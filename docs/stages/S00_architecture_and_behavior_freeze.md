@@ -37,12 +37,13 @@ Integrator reconciles Bible/ADR/domain contracts, records unresolved owner decis
 | Task | Lane | Deliverable | Depends on | Primary ownership | Non-goal / guardrail |
 |---|---|---|---|---|---|
 | W0-BHV-01 | BHV | Capability inventory legacy | — | docs/PRODUCT_SYNOPSIS.md, legacy notes | Только behavior/evidence. |
+| W0-QA-00 | QA | Fail-closed bootstrap validator + focused tests | — | scripts/validator, focused contract test | Не меняет contracts/dependencies. |
 | W0-BHV-02 | BHV | Golden journeys + edge-case matrix | W0-BHV-01 | fixtures/golden plan | Synthetic/anonymized only. |
 | W0-ARC-01 | ARC | Ratify/adapt Bible and ADR set | W0-BHV-01 | docs/architecture/** | No hidden Strangler dependency. |
 | W0-DOM-01 | DOM | Freeze IDs/state/errors v1 draft | W0-BHV-01 | contracts/domain/v1/** | Finding/observation and Run/Job/Attempt separate. |
 | W0-ANA-01 | ENG | Inventory stage I/O and package draft | W0-BHV-01 | contracts/analysis/v1/** | Single stage registry concept. |
 | W0-QA-01 | QA | Contract examples/schema checks + golden test plan | W0-DOM-01,W0-ANA-01 | tests docs | Independent consumer view. |
-| W0-INT-01 | INT | CP-00 integration/decision report/tag | all W0 tasks | checkpoint evidence | No production domain implementation. |
+| W0-INT-01 | INT | CP-00 integration/decision report/tag | all required W0 tasks | checkpoint evidence | No production domain implementation. |
 
 ## Automated exit evidence
 

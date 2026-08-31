@@ -29,6 +29,46 @@ evidence должны ссылаться на полный commit SHA выше �
 отдельного review и явного обновления traceability. Legacy `.env`, credentials,
 неотслеживаемые working-tree файлы и production payloads в snapshot не входят.
 
+### 1.2. Канонический snapshot архитектурных материалов refactoring
+
+Архитектурная конституция и связанные ADR обнаружены в том же локальном
+репозитории, но отсутствуют в behavioral snapshot `32b9d903...`. Для
+документационного provenance отдельно зафиксирован immutable snapshot:
+
+```text
+repository: PDF-proverka
+scope: refactoring architecture documentation only
+architecture_package_commit: 0b937dc0e24d38fb98485a920152b83d2f19c982
+subject: docs(W0-ARC-02): глоссарий и domain contract v1 с машинной сверкой
+commit_date: 2026-08-28T17:34:22+05:00
+bible_path: docs/architecture/ADR_BIBLE.md
+bible_last_change_commit: 71bac5f2e5003fe29892efbe6cea5411f6cb23e7
+bible_last_change_date: 2026-08-28T12:49:40+05:00
+bible_git_blob: 040a514dc37113d0712cde6757900d2c7d918c10
+adr_path: docs/architecture/adr/**
+adr_tree: f9c537c4258fe68acf6c4c5d23fef0d9739ee4e8
+```
+
+Commit `0b937dc0...` выбран как минимальный единый snapshot, содержащий
+последнюю редакцию `ADR_BIBLE.md`, актуальный на момент фиксации
+`ADR_INDEX.md` и полный связанный набор ADR-0001–0006, ADR-0013–0018.
+Номера ADR-0007–0012 в источнике зарезервированы и файлов не имеют. Сам
+`ADR_BIBLE.md` последний раз изменён commit `71bac5f2...`; указанный Git blob
+не менялся между commit последней редакции, package snapshot и проверенным
+локальным `dev`.
+
+Этот snapshot является advisory engineering source, а не behavioral oracle,
+runtime dependency или автоматически принятым contract set нового проекта.
+Статусы исходных ADR сохраняются: `proposed` не трактуется как `accepted`.
+При использовании ADR-0018 вместе с ним рассматриваются его приложения
+`docs/architecture/GLOSSARY.md`, `docs/architecture/DOMAIN_CONTRACT_V1.md`
+и `contracts/domain/v1/**` из того же commit. Любое расхождение разрешается
+в пользу утверждённых документов и contracts репозитория `PDF-Analysis`.
+
+Материалы читаются из immutable Git tree (`git show <commit>:<path>`), а не
+из текущего checkout или движущейся ветки. Неотслеживаемые файлы, включая
+`docs/architecture/presentations/`, в источник не входят.
+
 ## 2. Что перенесено как принцип
 
 - PostgreSQL — каноника бизнес-метаданных;

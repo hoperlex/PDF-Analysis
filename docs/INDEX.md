@@ -19,6 +19,9 @@
 ## Program
 - [Roadmap](program/ROADMAP.md)
 - [Wave execution guide](program/WAVE_EXECUTION_GUIDE.md)
+- [Active wave W0.1](program/waves/W0.1_behavioral_inventory.md)
+- [Task W0-BHV-01](program/tasks/W0-BHV-01.md)
+- [Task W0-QA-00](program/tasks/W0-QA-00.md)
 - [Checkpoint registry](program/CHECKPOINT_REGISTRY.md)
 - [Version/freeze policy](program/VERSIONING_AND_FREEZE_POLICY.md)
 - [Integration policy](program/INTEGRATION_POLICY.md)
