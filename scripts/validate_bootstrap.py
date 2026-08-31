@@ -11,15 +11,28 @@ notes: list[str] = []
 json_files = sorted(ROOT.rglob('*.json'))
 try:
     from jsonschema import Draft202012Validator
-except Exception:
-    Draft202012Validator = None
+    if not callable(Draft202012Validator):
+        raise TypeError('Draft202012Validator is not callable')
+    if not callable(getattr(Draft202012Validator, 'check_schema', None)):
+        raise TypeError('Draft202012Validator.check_schema is not callable')
+except Exception as exc:
+    print('Bootstrap validation')
+    print(
+        "FAILED: required Python dependency 'jsonschema' is unavailable or "
+        f"unusable ({type(exc).__name__})."
+    )
+    print(
+        "Action: provision a compatible 'jsonschema' package in this command's "
+        "Python environment, then rerun the validator."
+    )
+    sys.exit(2)
 for p in json_files:
     try:
         data = json.loads(p.read_text(encoding='utf-8'))
     except Exception as e:
         errors.append(f'JSON parse: {p.relative_to(ROOT)}: {e}')
         continue
-    if isinstance(data, dict) and data.get('$schema','').endswith('2020-12/schema') and Draft202012Validator:
+    if isinstance(data, dict) and data.get('$schema','').endswith('2020-12/schema'):
         try:
             Draft202012Validator.check_schema(data)
         except Exception as e:
@@ -27,20 +40,19 @@ for p in json_files:
 
 
 # Validate shipped contract examples.
-if Draft202012Validator:
-    pairs = [
-        ('contracts/analysis/v1/job-package.schema.json','contracts/analysis/v1/examples/job-package.example.json'),
-        ('contracts/analysis/v1/stage-result.schema.json','contracts/analysis/v1/examples/stage-result.example.json'),
-        ('contracts/analysis/v1/result-package.schema.json','contracts/analysis/v1/examples/result-package.example.json'),
-        ('contracts/events/v1/event-envelope.schema.json','contracts/events/v1/examples/event-envelope.example.json'),
-    ]
-    for schema_rel, example_rel in pairs:
-        schema = json.loads((ROOT/schema_rel).read_text(encoding='utf-8'))
-        example = json.loads((ROOT/example_rel).read_text(encoding='utf-8'))
-        try:
-            Draft202012Validator(schema).validate(example)
-        except Exception as e:
-            errors.append(f'Contract example invalid: {example_rel} vs {schema_rel}: {e}')
+pairs = [
+    ('contracts/analysis/v1/job-package.schema.json','contracts/analysis/v1/examples/job-package.example.json'),
+    ('contracts/analysis/v1/stage-result.schema.json','contracts/analysis/v1/examples/stage-result.example.json'),
+    ('contracts/analysis/v1/result-package.schema.json','contracts/analysis/v1/examples/result-package.example.json'),
+    ('contracts/events/v1/event-envelope.schema.json','contracts/events/v1/examples/event-envelope.example.json'),
+]
+for schema_rel, example_rel in pairs:
+    schema = json.loads((ROOT/schema_rel).read_text(encoding='utf-8'))
+    example = json.loads((ROOT/example_rel).read_text(encoding='utf-8'))
+    try:
+        Draft202012Validator(schema).validate(example)
+    except Exception as e:
+        errors.append(f'Contract example invalid: {example_rel} vs {schema_rel}: {e}')
 
 # Domain identifier prefix uniqueness.
 ids = json.loads((ROOT/'contracts/domain/v1/identifiers.json').read_text(encoding='utf-8'))['identifiers']
