@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "event_id": "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "event_type": "audit.run.created.v1",
+  "aggregate_type": "AuditRun",
+  "aggregate_id": "run_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "occurred_at": "2026-08-31T12:00:00Z",
+  "actor_id": null,
+  "source": "api",
+  "correlation_id": "corr_example",
+  "causation_id": null,
+  "payload": {
+    "project_uid": "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+  }
+}

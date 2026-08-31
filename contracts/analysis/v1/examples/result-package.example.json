@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "job_id": "job_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "attempt_id": "att_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "run_id": "run_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "fencing_token": "17",
+  "stage_results": [
+    {
+      "schema_version": 1,
+      "stage_name": "prepare",
+      "stage_version": "1.0.0",
+      "status": "succeeded",
+      "artifacts": [],
+      "metrics": {
+        "pages": 2
+      }
+    }
+  ],
+  "usage_summary": {
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost": 0,
+    "currency": "USD"
+  },
+  "completed_at": "2026-08-31T12:00:00Z"
+}

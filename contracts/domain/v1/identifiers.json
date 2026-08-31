@@ -1,0 +1,36 @@
+{
+  "contract": "auditmanager.domain.identifiers",
+  "version": "1.0.0-draft.0",
+  "format": "<prefix>_<ULID>",
+  "rules": [
+    "opaque",
+    "generated once",
+    "never parse business meaning from ULID",
+    "path and display numbers are not identity"
+  ],
+  "identifiers": {
+    "object_uid": "obj",
+    "discipline_uid": "dsc",
+    "project_uid": "prj",
+    "document_uid": "doc",
+    "version_uid": "ver",
+    "import_id": "imp",
+    "blob_id": "blob",
+    "run_id": "run",
+    "job_id": "job",
+    "attempt_id": "att",
+    "finding_uid": "fnd",
+    "finding_observation_id": "fobs",
+    "decision_id": "dec",
+    "analysis_profile_id": "ap",
+    "prompt_bundle_id": "pb",
+    "norms_snapshot_id": "ns",
+    "model_call_id": "mc",
+    "comparison_id": "cmp",
+    "sheet_link_id": "sln",
+    "export_id": "exp",
+    "worker_id": "wrk",
+    "audit_event_id": "evt",
+    "erasure_request_id": "era"
+  }
+}

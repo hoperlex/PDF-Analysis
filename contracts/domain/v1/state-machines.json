@@ -1,0 +1,141 @@
+{
+  "contract": "auditmanager.domain.state-machines",
+  "version": "1.0.0-draft.0",
+  "machines": {
+    "import": {
+      "initial": "received",
+      "terminal": [
+        "completed",
+        "rejected",
+        "failed"
+      ],
+      "transitions": {
+        "received": [
+          "validating",
+          "rejected"
+        ],
+        "validating": [
+          "materializing",
+          "rejected",
+          "failed"
+        ],
+        "materializing": [
+          "publishing",
+          "failed"
+        ],
+        "publishing": [
+          "completed",
+          "failed"
+        ]
+      }
+    },
+    "blob": {
+      "initial": "temporary",
+      "terminal": [
+        "rejected",
+        "deleted"
+      ],
+      "transitions": {
+        "temporary": [
+          "verifying",
+          "rejected"
+        ],
+        "verifying": [
+          "available",
+          "rejected"
+        ],
+        "available": [
+          "deleted"
+        ]
+      }
+    },
+    "run": {
+      "initial": "created",
+      "terminal": [
+        "published",
+        "failed",
+        "cancelled",
+        "partial"
+      ],
+      "transitions": {
+        "created": [
+          "queued",
+          "cancelled"
+        ],
+        "queued": [
+          "running",
+          "cancelled",
+          "failed"
+        ],
+        "running": [
+          "validating",
+          "failed",
+          "cancelled",
+          "partial"
+        ],
+        "validating": [
+          "published",
+          "failed",
+          "partial"
+        ]
+      }
+    },
+    "job": {
+      "initial": "queued",
+      "terminal": [
+        "succeeded",
+        "failed",
+        "cancelled",
+        "dead_letter"
+      ],
+      "transitions": {
+        "queued": [
+          "leased",
+          "cancelled"
+        ],
+        "leased": [
+          "running",
+          "queued",
+          "failed"
+        ],
+        "running": [
+          "succeeded",
+          "retry_wait",
+          "failed",
+          "cancelled"
+        ],
+        "retry_wait": [
+          "queued",
+          "dead_letter",
+          "cancelled"
+        ]
+      }
+    },
+    "attempt": {
+      "initial": "created",
+      "terminal": [
+        "succeeded",
+        "failed",
+        "superseded",
+        "cancelled"
+      ],
+      "transitions": {
+        "created": [
+          "leased",
+          "cancelled"
+        ],
+        "leased": [
+          "running",
+          "superseded",
+          "failed"
+        ],
+        "running": [
+          "succeeded",
+          "failed",
+          "superseded",
+          "cancelled"
+        ]
+      }
+    }
+  }
+}

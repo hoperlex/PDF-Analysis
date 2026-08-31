@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "job_id": "job_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "attempt_id": "att_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "run_id": "run_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "version_uid": "ver_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "analysis_profile_id": "ap_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "fencing_token": "17",
+  "artifacts": [
+    {
+      "role": "source.pdf",
+      "blob_id": "blob_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 12345,
+      "media_type": "application/pdf",
+      "logical_name": "synthetic.pdf"
+    }
+  ],
+  "stages": [
+    {
+      "name": "prepare",
+      "version": "1.0.0"
+    },
+    {
+      "name": "text_analysis",
+      "version": "1.0.0"
+    }
+  ]
+}

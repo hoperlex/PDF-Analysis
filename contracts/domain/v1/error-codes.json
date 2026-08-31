@@ -1,0 +1,81 @@
+{
+  "contract": "auditmanager.domain.errors",
+  "version": "1.0.0-draft.0",
+  "envelope": {
+    "required": [
+      "error_code",
+      "message",
+      "correlation_id"
+    ],
+    "optional": [
+      "details",
+      "retryable"
+    ]
+  },
+  "codes": {
+    "validation_failed": {
+      "http": 422,
+      "retryable": false
+    },
+    "not_found": {
+      "http": 404,
+      "retryable": false
+    },
+    "permission_denied": {
+      "http": 403,
+      "retryable": false
+    },
+    "authentication_required": {
+      "http": 401,
+      "retryable": false
+    },
+    "conflict": {
+      "http": 409,
+      "retryable": false
+    },
+    "state_transition_not_allowed": {
+      "http": 409,
+      "retryable": false
+    },
+    "idempotency_key_reuse": {
+      "http": 409,
+      "retryable": false
+    },
+    "unsupported_contract_version": {
+      "http": 400,
+      "retryable": false
+    },
+    "storage_integrity_error": {
+      "http": 422,
+      "retryable": false
+    },
+    "dependency_unavailable": {
+      "http": 503,
+      "retryable": true
+    },
+    "analysis_input_invalid": {
+      "http": 422,
+      "retryable": false
+    },
+    "analysis_failed": {
+      "http": 500,
+      "retryable": false
+    },
+    "cost_budget_exceeded": {
+      "http": 409,
+      "retryable": false
+    },
+    "stale_attempt": {
+      "http": 409,
+      "retryable": false
+    },
+    "internal_error": {
+      "http": 500,
+      "retryable": false
+    },
+    "idempotency_key_stale": {
+      "http": 409,
+      "retryable": false
+    }
+  }
+}

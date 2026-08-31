@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "stage_name": "prepare",
+  "stage_version": "1.0.0",
+  "status": "succeeded",
+  "artifacts": [
+    {
+      "role": "document.manifest",
+      "blob_id": "blob_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 500,
+      "media_type": "application/json"
+    }
+  ],
+  "metrics": {
+    "pages": 2
+  }
+}
