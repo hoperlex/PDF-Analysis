@@ -6,6 +6,29 @@
 - `Новая сжатая ZIP-папка.zip` — набор ADR/roadmap-материалов начатого refactoring; источник инженерных решений, но не plan-of-record нового greenfield проекта.
 - `ADR_BIBLE.md` — архитектурная конституция refactoring; большинство системных принципов адаптировано сюда.
 
+### 1.1. Канонический legacy snapshot для CP-00
+
+В локальном workspace legacy обнаружен в `/root/projects/PDF-proverka/PDF-proverka`.
+По решению владельца источником characterization/parity зафиксирован последний на
+момент фиксации commit локального `refs/heads/main`:
+
+```text
+repository: PDF-proverka
+resolved_ref: refs/heads/main
+commit: 32b9d903792b30506048a1d42b0e6b2d07aee403
+subject: Add high-confidence Stage 5 sheet-link repair
+commit_date: 2026-08-22T10:37:15+03:00
+recorded_at: 2026-08-31
+```
+
+Локальный путь является discovery path текущего workspace, а не runtime/config
+контрактом нового приложения. Все новые legacy inventory, golden fixtures и parity
+evidence должны ссылаться на полный commit SHA выше и читать immutable Git tree
+этого commit (`git show`/`git archive`), а не текущий checkout или движущийся branch.
+Продвижение legacy `main` не меняет baseline автоматически: новый snapshot требует
+отдельного review и явного обновления traceability. Legacy `.env`, credentials,
+неотслеживаемые working-tree файлы и production payloads в snapshot не входят.
+
 ## 2. Что перенесено как принцип
 
 - PostgreSQL — каноника бизнес-метаданных;
@@ -41,3 +64,7 @@ characterize → define contract → isolate algorithm → port/rewrite → pari
 ```
 
 Копирование крупного service/router/pipeline manager целиком запрещено.
+
+Каждый извлечённый fixture/evidence дополнительно фиксирует
+`legacy_source_commit: 32b9d903792b30506048a1d42b0e6b2d07aee403` либо SHA
+явно утверждённого следующего snapshot.

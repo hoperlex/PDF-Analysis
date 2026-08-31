@@ -8,7 +8,7 @@
 
 ## Preconditions
 
-- Доступны legacy source/docs только для чтения.
+- Доступен только для чтения канонический legacy snapshot, зафиксированный в `docs/SOURCE_TRACEABILITY.md`.
 - Доступны исходные refactoring ADR/Bible.
 - Назначен program integrator/architecture owner.
 

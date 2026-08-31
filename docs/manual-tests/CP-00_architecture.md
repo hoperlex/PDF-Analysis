@@ -3,7 +3,7 @@
 ## Preconditions
 
 - Распакованный bootstrap package.
-- Доступ к read-only legacy source/docs и исходным ADR/Bible.
+- Доступ к read-only Git tree канонического legacy commit из `docs/SOURCE_TRACEABILITY.md` и исходным ADR/Bible.
 - Назначены architecture/domain owner и independent reviewer.
 
 ## Start record

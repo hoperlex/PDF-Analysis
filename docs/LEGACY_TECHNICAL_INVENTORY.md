@@ -1,15 +1,26 @@
 # Legacy technical inventory snapshot
 
-This snapshot was taken from the supplied working archive while preparing the greenfield plan. It is evidence for **why not to reproduce legacy decomposition**, not a target metric.
+This inventory was recomputed from the immutable Git tree of the canonical legacy
+snapshot recorded in `SOURCE_TRACEABILITY.md`:
+
+```text
+resolved_ref: refs/heads/main
+commit: 32b9d903792b30506048a1d42b0e6b2d07aee403
+commit_date: 2026-08-22T10:37:15+03:00
+inventory_date: 2026-08-31
+```
+
+Working-tree and untracked files are excluded. The snapshot is evidence for **why
+not to reproduce legacy decomposition**, not a target metric.
 
 ## Size / concentration
 
-- `frontend/static/js/app.js`: 16,192 lines.
-- `frontend/index.html`: 6,576 lines.
-- `backend/app/pipeline/manager.py`: 7,546 lines.
+- `frontend/static/js/app.js`: 16,149 lines.
+- `frontend/index.html`: 6,421 lines.
+- `backend/app/pipeline/manager.py`: 7,541 lines.
 - `backend/app/main.py`: 493 lines.
-- FastAPI router decorators found under `backend/app`: 324.
-- files matching `test_*.py` in the supplied tree: 409.
+- FastAPI HTTP/WebSocket router decorators found under `backend/app`: 325.
+- files matching `test_*.py` in the committed tree: 389.
 
 ## Pipeline stage directories observed
 
