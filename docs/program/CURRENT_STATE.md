@@ -5,7 +5,8 @@ produced candidates, the repository owner has recorded an explicit disposition f
 `PD-01`–`PD-05` plus integration decisions `ID-01`–`ID-03`, and every lane has passed
 independent review. The accepted W0.2 candidate set is integrated at
 `cf7740474b1786163f54d93b013a0d526ef989e0`. Nothing is frozen, nothing is ratified,
-and production implementation remains locked.
+and production implementation remains locked. W0.3 is planned on
+`integration/W0.3`; no W0.3 implementation task has started.
 
 ## Active checkpoint
 
@@ -13,7 +14,8 @@ Target: `CP-00 / v0.0.0-architecture`.
 
 ## Active wave
 
-`W0.2 — completed candidate integration`; next is `W0.3 — ratification/integration`.
+`W0.3 — CP-00 ratification and integration` (planned). See
+`docs/program/waves/W0.3_ratification_integration.md`.
 
 Completed inputs:
 
@@ -170,10 +172,10 @@ not review lanes it coordinated.
 
 ## Next integration tasks
 
-Open W0.3 and run `W0-ARC-02` plus the serial `ID-01` chain `W0-QA-03` →
-`W0-DOM-02` → `W0-EVT-01`, followed by the independent cross-family QA task and
-CP-00 integration runbook. Do not record a contract or checkpoint freeze until those
-tasks and the manual CP-00 acceptance are complete.
+Start `W0-ARC-02` and `W0-QA-03` concurrently from the recorded W0.3 base. Then run
+the serial `ID-01` chain through `W0-DOM-02` and `W0-EVT-01`, followed by independent
+`W0-QA-01` and final `W0-INT-01`. Do not record a contract or checkpoint freeze until
+those tasks and the manual CP-00 acceptance are complete.
 
 `U-04` does **not** block a CP-00 contract freeze. Its owner disposition sets its own
 deadlines — tenant/IdP before `W2-C-01`, TTL and legal hold before `W9-C-01` — which

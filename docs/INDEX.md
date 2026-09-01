@@ -20,7 +20,8 @@
 - [Roadmap](program/ROADMAP.md)
 - [Wave execution guide](program/WAVE_EXECUTION_GUIDE.md)
 - [Accepted wave W0.1](program/waves/W0.1_behavioral_inventory.md)
-- [Active wave W0.2](program/waves/W0.2_architecture_domain_contract.md)
+- [Accepted wave W0.2](program/waves/W0.2_architecture_domain_contract.md)
+- [Active wave W0.3](program/waves/W0.3_ratification_integration.md)
 - [Task W0-BHV-01](program/tasks/W0-BHV-01.md)
 - [Task W0-QA-00](program/tasks/W0-QA-00.md)
 - [Task W0-DEP-01](program/tasks/W0-DEP-01.md)
@@ -31,10 +32,12 @@
 - [Task W0-ARC-01](program/tasks/W0-ARC-01.md)
 - [Task W0-DOM-01](program/tasks/W0-DOM-01.md)
 - [Task W0-ANA-01](program/tasks/W0-ANA-01.md)
-- [Task W0-ARC-02](program/tasks/W0-ARC-02.md) — backlog draft
-- [Task W0-QA-03](program/tasks/W0-QA-03.md) — backlog draft
+- [Task W0-ARC-02](program/tasks/W0-ARC-02.md) — ready for W0.3 assignment
+- [Task W0-QA-03](program/tasks/W0-QA-03.md) — ready for W0.3 assignment
 - [Task W0-DOM-02](program/tasks/W0-DOM-02.md) — backlog draft
 - [Task W0-EVT-01](program/tasks/W0-EVT-01.md) — backlog draft
+- [Task W0-QA-01](program/tasks/W0-QA-01.md) — backlog draft
+- [Task W0-INT-01](program/tasks/W0-INT-01.md) — backlog draft
 - [Checkpoint registry](program/CHECKPOINT_REGISTRY.md)
 - [Version/freeze policy](program/VERSIONING_AND_FREEZE_POLICY.md)
 - [Integration policy](program/INTEGRATION_POLICY.md)

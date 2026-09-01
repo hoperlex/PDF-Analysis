@@ -32,6 +32,8 @@ Production implementation tasks consuming these boundaries start only after the 
 
 Integrator reconciles Bible/ADR/domain contracts, records unresolved owner decisions and executes CP-00 manual review.
 
+Execution plan: [W0.3 ratification and integration](../program/waves/W0.3_ratification_integration.md).
+
 ## Agent-ready task map
 
 | Task | Lane | Deliverable | Depends on | Primary ownership | Non-goal / guardrail |

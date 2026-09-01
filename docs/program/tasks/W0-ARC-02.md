@@ -39,7 +39,7 @@ CP-00, enforcement is deferred to `W1-ARC-01`.
 
 ## Frozen inputs
 
-- base commit: `cf7740474b1786163f54d93b013a0d526ef989e0`
+- base commit: `43a84d93fd544573226b82860ab24f924ed66d83`
 - architectural prohibitions: `AGENTS.md` §4 at the base commit
 - accepted CP-00 architecture review: `docs/architecture/CP00_ARCHITECTURE_REVIEW.md`
   and `.json` at their accepted commit
@@ -116,6 +116,9 @@ deliverable 6 and let the integrator open an ADR task with the right owner.
   Expected: exit `0` with a standalone `PASS`.
 - Command: `git diff --check -- docs/architecture`.
   Expected: exit `0` and no output.
+- Command: `git diff --name-only 43a84d93fd544573226b82860ab24f924ed66d83 -- docs/architecture`.
+  Expected: exactly `docs/architecture/ARCHITECTURE_LINT_RULES.json` and
+  `docs/architecture/ARCHITECTURE_LINT_RULES.md`.
 - Independent reviewer confirms every `static` rule is genuinely decidable without
   running the application, and that no `review`-only rule was silently downgraded to
   a `warning` to appear enforceable.
