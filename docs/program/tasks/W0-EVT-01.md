@@ -2,8 +2,8 @@
 
 > **Status: backlog draft. Not executable yet.**
 > This task sits last in the `ID-01` chain. `W0-DOM-01` and `W0-ANA-01` are integrated;
-> `W0-QA-03` and `W0-DOM-02` remain pending. Its repository-wide sweep cannot pass
-> until the whole chain lands. Pin their real commits below when they exist.
+> `W0-QA-03` is integrated and `W0-DOM-02` is ready but not yet completed. Its
+> repository-wide sweep cannot pass until the domain change lands.
 
 ## Outcome
 
@@ -44,11 +44,10 @@ not silently edit an unowned contract family. This task creates that ownership.
 - `W0-DOM-01` and `W0-ANA-01`, integrated at
   `cf7740474b1786163f54d93b013a0d526ef989e0`, so the exact string form used by the
   other two families is fixed before the event family copies it.
-- `W0-QA-03` and `W0-DOM-02`, integrated at `<pending integration commits>`. Without
-  both, the repository-wide sweep below cannot pass: `scripts/validate_bootstrap.py`
-  hard-requires the bare `version` key on `contracts/domain/v1/error-codes.json`, so
-  the domain family cannot drop its deprecated mirror and the sweep would fail on a
-  file this task does not own.
+- `W0-QA-03`, integrated at
+  `23dddf99f833d12cd4cc22d11e224d4b278872bf`.
+- `W0-DOM-02`, integrated at `<pending integration commit>`. Until it lands, the
+  repository-wide sweep below still fails on a domain file this task does not own.
 
 ## Origin
 

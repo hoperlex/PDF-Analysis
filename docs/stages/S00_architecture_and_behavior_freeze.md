@@ -60,9 +60,9 @@ order shown below.
 
 | Task | Lane | Result | Depends on | Blocked because |
 |---|---|---|---|---|
-| W0-ARC-02 | ARC | Architecture lint rule specification (`U-03`) | W0-ARC-01 | Ready; dependency integrated at the W0.2 candidate commit. |
-| W0-QA-03 | QA | Validator reads `contract_version` (`ID-01`) | W0-QA-02, W0-ARC-01 | Ready; `ID-01` is committed at the W0.2 candidate commit. |
-| W0-DOM-02 | DOM | Remove deprecated domain `version` mirror (`ID-01`) | W0-QA-03, W0-DOM-01 | Validator still hard-requires the bare key. |
+| W0-ARC-02 | ARC | Architecture lint rule specification (`U-03`) | W0-ARC-01 | Accepted and integrated at `a67ba31e`. |
+| W0-QA-03 | QA | Validator reads `contract_version` (`ID-01`) | W0-QA-02, W0-ARC-01 | Accepted and integrated at `23dddf99`. |
+| W0-DOM-02 | DOM | Remove deprecated domain `version` mirror (`ID-01`) | W0-QA-03, W0-DOM-01 | Ready; validator dependency is integrated. |
 | W0-EVT-01 | EVT | Event envelope on `contract_version` (`ID-01`) | W0-DOM-02, W0-QA-03, W0-DOM-01, W0-ANA-01 | Last in the `ID-01` chain; its sweep cannot pass earlier. |
 
 `ID-01` completes only in that order: `W0-QA-03` → `W0-DOM-02` → `W0-EVT-01`.

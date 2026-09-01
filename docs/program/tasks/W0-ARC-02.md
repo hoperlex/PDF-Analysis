@@ -1,8 +1,9 @@
 # Task W0-ARC-02 — architecture lint rule specification
 
-> **Status: ready for W0.3 assignment.**
-> Its sole dependency is independently accepted and integrated at the commit pinned
-> below. No contract or ADR write is authorized by this task.
+> **Status: completed, independently accepted and integrated.**
+> Integration commit: `a67ba31e7748c02974ae9ae93c7f30b6f141d417`.
+> The specification remains a candidate input to CP-00; this task did not ratify an
+> ADR or freeze a contract.
 
 ## Outcome
 

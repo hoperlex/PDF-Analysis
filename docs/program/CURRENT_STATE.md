@@ -5,8 +5,9 @@ produced candidates, the repository owner has recorded an explicit disposition f
 `PD-01`–`PD-05` plus integration decisions `ID-01`–`ID-03`, and every lane has passed
 independent review. The accepted W0.2 candidate set is integrated at
 `cf7740474b1786163f54d93b013a0d526ef989e0`. Nothing is frozen, nothing is ratified,
-and production implementation remains locked. W0.3 is planned on
-`integration/W0.3`; no W0.3 implementation task has started.
+and production implementation remains locked. W0.3 is in progress on
+`integration/W0.3`; its two stage-one tasks are independently accepted and integrated
+through `a67ba31e7748c02974ae9ae93c7f30b6f141d417`.
 
 ## Active checkpoint
 
@@ -14,8 +15,15 @@ Target: `CP-00 / v0.0.0-architecture`.
 
 ## Active wave
 
-`W0.3 — CP-00 ratification and integration` (planned). See
+`W0.3 — CP-00 ratification and integration` (in progress). See
 `docs/program/waves/W0.3_ratification_integration.md`.
+
+Stage one integrated:
+
+- `W0-QA-03` — validator reads the canonical `contract_version` key, commit
+  `23dddf99f833d12cd4cc22d11e224d4b278872bf`;
+- `W0-ARC-02` — 33 architecture lint rules specified, independently accepted after
+  narrow remediation, commit `a67ba31e7748c02974ae9ae93c7f30b6f141d417`.
 
 Completed inputs:
 
@@ -151,9 +159,9 @@ not review lanes it coordinated.
 - A legacy defect is now recorded as observed fact and must not drift into a target
   rule: the export download guard compares resolved paths with `str.startswith` and
   no component boundary, so a sibling directory sharing the base prefix is served.
-- `W0-QA-03` must teach the validator to read `contract_version` before the domain
-  family can drop its deprecated bare `version` mirror; `W0-EVT-01` then follows.
-- `W0-ARC-02` specifies architecture lint rules before CP-00.
+- The remaining `ID-01` chain is `W0-DOM-02` → `W0-EVT-01`. `W0-DOM-02` must remove
+  both `version` and `deprecated_fields` from the catalog and from the schema's root
+  `required`/`properties`; root `additionalProperties: false` then rejects either key.
 
 ## Allowed work before CP-00
 
@@ -172,8 +180,8 @@ not review lanes it coordinated.
 
 ## Next integration tasks
 
-Start `W0-ARC-02` and `W0-QA-03` concurrently from the recorded W0.3 base. Then run
-the serial `ID-01` chain through `W0-DOM-02` and `W0-EVT-01`, followed by independent
+Assign `W0-DOM-02` from the stage-one convergence commit, independently review and
+integrate it, then re-pin and execute `W0-EVT-01`. Follow with independent
 `W0-QA-01` and final `W0-INT-01`. Do not record a contract or checkpoint freeze until
 those tasks and the manual CP-00 acceptance are complete.
 

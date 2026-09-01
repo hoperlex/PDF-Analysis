@@ -1,8 +1,9 @@
 # Contract task W0-DOM-02 — remove the deprecated domain `version` mirror
 
-> **Status: backlog draft. Not executable yet.**
-> `W0-DOM-01` is integrated, but `W0-QA-03` must complete first. Pin that integration
-> commit when it exists; the task then becomes executable unchanged.
+> **Status: ready for W0.3 assignment.**
+> `W0-QA-03` is independently accepted and integrated at
+> `23dddf99f833d12cd4cc22d11e224d4b278872bf`. The stage-one convergence commit is
+> pinned below; no dependency placeholder remains.
 
 ## Outcome
 
@@ -39,7 +40,8 @@ contract are different hotspots with different owners.
 
 ## Depends on
 
-- `W0-QA-03`, integrated at `<pending integration commit>`. Removing the key before
+- `W0-QA-03`, integrated at
+  `23dddf99f833d12cd4cc22d11e224d4b278872bf`. Removing the key before
   the validator stops requiring it makes `scripts/validate_bootstrap.py` fail, which
   is a required gate of this very task.
 - `W0-DOM-01`, integrated at
@@ -48,7 +50,8 @@ contract are different hotspots with different owners.
 
 ## Frozen inputs
 
-- base commit: the `W0-QA-03` integration commit
+- base commit: `a67ba31e7748c02974ae9ae93c7f30b6f141d417`, the stage-one convergence
+  containing accepted `W0-QA-03` and `W0-ARC-02`
 - domain contract candidate from `W0-DOM-01`, including its `deprecated_fields` block,
   its `const` pin tying `version` to `contract_version`, and its recorded removal gate
 - owner decision `ID-01` as committed by the `W0-ARC-01` integration
@@ -88,10 +91,11 @@ belongs to `W0-QA-03` and must already be integrated.
 
 - `error-codes.json`: the bare `version` key and the `deprecated_fields` block that
   described it are gone. `contract` and `contract_version` remain, unchanged in value.
-- `error-codes.schema.json`: the `version` property, its `deprecated` marker and its
-  `const` pin are removed, and the schema now **forbids** the key so a reintroduced
-  mirror fails closed rather than being tolerated. This matches the sibling catalogs,
-  whose schemas already reject it.
+- `error-codes.schema.json`: both `version` and `deprecated_fields` are removed from
+  the root `required` array and from root `properties`. This removes the `version`
+  property's deprecated marker and `const` pin as well as the schema for the
+  compatibility block. With root `additionalProperties: false` retained, the schema
+  **forbids both removed keys**, so either one fails closed if reintroduced.
 - `README.md`: the removal is recorded, `ID-01` is marked complete for the domain
   family, and the note explaining the transitional mirror is replaced rather than left
   describing a field that no longer exists.
@@ -111,8 +115,9 @@ belongs to `W0-QA-03` and must already be integrated.
 - Command: `.venv/bootstrap/bin/python -c "import json; from pathlib import Path; d=json.loads(Path('contracts/domain/v1/error-codes.json').read_text()); assert 'version' not in d and 'deprecated_fields' not in d; assert d['contract_version'] and isinstance(d['contract_version'],str)"`.
   Expected: exit `0`; the mirror and its supporting block are gone and the canonical
   key remains a non-empty string.
-- Command: `.venv/bootstrap/bin/python -c "import json; from pathlib import Path; from jsonschema import Draft202012Validator as V; root=Path('contracts/domain/v1'); s=json.loads((root/'error-codes.schema.json').read_text()); V.check_schema(s); d=json.loads((root/'error-codes.json').read_text()); V(s).validate(d); d['version']='1.0.0-draft.1'; assert list(V(s).iter_errors(d)), 'schema must reject a reintroduced version mirror'"`.
-  Expected: exit `0`; the catalog validates and a reintroduced mirror is rejected.
+- Command: `.venv/bootstrap/bin/python -c "import copy,json; from pathlib import Path; from jsonschema import Draft202012Validator as V; root=Path('contracts/domain/v1'); s=json.loads((root/'error-codes.schema.json').read_text()); removed={'version','deprecated_fields'}; assert not removed & set(s['required']); assert not removed & set(s['properties']); V.check_schema(s); d=json.loads((root/'error-codes.json').read_text()); V(s).validate(d); probes={'version':'1.0.0-draft.1','deprecated_fields':{}}; assert all(list(V(s).iter_errors(dict(d,**{k:v}))) for k,v in probes.items())"`.
+  Expected: exit `0`; both removed names are absent from the schema's `required` and
+  `properties`, the catalog validates, and reintroducing either key is rejected.
 - Command: `.venv/bootstrap/bin/python -c "import json,glob; bad=[p for p in glob.glob('contracts/domain/v1/*.json') for d in [json.load(open(p))] if isinstance(d,dict) and 'version' in d]; assert not bad, bad"`.
   Expected: exit `0`; no domain catalog declares a bare `version` key.
 - Command: `.venv/bootstrap/bin/python -c "import json; from pathlib import Path; from jsonschema import Draft202012Validator as V; root=Path('contracts/domain/v1'); c=json.loads((root/'error-codes.json').read_text()); s=json.loads((root/'error-envelope.schema.json').read_text()); assert set(s['properties']['error_code']['enum'])==set(c['codes'])"`.
