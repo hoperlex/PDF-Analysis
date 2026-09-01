@@ -1,6 +1,9 @@
 # Bootstrap validation
 
-Validation executed before packaging.
+Historical validation transcript for the initial bootstrap package at commit
+`0761df0f21ed415083503bef0218dc29da3585be`. The recorded
+`markdown_files=119` describes that immutable snapshot only; it is not current
+repository output.
 
 ```text
 Bootstrap validation
