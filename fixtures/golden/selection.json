@@ -1,0 +1,371 @@
+{
+  "schema_version": 1,
+  "task_id": "W0-BHV-02",
+  "wave": "W0.2",
+  "status": "candidate_pending_independent_review",
+  "base_commit": "6c82004b35f49463c8e7fc8602fbced2f374167e",
+  "legacy_source_commit": "32b9d903792b30506048a1d42b0e6b2d07aee403",
+  "inventory_reference": {
+    "path": "docs/behavior/legacy_capability_inventory.md",
+    "accepted_commit": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba"
+  },
+  "selected_count": 5,
+  "selection_policy": {
+    "fan_in": "The eleven accepted inventory characterization candidates and the five selected journeys are different namespaces. inventory_candidates is the normative and lossless fan-in map: every inventory candidate appears exactly once and none is omitted. inventory_assertion_coverage refines that map to the assertion level: each inventory candidate resolves to the concrete expectation and failure-case identifiers that characterize it, so coverage is verifiable without reading a journey as an opaque aggregate.",
+    "data_policy": "Synthetic material only. No production or customer document, payload, model response, credential or environment value is committed, and binary source documents are represented by declarative surrogates.",
+    "parity_policy": "Only expectations classified legacy_observed are parity oracle evidence. Expectations classified greenfield_target or pending_owner_decision are explicitly non-legacy, carry parity_oracle false and freeze no product semantics."
+  },
+  "assertion_invariants": {
+    "definition": "total_assertions is the number of expected_outputs and failure_cases entries declared across the five journey manifests. inventory_mapped_assertions is the number of identifiers listed in inventory_assertion_coverage, and target_scope_annotation_assertions is the number listed in target_scope_annotations. The two lists are pairwise disjoint and jointly exhaustive, so total_assertions equals their sum. These fields are the only declared counts of this selection: SELECTION.md, README.md and EDGE_CASE_MATRIX.md quote them from here and state no independent number, and the coverage gate in SELECTION.md section 8 recomputes every one of them from the manifests and fails on any disagreement.",
+    "total_assertions": 95,
+    "inventory_mapped_assertions": 92,
+    "target_scope_annotation_assertions": 3,
+    "per_journey_assertions": {
+      "GJ-01": 15,
+      "GJ-02": 24,
+      "GJ-03": 16,
+      "GJ-04": 17,
+      "GJ-05": 23
+    },
+    "revision_history": [
+      {
+        "round": 2,
+        "total_assertions": 91,
+        "inventory_mapped_assertions": 88,
+        "target_scope_annotation_assertions": 3,
+        "added_assertions": [],
+        "removed_assertions": [],
+        "change": "Composition carried into the second independent review. These are the numbers that review worked from and that docs/program/CURRENT_STATE.md quoted for this lane until the program integrator updated that line to the current totals on 2026-09-01, naming assertion_invariants here as the single source to quote. The row is kept as the history of the 91-to-95 change, not as a live divergence."
+      },
+      {
+        "round": 3,
+        "total_assertions": 95,
+        "inventory_mapped_assertions": 92,
+        "target_scope_annotation_assertions": 3,
+        "added_assertions": [
+          "GJ-01-EO-08",
+          "GJ-02-EO-12",
+          "GJ-02-EO-13",
+          "GJ-02-FC-11"
+        ],
+        "removed_assertions": [],
+        "change": "Four assertions were added to close defects the second review found. Their origin is not uniform, so it is recorded per assertion and no blanket derivation is claimed for the set. Three are derived from the frozen legacy source at 32b9d903792b30506048a1d42b0e6b2d07aee403 and carry legacy_evidence_refs resolvable at that commit: GJ-01-EO-08 records that folder ingest and version-file upload use two different extension sets and that companions are recognized by a lowercased filename suffix; GJ-02-EO-12 records that the legacy skip whitelist contains findings_merge, so legacy accepts the skip; GJ-02-FC-11 records the second archive-incompleteness path, where the broad handler prints one line and swallows the exception. The fourth, GJ-02-EO-13, is not derived from legacy and never was: it is a greenfield_target with parity_oracle false that exists to keep the target skippability statement separate from the opposite legacy observation GJ-02-EO-12 instead of letting one overwrite the other. Its source is a field of the unfrozen analysis-lane stage registry and not a legacy commit - contracts/analysis/v1/stage-registry.json, contract auditmanager.analysis.stage_registry version 1.0.0-draft.1, entry stage_id finding_merge, field status_policy.skip_allowed - which repository owner decision PD-02 makes authoritative for target stage semantics, while the owner disposed of no rule about merge skippability, so the expectation claims no owner_decision_ref and no legacy evidence and is re-derived from that field if the field changes. That source is named machine-readably in the expectation's authority block, with freeze_status unfrozen_candidate, only from the round-4 re-basing recorded in the next row; at this round the same non-legacy target value was stated in this lane's own name, which was the weaker form of the same statement. Nothing was removed and no assertion changed its inventory candidate. The declared invariants were not restated at the time, which is the divergence the third independent review rejected."
+      },
+      {
+        "round": 4,
+        "total_assertions": 95,
+        "inventory_mapped_assertions": 92,
+        "target_scope_annotation_assertions": 3,
+        "added_assertions": [],
+        "removed_assertions": [],
+        "change": "The invariants are restated officially at the round-3 composition, recorded here as the single source and made machine-checked by the coverage gate. No assertion was added, removed or re-mapped. The round corrected the IC-05 fixture so that it carries the PDF the folder rule requires and rewrote GJ-01-FC-04 accordingly, re-characterized the download guard in GJ-02-EO-08 and GJ-02-FC-09 as an existence-first check with a string-prefix containment comparison, and re-based GJ-02-EO-13 on the versioned stage registry through a new authority block instead of stating the target rule in this lane's own name."
+      }
+    ]
+  },
+  "journeys": [
+    {
+      "journey_id": "GJ-01",
+      "title": "Precheck, ingest and version isolation for a synthetic source bundle",
+      "manifest_path": "fixtures/golden/GJ-01/manifest.json",
+      "inventory_candidates": [
+        "GJ-01"
+      ],
+      "comparison_mode": "exact",
+      "manifest_sha256": "9126de8a8e9792ef43204e09004d795aac9a84f4fd36299e0a37d6d9657cacae"
+    },
+    {
+      "journey_id": "GJ-02",
+      "title": "Audit interruption, resume, retry, skip and export packaging",
+      "manifest_path": "fixtures/golden/GJ-02/manifest.json",
+      "inventory_candidates": [
+        "GJ-02",
+        "GJ-07"
+      ],
+      "comparison_mode": "replay",
+      "manifest_sha256": "79a1c67de1151d70f00265d9b76a782b598824c4a442978a369772c8d78cedb8"
+    },
+    {
+      "journey_id": "GJ-03",
+      "title": "Finding rerun, decision carryover under provider failure, and expert correction or revocation",
+      "manifest_path": "fixtures/golden/GJ-03/manifest.json",
+      "inventory_candidates": [
+        "GJ-03",
+        "GJ-04"
+      ],
+      "comparison_mode": "replay",
+      "manifest_sha256": "efbc780e293b337787251d53bc2e775123fe6a96e9459ee92d5f99c3fcf73301"
+    },
+    {
+      "journey_id": "GJ-04",
+      "title": "Stage comparison links, reuse, stale invalidation, repair and undo",
+      "manifest_path": "fixtures/golden/GJ-04/manifest.json",
+      "inventory_candidates": [
+        "GJ-05",
+        "GJ-06"
+      ],
+      "comparison_mode": "semantic",
+      "manifest_sha256": "ce0695a0852f1d9b024f85c25fb17024fbe95ca4efb63e856c80576807a10395"
+    },
+    {
+      "journey_id": "GJ-05",
+      "title": "Distributed worker reconnect, attempt authority, crash recovery and route exposure",
+      "manifest_path": "fixtures/golden/GJ-05/manifest.json",
+      "inventory_candidates": [
+        "GJ-08",
+        "GJ-09",
+        "GJ-10",
+        "GJ-11"
+      ],
+      "comparison_mode": "exact",
+      "manifest_sha256": "a2628698114d5ee0bfa5125ca1deb30396e73c1a7b60e6205b1d40643647cec3"
+    }
+  ],
+  "inventory_assertion_coverage": [
+    {
+      "inventory_candidate": "GJ-01",
+      "inventory_subject": "Precheck then ingest a synthetic PDF/Markdown/JSON companion as V1 and V2",
+      "selected_journey": "GJ-01",
+      "assertion_ids": [
+        "GJ-01-EO-01",
+        "GJ-01-EO-02",
+        "GJ-01-EO-03",
+        "GJ-01-EO-04",
+        "GJ-01-EO-05",
+        "GJ-01-EO-06",
+        "GJ-01-EO-07",
+        "GJ-01-EO-08",
+        "GJ-01-FC-01",
+        "GJ-01-FC-02",
+        "GJ-01-FC-03",
+        "GJ-01-FC-04",
+        "GJ-01-FC-05",
+        "GJ-01-FC-06",
+        "GJ-01-FC-07"
+      ]
+    },
+    {
+      "inventory_candidate": "GJ-02",
+      "inventory_subject": "Interrupt after each major audit stage and resume, retry or skip where allowed",
+      "selected_journey": "GJ-02",
+      "assertion_ids": [
+        "GJ-02-EO-01",
+        "GJ-02-EO-02",
+        "GJ-02-EO-03",
+        "GJ-02-EO-04",
+        "GJ-02-EO-05",
+        "GJ-02-EO-06",
+        "GJ-02-EO-07",
+        "GJ-02-EO-11",
+        "GJ-02-EO-12",
+        "GJ-02-EO-13",
+        "GJ-02-FC-01",
+        "GJ-02-FC-02",
+        "GJ-02-FC-03",
+        "GJ-02-FC-04"
+      ]
+    },
+    {
+      "inventory_candidate": "GJ-03",
+      "inventory_subject": "Review a finding, rerun on the next version with provider failure, then manually resolve",
+      "selected_journey": "GJ-03",
+      "assertion_ids": [
+        "GJ-03-EO-01",
+        "GJ-03-EO-02",
+        "GJ-03-EO-03",
+        "GJ-03-EO-04",
+        "GJ-03-EO-05",
+        "GJ-03-EO-08",
+        "GJ-03-FC-01",
+        "GJ-03-FC-02",
+        "GJ-03-FC-03",
+        "GJ-03-FC-04"
+      ]
+    },
+    {
+      "inventory_candidate": "GJ-04",
+      "inventory_subject": "Revoke or correct an expert decision, keeping legacy replacement and deletion separate from the append-only target",
+      "selected_journey": "GJ-03",
+      "assertion_ids": [
+        "GJ-03-EO-06",
+        "GJ-03-EO-07",
+        "GJ-03-EO-09",
+        "GJ-03-EO-10",
+        "GJ-03-FC-05",
+        "GJ-03-FC-06"
+      ]
+    },
+    {
+      "inventory_candidate": "GJ-05",
+      "inventory_subject": "Re-run comparison with an identical signature, then change a source, exclusion or link",
+      "selected_journey": "GJ-04",
+      "assertion_ids": [
+        "GJ-04-EO-01",
+        "GJ-04-EO-02",
+        "GJ-04-EO-03",
+        "GJ-04-EO-04",
+        "GJ-04-EO-05",
+        "GJ-04-EO-10",
+        "GJ-04-FC-01",
+        "GJ-04-FC-02",
+        "GJ-04-FC-03",
+        "GJ-04-FC-05"
+      ]
+    },
+    {
+      "inventory_candidate": "GJ-06",
+      "inventory_subject": "Apply a high-confidence sheet-link repair and undo it",
+      "selected_journey": "GJ-04",
+      "assertion_ids": [
+        "GJ-04-EO-06",
+        "GJ-04-EO-07",
+        "GJ-04-EO-08",
+        "GJ-04-FC-04"
+      ]
+    },
+    {
+      "inventory_candidate": "GJ-07",
+      "inventory_subject": "Export the package once with Excel success and once with generator failure",
+      "selected_journey": "GJ-02",
+      "assertion_ids": [
+        "GJ-02-EO-08",
+        "GJ-02-EO-09",
+        "GJ-02-EO-10",
+        "GJ-02-FC-05",
+        "GJ-02-FC-06",
+        "GJ-02-FC-07",
+        "GJ-02-FC-08",
+        "GJ-02-FC-09",
+        "GJ-02-FC-10",
+        "GJ-02-FC-11"
+      ]
+    },
+    {
+      "inventory_candidate": "GJ-08",
+      "inventory_subject": "Worker disconnects, reconnects and resumes a chunk upload",
+      "selected_journey": "GJ-05",
+      "assertion_ids": [
+        "GJ-05-EO-01",
+        "GJ-05-EO-02",
+        "GJ-05-EO-06",
+        "GJ-05-FC-01",
+        "GJ-05-FC-02",
+        "GJ-05-FC-03"
+      ]
+    },
+    {
+      "inventory_candidate": "GJ-09",
+      "inventory_subject": "Mark an attempt lost, create a new attempt, then deliver the old result late",
+      "selected_journey": "GJ-05",
+      "assertion_ids": [
+        "GJ-05-EO-03",
+        "GJ-05-EO-04",
+        "GJ-05-EO-05",
+        "GJ-05-EO-12",
+        "GJ-05-EO-13",
+        "GJ-05-FC-04",
+        "GJ-05-FC-09"
+      ]
+    },
+    {
+      "inventory_candidate": "GJ-10",
+      "inventory_subject": "Crash the centre during result apply and restart it",
+      "selected_journey": "GJ-05",
+      "assertion_ids": [
+        "GJ-05-EO-07",
+        "GJ-05-EO-08",
+        "GJ-05-EO-09",
+        "GJ-05-EO-14",
+        "GJ-05-FC-05",
+        "GJ-05-FC-06",
+        "GJ-05-FC-07"
+      ]
+    },
+    {
+      "inventory_candidate": "GJ-11",
+      "inventory_subject": "Exercise disabled and enabled distributed route configurations",
+      "selected_journey": "GJ-05",
+      "assertion_ids": [
+        "GJ-05-EO-10",
+        "GJ-05-EO-11",
+        "GJ-05-FC-08"
+      ]
+    }
+  ],
+  "owner_decisions": [
+    {
+      "decision_id": "PD-01",
+      "status": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "decision_authority": "repository_owner",
+      "decision_source": "Direct disposition of the repository owner, received in the W0.2 integrator session on 2026-09-01 and applied to this lane by the golden owner; no other lane's draft was consumed as an approval.",
+      "summary": "Expert correction and revocation are append-only: each creates a new decision identifier and a new event, the history is preserved, and a revocation moves the current projection to pending without automatically restoring the previous verdict.",
+      "modification": "Approved as append-only with the added rule that revocation leaves the projection in a pending state and never auto-restores the verdict that preceded the revoked decision.",
+      "affected_journeys": [
+        "GJ-03"
+      ],
+      "affected_assertions": [
+        "GJ-03-EO-09",
+        "GJ-03-FC-06"
+      ]
+    },
+    {
+      "decision_id": "PD-02",
+      "status": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "decision_authority": "repository_owner",
+      "decision_source": "Direct disposition of the repository owner, received in the W0.2 integrator session on 2026-09-01 and applied to this lane by the golden owner; no other lane's draft was consumed as an approval.",
+      "summary": "One versioned target stage registry is authoritative and conflicting legacy stage declarations become aliases or evidence.",
+      "modification": "Approved on condition that the analysis lane is accepted only after a name-level alias map exists. Legacy public stage names in this lane's fixtures, including findings_merge in fixtures/golden/GJ-02/inputs/run_plan.json, stay under their legacy spelling and are not renamed to a canonical stage identifier here; name resolution belongs to the analysis stage registry.",
+      "affected_journeys": [
+        "GJ-02"
+      ],
+      "affected_assertions": [
+        "GJ-02-EO-11"
+      ]
+    },
+    {
+      "decision_id": "PD-03",
+      "status": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "decision_authority": "repository_owner",
+      "decision_source": "Direct disposition of the repository owner, received in the W0.2 integrator session on 2026-09-01 and applied to this lane by the golden owner; no other lane's draft was consumed as an approval.",
+      "summary": "Audit run, job and attempt are distinct identities and current-attempt authority with fencing is mandatory, extending the partial legacy token and epoch behavior.",
+      "modification": "Approved with an explicit run creation rule: a new audit run exists only when a top-level audit or re-audit command is accepted for a frozen set of inputs and configuration; the same idempotency key with the same payload returns the existing run; retry, resume, restart and worker failover create a new attempt on the same job and never a new run; a terminal run is never reopened.",
+      "affected_journeys": [
+        "GJ-05"
+      ],
+      "affected_assertions": [
+        "GJ-05-EO-13",
+        "GJ-05-FC-09"
+      ]
+    },
+    {
+      "decision_id": "PD-04",
+      "status": "approved",
+      "decided_on": "2026-09-01",
+      "decision_authority": "repository_owner",
+      "decision_source": "Direct disposition of the repository owner, received in the W0.2 integrator session on 2026-09-01 and applied to this lane by the golden owner; no other lane's draft was consumed as an approval.",
+      "summary": "Graphic and vector comparison is future greenfield scope, explicitly absent from legacy parity, with its first contractual inclusion in W7 under a separate golden graphic pair. Nothing graphic is fabricated in W0 fixtures or contracts.",
+      "affected_journeys": [
+        "GJ-04"
+      ],
+      "affected_assertions": [
+        "GJ-04-EO-11"
+      ]
+    }
+  ],
+  "target_scope_annotations": [
+    {
+      "annotation_id": "TSA-01",
+      "statement": "Absence of graphic and vector comparison is recorded as an additive target-scope annotation on GJ-04. It is not a twelfth inventory candidate and it takes no place in the fan-in map, so its assertions are listed here instead of under any inventory candidate. Owner decision PD-04 is approved: graphic and vector comparison is future greenfield scope whose first contractual inclusion is W7 with a separate golden graphic pair, and no graphic material exists in this wave.",
+      "is_inventory_candidate": false,
+      "owner_decision_ref": "PD-04",
+      "first_contract_inclusion": "W7, together with a dedicated golden graphic pair created in that wave",
+      "assertion_ids": [
+        "GJ-04-EO-09",
+        "GJ-04-EO-11",
+        "GJ-04-FC-06"
+      ]
+    }
+  ]
+}

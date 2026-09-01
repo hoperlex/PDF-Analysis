@@ -2,33 +2,29 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:auditmanager:analysis:job-package:v1",
   "title": "JobPackage v1",
+  "contract_version": "1.0.0-draft.1",
+  "description": "Immutable unit of analysis work handed to an engine for exactly one Attempt. It carries the full attempt-authority tuple, the pinned stage-registry version and content-addressed input artifacts only.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version",
-    "job_id",
-    "attempt_id",
-    "run_id",
+    "contract_version",
+    "attempt_authority",
+    "stage_registry",
     "version_uid",
     "analysis_profile_id",
     "artifacts",
     "stages"
   ],
   "properties": {
-    "schema_version": {
-      "const": 1
+    "contract_version": {
+      "const": "1.0.0-draft.1"
     },
-    "job_id": {
-      "type": "string",
-      "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+    "attempt_authority": {
+      "$ref": "#/$defs/attempt_authority",
+      "description": "Complete authority tuple for exactly one Attempt. AuditRun, Job and Attempt are distinct (PD-03, approved with modification on 2026-09-01 by the repository owner). A new run_id is minted when a top-level audit or re-audit command is accepted for a frozen set of inputs and configurations under an idempotency key not accepted before. The same idempotency key with the same payload ALWAYS returns the existing Run and mints nothing at all - no Run, no Job and no Attempt - and that holds even when the existing Run is already terminal. A change of inputs, an explicit re-audit and a repeat of a terminal Run under a NEW idempotency key each mint a NEW run_id. Retry, resume, restart and worker failover never mint a new run_id: the job_id is reused and a new attempt_id with a fresh execution_token is issued, so each of those four mints exactly one new Attempt. A terminal Run is never reopened; it keeps its run_id and terminal state forever, which is why a repeat of it under a new idempotency key produces a separate new Run beside it rather than a continuation of it. All nine cases, the complete per-trigger outcome tuple creates_run/reuses_existing_run/reuses_job/creates_attempt/reopens_terminal_run, and the precedence of RC-02 over RC-05 for a same-key same-payload repeat of a terminal Run, are enumerated machine-readably in stage-registry.json run_lifecycle, which is the authoritative form; this description restates that block in full and never extends it. execution_token is an opaque equality-only capability; it is refreshed on every new Attempt and verified inside the publishing transaction. Fencing is a property of that behaviour, not of the field name, and the token is never ordered, parsed, decoded or derived from business data."
     },
-    "attempt_id": {
-      "type": "string",
-      "pattern": "^att_[0-9A-HJKMNP-TV-Z]{26}$"
-    },
-    "run_id": {
-      "type": "string",
-      "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
+    "stage_registry": {
+      "$ref": "#/$defs/stage_registry_ref"
     },
     "version_uid": {
       "type": "string",
@@ -38,73 +34,145 @@
       "type": "string",
       "pattern": "^ap_[0-9A-HJKMNP-TV-Z]{26}$"
     },
-    "fencing_token": {
-      "type": [
-        "string",
-        "integer"
-      ]
+    "prompt_bundle_id": {
+      "type": "string",
+      "pattern": "^pb_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "norms_snapshot_id": {
+      "type": "string",
+      "pattern": "^ns_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
     },
     "artifacts": {
       "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "role",
-          "blob_id",
-          "sha256",
-          "size_bytes",
-          "media_type"
-        ],
-        "properties": {
-          "role": {
-            "type": "string",
-            "minLength": 1
-          },
-          "blob_id": {
-            "type": "string",
-            "pattern": "^blob_[0-9A-HJKMNP-TV-Z]{26}$"
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "size_bytes": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "media_type": {
-            "type": "string",
-            "minLength": 1
-          },
-          "logical_name": {
-            "type": "string"
-          }
-        }
+        "$ref": "#/$defs/artifact"
       }
     },
     "stages": {
       "type": "array",
       "minItems": 1,
+      "uniqueItems": true,
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "name",
-          "version"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1
-          },
-          "version": {
-            "type": "string",
-            "minLength": 1
-          },
-          "config_ref": {
-            "type": "string"
-          }
+        "$ref": "#/$defs/planned_stage"
+      }
+    }
+  },
+  "$defs": {
+    "stage_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$"
+    },
+    "attempt_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Complete authority tuple for exactly one Attempt. AuditRun, Job and Attempt are distinct (PD-03, approved with modification on 2026-09-01 by the repository owner). A new run_id is minted when a top-level audit or re-audit command is accepted for a frozen set of inputs and configurations under an idempotency key not accepted before. The same idempotency key with the same payload ALWAYS returns the existing Run and mints nothing at all - no Run, no Job and no Attempt - and that holds even when the existing Run is already terminal. A change of inputs, an explicit re-audit and a repeat of a terminal Run under a NEW idempotency key each mint a NEW run_id. Retry, resume, restart and worker failover never mint a new run_id: the job_id is reused and a new attempt_id with a fresh execution_token is issued, so each of those four mints exactly one new Attempt. A terminal Run is never reopened; it keeps its run_id and terminal state forever, which is why a repeat of it under a new idempotency key produces a separate new Run beside it rather than a continuation of it. All nine cases, the complete per-trigger outcome tuple creates_run/reuses_existing_run/reuses_job/creates_attempt/reopens_terminal_run, and the precedence of RC-02 over RC-05 for a same-key same-payload repeat of a terminal Run, are enumerated machine-readably in stage-registry.json run_lifecycle, which is the authoritative form; this description restates that block in full and never extends it. execution_token is an opaque equality-only capability; it is refreshed on every new Attempt and verified inside the publishing transaction. Fencing is a property of that behaviour, not of the field name, and the token is never ordered, parsed, decoded or derived from business data.",
+      "required": [
+        "run_id",
+        "job_id",
+        "attempt_id",
+        "execution_token"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "pattern": "^att_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "execution_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9._~-]{1,256}$"
+        }
+      }
+    },
+    "stage_registry_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "contract_version"
+      ],
+      "properties": {
+        "contract": {
+          "const": "auditmanager.analysis.stage_registry"
+        },
+        "contract_version": {
+          "const": "1.0.0-draft.1"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Content-addressed artifact reference. It never carries an object key, URL, presigned link, credential or secret.",
+      "required": [
+        "role",
+        "blob_id",
+        "sha256",
+        "size_bytes",
+        "media_type"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"
+        },
+        "blob_id": {
+          "type": "string",
+          "pattern": "^blob_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z]+/[a-z0-9.+_-]+$"
+        },
+        "logical_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+          "description": "Display-only label. It is never identity and never a filesystem path, object key or URL."
+        }
+      }
+    },
+    "planned_stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reference to a canonical registry stage. A stage_id absent from the pinned registry version fails closed.",
+      "required": [
+        "stage_id",
+        "stage_version"
+      ],
+      "properties": {
+        "stage_id": {
+          "$ref": "#/$defs/stage_id"
+        },
+        "stage_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "config_ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
         }
       }
     }

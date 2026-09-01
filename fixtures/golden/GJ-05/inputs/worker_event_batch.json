@@ -1,0 +1,48 @@
+{
+  "worker_label": "SYNTH-WORKER-01",
+  "job_id": "SYNTH-JOB-01",
+  "attempt_number": 1,
+  "connection_epoch": 7,
+  "events": [
+    {
+      "seq": 41,
+      "kind": "stage_started",
+      "redacted": true
+    },
+    {
+      "seq": 42,
+      "kind": "log_line",
+      "redacted": true
+    },
+    {
+      "seq": 43,
+      "kind": "stage_finished",
+      "redacted": true
+    }
+  ],
+  "resend_batch": [
+    {
+      "seq": 42,
+      "kind": "log_line",
+      "redacted": true
+    },
+    {
+      "seq": 43,
+      "kind": "stage_finished",
+      "redacted": true
+    }
+  ],
+  "last_acked_seq_before": 41,
+  "expected_last_acked_seq_after": 43,
+  "stale_epoch_batch": {
+    "connection_epoch": 6,
+    "events": [
+      {
+        "seq": 44,
+        "kind": "log_line",
+        "redacted": true
+      }
+    ]
+  },
+  "note": "Event bodies are redacted by construction; no log text, path or credential-shaped value is stored."
+}

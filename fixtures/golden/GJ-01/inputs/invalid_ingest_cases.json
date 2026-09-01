@@ -1,0 +1,103 @@
+{
+  "cases": [
+    {
+      "case_id": "IC-01",
+      "kind": "empty_upload",
+      "members": []
+    },
+    {
+      "case_id": "IC-02",
+      "kind": "forbidden_extension",
+      "members": [
+        {
+          "name": "AR-101.exe",
+          "expected_disposition": "extension not in the folder-upload allowed set and not in the version-file allowed set"
+        }
+      ]
+    },
+    {
+      "case_id": "IC-03",
+      "kind": "path_traversal",
+      "members": [
+        {
+          "name": "../../escape/AR-101.pdf"
+        }
+      ]
+    },
+    {
+      "case_id": "IC-04",
+      "kind": "absolute_path",
+      "members": [
+        {
+          "name": "/etc/AR-101.pdf"
+        }
+      ]
+    },
+    {
+      "case_id": "IC-05",
+      "kind": "malformed_recognized_json_companion",
+      "members": [
+        {
+          "role": "source_document_surrogate",
+          "name": "AR-101.pdf",
+          "recognition_suffix": ".pdf",
+          "surrogate_of": "binary source PDF",
+          "text_stand_in": "GJ-01/inputs/sheet_text_stand_in.txt",
+          "declared_bytes": 4096,
+          "expected_ingest_disposition": "classified as the single project PDF, so the precheck pdf count is one and no no_pdf block is appended"
+        },
+        {
+          "role": "recognized_json_companion",
+          "name": "AR-101_result.json",
+          "recognition_suffix": "_result.json",
+          "body_is_valid_json": false,
+          "declared_bytes": 256,
+          "expected_ingest_disposition": "accepted: the member is classified by its lowercased filename suffix only and its body is never parsed at ingest, so the bytes are stored verbatim, has_result is true, and the malformed body contributes no block and no warning, because the closed precheck error-code set contains no JSON-validity code"
+        }
+      ],
+      "parse_failure_surfaces_at": "the downstream crop_blocks stage, not at ingest",
+      "pdf_member_is_required_for_this_case": {
+        "reason": "The case isolates the malformed recognized-JSON companion, so it must not also trip the missing-PDF rule. A folder holding the companion alone has a pdf count of zero: precheck appends the no_pdf block, no_pdf is a member of the closed precheck error-code set, and the verdict becomes error; the save path refuses the same folder outright with the no-PDF UploadFolderError. Either outcome would be produced by the absent PDF and not by the malformed JSON.",
+        "legacy_evidence": [
+          "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PRECHECK_ERROR_CODES@2792",
+          "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2858-2868",
+          "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2907-2912",
+          "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@3101-3106"
+        ]
+      },
+      "expected_precheck_verdict": "The verdict is whatever the same folder with a well-formed companion would receive: the malformed body raises no code of its own. It is not asserted to be ready unconditionally, because the duplicate, name and object codes still apply to the folder as a whole."
+    },
+    {
+      "case_id": "IC-06",
+      "kind": "name_conflict_without_replace",
+      "members": [
+        {
+          "name": "AR-101.pdf"
+        }
+      ],
+      "replace_existing": false
+    },
+    {
+      "case_id": "IC-07",
+      "kind": "version_from_project_with_non_empty_source_output",
+      "discard_source_output": false
+    },
+    {
+      "case_id": "IC-08",
+      "kind": "version_creation_during_active_audit"
+    },
+    {
+      "case_id": "IC-09",
+      "kind": "unrecognized_json_companion_suffix",
+      "members": [
+        {
+          "name": "AR-101.result.json",
+          "recognition_suffix": "none",
+          "expected_ingest_disposition": "collected under ignored_files: the extension is allowed but the lowercased name ends in neither _result.json nor _blocks.json, so the member is dropped from the bundle without a block and without a warning"
+        }
+      ],
+      "note": "A dot before result is not the legacy companion suffix. The legacy test is a lowercased endswith on _result.json."
+    }
+  ],
+  "note": "Every case is a declarative scenario description; no executable payload and no real filesystem path is committed. Member names use the exact legacy companion suffixes so that a golden run exercises the real recognition rule."
+}

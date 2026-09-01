@@ -1,0 +1,1723 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auditmanager:domain:state-machines:v1",
+  "title": "DomainStateMachineCatalog v1",
+  "description": "Validates contracts/domain/v1/state-machines.json. Closure of transitions, terminal-state edges and the initial state are additionally enforced by scripts/validate_bootstrap.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "contract_version",
+    "supersedes",
+    "candidate_revision",
+    "revision_note",
+    "status",
+    "frozen",
+    "rules",
+    "default_violation",
+    "machines",
+    "non_state_machine_aggregates",
+    "projections",
+    "open_owner_decisions",
+    "open_questions",
+    "resolved_questions",
+    "optional_branch_policy"
+  ],
+  "properties": {
+    "contract": {
+      "const": "auditmanager.domain.state-machines"
+    },
+    "contract_version": {
+      "const": "1.0.0-draft.1"
+    },
+    "supersedes": {
+      "const": "1.0.0-draft.0"
+    },
+    "candidate_revision": {
+      "const": 4,
+      "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
+    },
+    "revision_note": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "draft_candidate",
+        "frozen"
+      ]
+    },
+    "frozen": {
+      "const": false
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "default_violation": {
+      "const": "state_transition_not_allowed"
+    },
+    "machines": {
+      "type": "object",
+      "required": [
+        "attempt",
+        "audit_run",
+        "blob",
+        "command_idempotency",
+        "import",
+        "job"
+      ],
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entity",
+          "identifier",
+          "purpose",
+          "authoritative_writer",
+          "initial",
+          "transitions",
+          "terminal",
+          "terminal_semantics",
+          "guards",
+          "retry",
+          "evidence"
+        ],
+        "properties": {
+          "entity": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "identifier": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(_uid|_id)$"
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1
+          },
+          "authoritative_writer": {
+            "type": "string",
+            "minLength": 1
+          },
+          "run_creation": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "When a new aggregate of this machine's entity is created, when an existing one is returned instead, and what creates nothing. Required for audit_run.",
+            "required": [
+              "rule",
+              "frozen_at_creation",
+              "cases",
+              "decision_dependency",
+              "decided_on",
+              "authority"
+            ],
+            "properties": {
+              "rule": {
+                "type": "string",
+                "minLength": 1
+              },
+              "frozen_at_creation": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "cases": {
+                "type": "array",
+                "minItems": 6,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "trigger",
+                    "effect"
+                  ],
+                  "properties": {
+                    "trigger": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "effect": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "error_code": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    },
+                    "reference": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              },
+              "decision_dependency": {
+                "const": "PD-03"
+              },
+              "decided_on": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "authority": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "initial": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "transitions": {
+            "type": "object",
+            "minProperties": 1,
+            "propertyNames": {
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "additionalProperties": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          },
+          "terminal": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            }
+          },
+          "terminal_semantics": {
+            "type": "object",
+            "minProperties": 1,
+            "propertyNames": {
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "outcome",
+                "publishes_result",
+                "description"
+              ],
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "success",
+                    "partial",
+                    "failure",
+                    "cancelled",
+                    "rejected",
+                    "superseded",
+                    "lost",
+                    "erased",
+                    "abandoned"
+                  ]
+                },
+                "publishes_result": {
+                  "type": "boolean"
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "guards": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to",
+                "trigger",
+                "guard"
+              ],
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "to": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "trigger": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "guard": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "on_violation": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                }
+              }
+            }
+          },
+          "cancellation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "allowed_from",
+              "authorized_actor",
+              "effect"
+            ],
+            "properties": {
+              "allowed_from": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                }
+              },
+              "authorized_actor": {
+                "type": "string",
+                "minLength": 1
+              },
+              "effect": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "publication_authority": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rule",
+              "late_delivery",
+              "evidence",
+              "decision_dependency"
+            ],
+            "properties": {
+              "rule": {
+                "type": "string",
+                "minLength": 1
+              },
+              "late_delivery": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "decision_dependency": {
+                "enum": [
+                  "PD-01",
+                  "PD-02",
+                  "PD-03",
+                  "PD-04"
+                ]
+              }
+            }
+          },
+          "repeat_semantics": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "condition",
+                "result"
+              ],
+              "properties": {
+                "condition": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "result": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "retry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "in_place",
+              "creates"
+            ],
+            "properties": {
+              "in_place": {
+                "type": "boolean"
+              },
+              "creates": {
+                "type": "string",
+                "minLength": 1
+              },
+              "bounded_by": {
+                "type": "string",
+                "minLength": 1
+              },
+              "on_exhaustion": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "decision_dependency": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04"
+            ]
+          },
+          "notes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "non_state_machine_aggregates": {
+      "type": "object",
+      "required": [
+        "AnalysisProvenance",
+        "AuditEvent",
+        "ExpertDecision",
+        "FindingObservation"
+      ],
+      "propertyNames": {
+        "pattern": "^[A-Z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identifier",
+          "reason",
+          "rules",
+          "evidence",
+          "authority"
+        ],
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(_uid|_id)$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rules": {
+            "type": "array",
+            "minItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decision_dependency": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04"
+            ]
+          }
+        }
+      }
+    },
+    "projections": {
+      "type": "object",
+      "required": [
+        "execution_progress",
+        "finding_current_verdict",
+        "knowledge_base"
+      ],
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "rule",
+          "values",
+          "rebuildable",
+          "rules",
+          "evidence"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rule": {
+            "type": "string",
+            "minLength": 1
+          },
+          "values": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            }
+          },
+          "rebuildable": {
+            "const": true
+          },
+          "rules": {
+            "type": "array",
+            "minItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "decision_dependency": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04"
+            ]
+          }
+        }
+      }
+    },
+    "open_owner_decisions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Owner-decision register. Every PD entry this contract depends on is listed with its recorded disposition; an entry never silently disappears.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "statement",
+          "affects"
+        ],
+        "properties": {
+          "id": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04",
+              "OPEN-RETENTION"
+            ]
+          },
+          "external_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "pending_owner_approval",
+              "approved",
+              "approved_with_modification",
+              "rejected",
+              "not_decided"
+            ]
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "modification": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decided_on": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resolves": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^OQ-[0-9]{2}$"
+            }
+          },
+          "gate": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "approved",
+                    "approved_with_modification",
+                    "rejected"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "decided_on",
+                "authority"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "approved_with_modification"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "modification"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "not_decided",
+                    "pending_owner_approval"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "gate"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Questions still open in this catalog. Each names its owning slot and the gate that must close it; an empty array means this catalog has none.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "question",
+          "affects",
+          "owning_slot",
+          "gate"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^OQ-[0-9]{2}$"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "deferred"
+            ]
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "owning_slot": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gate": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "resolved_questions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Questions this catalog previously carried as open and that now have a recorded resolution. Entries are retained so a closed question cannot silently reappear as an assumption.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "question",
+          "resolution",
+          "affects",
+          "decided_on",
+          "authority"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^OQ-[0-9]{2}$"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resolution": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "decision_ref": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04"
+            ]
+          },
+          "decided_on": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "optional_branch_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Part 3 of the FS-04 fail-soft policy: what AuditRun and Job, as consumers, must do with the outcome of an optional branch. Every element is required, so a catalog that drops the policy, its outcome vocabulary, its decision table or its typed-reason rule fails validation instead of silently losing the rule.",
+      "required": [
+        "id",
+        "title",
+        "owner_decision",
+        "definition",
+        "outcome_values",
+        "unrecorded_outcome",
+        "recorded_outcome",
+        "branch_status",
+        "terminal_selection",
+        "job_consumer",
+        "no_silent_degradation",
+        "interaction",
+        "capability_status",
+        "integrator_notes"
+      ],
+      "properties": {
+        "id": {
+          "const": "FS-04-consumer"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner_decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "recorded_on",
+            "authority",
+            "statement",
+            "policy_ref",
+            "part",
+            "parts_not_owned_here",
+            "scope_limit"
+          ],
+          "properties": {
+            "recorded_on": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "authority": {
+              "type": "string",
+              "minLength": 1
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1
+            },
+            "policy_ref": {
+              "const": "FS-04"
+            },
+            "part": {
+              "const": "3 of 3"
+            },
+            "parts_not_owned_here": {
+              "type": "array",
+              "minItems": 2,
+              "uniqueItems": true,
+              "description": "The two FS-04 parts this contract does not own. Each names an owner and a family and no semantics, so the split cannot be quietly absorbed here.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "part",
+                  "owner",
+                  "family"
+                ],
+                "properties": {
+                  "part": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "owner": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "family": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "scope_limit": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "definition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "optional_branch",
+            "admitted",
+            "consumer",
+            "outcome_values_are_consumer_side"
+          ],
+          "properties": {
+            "optional_branch": {
+              "type": "string",
+              "minLength": 1
+            },
+            "admitted": {
+              "type": "string",
+              "minLength": 1
+            },
+            "consumer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "outcome_values_are_consumer_side": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "outcome_values": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The closed consumer-side outcome vocabulary. succeeded is the only successful value; both unsuccessful values require a typed reason, so no unsuccessful outcome can be recorded untyped.",
+          "required": [
+            "succeeded",
+            "failed",
+            "unknown"
+          ],
+          "properties": {
+            "succeeded": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/outcomeValue"
+                },
+                {
+                  "properties": {
+                    "successful": {
+                      "const": true
+                    },
+                    "typed_reason": {
+                      "const": "forbidden"
+                    }
+                  }
+                }
+              ]
+            },
+            "failed": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/outcomeValue"
+                },
+                {
+                  "properties": {
+                    "successful": {
+                      "const": false
+                    },
+                    "typed_reason": {
+                      "const": "required"
+                    }
+                  }
+                }
+              ]
+            },
+            "unknown": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/outcomeValue"
+                },
+                {
+                  "properties": {
+                    "successful": {
+                      "const": false
+                    },
+                    "typed_reason": {
+                      "const": "required"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "unrecorded_outcome": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Fail-closed default. A missing outcome evaluates to unknown, which is unsuccessful; it can never evaluate to a successful value.",
+          "required": [
+            "evaluates_to",
+            "rule",
+            "on_violation"
+          ],
+          "properties": {
+            "evaluates_to": {
+              "const": "unknown"
+            },
+            "rule": {
+              "type": "string",
+              "minLength": 1
+            },
+            "on_violation": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            }
+          }
+        },
+        "recorded_outcome": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rule",
+            "entry_content",
+            "wire_shape_owner",
+            "safety",
+            "on_violation"
+          ],
+          "properties": {
+            "rule": {
+              "type": "string",
+              "minLength": 1
+            },
+            "entry_content": {
+              "type": "array",
+              "minItems": 3,
+              "uniqueItems": true,
+              "description": "What every recorded outcome entry must contain. branch_reference, outcome and typed_reason are all required members, so an untyped or anonymous degradation record is not contract-conforming.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "element",
+                  "requirement"
+                ],
+                "properties": {
+                  "element": {
+                    "enum": [
+                      "branch_reference",
+                      "outcome",
+                      "typed_reason"
+                    ]
+                  },
+                  "requirement": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "wire_shape_owner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "safety": {
+              "type": "string",
+              "minLength": 1
+            },
+            "on_violation": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            }
+          }
+        },
+        "branch_status": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "derivation",
+            "values"
+          ],
+          "properties": {
+            "derivation": {
+              "type": "string",
+              "minLength": 1
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "all_successful",
+                "any_unsuccessful"
+              ],
+              "properties": {
+                "all_successful": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "any_unsuccessful": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "terminal_selection": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The machine-readable decision table. Its six rows are pinned one by one, so the terminal allowed and the terminal forbidden for every input combination is derivable from this schema alone, and no edit can let an unsuccessful optional branch reach published without a deliberate schema change.",
+          "required": [
+            "applies_to",
+            "evaluated_at",
+            "inputs",
+            "core_terminal",
+            "total",
+            "totality_rule",
+            "monotonicity_rule",
+            "table"
+          ],
+          "properties": {
+            "applies_to": {
+              "const": "machines.audit_run"
+            },
+            "evaluated_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "inputs": {
+              "const": [
+                "core_terminal",
+                "branch_status"
+              ]
+            },
+            "core_terminal": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "meaning",
+                "values",
+                "not_owned_here"
+              ],
+              "properties": {
+                "meaning": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "values": {
+                  "const": [
+                    "published",
+                    "partial",
+                    "failed"
+                  ]
+                },
+                "not_owned_here": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "total": {
+              "const": true
+            },
+            "totality_rule": {
+              "type": "string",
+              "minLength": 1
+            },
+            "monotonicity_rule": {
+              "type": "string",
+              "minLength": 1
+            },
+            "table": {
+              "type": "array",
+              "minItems": 6,
+              "maxItems": 6,
+              "uniqueItems": true,
+              "items": false,
+              "prefixItems": [
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/terminalSelectionRow"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "core_terminal": {
+                          "const": "published"
+                        },
+                        "branch_status": {
+                          "const": "all_successful"
+                        },
+                        "terminal": {
+                          "const": "published"
+                        },
+                        "terminal_forbidden": {
+                          "const": []
+                        }
+                      },
+                      "required": [
+                        "core_terminal",
+                        "branch_status",
+                        "terminal",
+                        "terminal_forbidden"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/terminalSelectionRow"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "core_terminal": {
+                          "const": "published"
+                        },
+                        "branch_status": {
+                          "const": "any_unsuccessful"
+                        },
+                        "terminal": {
+                          "const": "partial"
+                        },
+                        "terminal_forbidden": {
+                          "const": [
+                            "published"
+                          ]
+                        },
+                        "on_violation": {
+                          "const": "partial_result_not_publishable"
+                        }
+                      },
+                      "required": [
+                        "core_terminal",
+                        "branch_status",
+                        "terminal",
+                        "terminal_forbidden",
+                        "on_violation"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/terminalSelectionRow"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "core_terminal": {
+                          "const": "partial"
+                        },
+                        "branch_status": {
+                          "const": "all_successful"
+                        },
+                        "terminal": {
+                          "const": "partial"
+                        },
+                        "terminal_forbidden": {
+                          "const": [
+                            "published"
+                          ]
+                        },
+                        "on_violation": {
+                          "const": "partial_result_not_publishable"
+                        }
+                      },
+                      "required": [
+                        "core_terminal",
+                        "branch_status",
+                        "terminal",
+                        "terminal_forbidden",
+                        "on_violation"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/terminalSelectionRow"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "core_terminal": {
+                          "const": "partial"
+                        },
+                        "branch_status": {
+                          "const": "any_unsuccessful"
+                        },
+                        "terminal": {
+                          "const": "partial"
+                        },
+                        "terminal_forbidden": {
+                          "const": [
+                            "published"
+                          ]
+                        },
+                        "on_violation": {
+                          "const": "partial_result_not_publishable"
+                        }
+                      },
+                      "required": [
+                        "core_terminal",
+                        "branch_status",
+                        "terminal",
+                        "terminal_forbidden",
+                        "on_violation"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/terminalSelectionRow"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "core_terminal": {
+                          "const": "failed"
+                        },
+                        "branch_status": {
+                          "const": "all_successful"
+                        },
+                        "terminal": {
+                          "const": "failed"
+                        },
+                        "terminal_forbidden": {
+                          "const": [
+                            "published",
+                            "partial"
+                          ]
+                        },
+                        "on_violation": {
+                          "const": "analysis_failed"
+                        }
+                      },
+                      "required": [
+                        "core_terminal",
+                        "branch_status",
+                        "terminal",
+                        "terminal_forbidden",
+                        "on_violation"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/terminalSelectionRow"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "core_terminal": {
+                          "const": "failed"
+                        },
+                        "branch_status": {
+                          "const": "any_unsuccessful"
+                        },
+                        "terminal": {
+                          "const": "failed"
+                        },
+                        "terminal_forbidden": {
+                          "const": [
+                            "published",
+                            "partial"
+                          ]
+                        },
+                        "on_violation": {
+                          "const": "analysis_failed"
+                        }
+                      },
+                      "required": [
+                        "core_terminal",
+                        "branch_status",
+                        "terminal",
+                        "terminal_forbidden",
+                        "on_violation"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "job_consumer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "applies_to",
+            "role",
+            "success_terminal",
+            "published_outcome_forbidden",
+            "rule",
+            "on_violation",
+            "not_a_job_failure",
+            "attempt_unchanged"
+          ],
+          "properties": {
+            "applies_to": {
+              "const": "machines.job"
+            },
+            "role": {
+              "type": "string",
+              "minLength": 1
+            },
+            "success_terminal": {
+              "const": "succeeded"
+            },
+            "published_outcome_forbidden": {
+              "const": [
+                "success"
+              ]
+            },
+            "rule": {
+              "type": "string",
+              "minLength": 1
+            },
+            "on_violation": {
+              "const": "partial_result_not_publishable"
+            },
+            "not_a_job_failure": {
+              "type": "string",
+              "minLength": 1
+            },
+            "attempt_unchanged": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "no_silent_degradation": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "interaction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "PD-03",
+            "partial_semantics",
+            "run_creation",
+            "cancellation",
+            "conflicts_found"
+          ],
+          "properties": {
+            "PD-03": {
+              "type": "string",
+              "minLength": 1
+            },
+            "partial_semantics": {
+              "type": "string",
+              "minLength": 1
+            },
+            "run_creation": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cancellation": {
+              "type": "string",
+              "minLength": 1
+            },
+            "conflicts_found": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "capability_status": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The concrete project-optimization branch is switched off at CP-00 and its runtime semantics are excluded there. Both facts are pinned by const, so the policy cannot be read as enabling the capability.",
+          "required": [
+            "capability",
+            "enabled_at_cp_00",
+            "runtime_semantics_at_cp_00",
+            "statement",
+            "owning_family",
+            "owning_role",
+            "planned_task",
+            "gate",
+            "no_runtime_effect"
+          ],
+          "properties": {
+            "capability": {
+              "const": "project_optimization"
+            },
+            "enabled_at_cp_00": {
+              "const": false
+            },
+            "runtime_semantics_at_cp_00": {
+              "const": "excluded"
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1
+            },
+            "owning_family": {
+              "const": "contracts/optimization/v1/**"
+            },
+            "owning_role": {
+              "type": "string",
+              "minLength": 1
+            },
+            "planned_task": {
+              "const": "W5-OPT-01"
+            },
+            "gate": {
+              "type": "string",
+              "minLength": 1
+            },
+            "no_runtime_effect": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "integrator_notes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "description": "audit_run must declare run_creation: PD-03 as approved with modification requires the AuditRun creation rule to be machine-readable, not prose.",
+      "properties": {
+        "machines": {
+          "properties": {
+            "audit_run": {
+              "type": "object",
+              "required": [
+                "run_creation"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "machines.audit_run must keep the guard that makes validating -> published unavailable while an admitted optional branch is unsuccessful. Removing it would leave the rule stated only in optional_branch_policy and reachable in the machine.",
+      "properties": {
+        "machines": {
+          "properties": {
+            "audit_run": {
+              "type": "object",
+              "properties": {
+                "guards": {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "from",
+                      "to",
+                      "on_violation"
+                    ],
+                    "properties": {
+                      "from": {
+                        "const": "validating"
+                      },
+                      "to": {
+                        "const": "published"
+                      },
+                      "on_violation": {
+                        "const": "partial_result_not_publishable"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "machines.job must keep the guard that refuses a published result declaring success while an admitted optional branch is unsuccessful.",
+      "properties": {
+        "machines": {
+          "properties": {
+            "job": {
+              "type": "object",
+              "properties": {
+                "guards": {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "from",
+                      "to",
+                      "on_violation"
+                    ],
+                    "properties": {
+                      "from": {
+                        "const": "running"
+                      },
+                      "to": {
+                        "const": "succeeded"
+                      },
+                      "on_violation": {
+                        "const": "partial_result_not_publishable"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "terminalSelectionRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "core_terminal",
+        "branch_status",
+        "terminal",
+        "terminal_forbidden"
+      ],
+      "properties": {
+        "core_terminal": {
+          "enum": [
+            "published",
+            "partial",
+            "failed"
+          ]
+        },
+        "branch_status": {
+          "enum": [
+            "all_successful",
+            "any_unsuccessful"
+          ]
+        },
+        "terminal": {
+          "enum": [
+            "published",
+            "partial",
+            "failed"
+          ]
+        },
+        "terminal_forbidden": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "published",
+              "partial",
+              "failed",
+              "cancelled"
+            ]
+          }
+        },
+        "on_violation": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "description": "A row that forbids a terminal must name the code reported when it is attempted. A forbidding row without a code would be an untyped refusal.",
+          "if": {
+            "properties": {
+              "terminal_forbidden": {
+                "minItems": 1
+              }
+            },
+            "required": [
+              "terminal_forbidden"
+            ]
+          },
+          "then": {
+            "required": [
+              "on_violation"
+            ]
+          }
+        }
+      ]
+    },
+    "outcomeValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "successful",
+        "typed_reason",
+        "description"
+      ],
+      "properties": {
+        "successful": {
+          "type": "boolean"
+        },
+        "typed_reason": {
+          "enum": [
+            "required",
+            "forbidden"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,920 @@
+{
+  "contract": "auditmanager.analysis.stage_registry",
+  "contract_version": "1.0.0-draft.1",
+  "status": "candidate",
+  "evidence_baseline": {
+    "inventory_commit": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba",
+    "inventory_section": "2.2 Pipeline stage/order declarations; 6 Pipeline topology observed; 7 Gaps, contradictions and risks",
+    "legacy_commit": "32b9d903792b30506048a1d42b0e6b2d07aee403"
+  },
+  "alias_resolution": {
+    "name_map_contract": "auditmanager.analysis.legacy_stage_name_map",
+    "name_map_contract_version": "1.0.0-draft.1",
+    "site_map_contract": "auditmanager.analysis.legacy_stage_map",
+    "rule": "This registry stores no legacy alias. A concrete legacy stage name is resolved to a canonical stage_id, or recognised as explicitly excluded, only through legacy-stage-name-map.json; that map in turn cites the declaration site in legacy-stage-map.json and an immutable evidence locator at the pinned legacy commit. The control plane performs the resolution at its boundary and passes only canonical stage_id values to the engine; the engine never accepts a legacy name. Under PD-02 as approved with modification on 2026-09-01, this registry is authoritative only together with that name-level map."
+  },
+  "status_semantics": {
+    "succeeded": "The stage ran to completion and produced every output role marked required in this registry. A succeeded StageResult carries no error object and no degraded marker.",
+    "partial": "The stage produced a usable but incomplete result. It requires a typed error object describing what was not produced. Only stages with status_policy.partial_allowed may report it.",
+    "failed": "The stage did not produce a usable result. It requires a typed error object. Missing required input, missing required output or unavailable provider state is failure, never silent success.",
+    "skipped": "The stage did not run by explicit control-plane decision. It requires a typed error object whose code names the skip reason and whose retryable flag is false. Only stages with status_policy.skip_allowed may report it."
+  },
+  "execution_scopes": {
+    "central_only": "The stage may run only inside the trust center because it reads raw source documents or assigns canonical identity. Target policy under owner decisions PD-02 and PD-03, both approved with modification on 2026-09-01 by the repository owner. It is a target statement, never a legacy parity claim.",
+    "remote_eligible": "The stage may be dispatched to a remote worker because it consumes derived artifacts referenced by blob_id and checksum. Eligibility never implies that a remote worker writes canonical metadata. Target policy under owner decisions PD-02 and PD-03, both approved with modification on 2026-09-01 by the repository owner. It is a target statement, never a legacy parity claim."
+  },
+  "run_lifecycle": {
+    "owner_decision": "PD-03",
+    "decision_state": "approved_with_modification",
+    "decided_on": "2026-09-01",
+    "decided_by": "repository owner",
+    "rule": "Complete machine-readable transfer of the AuditRun creation rule approved with modification as PD-03. AuditRun, Job and Attempt are distinct entities. Every trigger the owner ruled on appears here exactly once with its condition and its whole outcome tuple - what it creates, what it reuses and whether it creates an Attempt - so that neither the restrictive nor the positive half of the rule, and neither the Run half nor the Attempt half, can be dropped in transfer. Where the conditions of two triggers can both match one request, trigger_precedence records which one wins and what the resolved outcome is. Prose in this family and in the package schemas restates this block and never extends it.",
+    "terminal_run_rule": "A terminal AuditRun is never reopened: no trigger in this block moves a Run out of a terminal state and reopens_terminal_run is false on every trigger without exception. RC-05 is not a counterexample. The two statements constrain different things. 'A terminal Run is never reopened' constrains the existing entity: it keeps its run_id, its terminal state and its recorded results forever, and no later request re-enters it. 'A repeat of a terminal Run creates a new Run' constrains what the repeated request produces: a separate AuditRun with a new run_id, its own Job and its own first Attempt, standing beside the terminal one. The old Run is neither continued nor mutated; a second entity simply comes into existence.",
+    "triggers": [
+      {
+        "rule_id": "RC-01",
+        "trigger": "top_level_audit_command_accepted",
+        "condition": "A top-level audit or re-audit command is accepted for a frozen set of inputs and configurations, under an idempotency key that has not been accepted before.",
+        "idempotency_scope": "new_idempotency_key",
+        "creates_run": true,
+        "reuses_existing_run": false,
+        "reuses_job": false,
+        "creates_attempt": true,
+        "reopens_terminal_run": false,
+        "effect": "A new AuditRun is created when a top-level audit or re-audit command is accepted for a frozen set of inputs and configurations. The new Run owns its own Job and its own first Attempt."
+      },
+      {
+        "rule_id": "RC-02",
+        "trigger": "idempotent_replay_same_key_and_payload",
+        "condition": "A repeat request carries the same idempotency key and the same payload as an already accepted command. This condition is evaluated first and holds whatever state the existing Run is in, terminal included.",
+        "idempotency_scope": "same_key_and_payload",
+        "creates_run": false,
+        "reuses_existing_run": true,
+        "reuses_job": true,
+        "creates_attempt": false,
+        "reopens_terminal_run": false,
+        "effect": "A repeat carrying the same idempotency key and the same payload returns the existing Run. Nothing is minted: no Run, no Job and no Attempt. This is unconditional - it holds when the existing Run is still running and equally when it is already terminal, where it wins over RC-05 by trigger_precedence RP-01."
+      },
+      {
+        "rule_id": "RC-03",
+        "trigger": "inputs_changed",
+        "condition": "The frozen input set of the request differs from the input set the existing Run was frozen on, so the request is not a same-payload repeat and carries a new idempotency key.",
+        "idempotency_scope": "new_idempotency_key",
+        "creates_run": true,
+        "reuses_existing_run": false,
+        "reuses_job": false,
+        "creates_attempt": true,
+        "reopens_terminal_run": false,
+        "effect": "A change of inputs is a different frozen input set and therefore creates a NEW AuditRun. It is never absorbed as a further Attempt of the Run that was frozen on the previous inputs, because that Run's results describe inputs which no longer hold."
+      },
+      {
+        "rule_id": "RC-04",
+        "trigger": "explicit_re_audit_command",
+        "condition": "An operator explicitly asks for a re-audit under a new idempotency key, with the inputs unchanged.",
+        "idempotency_scope": "new_idempotency_key",
+        "creates_run": true,
+        "reuses_existing_run": false,
+        "reuses_job": false,
+        "creates_attempt": true,
+        "reopens_terminal_run": false,
+        "effect": "An explicit re-audit command creates a NEW AuditRun even when the inputs are unchanged. The operator asked for a fresh Run, so the request is not collapsed into an idempotent replay."
+      },
+      {
+        "rule_id": "RC-05",
+        "trigger": "repeat_of_terminal_run",
+        "condition": "A Run that has already reached a terminal state is repeated under a new idempotency key. The new idempotency key is part of this condition and not an assumption around it: with the same idempotency key and the same payload the request is RC-02 instead, and the original terminal Run is returned. See trigger_precedence RP-01.",
+        "idempotency_scope": "new_idempotency_key",
+        "creates_run": true,
+        "reuses_existing_run": false,
+        "reuses_job": false,
+        "creates_attempt": true,
+        "reopens_terminal_run": false,
+        "effect": "Repeating a Run that has already reached a terminal state under a NEW idempotency key creates a NEW AuditRun with its own run_id, Job and first Attempt. The terminal Run is not continued, not mutated and not reopened; see terminal_run_rule for why the two statements do not conflict. Under the same idempotency key and the same payload this trigger does not apply at all: RC-02 does, and the original Run is returned unchanged."
+      },
+      {
+        "rule_id": "RC-06",
+        "trigger": "retry",
+        "condition": "An Attempt of an existing Job is retried. This is an internal control-plane lifecycle event, not a client-submitted command, so it presents no idempotency key.",
+        "idempotency_scope": "not_a_client_submitted_command",
+        "creates_run": false,
+        "reuses_existing_run": true,
+        "reuses_job": true,
+        "creates_attempt": true,
+        "reopens_terminal_run": false,
+        "effect": "Retry never creates a Run. The same Job is reused and a new Attempt with a refreshed execution_token is issued."
+      },
+      {
+        "rule_id": "RC-07",
+        "trigger": "resume",
+        "condition": "An Attempt of an existing Job is resumed. This is an internal control-plane lifecycle event, not a client-submitted command, so it presents no idempotency key.",
+        "idempotency_scope": "not_a_client_submitted_command",
+        "creates_run": false,
+        "reuses_existing_run": true,
+        "reuses_job": true,
+        "creates_attempt": true,
+        "reopens_terminal_run": false,
+        "effect": "Resume never creates a Run. The same Job is reused and a new Attempt with a refreshed execution_token is issued."
+      },
+      {
+        "rule_id": "RC-08",
+        "trigger": "restart",
+        "condition": "An Attempt of an existing Job is restarted. This is an internal control-plane lifecycle event, not a client-submitted command, so it presents no idempotency key.",
+        "idempotency_scope": "not_a_client_submitted_command",
+        "creates_run": false,
+        "reuses_existing_run": true,
+        "reuses_job": true,
+        "creates_attempt": true,
+        "reopens_terminal_run": false,
+        "effect": "Restart never creates a Run. The same Job is reused and a new Attempt with a refreshed execution_token is issued."
+      },
+      {
+        "rule_id": "RC-09",
+        "trigger": "worker_failover",
+        "condition": "The worker holding the current Attempt of an existing Job is replaced. This is an internal control-plane lifecycle event, not a client-submitted command, so it presents no idempotency key.",
+        "idempotency_scope": "not_a_client_submitted_command",
+        "creates_run": false,
+        "reuses_existing_run": true,
+        "reuses_job": true,
+        "creates_attempt": true,
+        "reopens_terminal_run": false,
+        "effect": "Worker failover never creates a Run. The same Job is reused and a new Attempt with a refreshed execution_token is issued on the taking-over worker."
+      }
+    ],
+    "trigger_precedence": [
+      {
+        "precedence_id": "RP-01",
+        "overlapping_condition": "A repeat of a Run that has already reached a terminal state, submitted with the same idempotency key and the same payload as the command that produced it. Read on its own, RC-02 claims this request because key and payload are unchanged, and RC-05 claims it because the Run is terminal and is being repeated. Without a recorded precedence the contract admits two incompatible readings of one request.",
+        "competing_rule_ids": [
+          "RC-02",
+          "RC-05"
+        ],
+        "winning_rule_id": "RC-02",
+        "losing_rule_id": "RC-05",
+        "resolved_outcome": {
+          "creates_run": false,
+          "reuses_existing_run": true,
+          "reuses_job": true,
+          "creates_attempt": false,
+          "reopens_terminal_run": false
+        },
+        "owner_ruling": "The same idempotency key and the same payload ALWAYS return the original Run. A repeat of a terminal Run creates a new Run ONLY under a new idempotency key.",
+        "decided_on": "2026-09-01",
+        "decided_by": "repository owner",
+        "rationale": "Idempotency is decided before Run creation, never after it, so the terminal state of the existing Run is not an input to the decision. The ruling keeps PD-03 self-consistent: idempotency would be worth nothing if a Run reaching a terminal state silently re-armed the same key to mint a second Run, and a client that retransmits a request it is unsure was received would then create duplicate audits by accident. RC-05 keeps its positive half intact - a deliberate repeat of a terminal Run does create a new Run - and pays for it with a new idempotency key, which is exactly how the caller signals that a second Run is intended rather than accidental."
+      }
+    ]
+  },
+  "fail_soft_policies": [
+    {
+      "policy_id": "FS-04",
+      "title": "Norm and optimization branches recorded degradation and let an audit complete with warning artifacts",
+      "split_decided_on": "2026-09-01",
+      "split_decided_by": "repository owner",
+      "analysis_part": {
+        "part": "norm_core",
+        "encoder_lane": "analysis (ANA)",
+        "rule": "Inside the nine canonical stages, degradation is never silent completion. A stage reports succeeded only when every output role marked required in this registry is present and it then carries no error at all; a norm or core branch that could not complete reports partial or failed with a typed error; a stage that did not run reports skipped with a typed reason, an empty artifact list and retryable false. status_semantics and the per-stage status_policy of this registry are the whole target policy for this part, and no warning artifact lets a degraded stage claim succeeded."
+      },
+      "parts_outside_this_lane": [
+        {
+          "part": "project_optimization_stages_and_results",
+          "owner": "project-optimization (OPT) contract owner",
+          "contract_family": "contracts/optimization/v1/**",
+          "planned_task": "W5-OPT-01",
+          "note": "The terminal semantics of optimization, optimization_critic, optimization_corrector and optimization_review left the analysis boundary with PD-05 and XS-11. This lane records that the part exists and is owned elsewhere; it does not encode it, and no analysis stage, package, example or fixture may absorb it."
+        },
+        {
+          "part": "audit_run_and_job_consumer_policy",
+          "owner": "domain (DOM) lane",
+          "contract_family": "contracts/domain/v1/**",
+          "rule": "AuditRun and Jobs consume the optional optimization branch: a failure of that optional branch yields an explicit partial and never a full success.",
+          "note": "Recorded as an inbound expectation of a neighbouring family so that the split stays visible. It is not analysis policy, this lane neither owns nor encodes it, and no analysis schema restates it as its own rule."
+        }
+      ]
+    }
+  ],
+  "stages": [
+    {
+      "stage_id": "source_preparation",
+      "title": "Source preparation",
+      "stage_version": "1.0.0",
+      "purpose": "Register the immutable source documents of one version and produce the page inventory and the extracted text layer used by every later stage.",
+      "depends_on": [],
+      "required_inputs": [
+        {
+          "role": "source.document",
+          "media_type": "application/pdf",
+          "required": true,
+          "description": "Immutable source PDF referenced by blob_id and SHA-256."
+        },
+        {
+          "role": "source.markdown",
+          "media_type": "text/markdown",
+          "required": false,
+          "description": "Optional recognized Markdown companion for the same version."
+        },
+        {
+          "role": "source.structured_companion",
+          "media_type": "application/json",
+          "required": false,
+          "description": "Optional recognized structured companion produced by ingest, never a live provider response."
+        }
+      ],
+      "produced_outputs": [
+        {
+          "role": "prepared.page_inventory",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Page count, page identity and page-level source references."
+        },
+        {
+          "role": "prepared.text_layer",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Deterministically extracted text layer with page and offset anchors."
+        }
+      ],
+      "execution": {
+        "scope": "central_only",
+        "scope_rationale": "Reads the raw source document and establishes canonical page identity.",
+        "model_routed": false,
+        "mandatory": true
+      },
+      "status_policy": {
+        "skip_allowed": false,
+        "partial_allowed": false,
+        "retryable": true,
+        "succeeded_requires_all_required_outputs": true
+      },
+      "evidence": {
+        "inventory_capabilities": [
+          "AN-02",
+          "WS-03"
+        ],
+        "legacy_declaration_ids": [
+          "LSD-01",
+          "LSD-10",
+          "LSD-11",
+          "LSD-29"
+        ]
+      }
+    },
+    {
+      "stage_id": "page_geometry_extraction",
+      "title": "Page geometry and block index extraction",
+      "stage_version": "1.0.0",
+      "purpose": "Derive deterministic page and block geometry plus the crops that later visual analysis and evidence linking depend on.",
+      "depends_on": [
+        "source_preparation"
+      ],
+      "required_inputs": [
+        {
+          "role": "prepared.page_inventory",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Page inventory produced by source_preparation."
+        },
+        {
+          "role": "prepared.text_layer",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Extracted text layer used to align blocks with text."
+        }
+      ],
+      "produced_outputs": [
+        {
+          "role": "geometry.block_index",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Stable block identities with page, bounding box and text-span anchors."
+        },
+        {
+          "role": "geometry.page_crops",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Manifest of rendered crops referenced by blob_id and SHA-256; the manifest never contains an object key or URL."
+        }
+      ],
+      "execution": {
+        "scope": "central_only",
+        "scope_rationale": "Renders raw source pages and mints stable block identities.",
+        "model_routed": false,
+        "mandatory": true
+      },
+      "status_policy": {
+        "skip_allowed": false,
+        "partial_allowed": false,
+        "retryable": true,
+        "succeeded_requires_all_required_outputs": true
+      },
+      "evidence": {
+        "inventory_capabilities": [
+          "AN-02",
+          "FD-02"
+        ],
+        "legacy_declaration_ids": [
+          "LSD-01",
+          "LSD-10",
+          "LSD-29"
+        ]
+      }
+    },
+    {
+      "stage_id": "document_context_build",
+      "title": "Document context build",
+      "stage_version": "1.0.0",
+      "purpose": "Build the document graph and analysis context shared by text and block analysis so neither stage rebuilds its own private context.",
+      "depends_on": [
+        "page_geometry_extraction"
+      ],
+      "required_inputs": [
+        {
+          "role": "geometry.block_index",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Block identities and geometry."
+        },
+        {
+          "role": "prepared.text_layer",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Extracted text layer."
+        }
+      ],
+      "produced_outputs": [
+        {
+          "role": "context.document_graph",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Section, reference and neighbourhood graph over stable block identities."
+        }
+      ],
+      "execution": {
+        "scope": "central_only",
+        "scope_rationale": "Derives the shared context from raw-source-derived artifacts inside the trust center.",
+        "model_routed": false,
+        "mandatory": true
+      },
+      "status_policy": {
+        "skip_allowed": false,
+        "partial_allowed": false,
+        "retryable": true,
+        "succeeded_requires_all_required_outputs": true
+      },
+      "evidence": {
+        "inventory_capabilities": [
+          "AN-02"
+        ],
+        "legacy_declaration_ids": [
+          "LSD-01",
+          "LSD-10"
+        ]
+      }
+    },
+    {
+      "stage_id": "text_analysis",
+      "title": "Text analysis",
+      "stage_version": "1.0.0",
+      "purpose": "Produce text-derived finding observations from the extracted text layer and the shared document context.",
+      "depends_on": [
+        "document_context_build"
+      ],
+      "required_inputs": [
+        {
+          "role": "prepared.text_layer",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Extracted text layer."
+        },
+        {
+          "role": "context.document_graph",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Shared document context."
+        }
+      ],
+      "produced_outputs": [
+        {
+          "role": "analysis.text_observations",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Text finding observations with evidence anchors into the text layer."
+        }
+      ],
+      "execution": {
+        "scope": "remote_eligible",
+        "scope_rationale": "Consumes derived artifacts by blob_id and checksum and writes no canonical metadata.",
+        "model_routed": true,
+        "mandatory": true
+      },
+      "status_policy": {
+        "skip_allowed": false,
+        "partial_allowed": true,
+        "retryable": true,
+        "succeeded_requires_all_required_outputs": true
+      },
+      "evidence": {
+        "inventory_capabilities": [
+          "AN-03"
+        ],
+        "legacy_declaration_ids": [
+          "LSD-01",
+          "LSD-02",
+          "LSD-10",
+          "LSD-12",
+          "LSD-13"
+        ]
+      }
+    },
+    {
+      "stage_id": "block_analysis",
+      "title": "Block and visual analysis",
+      "stage_version": "1.0.0",
+      "purpose": "Produce block-derived finding observations from crops, geometry and the shared document context.",
+      "depends_on": [
+        "document_context_build"
+      ],
+      "required_inputs": [
+        {
+          "role": "geometry.page_crops",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Crop manifest referenced by blob_id and SHA-256."
+        },
+        {
+          "role": "geometry.block_index",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Block identities and geometry."
+        },
+        {
+          "role": "context.document_graph",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Shared document context."
+        }
+      ],
+      "produced_outputs": [
+        {
+          "role": "analysis.block_observations",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Block finding observations with evidence anchors into block identities."
+        }
+      ],
+      "execution": {
+        "scope": "remote_eligible",
+        "scope_rationale": "Consumes derived artifacts by blob_id and checksum and writes no canonical metadata.",
+        "model_routed": true,
+        "mandatory": true
+      },
+      "status_policy": {
+        "skip_allowed": true,
+        "partial_allowed": true,
+        "retryable": true,
+        "succeeded_requires_all_required_outputs": true
+      },
+      "evidence": {
+        "inventory_capabilities": [
+          "AN-04",
+          "AN-07"
+        ],
+        "legacy_declaration_ids": [
+          "LSD-01",
+          "LSD-02",
+          "LSD-07",
+          "LSD-09",
+          "LSD-10",
+          "LSD-12",
+          "LSD-13"
+        ]
+      }
+    },
+    {
+      "stage_id": "finding_merge",
+      "title": "Finding merge and deduplication",
+      "stage_version": "1.0.0",
+      "purpose": "Merge text and block observations into canonical findings with stable finding identity and preserved observation links. When an upstream observation leg was skipped or reported partial, the merge result is partial with a typed error; it is never succeeded.",
+      "depends_on": [
+        "text_analysis",
+        "block_analysis"
+      ],
+      "required_inputs": [
+        {
+          "role": "analysis.text_observations",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Text observations."
+        },
+        {
+          "role": "analysis.block_observations",
+          "media_type": "application/json",
+          "required": false,
+          "description": "Block observations. Optional because block_analysis is skippable; a merge without them is reported partial, never succeeded."
+        }
+      ],
+      "produced_outputs": [
+        {
+          "role": "findings.merged",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Merged findings referencing every contributing observation; deduplication never deletes an observation link."
+        }
+      ],
+      "execution": {
+        "scope": "central_only",
+        "scope_rationale": "Assigns canonical finding identity, which is a control-plane responsibility.",
+        "model_routed": false,
+        "mandatory": true
+      },
+      "status_policy": {
+        "skip_allowed": false,
+        "partial_allowed": true,
+        "retryable": true,
+        "succeeded_requires_all_required_outputs": true
+      },
+      "evidence": {
+        "inventory_capabilities": [
+          "AN-05",
+          "AN-07"
+        ],
+        "legacy_declaration_ids": [
+          "LSD-01",
+          "LSD-06",
+          "LSD-07",
+          "LSD-10",
+          "LSD-29"
+        ]
+      }
+    },
+    {
+      "stage_id": "finding_review",
+      "title": "Finding review and grounding",
+      "stage_version": "1.0.0",
+      "purpose": "Assess merged findings against the document context and record a grounding verdict per finding without mutating deterministic evidence.",
+      "depends_on": [
+        "finding_merge"
+      ],
+      "required_inputs": [
+        {
+          "role": "findings.merged",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Merged findings."
+        },
+        {
+          "role": "context.document_graph",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Shared document context."
+        }
+      ],
+      "produced_outputs": [
+        {
+          "role": "review.findings_assessment",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Additive per-finding assessment; it never rewrites the merged findings artifact."
+        }
+      ],
+      "execution": {
+        "scope": "remote_eligible",
+        "scope_rationale": "Consumes derived artifacts by blob_id and checksum and writes no canonical metadata.",
+        "model_routed": true,
+        "mandatory": false
+      },
+      "status_policy": {
+        "skip_allowed": true,
+        "partial_allowed": true,
+        "retryable": true,
+        "succeeded_requires_all_required_outputs": true
+      },
+      "evidence": {
+        "inventory_capabilities": [
+          "AN-06"
+        ],
+        "legacy_declaration_ids": [
+          "LSD-01",
+          "LSD-02",
+          "LSD-07",
+          "LSD-10"
+        ]
+      }
+    },
+    {
+      "stage_id": "finding_correction",
+      "title": "Finding correction",
+      "stage_version": "1.0.0",
+      "purpose": "Apply the reviewer verdict to produce a corrected finding projection while keeping the merged findings artifact immutable.",
+      "depends_on": [
+        "finding_review"
+      ],
+      "required_inputs": [
+        {
+          "role": "findings.merged",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Merged findings."
+        },
+        {
+          "role": "review.findings_assessment",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Review assessment."
+        }
+      ],
+      "produced_outputs": [
+        {
+          "role": "review.corrected_findings",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Corrected finding projection carrying a link back to every source finding."
+        }
+      ],
+      "execution": {
+        "scope": "remote_eligible",
+        "scope_rationale": "Consumes derived artifacts by blob_id and checksum and writes no canonical metadata.",
+        "model_routed": true,
+        "mandatory": false
+      },
+      "status_policy": {
+        "skip_allowed": true,
+        "partial_allowed": true,
+        "retryable": true,
+        "succeeded_requires_all_required_outputs": true
+      },
+      "evidence": {
+        "inventory_capabilities": [
+          "AN-06",
+          "EX-07"
+        ],
+        "legacy_declaration_ids": [
+          "LSD-01",
+          "LSD-02",
+          "LSD-10"
+        ]
+      }
+    },
+    {
+      "stage_id": "norm_verification",
+      "title": "Normative verification",
+      "stage_version": "1.0.0",
+      "purpose": "Verify merged findings against a pinned norms snapshot and report normative conformance; verification and normative fix are one canonical stage.",
+      "depends_on": [
+        "finding_merge"
+      ],
+      "required_inputs": [
+        {
+          "role": "findings.merged",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Merged findings."
+        },
+        {
+          "role": "norms.snapshot",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Pinned norms snapshot referenced by blob_id and SHA-256."
+        }
+      ],
+      "produced_outputs": [
+        {
+          "role": "norms.verification_report",
+          "media_type": "application/json",
+          "required": true,
+          "description": "Per-finding normative verdict and the norms snapshot identity used."
+        }
+      ],
+      "execution": {
+        "scope": "remote_eligible",
+        "scope_rationale": "Consumes derived artifacts and a pinned norms snapshot; writes no canonical metadata.",
+        "model_routed": true,
+        "mandatory": false
+      },
+      "status_policy": {
+        "skip_allowed": true,
+        "partial_allowed": true,
+        "retryable": true,
+        "succeeded_requires_all_required_outputs": true
+      },
+      "evidence": {
+        "inventory_capabilities": [
+          "AN-06"
+        ],
+        "legacy_declaration_ids": [
+          "LSD-31"
+        ]
+      }
+    }
+  ],
+  "excluded_scope": [
+    {
+      "excluded_scope_id": "XS-01",
+      "title": "Expert decisions, corrections and revocations",
+      "reason": "Expert judgment is an append-only domain event stream owned outside the analysis engine; no analysis stage may write or overwrite an expert decision.",
+      "owning_boundary": "expert_decisions",
+      "legacy_declaration_ids": [
+        "LSD-10"
+      ],
+      "external_decision": {
+        "decision_id": "PD-01",
+        "state": "approved_with_modification",
+        "decided_on": "2026-09-01",
+        "decided_by": "repository owner",
+        "analysis_family_decision": false,
+        "owning_lanes": [
+          "domain",
+          "architecture"
+        ],
+        "modification": "Correction and revocation each create a new decision_id and the earlier decision is preserved as history rather than overwritten or deleted; a revocation moves the derived projection to pending and never automatically restores the previously current verdict.",
+        "note": "Referenced by its approved state only. PD-01 is not an analysis-family decision, so it carries no entry in owner_decisions and is not referenceable from owner_decision; this registry models none of its semantics and takes no position on how the domain and architecture lanes encode them."
+      },
+      "note": "The append-only expert-decision semantics recorded as PD-01 are approved with modification by the repository owner on 2026-09-01, not a proposal: correction and revocation each create a new decision_id, history is preserved, and a revocation moves the projection to pending without automatically restoring the previous verdict. PD-01 is not an analysis-family decision and is owned by the domain and architecture lanes, so this registry records only the exclusion, cites PD-01 by its approved state and takes no position on it."
+    },
+    {
+      "excluded_scope_id": "XS-02",
+      "title": "Knowledge-base projection and curation",
+      "reason": "Knowledge-base entries, patterns and confirmations are projections of expert decisions, not analysis stage outputs.",
+      "owning_boundary": "knowledge_base"
+    },
+    {
+      "excluded_scope_id": "XS-03",
+      "title": "Excel export and portable audit package",
+      "reason": "Publication and export happen after schema, checksum, manifest and current-attempt validation, outside the analysis engine.",
+      "owning_boundary": "publication_export",
+      "legacy_declaration_ids": [
+        "LSD-10"
+      ]
+    },
+    {
+      "excluded_scope_id": "XS-04",
+      "title": "Decision carryover and cross-version debt control",
+      "reason": "Carryover consumes prior expert verdicts; it belongs to the expert-decision boundary and must not be modelled as an analysis stage that silently degrades.",
+      "owning_boundary": "expert_decisions",
+      "legacy_declaration_ids": [
+        "LSD-10"
+      ],
+      "external_decision": {
+        "decision_id": "PD-01",
+        "state": "approved_with_modification",
+        "decided_on": "2026-09-01",
+        "decided_by": "repository owner",
+        "analysis_family_decision": false,
+        "owning_lanes": [
+          "domain",
+          "architecture"
+        ],
+        "modification": "Correction and revocation each create a new decision_id and the earlier decision is preserved as history rather than overwritten or deleted; a revocation moves the derived projection to pending and never automatically restores the previously current verdict.",
+        "note": "Referenced by its approved state only. PD-01 is not an analysis-family decision, so it carries no entry in owner_decisions and is not referenceable from owner_decision; this registry models none of its semantics and takes no position on how the domain and architecture lanes encode them."
+      },
+      "note": "Carryover reads prior expert verdicts. The append-only expert-decision semantics recorded as PD-01 are approved with modification by the repository owner on 2026-09-01, not a proposal: correction and revocation each create a new decision_id, history is preserved, and a revocation moves the projection to pending without automatically restoring the previous verdict. PD-01 is not an analysis-family decision and is owned by the domain and architecture lanes, so this registry records only the exclusion and takes no position on it. Legacy names debt_control and decision_carryover resolve here through the name-level alias map."
+    },
+    {
+      "excluded_scope_id": "XS-05",
+      "title": "Section optimization and replication sub-pipelines",
+      "reason": "These are separate user-triggered sub-pipelines with their own substage vocabularies; they are not part of the analysis stage registry. They run downstream of completed per-project work: section optimization aggregates the current versions of the projects of one section, together with the optimizations an expert has already accepted, into a single section-level slice, and replication propagates an accepted result to comparable projects of the same section.",
+      "owning_boundary": "section_optimization",
+      "legacy_declaration_ids": [
+        "LSD-21",
+        "LSD-22"
+      ],
+      "note": "This exclusion and XS-11 are different pipelines and neither is the entry point of the other. XS-11 is the per-project project-optimization sub-pipeline that generates improvement proposals; this exclusion is the downstream section-level aggregation and replication pipeline that consumes results which already exist. PD-05, approved on 2026-09-01 by the repository owner, fixes that separation. The scope of this exclusion is unchanged: declaration sites LSD-21 and LSD-22 and the substage names collect, normalize, synthesize, agent, review, validate, package and expert, which resolve here through the name-level alias map."
+    },
+    {
+      "excluded_scope_id": "XS-06",
+      "title": "Stage comparison inputs and comparison outputs",
+      "reason": "Legacy stage_1 and stage_2 are comparison input slots, not audit stages; comparison has its own contract family.",
+      "owning_boundary": "comparison",
+      "legacy_declaration_ids": [
+        "LSD-23"
+      ]
+    },
+    {
+      "excluded_scope_id": "XS-07",
+      "title": "Graphic and vector comparison",
+      "reason": "Graphic and vector comparison is future greenfield scope. It was not observed as audit-parity behaviour in the accepted inventory, it is explicitly outside legacy parity and outside W0, and its first contractual appearance is W7 together with a separate golden graphic pair. No graphic or vector analysis stage is fabricated here, and no W0 fixture or contract may claim one. The only graphic-related legacy names are the graphics substages of the section optimization and replication sub-pipelines; the name-level alias map resolves the legacy name graphics to this exclusion.",
+      "owning_boundary": "future_comparison_scope",
+      "legacy_declaration_ids": [
+        "LSD-21",
+        "LSD-22"
+      ],
+      "owner_decision": "PD-04"
+    },
+    {
+      "excluded_scope_id": "XS-08",
+      "title": "Distributed worker and transfer task lifecycle",
+      "reason": "Worker enrollment, transfer and task progress are distributed-execution concerns, not analysis stages. Under PD-03 as approved with modification, a worker failover reuses the same AuditRun and Job and produces a new Attempt; it never mints a new Run and never becomes an analysis stage.",
+      "owning_boundary": "distributed_execution",
+      "legacy_declaration_ids": [
+        "LSD-26"
+      ],
+      "owner_decision": "PD-03"
+    },
+    {
+      "excluded_scope_id": "XS-09",
+      "title": "Experimental document-class stage gates",
+      "reason": "The legacy document-class gate module is explicitly not wired into the production pipeline and is not adopted as target behavior. Its declared names are document classes rather than pipeline stages; the name-level alias map resolves each of them to this exclusion.",
+      "owning_boundary": "experimental_legacy",
+      "legacy_declaration_ids": [
+        "LSD-27"
+      ]
+    },
+    {
+      "excluded_scope_id": "XS-10",
+      "title": "Intra-stage work batching and retry sub-steps",
+      "reason": "Legacy exposed the batching of tile work and the retry of unreadable blocks as separate stage names in the persisted enum and in the status projections. Splitting work into batches and retrying part of it is behaviour inside one canonical stage and one Attempt, not a canonical stage. Under PD-03 as approved with modification, a retry reuses the same AuditRun and Job and produces a new Attempt with a refreshed execution_token; it never creates a stage. Surfacing batching as a stage is exactly what let legacy infer completion from partial artifacts.",
+      "owning_boundary": "engine_internal",
+      "legacy_declaration_ids": [
+        "LSD-01",
+        "LSD-12",
+        "LSD-13"
+      ],
+      "owner_decision": "PD-03",
+      "note": "Legacy names tile_batches and block_retry resolve here through the name-level alias map."
+    },
+    {
+      "excluded_scope_id": "XS-11",
+      "title": "Project-optimization sub-pipeline: proposal generation, critic, corrector and review",
+      "reason": "Legacy ran optimization, optimization_critic and optimization_corrector as first-class stages of the audit pipeline body and named them in the model routing table, the routing presets, the mandatory-stage set and the status projections. Their product is improvement proposals for the project under audit, not audit findings about it, so they answer a different question than every stage in this registry and cannot be one of them. Under PD-05, approved on 2026-09-01 by the repository owner, optimization, optimization_critic, optimization_corrector and optimization_review form a separate project-optimization sub-pipeline that is started on its own or as an optional post-findings branch of an audit run. Project optimization and section optimization are different pipelines: the section optimization and replication pipeline recorded in XS-05 runs downstream and aggregates and replicates results that already exist across the projects of a section, so this exclusion makes no entry-point claim about XS-05 and none is evidenced. The four names are therefore excluded from the nine-stage core audit registry and no optimization stage is fabricated here. This exclusion was made explicit only after the name-level alias map was built; the first-round site map recorded the sub-pipeline sites but left the main-pipeline optimization names unresolved.",
+      "owning_boundary": "project_optimization",
+      "legacy_declaration_ids": [
+        "LSD-01",
+        "LSD-02",
+        "LSD-03",
+        "LSD-04",
+        "LSD-05",
+        "LSD-06",
+        "LSD-08",
+        "LSD-11",
+        "LSD-12",
+        "LSD-13",
+        "LSD-14",
+        "LSD-15",
+        "LSD-16",
+        "LSD-17",
+        "LSD-18",
+        "LSD-20",
+        "LSD-24",
+        "LSD-25",
+        "LSD-29"
+      ],
+      "owner_decision": "PD-05",
+      "retained_capability": "Project optimization is moved outside the analysis boundary, not deleted. PD-05 retains optimization, optimization_critic, optimization_corrector and optimization_review as a separate product capability. The repository owner closed the open ownership question on 2026-09-01: the capability is its own bounded context, its contract family is contracts/optimization/v1/**, it is owned by a separate project-optimization (OPT) contract owner who is neither the analysis nor the domain lane, and it is carried by the planned task W5-OPT-01 scheduled after the core audit and decision contracts are frozen. Until W5-OPT-01 is accepted the capability is switched OFF and CP-00 explicitly excludes its runtime semantics: no analysis stage, package, example or fixture may claim it, and this lane neither creates nor populates contracts/optimization/v1/**, which lies outside its allowed paths.",
+      "retained_capability_disposition": {
+        "owner_input_id": "U-06",
+        "state": "resolved_by_owner",
+        "decided_on": "2026-09-01",
+        "decided_by": "repository owner",
+        "bounded_context": "project_optimization",
+        "contract_family": "contracts/optimization/v1/**",
+        "contract_owner": "project-optimization (OPT) contract owner",
+        "contract_owner_is_not": [
+          "analysis (ANA) lane",
+          "domain (DOM) lane"
+        ],
+        "planned_task": "W5-OPT-01",
+        "sequencing": "W5-OPT-01 is scheduled after the core audit contracts and the decision contracts are frozen.",
+        "capability_state": "disabled_until_task_accepted",
+        "cp00_excludes_runtime_semantics": true,
+        "note": "The capability is not merely waiting for some future owner: its family, owner, task and state are named. Until W5-OPT-01 is accepted it stays off, CP-00 excludes its runtime semantics, and creating contracts/optimization/v1/** is outside the allowed paths of this lane."
+      },
+      "note": "Legacy names optimization, optimization_critic, optimization_corrector and optimization_review resolve here through the name-level alias map. The declaration ids record only the sites where those names were observed; they are alias evidence and never a claim that the capability belongs to the audit pipeline."
+    }
+  ],
+  "owner_decisions": [
+    {
+      "decision_id": "PD-02",
+      "state": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "decided_by": "repository owner",
+      "effect": "This registry is the single authoritative target source for canonical stage name, version, dependencies, input and output roles, execution scope and success/partial/failed/skipped semantics. Conflicting legacy declarations are aliases and evidence only and never a competing source of truth.",
+      "modification": "The analysis lane is accepted only together with a name-level alias map. Its unit is one concrete legacy stage name, not a declaration site, and every name carries the surface it is observable on, the source_declaration_id it was read from, an immutable evidence locator resolvable at the pinned legacy commit, and either one canonical registry stage or an explicit exclusion. The name findings_merge must resolve to canonical stage_id finding_merge. That map is legacy-stage-name-map.json; the 31-row declaration-site map stays unchanged beside it."
+    },
+    {
+      "decision_id": "PD-03",
+      "state": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "decided_by": "repository owner",
+      "effect": "AuditRun, Job and Attempt are distinct, and current-attempt authority is mandatory: both packages require run_id, job_id, attempt_id and a non-empty equality-only execution_token. The complete creation rule is transferred trigger by trigger into the run_lifecycle block of this registry, where each case is machine-checkable.",
+      "modification": "A new AuditRun is created when a top-level audit or re-audit command is accepted for a frozen set of inputs and configurations. The same idempotency key with the same payload returns the existing Run. A change of inputs, an explicit re-audit and a repeat of a terminal Run each create a NEW Run. Retry, resume, restart and worker failover never create a new Run: the same Job is reused and a new Attempt is issued. A terminal Run is never reopened - it keeps its identity, terminal state and results forever, which is precisely why a repeat of it produces a separate new Run beside it instead of a continuation of it. All nine cases are encoded in run_lifecycle.triggers. The capability value is named execution_token; fencing is a property of the behaviour, not of the field name, and no monotonic number is promised. authority_token and fencing_token remain admissible only as legacy evidence."
+    },
+    {
+      "decision_id": "PD-04",
+      "state": "approved",
+      "decided_on": "2026-09-01",
+      "decided_by": "repository owner",
+      "effect": "Graphic and vector comparison is a future greenfield feature, outside legacy parity and outside W0. Its first contractual inclusion is W7 together with a separate golden graphic pair. Recorded here as explicit exclusion XS-07; no graphic or vector analysis stage exists in this registry."
+    },
+    {
+      "decision_id": "PD-05",
+      "state": "approved",
+      "decided_on": "2026-09-01",
+      "decided_by": "repository owner",
+      "identifier_assigned_by": "analysis (ANA) lane",
+      "identifier_confirmed_by": "program integrator",
+      "identifier_confirmed_on": "2026-09-01",
+      "identifier_note": "The label PD-05 was assigned by this lane rather than by the repository owner and was confirmed by the program integrator on 2026-09-01. The number is a label for the owner's disposition and is not itself part of it; the disposition stands regardless of numbering.",
+      "effect": "optimization, optimization_critic, optimization_corrector and optimization_review form a separate project-optimization sub-pipeline, run on its own or as an optional post-findings branch. Its product is improvement proposals, not audit findings. Section optimization is a downstream aggregation and replication pipeline, not the same pipeline. The four names are excluded from the nine-stage core audit registry and are retained as a separate capability whose bounded context, contract family, contract owner and carrying task are named below. Recorded here as exclusion XS-11 with owning boundary project_optimization; XS-05 records the separation from the section-level pipeline. The retained capability is a separate bounded context: contract family contracts/optimization/v1/**, a separate project-optimization (OPT) contract owner, planned task W5-OPT-01 after the core audit and decision contracts are frozen, and the capability disabled with its runtime semantics excluded from CP-00 until that task is accepted. Recorded in XS-11 retained_capability_disposition, which closes owner input U-06."
+    }
+  ]
+}

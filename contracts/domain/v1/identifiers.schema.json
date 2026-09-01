@@ -1,0 +1,849 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auditmanager:domain:identifiers:v1",
+  "title": "DomainIdentifierCatalog v1",
+  "description": "Validates contracts/domain/v1/identifiers.json. Record-shaped objects reject unknown properties; map-shaped catalogs pin the complete current key set and constrain every value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "contract_version",
+    "supersedes",
+    "candidate_revision",
+    "revision_note",
+    "status",
+    "frozen",
+    "format",
+    "id_pattern",
+    "prefix_pattern",
+    "pattern_template",
+    "ulid",
+    "rules",
+    "identifiers",
+    "entities",
+    "distinct_identities",
+    "non_identity",
+    "correlation_identifiers",
+    "command_keys",
+    "authority_capabilities",
+    "open_owner_decisions",
+    "open_questions",
+    "resolved_questions"
+  ],
+  "properties": {
+    "contract": {
+      "const": "auditmanager.domain.identifiers"
+    },
+    "contract_version": {
+      "const": "1.0.0-draft.1"
+    },
+    "supersedes": {
+      "const": "1.0.0-draft.0"
+    },
+    "candidate_revision": {
+      "const": 4,
+      "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
+    },
+    "revision_note": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "draft_candidate",
+        "frozen"
+      ]
+    },
+    "frozen": {
+      "const": false
+    },
+    "format": {
+      "const": "<prefix>_<ULID>"
+    },
+    "id_pattern": {
+      "const": "^[a-z][a-z0-9]{1,7}_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "prefix_pattern": {
+      "const": "^[a-z][a-z0-9]{1,7}$"
+    },
+    "pattern_template": {
+      "const": "^{prefix}_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ulid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "encoding",
+        "length",
+        "alphabet"
+      ],
+      "properties": {
+        "encoding": {
+          "type": "string",
+          "minLength": 1
+        },
+        "length": {
+          "const": 26
+        },
+        "alphabet": {
+          "const": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "identifiers": {
+      "type": "object",
+      "description": "Identifier name to globally unique prefix. Uniqueness is enforced by scripts/validate_bootstrap.py.",
+      "required": [
+        "object_uid",
+        "discipline_uid",
+        "project_uid",
+        "document_uid",
+        "version_uid",
+        "import_id",
+        "blob_id",
+        "run_id",
+        "job_id",
+        "attempt_id",
+        "lease_id",
+        "command_id",
+        "finding_uid",
+        "finding_observation_id",
+        "decision_id",
+        "analysis_profile_id",
+        "prompt_bundle_id",
+        "norms_snapshot_id",
+        "model_call_id",
+        "comparison_id",
+        "sheet_link_id",
+        "export_id",
+        "worker_id",
+        "audit_event_id",
+        "erasure_request_id"
+      ],
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*(_uid|_id)$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]{1,7}$"
+      }
+    },
+    "entities": {
+      "type": "object",
+      "description": "Entity name to the identifier that names it.",
+      "required": [
+        "Object",
+        "Discipline",
+        "Project",
+        "Document",
+        "DocumentVersion",
+        "Import",
+        "Blob",
+        "AuditRun",
+        "Job",
+        "Attempt",
+        "Lease",
+        "CommandRecord",
+        "Finding",
+        "FindingObservation",
+        "ExpertDecision",
+        "AnalysisProfile",
+        "PromptBundle",
+        "NormsSnapshot",
+        "ModelCallRecord",
+        "Comparison",
+        "SheetLink",
+        "ExportRequest",
+        "Worker",
+        "AuditEvent",
+        "ErasureRequest"
+      ],
+      "propertyNames": {
+        "pattern": "^[A-Z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "object_uid",
+          "discipline_uid",
+          "project_uid",
+          "document_uid",
+          "version_uid",
+          "import_id",
+          "blob_id",
+          "run_id",
+          "job_id",
+          "attempt_id",
+          "lease_id",
+          "command_id",
+          "finding_uid",
+          "finding_observation_id",
+          "decision_id",
+          "analysis_profile_id",
+          "prompt_bundle_id",
+          "norms_snapshot_id",
+          "model_call_id",
+          "comparison_id",
+          "sheet_link_id",
+          "export_id",
+          "worker_id",
+          "audit_event_id",
+          "erasure_request_id"
+        ]
+      }
+    },
+    "distinct_identities": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "identifiers",
+          "rule",
+          "authority",
+          "evidence"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "identifiers": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "object_uid",
+                "discipline_uid",
+                "project_uid",
+                "document_uid",
+                "version_uid",
+                "import_id",
+                "blob_id",
+                "run_id",
+                "job_id",
+                "attempt_id",
+                "lease_id",
+                "command_id",
+                "finding_uid",
+                "finding_observation_id",
+                "decision_id",
+                "analysis_profile_id",
+                "prompt_bundle_id",
+                "norms_snapshot_id",
+                "model_call_id",
+                "comparison_id",
+                "sheet_link_id",
+                "export_id",
+                "worker_id",
+                "audit_event_id",
+                "erasure_request_id"
+              ]
+            }
+          },
+          "rule": {
+            "type": "string",
+            "minLength": 1
+          },
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "decision_dependency": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04"
+            ]
+          }
+        }
+      }
+    },
+    "non_identity": {
+      "type": "array",
+      "minItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "correlation_identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correlation_id"
+      ],
+      "properties": {
+        "correlation_id": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "purpose",
+            "origin",
+            "pattern",
+            "is_entity_identity",
+            "rules"
+          ],
+          "properties": {
+            "purpose": {
+              "type": "string",
+              "minLength": 1
+            },
+            "origin": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pattern": {
+              "const": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "is_entity_identity": {
+              "const": false
+            },
+            "rules": {
+              "type": "array",
+              "minItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "command_keys": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "idempotency_key",
+        "payload_fingerprint"
+      ],
+      "properties": {
+        "idempotency_key": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "scope",
+            "pattern",
+            "is_entity_identity",
+            "rules"
+          ],
+          "properties": {
+            "origin": {
+              "const": "client-supplied"
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pattern": {
+              "const": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "is_entity_identity": {
+              "const": false
+            },
+            "rules": {
+              "type": "array",
+              "minItems": 3,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "payload_fingerprint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "definition",
+            "purpose",
+            "is_entity_identity",
+            "canonicalization"
+          ],
+          "properties": {
+            "definition": {
+              "type": "string",
+              "minLength": 1
+            },
+            "purpose": {
+              "type": "string",
+              "minLength": 1
+            },
+            "is_entity_identity": {
+              "const": false
+            },
+            "canonicalization": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "algorithm",
+                "serialization",
+                "input",
+                "excluded",
+                "rules",
+                "resolves",
+                "decided_on",
+                "authority"
+              ],
+              "properties": {
+                "algorithm": {
+                  "const": "sha256"
+                },
+                "serialization": {
+                  "const": "RFC 8785 JSON Canonicalization Scheme (JCS)"
+                },
+                "input": {
+                  "const": "the schema-valid, default-normalized command payload"
+                },
+                "excluded": {
+                  "type": "array",
+                  "minItems": 2,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "contains": {
+                    "const": "transport headers"
+                  }
+                },
+                "rules": {
+                  "type": "array",
+                  "minItems": 4,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "resolves": {
+                  "const": "OQ-01"
+                },
+                "decided_on": {
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                },
+                "authority": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "authority_capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_token",
+        "lease"
+      ],
+      "properties": {
+        "execution_token": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "canonical_field_name",
+            "legacy_evidence_names",
+            "kind",
+            "purpose",
+            "is_entity_identity",
+            "rules",
+            "evidence",
+            "decision_dependency"
+          ],
+          "properties": {
+            "kind": {
+              "const": "capability"
+            },
+            "canonical_field_name": {
+              "const": "execution_token"
+            },
+            "legacy_evidence_names": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "description": "Names that appear only as legacy or cross-lane evidence. They are never field names of the target contract.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "appears_in",
+                  "status"
+                ],
+                "properties": {
+                  "name": {
+                    "enum": [
+                      "fencing_token",
+                      "authority_token"
+                    ]
+                  },
+                  "appears_in": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "const": "legacy_evidence_only"
+                  }
+                }
+              }
+            },
+            "purpose": {
+              "type": "string",
+              "minLength": 1
+            },
+            "is_entity_identity": {
+              "const": false
+            },
+            "rules": {
+              "type": "array",
+              "minItems": 6,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "decision_dependency": {
+              "const": "PD-03"
+            }
+          }
+        },
+        "lease": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "identifier",
+            "kind",
+            "purpose",
+            "is_entity_identity",
+            "rules",
+            "open_question",
+            "evidence"
+          ],
+          "properties": {
+            "identifier": {
+              "const": "lease_id"
+            },
+            "kind": {
+              "const": "durable_grant"
+            },
+            "purpose": {
+              "type": "string",
+              "minLength": 1
+            },
+            "is_entity_identity": {
+              "const": true
+            },
+            "rules": {
+              "type": "array",
+              "minItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "open_question": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "open_owner_decisions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Owner-decision register. Every PD entry this contract depends on is listed with its recorded disposition; an entry never silently disappears.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "statement",
+          "affects"
+        ],
+        "properties": {
+          "id": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04",
+              "OPEN-RETENTION"
+            ]
+          },
+          "external_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "pending_owner_approval",
+              "approved",
+              "approved_with_modification",
+              "rejected",
+              "not_decided"
+            ]
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "modification": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decided_on": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resolves": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^OQ-[0-9]{2}$"
+            }
+          },
+          "gate": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "approved",
+                    "approved_with_modification",
+                    "rejected"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "decided_on",
+                "authority"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "approved_with_modification"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "modification"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "not_decided",
+                    "pending_owner_approval"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "gate"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Questions still open in this catalog. Each names its owning slot and the gate that must close it; an empty array means this catalog has none.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "question",
+          "affects",
+          "owning_slot",
+          "gate"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^OQ-[0-9]{2}$"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "deferred"
+            ]
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "owning_slot": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gate": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "resolved_questions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Questions this catalog previously carried as open and that now have a recorded resolution. Entries are retained so a closed question cannot silently reappear as an assumption.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "question",
+          "resolution",
+          "affects",
+          "decided_on",
+          "authority"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^OQ-[0-9]{2}$"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resolution": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "decision_ref": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04"
+            ]
+          },
+          "decided_on": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

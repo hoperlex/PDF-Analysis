@@ -1,12 +1,31 @@
 {
   "contract": "auditmanager.domain.identifiers",
-  "version": "1.0.0-draft.0",
+  "contract_version": "1.0.0-draft.1",
+  "supersedes": "1.0.0-draft.0",
+  "candidate_revision": 4,
+  "revision_note": "Fourth review round of the unreleased 1.0.0-draft.1 candidate. Round 4 is a correction round: it adds, removes and renames nothing and changes no rule. The one substantive change in the family is in state-machines.json and README.md, where a stale statement about another lane's ledger is corrected: U-06 is resolved, not open, and every part of the FS-04 fail-soft policy has an assigned encoder. This catalog is unchanged apart from candidate_revision and this note: no identifier, prefix, entity binding, distinct-identity rule, command key or authority capability was added, removed or renamed, and the 25 declared identifiers are exactly those of rounds 2 and 3. The optional branch reference the new policy names is allocated by the contract family that owns the branch and is deliberately not declared as an identifier here. The family carries one candidate_revision, so this catalog moves with the round. contract_version stays 1.0.0-draft.1 because no 1.0.0-draft.1 artifact was ever committed or frozen.",
+  "status": "draft_candidate",
+  "frozen": false,
   "format": "<prefix>_<ULID>",
+  "id_pattern": "^[a-z][a-z0-9]{1,7}_[0-9A-HJKMNP-TV-Z]{26}$",
+  "prefix_pattern": "^[a-z][a-z0-9]{1,7}$",
+  "pattern_template": "^{prefix}_[0-9A-HJKMNP-TV-Z]{26}$",
+  "ulid": {
+    "encoding": "Crockford base32, uppercase",
+    "length": 26,
+    "alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+  },
   "rules": [
-    "opaque",
-    "generated once",
-    "never parse business meaning from ULID",
-    "path and display numbers are not identity"
+    "An identifier is opaque: it is generated once, never reused, never re-issued after correction and never parsed to recover business meaning.",
+    "The ULID body must not be decoded by domain or consumer logic to derive creation time, ownership, ordering or any other business attribute.",
+    "A filesystem path, directory name, uploaded file name, S3 object key, URL, display ordinal such as F-014, human sheet or document number and any content checksum are addresses, presentation values or verification values; none of them is an identity and none may be used as a foreign key.",
+    "An identifier is stable for the lifetime of its entity. Correcting data creates a new entity with a new identifier; it never rewrites an existing one.",
+    "Identifiers carry no secret. They are safe to log, to place in error envelope details and to return to an authorized caller.",
+    "Prefixes are globally unique across this catalog; a new entity requires a new catalog entry and a new prefix.",
+    "Cross-entity references use the referenced identifier verbatim. No composite, derived, encoded or human-readable compound key is defined by this contract.",
+    "Suffix -uid marks the workspace/semantic identities carried over from 1.0.0-draft.0 and -id marks every other identity. The suffix is retained for consumer stability only; it is not a type discriminator and grants no different guarantee.",
+    "The canonical name of the execution authority capability is execution_token. fencing_token and authority_token are legacy or cross-lane evidence names only; no target field, payload key, database column or API parameter defined against this contract carries them.",
+    "The canonical version key of every catalog in this family is contract_version, a string semver or draft version. $schema stays the JSON Schema dialect and $id stays schema identity; neither is a contract version."
   ],
   "identifiers": {
     "object_uid": "obj",
@@ -19,6 +38,8 @@
     "run_id": "run",
     "job_id": "job",
     "attempt_id": "att",
+    "lease_id": "lse",
+    "command_id": "cmd",
     "finding_uid": "fnd",
     "finding_observation_id": "fobs",
     "decision_id": "dec",
@@ -32,5 +53,274 @@
     "worker_id": "wrk",
     "audit_event_id": "evt",
     "erasure_request_id": "era"
-  }
+  },
+  "entities": {
+    "Object": "object_uid",
+    "Discipline": "discipline_uid",
+    "Project": "project_uid",
+    "Document": "document_uid",
+    "DocumentVersion": "version_uid",
+    "Import": "import_id",
+    "Blob": "blob_id",
+    "AuditRun": "run_id",
+    "Job": "job_id",
+    "Attempt": "attempt_id",
+    "Lease": "lease_id",
+    "CommandRecord": "command_id",
+    "Finding": "finding_uid",
+    "FindingObservation": "finding_observation_id",
+    "ExpertDecision": "decision_id",
+    "AnalysisProfile": "analysis_profile_id",
+    "PromptBundle": "prompt_bundle_id",
+    "NormsSnapshot": "norms_snapshot_id",
+    "ModelCallRecord": "model_call_id",
+    "Comparison": "comparison_id",
+    "SheetLink": "sheet_link_id",
+    "ExportRequest": "export_id",
+    "Worker": "worker_id",
+    "AuditEvent": "audit_event_id",
+    "ErasureRequest": "erasure_request_id"
+  },
+  "distinct_identities": [
+    {
+      "name": "finding_identity",
+      "identifiers": [
+        "finding_uid",
+        "finding_observation_id"
+      ],
+      "rule": "finding_uid is the durable semantic issue identity that carries expert history across reruns. finding_observation_id is immutable evidence emitted by exactly one run_id. A rerun creates new observations and never rewrites or removes earlier ones. When the versioned matching policy cannot justify carryover it allocates a new finding_uid instead of reusing one.",
+      "authority": "ADR-0010",
+      "evidence": [
+        "FD-01",
+        "FD-02",
+        "EX-08",
+        "EX-09"
+      ]
+    },
+    {
+      "name": "execution_identity",
+      "identifiers": [
+        "run_id",
+        "job_id",
+        "attempt_id"
+      ],
+      "rule": "AuditRun is the business request and result history, Job is the durable schedulable work item, Attempt is one concrete leased execution. None substitutes for another, none is derived from another and none may be reconstructed from project_uid, version_uid or a worker task handle.",
+      "authority": "ADR-0007",
+      "evidence": [
+        "DW-02",
+        "DW-03"
+      ],
+      "decision_dependency": "PD-03"
+    },
+    {
+      "name": "decision_identity",
+      "identifiers": [
+        "decision_id"
+      ],
+      "rule": "Every expert verdict, correction and revocation allocates a new decision_id and appends a new immutable event. A decision_id is never reused, updated in place or removed; the current verdict is a rebuildable projection over the event stream.",
+      "authority": "ADR-0012",
+      "evidence": [
+        "EX-01",
+        "EX-02"
+      ],
+      "decision_dependency": "PD-01"
+    },
+    {
+      "name": "input_identity",
+      "identifiers": [
+        "version_uid",
+        "blob_id",
+        "import_id"
+      ],
+      "rule": "version_uid is the immutable published input state, blob_id is durable content bytes with checksum metadata and import_id is the operation that produced them. A project folder, an upload batch name or an S3 key is none of these.",
+      "authority": "ARCHITECTURE_BIBLE P-02, P-03",
+      "evidence": [
+        "WS-02",
+        "WS-03"
+      ]
+    }
+  ],
+  "non_identity": [
+    "filesystem path or directory name",
+    "uploaded file name or extension",
+    "S3 object key, bucket name or internal object layout",
+    "URL, presigned link or download endpoint",
+    "display ordinal such as F-014",
+    "human sheet number or document number",
+    "project, version or upload batch ordinal",
+    "database row number or sequence value exposed to a client",
+    "provider request id, model name or prompt text",
+    "idempotency key or command payload fingerprint",
+    "execution authority capability such as execution_token, and its legacy evidence names fencing_token and authority_token",
+    "content checksum such as sha256"
+  ],
+  "correlation_identifiers": {
+    "correlation_id": {
+      "purpose": "Correlates one externally visible request or command with its diagnostic logs, durable audit events and background work.",
+      "origin": "assigned by the edge when the caller does not supply one",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "is_entity_identity": false,
+      "rules": [
+        "Present in every error envelope so an operator can locate the full diagnostic record without the response carrying unsafe content.",
+        "Never used as a foreign key, never authorizes anything and never encodes subject, tenant or path information.",
+        "The events contract family declares its own correlation and causation fields; divergence in format is an integrator mismatch, not a domain-local fork."
+      ]
+    }
+  },
+  "command_keys": {
+    "idempotency_key": {
+      "origin": "client-supplied",
+      "scope": "command type plus authorized subject plus target aggregate",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "is_entity_identity": false,
+      "rules": [
+        "The same key with the same payload fingerprint replays the recorded outcome and creates no second aggregate, version, run, attempt or decision.",
+        "The same key with a different payload fingerprint is a conflict (idempotency_key_reuse) and creates or changes nothing.",
+        "A key is never interpreted as, converted into or stored as a system identifier, and never appears in an error envelope."
+      ]
+    },
+    "payload_fingerprint": {
+      "definition": "sha256 over the RFC 8785 JSON Canonicalization Scheme serialization of the command payload, taken after the payload validated against its declared command schema and after declared defaults were applied, and excluding transport headers and the idempotency key itself.",
+      "purpose": "Distinguishes an idempotent repeat from a same-key, different-payload conflict.",
+      "is_entity_identity": false,
+      "canonicalization": {
+        "algorithm": "sha256",
+        "serialization": "RFC 8785 JSON Canonicalization Scheme (JCS)",
+        "input": "the schema-valid, default-normalized command payload",
+        "excluded": [
+          "transport headers",
+          "the idempotency key itself",
+          "request framing, transfer encoding and any other envelope-level metadata"
+        ],
+        "rules": [
+          "The payload is validated against its declared command schema and default-normalized before it is canonicalized. An invalid payload is validation_failed and is never fingerprinted, so a malformed request can never take an idempotency key hostage.",
+          "Canonicalization is RFC 8785 JCS over that normalized payload and the fingerprint is the sha256 digest of its UTF-8 bytes. No provider defines a second canonical form and no provider falls back to another one.",
+          "Transport headers and the idempotency key itself are excluded from the fingerprint input, so two requests that differ only in transport framing produce the same fingerprint and replay instead of conflicting.",
+          "The fingerprint is a comparison value only: it is never an identity, never a foreign key, never parsed for meaning and never returned in an error envelope.",
+          "Both sides compute the fingerprint from the same normalized payload; a provider never fingerprints raw transport bytes."
+        ],
+        "resolves": "OQ-01",
+        "decided_on": "2026-09-01",
+        "authority": "repository owner"
+      }
+    }
+  },
+  "authority_capabilities": {
+    "execution_token": {
+      "canonical_field_name": "execution_token",
+      "legacy_evidence_names": [
+        {
+          "name": "fencing_token",
+          "appears_in": "DW-05 legacy attempt-token and connection-epoch evidence, and 1.0.0-draft.1 round-1 prose",
+          "status": "legacy_evidence_only"
+        },
+        {
+          "name": "authority_token",
+          "appears_in": "the parallel analysis contract draft and 1.0.0-draft.1 round-1 prose",
+          "status": "legacy_evidence_only"
+        }
+      ],
+      "kind": "capability",
+      "purpose": "Proves that the bearer is the current authorized executor of a Job and its current Attempt at the instant of a write.",
+      "is_entity_identity": false,
+      "rules": [
+        "execution_token is the only field name this contract declares for the execution authority capability. fencing_token and authority_token are legacy or cross-lane evidence names; a target field, payload key, database column or API parameter never carries them.",
+        "The issuing control plane allocates exactly one current token per job_id and supersedes the previous one when a new Attempt is created; a superseded token is permanently rejected and can never become current again.",
+        "The token is opaque and equality-only. Every other party, including engines and workers, compares it for exact equality and never parses, orders, ranges, increments, derives or uses it as a lookup key.",
+        "Fencing is a property of behavior, not of the value or of the field name: it holds because a superseded token can never publish again. This contract promises no monotonic number, no ordering and no comparability, and a consumer must not assume any.",
+        "Verified inside the same transaction that performs the guarded write; a check performed earlier in the request is not sufficient.",
+        "Never persisted as an entity identity and never accepted in place of attempt_id.",
+        "Secret-class value: never logged, never placed in an error message or details object and never returned to an unauthorized caller. execution_token, fencing_token and authority_token are all forbidden detail keys in the error catalog.",
+        "Its transport representation is declared by the execution/analysis contract family; this contract does not fix it."
+      ],
+      "evidence": [
+        "DW-02",
+        "DW-05"
+      ],
+      "decision_dependency": "PD-03"
+    },
+    "lease": {
+      "identifier": "lease_id",
+      "kind": "durable_grant",
+      "purpose": "Time-bounded grant of execution authority to one Worker for one Attempt, kept alive by heartbeat.",
+      "is_entity_identity": true,
+      "rules": [
+        "The lease record has identity; the execution token it carries is a capability and is not the lease identity.",
+        "Lease expiry returns the Job to queued, marks the Attempt lost and removes publication authority from that Attempt."
+      ],
+      "open_question": "Deferred as OQ-02: lease duration, heartbeat interval and grace window are operational values. They are decided by the jobs/operations slot no later than the first task that implements an execution lease (W4-JOB-01, durable stage state and bounded retry/resume). No numeric value is invented here and no lease implementation may proceed without that decision.",
+      "evidence": [
+        "DW-01",
+        "DW-02",
+        "DW-05"
+      ]
+    }
+  },
+  "open_owner_decisions": [
+    {
+      "id": "PD-01",
+      "status": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "authority": "repository owner",
+      "statement": "Expert correction and revocation append a new decision event with a new decision_id, decision history is neither deleted nor overwritten, and projections are recomputed from the event stream. The legacy overwrite and delete behavior recorded in EX-02 is not adopted.",
+      "modification": "Revocation moves the current projection for the affected finding to pending. The projection never restores an earlier superseded verdict automatically; a verdict after a revocation exists only where an authorized expert appended a new decision event. This modification also resolves OQ-03.",
+      "resolves": [
+        "OQ-03"
+      ],
+      "affects": [
+        "decision_id",
+        "distinct_identities.decision_identity"
+      ]
+    },
+    {
+      "id": "PD-03",
+      "status": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "authority": "repository owner",
+      "statement": "AuditRun, Job and Attempt are three distinct entities with separate identities, current-attempt authority is mandatory and a stale or superseded Attempt cannot publish. The execution authority capability is not an entity identity and not a path.",
+      "modification": "The AuditRun creation rule is fixed. A new AuditRun is created when a top-level audit or re-audit command is accepted for a frozen set of inputs and configurations. A repeat with the same idempotency key and the same payload returns the existing Run. Changed inputs, an explicit re-audit, or a repeat of a terminal Run create a new Run. Retry, resume, restart and worker failover create no Run and no Job: the Job stays the same and a new Attempt is created. A terminal Run is never reopened.",
+      "affects": [
+        "run_id",
+        "job_id",
+        "attempt_id",
+        "lease_id",
+        "authority_capabilities.execution_token"
+      ]
+    },
+    {
+      "id": "OPEN-RETENTION",
+      "external_id": "U-04",
+      "status": "not_decided",
+      "statement": "No retention window, TTL, legal-hold, tenant or identity provider semantics are declared by this contract. erasure_request_id names the request entity only; the policy that authorizes erasure is an owner decision and stays open as U-04.",
+      "gate": "Owner input U-04 (tenant model, identity provider, retention TTL matrix, legal-hold authority) recorded in docs/architecture/CP00_ARCHITECTURE_REVIEW.md section 11. It keeps ADR-0014 in proposed status. No numeric retention, TTL or legal-hold value may be declared by any lane before that input exists.",
+      "affects": [
+        "erasure_request_id",
+        "command_id"
+      ]
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "OQ-02",
+      "status": "deferred",
+      "question": "What lease duration, heartbeat interval and grace window apply to an execution lease?",
+      "affects": [
+        "authority_capabilities.lease"
+      ],
+      "owning_slot": "jobs/operations slot",
+      "gate": "Decided by the jobs/operations slot no later than the first task that implements an execution lease (W4-JOB-01, durable stage state and bounded retry/resume, docs/stages/S04_core_audit_engine.md). No numeric value is chosen before that task and no lease implementation may proceed without it."
+    }
+  ],
+  "resolved_questions": [
+    {
+      "id": "OQ-01",
+      "question": "Which canonical serialization defines the command payload fingerprint?",
+      "resolution": "The payload fingerprint is the sha256 digest of the RFC 8785 JSON Canonicalization Scheme serialization of the schema-valid, default-normalized command payload. Transport headers and the idempotency key itself are excluded from the fingerprint input.",
+      "affects": [
+        "command_keys.payload_fingerprint"
+      ],
+      "decided_on": "2026-09-01",
+      "authority": "repository owner"
+    }
+  ]
 }

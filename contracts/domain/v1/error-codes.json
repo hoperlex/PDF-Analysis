@@ -1,81 +1,455 @@
 {
   "contract": "auditmanager.domain.errors",
-  "version": "1.0.0-draft.0",
+  "contract_version": "1.0.0-draft.1",
+  "version": "1.0.0-draft.1",
+  "supersedes": "1.0.0-draft.0",
+  "candidate_revision": 4,
+  "revision_note": "Fourth review round of the unreleased 1.0.0-draft.1 candidate. Round 4 is a correction round: it adds, removes and renames nothing and changes no rule. The one substantive change in the family is in state-machines.json and README.md, where a stale statement about another lane's ledger is corrected: U-06 is resolved, not open, and every part of the FS-04 fail-soft policy has an assigned encoder. This catalog is unchanged apart from candidate_revision and this note: the 20 codes and every http status, retryable flag, category, summary, safe detail key list and evidence list are exactly those of rounds 2 and 3, the envelope declaration, safety rules and internal_mapping are untouched, the deprecated version mirror is deliberately retained because removing it is the separate W0-DOM-02 task that follows W0-QA-03, and the optional-branch policy still declares no code of its own: it reuses partial_result_not_publishable, validation_failed and analysis_failed. The family carries one candidate_revision, so this catalog moves with the round. contract_version stays 1.0.0-draft.1 because no 1.0.0-draft.1 artifact was ever committed or frozen.",
+  "status": "draft_candidate",
+  "frozen": false,
+  "deprecated_fields": {
+    "version": {
+      "replaced_by": "contract_version",
+      "status": "deprecated_compatibility_mirror",
+      "reason": "scripts/validate_bootstrap.py, hardened and frozen by W0-QA-02 and not writable by this contract lane, requires a non-empty 'version' string in this catalog specifically. The mirror keeps that gate green while contract_version becomes canonical. This catalog's schema pins both to the same const, so the two values can never diverge.",
+      "consumer_rule": "Consumers MUST read contract_version. No consumer, code generator, runtime type or other contract family may read 'version' from this catalog; it carries no independent meaning.",
+      "removal_gate": "A QA-lane task that updates scripts/validate_bootstrap.py to read contract_version instead of version. This contract lane may not edit that validator, so the mirror is removed in the same change that updates it, not before."
+    }
+  },
   "envelope": {
     "required": [
+      "contract_version",
       "error_code",
       "message",
-      "correlation_id"
+      "correlation_id",
+      "retryable"
     ],
     "optional": [
-      "details",
-      "retryable"
+      "details"
+    ],
+    "schema_ref": "urn:auditmanager:domain:error-envelope:v1",
+    "description": "The single externally visible failure shape. Its error_code enum is exactly the key set of this catalog and its retryable value is pinned to the catalog value for the reported code."
+  },
+  "safety": {
+    "rules": [
+      "message is a stable, caller-safe sentence. It never contains a filesystem path, object key, URL, credential, token, prompt, model payload, SQL, stack trace or personal data.",
+      "details carries only the safe_detail_keys declared for the reported code, with scalar values. Opaque identifiers and enum-like classifiers are safe; raw inputs and secrets are not.",
+      "correlation_id is always present so an operator can find the full diagnostic record without the response having to carry it.",
+      "error_code is stable. Renaming, removing or repurposing a code is a breaking contract change and requires a version change.",
+      "An unmapped internal failure maps to internal_error and the original internal code stays in protected diagnostics only; internal_mapping is the complete rule. A code that is not in this catalog is never emitted and never invented at the edge.",
+      "The envelope shape does not vary by authorization level; authorization differences are expressed by the code, never by adding or removing fields.",
+      "retryable is authoritative. A caller never infers retryability from the HTTP status or the message text.",
+      "execution_token, fencing_token and authority_token are forbidden detail keys. Neither the capability value nor any of its legacy names ever appears in an envelope."
+    ],
+    "forbidden_detail_keys": [
+      "api_key",
+      "authority_token",
+      "authorization",
+      "bucket",
+      "credential",
+      "directory",
+      "email",
+      "execution_token",
+      "fencing_token",
+      "file_name",
+      "file_path",
+      "filename",
+      "idempotency_key",
+      "ip",
+      "ip_address",
+      "object_key",
+      "password",
+      "path",
+      "payload",
+      "prompt",
+      "query",
+      "raw_response",
+      "response_body",
+      "s3_key",
+      "secret",
+      "sql",
+      "stack",
+      "stacktrace",
+      "token",
+      "traceback",
+      "uri",
+      "url",
+      "user_email"
+    ],
+    "detail_value_rules": [
+      "scalar values only: string, number, boolean or null",
+      "at most 256 characters per string value",
+      "at most 16 keys per details object"
     ]
+  },
+  "internal_mapping": {
+    "rule": "Every internally typed failure reason is mapped to exactly one code declared in this catalog before it can leave the trust boundary.",
+    "unknown_internal_code": "internal_error",
+    "rules": [
+      "An internal analysis stage code, adapter code or worker code that has no declared mapping in this catalog is reported externally as internal_error.",
+      "The original internal code is recorded only in protected diagnostics, correlated by correlation_id. It never appears in error_code, message or details and never reaches the external envelope.",
+      "An unmapped internal code is never passed through unchanged, never prefixed, never truncated into a new code and never used to invent a catalog entry at the edge.",
+      "Giving a recurring internal reason its own stable external code is a deliberate change to this catalog under the versioning policy, not an edge-local or provider-local decision."
+    ],
+    "resolves": "OQ-06",
+    "decided_on": "2026-09-01",
+    "authority": "repository owner"
+  },
+  "categories": {
+    "validation": "The request, payload or declared contract version is not acceptable. Nothing was created or changed.",
+    "authorization": "The caller is not authenticated, or is authenticated and not permitted for the addressed resource.",
+    "not_found": "The addressed aggregate does not exist or is not visible to this caller.",
+    "state_conflict": "The requested transition or command conflicts with durable state, including idempotency-key conflicts.",
+    "stale_authority": "The caller no longer holds execution or publication authority for the addressed work.",
+    "dependency": "A required dependency is transiently unavailable or a required authoritative reference cannot be resolved.",
+    "integrity": "Stored or delivered bytes, checksums or manifests do not match their declared identity.",
+    "execution": "A run, job or attempt terminated in a declared failure state.",
+    "policy": "An explicit product or operational policy refused the operation.",
+    "internal": "An unclassified server fault."
   },
   "codes": {
     "validation_failed": {
       "http": 422,
-      "retryable": false
+      "retryable": false,
+      "category": "validation",
+      "summary": "The request or payload violates a declared schema, enum, format or invariant. Nothing was created or changed.",
+      "safe_detail_keys": [
+        "field",
+        "constraint",
+        "aggregate_type"
+      ],
+      "evidence": [
+        "WS-02",
+        "WS-03"
+      ]
     },
     "not_found": {
       "http": 404,
-      "retryable": false
-    },
-    "permission_denied": {
-      "http": 403,
-      "retryable": false
+      "retryable": false,
+      "category": "not_found",
+      "summary": "The addressed aggregate does not exist or is not visible to this caller. The response never reveals the existence of a resource the caller may not see.",
+      "safe_detail_keys": [
+        "aggregate_type"
+      ],
+      "evidence": [
+        "FD-01",
+        "WS-04"
+      ]
     },
     "authentication_required": {
       "http": 401,
-      "retryable": false
+      "retryable": false,
+      "category": "authorization",
+      "summary": "No valid authenticated subject was presented. The response carries no hint about the addressed resource.",
+      "safe_detail_keys": [],
+      "evidence": [
+        "WS-01"
+      ]
+    },
+    "permission_denied": {
+      "http": 403,
+      "retryable": false,
+      "category": "authorization",
+      "summary": "The authenticated subject is not permitted to perform this operation on this resource. Authorization is decided server-side.",
+      "safe_detail_keys": [
+        "aggregate_type",
+        "required_capability"
+      ],
+      "evidence": [
+        "WS-01",
+        "DW-01"
+      ]
     },
     "conflict": {
       "http": 409,
-      "retryable": false
+      "retryable": false,
+      "category": "state_conflict",
+      "summary": "A concurrent write lost the optimistic-concurrency check or a uniqueness invariant would be violated. Used only when no more specific conflict code applies.",
+      "safe_detail_keys": [
+        "aggregate_type",
+        "expected_revision"
+      ],
+      "evidence": [
+        "WS-02",
+        "DW-02"
+      ]
     },
     "state_transition_not_allowed": {
       "http": 409,
-      "retryable": false
+      "retryable": false,
+      "category": "state_conflict",
+      "summary": "The requested transition is not declared in state-machines.json for the aggregate's current state. This is the fail-closed answer for every undeclared transition, including any attempt to reopen a terminal aggregate, overwrite a published version or delete a decision event.",
+      "safe_detail_keys": [
+        "machine",
+        "current_state",
+        "requested_state"
+      ],
+      "evidence": [
+        "AN-07",
+        "CP-03"
+      ]
     },
     "idempotency_key_reuse": {
       "http": 409,
-      "retryable": false
+      "retryable": false,
+      "category": "state_conflict",
+      "summary": "The idempotency key was already used with a different payload fingerprint. Nothing was created or changed and no duplicate aggregate exists.",
+      "safe_detail_keys": [
+        "command_type"
+      ],
+      "evidence": [
+        "DW-04"
+      ]
     },
-    "unsupported_contract_version": {
-      "http": 400,
-      "retryable": false
-    },
-    "storage_integrity_error": {
-      "http": 422,
-      "retryable": false
-    },
-    "dependency_unavailable": {
-      "http": 503,
-      "retryable": true
-    },
-    "analysis_input_invalid": {
-      "http": 422,
-      "retryable": false
-    },
-    "analysis_failed": {
-      "http": 500,
-      "retryable": false
-    },
-    "cost_budget_exceeded": {
+    "idempotency_key_in_progress": {
       "http": 409,
-      "retryable": false
-    },
-    "stale_attempt": {
-      "http": 409,
-      "retryable": false
-    },
-    "internal_error": {
-      "http": 500,
-      "retryable": false
+      "retryable": true,
+      "category": "state_conflict",
+      "summary": "A command with the same key and the same payload fingerprint is still executing. The caller retries the same request and never re-issues the command under a new key.",
+      "safe_detail_keys": [
+        "command_type"
+      ],
+      "evidence": [
+        "DW-04"
+      ]
     },
     "idempotency_key_stale": {
       "http": 409,
-      "retryable": false
+      "retryable": false,
+      "category": "state_conflict",
+      "summary": "The command record for this key is no longer available or its outcome could not be established, so the recorded outcome cannot be replayed. The request fails closed instead of re-executing on a guess.",
+      "safe_detail_keys": [
+        "command_type"
+      ],
+      "evidence": [
+        "DW-04",
+        "DW-05"
+      ],
+      "notes": [
+        "The retention window that makes a command record unavailable is the unresolved OPEN-RETENTION owner decision; no window value is declared here."
+      ]
+    },
+    "unsupported_contract_version": {
+      "http": 400,
+      "retryable": false,
+      "category": "validation",
+      "summary": "The declared contract or schema version is unknown to this provider. There is no tolerant fallback and no best-effort interpretation.",
+      "safe_detail_keys": [
+        "contract",
+        "received_version",
+        "supported_versions"
+      ],
+      "evidence": [
+        "inventory section 5 versioned stage registry"
+      ]
+    },
+    "storage_integrity_error": {
+      "http": 422,
+      "retryable": false,
+      "category": "integrity",
+      "summary": "A declared checksum, byte size or media type does not match the stored or delivered bytes, or a required manifest role is missing. The artifact is never published.",
+      "safe_detail_keys": [
+        "blob_id",
+        "expected_sha256",
+        "actual_sha256",
+        "role"
+      ],
+      "evidence": [
+        "DW-04",
+        "CP-01"
+      ]
+    },
+    "dependency_unavailable": {
+      "http": 503,
+      "retryable": true,
+      "category": "dependency",
+      "summary": "A required adapter such as the metadata store, blob storage, a model provider or the worker transport is transiently unavailable. The operation created nothing and may be retried.",
+      "safe_detail_keys": [
+        "dependency"
+      ],
+      "evidence": [
+        "AN-09",
+        "DW-05"
+      ],
+      "notes": [
+        "The dependency detail carries a stable dependency class name only, never a host, URL, credential or vendor endpoint."
+      ]
+    },
+    "required_norm_unavailable": {
+      "http": 422,
+      "retryable": false,
+      "category": "dependency",
+      "summary": "An authoritative reference the run depends on, such as the NormsSnapshot, PromptBundle or AnalysisProfile, cannot be resolved to an immutable versioned record. No unversioned, partial or substitute norm source is used instead.",
+      "safe_detail_keys": [
+        "norms_snapshot_id",
+        "analysis_profile_id",
+        "prompt_bundle_id",
+        "reference_kind"
+      ],
+      "evidence": [
+        "AN-06",
+        "inventory section 5 normative verification"
+      ]
+    },
+    "analysis_input_invalid": {
+      "http": 422,
+      "retryable": false,
+      "category": "validation",
+      "summary": "A delivered analysis package or a declared stage input is not acceptable. Stage-specific field semantics belong to the analysis contract family; this code is the externally visible mapping.",
+      "safe_detail_keys": [
+        "stage_id",
+        "reason"
+      ],
+      "evidence": [
+        "AN-03",
+        "AN-04",
+        "DW-04"
+      ]
+    },
+    "analysis_failed": {
+      "http": 500,
+      "retryable": false,
+      "category": "execution",
+      "summary": "The analysis execution terminated in the failed terminal state. The failure is recorded on the run and no partial output is published as if it were complete.",
+      "safe_detail_keys": [
+        "run_id",
+        "stage_id"
+      ],
+      "evidence": [
+        "AN-06",
+        "AN-07"
+      ]
+    },
+    "partial_result_not_publishable": {
+      "http": 409,
+      "retryable": false,
+      "category": "policy",
+      "summary": "The addressed run terminated as partial and the requested operation requires a complete run. The partial outcome and its missing set stay visible instead of being silently completed or silently degraded.",
+      "safe_detail_keys": [
+        "run_id",
+        "missing_stage_count"
+      ],
+      "evidence": [
+        "AN-06",
+        "OUT-02",
+        "inventory section 7 item 5"
+      ]
+    },
+    "cost_budget_exceeded": {
+      "http": 409,
+      "retryable": false,
+      "category": "policy",
+      "summary": "The declared cost or token budget for the run or subject is exhausted. Execution stops explicitly instead of silently degrading quality.",
+      "safe_detail_keys": [
+        "budget_scope"
+      ],
+      "evidence": [
+        "AN-09"
+      ]
+    },
+    "stale_attempt": {
+      "http": 409,
+      "retryable": false,
+      "category": "stale_authority",
+      "summary": "The submitting Attempt is not the current publication authority for its Job because it is superseded, lost, cancelled or failed. The delivered result is stored as immutable evidence and is never applied to project state.",
+      "safe_detail_keys": [
+        "job_id",
+        "attempt_id",
+        "current_attempt_id"
+      ],
+      "evidence": [
+        "DW-02",
+        "DW-04",
+        "DW-05"
+      ],
+      "decision_dependency": "PD-03"
+    },
+    "execution_token_invalid": {
+      "http": 403,
+      "retryable": false,
+      "category": "stale_authority",
+      "summary": "The presented execution authority capability is absent, malformed or not the current one for this Job. The token value itself is never echoed back in the envelope.",
+      "safe_detail_keys": [
+        "job_id",
+        "attempt_id"
+      ],
+      "evidence": [
+        "DW-02",
+        "DW-05"
+      ],
+      "decision_dependency": "PD-03",
+      "notes": [
+        "The capability is named execution_token. fencing_token and authority_token are legacy evidence names and are forbidden detail keys, so neither the value nor a legacy field name can appear in the envelope."
+      ]
+    },
+    "internal_error": {
+      "http": 500,
+      "retryable": false,
+      "category": "internal",
+      "summary": "An unclassified server fault. The envelope still carries a stable code and correlation id; no internal path, payload, query or stack trace is exposed.",
+      "safe_detail_keys": [],
+      "evidence": [
+        "inventory section 4 user-visible failures"
+      ],
+      "notes": [
+        "internal_mapping declares what happens to an internal code this catalog does not declare: it is reported as internal_error and the original code stays in protected diagnostics. That rule resolves OQ-06."
+      ]
     }
-  }
+  },
+  "open_owner_decisions": [
+    {
+      "id": "PD-01",
+      "status": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "authority": "repository owner",
+      "statement": "This catalog deliberately declares no code for deleting or overwriting an expert decision event. Under the approved append-only semantics such a request is an undeclared transition and fails with state_transition_not_allowed. The delete and overwrite behavior recorded in EX-02 is not adopted and needs no code.",
+      "modification": "Revocation moves the current projection for the affected finding to pending. The projection never restores an earlier superseded verdict automatically; a verdict after a revocation exists only where an authorized expert appended a new decision event. This modification also resolves OQ-03. Revocation stays a normal appended event, so the modification adds no new error code and none is added here.",
+      "resolves": [
+        "OQ-03"
+      ],
+      "affects": [
+        "state_transition_not_allowed"
+      ]
+    },
+    {
+      "id": "PD-03",
+      "status": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "authority": "repository owner",
+      "statement": "stale_attempt and execution_token_invalid rest on AuditRun, Job and Attempt being distinct entities with mandatory current-attempt authority. DW-03 and DW-05 record that legacy has attempt tokens and connection epochs but no canonical fencing contract.",
+      "modification": "The AuditRun creation rule is fixed. A new AuditRun is created when a top-level audit or re-audit command is accepted for a frozen set of inputs and configurations. A repeat with the same idempotency key and the same payload returns the existing Run. Changed inputs, an explicit re-audit, or a repeat of a terminal Run create a new Run. Retry, resume, restart and worker failover create no Run and no Job: the Job stays the same and a new Attempt is created. A terminal Run is never reopened. The rule adds no new code: an idempotent repeat replays the recorded outcome, a same-key different-payload repeat is idempotency_key_reuse, and any request that would reopen a terminal run is state_transition_not_allowed.",
+      "affects": [
+        "stale_attempt",
+        "execution_token_invalid",
+        "idempotency_key_reuse",
+        "state_transition_not_allowed"
+      ]
+    },
+    {
+      "id": "OPEN-RETENTION",
+      "external_id": "U-04",
+      "status": "not_decided",
+      "statement": "idempotency_key_stale names the fail-closed outcome once a command record is unavailable. The retention window, legal-hold and tenant or identity-provider semantics that would decide when that happens are not declared by this contract.",
+      "gate": "Owner input U-04 (tenant model, identity provider, retention TTL matrix, legal-hold authority) recorded in docs/architecture/CP00_ARCHITECTURE_REVIEW.md section 11. It keeps ADR-0014 in proposed status. No numeric retention, TTL or legal-hold value may be declared by any lane before that input exists.",
+      "affects": [
+        "idempotency_key_stale"
+      ]
+    }
+  ],
+  "open_questions": [],
+  "resolved_questions": [
+    {
+      "id": "OQ-06",
+      "question": "Which externally visible code does an internal analysis stage error map to when the stage code is not in this catalog?",
+      "resolution": "internal_error. The original internal code stays in protected diagnostics correlated by correlation_id and never reaches the external envelope; internal_mapping carries the full rule.",
+      "affects": [
+        "internal_mapping",
+        "analysis_input_invalid",
+        "analysis_failed",
+        "internal_error"
+      ],
+      "decided_on": "2026-09-01",
+      "authority": "repository owner"
+    }
+  ]
 }

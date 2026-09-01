@@ -1,0 +1,452 @@
+{
+  "schema_version": 1,
+  "journey_id": "GJ-05",
+  "title": "Distributed worker reconnect, attempt authority, crash recovery and route exposure",
+  "summary": "Disconnect and reconnect a synthetic worker with a disk-first event outbox, declare the running attempt lost and open a new one, deliver the old attempt's result late, replay the result package with the same and a different hash, and exercise the enabled and disabled distributed route configurations.",
+  "inventory_candidates": [
+    "GJ-08",
+    "GJ-09",
+    "GJ-10",
+    "GJ-11"
+  ],
+  "comparison_mode": "exact",
+  "determinism": {
+    "provider_dependent": false,
+    "llm_text_equality_asserted": false,
+    "rationale": "Sequence numbers, acknowledgements, attempt dispositions, package hashes and route visibility are all deterministic protocol facts, so exact structural comparison is admissible."
+  },
+  "provenance": {
+    "legacy_source_commit": "32b9d903792b30506048a1d42b0e6b2d07aee403",
+    "method": "Read-only inspection of the immutable legacy Git objects at the pinned commit (git show / git grep against the object database) plus the accepted W0-BHV-01 capability inventory. No legacy service, job, provider, migration or user flow was executed, and no mutable legacy checkout path was read as evidence. This describes how the legacy_observed evidence of this manifest was obtained and is not a statement about every assertion in it: the greenfield_target expectations GJ-05-EO-13, GJ-05-EO-14 and GJ-05-FC-09 are not derived from legacy. GJ-05-EO-13 and GJ-05-FC-09 rest on repository owner decision PD-03 together with integration decision ID-02 as recorded in docs/architecture/CP00_ARCHITECTURE_REVIEW.md and docs/program/CURRENT_STATE.md, and GJ-05-EO-14 on standing repository rules, each named in its own target_basis; none claims a legacy evidence reference.",
+    "data_classification": "synthetic",
+    "inventory_reference": "docs/behavior/legacy_capability_inventory.md",
+    "runtime_execution": "none",
+    "evidence": [
+      {
+        "capability_id": "DW-05",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:audit_worker/event_outbox.py:module@1-18",
+        "evidence_class": "direct",
+        "supports": "Disk-first outbox: monotonic sequence that is never reset, atomic cursor persistence, acknowledgement moves the acknowledged sequence, retransmission is safe through deduplication by job, attempt and sequence, and truncation under sustained loss emits an explicit event."
+      },
+      {
+        "capability_id": "DW-05",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/gateway_repository.py:accept_connection@22",
+        "evidence_class": "direct",
+        "supports": "Gateway connection acceptance carries the connection epoch used to fence an older connection."
+      },
+      {
+        "capability_id": "DW-05",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:reconcile@1502",
+        "evidence_class": "direct",
+        "supports": "Reconciliation endpoint returning the closed set of continuation actions."
+      },
+      {
+        "capability_id": "DW-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:jobs_next@625",
+        "evidence_class": "direct",
+        "supports": "Job claim path for the next logical job."
+      },
+      {
+        "capability_id": "DW-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/schema.py:_MIGRATION_3@243",
+        "evidence_class": "direct",
+        "supports": "Logical job and attempt tables replace the single-row attempt model."
+      },
+      {
+        "capability_id": "DW-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/schema.py:lines@239-242",
+        "evidence_class": "direct",
+        "supports": "Attempt disposition is an axis orthogonal to execution state and the two must not be conflated."
+      },
+      {
+        "capability_id": "DW-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/schema.py:lines@306-318",
+        "evidence_class": "direct",
+        "supports": "Unique attempt number per job and a partial unique index enforcing exactly one active attempt per logical job."
+      },
+      {
+        "capability_id": "DW-04",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/upload_service.py:module@1-16",
+        "evidence_class": "direct",
+        "supports": "Resumable chunked upload with idempotency at session, chunk and completion level; the same chunk hash is a no-op and a different hash is a conflict."
+      },
+      {
+        "capability_id": "DW-04",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:lines@1231-1260",
+        "evidence_class": "direct",
+        "supports": "A result arriving for an attempt that is no longer active is stored without publication and reported as stored only with a superseded storage class."
+      },
+      {
+        "capability_id": "DW-04",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/result_import.py:module@1-18",
+        "evidence_class": "direct",
+        "supports": "Staging, validation, change plan, backup and atomic replacement with a journal; repeat of the same package answers already applied and a different hash for an applied attempt is a conflict rather than a silent overwrite."
+      },
+      {
+        "capability_id": "DW-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:register@263",
+        "evidence_class": "direct",
+        "supports": "Worker registration and re-enrollment entry point."
+      },
+      {
+        "capability_id": "DW-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/main.py:lines@248-280",
+        "evidence_class": "direct",
+        "supports": "The status route is always mounted; agent routes exist only when the distributed feature flag is on; administrative and bootstrap routes additionally require portal authentication or an explicit insecure-admin acknowledgement."
+      },
+      {
+        "capability_id": "DW-06",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/worker_bootstrap/manager.py:run@144",
+        "evidence_class": "direct",
+        "supports": "Resumable bootstrap session whose remote steps are repeat safe."
+      },
+      {
+        "capability_id": "DW-06",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:update_manifest@1488",
+        "evidence_class": "direct",
+        "supports": "Worker update delivery is an explicit empty-response manifest, not a hidden upgrade channel."
+      },
+      {
+        "capability_id": "DW-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/schema.py:lines@244-318",
+        "evidence_class": "inferred",
+        "supports": "Job and attempt are durable and explicit; no distinct canonical run entity is present in the inspected schema."
+      },
+      {
+        "capability_id": "DW-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/schema.py:lines@268-276",
+        "evidence_class": "direct",
+        "supports": "The attempt row persists only execution_token_hash, with an explicit comment that the token itself is stored nowhere; there is no separate authority-token column under any other name."
+      }
+    ]
+  },
+  "input_manifest": {
+    "data_classification": "synthetic",
+    "generation_method": "Hand-authored synthetic scenario descriptors. No production project, customer document, provider payload, model response, credential or environment value was copied, derived from or reconstructed. Binary source documents are represented by declarative surrogates and text stand-ins.",
+    "artifacts": [
+      {
+        "path": "fixtures/golden/GJ-05/inputs/worker_event_batch.json",
+        "role": "outbox event batch with resend, acknowledgement and stale-epoch variants",
+        "media_type": "application/json",
+        "sha256": "0129ee16bccc4183c10b00a8f45817ed4ef2759d4d9c4645d0021d315feb85db",
+        "size_bytes": 919,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-05/inputs/attempt_timeline.json",
+        "role": "attempt disposition and execution-state timeline with a late delivery",
+        "media_type": "application/json",
+        "sha256": "b55f74765ee0c0b41f27dbf7a16d995682c2b5193981e8b6a7c5676a4d3c673e",
+        "size_bytes": 499,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-05/inputs/result_package_descriptor.json",
+        "role": "resumable upload descriptor, member path classes and replay hash variants",
+        "media_type": "application/json",
+        "sha256": "9a155e47ab69e13f2341294a4eea9862fec5a091c89d8feb4b4663b8879a95c7",
+        "size_bytes": 1599,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-05/inputs/route_flag_matrix.json",
+        "role": "distributed route and authorization configuration matrix",
+        "media_type": "application/json",
+        "sha256": "d6dbd47fbbb38b967944f13851d8211cc6d0d833cb7f6745fef38dfe8a3a6afa",
+        "size_bytes": 907,
+        "data_classification": "synthetic"
+      }
+    ],
+    "surrogates": [
+      {
+        "legacy_input_kind": "real worker result archive",
+        "surrogate": "package descriptor with synthetic digests and declared member path classes",
+        "reason": "No archive bytes and no worker-produced project content may be committed; hash replay is asserted over declared digests."
+      }
+    ]
+  },
+  "expected_outputs": [
+    {
+      "id": "GJ-05-EO-01",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "idempotency",
+      "statement": "After a disconnect the worker resends unacknowledged events; the centre deduplicates by job, attempt and sequence, the acknowledged sequence advances to the highest accepted value and the monotonic sequence is never reset, including across a worker restart.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:audit_worker/event_outbox.py:module@1-18"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-02",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "state_transition",
+      "statement": "An event batch arriving on an older connection epoch is rejected rather than applied, and reconciliation answers with one of the closed continuation actions.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/gateway_repository.py:accept_connection@22",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:reconcile@1502"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-03",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "invariant",
+      "statement": "A logical job has at most one active attempt, enforced by a partial unique index, and attempt numbers are unique inside the job; declaring an attempt lost does not delete its history.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/schema.py:_MIGRATION_3@243",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/schema.py:lines@306-318"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-04",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "invariant",
+      "statement": "Attempt disposition and execution state are orthogonal: an attempt the centre no longer treats as current may still be recorded as running on the worker, and the two axes are not merged into one status.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/schema.py:lines@239-242"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-05",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "state_transition",
+      "statement": "A result delivered by an attempt that is no longer active is accepted for storage only: the response reports that it was not published, marks it stored only with a superseded storage class, and the new attempt keeps authority.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:lines@1231-1260",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:jobs_next@625"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-06",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "idempotency",
+      "statement": "Chunk upload is idempotent at session, chunk and completion level: recreating the session for the same job, attempt and expected hash returns the same session with the accepted chunk list, resending a chunk with the same hash is a no-op and resending it with a different hash is a conflict.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/upload_service.py:module@1-16"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-07",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "state_transition",
+      "statement": "Result import never unpacks over the project: the package goes through staging, validation, a change plan and a backup before an atomic replacement recorded in a journal, so a crash during apply is recoverable by rollback on restart.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/result_import.py:module@1-18"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-08",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "idempotency",
+      "statement": "Re-delivering the same package hash for an already applied attempt answers already applied and changes nothing; a different hash for that attempt is an explicit conflict rather than a silent overwrite.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/result_import.py:module@1-18"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-09",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "invariant",
+      "statement": "Package members are classified by path ownership: source and centre-generated paths arriving from the worker are a package rejection, and only worker-generated paths may be replaced.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/result_import.py:module@1-18"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-10",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "With the distributed feature disabled only the worker status route answers and the agent, administrative and bootstrap routes are absent; with it enabled the agent routes appear, while the administrative and bootstrap routes are mounted only under portal authentication or an explicit insecure-admin acknowledgement.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/main.py:lines@248-280",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:register@263"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-11",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "idempotency",
+      "statement": "Repeating a bootstrap session does not create a duplicate release, service or worker, and the worker update manifest is an explicit empty response rather than an implicit upgrade.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/worker_bootstrap/manager.py:run@144",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:update_manifest@1488"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-12",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "bounded_absence",
+      "statement": "Within the bounded inspected schema and protocol there is no distinct canonical run entity, and attempt authority is not carried by a dedicated domain-level authority field of its own. What legacy has is the attempt disposition, an attempt-scoped execution token persisted only as its hash on the attempt row, and a connection epoch carried by gateway connection acceptance; a search of the pinned tree finds no field named fencing_token or authority_token anywhere. Fencing appears in legacy only as a behavior of those three mechanisms. The journey records this bounded absence and does not relabel the mechanisms as a run entity or as any named authority-token contract.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/schema.py:lines@244-318",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/schema.py:lines@268-276",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/gateway_repository.py:accept_connection@22"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-13",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "identity",
+      "statement": "Audit run, job and attempt are three distinct identities with an explicit creation rule. A new audit run is created only when a top-level audit or re-audit command is accepted for a frozen set of inputs and configuration, and the same idempotency key with the same payload returns the existing run instead of creating another one. Retry, resume, restart and worker failover never create a run: they keep the same job and open a new attempt under it. Current-attempt authority is carried by the execution_token, which is opaque, compared only for equality, refreshed on every new attempt and verified inside the publishing transaction; fencing is a property of that behavior and is neither a field name nor a promise of a monotonically increasing number. A run that has reached a terminal state is never reopened. This extends the partial legacy token and epoch behavior recorded in GJ-05-EO-12 and is not parity.",
+      "parity_oracle": false,
+      "owner_decision_ref": "PD-03",
+      "target_basis": [
+        "repository owner decision PD-03, approved with modification on 2026-09-01 by the repository owner: audit run, job and attempt are separate; a run is created only on acceptance of a top-level audit or re-audit command over a frozen input and configuration set; an identical idempotency key and payload return the existing run; retry, resume, restart and worker failover create a new attempt on the same job and no new run; a terminal run is never reopened",
+        "integration decision ID-02 recorded in docs/architecture/CP00_ARCHITECTURE_REVIEW.md and docs/program/CURRENT_STATE.md: execution_token is the canonical name of the attempt-authority capability, opaque and equality-only, refreshed on every new attempt and verified inside the publishing transaction; fencing_token and authority_token survive only as legacy evidence wording",
+        "docs/behavior/legacy_capability_inventory.md section 7 item 4",
+        "fixtures/golden/GJ-05/manifest.json expectation GJ-05-EO-12 keeps the bounded legacy absence of a run entity separate and unchanged"
+      ]
+    },
+    {
+      "id": "GJ-05-EO-14",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "invariant",
+      "statement": "Job and attempt state is durable outside process memory and every externally visible side effect is paired with an outbox record, so a centre restart cannot lose queued work or publish an unreconciled effect.",
+      "parity_oracle": false,
+      "target_basis": [
+        "AGENTS.md section 4 forbids job state held only in memory",
+        "AGENTS.md section 4 forbids dual write to a store and an external side effect without an outbox or reconciliation"
+      ]
+    }
+  ],
+  "failure_cases": [
+    {
+      "id": "GJ-05-FC-01",
+      "provenance_class": "legacy_observed",
+      "trigger": "Event batch sent on a superseded connection epoch (the stale-epoch batch in the input set).",
+      "expected_visible_state": "The batch is rejected; the acknowledged sequence does not move and no event is applied twice.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/gateway_repository.py:accept_connection@22"
+      ]
+    },
+    {
+      "id": "GJ-05-FC-02",
+      "provenance_class": "legacy_observed",
+      "trigger": "Sustained loss of connectivity fills the outbox to its ceiling.",
+      "expected_visible_state": "Log lines are thinned and an explicit truncation event is emitted, so the loss is visible rather than silent.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:audit_worker/event_outbox.py:module@1-18"
+      ]
+    },
+    {
+      "id": "GJ-05-FC-03",
+      "provenance_class": "legacy_observed",
+      "trigger": "Chunk resent with a different hash for an index already accepted.",
+      "expected_visible_state": "Conflict response; the previously accepted chunk is not replaced.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/upload_service.py:module@1-16"
+      ]
+    },
+    {
+      "id": "GJ-05-FC-04",
+      "provenance_class": "legacy_observed",
+      "trigger": "Result of a declared-lost attempt arrives after a new attempt became active.",
+      "expected_visible_state": "Stored only with a superseded storage class and an explicit not-published flag; the active attempt keeps authority and the history stays visible.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit_worker_agent.py:lines@1231-1260"
+      ]
+    },
+    {
+      "id": "GJ-05-FC-05",
+      "provenance_class": "legacy_observed",
+      "trigger": "Centre crashes in the middle of applying a validated result.",
+      "expected_visible_state": "Restart consults the journal and rolls back the partial application; publication happens only after validation completes.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/result_import.py:module@1-18"
+      ]
+    },
+    {
+      "id": "GJ-05-FC-06",
+      "provenance_class": "legacy_observed",
+      "trigger": "Different package hash delivered for an attempt whose result was already applied.",
+      "expected_visible_state": "Explicit conflict; the applied result is not overwritten.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/result_import.py:module@1-18"
+      ]
+    },
+    {
+      "id": "GJ-05-FC-07",
+      "provenance_class": "legacy_observed",
+      "trigger": "Package contains a source or centre-generated member.",
+      "expected_visible_state": "The package is refused; no project file outside the worker-generated class is touched.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/result_import.py:module@1-18"
+      ]
+    },
+    {
+      "id": "GJ-05-FC-08",
+      "provenance_class": "legacy_observed",
+      "trigger": "Administrative or bootstrap route requested with the feature enabled but portal authentication off and no explicit insecure-admin acknowledgement (configuration CFG-on-unprotected).",
+      "expected_visible_state": "The administrative and bootstrap routes are not mounted at all; the status route still answers so the absence is explicit rather than an empty screen.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/main.py:lines@248-280"
+      ]
+    },
+    {
+      "id": "GJ-05-FC-09",
+      "provenance_class": "greenfield_target",
+      "trigger": "A worker failover or a retry leaves two workers each believing they hold the current attempt for one job.",
+      "expected_visible_state": "The failover opened a new attempt under the same job and the same audit run: no additional run was created and no terminal run was reopened. The stale holder is refused by an equality check of its execution_token against the token of the current attempt, performed inside the publishing transaction, and its writes are visibly rejected instead of being merged or applied late. Fencing here names the behavior, not a field and not a monotonic counter.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": false,
+      "owner_decision_ref": "PD-03",
+      "target_basis": [
+        "repository owner decision PD-03, approved with modification on 2026-09-01 by the repository owner: retry, resume, restart and worker failover produce a new attempt on the same job and never a new run, and current-attempt authority is enforced by an explicit token check",
+        "integration decision ID-02 recorded in docs/architecture/CP00_ARCHITECTURE_REVIEW.md and docs/program/CURRENT_STATE.md: the canonical name of that capability is execution_token, and fencing is a property of the behavior rather than a field name",
+        "AGENTS.md section 4 forbids silent fallback, so a fenced write is refused visibly"
+      ]
+    }
+  ],
+  "sensitive_data_exclusions": [
+    {
+      "excluded": "legacy `.env`, `.env.example` and every credential-shaped file",
+      "reason": "Not opened during inventory or selection; secrets never enter fixtures."
+    },
+    {
+      "excluded": "`audit_worker/providers/openrouter_secret.py`",
+      "reason": "Designated metadata-only and excluded by the accepted inventory; no value was accessed or copied here."
+    },
+    {
+      "excluded": "production or customer PDF, Markdown, recognized-JSON and Excel payloads",
+      "reason": "Fixture policy allows synthetic or anonymized material only; binary documents are represented by surrogates."
+    },
+    {
+      "excluded": "live provider prompts, model responses, endpoints and account identifiers",
+      "reason": "LLM text is not byte-stable and provider material is out of fixture scope; only outcome shapes are replayed."
+    },
+    {
+      "excluded": "mutable legacy checkout files, untracked paths, databases and generated results",
+      "reason": "Only immutable Git objects at the pinned legacy commit are admissible evidence."
+    }
+  ],
+  "reviewer_sampling": {
+    "minimum_evidence_objects": 3,
+    "instruction": "Resolve the outbox module region, the attempt-table region, the stored-only upload range and the route mounting range in the immutable legacy object. Confirm that no run identity and no named attempt-authority token contract is asserted as legacy behavior, that the legacy mechanisms are described as the attempt disposition, the hashed execution token and the connection epoch, and that every target statement uses execution_token with fencing described as behavior."
+  }
+}

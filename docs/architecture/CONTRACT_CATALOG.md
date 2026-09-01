@@ -15,6 +15,13 @@ Any boundary between independently changing components has a versioned machine-c
 | Comparison | `contracts/comparison/v1` | CMP contract owner | comparison backend/web/tests |
 | DB schema | `db/migrations` | migration owner | backend/ops |
 
+Владелец в таблице — роль, а не постоянное назначение. Конкретный владелец пути
+фиксируется контрактом активной волны: в
+[W0.2](../program/waves/W0.2_architecture_domain_contract.md) `contracts/domain/v1/**`
+принадлежит DOM lane, `contracts/analysis/v1/**` — ENG/ANA lane, а ARC lane владеет
+только `docs/architecture/**`. Лейн не пишет в чужой contract family даже для
+исправления собственной сборки.
+
 ## Freeze manifest
 
 Каждая волна создаёт contract manifest в checkpoint evidence (не обязательно отдельный постоянный формат до CP-01):

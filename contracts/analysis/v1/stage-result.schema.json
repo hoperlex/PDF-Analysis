@@ -2,27 +2,28 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:auditmanager:analysis:stage-result:v1",
   "title": "StageResult v1",
+  "contract_version": "1.0.0-draft.1",
+  "description": "Fail-closed result of exactly one canonical registry stage inside one Attempt. failed, partial and skipped require a typed error; succeeded forbids any error state.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version",
-    "stage_name",
+    "contract_version",
+    "stage_id",
     "stage_version",
     "status",
     "artifacts",
     "metrics"
   ],
   "properties": {
-    "schema_version": {
-      "const": 1
+    "contract_version": {
+      "const": "1.0.0-draft.1"
     },
-    "stage_name": {
-      "type": "string",
-      "minLength": 1
+    "stage_id": {
+      "$ref": "#/$defs/stage_id"
     },
     "stage_version": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
     },
     "status": {
       "enum": [
@@ -34,45 +35,16 @@
     },
     "artifacts": {
       "type": "array",
+      "uniqueItems": true,
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "role",
-          "blob_id",
-          "sha256",
-          "size_bytes",
-          "media_type"
-        ],
-        "properties": {
-          "role": {
-            "type": "string",
-            "minLength": 1
-          },
-          "blob_id": {
-            "type": "string",
-            "pattern": "^blob_[0-9A-HJKMNP-TV-Z]{26}$"
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "size_bytes": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "media_type": {
-            "type": "string",
-            "minLength": 1
-          },
-          "logical_name": {
-            "type": "string"
-          }
-        }
+        "$ref": "#/$defs/artifact"
       }
     },
     "metrics": {
       "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
       "additionalProperties": {
         "type": [
           "number",
@@ -83,14 +55,169 @@
         ]
       }
     },
-    "error_code": {
-      "type": "string"
+    "error": {
+      "$ref": "#/$defs/error"
     },
-    "error_message": {
-      "type": "string"
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
     },
-    "retryable": {
-      "type": "boolean"
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "failed",
+              "partial",
+              "skipped"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "error"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "const": "succeeded"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "error"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "const": "skipped"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "artifacts": {
+            "maxItems": 0
+          },
+          "error": {
+            "properties": {
+              "retryable": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "stage_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Content-addressed artifact reference. It never carries an object key, URL, presigned link, credential or secret.",
+      "required": [
+        "role",
+        "blob_id",
+        "sha256",
+        "size_bytes",
+        "media_type"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"
+        },
+        "blob_id": {
+          "type": "string",
+          "pattern": "^blob_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z]+/[a-z0-9.+_-]+$"
+        },
+        "logical_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+          "description": "Display-only label. It is never identity and never a filesystem path, object key or URL."
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed reason carrier. For skipped it names the skip reason and is not retryable.",
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object",
+          "description": "Safe scalar diagnostics only. It never carries a filesystem path, object key, URL, credential, execution or authority token, prompt, model payload or raw protected content. Consumers align the key allowlist with the domain error catalog safety rules.",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "type": [
+              "number",
+              "integer",
+              "string",
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      }
     }
   }
 }

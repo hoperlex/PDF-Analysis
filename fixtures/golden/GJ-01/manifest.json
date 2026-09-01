@@ -1,0 +1,432 @@
+{
+  "schema_version": 1,
+  "journey_id": "GJ-01",
+  "title": "Precheck, ingest and version isolation for a synthetic source bundle",
+  "summary": "Precheck a synthetic project bundle, ingest it as V1, then create V2 from the same object. Covers duplicate detection by bundle fingerprint, the filename-suffix companion recognition rule and its two different extension sets, name/state conflict, source-output isolation, a malformed recognized-JSON companion and path/extension rejection.",
+  "inventory_candidates": [
+    "GJ-01"
+  ],
+  "comparison_mode": "exact",
+  "determinism": {
+    "provider_dependent": false,
+    "llm_text_equality_asserted": false,
+    "rationale": "Every assertion is a deterministic status, verdict field or filesystem-structure statement. No model or provider participates in this journey, so exact structural comparison is admissible."
+  },
+  "provenance": {
+    "legacy_source_commit": "32b9d903792b30506048a1d42b0e6b2d07aee403",
+    "method": "Read-only inspection of the immutable legacy Git objects at the pinned commit (git show / git grep against the object database) plus the accepted W0-BHV-01 capability inventory. No legacy service, job, provider, migration or user flow was executed, and no mutable legacy checkout path was read as evidence. This describes how the legacy_observed evidence of this manifest was obtained and is not a statement about every assertion in it: the greenfield_target expectations GJ-01-EO-06 and GJ-01-EO-07 are not derived from legacy. Their basis is the standing repository rules named in their own target_basis, AGENTS.md section 4 and docs/SOURCE_TRACEABILITY.md section 2, and neither claims a legacy evidence reference.",
+    "data_classification": "synthetic",
+    "inventory_reference": "docs/behavior/legacy_capability_inventory.md",
+    "runtime_execution": "none",
+    "evidence": [
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:upload_folder_precheck@279",
+        "evidence_class": "direct",
+        "supports": "Precheck route accepts a folder upload and returns a verdict envelope."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:precheck_uploaded_project_folder@2809",
+        "evidence_class": "direct",
+        "supports": "Precheck verdict computation for an uploaded project folder."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2907-2912",
+        "evidence_class": "direct",
+        "supports": "Verdict status resolves to error, duplicate, warning or ready in that precedence."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_compute_upload_fingerprint@2728",
+        "evidence_class": "direct",
+        "supports": "Bundle fingerprint and pdf digest are computed from the uploaded set."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_scan_object_fingerprints@2760",
+        "evidence_class": "direct",
+        "supports": "Existing project fingerprints inside the object are scanned for duplicate detection."
+      },
+      {
+        "capability_id": "WS-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:create_project_version@533",
+        "evidence_class": "direct",
+        "supports": "Explicit version creation entry point."
+      },
+      {
+        "capability_id": "WS-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:create_version_from_project@746",
+        "evidence_class": "direct",
+        "supports": "Version creation from an existing project, with retain or delete of the source."
+      },
+      {
+        "capability_id": "WS-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:lines@394-408",
+        "evidence_class": "direct",
+        "supports": "Non-empty source output is a 409 carrying code source_output_not_empty and needs_flag discard_source_output; file conflict 409; other version-file errors 400."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:upload_version_files_endpoint@616",
+        "evidence_class": "direct",
+        "supports": "Version file upload entry point."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:lines@629-631",
+        "evidence_class": "direct",
+        "supports": "Documented failure contract: name conflict without replace_existing is 409; path traversal or forbidden extension is 400."
+      },
+      {
+        "capability_id": "WS-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:FlatVersionFromCandidateRequest@413",
+        "evidence_class": "direct",
+        "supports": "Request shape for creating the next version from an already discovered candidate set."
+      },
+      {
+        "capability_id": "WS-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:flat_create_version_from_candidate@426",
+        "evidence_class": "direct",
+        "supports": "Route creating V(N+1) of a target project from discovered candidate files."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_ALLOWED_UPLOAD_EXTS@2604",
+        "evidence_class": "direct",
+        "supports": "Folder ingest accepts exactly the member extensions .pdf, .md, .json, .html, .htm and .zip."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_classify_upload_files@2687",
+        "evidence_class": "direct",
+        "supports": "Upload members are classified into pdf, md, result, ocr, blocks and ignored by filename only; ZIP members are expanded first."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2698-2725",
+        "evidence_class": "direct",
+        "supports": "The recognized JSON companion is a .json member whose lowercased name ends with _result.json; _blocks.json is the optional block-geometry companion; _ocr.html, _results.html and _results.htm are the OCR companions; every other member falls to ignored, and no member body is parsed."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:save_uploaded_project_folder@3031",
+        "evidence_class": "direct",
+        "supports": "Ingest writes the classified pdf, md, result, ocr and blocks members to the project folder verbatim and returns ignored_files alongside the has_result flag; no companion body is validated."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PRECHECK_ERROR_CODES@2792",
+        "evidence_class": "direct",
+        "supports": "The closed precheck error-code set is no_pdf, multiple_pdf, bad_name, bad_discipline, object_not_found and unsafe_filename; there is no JSON-validity code."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/version_service.py:ALLOWED_SOURCE_EXTENSIONS@1167",
+        "evidence_class": "direct",
+        "supports": "The version-file upload accepts a different extension set: .pdf, .md, .txt, .json and .html."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/version_service.py:validate_filename@1172",
+        "evidence_class": "direct",
+        "supports": "Version-file names are validated for traversal, character safety and extension only; the extension is lowercased and no companion suffix is recognized."
+      },
+      {
+        "capability_id": "AN-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/crop_blocks/blocks.py:crop_blocks@750",
+        "evidence_class": "direct",
+        "supports": "The crop stage is the first consumer that actually parses a *_result.json companion."
+      },
+      {
+        "capability_id": "AN-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/crop_blocks/blocks.py:lines@793-797",
+        "evidence_class": "direct",
+        "supports": "The crop stage opens the companion and calls json.load without a guard, so a decode error propagates out of the stage."
+      },
+      {
+        "capability_id": "AN-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/crop_blocks/blocks.py:_iter_image_blocks_from_ocr@223",
+        "evidence_class": "direct",
+        "supports": "A second reader of the same companion exists in the crop module."
+      },
+      {
+        "capability_id": "AN-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/crop_blocks/blocks.py:lines@246-250",
+        "evidence_class": "direct",
+        "supports": "That second reader wraps the parse in except Exception and continues, skipping the malformed companion without any visible signal."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2858-2868",
+        "evidence_class": "direct",
+        "supports": "A pdf count of zero appends the no_pdf block, more than one appends multiple_pdf, and invalid name, invalid discipline and unknown object append their own codes; every one of them is in the closed precheck error-code set."
+      },
+      {
+        "capability_id": "WS-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@3101-3106",
+        "evidence_class": "direct",
+        "supports": "The save path refuses a folder with no PDF, and one with more than one PDF, with UploadFolderError before any file is written."
+      }
+    ]
+  },
+  "input_manifest": {
+    "data_classification": "synthetic",
+    "generation_method": "Hand-authored synthetic scenario descriptors. No production project, customer document, provider payload, model response, credential or environment value was copied, derived from or reconstructed. Binary source documents are represented by declarative surrogates and text stand-ins.",
+    "artifacts": [
+      {
+        "path": "fixtures/golden/GJ-01/inputs/bundle_v1.json",
+        "role": "first-version synthetic ingest bundle descriptor",
+        "media_type": "application/json",
+        "sha256": "a483012520488742c5e5a15d3cfdb282db88cbd41b0d04bc8dcbe328cf2da1d5",
+        "size_bytes": 2799,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-01/inputs/bundle_v2_duplicate.json",
+        "role": "second bundle with an identical declared fingerprint",
+        "media_type": "application/json",
+        "sha256": "872678c3d1249dd98f5885e422cc1b3550b1d0adeccd2a951f7fb6172344b05c",
+        "size_bytes": 2839,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-01/inputs/invalid_ingest_cases.json",
+        "role": "malformed, conflicting and unsafe ingest scenarios",
+        "media_type": "application/json",
+        "sha256": "b98d0a5636ebab3b15b2121ab3a95a9c709e722f385b208a748442b90d35e5ef",
+        "size_bytes": 4531,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-01/inputs/sheet_text_stand_in.txt",
+        "role": "text stand-in for the source document text layer",
+        "media_type": "text/plain",
+        "sha256": "1f794a05954d1a2f7f9380a1add26249f14f5d0953b874167107a38d15903a55",
+        "size_bytes": 187,
+        "data_classification": "synthetic"
+      }
+    ],
+    "surrogates": [
+      {
+        "legacy_input_kind": "binary source PDF",
+        "surrogate": "declarative bundle member plus a plain-text sheet stand-in",
+        "reason": "No PDF bytes may be committed; the journey asserts identity, fingerprint and status behavior, not render output."
+      }
+    ]
+  },
+  "expected_outputs": [
+    {
+      "id": "GJ-01-EO-01",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "Precheck of a clean bundle returns a verdict whose status is ready, and the verdict carries the computed pdf digest, bundle fingerprint and suggested target project and version label.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:upload_folder_precheck@279",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2907-2912",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:precheck_uploaded_project_folder@2809"
+      ]
+    },
+    {
+      "id": "GJ-01-EO-02",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "A second bundle whose declared bundle fingerprint already exists inside the same object yields precheck status duplicate, and status error takes precedence when a blocking error code is present.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_compute_upload_fingerprint@2728",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_scan_object_fingerprints@2760",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2907-2912"
+      ]
+    },
+    {
+      "id": "GJ-01-EO-03",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "Creating a new version does not copy the prior version output; a source project whose output is not empty is refused with 409, code source_output_not_empty and the explicit needs_flag discard_source_output rather than being silently cleared.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:create_project_version@533",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:create_version_from_project@746",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:lines@394-408"
+      ]
+    },
+    {
+      "id": "GJ-01-EO-04",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "Version file upload rejects a name conflict without replace_existing with 409 and rejects path traversal or a forbidden extension with 400; after a successful upload the version metadata document is updated with the new document inventory.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:upload_version_files_endpoint@616",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:lines@629-631"
+      ]
+    },
+    {
+      "id": "GJ-01-EO-05",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "idempotency",
+      "statement": "Creating the next version from an already discovered candidate set is a distinct, explicitly parameterized request and repeating it with the same target project does not silently fork a second version lineage.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:FlatVersionFromCandidateRequest@413",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:flat_create_version_from_candidate@426"
+      ]
+    },
+    {
+      "id": "GJ-01-EO-06",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "identity",
+      "statement": "Project, version and document identity is an opaque assigned identifier. A filesystem path, an uploaded filename or a human display label is never the identity key, even where the legacy layout derives directories from names.",
+      "parity_oracle": false,
+      "target_basis": [
+        "AGENTS.md section 4 forbids path, filename or display number as identity",
+        "docs/SOURCE_TRACEABILITY.md section 2 immutable manifests principle"
+      ]
+    },
+    {
+      "id": "GJ-01-EO-07",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "invariant",
+      "statement": "Duplicate detection is expressed over content digests carried by an immutable ingest manifest rather than over a directory scan of a mutable object folder.",
+      "parity_oracle": false,
+      "target_basis": [
+        "docs/SOURCE_TRACEABILITY.md section 2 immutable manifests principle",
+        "AGENTS.md section 4 forbids direct filesystem access from routers"
+      ]
+    },
+    {
+      "id": "GJ-01-EO-08",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "Folder ingest accepts the member extensions .pdf, .md, .json, .html, .htm and .zip, expands ZIP members transparently, and recognizes companions by a lowercased filename suffix and not by media type: a .json member is the recognized JSON companion only when its name ends with _result.json, the optional block-geometry companion only when it ends with _blocks.json, and an .html or .htm member is the OCR companion only when it ends with _ocr.html, _results.html or _results.htm. Every other member, including a .json member named with a dot such as AR-101.result.json, is collected under ignored_files without a block and without a warning. The separate version-file upload accepts .pdf, .md, .txt, .json and .html and applies no companion-suffix rule at all, so the two ingest entry points do not share one extension set.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_ALLOWED_UPLOAD_EXTS@2604",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_classify_upload_files@2687",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2698-2725",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/version_service.py:ALLOWED_SOURCE_EXTENSIONS@1167",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/version_service.py:validate_filename@1172"
+      ]
+    }
+  ],
+  "failure_cases": [
+    {
+      "id": "GJ-01-FC-01",
+      "provenance_class": "legacy_observed",
+      "trigger": "Upload with no files at all (case IC-01).",
+      "expected_visible_state": "400 with an explicit message; no project, version or metadata document is created.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:upload_version_files_endpoint@616"
+      ]
+    },
+    {
+      "id": "GJ-01-FC-02",
+      "provenance_class": "legacy_observed",
+      "trigger": "Member with a forbidden extension (case IC-02).",
+      "expected_visible_state": "400; the bundle is not stored and no partial version is left behind.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:lines@629-631"
+      ]
+    },
+    {
+      "id": "GJ-01-FC-03",
+      "provenance_class": "legacy_observed",
+      "trigger": "Relative traversal or absolute path member name (cases IC-03 and IC-04).",
+      "expected_visible_state": "400; nothing is written outside the allowed version root.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:lines@629-631"
+      ]
+    },
+    {
+      "id": "GJ-01-FC-04",
+      "provenance_class": "legacy_observed",
+      "trigger": "Recognized JSON companion named AR-101_result.json whose body is not valid JSON, uploaded beside the single project PDF the folder rule requires (case IC-05), and, for contrast, a .json member whose name carries no recognized companion suffix (case IC-09).",
+      "expected_visible_state": "Ingest accepts the malformed companion. Classification is by lowercased filename suffix only and no member body is parsed at upload, so the bytes are written verbatim and the response reports has_result true. The malformed body contributes no precheck block and no precheck warning: the closed precheck error-code set is no_pdf, multiple_pdf, bad_name, bad_discipline, object_not_found and unsafe_filename, and none of those codes, nor the duplicate, legacy-name, v2-name or similar-name codes, encodes JSON validity. The verdict is therefore the one the same folder would receive with a well-formed companion, and it is unaffected by the malformed body specifically, not unconditionally ready. Case IC-05 carries the PDF for exactly this reason: a folder holding the companion alone has a pdf count of zero, which appends the no_pdf block and makes the verdict error, and the same folder is refused outright at save with the no-PDF UploadFolderError, so without the PDF the case would characterize the missing-PDF rule instead of the companion rule. The malformed body is neither an ingest error, nor a rejected file, nor a precheck error code. It first surfaces one level down, in the crop stage, and even there the two readers of the same file disagree: the crop entry point parses with an unguarded json.load so the decode error propagates out of the stage, while the image-block iterator wraps the parse in except Exception and skips the companion with no visible signal. Case IC-09 is not malformed at all and is simply listed under ignored_files. The journey asserts this exact deferred and split behavior so that the gap is characterized rather than hidden; a golden run must never record the malformed companion as a clean successful companion, must never assert an ingest-time rejection that legacy does not perform, and must never attribute a no_pdf verdict to the malformed body.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_classify_upload_files@2687",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2698-2725",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:precheck_uploaded_project_folder@2809",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PRECHECK_ERROR_CODES@2792",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2858-2868",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2907-2912",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:save_uploaded_project_folder@3031",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@3101-3106",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/crop_blocks/blocks.py:crop_blocks@750",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/crop_blocks/blocks.py:lines@793-797",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/crop_blocks/blocks.py:_iter_image_blocks_from_ocr@223",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/crop_blocks/blocks.py:lines@246-250"
+      ]
+    },
+    {
+      "id": "GJ-01-FC-05",
+      "provenance_class": "legacy_observed",
+      "trigger": "Name conflict without replace_existing (case IC-06).",
+      "expected_visible_state": "409; the existing file is preserved unchanged.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:lines@629-631"
+      ]
+    },
+    {
+      "id": "GJ-01-FC-06",
+      "provenance_class": "legacy_observed",
+      "trigger": "Version creation from a source project whose output is not empty, without the discard flag (case IC-07).",
+      "expected_visible_state": "409 carrying code source_output_not_empty and needs_flag discard_source_output.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:lines@394-408"
+      ]
+    },
+    {
+      "id": "GJ-01-FC-07",
+      "provenance_class": "legacy_observed",
+      "trigger": "Version creation while an audit is active on the project (case IC-08).",
+      "expected_visible_state": "409 conflict; the running audit is not disturbed.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:create_project_version@533",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/projects.py:lines@394-408"
+      ]
+    }
+  ],
+  "sensitive_data_exclusions": [
+    {
+      "excluded": "legacy `.env`, `.env.example` and every credential-shaped file",
+      "reason": "Not opened during inventory or selection; secrets never enter fixtures."
+    },
+    {
+      "excluded": "`audit_worker/providers/openrouter_secret.py`",
+      "reason": "Designated metadata-only and excluded by the accepted inventory; no value was accessed or copied here."
+    },
+    {
+      "excluded": "production or customer PDF, Markdown, recognized-JSON and Excel payloads",
+      "reason": "Fixture policy allows synthetic or anonymized material only; binary documents are represented by surrogates."
+    },
+    {
+      "excluded": "live provider prompts, model responses, endpoints and account identifiers",
+      "reason": "LLM text is not byte-stable and provider material is out of fixture scope; only outcome shapes are replayed."
+    },
+    {
+      "excluded": "mutable legacy checkout files, untracked paths, databases and generated results",
+      "reason": "Only immutable Git objects at the pinned legacy commit are admissible evidence."
+    }
+  ],
+  "reviewer_sampling": {
+    "minimum_evidence_objects": 4,
+    "instruction": "Resolve the precheck verdict locator, the block-appending range that carries no_pdf, one projects router failure range and the upload classification range in the immutable legacy object. Confirm the companion suffix is the lowercased _result.json test and not a dotted .result.json name, confirm that no ingest path parses a companion body, so the malformed-companion failure case claims no ingest-time rejection, and confirm that case IC-05 carries the single PDF the folder rule requires, so that its verdict is not the no_pdf error a PDF-less folder would receive."
+  }
+}

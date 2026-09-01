@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auditmanager:analysis:legacy-stage-map:v1",
+  "title": "LegacyStageMap v1",
+  "contract_version": "1.0.0-draft.1",
+  "description": "Evidence-only map from every accepted legacy stage/order declaration site to its target owner. It is an alias and traceability index, never a source of target truth; the stage registry is authoritative.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "contract_version",
+    "status",
+    "source_inventory_commit",
+    "source_inventory_section",
+    "legacy_source_commit",
+    "declaration_count",
+    "target_kinds",
+    "declarations"
+  ],
+  "properties": {
+    "contract": {
+      "const": "auditmanager.analysis.legacy_stage_map"
+    },
+    "contract_version": {
+      "const": "1.0.0-draft.1"
+    },
+    "status": {
+      "const": "candidate"
+    },
+    "source_inventory_commit": {
+      "$ref": "#/$defs/inventory_commit"
+    },
+    "source_inventory_section": {
+      "type": "string",
+      "minLength": 1
+    },
+    "legacy_source_commit": {
+      "$ref": "#/$defs/legacy_commit"
+    },
+    "declaration_count": {
+      "const": 31
+    },
+    "target_kinds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "control_plane",
+        "sub_pipeline",
+        "excluded"
+      ],
+      "properties": {
+        "stage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "control_plane": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sub_pipeline": {
+          "type": "string",
+          "minLength": 1
+        },
+        "excluded": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "declarations": {
+      "type": "array",
+      "minItems": 31,
+      "maxItems": 31,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/declaration"
+      }
+    }
+  },
+  "$defs": {
+    "inventory_commit": {
+      "const": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba"
+    },
+    "legacy_commit": {
+      "const": "32b9d903792b30506048a1d42b0e6b2d07aee403"
+    },
+    "stage_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$"
+    },
+    "declaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_declaration_id",
+        "source_declaration_site",
+        "source_inventory_commit",
+        "legacy_source_commit",
+        "inventory_disposition",
+        "inventory_role",
+        "target_kind",
+        "target_concern",
+        "related_stage_ids",
+        "rationale"
+      ],
+      "properties": {
+        "source_declaration_id": {
+          "type": "string",
+          "pattern": "^LSD-(0[1-9]|[12][0-9]|3[01])$"
+        },
+        "source_declaration_site": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Normalized accepted-inventory declaration-site cell with Markdown backticks removed.",
+          "not": {
+            "pattern": "`"
+          }
+        },
+        "source_inventory_commit": {
+          "$ref": "#/$defs/inventory_commit"
+        },
+        "legacy_source_commit": {
+          "$ref": "#/$defs/legacy_commit"
+        },
+        "inventory_disposition": {
+          "enum": [
+            "mapped",
+            "excluded"
+          ]
+        },
+        "inventory_role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_kind": {
+          "enum": [
+            "stage",
+            "control_plane",
+            "sub_pipeline",
+            "excluded"
+          ]
+        },
+        "target_concern": {
+          "enum": [
+            "canonical_stage",
+            "stage_registry",
+            "scheduling_and_recovery",
+            "model_routing",
+            "prompt_configuration",
+            "execution_scope_policy",
+            "status_projection",
+            "section_optimization",
+            "section_replication",
+            "comparison_scope",
+            "distributed_worker_lifecycle",
+            "experimental_not_wired"
+          ]
+        },
+        "canonical_stage_id": {
+          "$ref": "#/$defs/stage_id"
+        },
+        "related_stage_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stage_id"
+          }
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "target_kind"
+            ],
+            "properties": {
+              "target_kind": {
+                "const": "stage"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "canonical_stage_id"
+            ],
+            "properties": {
+              "target_concern": {
+                "const": "canonical_stage"
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "canonical_stage_id"
+              ]
+            },
+            "properties": {
+              "target_concern": {
+                "not": {
+                  "const": "canonical_stage"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

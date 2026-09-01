@@ -1,0 +1,23 @@
+{
+  "pair_id": "SYNTH-PAIR-01",
+  "groups": [
+    {
+      "group_id": "G-01",
+      "state": "completed",
+      "reusable_on_same_signature": true
+    },
+    {
+      "group_id": "G-02",
+      "state": "failed",
+      "reusable_on_same_signature": false
+    },
+    {
+      "group_id": "G-03",
+      "state": "partial",
+      "reusable_on_same_signature": false
+    }
+  ],
+  "raw_evidence_mutation_allowed": false,
+  "llm_text_equality_asserted": false,
+  "note": "Only group lifecycle state is asserted. No AI narrative text is stored or compared."
+}

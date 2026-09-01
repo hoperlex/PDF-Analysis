@@ -1,0 +1,1654 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auditmanager:analysis:stage-registry:v1",
+  "title": "AnalysisStageRegistry v1",
+  "contract_version": "1.0.0-draft.1",
+  "description": "Sole target source of truth for canonical analysis stage identity, version, dependencies, required input/output roles, execution scope and status semantics. No legacy stage list is authoritative.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "contract_version",
+    "status",
+    "evidence_baseline",
+    "alias_resolution",
+    "status_semantics",
+    "execution_scopes",
+    "run_lifecycle",
+    "fail_soft_policies",
+    "stages",
+    "excluded_scope",
+    "owner_decisions"
+  ],
+  "properties": {
+    "contract": {
+      "const": "auditmanager.analysis.stage_registry"
+    },
+    "contract_version": {
+      "const": "1.0.0-draft.1"
+    },
+    "status": {
+      "const": "candidate"
+    },
+    "evidence_baseline": {
+      "$ref": "#/$defs/evidence_baseline"
+    },
+    "alias_resolution": {
+      "$ref": "#/$defs/alias_resolution"
+    },
+    "status_semantics": {
+      "$ref": "#/$defs/status_semantics"
+    },
+    "execution_scopes": {
+      "$ref": "#/$defs/execution_scopes"
+    },
+    "run_lifecycle": {
+      "$ref": "#/$defs/run_lifecycle"
+    },
+    "fail_soft_policies": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/fail_soft_policy"
+      }
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/stage"
+      }
+    },
+    "excluded_scope": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/exclusion"
+      }
+    },
+    "owner_decisions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/owner_decision"
+      }
+    }
+  },
+  "$defs": {
+    "stage_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$"
+    },
+    "artifact_role": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"
+    },
+    "media_type": {
+      "type": "string",
+      "pattern": "^[a-z]+/[a-z0-9.+_-]+$"
+    },
+    "evidence_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inventory_commit",
+        "inventory_section",
+        "legacy_commit"
+      ],
+      "properties": {
+        "inventory_commit": {
+          "const": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba"
+        },
+        "inventory_section": {
+          "type": "string",
+          "minLength": 1
+        },
+        "legacy_commit": {
+          "const": "32b9d903792b30506048a1d42b0e6b2d07aee403"
+        }
+      }
+    },
+    "alias_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where a legacy stage name is resolved into a canonical stage_id. The registry itself stores no legacy alias; PD-02 makes this registry authoritative only together with the name-level alias map named here.",
+      "required": [
+        "name_map_contract",
+        "name_map_contract_version",
+        "site_map_contract",
+        "rule"
+      ],
+      "properties": {
+        "name_map_contract": {
+          "const": "auditmanager.analysis.legacy_stage_name_map"
+        },
+        "name_map_contract_version": {
+          "const": "1.0.0-draft.1"
+        },
+        "site_map_contract": {
+          "const": "auditmanager.analysis.legacy_stage_map"
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "status_semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "succeeded",
+        "partial",
+        "failed",
+        "skipped"
+      ],
+      "properties": {
+        "succeeded": {
+          "type": "string",
+          "minLength": 1
+        },
+        "partial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failed": {
+          "type": "string",
+          "minLength": 1
+        },
+        "skipped": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "execution_scopes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "central_only",
+        "remote_eligible"
+      ],
+      "properties": {
+        "central_only": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remote_eligible": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "run_creation_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One trigger of the approved PD-03 AuditRun creation rule, stated as data rather than prose. The outcome of a trigger is the complete tuple creates_run, reuses_existing_run, reuses_job, creates_attempt and reopens_terminal_run, and every member of that tuple is pinned per trigger by this schema - not only creates_run. That is what keeps the two halves of PD-03 apart: retry, resume, restart and worker failover create no Run and exactly one new Attempt, while an idempotent replay of the same key and the same payload creates neither. reopens_terminal_run is false on every trigger, so a terminal Run is never re-entered. idempotency_scope states, machine-readably, what the trigger assumes about the idempotency key, so the condition of a trigger is data as well; condition carries the same precondition in prose and its operative qualifier is pattern-checked where two triggers could otherwise be read as overlapping. rule_id is pinned the same way as the outcome tuple: each of the nine triggers carries one fixed RC-NN, so the identifier of a trigger is part of the contract rather than a free label. Without that, RC-02 and RC-05 could be renamed, swapped or duplicated while trigger_precedence kept naming RC-02, and the recorded priority would invert while the document stayed valid.",
+      "required": [
+        "rule_id",
+        "trigger",
+        "condition",
+        "idempotency_scope",
+        "creates_run",
+        "reuses_existing_run",
+        "reuses_job",
+        "creates_attempt",
+        "reopens_terminal_run",
+        "effect"
+      ],
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "pattern": "^RC-[0-9]{2}$",
+          "description": "Stable identifier of this trigger, and the only handle by which trigger_precedence can name a trigger. The pattern alone would let any RC-NN sit on any trigger, so the schema additionally pins the exact identifier of each of the nine triggers with a const in the same if/then that pins its outcome tuple: RC-01 top_level_audit_command_accepted, RC-02 idempotent_replay_same_key_and_payload, RC-03 inputs_changed, RC-04 explicit_re_audit_command, RC-05 repeat_of_terminal_run, RC-06 retry, RC-07 resume, RC-08 restart, RC-09 worker_failover. Renaming a rule_id, swapping two of them or duplicating one therefore fails validation instead of silently re-pointing the RC-02-over-RC-05 precedence at another trigger."
+        },
+        "trigger": {
+          "enum": [
+            "top_level_audit_command_accepted",
+            "idempotent_replay_same_key_and_payload",
+            "inputs_changed",
+            "explicit_re_audit_command",
+            "repeat_of_terminal_run",
+            "retry",
+            "resume",
+            "restart",
+            "worker_failover"
+          ]
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The precondition under which this trigger applies, in prose. It must name every qualifier the owner ruling attaches to the trigger; where a qualifier separates this trigger from another, the schema pins it with a pattern instead of trusting the wording."
+        },
+        "idempotency_scope": {
+          "enum": [
+            "same_key_and_payload",
+            "new_idempotency_key",
+            "not_a_client_submitted_command"
+          ],
+          "description": "What the trigger assumes about the idempotency key of the request. same_key_and_payload is the repeat that always returns the existing Run; new_idempotency_key is a client-submitted command carrying a key not accepted before; not_a_client_submitted_command marks an internal control-plane lifecycle event, which presents no idempotency key at all. Exactly one trigger may carry same_key_and_payload, because each of the nine trigger values occurs exactly once and this schema pins the value of each."
+        },
+        "creates_run": {
+          "type": "boolean"
+        },
+        "reuses_existing_run": {
+          "type": "boolean"
+        },
+        "reuses_job": {
+          "type": "boolean"
+        },
+        "creates_attempt": {
+          "type": "boolean"
+        },
+        "reopens_terminal_run": {
+          "const": false,
+          "description": "Always false. A terminal AuditRun keeps its identity and terminal state forever; a repeat of it is admitted only by creating a separate new Run."
+        },
+        "effect": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "trigger"
+            ],
+            "properties": {
+              "trigger": {
+                "const": "top_level_audit_command_accepted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rule_id": {
+                "const": "RC-01",
+                "description": "The identifier of this trigger is fixed. RC-01 always means top_level_audit_command_accepted and nothing else, so a reference to RC-01 from trigger_precedence always resolves to this trigger."
+              },
+              "idempotency_scope": {
+                "const": "new_idempotency_key"
+              },
+              "creates_run": {
+                "const": true
+              },
+              "reuses_existing_run": {
+                "const": false
+              },
+              "reuses_job": {
+                "const": false
+              },
+              "creates_attempt": {
+                "const": true
+              },
+              "reopens_terminal_run": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "trigger"
+            ],
+            "properties": {
+              "trigger": {
+                "const": "idempotent_replay_same_key_and_payload"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rule_id": {
+                "const": "RC-02",
+                "description": "The identifier of this trigger is fixed. RC-02 always means idempotent_replay_same_key_and_payload and nothing else, so a reference to RC-02 from trigger_precedence always resolves to this trigger."
+              },
+              "idempotency_scope": {
+                "const": "same_key_and_payload"
+              },
+              "creates_run": {
+                "const": false
+              },
+              "reuses_existing_run": {
+                "const": true
+              },
+              "reuses_job": {
+                "const": true
+              },
+              "creates_attempt": {
+                "const": false
+              },
+              "reopens_terminal_run": {
+                "const": false
+              },
+              "condition": {
+                "pattern": "same idempotency key and the same payload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "trigger"
+            ],
+            "properties": {
+              "trigger": {
+                "const": "inputs_changed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rule_id": {
+                "const": "RC-03",
+                "description": "The identifier of this trigger is fixed. RC-03 always means inputs_changed and nothing else, so a reference to RC-03 from trigger_precedence always resolves to this trigger."
+              },
+              "idempotency_scope": {
+                "const": "new_idempotency_key"
+              },
+              "creates_run": {
+                "const": true
+              },
+              "reuses_existing_run": {
+                "const": false
+              },
+              "reuses_job": {
+                "const": false
+              },
+              "creates_attempt": {
+                "const": true
+              },
+              "reopens_terminal_run": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "trigger"
+            ],
+            "properties": {
+              "trigger": {
+                "const": "explicit_re_audit_command"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rule_id": {
+                "const": "RC-04",
+                "description": "The identifier of this trigger is fixed. RC-04 always means explicit_re_audit_command and nothing else, so a reference to RC-04 from trigger_precedence always resolves to this trigger."
+              },
+              "idempotency_scope": {
+                "const": "new_idempotency_key"
+              },
+              "creates_run": {
+                "const": true
+              },
+              "reuses_existing_run": {
+                "const": false
+              },
+              "reuses_job": {
+                "const": false
+              },
+              "creates_attempt": {
+                "const": true
+              },
+              "reopens_terminal_run": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "trigger"
+            ],
+            "properties": {
+              "trigger": {
+                "const": "repeat_of_terminal_run"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rule_id": {
+                "const": "RC-05",
+                "description": "The identifier of this trigger is fixed. RC-05 always means repeat_of_terminal_run and nothing else, so a reference to RC-05 from trigger_precedence always resolves to this trigger."
+              },
+              "idempotency_scope": {
+                "const": "new_idempotency_key"
+              },
+              "creates_run": {
+                "const": true
+              },
+              "reuses_existing_run": {
+                "const": false
+              },
+              "reuses_job": {
+                "const": false
+              },
+              "creates_attempt": {
+                "const": true
+              },
+              "reopens_terminal_run": {
+                "const": false
+              },
+              "condition": {
+                "pattern": "new idempotency key"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "trigger"
+            ],
+            "properties": {
+              "trigger": {
+                "const": "retry"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rule_id": {
+                "const": "RC-06",
+                "description": "The identifier of this trigger is fixed. RC-06 always means retry and nothing else, so a reference to RC-06 from trigger_precedence always resolves to this trigger."
+              },
+              "idempotency_scope": {
+                "const": "not_a_client_submitted_command"
+              },
+              "creates_run": {
+                "const": false
+              },
+              "reuses_existing_run": {
+                "const": true
+              },
+              "reuses_job": {
+                "const": true
+              },
+              "creates_attempt": {
+                "const": true
+              },
+              "reopens_terminal_run": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "trigger"
+            ],
+            "properties": {
+              "trigger": {
+                "const": "resume"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rule_id": {
+                "const": "RC-07",
+                "description": "The identifier of this trigger is fixed. RC-07 always means resume and nothing else, so a reference to RC-07 from trigger_precedence always resolves to this trigger."
+              },
+              "idempotency_scope": {
+                "const": "not_a_client_submitted_command"
+              },
+              "creates_run": {
+                "const": false
+              },
+              "reuses_existing_run": {
+                "const": true
+              },
+              "reuses_job": {
+                "const": true
+              },
+              "creates_attempt": {
+                "const": true
+              },
+              "reopens_terminal_run": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "trigger"
+            ],
+            "properties": {
+              "trigger": {
+                "const": "restart"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rule_id": {
+                "const": "RC-08",
+                "description": "The identifier of this trigger is fixed. RC-08 always means restart and nothing else, so a reference to RC-08 from trigger_precedence always resolves to this trigger."
+              },
+              "idempotency_scope": {
+                "const": "not_a_client_submitted_command"
+              },
+              "creates_run": {
+                "const": false
+              },
+              "reuses_existing_run": {
+                "const": true
+              },
+              "reuses_job": {
+                "const": true
+              },
+              "creates_attempt": {
+                "const": true
+              },
+              "reopens_terminal_run": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "trigger"
+            ],
+            "properties": {
+              "trigger": {
+                "const": "worker_failover"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rule_id": {
+                "const": "RC-09",
+                "description": "The identifier of this trigger is fixed. RC-09 always means worker_failover and nothing else, so a reference to RC-09 from trigger_precedence always resolves to this trigger."
+              },
+              "idempotency_scope": {
+                "const": "not_a_client_submitted_command"
+              },
+              "creates_run": {
+                "const": false
+              },
+              "reuses_existing_run": {
+                "const": true
+              },
+              "reuses_job": {
+                "const": true
+              },
+              "creates_attempt": {
+                "const": true
+              },
+              "reopens_terminal_run": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "creates_run"
+            ],
+            "properties": {
+              "creates_run": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reuses_existing_run": {
+                "const": false
+              },
+              "reuses_job": {
+                "const": false
+              },
+              "creates_attempt": {
+                "const": true
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "reuses_existing_run": {
+                "const": true
+              },
+              "reuses_job": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "description": "A trigger that presents the same idempotency key and the same payload mints nothing at all: no Run, no Job and no Attempt. This is the half of PD-03 that separates an idempotent replay from a retry, which also creates no Run but does create an Attempt.",
+          "if": {
+            "required": [
+              "idempotency_scope"
+            ],
+            "properties": {
+              "idempotency_scope": {
+                "const": "same_key_and_payload"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "creates_run": {
+                "const": false
+              },
+              "reuses_existing_run": {
+                "const": true
+              },
+              "reuses_job": {
+                "const": true
+              },
+              "creates_attempt": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "description": "An internal control-plane lifecycle event - retry, resume, restart, worker failover - never creates a Run and always creates exactly one new Attempt on the reused Job.",
+          "if": {
+            "required": [
+              "idempotency_scope"
+            ],
+            "properties": {
+              "idempotency_scope": {
+                "const": "not_a_client_submitted_command"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "creates_run": {
+                "const": false
+              },
+              "reuses_existing_run": {
+                "const": true
+              },
+              "reuses_job": {
+                "const": true
+              },
+              "creates_attempt": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "run_lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Complete machine-readable transfer of the AuditRun/Job/Attempt creation rule approved with modification as PD-03. Every trigger the owner ruled on must be present exactly once with the whole outcome tuple the owner fixed - creates_run, reuses_existing_run, reuses_job, creates_attempt and reopens_terminal_run - so that transferring only the restrictive half of the rule, only the positive half, or only the Run half without the Attempt half, fails schema validation instead of passing review. Where the conditions of two triggers can both match one request, trigger_precedence names the winner and fixes the resolved outcome, so no request has two admissible readings.",
+      "required": [
+        "owner_decision",
+        "decision_state",
+        "decided_on",
+        "decided_by",
+        "rule",
+        "terminal_run_rule",
+        "triggers",
+        "trigger_precedence"
+      ],
+      "properties": {
+        "owner_decision": {
+          "const": "PD-03"
+        },
+        "decision_state": {
+          "const": "approved_with_modification"
+        },
+        "decided_on": {
+          "const": "2026-09-01"
+        },
+        "decided_by": {
+          "const": "repository owner"
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terminal_run_rule": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Must state why 'a terminal Run is never reopened' and 'a repeat of a terminal Run creates a new Run' are complementary rather than contradictory: the first constrains the existing entity, the second constrains what the repeated request produces."
+        },
+        "triggers": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/run_creation_rule"
+          },
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "trigger": {
+                    "const": "top_level_audit_command_accepted"
+                  }
+                },
+                "required": [
+                  "trigger"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "trigger": {
+                    "const": "idempotent_replay_same_key_and_payload"
+                  }
+                },
+                "required": [
+                  "trigger"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "trigger": {
+                    "const": "inputs_changed"
+                  }
+                },
+                "required": [
+                  "trigger"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "trigger": {
+                    "const": "explicit_re_audit_command"
+                  }
+                },
+                "required": [
+                  "trigger"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "trigger": {
+                    "const": "repeat_of_terminal_run"
+                  }
+                },
+                "required": [
+                  "trigger"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "trigger": {
+                    "const": "retry"
+                  }
+                },
+                "required": [
+                  "trigger"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "trigger": {
+                    "const": "resume"
+                  }
+                },
+                "required": [
+                  "trigger"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "trigger": {
+                    "const": "restart"
+                  }
+                },
+                "required": [
+                  "trigger"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "trigger": {
+                    "const": "worker_failover"
+                  }
+                },
+                "required": [
+                  "trigger"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
+        },
+        "trigger_precedence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true,
+          "description": "Every pair of triggers whose conditions can both match a single request, with the owner-ruled winner. Exactly one such overlap exists under PD-03: a repeat of a terminal Run submitted with the same idempotency key and the same payload matches both RC-02 and RC-05. The owner ruled that identical key and identical payload ALWAYS return the original Run and that a repeat of a terminal Run creates a new Run ONLY under a new idempotency key, so RC-02 wins. That direction is a constant here: RC-05 cannot be recorded as the winner, and the resolved outcome cannot be recorded as anything but the RC-02 outcome tuple. The two references resolve by construction rather than by convention: every trigger's rule_id is fixed per trigger by run_creation_rule, and all nine triggers are required exactly once, so RC-02 here is necessarily the idempotent replay and RC-05 is necessarily the repeat of a terminal Run.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "precedence_id",
+              "overlapping_condition",
+              "competing_rule_ids",
+              "winning_rule_id",
+              "losing_rule_id",
+              "resolved_outcome",
+              "owner_ruling",
+              "decided_on",
+              "decided_by",
+              "rationale"
+            ],
+            "properties": {
+              "precedence_id": {
+                "const": "RP-01"
+              },
+              "overlapping_condition": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "same idempotency key and the same payload",
+                "description": "The single request shape that both competing triggers would otherwise claim."
+              },
+              "competing_rule_ids": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "uniqueItems": true,
+                "prefixItems": [
+                  {
+                    "const": "RC-02"
+                  },
+                  {
+                    "const": "RC-05"
+                  }
+                ],
+                "items": false,
+                "description": "The two triggers whose conditions both match the overlapping request, in the owner-ruled order winner, loser. Both entries are constants, and each names a trigger whose identity run_creation_rule pins by const, so the pair cannot be re-pointed at other triggers."
+              },
+              "winning_rule_id": {
+                "const": "RC-02",
+                "description": "Fixed by the owner ruling. Recording RC-05 here - the reverse priority - fails validation. RC-02 cannot be made to mean a different trigger either: run_creation_rule pins RC-02 to idempotent_replay_same_key_and_payload with a const, so this reference always resolves to the idempotent replay."
+              },
+              "losing_rule_id": {
+                "const": "RC-05",
+                "description": "Fixed by the owner ruling. run_creation_rule pins RC-05 to repeat_of_terminal_run with a const, so this reference always resolves to the repeat of a terminal Run."
+              },
+              "resolved_outcome": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "The outcome the winning trigger produces for the overlapping request. It is the RC-02 outcome tuple, constant by constant, so the precedence cannot be recorded with an outcome its own winner does not produce.",
+                "required": [
+                  "creates_run",
+                  "reuses_existing_run",
+                  "reuses_job",
+                  "creates_attempt",
+                  "reopens_terminal_run"
+                ],
+                "properties": {
+                  "creates_run": {
+                    "const": false
+                  },
+                  "reuses_existing_run": {
+                    "const": true
+                  },
+                  "reuses_job": {
+                    "const": true
+                  },
+                  "creates_attempt": {
+                    "const": false
+                  },
+                  "reopens_terminal_run": {
+                    "const": false
+                  }
+                }
+              },
+              "owner_ruling": {
+                "type": "string",
+                "minLength": 1,
+                "allOf": [
+                  {
+                    "pattern": "ALWAYS return the original Run"
+                  },
+                  {
+                    "pattern": "ONLY under a new idempotency key"
+                  }
+                ],
+                "description": "The repository owner's words, carrying both halves: identical key and payload ALWAYS return the original Run, and a repeat of a terminal Run creates a new Run ONLY under a new idempotency key."
+              },
+              "decided_on": {
+                "const": "2026-09-01"
+              },
+              "decided_by": {
+                "const": "repository owner"
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "fail_soft_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A legacy fail-soft behaviour whose target policy this lane encodes. When the repository owner split a policy across families, only the analysis part may be stated as policy here; every other part is listed with its owning lane or contract family and is neither encoded nor absorbed by this contract.",
+      "required": [
+        "policy_id",
+        "title",
+        "analysis_part"
+      ],
+      "properties": {
+        "policy_id": {
+          "type": "string",
+          "pattern": "^FS-[0-9]{2}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "split_decided_on": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "split_decided_by": {
+          "const": "repository owner"
+        },
+        "analysis_part": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "part",
+            "encoder_lane",
+            "rule"
+          ],
+          "properties": {
+            "part": {
+              "type": "string",
+              "minLength": 1
+            },
+            "encoder_lane": {
+              "const": "analysis (ANA)"
+            },
+            "rule": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "parts_outside_this_lane": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "Parts of the same policy that belong to another owner. Recorded so the split stays visible; never restated as analysis policy.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "part",
+              "owner",
+              "note"
+            ],
+            "properties": {
+              "part": {
+                "type": "string",
+                "minLength": 1
+              },
+              "owner": {
+                "type": "string",
+                "minLength": 1
+              },
+              "contract_family": {
+                "type": "string",
+                "minLength": 1
+              },
+              "planned_task": {
+                "type": "string",
+                "pattern": "^W[0-9]+-[A-Z]{2,4}-[0-9]{2}$"
+              },
+              "rule": {
+                "type": "string",
+                "minLength": 1
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "dependentRequired": {
+        "split_decided_on": [
+          "split_decided_by"
+        ],
+        "split_decided_by": [
+          "split_decided_on"
+        ]
+      }
+    },
+    "external_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "An owner decision of another contract family that this exclusion cites. It is recorded by state, never as a proposal: state admits only decided values, and a decided state requires its date and deciding authority, so an approved decision cannot be described here as merely proposed. analysis_family_decision is always false - a decision of this family belongs in owner_decisions.",
+      "required": [
+        "decision_id",
+        "state",
+        "decided_on",
+        "decided_by",
+        "analysis_family_decision",
+        "owning_lanes",
+        "note"
+      ],
+      "properties": {
+        "decision_id": {
+          "enum": [
+            "PD-01"
+          ]
+        },
+        "state": {
+          "enum": [
+            "approved",
+            "approved_with_modification"
+          ]
+        },
+        "decided_on": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "decided_by": {
+          "const": "repository owner"
+        },
+        "analysis_family_decision": {
+          "const": false
+        },
+        "owning_lanes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "domain",
+              "architecture"
+            ]
+          }
+        },
+        "modification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "state"
+            ],
+            "properties": {
+              "state": {
+                "const": "approved_with_modification"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "modification"
+            ]
+          }
+        }
+      ]
+    },
+    "retained_capability_disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Owner disposition for a capability that leaves the analysis boundary but is retained. It must name the contract family, the contract owner and the carrying task, and state whether the capability is on or off in the meantime; 'awaiting some future owner' is not an admissible disposition.",
+      "required": [
+        "owner_input_id",
+        "state",
+        "decided_on",
+        "decided_by",
+        "bounded_context",
+        "contract_family",
+        "contract_owner",
+        "planned_task",
+        "capability_state",
+        "cp00_excludes_runtime_semantics"
+      ],
+      "properties": {
+        "owner_input_id": {
+          "type": "string",
+          "pattern": "^U-[0-9]{2}$"
+        },
+        "state": {
+          "enum": [
+            "resolved_by_owner"
+          ]
+        },
+        "decided_on": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "decided_by": {
+          "const": "repository owner"
+        },
+        "bounded_context": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract_family": {
+          "type": "string",
+          "pattern": "^contracts/[a-z_]+/v[0-9]+/\\*\\*$"
+        },
+        "contract_owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract_owner_is_not": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "planned_task": {
+          "type": "string",
+          "pattern": "^W[0-9]+-[A-Z]{2,4}-[0-9]{2}$"
+        },
+        "sequencing": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capability_state": {
+          "enum": [
+            "disabled_until_task_accepted",
+            "active_under_owning_contract"
+          ],
+          "description": "disabled_until_task_accepted means the capability is switched off until the planned task is accepted."
+        },
+        "cp00_excludes_runtime_semantics": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "capability_state"
+            ],
+            "properties": {
+              "capability_state": {
+                "const": "disabled_until_task_accepted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cp00_excludes_runtime_semantics": {
+                "const": true
+              }
+            },
+            "required": [
+              "planned_task",
+              "contract_family",
+              "contract_owner"
+            ]
+          }
+        }
+      ]
+    },
+    "io_role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "media_type",
+        "required",
+        "description"
+      ],
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/artifact_role"
+        },
+        "media_type": {
+          "$ref": "#/$defs/media_type"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage_id",
+        "title",
+        "stage_version",
+        "purpose",
+        "depends_on",
+        "required_inputs",
+        "produced_outputs",
+        "execution",
+        "status_policy",
+        "evidence"
+      ],
+      "properties": {
+        "stage_id": {
+          "$ref": "#/$defs/stage_id"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "depends_on": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stage_id"
+          }
+        },
+        "required_inputs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/io_role"
+          }
+        },
+        "produced_outputs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/io_role"
+          }
+        },
+        "execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scope",
+            "scope_rationale",
+            "model_routed",
+            "mandatory"
+          ],
+          "properties": {
+            "scope": {
+              "enum": [
+                "central_only",
+                "remote_eligible"
+              ]
+            },
+            "scope_rationale": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model_routed": {
+              "type": "boolean"
+            },
+            "mandatory": {
+              "type": "boolean"
+            }
+          }
+        },
+        "status_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "skip_allowed",
+            "partial_allowed",
+            "retryable",
+            "succeeded_requires_all_required_outputs"
+          ],
+          "properties": {
+            "skip_allowed": {
+              "type": "boolean"
+            },
+            "partial_allowed": {
+              "type": "boolean"
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "succeeded_requires_all_required_outputs": {
+              "const": true
+            }
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "inventory_capabilities",
+            "legacy_declaration_ids"
+          ],
+          "properties": {
+            "inventory_capabilities": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z]{2,3}-[0-9]{2}$"
+              }
+            },
+            "legacy_declaration_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^LSD-[0-9]{2}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "exclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "excluded_scope_id",
+        "title",
+        "reason",
+        "owning_boundary"
+      ],
+      "properties": {
+        "excluded_scope_id": {
+          "type": "string",
+          "pattern": "^XS-[0-9]{2}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owning_boundary": {
+          "description": "Target boundary that owns the excluded concern. project_optimization and section_optimization are deliberately distinct values: the project-optimization sub-pipeline produces improvement proposals for one project, while section optimization is the downstream section-level aggregation and replication pipeline. Collapsing the two would restate the unproven scope claim PD-05 removed.",
+          "enum": [
+            "expert_decisions",
+            "knowledge_base",
+            "publication_export",
+            "comparison",
+            "future_comparison_scope",
+            "project_optimization",
+            "section_optimization",
+            "distributed_execution",
+            "experimental_legacy",
+            "engine_internal"
+          ]
+        },
+        "legacy_declaration_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^LSD-[0-9]{2}$"
+          }
+        },
+        "owner_decision": {
+          "description": "Owner decision of the analysis family that governs this exclusion. PD-01 is not an analysis-family decision and is therefore not referenceable here; an exclusion that cites it does so through external_decision, which records it by its approved state.",
+          "enum": [
+            "PD-02",
+            "PD-03",
+            "PD-04",
+            "PD-05"
+          ]
+        },
+        "retained_capability": {
+          "description": "Present when the excluded concern is moved outside the analysis boundary rather than dropped. States what survives the exclusion and which future contract owner must specify it, so that an exclusion cannot be read as deletion of a product capability.",
+          "type": "string",
+          "minLength": 1
+        },
+        "retained_capability_disposition": {
+          "$ref": "#/$defs/retained_capability_disposition"
+        },
+        "external_decision": {
+          "$ref": "#/$defs/external_decision"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "dependentRequired": {
+        "retained_capability_disposition": [
+          "retained_capability"
+        ]
+      }
+    },
+    "owner_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Product/domain decision of the analysis contract family, recorded exactly as the repository owner ruled it. Only the repository owner, through the wave integrator, may change a state here; every non-pending state carries its decision date and deciding authority, and approved_with_modification additionally carries the modification that was imposed. PD-05 additionally carries its identifier provenance, because its number was assigned by this lane and confirmed by the program integrator rather than issued by the owner.",
+      "required": [
+        "decision_id",
+        "state",
+        "effect"
+      ],
+      "properties": {
+        "decision_id": {
+          "enum": [
+            "PD-02",
+            "PD-03",
+            "PD-04",
+            "PD-05"
+          ]
+        },
+        "state": {
+          "enum": [
+            "pending_owner_approval",
+            "approved",
+            "approved_with_modification"
+          ]
+        },
+        "effect": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decided_on": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "decided_by": {
+          "const": "repository owner"
+        },
+        "identifier_assigned_by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Who assigned the PD-* label. The number is never itself an owner decision."
+        },
+        "identifier_confirmed_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "identifier_confirmed_on": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "identifier_note": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owning_lane": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "state"
+            ],
+            "properties": {
+              "state": {
+                "enum": [
+                  "approved",
+                  "approved_with_modification"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "decided_on",
+              "decided_by"
+            ]
+          },
+          "else": {
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "decided_on"
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "required": [
+                    "decided_by"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "state"
+            ],
+            "properties": {
+              "state": {
+                "const": "approved_with_modification"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "modification"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "modification"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "decision_id"
+            ],
+            "properties": {
+              "decision_id": {
+                "const": "PD-05"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "identifier_assigned_by",
+              "identifier_confirmed_by",
+              "identifier_confirmed_on"
+            ]
+          }
+        }
+      ],
+      "dependentRequired": {
+        "identifier_confirmed_by": [
+          "identifier_confirmed_on",
+          "identifier_assigned_by"
+        ],
+        "identifier_confirmed_on": [
+          "identifier_confirmed_by"
+        ]
+      }
+    }
+  }
+}

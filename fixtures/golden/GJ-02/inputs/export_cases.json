@@ -1,0 +1,73 @@
+{
+  "cases": [
+    {
+      "case_id": "EX-OK",
+      "kind": "excel_export",
+      "report_type": "all",
+      "generator_outcome": "success"
+    },
+    {
+      "case_id": "EX-BAD-KIND",
+      "kind": "excel_export",
+      "report_type": "not_a_report_kind",
+      "generator_outcome": "not_invoked"
+    },
+    {
+      "case_id": "EX-GEN-FAIL",
+      "kind": "excel_export",
+      "report_type": "all",
+      "generator_outcome": "generator_error",
+      "expected_disposition": "500 raised to the caller by the standalone export route"
+    },
+    {
+      "case_id": "PKG-OK",
+      "kind": "audit_package",
+      "generator_outcome": "success"
+    },
+    {
+      "case_id": "PKG-XLSX-RC",
+      "kind": "audit_package",
+      "generator_outcome": "generator_exits_non_zero",
+      "expected_disposition": "the member condition returncode == 0 and non-empty output file is not met, so audit_report.xlsx is not added; nothing is logged and the archive is still streamed to the caller"
+    },
+    {
+      "case_id": "PKG-XLSX-EXC",
+      "kind": "audit_package",
+      "generator_outcome": "generation_raises",
+      "raised_by": "the sixty-second subprocess budget expiring, an unresolvable generator script or a failed archive write",
+      "expected_disposition": "caught by the broad exception handler around the generation block, printed to standard output and swallowed; audit_report.xlsx is not added and the archive is still streamed to the caller"
+    },
+    {
+      "case_id": "PKG-NO-FINDINGS",
+      "kind": "audit_package",
+      "findings_file_present": false
+    },
+    {
+      "case_id": "DL-ESCAPE",
+      "kind": "download",
+      "requested_name": "../../outside.xlsx",
+      "file_exists_under_either_lookup_root": false,
+      "expected_disposition": "404. Existence is tested before containment: the name is joined to REPORTS_DIR, then to BASE_DIR, and when neither join exists the handler raises the not-found error and never reaches the containment check. A traversal name is therefore not rejected by a safe-path validation in this route."
+    },
+    {
+      "case_id": "DL-OUTSIDE",
+      "kind": "download",
+      "requested_name": "outside_report.xlsx",
+      "file_exists_under_either_lookup_root": true,
+      "resolved_path_under_base_dir": false,
+      "expected_disposition": "403. This is the only branch that produces 403: the joined path exists and its resolved form does not satisfy the containment comparison against the resolved BASE_DIR."
+    },
+    {
+      "case_id": "DL-PREFIX",
+      "kind": "download",
+      "requested_name": "sibling_report.xlsx",
+      "file_exists_under_either_lookup_root": true,
+      "resolved_path_under_base_dir": false,
+      "resolved_path_shares_base_dir_name_as_string_prefix": true,
+      "expected_disposition": "Served with 200 although the file is outside the base directory. The containment check is str(filepath.resolve()).startswith(str(BASE_DIR.resolve())), a byte-prefix comparison with no path-separator or component boundary, so a resolved path such as /srv/audit-backup/sibling_report.xlsx satisfies a resolved base of /srv/audit. Recorded as observed legacy behaviour and as a containment weakness; the fixture states no target rule and no remediation.",
+      "classification": "legacy_observed_defect"
+    }
+  ],
+  "note": "Generator outcomes are injected deterministically; no external process is executed by the fixture. The two packaging failure cases are kept apart on purpose: a non-zero generator exit produces no log line at all, while an exception inside the generation block is printed and then swallowed. Both end with a complete, successfully streamed archive that is missing the report member.",
+  "download_guard_note": "The three download cases exist because the route's guard is ordered existence-first and its containment test is a string prefix. DL-ESCAPE is a 404, DL-OUTSIDE is the only 403, and DL-PREFIX is served. None of the three is a safe-path validation performed before resolution."
+}

@@ -1,0 +1,402 @@
+{
+  "schema_version": 1,
+  "journey_id": "GJ-03",
+  "title": "Finding rerun, decision carryover under provider failure, and expert correction or revocation",
+  "summary": "Review findings on V1, rerun the audit on V2 with the carryover provider failing, then correct and revoke an expert decision. Separates the observed legacy overwrite and delete behavior from the approved append-only target, which remains a target and never parity.",
+  "inventory_candidates": [
+    "GJ-03",
+    "GJ-04"
+  ],
+  "comparison_mode": "replay",
+  "determinism": {
+    "provider_dependent": true,
+    "llm_text_equality_asserted": false,
+    "rationale": "The carryover matching leg is driven from a deterministic synthetic stub returning outcome shapes only. All assertions are over decision records, statuses and provenance fields, never over generated narrative text.",
+    "replay_material": [
+      {
+        "path": "fixtures/golden/GJ-03/inputs/carryover_provider_replay.json",
+        "review_status": "reviewed_for_sensitive_content",
+        "content_policy": "Outcome shapes, a synthetic candidate identifier and a confidence number. No prompt, no model output text, no credential and no account identifier."
+      }
+    ]
+  },
+  "provenance": {
+    "legacy_source_commit": "32b9d903792b30506048a1d42b0e6b2d07aee403",
+    "method": "Read-only inspection of the immutable legacy Git objects at the pinned commit (git show / git grep against the object database) plus the accepted W0-BHV-01 capability inventory. No legacy service, job, provider, migration or user flow was executed, and no mutable legacy checkout path was read as evidence. This describes how the legacy_observed evidence of this manifest was obtained and is not a statement about every assertion in it: the greenfield_target expectations GJ-03-EO-09, GJ-03-EO-10 and GJ-03-FC-06 are not derived from legacy. GJ-03-EO-09 and GJ-03-FC-06 rest on repository owner decision PD-01 and GJ-03-EO-10 on standing repository rules, each named in its own target_basis, and none claims a legacy evidence reference.",
+    "data_classification": "synthetic",
+    "inventory_reference": "docs/behavior/legacy_capability_inventory.md",
+    "runtime_execution": "none",
+    "evidence": [
+      {
+        "capability_id": "FD-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/findings.py:get_findings@145",
+        "evidence_class": "direct",
+        "supports": "Version-aware finding list, filtering and grouping."
+      },
+      {
+        "capability_id": "FD-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/findings.py:get_finding_block_map@45",
+        "evidence_class": "direct",
+        "supports": "Finding to source block map route."
+      },
+      {
+        "capability_id": "FD-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/findings_service.py:compute_finding_block_map@543",
+        "evidence_class": "direct",
+        "supports": "Deterministic computation of the finding block map."
+      },
+      {
+        "capability_id": "EX-08",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:module@14-24",
+        "evidence_class": "direct",
+        "supports": "Stated carryover principles: human decisions are not overwritten, verdicts transfer only above the confidence threshold, provider unavailability or timeout produces a pending mark without a verdict, and reruns merge by item identity."
+      },
+      {
+        "capability_id": "EX-08",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:run_decision_carryover@436",
+        "evidence_class": "direct",
+        "supports": "Carryover entry point over the previous checked version."
+      },
+      {
+        "capability_id": "EX-08",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:_timeout_sec@91",
+        "evidence_class": "direct",
+        "supports": "Explicit provider time budget for the carryover leg."
+      },
+      {
+        "capability_id": "EX-08",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:lines@605-620",
+        "evidence_class": "direct",
+        "supports": "Uncertain match records a carried-over entry with status needs_manual_review, the top score and the candidate identifier."
+      },
+      {
+        "capability_id": "EX-08",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:lines@663-676",
+        "evidence_class": "direct",
+        "supports": "Exhausted provider call budget also yields needs_manual_review with the reason attached rather than a verdict."
+      },
+      {
+        "capability_id": "EX-08",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/decision_carryover/runner.py:run_decision_carryover_stage@40",
+        "evidence_class": "direct",
+        "supports": "Carryover is a distinct pipeline stage with its own stage result."
+      },
+      {
+        "capability_id": "EX-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/knowledge_base.py:_resolve_reviewer@26",
+        "evidence_class": "direct",
+        "supports": "Reviewer identity is resolved from the portal session when authentication is enabled."
+      },
+      {
+        "capability_id": "EX-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:save_expert_review@220",
+        "evidence_class": "direct",
+        "supports": "Atomic save of the per-project expert review and its projection."
+      },
+      {
+        "capability_id": "EX-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:_append_to_decisions_log@683",
+        "evidence_class": "direct",
+        "supports": "The global decision log is keyed by source project and item; a matching entry is replaced in place rather than appended."
+      },
+      {
+        "capability_id": "EX-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:lines@701-722",
+        "evidence_class": "direct",
+        "supports": "Auto-carryover is guarded from overwriting a live human entry or another version's auto entry, and the surviving record replaces the previous one in the keyed map."
+      },
+      {
+        "capability_id": "EX-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:revoke_decision@861",
+        "evidence_class": "direct",
+        "supports": "Revocation removes the record from the global decision log."
+      },
+      {
+        "capability_id": "EX-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:lines@884-905",
+        "evidence_class": "direct",
+        "supports": "Revocation refuses to act when the match is ambiguous and otherwise also removes the decision from the project review document."
+      },
+      {
+        "capability_id": "EX-09",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/migrated_findings_service.py:_stable_migrated_id@1436",
+        "evidence_class": "direct",
+        "supports": "Stable identifier derived from the origin version and origin finding pair."
+      },
+      {
+        "capability_id": "EX-09",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/migrated_findings_service.py:append_migrated_findings_to_current_findings@1442",
+        "evidence_class": "direct",
+        "supports": "Migrated findings are appended into the current merged findings document."
+      },
+      {
+        "capability_id": "EX-09",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/migrated_findings.py:check_migrated_findings@33",
+        "evidence_class": "direct",
+        "supports": "Manual recheck of migrated accepted findings is a separate explicit request."
+      }
+    ]
+  },
+  "input_manifest": {
+    "data_classification": "synthetic",
+    "generation_method": "Hand-authored synthetic scenario descriptors. No production project, customer document, provider payload, model response, credential or environment value was copied, derived from or reconstructed. Binary source documents are represented by declarative surrogates and text stand-ins.",
+    "artifacts": [
+      {
+        "path": "fixtures/golden/GJ-03/inputs/previous_version_findings.json",
+        "role": "synthetic previous-version finding set",
+        "media_type": "application/json",
+        "sha256": "db42bce9a7cb1c25fc02abbc42aaa1c5b9b015809e5cd478c130534678a8051e",
+        "size_bytes": 438,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-03/inputs/current_version_findings.json",
+        "role": "synthetic current-version finding set",
+        "media_type": "application/json",
+        "sha256": "8db4e3b9d0ea9f6957d685288c69fa59e3789902be0cfc51079a249ff2da6e7a",
+        "size_bytes": 536,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-03/inputs/expert_decisions_v1.json",
+        "role": "synthetic expert decisions plus correction and revocation requests",
+        "media_type": "application/json",
+        "sha256": "a065479aa06691706c339ae5d87cd527766cffce128d63fe0f53c4aefe77e457",
+        "size_bytes": 815,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-03/inputs/carryover_provider_replay.json",
+        "role": "deterministic provider outcome stub for the carryover matching leg",
+        "media_type": "application/json",
+        "sha256": "6ffbbda7f959a42c1d0c15b157cc56f98a0c7f7ff84c830742647c9a46be5411",
+        "size_bytes": 984,
+        "data_classification": "synthetic"
+      }
+    ],
+    "surrogates": [
+      {
+        "legacy_input_kind": "expert decision spreadsheet import",
+        "surrogate": "structured decision records in JSON",
+        "reason": "Spreadsheet compatibility is a separate characterization item; no customer workbook may be committed."
+      }
+    ]
+  },
+  "expected_outputs": [
+    {
+      "id": "GJ-03-EO-01",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "Findings are listed per version with filters and grouping, and each finding remains traceable to its deterministic source block map.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/findings.py:get_findings@145",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/findings.py:get_finding_block_map@45",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/findings_service.py:compute_finding_block_map@543"
+      ]
+    },
+    {
+      "id": "GJ-03-EO-02",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "invariant",
+      "statement": "An existing human decision is never replaced by the automatic carryover: an entry that is not marked as carried over is skipped, and an auto entry belonging to a different version is left untouched.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:module@14-24",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:lines@701-722"
+      ]
+    },
+    {
+      "id": "GJ-03-EO-03",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "state_transition",
+      "statement": "When the carryover provider times out, exhausts its call budget or returns confidence below the threshold, the item is recorded with status needs_manual_review and no verdict is transferred.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:_timeout_sec@91",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:lines@605-620",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:lines@663-676"
+      ]
+    },
+    {
+      "id": "GJ-03-EO-04",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "Carryover provenance stays visible on the resulting record: the carried-over marker, the origin version and the origin item identifier are all persisted alongside the top score and candidate.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:lines@605-620",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:run_decision_carryover@436",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/decision_carryover/runner.py:run_decision_carryover_stage@40"
+      ]
+    },
+    {
+      "id": "GJ-03-EO-05",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "idempotency",
+      "statement": "Rerunning carryover on the same version merges by item identity and does not duplicate entries; migrated findings use an identifier derived from the origin version and origin finding pair, so appending them again is stable.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:module@14-24",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/migrated_findings_service.py:_stable_migrated_id@1436",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/migrated_findings_service.py:append_migrated_findings_to_current_findings@1442",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/migrated_findings.py:check_migrated_findings@33"
+      ]
+    },
+    {
+      "id": "GJ-03-EO-06",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "state_transition",
+      "statement": "Correcting an expert decision replaces the matching entry in the global decision log in place, keeping the previous record identifier and its customer confirmation fields. The previous decision value is not retained as history.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:_append_to_decisions_log@683",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:lines@701-722",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:save_expert_review@220"
+      ]
+    },
+    {
+      "id": "GJ-03-EO-07",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "state_transition",
+      "statement": "Revoking an expert decision deletes the record from the global decision log and from the project review document; no revocation event remains behind.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:revoke_decision@861",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:lines@884-905"
+      ]
+    },
+    {
+      "id": "GJ-03-EO-08",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "identity",
+      "statement": "Reviewer identity comes from the portal session when authentication is enabled, and an unmapped authenticated login is not substituted with another identity.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/knowledge_base.py:_resolve_reviewer@26"
+      ]
+    },
+    {
+      "id": "GJ-03-EO-09",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "state_transition",
+      "statement": "Expert decisions are append-only. A correction and a revocation each create a new decision identifier and a new immutable event instead of replacing or deleting the earlier record, so every previous decision value stays readable as history. A revocation moves the current projection to pending and does not automatically restore the verdict that preceded the revoked decision. This diverges from the observed legacy in-place replacement and deletion behavior recorded in GJ-03-EO-06 and GJ-03-EO-07 and is not parity.",
+      "parity_oracle": false,
+      "owner_decision_ref": "PD-01",
+      "target_basis": [
+        "repository owner decision PD-01, approved with modification on 2026-09-01 by the repository owner: decisions are append-only, correction and revocation each create a new decision identifier, history is preserved, and revocation moves the projection to pending without automatic restoration of the previous verdict",
+        "docs/behavior/legacy_capability_inventory.md section 7 item 1",
+        "fixtures/golden/GJ-03/manifest.json expectations GJ-03-EO-06 and GJ-03-EO-07 keep the observed legacy behavior separate and unchanged"
+      ]
+    },
+    {
+      "id": "GJ-03-EO-10",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "invariant",
+      "statement": "A decision value is drawn from a closed enumeration and a pending state is represented explicitly, instead of relying on permissive free-form typing and an empty verdict.",
+      "parity_oracle": false,
+      "target_basis": [
+        "docs/behavior/legacy_capability_inventory.md section 7 item 6",
+        "AGENTS.md section 4 forbids business semantics carried by weakly typed transport schema"
+      ]
+    }
+  ],
+  "failure_cases": [
+    {
+      "id": "GJ-03-FC-01",
+      "provenance_class": "legacy_observed",
+      "trigger": "Carryover provider timeout (replay interaction CO-01).",
+      "expected_visible_state": "Item recorded as needs_manual_review with no verdict; the run continues fail-soft and the degradation is visible in the carryover report.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:_timeout_sec@91",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:module@14-24"
+      ]
+    },
+    {
+      "id": "GJ-03-FC-02",
+      "provenance_class": "legacy_observed",
+      "trigger": "Carryover call budget exhausted (replay interaction CO-02).",
+      "expected_visible_state": "Item recorded as needs_manual_review with the exhaustion reason attached; no verdict is transferred.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:lines@663-676"
+      ]
+    },
+    {
+      "id": "GJ-03-FC-03",
+      "provenance_class": "legacy_observed",
+      "trigger": "Match confidence below the transfer threshold (replay interaction CO-03).",
+      "expected_visible_state": "Item recorded as needs_manual_review with the top score and candidate visible; the reviewer decides.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:lines@605-620"
+      ]
+    },
+    {
+      "id": "GJ-03-FC-04",
+      "provenance_class": "legacy_observed",
+      "trigger": "Carryover tries to write over an existing human decision for the same source project and item key.",
+      "expected_visible_state": "The live entry is left untouched and the auto-transfer is skipped for that key; the transfer itself remains visible in the project review document.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:lines@701-722"
+      ]
+    },
+    {
+      "id": "GJ-03-FC-05",
+      "provenance_class": "legacy_observed",
+      "trigger": "Revocation request that does not identify a unique record (the ambiguous request in the input set).",
+      "expected_visible_state": "The revocation is refused and logged; nothing is deleted.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:lines@884-905",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:revoke_decision@861"
+      ]
+    },
+    {
+      "id": "GJ-03-FC-06",
+      "provenance_class": "greenfield_target",
+      "trigger": "Correction or revocation of an expert decision whose earlier value must remain auditable.",
+      "expected_visible_state": "A new decision identifier and a new immutable event are appended and the earlier record stays readable as history. After a revocation the current projection is pending and visibly unresolved: the verdict that preceded the revoked decision is not reinstated automatically and no substitute verdict is derived, so the item is routed back for an explicit human decision.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": false,
+      "owner_decision_ref": "PD-01",
+      "target_basis": [
+        "repository owner decision PD-01, approved with modification on 2026-09-01 by the repository owner: revocation moves the projection to pending and never auto-restores the previous verdict",
+        "AGENTS.md section 4 forbids silent fallback, so an unresolved projection is visible instead of being backfilled"
+      ]
+    }
+  ],
+  "sensitive_data_exclusions": [
+    {
+      "excluded": "legacy `.env`, `.env.example` and every credential-shaped file",
+      "reason": "Not opened during inventory or selection; secrets never enter fixtures."
+    },
+    {
+      "excluded": "`audit_worker/providers/openrouter_secret.py`",
+      "reason": "Designated metadata-only and excluded by the accepted inventory; no value was accessed or copied here."
+    },
+    {
+      "excluded": "production or customer PDF, Markdown, recognized-JSON and Excel payloads",
+      "reason": "Fixture policy allows synthetic or anonymized material only; binary documents are represented by surrogates."
+    },
+    {
+      "excluded": "live provider prompts, model responses, endpoints and account identifiers",
+      "reason": "LLM text is not byte-stable and provider material is out of fixture scope; only outcome shapes are replayed."
+    },
+    {
+      "excluded": "mutable legacy checkout files, untracked paths, databases and generated results",
+      "reason": "Only immutable Git objects at the pinned legacy commit are admissible evidence."
+    }
+  ],
+  "reviewer_sampling": {
+    "minimum_evidence_objects": 3,
+    "instruction": "Resolve the decision-log replacement range, the revocation range and one carryover pending range in the immutable legacy object; confirm that the append-only target is labelled as an approved greenfield target with the owner decision attached and never as parity, and that the legacy replacement and deletion observations are unchanged."
+  }
+}

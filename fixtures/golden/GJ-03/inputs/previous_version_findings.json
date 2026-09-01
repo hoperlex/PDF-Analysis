@@ -1,0 +1,23 @@
+{
+  "version_id": "SYNTH-VER-01",
+  "items": [
+    {
+      "item_id": "F-001",
+      "section": "AR",
+      "title": "Synthetic finding one",
+      "severity": "major"
+    },
+    {
+      "item_id": "F-002",
+      "section": "AR",
+      "title": "Synthetic finding two",
+      "severity": "minor"
+    },
+    {
+      "item_id": "F-003",
+      "section": "AR",
+      "title": "Synthetic finding three",
+      "severity": "minor"
+    }
+  ]
+}

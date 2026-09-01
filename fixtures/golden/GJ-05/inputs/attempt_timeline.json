@@ -1,0 +1,20 @@
+{
+  "job_id": "SYNTH-JOB-01",
+  "attempts": [
+    {
+      "attempt_number": 1,
+      "execution_state": "running",
+      "attempt_disposition": "operator_declared_lost"
+    },
+    {
+      "attempt_number": 2,
+      "execution_state": "running",
+      "attempt_disposition": "active"
+    }
+  ],
+  "late_delivery": {
+    "from_attempt_number": 1,
+    "arrives_after": "attempt 2 became active"
+  },
+  "note": "execution_state and attempt_disposition are two orthogonal axes and must not be merged."
+}

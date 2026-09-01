@@ -1,29 +1,75 @@
 {
-  "schema_version": 1,
-  "job_id": "job_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-  "attempt_id": "att_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-  "run_id": "run_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-  "version_uid": "ver_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-  "analysis_profile_id": "ap_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-  "fencing_token": "17",
+  "contract_version": "1.0.0-draft.1",
+  "attempt_authority": {
+    "run_id": "run_NC8B8QARV9SZPKVF59QSXCV53K",
+    "job_id": "job_HHDBVZETDEPXT3WKNRV16PAW6S",
+    "attempt_id": "att_3CEHJNEQYRTH7PZAZTQB48QJFZ",
+    "execution_token": "etk_7f3c9d21b4e60a58"
+  },
+  "stage_registry": {
+    "contract": "auditmanager.analysis.stage_registry",
+    "contract_version": "1.0.0-draft.1"
+  },
+  "version_uid": "ver_1QE9R2F0TFCVN7GTFW0SA5253P",
+  "analysis_profile_id": "ap_T7NMN22MWT5578D478ZESPX2CQ",
+  "prompt_bundle_id": "pb_QMGQYVQJ46950BZ5H85BHX8D3P",
+  "norms_snapshot_id": "ns_NH78225QD2X81WJH2T0G7Z772N",
+  "issued_at": "2026-08-15T09:00:00Z",
   "artifacts": [
     {
-      "role": "source.pdf",
-      "blob_id": "blob_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "size_bytes": 12345,
+      "role": "source.document",
+      "blob_id": "blob_C86A720G5XWPCB2Y290MQ1BCYM",
+      "sha256": "0c414c2add1c06f24786ed9cd33f6083e1e9ab0f74e4193445428fa1a03d57f5",
+      "size_bytes": 184320,
       "media_type": "application/pdf",
-      "logical_name": "synthetic.pdf"
+      "logical_name": "synthetic-source.pdf"
+    },
+    {
+      "role": "norms.snapshot",
+      "blob_id": "blob_QY06HGKS8BHDWZH62MQD0Z3WCV",
+      "sha256": "6e90b28e4bca503b84d11897148f42a0ab9adaf5ba62f2afb5ffc0f1f1cde282",
+      "size_bytes": 20480,
+      "media_type": "application/json",
+      "logical_name": "synthetic-norms.json"
     }
   ],
   "stages": [
     {
-      "name": "prepare",
-      "version": "1.0.0"
+      "stage_id": "source_preparation",
+      "stage_version": "1.0.0"
     },
     {
-      "name": "text_analysis",
-      "version": "1.0.0"
+      "stage_id": "page_geometry_extraction",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "document_context_build",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "text_analysis",
+      "stage_version": "1.0.0",
+      "config_ref": "profile.text_analysis.v1"
+    },
+    {
+      "stage_id": "block_analysis",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "finding_merge",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "finding_review",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "finding_correction",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "norm_verification",
+      "stage_version": "1.0.0"
     }
   ]
 }

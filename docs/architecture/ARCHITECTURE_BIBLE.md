@@ -3,6 +3,18 @@
 **Статус:** baseline для нового репозитория; утверждается на CP-00.  
 **Область:** backend, frontend, PostgreSQL, S3, analysis pipeline, workers, contracts, security, testing, operations и AI-agent delivery.
 
+**CP-00 review:** a disposition for every principle below is recorded in
+[CP00_ARCHITECTURE_REVIEW.md](CP00_ARCHITECTURE_REVIEW.md). P-03, P-10, P-16, P-18
+and P-22 are ratifiable only together with the qualifications recorded there; no
+principle is deferred any more. The repository owner recorded `PD-01`–`PD-04` on
+2026-09-01 ([CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md)): P-18 and §2's
+"current expert verdict" now carry the approved `PD-01` modification — a correction
+or revocation creates a new `decision_id`, a revocation projects the current verdict
+to `pending` and never auto-restores the superseded one, and history is preserved.
+`U-04` (tenant model, IdP, TTL matrix, legal hold) remains open, so §13 retention and
+classification obligations stay non-ratifiable. No principle is ratified until the
+CP-00 integration task records acceptance.
+
 ## 1. Архитектурная позиция
 
 Продукт создаётся с нуля. Старое приложение не является runtime dependency. Оно используется как behavioral oracle и источник golden evidence.

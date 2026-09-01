@@ -1,0 +1,47 @@
+{
+  "session_label": "SYNTH-CMP-04",
+  "stage_1": {
+    "root_label": "synthetic-stage-1",
+    "documents": [
+      {
+        "doc_id": "S1-D1",
+        "sheets": [
+          "A-01",
+          "A-02"
+        ]
+      },
+      {
+        "doc_id": "S1-D2",
+        "sheets": [
+          "A-03"
+        ]
+      }
+    ]
+  },
+  "stage_2": {
+    "root_label": "synthetic-stage-2",
+    "documents": [
+      {
+        "doc_id": "S2-D1",
+        "sheets": [
+          "A-01",
+          "A-02"
+        ]
+      },
+      {
+        "doc_id": "S2-D2",
+        "sheets": [
+          "A-03",
+          "A-04"
+        ]
+      }
+    ]
+  },
+  "source_signature_inputs": [
+    "stage_1.root_label",
+    "stage_2.root_label",
+    "stage_1.documents",
+    "stage_2.documents"
+  ],
+  "note": "Sheet inventories are synthetic labels; no drawing bytes are committed."
+}

@@ -1,0 +1,47 @@
+{
+  "contract_version": "1.0.0-draft.1",
+  "attempt_authority": {
+    "run_id": "run_NC8B8QARV9SZPKVF59QSXCV53K",
+    "job_id": "job_HHDBVZETDEPXT3WKNRV16PAW6S",
+    "attempt_id": "att_3CEHJNEQYRTH7PZAZTQB48QJFZ"
+  },
+  "stage_registry": {
+    "contract": "auditmanager.analysis.stage_registry",
+    "contract_version": "1.0.0-draft.1"
+  },
+  "stage_results": [
+    {
+      "contract_version": "1.0.0-draft.1",
+      "stage_id": "source_preparation",
+      "stage_version": "1.0.0",
+      "status": "succeeded",
+      "artifacts": [
+        {
+          "role": "prepared.page_inventory",
+          "blob_id": "blob_J6VNHEG0551A6NP75YJQ23CSCX",
+          "sha256": "2cc895a80100e5b53610183aac08a4b07ee5e7f446d0ab5d78c2d0101ebc9d20",
+          "size_bytes": 4096,
+          "media_type": "application/json"
+        },
+        {
+          "role": "prepared.text_layer",
+          "blob_id": "blob_DEY7ZDCMFE47JX5FX5WRQ7BVFB",
+          "sha256": "9fe26ca49d44f7d61d0b8b2e1c5256060a5cbc910df110a57f5c246f6a3900b7",
+          "size_bytes": 65536,
+          "media_type": "application/json"
+        }
+      ],
+      "metrics": {
+        "pages": 2,
+        "duration_ms": 1840
+      }
+    }
+  ],
+  "usage_summary": {
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost": 0,
+    "currency": "USD"
+  },
+  "completed_at": "2026-08-15T09:21:44Z"
+}

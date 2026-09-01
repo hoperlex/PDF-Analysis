@@ -1,26 +1,211 @@
 {
-  "schema_version": 1,
-  "job_id": "job_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-  "attempt_id": "att_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-  "run_id": "run_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-  "fencing_token": "17",
+  "contract_version": "1.0.0-draft.1",
+  "attempt_authority": {
+    "run_id": "run_NC8B8QARV9SZPKVF59QSXCV53K",
+    "job_id": "job_HHDBVZETDEPXT3WKNRV16PAW6S",
+    "attempt_id": "att_3CEHJNEQYRTH7PZAZTQB48QJFZ",
+    "execution_token": "etk_7f3c9d21b4e60a58"
+  },
+  "stage_registry": {
+    "contract": "auditmanager.analysis.stage_registry",
+    "contract_version": "1.0.0-draft.1"
+  },
   "stage_results": [
     {
-      "schema_version": 1,
-      "stage_name": "prepare",
+      "contract_version": "1.0.0-draft.1",
+      "stage_id": "source_preparation",
       "stage_version": "1.0.0",
       "status": "succeeded",
+      "artifacts": [
+        {
+          "role": "prepared.page_inventory",
+          "blob_id": "blob_J6VNHEG0551A6NP75YJQ23CSCX",
+          "sha256": "2cc895a80100e5b53610183aac08a4b07ee5e7f446d0ab5d78c2d0101ebc9d20",
+          "size_bytes": 4096,
+          "media_type": "application/json"
+        },
+        {
+          "role": "prepared.text_layer",
+          "blob_id": "blob_DEY7ZDCMFE47JX5FX5WRQ7BVFB",
+          "sha256": "9fe26ca49d44f7d61d0b8b2e1c5256060a5cbc910df110a57f5c246f6a3900b7",
+          "size_bytes": 65536,
+          "media_type": "application/json"
+        }
+      ],
+      "metrics": {
+        "pages": 2,
+        "duration_ms": 1840
+      }
+    },
+    {
+      "contract_version": "1.0.0-draft.1",
+      "stage_id": "page_geometry_extraction",
+      "stage_version": "1.0.0",
+      "status": "succeeded",
+      "artifacts": [
+        {
+          "role": "geometry.block_index",
+          "blob_id": "blob_BAQDFY02KZF07H830KKFMK27ZQ",
+          "sha256": "4afa45a29a1c8ceb013c9cce0eb11fa6bf11e089db3702af73680a9fdf357b8d",
+          "size_bytes": 32768,
+          "media_type": "application/json"
+        },
+        {
+          "role": "geometry.page_crops",
+          "blob_id": "blob_379ESS85HXBAMK81636VPPAVXR",
+          "sha256": "d3e7d8a53140e40aee8b74387e0793a39445583709939c9284708c08ac11ded8",
+          "size_bytes": 8192,
+          "media_type": "application/json"
+        }
+      ],
+      "metrics": {
+        "blocks": 46,
+        "duration_ms": 2610
+      }
+    },
+    {
+      "contract_version": "1.0.0-draft.1",
+      "stage_id": "document_context_build",
+      "stage_version": "1.0.0",
+      "status": "succeeded",
+      "artifacts": [
+        {
+          "role": "context.document_graph",
+          "blob_id": "blob_DC7MGB3SEY3JFCRC7M5X212SAK",
+          "sha256": "60a1d58d9b3e589aef01daa52e16d3631bae9659f49df4740f2f311ea04e17b6",
+          "size_bytes": 24576,
+          "media_type": "application/json"
+        }
+      ],
+      "metrics": {
+        "graph_nodes": 46,
+        "duration_ms": 640
+      }
+    },
+    {
+      "contract_version": "1.0.0-draft.1",
+      "stage_id": "text_analysis",
+      "stage_version": "1.0.0",
+      "status": "succeeded",
+      "artifacts": [
+        {
+          "role": "analysis.text_observations",
+          "blob_id": "blob_DJSG7YC9CSEBG55F5V58E293EQ",
+          "sha256": "07fc5a6410290e7467842f4913e25d44e61e17da36dba43a49f652d92247bd4a",
+          "size_bytes": 16384,
+          "media_type": "application/json"
+        }
+      ],
+      "metrics": {
+        "observations": 7,
+        "duration_ms": 9120
+      }
+    },
+    {
+      "contract_version": "1.0.0-draft.1",
+      "stage_id": "block_analysis",
+      "stage_version": "1.0.0",
+      "status": "partial",
+      "artifacts": [
+        {
+          "role": "analysis.block_observations",
+          "blob_id": "blob_Z03C3EWS7Q99M0SX8CFJ5DYGQQ",
+          "sha256": "4d97316c87ed9613dba60e83e0053719bb7f898cec5e4611adabeacb3ed14ac4",
+          "size_bytes": 12288,
+          "media_type": "application/json"
+        }
+      ],
+      "metrics": {
+        "observations": 3,
+        "blocks_analyzed": 40,
+        "blocks_expected": 46
+      },
+      "error": {
+        "code": "analysis_incomplete",
+        "message": "6 of 46 blocks were not analyzed because the routed provider returned no result for them.",
+        "retryable": true,
+        "details": {
+          "blocks_missing": 6
+        }
+      }
+    },
+    {
+      "contract_version": "1.0.0-draft.1",
+      "stage_id": "finding_merge",
+      "stage_version": "1.0.0",
+      "status": "succeeded",
+      "artifacts": [
+        {
+          "role": "findings.merged",
+          "blob_id": "blob_J3RENEMWQ4N9TEX96GF2K81MKX",
+          "sha256": "9f2f0232ebcecf8a80b77c1331bae4fbfbcd9222f0317de53c055f6e7e14e399",
+          "size_bytes": 20480,
+          "media_type": "application/json"
+        }
+      ],
+      "metrics": {
+        "findings": 9,
+        "observations_linked": 10
+      }
+    },
+    {
+      "contract_version": "1.0.0-draft.1",
+      "stage_id": "finding_review",
+      "stage_version": "1.0.0",
+      "status": "succeeded",
+      "artifacts": [
+        {
+          "role": "review.findings_assessment",
+          "blob_id": "blob_XEKAH0REEG9QVSR43YHYKCA9V8",
+          "sha256": "c42537fbb0d3a6b0a93f0efb7ea00976c98850fa7bf2d38df823ff52182b3f9e",
+          "size_bytes": 10240,
+          "media_type": "application/json"
+        }
+      ],
+      "metrics": {
+        "findings_assessed": 9
+      }
+    },
+    {
+      "contract_version": "1.0.0-draft.1",
+      "stage_id": "finding_correction",
+      "stage_version": "1.0.0",
+      "status": "skipped",
       "artifacts": [],
       "metrics": {
-        "pages": 2
+        "findings_assessed": 0
+      },
+      "error": {
+        "code": "stage_skipped_by_profile",
+        "message": "The selected analysis profile does not enable finding_correction for this run.",
+        "retryable": false
+      }
+    },
+    {
+      "contract_version": "1.0.0-draft.1",
+      "stage_id": "norm_verification",
+      "stage_version": "1.0.0",
+      "status": "succeeded",
+      "artifacts": [
+        {
+          "role": "norms.verification_report",
+          "blob_id": "blob_1V85RZN6H832YDS3G5TBJZAW2Q",
+          "sha256": "73e426f8f7c67b12ed37995904845f213cfd40723ce5717145e345cf5741d9e0",
+          "size_bytes": 8192,
+          "media_type": "application/json"
+        }
+      ],
+      "metrics": {
+        "norm_checks": 21,
+        "violations": 2
       }
     }
   ],
   "usage_summary": {
-    "tokens_in": 0,
-    "tokens_out": 0,
-    "cost": 0,
+    "tokens_in": 41250,
+    "tokens_out": 6180,
+    "cost": 0.42,
     "currency": "USD"
   },
-  "completed_at": "2026-08-31T12:00:00Z"
+  "completed_at": "2026-08-15T09:21:44Z"
 }

@@ -1,0 +1,601 @@
+{
+  "schema_version": 1,
+  "journey_id": "GJ-02",
+  "title": "Audit interruption, resume, retry, skip and export packaging",
+  "summary": "Interrupt a synthetic audit after each major stage and drive resume, retry and skip; force a provider timeout in the block-analysis leg; observe missing-norm accumulation; then export once with a successful Excel generator and once where the embedded generator fails.",
+  "inventory_candidates": [
+    "GJ-02",
+    "GJ-07"
+  ],
+  "comparison_mode": "replay",
+  "determinism": {
+    "provider_dependent": true,
+    "llm_text_equality_asserted": false,
+    "rationale": "The provider timeout leg is driven from a deterministic synthetic stub that returns outcome shapes only. Stage status, ordering, artifact presence and archive membership are compared structurally; provider text is never compared.",
+    "replay_material": [
+      {
+        "path": "fixtures/golden/GJ-02/inputs/provider_timeout_replay.json",
+        "review_status": "reviewed_for_sensitive_content",
+        "content_policy": "Outcome shapes and elapsed budgets only. No prompt, no model output text, no endpoint, no credential and no account identifier."
+      }
+    ]
+  },
+  "provenance": {
+    "legacy_source_commit": "32b9d903792b30506048a1d42b0e6b2d07aee403",
+    "method": "Read-only inspection of the immutable legacy Git objects at the pinned commit (git show / git grep against the object database) plus the accepted W0-BHV-01 capability inventory. No legacy service, job, provider, migration or user flow was executed, and no mutable legacy checkout path was read as evidence. This describes how the legacy_observed evidence of this manifest was obtained and is not a statement about every assertion in it: the greenfield_target expectations GJ-02-EO-10, GJ-02-EO-11, GJ-02-EO-13 and GJ-02-FC-10 are not derived from legacy, and each names its own basis in target_basis. One of them is an explicit exception to the source list above rather than something a reader has to infer from it: GJ-02-EO-13 reports a value read from a file outside the legacy object set and outside the accepted inventory - contracts/analysis/v1/stage-registry.json, contract auditmanager.analysis.stage_registry version 1.0.0-draft.1, entry stage_id finding_merge, field status_policy.skip_allowed - an unfrozen analysis-lane candidate that repository owner decision PD-02 makes authoritative for target stage semantics. That single cross-lane read is recorded in the expectation's own authority block, with freeze_status unfrozen_candidate and the read_scope it was made under, and in SELECTION.md section 6.1; it yields no legacy evidence reference and no owner_decision_ref. GJ-02-EO-11 rests on owner decision PD-02 itself, and GJ-02-EO-10 and GJ-02-FC-10 on standing repository rules.",
+    "data_classification": "synthetic",
+    "inventory_reference": "docs/behavior/legacy_capability_inventory.md",
+    "runtime_execution": "none",
+    "evidence": [
+      {
+        "capability_id": "AN-07",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:retry_stage@1099",
+        "evidence_class": "direct",
+        "supports": "Public retry entry point for a named stage."
+      },
+      {
+        "capability_id": "AN-05",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107",
+        "evidence_class": "direct",
+        "supports": "Public retry alias map from request name to manager stage."
+      },
+      {
+        "capability_id": "AN-07",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157",
+        "evidence_class": "direct",
+        "supports": "Publicly skippable stage whitelist."
+      },
+      {
+        "capability_id": "AN-07",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243",
+        "evidence_class": "direct",
+        "supports": "Accepted resume-entry vocabulary normalization."
+      },
+      {
+        "capability_id": "AN-04",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:ocr_stages@3688",
+        "evidence_class": "direct",
+        "supports": "Ordered continuation path used when resuming."
+      },
+      {
+        "capability_id": "AN-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_run_ocr_pipeline@5346",
+        "evidence_class": "direct",
+        "supports": "Runtime orchestration body covering preparation, analysis, merge, review, norm, debt, carryover and Excel."
+      },
+      {
+        "capability_id": "AN-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_recover_stale_pipelines@1304",
+        "evidence_class": "direct",
+        "supports": "Startup recovery converts stale running state into an interrupted, resumable state."
+      },
+      {
+        "capability_id": "AN-06",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_run_post_findings_parallel@4711",
+        "evidence_class": "direct",
+        "supports": "Post-merge review, norm and optimization branches run together and can degrade independently."
+      },
+      {
+        "capability_id": "AN-07",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253",
+        "evidence_class": "direct",
+        "supports": "Log-state to resumable-stage order."
+      },
+      {
+        "capability_id": "AN-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_get_stage_order@1882",
+        "evidence_class": "direct",
+        "supports": "Status and display stage order is selected by pipeline version."
+      },
+      {
+        "capability_id": "AN-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864",
+        "evidence_class": "direct",
+        "supports": "Project status and display stage order declaration."
+      },
+      {
+        "capability_id": "AN-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175",
+        "evidence_class": "direct",
+        "supports": "Legacy artifact and status aliases accepted when computing pipeline state."
+      },
+      {
+        "capability_id": "AN-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185",
+        "evidence_class": "direct",
+        "supports": "Artifact-presence map used to infer completed stages."
+      },
+      {
+        "capability_id": "AN-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/storage/stage_artifacts.py:STAGE_VALUE_ALIASES@61",
+        "evidence_class": "direct",
+        "supports": "Persisted stage-value canonicalization aliases."
+      },
+      {
+        "capability_id": "AN-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8",
+        "evidence_class": "direct",
+        "supports": "Persisted audit-stage vocabulary."
+      },
+      {
+        "capability_id": "AN-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79",
+        "evidence_class": "direct",
+        "supports": "Audit-log display and status order keys."
+      },
+      {
+        "capability_id": "AN-04",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/block_analysis/gemma_findings_only.py:lines@1677-1688",
+        "evidence_class": "direct",
+        "supports": "Block-analysis provider leg wraps the call in a wait-for budget and converts expiry into an explicit not-ok result with a timeout error string and elapsed milliseconds."
+      },
+      {
+        "capability_id": "AN-06",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/norms/runner.py:norm_stages@313",
+        "evidence_class": "direct",
+        "supports": "Norm verification and fix stage set."
+      },
+      {
+        "capability_id": "AN-06",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/norms/runner.py:lines@483-494",
+        "evidence_class": "direct",
+        "supports": "Missing-norm queue is written and surfaced as a warning; failure to write the queue degrades to a warning log rather than failing the run."
+      },
+      {
+        "capability_id": "OUT-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:generate_excel@42",
+        "evidence_class": "direct",
+        "supports": "Excel export entry point with report kind selection."
+      },
+      {
+        "capability_id": "OUT-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:download_file@78",
+        "evidence_class": "direct",
+        "supports": "Report download route: two lookup roots, a not-found branch that precedes any containment test, and a single containment comparison against BASE_DIR."
+      },
+      {
+        "capability_id": "OUT-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:_download_audit_package_v2@137",
+        "evidence_class": "direct",
+        "supports": "Portable audit package assembly on the v2 layout."
+      },
+      {
+        "capability_id": "OUT-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:download_audit_package@253",
+        "evidence_class": "direct",
+        "supports": "Portable audit package assembly on the legacy layout."
+      },
+      {
+        "capability_id": "OUT-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@207-229",
+        "evidence_class": "direct",
+        "supports": "Embedded Excel generation is wrapped in a broad exception handler that only prints; the archive is still returned without the report member."
+      },
+      {
+        "capability_id": "OUT-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@332-355",
+        "evidence_class": "direct",
+        "supports": "The legacy package path swallows embedded Excel failure in the same way."
+      },
+      {
+        "capability_id": "AN-07",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:skip_stage@1153",
+        "evidence_class": "direct",
+        "supports": "Public skip entry point: a whitelisted name only writes a skipped pipeline-log entry for that stage; a name outside the whitelist is a 400."
+      },
+      {
+        "capability_id": "OUT-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@216-224",
+        "evidence_class": "direct",
+        "supports": "The embedded workbook is produced by an external generator run under a sixty-second budget, and the archive member is added only when the process exits zero and the produced file is non-empty; a non-zero exit simply fails that condition and logs nothing."
+      },
+      {
+        "capability_id": "OUT-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@225-229",
+        "evidence_class": "direct",
+        "supports": "A raised exception in the generation block is caught by a broad except, printed once and swallowed; the temporary file is removed and the archive continues to be assembled and returned."
+      },
+      {
+        "capability_id": "OUT-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@77-93",
+        "evidence_class": "direct",
+        "supports": "The download route declares a plain {filename} path parameter and the whole handler body: two lookup roots, the not-found branch and the containment branch."
+      },
+      {
+        "capability_id": "OUT-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@82-88",
+        "evidence_class": "direct",
+        "supports": "The requested name is joined to REPORTS_DIR, then to BASE_DIR; a path that exists under neither is 404; only an existing path is then compared with str(filepath.resolve()).startswith(str(BASE_DIR.resolve())) and answered 403 on failure."
+      },
+      {
+        "capability_id": "OUT-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:BASE_DIR@1375",
+        "evidence_class": "direct",
+        "supports": "BASE_DIR is an alias of ROOT_DIR, so the containment comparison is made against the repository root."
+      },
+      {
+        "capability_id": "OUT-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:REPORTS_DIR@68",
+        "evidence_class": "direct",
+        "supports": "REPORTS_DIR, the first lookup root of the download route, is derived from DATA_DIR and not from BASE_DIR."
+      },
+      {
+        "capability_id": "OUT-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_data_dir@54",
+        "evidence_class": "direct",
+        "supports": "DATA_DIR is ROOT_DIR unless the AUDIT_DATA_DIR environment variable redirects it, so the first lookup root can resolve outside the directory the containment check compares against."
+      }
+    ]
+  },
+  "input_manifest": {
+    "data_classification": "synthetic",
+    "generation_method": "Hand-authored synthetic scenario descriptors. No production project, customer document, provider payload, model response, credential or environment value was copied, derived from or reconstructed. Binary source documents are represented by declarative surrogates and text stand-ins.",
+    "artifacts": [
+      {
+        "path": "fixtures/golden/GJ-02/inputs/run_plan.json",
+        "role": "stage variants, interruption points and operator control requests",
+        "media_type": "application/json",
+        "sha256": "b65e5ca18c08445ee1fd05b0a06cc1dfb5975c644f37c66e279db9918a91a611",
+        "size_bytes": 5045,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-02/inputs/provider_timeout_replay.json",
+        "role": "deterministic provider outcome stub for the block-analysis leg",
+        "media_type": "application/json",
+        "sha256": "e66b0e8db32d9b5c73a419c351ed334f5a66c82a97dd3fe652bba4bd50d46915",
+        "size_bytes": 894,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-02/inputs/export_cases.json",
+        "role": "export and packaging scenarios including generator failure",
+        "media_type": "application/json",
+        "sha256": "d37b189509714c6c5f88b201b4333a19e9c52149ed2c0bcc5c748e42b53a76c7",
+        "size_bytes": 4000,
+        "data_classification": "synthetic"
+      }
+    ],
+    "surrogates": [
+      {
+        "legacy_input_kind": "live model or command-line provider call",
+        "surrogate": "recorded outcome shape (ok, timeout) with no request or response text",
+        "reason": "Live provider text is not byte-stable and must never be treated as a parity oracle."
+      }
+    ]
+  },
+  "expected_outputs": [
+    {
+      "id": "GJ-02-EO-01",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "state_transition",
+      "statement": "After an interruption, startup recovery converts a stale running pipeline into an interrupted, resumable state instead of leaving it as running.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_recover_stale_pipelines@1304"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-02",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "ordering",
+      "statement": "Resume enters at the normalized stage name and continues along the declared continuation order; the resume order is a separate declaration from the status and display order, and the two are not required to agree.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:ocr_stages@3688",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-03",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "ordering",
+      "statement": "Text analysis and block analysis appear in either order depending on the pipeline version selected for status computation, so both the text-before-block and the block-before-text variants are valid legacy shapes.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_get_stage_order@1882",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_run_ocr_pipeline@5346"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-04",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "A retry request maps a public stage name through the retry alias map, and a skip request is accepted only for names in the skip whitelist. The two vocabularies are different sets and neither is derived from the other: a name can be retryable and not skippable. An accepted skip performs no execution; it only writes a skipped pipeline-log entry for that stage.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:retry_stage@1099",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:skip_stage@1153",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-05",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "artifact_presence",
+      "statement": "Completed stages are inferred from the artifact-presence map and legacy artifact aliases, so invalidating a text or block stage artifact returns that stage to an incomplete state on the next status computation.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/storage/stage_artifacts.py:STAGE_VALUE_ALIASES@61"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-06",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "A provider call that exceeds its budget in the block-analysis leg returns an explicit not-ok result carrying a timeout error string and an elapsed measurement; it never returns an empty successful analysis.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/block_analysis/gemma_findings_only.py:lines@1677-1688"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-07",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "artifact_presence",
+      "statement": "Missing norms are accumulated into a queue artifact and surfaced as a warning with counts; when the queue cannot be written the run degrades to a warning log and continues.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/norms/runner.py:lines@483-494",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/norms/runner.py:norm_stages@313",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_run_post_findings_parallel@4711"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-08",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "A successful standalone Excel export returns the generated workbook name and path, and the download route serves that workbook through a two-step lookup followed by a single containment check, in that order. The handler joins the requested name to REPORTS_DIR, falls back to joining it to BASE_DIR, and answers 404 when neither join exists; only a path that already exists is then compared with the base directory, and 403 is raised solely when that comparison fails. The guard is therefore not a safe-path validation applied before resolution: an escaping name that does not exist is a 404, and 403 is reachable only for an existing file whose resolved path lies outside BASE_DIR. The comparison itself is str(filepath.resolve()).startswith(str(BASE_DIR.resolve())), a plain string prefix test with no path-separator or component boundary, so a sibling directory whose resolved path merely begins with the resolved base directory name — a file under /srv/audit-backup against a base of /srv/audit — satisfies the check and is served. The first lookup root, REPORTS_DIR, is derived from DATA_DIR rather than from BASE_DIR and AUDIT_DATA_DIR may point it outside the base directory, in which case an existing report found by the first join fails the containment check and the download answers 403. All of this is recorded as observed legacy behaviour, the prefix collision included; it is not a target rule, not a recommendation and not a remediation.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:generate_excel@42",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:download_file@78",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@77-93",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@82-88",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:BASE_DIR@1375",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:REPORTS_DIR@68",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_data_dir@54"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-09",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "artifact_presence",
+      "statement": "Embedded Excel generation inside audit-package assembly cannot fail the package. The report member is added only when the external generator exits zero and leaves a non-empty file, and there are two distinct ways that condition is missed. A non-zero generator exit or an empty output file simply fails the guard: the member is skipped and nothing at all is logged. An exception raised inside the generation block, such as the sixty-second subprocess budget expiring, is caught by a broad except handler, printed once to standard output and swallowed. In both branches the archive is completed and streamed to the caller as an ordinary successful response with no error status, no warning field and no manifest of omitted members, so the caller cannot tell a complete package from one missing audit_report.xlsx. The legacy-layout package path repeats the same shape. This is recorded as observed behavior and as a completeness risk, not as desired behavior.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:_download_audit_package_v2@137",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@207-229",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@216-224",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@225-229",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:download_audit_package@253",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@332-355"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-10",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "invariant",
+      "statement": "An export package that omits a declared member is a visible degraded or failed result carrying the omission reason; a package is never returned as success while a declared member is missing.",
+      "parity_oracle": false,
+      "target_basis": [
+        "AGENTS.md section 4 forbids silent fallback",
+        "docs/behavior/legacy_capability_inventory.md section 7 item 5 records fail-soft omissions as requiring explicit golden journeys"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-11",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "identity",
+      "statement": "One versioned target stage registry is the single authoritative source of stage identity, and every legacy stage enum, resume order, display order, routing preset and remote-eligibility list is a traced alias or evidence rather than a competing source of truth. The registry is accepted only together with a name-level alias map that resolves each legacy public stage name, so this journey keeps legacy spellings such as findings_merge in fixtures/golden/GJ-02/inputs/run_plan.json as legacy public names and selects no canonical stage identifier of its own.",
+      "parity_oracle": false,
+      "owner_decision_ref": "PD-02",
+      "target_basis": [
+        "repository owner decision PD-02, approved with modification on 2026-09-01 by the repository owner: one versioned target stage registry is authoritative, and the analysis lane is accepted only after a name-level alias map resolves the legacy names",
+        "docs/behavior/legacy_capability_inventory.md section 7 item 2 records the conflicting legacy stage declarations",
+        "fixtures/golden/GJ-02/inputs/run_plan.json stage_name_authority marks every stage string in that input as a legacy public name and not a canonical stage identifier"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-12",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "The legacy skip whitelist is exactly prepare, crop_blocks, text_analysis, block_analysis, findings_merge, norm_verify, excel, tile_audit and main_audit. findings_merge is a member of that set, so legacy accepts a skip request for the findings-merge stage and answers with the skipped status after writing a skipped pipeline-log entry; it does not reject it. Names outside the set, including retryable names such as decision_carryover, are refused with a 400. This records what legacy permits and is deliberately kept separate from the target policy stated in GJ-02-EO-13.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:skip_stage@1153",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157"
+      ]
+    },
+    {
+      "id": "GJ-02-EO-13",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "invariant",
+      "statement": "In the target, per-stage skippability is declared by the single versioned stage registry rather than by a router-local whitelist, and for the merge stage that declaration is skip_allowed false. This journey reports the registry's value; it does not decide it. The value is read from contracts/analysis/v1/stage-registry.json, contract auditmanager.analysis.stage_registry version 1.0.0-draft.1, entry stage_id finding_merge, field status_policy.skip_allowed, as recorded in this expectation's authority block. Repository owner decision PD-02 makes that registry the authoritative source of target stage semantics, but the owner disposed of no rule about merge skippability, so this expectation asserts no owner decision and carries no owner_decision_ref. The registry is an unfrozen candidate owned by the analysis lane: if that field changes, this expectation is re-derived from it rather than defended. The registry stores no legacy alias, and the legacy public name findings_merge is resolved to the canonical stage_id finding_merge only through the name-level map that the registry's alias_resolution names, which this lane neither reads nor restates. GJ-02-EO-12 records the opposite legacy permission and remains the parity-bearing observation; neither statement may be substituted for the other, and this one must never be used as parity evidence.",
+      "parity_oracle": false,
+      "target_basis": [
+        "contracts/analysis/v1/stage-registry.json, stages entry stage_id finding_merge, status_policy.skip_allowed false, in contract auditmanager.analysis.stage_registry version 1.0.0-draft.1 whose status is candidate: the authoritative source of this value and the only source this expectation reports",
+        "repository owner decision PD-02, approved with modification on 2026-09-01 by the repository owner, makes that versioned registry authoritative for canonical stage identity and for success, partial, failed and skipped semantics; the owner decided nothing about merge skippability, so no owner rule is asserted here and no owner_decision_ref is claimed",
+        "fixtures/golden/GJ-02/manifest.json expectation GJ-02-EO-12 keeps the legacy permission to skip findings_merge unchanged and parity-bearing, so the observation and the target stay separate"
+      ],
+      "authority": {
+        "authority_kind": "contract_registry_field",
+        "contract": "auditmanager.analysis.stage_registry",
+        "contract_version": "1.0.0-draft.1",
+        "source_path": "contracts/analysis/v1/stage-registry.json",
+        "selector": "stages[stage_id=finding_merge].status_policy.skip_allowed",
+        "value": false,
+        "freeze_status": "unfrozen_candidate",
+        "read_scope": "Read once, for this reference only, under the program integrator's explicit lane exception of 2026-09-01, which lifted this lane's earlier no-cross-lane-draft rule for this single file because PD-02 made the registry authoritative for target stage semantics.",
+        "provenance_note": "The value is taken from the registry field named by selector and from nowhere else. It is not an owner decision: the repository owner disposed of PD-02, which makes the registry authoritative, and disposed of no rule about merge skippability. It is not a legacy observation either: legacy permits the skip, and that opposite fact is recorded separately as GJ-02-EO-12 with parity_oracle true."
+      }
+    }
+  ],
+  "failure_cases": [
+    {
+      "id": "GJ-02-FC-01",
+      "provenance_class": "legacy_observed",
+      "trigger": "Retry request naming a stage absent from the retry alias map (case CR-02).",
+      "expected_visible_state": "4xx rejection; no stage is restarted and no status is mutated.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:retry_stage@1099",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107"
+      ]
+    },
+    {
+      "id": "GJ-02-FC-02",
+      "provenance_class": "legacy_observed",
+      "trigger": "Skip request for decision_carryover (case CR-04), a legacy public retry name that is absent from the skip whitelist.",
+      "expected_visible_state": "400 with an explicit message that the stage cannot be skipped; no pipeline-log entry is written and the stage stays mandatory for this run. The case deliberately does not use findings_merge, which legacy does allow to be skipped.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:skip_stage@1153",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107"
+      ]
+    },
+    {
+      "id": "GJ-02-FC-03",
+      "provenance_class": "legacy_observed",
+      "trigger": "Provider timeout in the block-analysis leg (replay interaction PR-01).",
+      "expected_visible_state": "Explicit not-ok provider result with a timeout error and elapsed measurement, surfaced through pipeline status and log; the stage does not complete as empty success.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/block_analysis/gemma_findings_only.py:lines@1677-1688"
+      ]
+    },
+    {
+      "id": "GJ-02-FC-04",
+      "provenance_class": "legacy_observed",
+      "trigger": "Missing-norm queue cannot be written.",
+      "expected_visible_state": "Warning log entry naming the failure; the run continues in a degraded state that must remain visible in the pipeline log.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/norms/runner.py:lines@483-494"
+      ]
+    },
+    {
+      "id": "GJ-02-FC-05",
+      "provenance_class": "legacy_observed",
+      "trigger": "Excel export with an unknown report kind (case EX-BAD-KIND).",
+      "expected_visible_state": "400; no workbook is produced.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:generate_excel@42"
+      ]
+    },
+    {
+      "id": "GJ-02-FC-06",
+      "provenance_class": "legacy_observed",
+      "trigger": "Excel generator error during standalone export (case EX-GEN-FAIL).",
+      "expected_visible_state": "5xx; the failure is reported to the caller rather than returning an empty workbook.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:generate_excel@42"
+      ]
+    },
+    {
+      "id": "GJ-02-FC-07",
+      "provenance_class": "legacy_observed",
+      "trigger": "Audit package requested for a version with no merged findings document (case PKG-NO-FINDINGS).",
+      "expected_visible_state": "404; no archive is produced.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:_download_audit_package_v2@137",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:download_audit_package@253"
+      ]
+    },
+    {
+      "id": "GJ-02-FC-08",
+      "provenance_class": "legacy_observed",
+      "trigger": "Embedded Excel generator exits non-zero or leaves an empty workbook during audit-package assembly (case PKG-XLSX-RC).",
+      "expected_visible_state": "The guard requiring a zero exit code and a non-empty file is not met, so audit_report.xlsx is simply not added. Nothing is printed, nothing is logged and no field of the response records the omission; the archive is completed and streamed to the caller as an ordinary successful response. The journey asserts this exact silent incompleteness so the risk is characterized rather than hidden, and a golden run must not record the archive as complete.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@216-224",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@207-229",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@332-355"
+      ]
+    },
+    {
+      "id": "GJ-02-FC-09",
+      "provenance_class": "legacy_observed",
+      "trigger": "Download requested with an escaping name that exists under neither lookup root (case DL-ESCAPE), with an existing file whose resolved path lies outside the base directory (case DL-OUTSIDE), and with an existing file in a sibling directory whose resolved path merely shares the resolved base directory name as a string prefix (case DL-PREFIX).",
+      "expected_visible_state": "Existence is checked before containment, so the three cases end differently and a golden run must record them separately rather than as one safe-path rejection. DL-ESCAPE names a file that neither REPORTS_DIR nor BASE_DIR contains, so the route answers 404 with the file-not-found message and never reaches the containment check. DL-OUTSIDE is an existing file whose resolved path is not accepted by the comparison against the resolved BASE_DIR, and it is the only branch that answers 403. DL-PREFIX is served: the check is str(filepath.resolve()).startswith(str(BASE_DIR.resolve())), a byte-prefix comparison with no path-separator or component boundary, so a resolved path under /srv/audit-backup passes a resolved base of /srv/audit. The third case is recorded because it is what the pinned legacy source does, not because it is acceptable: it is legacy_observed, it carries no target status, and no fix, hardening rule or recommendation is asserted anywhere in this journey.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:download_file@78",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@77-93",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@82-88",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:BASE_DIR@1375",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:REPORTS_DIR@68"
+      ]
+    },
+    {
+      "id": "GJ-02-FC-10",
+      "provenance_class": "greenfield_target",
+      "trigger": "Any declared package member is unavailable at assembly time.",
+      "expected_visible_state": "The result is degraded or failed with the reason attached to the package manifest; success is not reported for an incomplete package.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": false,
+      "target_basis": [
+        "AGENTS.md section 4 forbids silent fallback"
+      ]
+    },
+    {
+      "id": "GJ-02-FC-11",
+      "provenance_class": "legacy_observed",
+      "trigger": "Embedded Excel generation raises during audit-package assembly, for example when the sixty-second subprocess budget expires (case PKG-XLSX-EXC).",
+      "expected_visible_state": "The broad exception handler around the generation block catches it, prints one line to standard output and swallows it. audit_report.xlsx is not added, the temporary workbook is removed, and the archive is completed and streamed to the caller as an ordinary successful response with no error status and no omission record. The only trace is the printed line, which never reaches the caller. Asserted as observed behavior and as a completeness risk.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@225-229",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@207-229",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:lines@332-355"
+      ]
+    }
+  ],
+  "sensitive_data_exclusions": [
+    {
+      "excluded": "legacy `.env`, `.env.example` and every credential-shaped file",
+      "reason": "Not opened during inventory or selection; secrets never enter fixtures."
+    },
+    {
+      "excluded": "`audit_worker/providers/openrouter_secret.py`",
+      "reason": "Designated metadata-only and excluded by the accepted inventory; no value was accessed or copied here."
+    },
+    {
+      "excluded": "production or customer PDF, Markdown, recognized-JSON and Excel payloads",
+      "reason": "Fixture policy allows synthetic or anonymized material only; binary documents are represented by surrogates."
+    },
+    {
+      "excluded": "live provider prompts, model responses, endpoints and account identifiers",
+      "reason": "LLM text is not byte-stable and provider material is out of fixture scope; only outcome shapes are replayed."
+    },
+    {
+      "excluded": "mutable legacy checkout files, untracked paths, databases and generated results",
+      "reason": "Only immutable Git objects at the pinned legacy commit are admissible evidence."
+    }
+  ],
+  "reviewer_sampling": {
+    "minimum_evidence_objects": 3,
+    "instruction": "Resolve at least one stage-order declaration, the skip whitelist, the block-analysis timeout range and one export packaging range in the immutable legacy object. Confirm that the skip whitelist contains findings_merge, that the legacy permission and the target non-skippability are two separately classified assertions, that the packaging failure cases distinguish a non-zero generator exit from a raised exception, and that every stage string in the inputs is annotated as a legacy public name. Resolve the download handler range as well and confirm the recorded order: not-found before containment, 403 only for an existing path, and a string-prefix comparison rather than a component-boundary one. For GJ-02-EO-13, open contracts/analysis/v1/stage-registry.json at the stage_id finding_merge entry and confirm that status_policy.skip_allowed is false there, that the expectation reports that field through its authority block instead of asserting a rule of its own, and that it claims no owner decision."
+  }
+}

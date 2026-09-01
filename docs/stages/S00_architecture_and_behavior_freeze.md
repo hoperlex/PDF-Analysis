@@ -49,6 +49,27 @@ Integrator reconciles Bible/ADR/domain contracts, records unresolved owner decis
 | W0-QA-01 | QA | Contract examples/schema checks + golden test plan | W0-BHV-02,W0-ARC-01,W0-DOM-01,W0-ANA-01 | tests docs | Independent consumer view. |
 | W0-INT-01 | INT | CP-00 integration/decision report/tag | all required W0 tasks | checkpoint evidence | No production domain implementation. |
 
+### Backlog drafts — not executable until their dependencies are integrated
+
+`AGENTS.md` §2 allows `depends_on` to name completed task IDs only. Each row below
+carries a `backlog draft` banner and a `<pending integration commit>` placeholder; it
+becomes executable when its dependency is integrated at a recorded commit, not before.
+
+| Task | Lane | Result | Depends on | Blocked because |
+|---|---|---|---|---|
+| W0-ARC-02 | ARC | Architecture lint rule specification (`U-03`) | W0-ARC-01 | W0-ARC-01 accepted as candidate, not integrated. |
+| W0-QA-03 | QA | Validator reads `contract_version` (`ID-01`) | W0-QA-02, W0-ARC-01 | `ID-01` exists only in uncommitted architecture artifacts. |
+| W0-DOM-02 | DOM | Remove deprecated domain `version` mirror (`ID-01`) | W0-QA-03, W0-DOM-01 | Validator still hard-requires the bare key. |
+| W0-EVT-01 | EVT | Event envelope on `contract_version` (`ID-01`) | W0-DOM-02, W0-QA-03, W0-DOM-01, W0-ANA-01 | Last in the `ID-01` chain; its sweep cannot pass earlier. |
+
+`ID-01` completes only in that order: `W0-QA-03` → `W0-DOM-02` → `W0-EVT-01`.
+
+### Planned outside W0
+
+| Task | Lane | Result | Scheduled | Note |
+|---|---|---|---|---|
+| W5-OPT-01 | OPT | Project Optimization bounded context, `contracts/optimization/v1/**` | After core audit and decision-contract freeze | Owner decision on `U-06`. Separate OPT contract owner, not ANA or DOM. The capability is disabled until this task is accepted, and CP-00 explicitly excludes its runtime semantics. |
+
 ## Automated exit evidence
 
 - [ ] All JSON schemas/examples parse.

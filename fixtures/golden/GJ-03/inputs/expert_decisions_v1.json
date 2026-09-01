@@ -1,0 +1,35 @@
+{
+  "project_id": "SYNTH-PRJ-03",
+  "version_id": "SYNTH-VER-01",
+  "decisions": [
+    {
+      "item_id": "F-001",
+      "decision": "accepted",
+      "reviewer": "synthetic-reviewer-a",
+      "carried_over": false,
+      "comment": "Confirmed by hand."
+    },
+    {
+      "item_id": "F-002",
+      "decision": "rejected",
+      "reviewer": "synthetic-reviewer-a",
+      "carried_over": false,
+      "comment": "Not applicable to this object."
+    }
+  ],
+  "correction_request": {
+    "item_id": "F-002",
+    "decision": "accepted",
+    "reviewer": "synthetic-reviewer-b",
+    "comment": "Corrected after re-reading."
+  },
+  "revocation_request": {
+    "item_id": "F-001",
+    "entry_id": "DEC-0001"
+  },
+  "ambiguous_revocation_request": {
+    "entry_id": "DEC-0001",
+    "project_id": "",
+    "item_id": ""
+  }
+}

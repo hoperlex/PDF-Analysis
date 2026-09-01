@@ -1,0 +1,787 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auditmanager:fixtures:golden-selection:v1",
+  "title": "Golden journey selection v1",
+  "description": "Structural schema for the W0-BHV-02 selected golden set. It fixes the ordered five-journey selection, the lossless inventory fan-in map and the inventory-candidate to assertion coverage map. Fixture-local: not a ratified repository contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "wave",
+    "status",
+    "base_commit",
+    "legacy_source_commit",
+    "inventory_reference",
+    "selected_count",
+    "selection_policy",
+    "journeys",
+    "inventory_assertion_coverage",
+    "owner_decisions",
+    "target_scope_annotations",
+    "assertion_invariants"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "task_id": {
+      "const": "W0-BHV-02"
+    },
+    "wave": {
+      "const": "W0.2"
+    },
+    "status": {
+      "const": "candidate_pending_independent_review"
+    },
+    "base_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "legacy_source_commit": {
+      "const": "32b9d903792b30506048a1d42b0e6b2d07aee403"
+    },
+    "inventory_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "accepted_commit"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "selected_count": {
+      "const": 5
+    },
+    "selection_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fan_in",
+        "data_policy",
+        "parity_policy"
+      ],
+      "properties": {
+        "fan_in": {
+          "type": "string",
+          "minLength": 1
+        },
+        "data_policy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parity_policy": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "journeys": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/journey",
+          "properties": {
+            "journey_id": {
+              "const": "GJ-01"
+            },
+            "manifest_path": {
+              "const": "fixtures/golden/GJ-01/manifest.json"
+            },
+            "inventory_candidates": {
+              "const": [
+                "GJ-01"
+              ]
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/journey",
+          "properties": {
+            "journey_id": {
+              "const": "GJ-02"
+            },
+            "manifest_path": {
+              "const": "fixtures/golden/GJ-02/manifest.json"
+            },
+            "inventory_candidates": {
+              "const": [
+                "GJ-02",
+                "GJ-07"
+              ]
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/journey",
+          "properties": {
+            "journey_id": {
+              "const": "GJ-03"
+            },
+            "manifest_path": {
+              "const": "fixtures/golden/GJ-03/manifest.json"
+            },
+            "inventory_candidates": {
+              "const": [
+                "GJ-03",
+                "GJ-04"
+              ]
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/journey",
+          "properties": {
+            "journey_id": {
+              "const": "GJ-04"
+            },
+            "manifest_path": {
+              "const": "fixtures/golden/GJ-04/manifest.json"
+            },
+            "inventory_candidates": {
+              "const": [
+                "GJ-05",
+                "GJ-06"
+              ]
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/journey",
+          "properties": {
+            "journey_id": {
+              "const": "GJ-05"
+            },
+            "manifest_path": {
+              "const": "fixtures/golden/GJ-05/manifest.json"
+            },
+            "inventory_candidates": {
+              "const": [
+                "GJ-08",
+                "GJ-09",
+                "GJ-10",
+                "GJ-11"
+              ]
+            }
+          }
+        }
+      ],
+      "items": false
+    },
+    "owner_decisions": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision_id",
+          "status",
+          "summary",
+          "affected_journeys"
+        ],
+        "properties": {
+          "decision_id": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04"
+            ]
+          },
+          "status": {
+            "description": "Lifecycle state of the owner decision. Enumerated so a disposition change is explicit and an arbitrary state cannot be introduced.",
+            "enum": [
+              "pending_owner_approval",
+              "approved",
+              "approved_with_modification",
+              "rejected",
+              "withdrawn"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affected_journeys": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "GJ-01",
+                "GJ-02",
+                "GJ-03",
+                "GJ-04",
+                "GJ-05"
+              ]
+            }
+          },
+          "decided_on": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "decision_authority": {
+            "enum": [
+              "repository_owner"
+            ]
+          },
+          "decision_source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "modification": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affected_assertions": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/assertion_id"
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "enum": [
+                    "approved",
+                    "approved_with_modification",
+                    "rejected",
+                    "withdrawn"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "decided_on",
+                "decision_authority",
+                "decision_source",
+                "affected_assertions"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "const": "approved_with_modification"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "modification"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "const": "pending_owner_approval"
+                }
+              }
+            },
+            "then": {
+              "allOf": [
+                {
+                  "not": {
+                    "required": [
+                      "decided_on"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "decision_authority"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "modification"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "target_scope_annotations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "annotation_id",
+          "statement",
+          "is_inventory_candidate",
+          "owner_decision_ref",
+          "assertion_ids"
+        ],
+        "properties": {
+          "annotation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "is_inventory_candidate": {
+            "const": false
+          },
+          "owner_decision_ref": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04"
+            ]
+          },
+          "assertion_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/assertion_id"
+            }
+          },
+          "first_contract_inclusion": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "inventory_assertion_coverage": {
+      "description": "Machine-readable coverage map required for acceptance: each of the eleven accepted inventory candidates resolves to the concrete expectation and failure-case assertion identifiers that characterize it, not only to a selected journey identifier.",
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-01"
+            },
+            "selected_journey": {
+              "const": "GJ-01"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-01-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-02"
+            },
+            "selected_journey": {
+              "const": "GJ-02"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-02-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-03"
+            },
+            "selected_journey": {
+              "const": "GJ-03"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-03-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-04"
+            },
+            "selected_journey": {
+              "const": "GJ-03"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-03-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-05"
+            },
+            "selected_journey": {
+              "const": "GJ-04"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-04-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-06"
+            },
+            "selected_journey": {
+              "const": "GJ-04"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-04-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-07"
+            },
+            "selected_journey": {
+              "const": "GJ-02"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-02-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-08"
+            },
+            "selected_journey": {
+              "const": "GJ-05"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-05-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-09"
+            },
+            "selected_journey": {
+              "const": "GJ-05"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-05-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-10"
+            },
+            "selected_journey": {
+              "const": "GJ-05"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-05-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/inventory_coverage_row",
+          "properties": {
+            "inventory_candidate": {
+              "const": "GJ-11"
+            },
+            "selected_journey": {
+              "const": "GJ-05"
+            },
+            "assertion_ids": {
+              "items": {
+                "pattern": "^GJ-05-(EO|FC)-[0-9]{2}$"
+              }
+            }
+          }
+        }
+      ],
+      "items": false
+    },
+    "assertion_invariants": {
+      "type": "object",
+      "description": "The declared assertion invariants of this selection and the record of every round in which the composition changed. This is the single place where the counts exist; every prose document quotes them from here and the coverage gate recomputes them.",
+      "additionalProperties": false,
+      "required": [
+        "definition",
+        "total_assertions",
+        "inventory_mapped_assertions",
+        "target_scope_annotation_assertions",
+        "per_journey_assertions",
+        "revision_history"
+      ],
+      "properties": {
+        "definition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "total_assertions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inventory_mapped_assertions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_scope_annotation_assertions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "per_journey_assertions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "GJ-01",
+            "GJ-02",
+            "GJ-03",
+            "GJ-04",
+            "GJ-05"
+          ],
+          "properties": {
+            "GJ-01": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "GJ-02": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "GJ-03": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "GJ-04": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "GJ-05": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "revision_history": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "round",
+              "total_assertions",
+              "inventory_mapped_assertions",
+              "target_scope_annotation_assertions",
+              "added_assertions",
+              "removed_assertions",
+              "change"
+            ],
+            "properties": {
+              "round": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "total_assertions": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "inventory_mapped_assertions": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "target_scope_annotation_assertions": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "added_assertions": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/assertion_id"
+                }
+              },
+              "removed_assertions": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/assertion_id"
+                }
+              },
+              "change": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "assertion_id": {
+      "type": "string",
+      "pattern": "^GJ-0[1-5]-(EO|FC)-[0-9]{2}$"
+    },
+    "inventory_coverage_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inventory_candidate",
+        "inventory_subject",
+        "selected_journey",
+        "assertion_ids"
+      ],
+      "properties": {
+        "inventory_candidate": {
+          "type": "string",
+          "pattern": "^GJ-(0[1-9]|1[01])$"
+        },
+        "inventory_subject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selected_journey": {
+          "enum": [
+            "GJ-01",
+            "GJ-02",
+            "GJ-03",
+            "GJ-04",
+            "GJ-05"
+          ]
+        },
+        "assertion_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/assertion_id"
+          }
+        }
+      }
+    },
+    "journey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "journey_id",
+        "title",
+        "manifest_path",
+        "inventory_candidates",
+        "comparison_mode",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "journey_id": {
+          "enum": [
+            "GJ-01",
+            "GJ-02",
+            "GJ-03",
+            "GJ-04",
+            "GJ-05"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifest_path": {
+          "type": "string",
+          "pattern": "^fixtures/golden/GJ-0[1-5]/manifest\\.json$"
+        },
+        "inventory_candidates": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^GJ-(0[1-9]|1[01])$"
+          }
+        },
+        "comparison_mode": {
+          "enum": [
+            "exact",
+            "semantic",
+            "replay"
+          ]
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

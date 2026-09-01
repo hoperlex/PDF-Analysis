@@ -1,0 +1,400 @@
+{
+  "schema_version": 1,
+  "journey_id": "GJ-04",
+  "title": "Stage comparison links, reuse, stale invalidation, repair and undo",
+  "summary": "Create a comparison session over two synthetic stage sources, save explicit sheet links, run the deterministic text comparison twice with an unchanged signature, invalidate downstream state by changing a source or an exclusion, then apply and undo a high-confidence sheet-link repair.",
+  "inventory_candidates": [
+    "GJ-05",
+    "GJ-06"
+  ],
+  "comparison_mode": "semantic",
+  "determinism": {
+    "provider_dependent": false,
+    "llm_text_equality_asserted": false,
+    "rationale": "The deterministic comparison, difference, link and repair artifacts are compared structurally. The additive AI layer is asserted only at the level of group lifecycle state and the invariant that raw evidence is unchanged; no generated narrative is stored, replayed or compared, which is why the mode is semantic rather than replay."
+  },
+  "provenance": {
+    "legacy_source_commit": "32b9d903792b30506048a1d42b0e6b2d07aee403",
+    "method": "Read-only inspection of the immutable legacy Git objects at the pinned commit (git show / git grep against the object database) plus the accepted W0-BHV-01 capability inventory. No legacy service, job, provider, migration or user flow was executed, and no mutable legacy checkout path was read as evidence. This describes how the legacy_observed evidence of this manifest was obtained and is not a statement about every assertion in it: the greenfield_target expectations GJ-04-EO-10 and GJ-04-EO-11 are not derived from legacy. GJ-04-EO-11 rests on repository owner decision PD-04 and GJ-04-EO-10 on standing repository rules, each named in its own target_basis, and neither claims a legacy evidence reference.",
+    "data_classification": "synthetic",
+    "inventory_reference": "docs/behavior/legacy_capability_inventory.md",
+    "runtime_execution": "none",
+    "evidence": [
+      {
+        "capability_id": "CP-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/stage_upload.py:VALID_STAGES@27",
+        "evidence_class": "direct",
+        "supports": "Comparison input slots are exactly the two stage names."
+      },
+      {
+        "capability_id": "CP-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/stage_upload.py:_commit_extracted_stage@347",
+        "evidence_class": "direct",
+        "supports": "Extracted stage content is committed through a temporary location and an atomic switch."
+      },
+      {
+        "capability_id": "CP-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/stage_upload.py:replace_stage_from_zip@444",
+        "evidence_class": "direct",
+        "supports": "Archive replacement path with a recoverable previous backup."
+      },
+      {
+        "capability_id": "CP-01",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/stage_upload.py:replace_stage_from_folder@478",
+        "evidence_class": "direct",
+        "supports": "Folder replacement path with the same recovery shape."
+      },
+      {
+        "capability_id": "CP-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:create_session@184",
+        "evidence_class": "direct",
+        "supports": "Session creation entry point."
+      },
+      {
+        "capability_id": "CP-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:lines@190-212",
+        "evidence_class": "direct",
+        "supports": "A session with the same computed source signature is reused instead of creating a second session."
+      },
+      {
+        "capability_id": "CP-02",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:save_sheet_links@564",
+        "evidence_class": "direct",
+        "supports": "Saving sheet links replaces the prior explicit decision and becomes authoritative."
+      },
+      {
+        "capability_id": "CP-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_comparison@1281",
+        "evidence_class": "direct",
+        "supports": "Deterministic text comparison over accepted links and exclusions."
+      },
+      {
+        "capability_id": "CP-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:require_text_exclusions_for_downstream@690",
+        "evidence_class": "direct",
+        "supports": "Mandatory downstream gate over exclusion state."
+      },
+      {
+        "capability_id": "CP-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:lines@690-699",
+        "evidence_class": "direct",
+        "supports": "The gate raises distinct required, stale and invalid errors instead of continuing with degraded inputs."
+      },
+      {
+        "capability_id": "CP-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_differences@720",
+        "evidence_class": "direct",
+        "supports": "Factual difference computation."
+      },
+      {
+        "capability_id": "CP-03",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:lines@726-741",
+        "evidence_class": "direct",
+        "supports": "A stored difference artifact is reused when its recorded signature equals the expected signature, and the upstream comparison must match the exclusion signature."
+      },
+      {
+        "capability_id": "CP-04",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_ai_review@1068",
+        "evidence_class": "direct",
+        "supports": "Additive AI review over the current deterministic artifacts."
+      },
+      {
+        "capability_id": "CP-04",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_project_change_summary@939",
+        "evidence_class": "direct",
+        "supports": "Project change summary with a deterministic fallback on provider or validation failure."
+      },
+      {
+        "capability_id": "CP-05",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:_apply_sheet_link_repair@838",
+        "evidence_class": "direct",
+        "supports": "High-confidence repair application with durable history."
+      },
+      {
+        "capability_id": "CP-05",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:undo_sheet_link_repair@908",
+        "evidence_class": "direct",
+        "supports": "Undo restores the snapshot and recomputes downstream stages."
+      },
+      {
+        "capability_id": "CP-06",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:vector_graphics_comparison@1427",
+        "evidence_class": "direct",
+        "supports": "The comparison capability map records vector graphics comparison as absent."
+      },
+      {
+        "capability_id": "CP-06",
+        "source_ref": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/text_differences.py:graphics_analyzed@479",
+        "evidence_class": "direct",
+        "supports": "The difference artifact explicitly reports that graphics were not analyzed."
+      }
+    ]
+  },
+  "input_manifest": {
+    "data_classification": "synthetic",
+    "generation_method": "Hand-authored synthetic scenario descriptors. No production project, customer document, provider payload, model response, credential or environment value was copied, derived from or reconstructed. Binary source documents are represented by declarative surrogates and text stand-ins.",
+    "artifacts": [
+      {
+        "path": "fixtures/golden/GJ-04/inputs/stage_sources.json",
+        "role": "synthetic two-stage sheet inventory and signature inputs",
+        "media_type": "application/json",
+        "sha256": "56efc66691a6fae30512f8a04dc50915116d6c86d820c24d4f3a70d90f9dd444",
+        "size_bytes": 844,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-04/inputs/sheet_links.json",
+        "role": "explicit accepted links plus high and low confidence repair suggestions",
+        "media_type": "application/json",
+        "sha256": "c2ae9a2761f3996442025baad766a71524968202603454a65d811e8534267221",
+        "size_bytes": 747,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-04/inputs/text_exclusions.json",
+        "role": "current and deliberately stale exclusion state",
+        "media_type": "application/json",
+        "sha256": "254f54cd011946814bcd8d65fd9ce48d12d2ea4c32eeb6fdb7153a283c7f7a86",
+        "size_bytes": 280,
+        "data_classification": "synthetic"
+      },
+      {
+        "path": "fixtures/golden/GJ-04/inputs/ai_group_states.json",
+        "role": "AI group lifecycle states used for reuse and partial-failure assertions",
+        "media_type": "application/json",
+        "sha256": "67c4f5426003a8b59e723532edb82e2e15ed56b6b97fd8c4133dff3807621323",
+        "size_bytes": 550,
+        "data_classification": "synthetic"
+      }
+    ],
+    "surrogates": [
+      {
+        "legacy_input_kind": "drawing archive containing binary sheets",
+        "surrogate": "declarative sheet inventory with synthetic labels",
+        "reason": "No drawing bytes may be committed; the journey asserts link, signature and recompute behavior, not rendering."
+      }
+    ]
+  },
+  "expected_outputs": [
+    {
+      "id": "GJ-04-EO-01",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "idempotency",
+      "statement": "Creating a session twice from the same two stage sources reuses the existing session whose recorded source signature matches, rather than creating a second session.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:create_session@184",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:lines@190-212"
+      ]
+    },
+    {
+      "id": "GJ-04-EO-02",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "Saved sheet links are the authoritative decision: saving replaces the prior explicit link set and supersedes any outstanding repair suggestion.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:save_sheet_links@564"
+      ]
+    },
+    {
+      "id": "GJ-04-EO-03",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "idempotency",
+      "statement": "Running the deterministic difference computation again with an unchanged signature returns the stored artifact instead of recomputing it, and the reused artifact is reported as not stale.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_differences@720",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:lines@726-741"
+      ]
+    },
+    {
+      "id": "GJ-04-EO-04",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "state_transition",
+      "statement": "Changing a stage source, a link or an exclusion changes the computed signature, so downstream artifacts become stale and the mandatory gate refuses to run further stages until the exclusion state is refreshed.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:require_text_exclusions_for_downstream@690",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:lines@690-699",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_comparison@1281"
+      ]
+    },
+    {
+      "id": "GJ-04-EO-05",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "invariant",
+      "statement": "The AI layer is additive over the current deterministic comparison and difference artifacts; completed groups can be reused on an unchanged signature while failed and partial groups stay failed and partial, and the raw deterministic evidence is not rewritten by the AI layer.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_ai_review@1068",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_project_change_summary@939"
+      ]
+    },
+    {
+      "id": "GJ-04-EO-06",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "state_transition",
+      "statement": "Applying a high-confidence sheet-link repair validates the confidence and the current source, records a durable repair history entry and recomputes the downstream deterministic stages.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:_apply_sheet_link_repair@838"
+      ]
+    },
+    {
+      "id": "GJ-04-EO-07",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "state_transition",
+      "statement": "Undo restores the snapshot captured before the repair and recomputes downstream stages, so the link set and the deterministic artifacts return to their pre-repair values.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:undo_sheet_link_repair@908"
+      ]
+    },
+    {
+      "id": "GJ-04-EO-08",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "structural",
+      "statement": "Stage input replacement goes through a temporary location and an atomic switch and leaves a recoverable previous copy, for both the archive and the folder path.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/stage_upload.py:_commit_extracted_stage@347",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/stage_upload.py:replace_stage_from_zip@444",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/stage_upload.py:replace_stage_from_folder@478",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/stage_upload.py:VALID_STAGES@27"
+      ]
+    },
+    {
+      "id": "GJ-04-EO-09",
+      "provenance_class": "legacy_observed",
+      "assertion_kind": "bounded_absence",
+      "statement": "Within the bounded inspected source there is no graphic or vector comparison artifact: the capability map records vector graphics comparison as absent and the difference artifact reports that graphics were not analyzed. The journey asserts this recorded absence and does not fabricate graphic comparison output.",
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:vector_graphics_comparison@1427",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/text_differences.py:graphics_analyzed@479"
+      ]
+    },
+    {
+      "id": "GJ-04-EO-10",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "invariant",
+      "statement": "Raw deterministic comparison evidence is immutable for the AI layer: an AI stage may only add its own artifact and may never edit, delete or reinterpret the stored raw difference record.",
+      "parity_oracle": false,
+      "target_basis": [
+        "AGENTS.md section 4 forbids an AI layer changing raw deterministic comparison evidence",
+        "AGENTS.md section 4 forbids LLM output as the canonical expert decision"
+      ]
+    },
+    {
+      "id": "GJ-04-EO-11",
+      "provenance_class": "greenfield_target",
+      "assertion_kind": "bounded_absence",
+      "statement": "Graphic and vector comparison is approved future greenfield scope. It is absent from legacy parity and from every W0 artifact: no graphic comparison input, expectation, fixture or contract exists in this wave, and the observed legacy absence recorded by GJ-04-EO-09 is not converted into a capability claim. Its first contractual inclusion is W7, together with a dedicated golden graphic pair created there.",
+      "parity_oracle": false,
+      "owner_decision_ref": "PD-04",
+      "target_basis": [
+        "repository owner decision PD-04, approved on 2026-09-01 by the repository owner: graphic and vector comparison is future greenfield scope, absent from legacy parity and from W0, with its first contract inclusion in W7 under a separate golden graphic pair",
+        "docs/behavior/legacy_capability_inventory.md section 7 item 3",
+        "fixtures/golden/selection.json target scope annotation TSA-01 keeps this outside the inventory fan-in map"
+      ]
+    }
+  ],
+  "failure_cases": [
+    {
+      "id": "GJ-04-FC-01",
+      "provenance_class": "legacy_observed",
+      "trigger": "Downstream stage requested with no exclusion state recorded.",
+      "expected_visible_state": "The mandatory gate raises the required-exclusions error; no downstream artifact is produced.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:lines@690-699"
+      ]
+    },
+    {
+      "id": "GJ-04-FC-02",
+      "provenance_class": "legacy_observed",
+      "trigger": "Exclusion state whose recorded signature no longer matches the current sources and links.",
+      "expected_visible_state": "The gate raises the stale-exclusions error; downstream stages refuse to run on outdated inputs.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:lines@690-699",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:require_text_exclusions_for_downstream@690"
+      ]
+    },
+    {
+      "id": "GJ-04-FC-03",
+      "provenance_class": "legacy_observed",
+      "trigger": "Difference computation requested while the upstream comparison artifact is missing or carries a different signature.",
+      "expected_visible_state": "An explicit comparison-required error; the stale upstream artifact is not silently reused.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:lines@726-741"
+      ]
+    },
+    {
+      "id": "GJ-04-FC-04",
+      "provenance_class": "legacy_observed",
+      "trigger": "Repair applied from a suggestion below the confidence bar, or against a source that has since changed.",
+      "expected_visible_state": "The repair is refused with an explicit validation or race error and no link change is committed.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:_apply_sheet_link_repair@838"
+      ]
+    },
+    {
+      "id": "GJ-04-FC-05",
+      "provenance_class": "legacy_observed",
+      "trigger": "AI group fails or returns partial output.",
+      "expected_visible_state": "The group stays failed or partial in the additive AI artifact; the deterministic comparison and difference artifacts are unchanged and the change summary falls back to its deterministic form with the degradation visible.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_ai_review@1068",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_project_change_summary@939"
+      ]
+    },
+    {
+      "id": "GJ-04-FC-06",
+      "provenance_class": "legacy_observed",
+      "trigger": "Graphic or vector difference requested for a linked sheet pair.",
+      "expected_visible_state": "No graphic comparison artifact exists; the difference artifact continues to report that graphics were not analyzed. The absence is explicit and bounded to the inspected source.",
+      "silent_fallback_allowed": false,
+      "parity_oracle": true,
+      "legacy_evidence_refs": [
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:vector_graphics_comparison@1427",
+        "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/text_differences.py:graphics_analyzed@479"
+      ]
+    }
+  ],
+  "sensitive_data_exclusions": [
+    {
+      "excluded": "legacy `.env`, `.env.example` and every credential-shaped file",
+      "reason": "Not opened during inventory or selection; secrets never enter fixtures."
+    },
+    {
+      "excluded": "`audit_worker/providers/openrouter_secret.py`",
+      "reason": "Designated metadata-only and excluded by the accepted inventory; no value was accessed or copied here."
+    },
+    {
+      "excluded": "production or customer PDF, Markdown, recognized-JSON and Excel payloads",
+      "reason": "Fixture policy allows synthetic or anonymized material only; binary documents are represented by surrogates."
+    },
+    {
+      "excluded": "live provider prompts, model responses, endpoints and account identifiers",
+      "reason": "LLM text is not byte-stable and provider material is out of fixture scope; only outcome shapes are replayed."
+    },
+    {
+      "excluded": "mutable legacy checkout files, untracked paths, databases and generated results",
+      "reason": "Only immutable Git objects at the pinned legacy commit are admissible evidence."
+    }
+  ],
+  "reviewer_sampling": {
+    "minimum_evidence_objects": 3,
+    "instruction": "Resolve the exclusion gate range, the difference reuse range and one repair or undo locator in the immutable legacy object; confirm that graphic comparison appears only as a recorded legacy absence and as an approved future-scope annotation, with no graphic material anywhere in this wave."
+  }
+}

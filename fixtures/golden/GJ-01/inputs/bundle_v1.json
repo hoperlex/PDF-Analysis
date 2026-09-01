@@ -1,0 +1,71 @@
+{
+  "bundle_id": "SYNTH-BUNDLE-V1",
+  "object_id": "SYNTH-OBJ-01",
+  "discipline": "AR",
+  "project_name": "Synthetic Block A",
+  "version_label": "V1",
+  "members": [
+    {
+      "role": "source_document_surrogate",
+      "name": "AR-101.pdf",
+      "surrogate_of": "binary source PDF",
+      "text_stand_in": "GJ-01/inputs/sheet_text_stand_in.txt",
+      "declared_bytes": 4096,
+      "recognition_suffix": ".pdf"
+    },
+    {
+      "role": "markdown_companion",
+      "name": "AR-101.md",
+      "declared_bytes": 512,
+      "recognition_suffix": ".md"
+    },
+    {
+      "role": "recognized_json_companion",
+      "name": "AR-101_result.json",
+      "declared_bytes": 256,
+      "recognition_suffix": "_result.json"
+    }
+  ],
+  "ingest_recognition": {
+    "entry_point": "project folder upload and its dry-run precheck twin",
+    "allowed_member_extensions": [
+      ".pdf",
+      ".md",
+      ".json",
+      ".html",
+      ".htm",
+      ".zip"
+    ],
+    "recognized_companion_suffixes": {
+      "recognized_json_companion": "_result.json",
+      "block_geometry_companion": "_blocks.json",
+      "ocr_html_companion": [
+        "_ocr.html",
+        "_results.html",
+        "_results.htm"
+      ]
+    },
+    "zip_members_expanded_transparently": true,
+    "unrecognized_member_disposition": "collected under ignored_files; it is neither a block nor a warning, so a .json member whose name does not end in _result.json or _blocks.json is silently dropped from the bundle",
+    "version_file_upload_extensions": [
+      ".pdf",
+      ".md",
+      ".txt",
+      ".json",
+      ".html"
+    ],
+    "version_file_upload_suffix_rule": "none; the version-file upload validates the base name and the extension only and performs no companion-suffix recognition, so the two ingest entry points do not share one extension set",
+    "legacy_evidence": [
+      "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_ALLOWED_UPLOAD_EXTS@2604",
+      "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_classify_upload_files@2687",
+      "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:lines@2698-2725",
+      "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/version_service.py:ALLOWED_SOURCE_EXTENSIONS@1167",
+      "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/version_service.py:validate_filename@1172"
+    ]
+  },
+  "declared_fingerprint": {
+    "pdf_sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+    "bundle_fingerprint": "0000000000000000000000000000000000000000000000000000000000000011"
+  },
+  "note": "Digest values are synthetic constants; they are identity tokens for the journey, not real document hashes."
+}

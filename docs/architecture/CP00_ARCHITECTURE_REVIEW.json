@@ -1,0 +1,1034 @@
+{
+  "review_id": "CP00-ARCHITECTURE-REVIEW",
+  "task_id": "W0-ARC-01",
+  "wave": "W0.2",
+  "checkpoint": "CP-00",
+  "review_status": "owner_decisions_recorded",
+  "owner_decision_round": 5,
+  "owner_decisions_recorded_on": "2026-09-01",
+  "owner_decision_authority": "repository owner",
+  "owner_decision_channel": "direct instruction to the program integrator session",
+  "ratified": false,
+  "generated_for_base_commit": "6c82004b35f49463c8e7fc8602fbced2f374167e",
+  "markdown_review": "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+  "owner_decision_records": "docs/architecture/CP00_OWNER_DECISIONS.md",
+  "frozen_inputs": {
+    "base_commit": "6c82004b35f49463c8e7fc8602fbced2f374167e",
+    "behavioral_inventory_commit": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba",
+    "normalized_evidence_commit": "134436502b7ee40ca9abb061e0080741a863ffda",
+    "legacy_oracle_commit": "32b9d903792b30506048a1d42b0e6b2d07aee403",
+    "refactoring_architecture_commit": "0b937dc0e24d38fb98485a920152b83d2f19c982",
+    "refactoring_bible_blob": "040a514dc37113d0712cde6757900d2c7d918c10"
+  },
+  "evidence_classes": {
+    "B": "row or section of the accepted legacy capability inventory (frozen behavioral evidence)",
+    "L": "immutable legacy anchor legacy_oracle:path:symbol@line copied verbatim from the accepted inventory",
+    "S": "refactoring architecture source read only via git show 0b937dc0e24d38fb98485a920152b83d2f19c982:<path>; advisory, statuses not inherited",
+    "P": "document of this package at the base commit; package baseline, not owner approval",
+    "O": "explicit repository-owner disposition recorded in docs/architecture/CP00_OWNER_DECISIONS.md; product-semantic authority, not an agent inference"
+  },
+  "disposition_vocabulary": {
+    "ratify": "adopted as written; evidence supports it or does not contradict it",
+    "adapt": "adopted only with the explicit evidence-backed qualification recorded in the review",
+    "defer": "cannot be ratified at CP-00; core statement depends on a pending owner decision or missing authority",
+    "supersede": "contradicted by accepted evidence; requires a replacement ADR recording supersedes"
+  },
+  "supersede_dispositions_issued": 0,
+  "adr_files_created": [],
+  "owner_decisions": [
+    {
+      "id": "PD-01",
+      "subject": "Expert correction/revocation is a new append-only decision event and a projection change, not the legacy overwrite/delete",
+      "status": "approved_with_modification",
+      "approved": true,
+      "blocks": ["ADR-0012", "P-18", "P-03 decision-event clause", "contracts/domain/v1 decision semantics"],
+      "evidence": [
+        "[B] legacy_capability_inventory 3.3 EX-02 = not observed",
+        "[B] legacy_capability_inventory 5 append-only expert decision events = contradicted",
+        "[B] legacy_capability_inventory 7 gap 1",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:_append_to_decisions_log@683",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:revoke_decision@861"
+      ],
+      "decided_by": "repository owner",
+      "decided_on": "2026-09-01",
+      "decision_channel": "direct instruction to the program integrator session",
+      "modification": "Decisions stay append-only. A correction and a revocation each create a new decision_id; neither rewrites nor deletes an earlier decision. A revocation moves the current projection to pending and does NOT automatically restore the previously superseded verdict. The decision history is preserved in full.",
+      "closes": ["domain-contract open question OQ-03: on revocation the verdict projection goes to pending, not back to the previous verdict"],
+      "downstream_obligations": [
+        "DOM lane: model decision events, projections and the pending-on-revocation rule; close OQ-03 with this rule in contracts/domain/v1",
+        "P-18, P-03 decision-event clause and ADR-0012 are re-dispositioned from defer to adapt with this modification attached"
+      ]
+    },
+    {
+      "id": "PD-02",
+      "subject": "One versioned target stage registry is authoritative; conflicting legacy declarations are aliases and evidence",
+      "status": "approved_with_modification",
+      "approved": true,
+      "blocks": ["ADR-0008 registry clause", "contracts/analysis/v1 stage registry", "FS-04", "FS-08"],
+      "evidence": [
+        "[B] legacy_capability_inventory 2.2 31 declaration sites, conflicting membership and order",
+        "[B] legacy_capability_inventory 5 versioned stage registry = partial",
+        "[B] legacy_capability_inventory 6 at least five overlapping notions of stage order",
+        "[B] legacy_capability_inventory 7 gap 2",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0018-domain-contract-v1.md section 1.1 (advisory, verified at 98d075ea)"
+      ],
+      "decided_by": "repository owner",
+      "decided_on": "2026-09-01",
+      "decision_channel": "direct instruction to the program integrator session",
+      "modification": "One stage registry is authoritative, but the ANA lane is accepted only after a name-level alias map exists. For every legacy stage name the map must carry the surface on which the name appears, its source_declaration_id, immutable evidence and either a canonical target stage or an explicit exclusion. findings_merge -> finding_merge is a mandatory example. At decision time contracts/analysis/v1/legacy-stage-map.json holds 31 declaration sites and zero concrete alias values, so the acceptance precondition is not met yet.",
+      "acceptance_precondition": "name-level legacy alias map with surface, source_declaration_id, immutable evidence and canonical target or explicit exclusion for every legacy stage name, including findings_merge -> finding_merge",
+      "downstream_obligations": [
+        "ANA lane: publish the name-level alias map before its draft can be accepted; site-level mapping alone is not sufficient",
+        "independent reviewer: confirm the nine registry stages against capability evidence and check every alias-bearing declaration site (ID-03)"
+      ],
+      "precondition_state_at_decision": "contracts/analysis/v1/legacy-stage-map.json carried 31 declaration sites and zero name-level alias values; an ANA-lane candidate legacy-stage-name-map.json with 62 names appeared afterwards and is verified by the integrator and the ID-03 reviewer, not by the architecture lane"
+    },
+    {
+      "id": "PD-03",
+      "subject": "AuditRun, Job and Attempt are distinct and current-attempt authority/fencing is mandatory",
+      "status": "approved_with_modification",
+      "approved": true,
+      "blocks": ["ADR-0007 fencing clause", "ADR-0005 AuditRun naming", "contracts/domain/v1 identifiers and state machines", "FS-06"],
+      "evidence": [
+        "[B] legacy_capability_inventory 3.6 DW-02 job/attempt durable state and attempt-scoped token",
+        "[B] legacy_capability_inventory 3.6 DW-03 = not observed, no distinct Run entity",
+        "[B] legacy_capability_inventory 3.6 DW-05 no domain-level fencing_token field established",
+        "[B] legacy_capability_inventory 7 gap 4",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0018-domain-contract-v1.md section 1.1 four forms of run_id (advisory)"
+      ],
+      "decided_by": "repository owner",
+      "decided_on": "2026-09-01",
+      "decision_channel": "direct instruction to the program integrator session",
+      "modification": "AuditRun, Job and Attempt are distinct entities. A new AuditRun is created when a top-level audit or re-audit command is accepted for a frozen set of inputs and configurations. A repeat with the same idempotency key and payload returns the existing Run. Changed inputs, an explicit re-audit or a repeat of a terminal Run create a new Run. Retry, resume, restart and worker failover create no new Run: the Job stays the same and a new Attempt is created. A terminal Run is never reopened.",
+      "closes": ["the review sub-question \"what creates a new AuditRun\", raised because legacy provides no Run evidence"],
+      "precedence_clarification": {
+        "record_kind": "precedence clarification of PD-03",
+        "is_new_owner_decision": false,
+        "creates_new_decision_id": false,
+        "clarifies": "PD-03",
+        "recorded_in_round": 5,
+        "decided_by": "repository owner",
+        "decided_on": "2026-09-01",
+        "decision_channel": "direct instruction to the program integrator session, confirmed on the outcome of the independent review",
+        "raised_by": "independent review of the W0-ARC-01 candidate: the approved PD-03 modification left two of its own clauses overlapping without a stated priority",
+        "ambiguity": "A repeat of a Run that is already terminal, carrying the same idempotency key and the same payload, satisfied two clauses of the approved modification at once: \"a repeat with the same idempotency key and payload returns the existing Run\" and \"a repeat of a terminal Run creates a new Run\". PD-03 stated no precedence between them, so one and the same request had two admissible outcomes.",
+        "overlapping_clauses": [
+          "PD-03 modification, idempotent-replay clause: a repeat with the same idempotency key and payload returns the existing Run",
+          "PD-03 modification, new-Run clause: changed inputs, an explicit re-audit or a repeat of a terminal Run create a new Run"
+        ],
+        "rule": "Identical idempotency key and payload ALWAYS return the original Run. A repeat of a terminal Run creates a new Run ONLY under a new idempotency key.",
+        "effect_on_existing_clauses": "Neither clause is changed, narrowed or withdrawn; only their intersection is assigned. In the overlap the idempotent-replay clause wins, and the terminal-repeat clause governs every repeat that arrives under a new idempotency key. The terminal Run is never reopened on either branch: the idempotent replay returns it unchanged, and the new-key repeat produces a separate Run beside it.",
+        "changes_disposition": false,
+        "changes_decision_count": false,
+        "consuming_families": [
+          {
+            "family": "contracts/analysis/v1",
+            "carrier": "stage-registry.json run_lifecycle",
+            "obligation": "the precedence must be stated over the run_lifecycle triggers: the idempotent-replay trigger takes precedence over the terminal-repeat trigger, and the terminal-repeat trigger creates a new Run only under a new idempotency key",
+            "observed_state_at_recording": "the run_lifecycle triggers carry the two cases without a precedence between them; the ANA lane is correcting this in parallel",
+            "verified_by_this_lane": false
+          },
+          {
+            "family": "contracts/domain/v1",
+            "carrier": "state-machines.json audit_run.run_creation",
+            "obligation": "the same precedence must be stated over the AuditRun creation cases",
+            "observed_state_at_recording": "the creation cases already return the existing run whatever state it is in and mint a new run for a target whose previous run is terminal only under a new idempotency key",
+            "verified_by_this_lane": false
+          }
+        ],
+        "consuming_family_note": "Both observations are of another lane's unfrozen working-tree draft, read for reconciliation only. This lane certifies neither; the obligation is what binds, not the observed state."
+      },
+      "downstream_obligations": [
+        "DOM lane: encode Run/Job/Attempt identity, the Run-creation rule, idempotent Run return and the terminal-Run rule",
+        "token naming follows integration decision ID-02: execution_token is canonical",
+        "ANA lane: contracts/analysis/v1 run_lifecycle must reflect the precedence clarification recorded above",
+        "DOM lane: the contracts/domain/v1 AuditRun creation rule must reflect the same precedence clarification",
+        "both consuming families must reflect it: a family that carries only one of the two overlapping clauses, or carries both without the precedence, is not conformant to PD-03"
+      ]
+    },
+    {
+      "id": "PD-04",
+      "subject": "Graphic/vector comparison is future target scope, absent from legacy parity and not fabricated in W0 artifacts",
+      "status": "approved",
+      "approved": true,
+      "blocks": ["ADR-0013 raw graphic evidence clause", "comparison fixtures and contracts"],
+      "evidence": [
+        "[B] legacy_capability_inventory 3.4 CP-06 = not observed",
+        "[B] legacy_capability_inventory 5 graphic/vector comparison = not observed",
+        "[B] legacy_capability_inventory 7 gap 3",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:vector_graphics_comparison@1427",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/text_differences.py:graphics_analyzed@479"
+      ],
+      "decided_by": "repository owner",
+      "decided_on": "2026-09-01",
+      "decision_channel": "direct instruction to the program integrator session",
+      "modification": null,
+      "qualification": "Graphic/vector comparison is a future greenfield feature, absent from legacy parity and from W0. Its first contractual inclusion is W7 together with a dedicated golden graphic pair.",
+      "downstream_obligations": [
+        "no W0 fixture, schema or golden journey may assert graphic comparison behavior",
+        "W7 owns the first graphic-comparison contract and its golden graphic pair"
+      ]
+    },
+    {
+      "id": "PD-05",
+      "subject": "optimization, optimization_critic, optimization_corrector and optimization_review are a separate project-optimization sub-pipeline, excluded from the nine-stage core audit registry and retained as a capability with a future contract owner",
+      "status": "approved",
+      "approved": true,
+      "identifier_assigned_by": "analysis (ANA) lane",
+      "identifier_confirmed_by": "program integrator",
+      "identifier_confirmed_on": "2026-09-01",
+      "identifier_status": "confirmed",
+      "identifier_renumbering_required": false,
+      "identifier_note": "The label PD-05 was assigned by the ANA lane, not by the repository owner, and was confirmed by the program integrator on 2026-09-01. The number stands: no renumbering is required and confirming it changed no semantics. It is used across this matrix, CP00_OWNER_DECISIONS.md and contracts/analysis/v1/stage-registry.json so that all three name the same decision. The number is still no part of the owner statement itself, but it is no longer an open question.",
+      "record_kind": "retrospective reconciliation: the owner issued the disposition directly and the ANA lane recorded it in its contract before it reached the owner-decision ledger; round 3 reconciles it into the ledger and into this matrix",
+      "blocks": [
+        "contracts/analysis/v1 stage registry membership",
+        "excluded_scope XS-11",
+        "FS-04-B fail-soft policy of the four excluded optimization names, owned by the OPT contract owner in contracts/optimization/v1/** under task W5-OPT-01"
+      ],
+      "evidence": [
+        "[B] legacy_capability_inventory 2.2 declaration site 10 pipeline/manager.py full pipeline body: preparation, analysis, merge, review/norm/optimization, debt/carryover and Excel",
+        "[B] legacy_capability_inventory 2.2 declaration site 17 optimization.py",
+        "[B] legacy_capability_inventory 2.2 declaration sites 21 and 22: section-optimization pipeline and replication sub-pipelines with their own stage lists",
+        "[B] legacy_capability_inventory 3.2 AN-06 norm/optimization branches may record degradation and continue, confidence medium",
+        "[B] legacy_capability_inventory 3.2 AN-08 auditor requests section/project optimization and replication, confidence high, output = optimization artifacts and section replication pipeline artifacts",
+        "[B] legacy_capability_inventory 6 pipeline topology: the manager coordinates review/norm/optimization after merging findings",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_run_ocr_pipeline@5346",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_run_post_findings_parallel@4711",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/optimization.py:router",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/main.py:include_router@228",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_pipeline_service.py:_STAGES@34",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_replication_service.py:_STAGES@45",
+        "[P] contracts/analysis/v1/stage-registry.json owner_decisions[PD-05] and excluded_scope XS-11 with owning_boundary project_optimization and its retained_capability statement; another lane's unfrozen draft, read for reconciliation and not verified by this lane"
+      ],
+      "decided_by": "repository owner",
+      "decided_on": "2026-09-01",
+      "decision_channel": "owner disposition stated as a recommendation to approve, with a separate instruction to record it; first written down by the ANA lane in contracts/analysis/v1/stage-registry.json",
+      "modification": null,
+      "qualification": "optimization, optimization_critic, optimization_corrector and optimization_review form a separate project-optimization sub-pipeline, started on its own or as an optional post-findings branch. Its product is improvement proposals, not audit findings. Section optimization is a downstream aggregation/replication pipeline, not the same pipeline. The four names are excluded from the nine-stage core audit registry but retained as a separate capability with a future contract owner.",
+      "consistency_with_recorded_decisions": [
+        "PD-02: no conflict. PD-05 creates no second registry; it is a membership decision taken under the single-registry authority PD-02 established, and it supplies the explicit-exclusion resolution form that PD-02's modification already requires for every legacy stage name. The nine registry stages are unchanged.",
+        "ID-03: unchanged. The 25 control_plane / 2 sub_pipeline / 3 excluded / 1 stage distribution is stated over the 31 site-level declaration sites, while PD-05 acts at the name level of the alias map. PD-05 adds no condition to ID-03 and removes none.",
+        "PD-01, PD-03, PD-04: independent subject matter, no interaction.",
+        "Principle and ADR dispositions unchanged: 17 ratify / 5 adapt / 0 defer for principles and 11 / 6 / 1 for ADRs, the single defer still ADR-0014 under the open U-04. PD-05 contradicts no baseline ADR and issues no supersede disposition."
+      ],
+      "downstream_obligations": [
+        "ANA lane: keep the four names resolved through the explicit exclusion XS-11 with owning boundary project_optimization; the core audit registry keeps its nine stages; no analysis stage, package, example or fixture may claim the retained capability",
+        "every lane: the capability is disabled until W5-OPT-01 is accepted, so its stage vocabulary, status semantics and packages may not be modelled in any contract family, contracts/optimization/v1 included (obligation U-06-OB-1)",
+        "BHV/golden lanes: no W0 journey or fixture may assert project-optimization behavior as a core-registry audit stage",
+        "CP-00 scope: the checkpoint explicitly excludes project-optimization runtime semantics and ratifies none of them (obligation U-06-OB-2)",
+        "OPT contract owner: carry the capability in the separate bounded context contracts/optimization/v1/** under task W5-OPT-01, after the core audit and decision contracts are frozen",
+        "FS-04: the fail-soft policy of the four excluded optimization names is part FS-04-B, owned by the OPT contract owner under W5-OPT-01; the no-silent-success rule is unchanged and binds all three FS-04 parts"
+      ],
+      "open_item": null,
+      "closed_item": "U-06 closed by the repository owner on 2026-09-01: project optimization becomes a separate bounded context with contract family contracts/optimization/v1/**, a dedicated OPT contract owner who is neither ANA nor DOM, and the planned task W5-OPT-01; the capability stays disabled and outside CP-00 runtime semantics until W5-OPT-01 is accepted",
+      "closed_item_recorded_in_round": 4
+    }
+  ],
+  "integration_decisions": [
+    {
+      "id": "ID-01",
+      "subject": "Canonical version key of machine contracts",
+      "decision": "contract_version is the canonical version key of every machine contract and carries a string semver or draft version. $schema stays the JSON Schema dialect and $id stays the schema identity. A bare version key and schema_version used as a contract-envelope version are removed before freeze.",
+      "decided_by": "repository owner",
+      "decided_on": "2026-09-01",
+      "applies_to": ["contracts/domain/v1", "contracts/analysis/v1", "every later machine contract family"],
+      "owner_of_execution": "DOM and ANA lanes under integrator verification; ARC records the decision only"
+    },
+    {
+      "id": "ID-02",
+      "subject": "Canonical attempt-authority token name",
+      "decision": "execution_token is the canonical token name: an opaque equality-only capability, rotated on every new Attempt and verified inside the publishing transaction. Fencing is a property of the behavior, not the name of a field and not a promise of a monotonically increasing number. authority_token and fencing_token survive only in legacy evidence.",
+      "decided_by": "repository owner",
+      "decided_on": "2026-09-01",
+      "applies_to": ["contracts/domain/v1 identifiers, state machines and error codes", "contracts/analysis/v1 result package", "ADR-0007 fencing clause"],
+      "owner_of_execution": "DOM and ANA lanes; ARC records the decision only"
+    },
+    {
+      "id": "ID-03",
+      "subject": "Legacy stage-map target-kind distribution",
+      "decision": "The distribution of 25 control_plane, 2 sub_pipeline, 3 excluded and 1 stage over the 31 legacy declaration sites is admissible conditionally: an independent reviewer must confirm all nine registry stages against capability evidence and separately check every alias-bearing declaration site.",
+      "decided_by": "repository owner",
+      "decided_on": "2026-09-01",
+      "applies_to": ["contracts/analysis/v1/legacy-stage-map.json", "contracts/analysis/v1/stage-registry.json", "PD-02 acceptance"],
+      "owner_of_execution": "independent reviewer assigned by the integrator"
+    }
+  ],
+  "principles": [
+    {
+      "principle_id": "P-01",
+      "title": "Opaque identity",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-01--opaque-identity",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] EX-09 stable MIG origin pairs make append idempotent",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/migrated_findings_service.py:_stable_migrated_id@1436",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0018-domain-contract-v1.md section 1.1 project_id parsed as path (advisory)"
+      ],
+      "compatibility_impact": "Legacy path and display identifiers survive only as import evidence, never as new identity.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-02",
+      "title": "Path is not identity",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-02--path-is-not-identity",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] WS-03 path traversal and extension rejection",
+        "[B] CP-01 versioned comparison-stage roots with temp and atomic switch",
+        "[B] legacy_capability_inventory 7 gap 7 dual filesystem layouts"
+      ],
+      "compatibility_impact": "Storage adapter owns key layout; legacy path mapping must be explicit migration data, not inferred identity.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-03",
+      "title": "Immutable history, explicit mutable pointers",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-03--immutable-history-explicit-mutable-pointers",
+      "disposition": "adapt",
+      "evidence": [
+        "[B] WS-02 a new version does not copy prior output",
+        "[B] CP-03 and CP-04 deterministic artifacts are not mutated by the AI layer",
+        "[B] EX-02 legacy decision history is replaceable and deletable",
+        "[O] PD-01 approved with modification on 2026-09-01"
+      ],
+      "compatibility_impact": "Ratifiable for versions, runs, manifests and raw comparison evidence; the immutable decision-event clause is ratifiable with the approved PD-01 modification attached: correction and revocation each create a new decision_id, a revocation projects the current verdict to pending and never auto-restores the superseded one.",
+      "owner_decisions": ["PD-01"],
+      "owner_decision_state": "PD-01 approved with modification (2026-09-01)"
+    },
+    {
+      "principle_id": "P-04",
+      "title": "Contract before concurrency",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-04--contract-before-concurrency",
+      "disposition": "ratify",
+      "evidence": [
+        "[P] docs/program/waves/W0.2_architecture_domain_contract.md parallel-task table with disjoint allowed paths",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_BIBLE.md:P-04@132"
+      ],
+      "compatibility_impact": "No lane may consume another lane's unfrozen draft as a contract.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-05",
+      "title": "Modular monolith by default",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-05--modular-monolith-by-default",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] legacy_capability_inventory 2.1 23 mapped router modules in one backend",
+        "[B] DW-01 through DW-06 separate worker execution with a different resource and failure profile",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_BIBLE.md:P-05@138"
+      ],
+      "compatibility_impact": "Worker and engine processes are allowed; any further network service requires its own ADR.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-06",
+      "title": "Side effects at edges",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-06--side-effects-at-edges",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] legacy_capability_inventory 4 provider boundaries and external side effects rows",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_BIBLE.md:P-06@145"
+      ],
+      "compatibility_impact": "Domain code receives ports; adapters own I/O, retry and typed error mapping.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-07",
+      "title": "Transaction ends in outbox",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-07--transaction-ends-in-outbox",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] DW-05 disk-first event outbox with sequence and ACK",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:audit_worker/event_outbox.py:module@1-18",
+        "[B] DW-04 staging, backup and journal before atomic project replacement"
+      ],
+      "compatibility_impact": "Legacy proves the recovery-journal pattern; the target replaces filesystem journals with a transactional database outbox.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-08",
+      "title": "Retry is normal",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-08--retry-is-normal",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] DW-04 idempotent chunk, session and complete plus same-hash replay",
+        "[B] CP-02 idempotent session and pair creation",
+        "[B] EX-09 idempotent append by stable origin pair"
+      ],
+      "compatibility_impact": "Every write command needs an idempotency key or a natural unique key.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-09",
+      "title": "State is a state machine",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-09--state-is-a-state-machine",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] DW-02 state and disposition are separate",
+        "[B] legacy_capability_inventory 7 gap 6 permissive legacy decision typing",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0018-domain-contract-v1.md section 1.1 single explicit legacy state machine (advisory)"
+      ],
+      "compatibility_impact": "Boolean and free-string statuses must become declared transitions before any writer exists.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-10",
+      "title": "No silent fallback",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-10--no-silent-fallback",
+      "disposition": "adapt",
+      "evidence": [
+        "[B] legacy_capability_inventory 7 gap 5 fail-soft branches",
+        "[B] OUT-02 embedded Excel failure is swallowed and the package can still succeed",
+        "[B] CP-04 deterministic summary fallback on provider or validation failure"
+      ],
+      "compatibility_impact": "Ratifiable only together with the fail-soft mapping FS-01 through FS-08; each legacy fail-soft path must resolve to a named failure, partial or observable degraded mode.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-11",
+      "title": "Derived data is rebuildable",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-11--derived-data-is-rebuildable",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] CP-02 disposable suggestions versus the authoritative saved link file",
+        "[B] EX-01 and EX-04 global decision-log projection and knowledge-base views"
+      ],
+      "compatibility_impact": "A projection may be rebuilt at any time and may never be the only copy.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-12",
+      "title": "Observability is contract",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-12--observability-is-contract",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] LO-01 operational action log",
+        "[B] AN-01 pipeline logs and WebSocket progress",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_BIBLE.md:P-13@186"
+      ],
+      "compatibility_impact": "Progress stays a projection; diagnostic logs, durable audit and metrics stay separate channels with different guarantees.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-13",
+      "title": "Security fail-closed",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-13--security-fail-closed",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] WS-01 auth and role gates produce visible denials",
+        "[B] DW-01 admin routes require portal auth or an explicit insecure-admin mode",
+        "[B] legacy_capability_inventory 4 safe-path, archive-limit and checksum controls"
+      ],
+      "compatibility_impact": "The legacy insecure-admin escape hatch must not be ported; classification and retention remain with deferred ADR-0014.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-14",
+      "title": "Simplicity before framework",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-14--simplicity-before-framework",
+      "disposition": "ratify",
+      "evidence": [
+        "[P] AGENTS.md section 4 forbids generic repository, base service and global utils",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_BIBLE.md:P-15@214"
+      ],
+      "compatibility_impact": "Abstractions appear after two real independent uses or at a mandatory boundary.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-15",
+      "title": "LLM reproducibility by artifacts",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-15--llm-reproducibility-by-artifacts",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] AN-09 token, cost and usage records with the explicit inference that cost observability does not establish replayability",
+        "[B] legacy_capability_inventory 5 replay and cost accounting = partial"
+      ],
+      "compatibility_impact": "Replay evidence requires recorded synthetic responses; live text equality is out of scope.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-16",
+      "title": "Cost is an operational budget",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-16--cost-is-an-operational-budget",
+      "disposition": "adapt",
+      "evidence": [
+        "[B] AN-09 budget and configuration validation observed, confidence medium",
+        "[B] legacy_capability_inventory 5 replay and cost accounting = partial; no cost-per-accepted-finding metric was observed"
+      ],
+      "compatibility_impact": "The measurement obligation is ratifiable; numeric budget values and release-stopping thresholds are deferred to W3-C-01 by the owner and must be defined before the first paid-provider canary. CP-00 fixes the measurement, not the numbers (U-01).",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-17",
+      "title": "Evidence first, AI additive",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-17--evidence-first-ai-additive",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] CP-04 additive AI review, final and change-summary artifacts keyed to current deterministic artifacts",
+        "[B] FD-02 evidence is not silently invented by the AI summary layer",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_ai_review@1068"
+      ],
+      "compatibility_impact": "AI artifacts remain separate, versioned and checksum-referenced; raw deterministic evidence is never mutated.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-18",
+      "title": "Expert decision is an event",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-18--expert-decision-is-an-event",
+      "disposition": "adapt",
+      "evidence": [
+        "[B] EX-02 = not observed",
+        "[B] legacy_capability_inventory 5 append-only expert decision events = contradicted",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:revoke_decision@861",
+        "[O] PD-01 approved with modification on 2026-09-01"
+      ],
+      "compatibility_impact": "The defer basis disappeared when PD-01 was approved. Ratifiable with the approved modification attached: correction and revocation each create a new decision_id, a revocation moves the current projection to pending without restoring the superseded verdict, and history is preserved. Legacy overwrite/delete stays characterized legacy behavior only.",
+      "owner_decisions": ["PD-01"],
+      "owner_decision_state": "PD-01 approved with modification (2026-09-01)"
+    },
+    {
+      "principle_id": "P-19",
+      "title": "Legacy is a read-only oracle",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-19--legacy-is-a-read-only-oracle",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] legacy_capability_inventory 1 runtime execution = None",
+        "[B] legacy_capability_inventory 9 read-only Git-object command set",
+        "[P] docs/SOURCE_TRACEABILITY.md section 3 Strangler runtime migration not transferred"
+      ],
+      "compatibility_impact": "No runtime legacy dependency exists or is planned; parity is proven through golden and replay evidence.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-20",
+      "title": "Checkpoint is an evidence bundle",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-20--checkpoint-is-an-evidence-bundle",
+      "disposition": "ratify",
+      "evidence": [
+        "[P] docs/stages/S00_architecture_and_behavior_freeze.md checkpoint exit criterion",
+        "[P] docs/manual-tests/CP-00_architecture.md final acceptance checklist"
+      ],
+      "compatibility_impact": "This review is one evidence input to CP-00 and is not itself a checkpoint; no tag is created by this task.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-21",
+      "title": "Manual acceptance is first-class",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-21--manual-acceptance-is-first-class",
+      "disposition": "ratify",
+      "evidence": [
+        "[P] docs/manual-tests/CP-00_architecture.md cases MT00-01 through MT00-06",
+        "[P] docs/manual-tests/CP-00_architecture.md case MT00-06 unresolved decisions"
+      ],
+      "compatibility_impact": "The PD records are the input that MT00-06 samples; manual acceptance does not replace the automated gates.",
+      "owner_decisions": []
+    },
+    {
+      "principle_id": "P-22",
+      "title": "Agent parallelism follows ownership boundaries",
+      "source_anchor": "docs/architecture/ARCHITECTURE_BIBLE.md#p-22--agent-parallelism-follows-ownership-boundaries",
+      "disposition": "adapt",
+      "evidence": [
+        "[P] docs/program/waves/W0.2_architecture_domain_contract.md frozen hotspot ownership and parallel-task tables",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0016-workspace-isolation.md status proposed, shared checkout versus worktrees still open"
+      ],
+      "compatibility_impact": "The ratifiable invariant is one owner per hotspot with disjoint allowed paths. U-02 is resolved by the owner: a worktree is the default and a shared checkout is admissible only with disjoint allowed paths and a single owner per hotspot; the isolation mechanism itself remains a mechanism, not an invariant.",
+      "owner_decisions": []
+    }
+  ],
+  "adrs": [
+    {
+      "adr_id": "ADR-0001",
+      "title": "Greenfield product; legacy is a behavioral oracle",
+      "file": "docs/architecture/adr/ADR-0001-greenfield-behavioral-oracle.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source ADR-0001 hybrid Strangler migration = accepted; deliberately not transferred",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] legacy_capability_inventory 1 runtime execution = None",
+        "[B] legacy_capability_inventory 9 read-only Git-object commands",
+        "[P] docs/SOURCE_TRACEABILITY.md section 3",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_INDEX.md:13"
+      ],
+      "compatibility_impact": "No runtime Strangler dependency; porting an algorithm requires characterize, contract, tests and parity evidence.",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0002",
+      "title": "Modular monolith control plane",
+      "file": "docs/architecture/adr/ADR-0002-modular-monolith-control-plane.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source ADR-0002 = proposed, pending W0-DEC-01; status not inherited",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] legacy_capability_inventory 2.1 24 discovered router modules, 23 mapped, in one backend",
+        "[B] DW-01 through DW-06 separate worker execution profile",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_INDEX.md:14"
+      ],
+      "compatibility_impact": "Separate execution processes are allowed; any further network service requires a new ADR.",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0003",
+      "title": "Contract-first boundaries and single data owner",
+      "file": "docs/architecture/adr/ADR-0003-contract-first-and-data-ownership.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source ADR-0003 = accepted",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] legacy_capability_inventory 7 gap 7 dual filesystem layouts and shadow mirroring",
+        "[B] CP-02 one authoritative saved link file versus disposable suggestions",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_INDEX.md:15"
+      ],
+      "compatibility_impact": "Every aggregate needs a named authoritative writer before implementation starts.",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0004",
+      "title": "Repository layout and module boundaries",
+      "file": "docs/architecture/adr/ADR-0004-repository-layout-and-module-boundaries.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source ADR-0006 = proposed, pending W0-DEC-01; status not inherited",
+      "disposition": "adapt",
+      "evidence": [
+        "[P] docs/architecture/adr/ADR-0004-repository-layout-and-module-boundaries.md mandates architecture lint/test against deep cross-context and FSD cross-slice imports",
+        "[P] docs/stages/S00_architecture_and_behavior_freeze.md automated exit evidence requires architecture lint rules to be specified",
+        "[P] no lint-rule specification exists under docs/architecture at base commit 6c82004b35f49463c8e7fc8602fbced2f374167e"
+      ],
+      "compatibility_impact": "Layout is ratifiable as written; the lint-rule specification is now an assigned CP-00 exit obligation: the owner opens W0-ARC-02 for the architecture lint-rule specification before CP-00 and W1-ARC-01 implements enforcement (U-03).",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0005",
+      "title": "PostgreSQL owns metadata and durable workflow state",
+      "file": "docs/architecture/adr/ADR-0005-postgresql-metadata-and-durable-state.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source ADR-0003 = accepted for PostgreSQL/S3 ownership",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] legacy_capability_inventory 4 stores row: filesystem JSON, SQLite and process-local handles",
+        "[P] docs/SOURCE_TRACEABILITY.md section 3 legacy filesystem/SQLite pilot choices not transferred",
+        "[O] PD-03 approved with modification on 2026-09-01"
+      ],
+      "compatibility_impact": "Storage canonicality is uncontested; the AuditRun state named by this ADR is supported by the approved PD-03 identity separation and its Run-creation rule.",
+      "owner_decisions": ["PD-03"],
+      "owner_decision_state": "PD-03 approved with modification (2026-09-01)"
+    },
+    {
+      "adr_id": "ADR-0006",
+      "title": "Private S3-compatible artifact storage",
+      "file": "docs/architecture/adr/ADR-0006-private-s3-artifact-storage.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source ADR-0003 = accepted for PostgreSQL/S3 ownership",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] DW-04 checksum-verified assembled package, staging, backup, journal and atomic replacement",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/upload_service.py:module@1-16",
+        "[B] legacy_capability_inventory 4 stores row"
+      ],
+      "compatibility_impact": "Temporary, verify, publish maps onto observed legacy import safety; no legacy S3 parity exists and none is claimed.",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0007",
+      "title": "PostgreSQL jobs/outbox; Attempt fencing",
+      "file": "docs/architecture/adr/ADR-0007-postgres-jobs-outbox-and-attempt-fencing.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source number reserved as ADR-0009 backlog with no source ADR file; source Bible section 5.4",
+      "disposition": "adapt",
+      "evidence": [
+        "[B] DW-02 one active job per project/version, one active attempt per job, attempt-scoped execution token, idempotency keys, stale and superseded rejection",
+        "[B] DW-05 connection-epoch fencing with no domain-level fencing_token field established",
+        "[B] legacy_capability_inventory 7 gap 4",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_BIBLE.md:5.4@306-316",
+        "[O] PD-03 approved with modification and integration decision ID-02 on 2026-09-01"
+      ],
+      "compatibility_impact": "Durable job and outbox parts are ratifiable; the fencing clause is ratifiable only with the approved qualification: the capability is named execution_token, is opaque and equality-only, is rotated on every new Attempt and is verified inside the publishing transaction. Fencing is behavior, not a field name and not a monotonic number. Retry, resume, restart and worker failover create a new Attempt, never a new AuditRun.",
+      "owner_decisions": ["PD-03"],
+      "owner_decision_state": "PD-03 approved with modification (2026-09-01); ID-02 fixes the token name"
+    },
+    {
+      "adr_id": "ADR-0008",
+      "title": "Execution engine is a package-contract boundary",
+      "file": "docs/architecture/adr/ADR-0008-execution-engine-package-contract.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source number reserved as ADR-0012 backlog with no source ADR file",
+      "disposition": "adapt",
+      "evidence": [
+        "[B] legacy_capability_inventory 2.2 31 declaration sites, 29 mapped, conflicting membership and order",
+        "[B] legacy_capability_inventory 5 versioned stage registry = partial",
+        "[B] legacy_capability_inventory 7 gap 2",
+        "[B] DW-04 publication only after validation",
+        "[O] PD-02 approved with modification on 2026-09-01",
+        "[O] PD-05 approved on 2026-09-01: four optimization names excluded from the nine-stage core audit registry as a separate project-optimization sub-pipeline",
+        "[P] contracts/analysis/v1/legacy-stage-map.json as observed when the decision was recorded: 31 declaration sites, no name-level alias values",
+        "[P] contracts/analysis/v1/legacy-stage-name-map.json (62 names) appeared later in the same working tree as an unfrozen ANA-lane candidate; not verified by this lane"
+      ],
+      "compatibility_impact": "The package boundary is ratifiable; the single versioned stage registry clause is ratifiable only with the approved PD-02 precondition: a name-level alias map giving every legacy name its surface, source_declaration_id, immutable evidence and either a canonical target or an explicit exclusion, with findings_merge -> finding_merge mandatory. Site-level mapping alone does not satisfy it, and ID-03 adds independent confirmation of the nine registry stages and of every alias-bearing declaration site. PD-05 applies that same single-registry authority to a membership question: four legacy optimization names take the explicit-exclusion branch as a separate project-optimization sub-pipeline, which changes no registry stage and creates no second registry.",
+      "owner_decisions": ["PD-02", "PD-05"],
+      "owner_decision_state": "PD-02 approved with modification (2026-09-01); ANA acceptance still blocked on the alias map. PD-05 approved (2026-09-01) excludes four optimization names from the nine-stage core registry without altering the registry clause"
+    },
+    {
+      "adr_id": "ADR-0009",
+      "title": "Next.js/React/TypeScript strict with FSD vertical slices",
+      "file": "docs/architecture/adr/ADR-0009-nextjs-react-typescript-fsd.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source ADR-0004 = accepted; source ADR-0017 route strangler = proposed and not applicable to a greenfield repository",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] legacy_capability_inventory 2.2 items 24 and 25 frontend stage-model configuration and legacy artifact aliases",
+        "[B] legacy_capability_inventory 7 gap 8 runtime and UI parity unknown",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_INDEX.md:16"
+      ],
+      "compatibility_impact": "The UI consumes the stage registry and the generated client and never redeclares stage vocabulary; no route-strangler phase exists.",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0010",
+      "title": "Stable Finding identity is separate from run observation",
+      "file": "docs/architecture/adr/ADR-0010-stable-finding-identity.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "no source ADR file; corroborated by advisory source ADR-0018 section 1.1",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] EX-09 stable MIG identity and idempotent append",
+        "[B] EX-08 an existing non-empty human or auto verdict is preserved by carryover",
+        "[B] FD-01 and FD-02 version-aware listing and strict evidence links",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0018-domain-contract-v1.md section 1.1 F-NNN reissued per run (advisory)"
+      ],
+      "compatibility_impact": "Display ordinals are presentation only; the identity matching policy is versioned and may create a new Finding instead of carrying one over.",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0011",
+      "title": "LLM reproducibility and cost ledger",
+      "file": "docs/architecture/adr/ADR-0011-llm-reproducibility-and-cost.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source ADR-0013 = proposed, pending W0-ADR-04; status not inherited",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] AN-09 token, cost, usage and budget records, confidence medium",
+        "[B] legacy_capability_inventory 5 replay and cost accounting = partial",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_INDEX.md:19"
+      ],
+      "compatibility_impact": "Replay parity requires repository-approved synthetic recordings; budget thresholds are separate and unresolved as U-01.",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0012",
+      "title": "Expert decisions are append-only; KB is a projection",
+      "file": "docs/architecture/adr/ADR-0012-expert-decision-ledger-and-kb-projection.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "no source ADR file for this decision",
+      "disposition": "adapt",
+      "evidence": [
+        "[B] EX-02 = not observed: a matching decision is updated and revoke deletes from the global log and the active review",
+        "[B] legacy_capability_inventory 5 = contradicted",
+        "[B] legacy_capability_inventory 7 gap 1",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:_append_to_decisions_log@683",
+        "[O] PD-01 approved with modification on 2026-09-01"
+      ],
+      "compatibility_impact": "The defer basis disappeared when PD-01 was approved. Ratifiable with the approved modification attached: correction and revocation create new decision_ids, a revocation projects the current verdict to pending with no automatic restore, and the KB projection is rebuilt from preserved history. Legacy overwrite and delete remain characterized legacy behavior and are not the target.",
+      "owner_decisions": ["PD-01"],
+      "owner_decision_state": "PD-01 approved with modification (2026-09-01)"
+    },
+    {
+      "adr_id": "ADR-0013",
+      "title": "Comparison separates approved state, raw evidence and AI synthesis",
+      "file": "docs/architecture/adr/ADR-0013-comparison-evidence-layers.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "no source ADR file for this decision",
+      "disposition": "adapt",
+      "evidence": [
+        "[B] CP-02 approved links are authoritative over disposable suggestions",
+        "[B] CP-03 deterministic hard gates and same-signature reuse",
+        "[B] CP-04 additive AI artifacts with race rejection before atomic write",
+        "[B] CP-05 repair proof, history and undo",
+        "[B] CP-06 = not observed: graphics explicitly not analyzed",
+        "[O] PD-04 approved on 2026-09-01"
+      ],
+      "compatibility_impact": "Text, approved-link and AI layers are ratifiable. The raw graphic evidence layer is approved as future greenfield scope with the recorded qualification: absent from legacy parity and from W0, first contractual inclusion in W7 together with a dedicated golden graphic pair.",
+      "owner_decisions": ["PD-04"],
+      "owner_decision_state": "PD-04 approved (2026-09-01)"
+    },
+    {
+      "adr_id": "ADR-0014",
+      "title": "Object authorization and classification/retention policy",
+      "file": "docs/architecture/adr/ADR-0014-authz-classification-retention.md",
+      "package_status": "proposed",
+      "refactoring_source_status": "source ADR-0014 = proposed and explicitly not approved; retention matrix values unfilled",
+      "disposition": "defer",
+      "evidence": [
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0014-data-classification-retention-and-erasure.md:3 status proposed",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0014-data-classification-retention-and-erasure.md retention matrix with unfilled values",
+        "[B] WS-01 exact runtime authorization policy was not exercised",
+        "[B] DW-01 explicit insecure-admin mode",
+        "[B] LO-01 retention and immutability guarantees were not established"
+      ],
+      "compatibility_impact": "Remains proposed. U-04 stays open: the tenant/identity-provider boundary is required before W2-C-01 and the TTL/legal-hold matrix before W9-C-01. No TTL, tenant model, identity provider or legal-hold value may be encoded. This blocks the production storage and security gate, not CP-00 documentation.",
+      "owner_decisions": ["U-04 tenant model, identity provider, TTL matrix and legal-hold authority"],
+      "owner_decision_state": "U-04 remains open by explicit owner disposition (2026-09-01)"
+    },
+    {
+      "adr_id": "ADR-0015",
+      "title": "Diagnostic logs, durable audit and metrics are separate",
+      "file": "docs/architecture/adr/ADR-0015-observability-audit-and-redaction.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "no source ADR file; source Bible P-13",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] legacy_capability_inventory 4 security note: redaction before outbox persistence observed",
+        "[B] LO-01 action log present, retention and immutability not established",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_BIBLE.md:P-13@186"
+      ],
+      "compatibility_impact": "Channel separation is ratifiable; durable audit retention depends on the deferred ADR-0014 authority.",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0016",
+      "title": "Testing is an evidence model, not a test pyramid quota",
+      "file": "docs/architecture/adr/ADR-0016-testing-evidence-model.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "no source ADR file; source Bible section 5.7",
+      "disposition": "ratify",
+      "evidence": [
+        "[B] legacy_capability_inventory 8 candidates GJ-01 through GJ-11 with required assertions",
+        "[B] legacy_capability_inventory 8 live LLM text equality is explicitly out of scope"
+      ],
+      "compatibility_impact": "W0-BHV-02 selects five journeys from eleven candidates; the uncovered remainder must be recorded as a known coverage gap (U-05), not silently dropped.",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0017",
+      "title": "Contract waves and worktree-per-task ownership",
+      "file": "docs/architecture/adr/ADR-0017-contract-waves-and-worktree-ownership.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "source ADR-0005 = accepted for parallel delivery; source ADR-0016 workspace isolation = proposed and unresolved",
+      "disposition": "adapt",
+      "evidence": [
+        "[P] docs/program/waves/W0.2_architecture_domain_contract.md runs four lanes concurrently on disjoint allowed paths",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/ADR_INDEX.md:22",
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0016-workspace-isolation.md variants A and B still open"
+      ],
+      "compatibility_impact": "The wave, freeze and ownership model is ratifiable; one worktree per task is a default mechanism rather than an invariant. U-02 is resolved by the owner: worktree is the default and a shared checkout is admissible only with disjoint allowed paths and a single owner per hotspot, which is what W0.2 executes.",
+      "owner_decisions": []
+    },
+    {
+      "adr_id": "ADR-0018",
+      "title": "Checkpoint version = tag + frozen contracts + automated + manual evidence",
+      "file": "docs/architecture/adr/ADR-0018-checkpoint-versioning.md",
+      "package_status": "accepted bootstrap",
+      "refactoring_source_status": "no source ADR file; source checkpoint artifacts exist under docs/architecture/checkpoints",
+      "disposition": "ratify",
+      "evidence": [
+        "[P] docs/stages/S00_architecture_and_behavior_freeze.md integration report requirements",
+        "[P] docs/manual-tests/CP-00_architecture.md final acceptance checklist",
+        "[P] docs/program/CHECKPOINT_REGISTRY.md"
+      ],
+      "compatibility_impact": "No tag and no checkpoint claim is created by this task.",
+      "owner_decisions": []
+    }
+  ],
+  "fail_soft_policy": [
+    {
+      "id": "FS-01",
+      "legacy_behavior": "Portable audit package swallows embedded Excel generation failure and can still produce a ZIP without it",
+      "evidence": ["[B] OUT-02", "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:_download_audit_package_v2@137"],
+      "target_policy": "Export manifest declares required members; a missing required member yields a typed partial or failed export with a stable error_code, never a silently incomplete download",
+      "governing": ["P-10", "ADR-0015"]
+    },
+    {
+      "id": "FS-02",
+      "legacy_behavior": "Decision carryover wrapper is fail-soft and yields needs_manual_review with no verdict",
+      "evidence": ["[B] EX-08", "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:run_decision_carryover@436"],
+      "target_policy": "The pending user-visible state is preserved as a declared state of a declared state machine with a recorded failure class and provenance, never as an implicit empty verdict",
+      "governing": ["P-09", "P-10", "ADR-0010"]
+    },
+    {
+      "id": "FS-03",
+      "legacy_behavior": "Expert-review shadow-v2 mirror failure is fail-soft",
+      "evidence": ["[B] EX-01", "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:save_expert_review@220"],
+      "target_policy": "No dual write exists in the target; the second view is a rebuildable projection and a build failure is a named observable degraded mode with an owner",
+      "governing": ["P-07", "P-11"]
+    },
+    {
+      "id": "FS-04",
+      "legacy_behavior": "Norm and optimization branches record degradation and let an audit complete with warning artifacts",
+      "evidence": ["[B] AN-06", "[B] AN-08", "[B] legacy_capability_inventory 6 pipeline topology"],
+      "target_policy": "Stage terminal semantics belong to the single versioned stage registry of the owning bounded context, with an explicit consumer policy per state; the policy is split into the three owned parts below and no part may resolve a fail-soft branch to a success",
+      "governing": ["P-09", "P-10", "ADR-0008", "PD-02", "PD-05"],
+      "split": true,
+      "split_recorded_in_round": 4,
+      "split_authority": "repository owner, 2026-09-01, recorded together with the U-06 disposition",
+      "split_reason": "PD-05 moved the four optimization names out of the analysis boundary, which left that half of a single-owner FS-04 without an encoder. The owner split the policy into three parts, each with a named owner, a target contract family and a task",
+      "no_silent_success_rule": "No part of FS-04 may be implemented as a silent success rule. The rule admits no exception and binds every part below.",
+      "no_silent_success_rule_applies_to_all_parts": true,
+      "parts_total": 3,
+      "parts": [
+        {
+          "part_id": "FS-04-A",
+          "scope": "norm and core-audit stage terminal semantics inside the nine-stage core audit registry",
+          "owner": "ANA lane",
+          "owner_role": "analysis contract owner",
+          "target_contract_family": "contracts/analysis/v1/**",
+          "task_id": "W0-ANA-01",
+          "target_policy": "Stage terminal semantics (ok, partial, failed, skipped) are declared in the single versioned core audit stage registry with an explicit consumer policy per state; a degraded norm branch resolves to a declared non-success terminal state",
+          "governing": ["P-09", "P-10", "ADR-0008", "PD-02"],
+          "silent_success_allowed": false,
+          "status": "assigned",
+          "conditions": ["PD-02 name-level alias map precondition", "ID-03 independent reviewer confirmation"]
+        },
+        {
+          "part_id": "FS-04-B",
+          "scope": "project-optimization stage and result terminal semantics for optimization, optimization_critic, optimization_corrector and optimization_review",
+          "owner": "OPT contract owner",
+          "owner_role": "project-optimization contract owner, neither the ANA nor the DOM lane",
+          "target_contract_family": "contracts/optimization/v1/**",
+          "task_id": "W5-OPT-01",
+          "target_policy": "The project-optimization bounded context declares its own stage and result terminal semantics with an explicit consumer policy per state; a degraded optimization branch resolves to a declared non-success terminal state of that family and never to a success",
+          "governing": ["P-09", "P-10", "PD-05", "U-06"],
+          "silent_success_allowed": false,
+          "status": "assigned_to_future_task",
+          "conditions": ["U-06-OB-1: the capability is disabled until W5-OPT-01 is accepted, so this part may not be encoded before that task", "U-06-OB-2: CP-00 explicitly excludes project-optimization runtime semantics"]
+        },
+        {
+          "part_id": "FS-04-C",
+          "scope": "AuditRun and Job consumption of an optional optimization branch",
+          "owner": "DOM lane",
+          "owner_role": "domain contract owner",
+          "target_contract_family": "contracts/domain/v1/**",
+          "task_id": "W0-DOM-01",
+          "task_note": "the domain contract task that owns the state machines; if it is already accepted when this rule is encoded, the integrator re-points the part at the next domain contract task without changing the rule",
+          "target_policy": "Failure of an optional optimization branch resolves the consuming AuditRun or Job to an explicit partial and never to a full success; the outcome is a declared transition of the domain state machines, not consumer-side tolerance",
+          "consumer_rule": {
+            "trigger": "an optional project-optimization branch does not succeed",
+            "required_outcome": "partial",
+            "forbidden_outcome": "success",
+            "explicit": true,
+            "encoded_in": "contracts/domain/v1 state machines",
+            "encoded_by": "DOM lane"
+          },
+          "governing": ["P-09", "P-10", "ADR-0005", "ADR-0007", "PD-03", "PD-05"],
+          "silent_success_allowed": false,
+          "status": "assigned"
+        }
+      ]
+    },
+    {
+      "id": "FS-05",
+      "legacy_behavior": "Comparison AI review falls back to a deterministic summary on provider or validation failure",
+      "evidence": ["[B] CP-04", "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_ai_review@1068"],
+      "target_policy": "Allowed only as a named, marked and observable degraded artifact that states its own provenance; never presented as completed AI synthesis",
+      "governing": ["P-10", "P-17", "ADR-0013"]
+    },
+    {
+      "id": "FS-06",
+      "legacy_behavior": "Pipeline and job state partly lives in process-local active task handles alongside persisted logs",
+      "evidence": ["[B] legacy_capability_inventory 4 stores row", "[B] AN-02 stale running converted to interrupted at startup"],
+      "target_policy": "Durable job and attempt state is canonical; process memory is never a status source and recovery is a declared transition",
+      "governing": ["P-09", "ADR-0005", "ADR-0007", "PD-03"]
+    },
+    {
+      "id": "FS-07",
+      "legacy_behavior": "Silent identity fallback between an identifier with and without a .pdf suffix during project resolution",
+      "evidence": ["[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0018-domain-contract-v1.md section 1.1 (advisory, verified at 98d075ea)"],
+      "target_policy": "Identity resolution is an explicit typed lookup; an unresolvable identifier is a typed error, never a guessed alternative form",
+      "governing": ["P-01", "P-02", "P-10"]
+    },
+    {
+      "id": "FS-08",
+      "legacy_behavior": "User-visible stage states error, partial, skipped and interrupted plus comparison not_started and stale gates exist without one declared vocabulary",
+      "evidence": ["[B] legacy_capability_inventory 4 user-visible failures row", "[B] legacy_capability_inventory 2.2 alias declarations"],
+      "target_policy": "Each state maps to exactly one declared target state with declared transitions and a declared alias table; aliases are evidence and never parallel sources of truth",
+      "governing": ["P-09", "ADR-0008", "PD-02"]
+    }
+  ],
+  "escalations": [
+    {"id": "E-01", "summary": "Append-only expert decisions asserted by Bible section 2, P-18 and ADR-0012 versus contradicted legacy evidence", "escalated_to": "repository owner via PD-01", "status": "resolved_by_owner", "resolution": "PD-01 approved with modification on 2026-09-01; P-18 and ADR-0012 move from defer to adapt"},
+    {"id": "E-02", "summary": "Single versioned stage registry asserted by Bible section 8 and ADR-0008 versus 31 conflicting legacy declarations", "escalated_to": "repository owner via PD-02", "status": "resolved_with_precondition", "resolution": "PD-02 approved with modification on 2026-09-01; ANA acceptance requires the name-level alias map"},
+    {"id": "E-03", "summary": "Distinct Run/Job/Attempt and fencing token asserted by Bible section 8 and ADR-0007 versus missing Run entity and missing fencing-token contract", "escalated_to": "repository owner via PD-03", "status": "resolved_by_owner", "resolution": "PD-03 approved with modification on 2026-09-01, including the rule for what creates a new AuditRun; ID-02 fixes execution_token as the canonical name. Round 5 adds the owner precedence clarification inside PD-03: identical idempotency key and payload always return the original Run, and a repeat of a terminal Run creates a new Run only under a new idempotency key"},
+    {"id": "E-04", "summary": "Raw graphic evidence layer asserted by Bible section 11 and ADR-0013 versus legacy graphics not analyzed", "escalated_to": "repository owner via PD-04", "status": "resolved_by_owner", "resolution": "PD-04 approved on 2026-09-01; first contractual inclusion in W7 with a dedicated golden graphic pair"},
+    {"id": "E-05", "summary": "ADR index labels accepted bootstrap while several decisions derive from refactoring ADRs whose source status is proposed", "escalated_to": "program integrator at W0.3 ratification", "status": "open", "resolution": "still an integrator obligation at W0.3 ratification: owner approval of PD-01 to PD-04 does not convert a proposed source ADR status into an accepted one"},
+    {"id": "E-06", "summary": "S00 requires architecture lint rules to be specified and ADR-0004 mandates architecture lint/test, but no specification exists", "escalated_to": "program integrator, tracked as U-03", "status": "assigned", "resolution": "U-03 assigned: W0-ARC-02 specifies the architecture lint rules before CP-00, W1-ARC-01 implements enforcement; the task file itself is authored by the integrator under docs/program"},
+    {"id": "E-07", "summary": "Contract catalog names the ARC owner for contracts/domain/v1 while the W0.2 wave assigns that path to the DOM lane", "escalated_to": "program integrator; additive catalog note applied", "status": "resolved", "resolution": "additive catalog ownership note applied; per-wave ownership stays a program-governance decision"},
+    {"id": "E-08", "summary": "ADR-0017 default worktree-per-task isolation versus the W0.2 shared-checkout execution model", "escalated_to": "program integrator, tracked as U-02", "status": "resolved_by_owner", "resolution": "U-02 resolved: worktree is the default, shared checkout only with disjoint allowed paths and a single owner per hotspot"}
+  ],
+  "unresolved_inputs": [
+    {"id": "U-01", "summary": "Cost and budget values plus release-stopping thresholds behind P-16 and ADR-0011", "owner": "repository owner and operations", "status": "deferred_with_deadline", "owner_disposition": "Numeric cost thresholds are deferred to W3-C-01 and must be defined before the first paid-provider canary. CP-00 fixes the measurement, not the numbers.", "recorded_on": "2026-09-01"},
+    {"id": "U-02", "summary": "Workspace isolation model behind ADR-0017", "owner": "program integrator", "status": "resolved", "owner_disposition": "Worktree is the default isolation; a shared checkout is admissible only with disjoint allowed paths and a single owner per hotspot.", "recorded_on": "2026-09-01"},
+    {"id": "U-03", "summary": "Owning task for the architecture lint-rule specification required by ADR-0004 and S00", "owner": "program integrator", "status": "assigned", "owner_disposition": "A separate task W0-ARC-02 specifies the architectural lint rules before CP-00; W1-ARC-01 implements enforcement. The task file is created by the integrator under docs/program, outside this lane. The task file docs/program/tasks/W0-ARC-02.md is present in the working tree.", "recorded_on": "2026-09-01"},
+    {"id": "U-04", "summary": "Tenant model, identity provider, retention TTL matrix and legal-hold authority behind ADR-0014", "owner": "repository owner with security and legal", "status": "open", "owner_disposition": "Remains open by explicit owner disposition. The tenant/identity-provider boundary is required before W2-C-01 and the TTL/legal-hold authority before W9-C-01. ADR-0014 stays proposed.", "blocks_cp00_freeze": false, "blocks_cp00_freeze_note": "U-04 has its own deadlines, W2-C-01 and W9-C-01; requiring it to close before CP-00 would make those deadlines meaningless. It blocks exactly and only the four items below.", "blocking_scope": ["ADR-0014 remains proposed and is not ratified at CP-00", "the retention and legal-hold clauses of ADR-0015 are not ratified", "the P-13 classification and retention obligations are not ratified", "no tenant, identity-provider, TTL, retention or legal-hold value is encoded in any contract"], "recorded_on": "2026-09-01"},
+    {"id": "U-05", "summary": "Coverage policy for the W0-BHV-02 candidate journeys not selected as golden", "owner": "golden owner and integrator", "status": "conditionally_accepted", "owner_disposition": "Five aggregate journeys are admissible, but acceptance requires a machine-readable mapping of each of the 11 inventory candidates to concrete EO/FC assertion IDs, not only to journey IDs.", "recorded_on": "2026-09-01"},
+    {
+      "id": "U-06",
+      "summary": "Contract owner, target contract family and task ID for the project-optimization capability retained by PD-05",
+      "owner": "repository owner and program integrator",
+      "status": "resolved",
+      "owner_disposition": "Project optimization becomes a separate bounded context. Its contract family is contracts/optimization/v1/**, owned by a dedicated OPT contract owner who is neither the ANA nor the DOM lane. The planned task is W5-OPT-01, after the freeze of the core audit and decision contracts. Until W5-OPT-01 is accepted the capability is disabled, and CP-00 explicitly excludes its runtime semantics.",
+      "decided_by": "repository owner",
+      "decided_on": "2026-09-01",
+      "decision_authority": "repository owner",
+      "decision_channel": "direct instruction to the program integrator session",
+      "raised_by": "architecture lane, W0.2 round 3",
+      "raised_because": "PD-05 retained optimization, optimization_critic, optimization_corrector and optimization_review as a capability outside the analysis boundary but named no owner, no contract family and no task ID for it",
+      "resolution": {
+        "bounded_context": "project_optimization",
+        "separate_bounded_context": true,
+        "target_contract_family": "contracts/optimization/v1/**",
+        "contract_owner": "OPT contract owner",
+        "contract_owner_is_not": ["analysis (ANA) lane", "domain (DOM) lane"],
+        "task_id": "W5-OPT-01",
+        "sequencing": "after the freeze of the core audit contracts and the decision contracts"
+      },
+      "obligations": [
+        {"id": "U-06-OB-1", "kind": "prohibition", "binding": true, "obligation": "The project-optimization capability is disabled until W5-OPT-01 is accepted. No lane may enable, model or expose its stage vocabulary, status semantics, packages or endpoints before that acceptance, and contracts/optimization/v1 does not exist as a frozen family until then.", "binding_on": "every lane, the OPT contract owner included", "until": "W5-OPT-01 accepted", "verified_by": "no optimization stage, package, example or fixture in any contract family, and contracts/optimization/v1 absent from the frozen contract set"},
+        {"id": "U-06-OB-2", "kind": "scope_exclusion", "binding": true, "obligation": "CP-00 explicitly excludes project-optimization runtime semantics. The checkpoint ratifies no stage, state, result package, endpoint or degradation rule of the capability, and no CP-00 artifact may be read as covering them.", "binding_on": "CP-00 checkpoint scope and the program integrator at W0.3 ratification", "until": "W5-OPT-01 accepted", "verified_by": "no CP-00 disposition, principle or ADR row in this matrix asserts a project-optimization runtime semantic; FS-04-B is assigned to W5-OPT-01 and to no CP-00 lane"}
+      ],
+      "consequence_of_the_disposition": "the FS-04 fail-soft policy of the four excluded names is part FS-04-B and now has a named owner, family and task; it may not be encoded before W5-OPT-01 and may not be absorbed by the analysis contract",
+      "recorded_on": "2026-09-01",
+      "recorded_in_round": 4
+    }
+  ],
+  "documentation_updates_applied": [
+    {"file": "docs/architecture/ARCHITECTURE_BIBLE.md", "change": "CP-00 review pointer naming qualified principles P-03, P-10, P-16, P-22 and deferred P-18", "round": 1},
+    {"file": "docs/architecture/ADR_INDEX.md", "change": "CP-00 disposition section referencing this review; no new ADR link and no status upgrade", "round": 1},
+    {"file": "docs/architecture/DOMAIN_MODEL.md", "change": "pending owner decision guard note for PD-01 and PD-03 semantics", "round": 1},
+    {"file": "docs/architecture/CONTRACT_CATALOG.md", "change": "per-wave contract ownership note resolving E-07", "round": 1},
+    {"round": 2, "file": "docs/architecture/ARCHITECTURE_BIBLE.md", "change": "CP-00 review pointer rewritten for the recorded owner decisions: P-18 is no longer deferred, the approved PD-01 modification is named and U-04 is named as still open"},
+    {"round": 2, "file": "docs/architecture/ADR_INDEX.md", "change": "CP-00 disposition section updated to the round-2 lists: ADR-0012 moves to adapt, ADR-0014 is the only defer, and the PD-01 to PD-04 dispositions are recorded"},
+    {"round": 2, "file": "docs/architecture/DOMAIN_MODEL.md", "change": "pending-decision guard replaced by the decided PD-01 and PD-03 semantics, including the pending-on-revocation rule, the AuditRun creation rule and the execution_token naming"}, {"round": 5, "file": "docs/architecture/DOMAIN_MODEL.md", "change": "the decided PD-03 semantics carry the owner precedence clarification of 2026-09-01: identical idempotency key and payload always return the original Run and a repeat of a terminal Run creates a new Run only under a new idempotency key; the Run/Job/Attempt narrative line now points at that rule instead of restating the overlap loosely"}
+  ],
+  "coverage": {
+    "principles_total": 22,
+    "principles_ratify": 17,
+    "principles_adapt": 5,
+    "principles_defer": 0,
+    "principles_supersede": 0,
+    "adrs_total": 18,
+    "adrs_ratify": 11,
+    "adrs_adapt": 6,
+    "adrs_defer": 1,
+    "adrs_supersede": 0,
+    "owner_decisions_total": 5,
+    "owner_decisions_pending": 0,
+    "fail_soft_cases_mapped": 8,
+    "owner_decisions_approved": 2,
+    "owner_decisions_approved_with_modification": 3,
+    "owner_decision_precedence_clarifications": 1,
+    "owner_decision_precedence_clarification_ids": ["PD-03"],
+    "owner_decisions_added_in_round_5": 0,
+    "integration_decisions_recorded": 3,
+    "unresolved_inputs_total": 6,
+    "unresolved_inputs_open": 1,
+    "unresolved_inputs_open_ids": ["U-04"],
+    "unresolved_inputs_with_owner_disposition": 6,
+    "unresolved_inputs_resolved": 2,
+    "fail_soft_policy_split_cases": 1,
+    "fail_soft_policy_parts_total": 3,
+    "fail_soft_policy_parts_without_owner": 0,
+    "fail_soft_policy_parts_without_target_family": 0,
+    "fail_soft_policy_parts_without_task": 0,
+    "fail_soft_policy_parts_allowing_silent_success": 0
+  }
+}

@@ -1,0 +1,3242 @@
+{
+  "contract": "auditmanager.analysis.legacy_stage_name_map",
+  "contract_version": "1.0.0-draft.1",
+  "status": "candidate",
+  "source_inventory_commit": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba",
+  "legacy_source_commit": "32b9d903792b30506048a1d42b0e6b2d07aee403",
+  "site_map_contract": "auditmanager.analysis.legacy_stage_map",
+  "purpose": "Name-level alias map required by owner decision PD-02 (approved with modification on 2026-09-01). Its unit is one concrete legacy stage name observed in the frozen legacy tree, not a declaration site. Every name carries the surface on which it is observable, the legacy-stage-map declaration site it was read from, an immutable evidence locator resolvable with `git show`, and either a canonical registry stage or an explicit exclusion. This map is evidence and alias resolution only; the stage registry stays the sole target source of truth.",
+  "evidence_locator_format": "<legacy_commit>:<path>:<symbol>@<line> or <legacy_commit>:<path>:<symbol>@<start>-<end>. The symbol is the literal source symbol at the start line; the range is the declaration region. evidence_literal is the exact substring proving the name inside that region and evidence_line is the line it occurs on.",
+  "resolution_kinds": {
+    "canonical_stage": "The legacy name resolves to exactly one canonical registry stage_id.",
+    "excluded": "The legacy name is deliberately outside the analysis stage registry and names a registry excluded_scope entry."
+  },
+  "alias_bearing_declaration_ids": [
+    "LSD-01",
+    "LSD-02",
+    "LSD-03",
+    "LSD-04",
+    "LSD-05",
+    "LSD-06",
+    "LSD-07",
+    "LSD-08",
+    "LSD-09",
+    "LSD-10",
+    "LSD-11",
+    "LSD-12",
+    "LSD-13",
+    "LSD-14",
+    "LSD-15",
+    "LSD-16",
+    "LSD-17",
+    "LSD-18",
+    "LSD-19",
+    "LSD-20",
+    "LSD-21",
+    "LSD-22",
+    "LSD-23",
+    "LSD-24",
+    "LSD-25",
+    "LSD-26",
+    "LSD-27",
+    "LSD-28",
+    "LSD-29",
+    "LSD-30",
+    "LSD-31"
+  ],
+  "name_count": 62,
+  "names": [
+    {
+      "legacy_stage_name": "prepare",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"prepare\"",
+      "evidence_line": 9,
+      "observed_surfaces": [
+        "failure_recovery_order",
+        "persisted_stage_enum",
+        "pipeline_execution_order",
+        "public_retry_api",
+        "public_skip_api",
+        "resume_alias_vocabulary",
+        "status_alias_table"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-06",
+        "LSD-07",
+        "LSD-08",
+        "LSD-09",
+        "LSD-11",
+        "LSD-28"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "source_preparation",
+      "also_covers_stage_ids": [
+        "page_geometry_extraction"
+      ],
+      "rationale": "Legacy `prepare` is coarse: the retry alias table and the status alias table both fold `crop_blocks` into it, so one legacy name covered source registration and page cropping. It resolves to source_preparation as the entry point; the cropping half is the separate canonical stage page_geometry_extraction recorded in also_covers_stage_ids.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"prepare\"",
+          "evidence_line": 1108
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"prepare\"",
+          "evidence_line": 3245
+        },
+        {
+          "surface": "status_alias_table",
+          "source_declaration_id": "LSD-28",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175-2180",
+          "evidence_literal": "\"prepare\"",
+          "evidence_line": 2176
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253-264",
+          "evidence_literal": "\"prepare\"",
+          "evidence_line": 254
+        },
+        {
+          "surface": "pipeline_execution_order",
+          "source_declaration_id": "LSD-09",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:ocr_stages@3688-3698",
+          "evidence_literal": "\"prepare\"",
+          "evidence_line": 3689
+        },
+        {
+          "surface": "public_skip_api",
+          "source_declaration_id": "LSD-07",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157-1158",
+          "evidence_literal": "\"prepare\"",
+          "evidence_line": 1158
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "crop_blocks",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"crop_blocks\"",
+      "evidence_line": 21,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "failure_recovery_order",
+        "persisted_stage_enum",
+        "project_status_order",
+        "public_retry_api",
+        "public_skip_api",
+        "remote_eligibility_set",
+        "resume_alias_vocabulary",
+        "runtime_orchestration_body",
+        "status_alias_table"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-06",
+        "LSD-07",
+        "LSD-08",
+        "LSD-10",
+        "LSD-11",
+        "LSD-12",
+        "LSD-13",
+        "LSD-18",
+        "LSD-28",
+        "LSD-29"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "page_geometry_extraction",
+      "rationale": "Legacy block cropping and page rendering become the canonical geometry/crop stage.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"crop_blocks\"",
+          "evidence_line": 1108
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"crop_blocks\"",
+          "evidence_line": 3245
+        },
+        {
+          "surface": "status_alias_table",
+          "source_declaration_id": "LSD-28",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175-2180",
+          "evidence_literal": "\"crop_blocks\"",
+          "evidence_line": 2176
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:REMOTE_AUDIT_PILOT_STAGES@39-49",
+          "evidence_literal": "\"crop_blocks\"",
+          "evidence_line": 40
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"crop_blocks\"",
+          "evidence_line": 80
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"crop_blocks\"",
+          "evidence_line": 1865
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253-264",
+          "evidence_literal": "\"crop_blocks\"",
+          "evidence_line": 255
+        },
+        {
+          "surface": "public_skip_api",
+          "source_declaration_id": "LSD-07",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157-1158",
+          "evidence_literal": "\"crop_blocks\"",
+          "evidence_line": 1157
+        },
+        {
+          "surface": "runtime_orchestration_body",
+          "source_declaration_id": "LSD-10",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_run_ocr_pipeline@5346-5607",
+          "evidence_literal": "AuditStage.CROP_BLOCKS",
+          "evidence_line": 5374
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"crop_blocks\"",
+          "evidence_line": 2186
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "tile_batches",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"tile_batches\"",
+      "evidence_line": 10,
+      "observed_surfaces": [
+        "persisted_stage_enum"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-10",
+      "rationale": "Batch construction for tile audit is an engine-internal work-splitting step inside one stage, not a canonical stage."
+    },
+    {
+      "legacy_stage_name": "block_context",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"block_context\"",
+      "evidence_line": 22,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "persisted_stage_enum",
+        "project_status_order",
+        "public_retry_api",
+        "remote_eligibility_set",
+        "resume_alias_vocabulary",
+        "status_alias_table"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-06",
+        "LSD-08",
+        "LSD-13",
+        "LSD-18",
+        "LSD-28",
+        "LSD-29"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "document_context_build",
+      "rationale": "The vector/PDF block-context summary is the shared document context.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"block_context\"",
+          "evidence_line": 1109
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"block_context\"",
+          "evidence_line": 3246
+        },
+        {
+          "surface": "status_alias_table",
+          "source_declaration_id": "LSD-28",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175-2180",
+          "evidence_literal": "\"block_context\"",
+          "evidence_line": 2177
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:REMOTE_AUDIT_PILOT_STAGES@39-49",
+          "evidence_literal": "\"block_context\"",
+          "evidence_line": 42
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"block_context\"",
+          "evidence_line": 1866
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"block_context\"",
+          "evidence_line": 2187
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "gemma_enrichment",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"gemma_enrichment\"",
+      "evidence_line": 23,
+      "observed_surfaces": [
+        "audit_log_status_order",
+        "failure_recovery_order",
+        "persisted_stage_enum",
+        "pipeline_execution_order",
+        "public_retry_api",
+        "resume_alias_vocabulary",
+        "status_alias_table"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-06",
+        "LSD-08",
+        "LSD-09",
+        "LSD-11",
+        "LSD-12",
+        "LSD-28"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "document_context_build",
+      "rationale": "Legacy OCR-enrichment alias of block_context; the retry table maps `block_context` onto `gemma_enrichment`, so both names denote the same shared-context build.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"gemma_enrichment\"",
+          "evidence_line": 1109
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"gemma_enrichment\"",
+          "evidence_line": 3246
+        },
+        {
+          "surface": "status_alias_table",
+          "source_declaration_id": "LSD-28",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175-2180",
+          "evidence_literal": "\"gemma_enrichment\"",
+          "evidence_line": 2177
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"gemma_enrichment\"",
+          "evidence_line": 81
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253-264",
+          "evidence_literal": "\"gemma_enrichment\"",
+          "evidence_line": 256
+        },
+        {
+          "surface": "pipeline_execution_order",
+          "source_declaration_id": "LSD-09",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:ocr_stages@3688-3698",
+          "evidence_literal": "\"gemma_enrichment\"",
+          "evidence_line": 3690
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "document_graph",
+      "surface": "remote_eligibility_set",
+      "source_declaration_id": "LSD-18",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:REMOTE_AUDIT_PILOT_STAGES@39-49",
+      "evidence_literal": "\"document_graph\"",
+      "evidence_line": 41,
+      "observed_surfaces": [
+        "remote_eligibility_set"
+      ],
+      "observed_declaration_ids": [
+        "LSD-18"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "document_context_build",
+      "rationale": "The remote-pilot eligibility set names the document-graph build separately; it is part of the same canonical shared-context stage."
+    },
+    {
+      "legacy_stage_name": "text_analysis",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"text_analysis\"",
+      "evidence_line": 24,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "failure_recovery_order",
+        "global_prompt_template_whitelist",
+        "model_routing_config",
+        "model_validation_subset",
+        "persisted_stage_enum",
+        "pipeline_execution_order",
+        "project_prompt_whitelist",
+        "project_status_order",
+        "provider_requirement_set",
+        "public_retry_api",
+        "public_skip_api",
+        "remote_eligibility_set",
+        "resume_alias_vocabulary",
+        "routing_plan_order",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "runtime_orchestration_body",
+        "ui_artifact_alias",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-02",
+        "LSD-03",
+        "LSD-04",
+        "LSD-05",
+        "LSD-06",
+        "LSD-07",
+        "LSD-08",
+        "LSD-09",
+        "LSD-10",
+        "LSD-11",
+        "LSD-12",
+        "LSD-13",
+        "LSD-14",
+        "LSD-15",
+        "LSD-16",
+        "LSD-17",
+        "LSD-18",
+        "LSD-20",
+        "LSD-24",
+        "LSD-25",
+        "LSD-29"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "text_analysis",
+      "rationale": "Direct name match.",
+      "additional_observations": [
+        {
+          "surface": "routing_stage_scope_map",
+          "source_declaration_id": "LSD-14",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 48
+        },
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 1111
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 3255
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:REMOTE_AUDIT_PILOT_STAGES@39-49",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 44
+        },
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 263
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 48
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 82
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 1867
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:_text_tuple@243",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 243
+        },
+        {
+          "surface": "pipeline_execution_order",
+          "source_declaration_id": "LSD-09",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_mid@3683-3687",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 3684
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 586
+        },
+        {
+          "surface": "global_prompt_template_whitelist",
+          "source_declaration_id": "LSD-04",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@618",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 618
+        },
+        {
+          "surface": "project_prompt_whitelist",
+          "source_declaration_id": "LSD-05",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@841",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 841
+        },
+        {
+          "surface": "public_skip_api",
+          "source_declaration_id": "LSD-07",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157-1158",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 1157
+        },
+        {
+          "surface": "runtime_orchestration_body",
+          "source_declaration_id": "LSD-10",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_run_ocr_pipeline@5346-5607",
+          "evidence_literal": "AuditStage.TEXT_ANALYSIS",
+          "evidence_line": 5427
+        },
+        {
+          "surface": "routing_plan_order",
+          "source_declaration_id": "LSD-15",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:stages@690-702",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 692
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 40
+        },
+        {
+          "surface": "provider_requirement_set",
+          "source_declaration_id": "LSD-20",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/provider_requirement.py:AUDIT_MODEL_STAGES@72-80",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 74
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "text_analysis:",
+          "evidence_line": 3050
+        },
+        {
+          "surface": "ui_artifact_alias",
+          "source_declaration_id": "LSD-25",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:STAGES@2837",
+          "evidence_literal": "'text_analysis'",
+          "evidence_line": 2837
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"text_analysis\"",
+          "evidence_line": 2188
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "01_text_analysis",
+      "surface": "persisted_stage_value_alias",
+      "source_declaration_id": "LSD-30",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/storage/stage_artifacts.py:STAGE_VALUE_ALIASES@61-65",
+      "evidence_literal": "\"01_text_analysis\"",
+      "evidence_line": 62,
+      "observed_surfaces": [
+        "persisted_stage_value_alias"
+      ],
+      "observed_declaration_ids": [
+        "LSD-30"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "text_analysis",
+      "rationale": "Legacy persisted `stage` value canonicalized by the storage alias table."
+    },
+    {
+      "legacy_stage_name": "02_text_analysis",
+      "surface": "persisted_stage_value_alias",
+      "source_declaration_id": "LSD-30",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/storage/stage_artifacts.py:TEXT_ANALYSIS_STAGE@34",
+      "evidence_literal": "\"02_text_analysis\"",
+      "evidence_line": 34,
+      "observed_surfaces": [
+        "persisted_stage_value_alias"
+      ],
+      "observed_declaration_ids": [
+        "LSD-30"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "text_analysis",
+      "rationale": "Canonical legacy persisted `stage` value after the 01/02 swap; still a legacy name, not a target stage_id."
+    },
+    {
+      "legacy_stage_name": "block_analysis",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"block_analysis\"",
+      "evidence_line": 25,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "failure_recovery_order",
+        "global_prompt_template_whitelist",
+        "persisted_stage_enum",
+        "pipeline_execution_order",
+        "project_prompt_whitelist",
+        "project_status_order",
+        "provider_requirement_set",
+        "public_retry_api",
+        "public_skip_api",
+        "remote_eligibility_set",
+        "resume_alias_vocabulary",
+        "routing_stage_scope_map",
+        "status_alias_table"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-04",
+        "LSD-05",
+        "LSD-06",
+        "LSD-07",
+        "LSD-08",
+        "LSD-09",
+        "LSD-11",
+        "LSD-12",
+        "LSD-13",
+        "LSD-14",
+        "LSD-18",
+        "LSD-20",
+        "LSD-28",
+        "LSD-29"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "block_analysis",
+      "rationale": "Direct name match.",
+      "additional_observations": [
+        {
+          "surface": "routing_stage_scope_map",
+          "source_declaration_id": "LSD-14",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 47
+        },
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 1112
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 3247
+        },
+        {
+          "surface": "status_alias_table",
+          "source_declaration_id": "LSD-28",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175-2180",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 2178
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:REMOTE_AUDIT_PILOT_STAGES@39-49",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 43
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 83
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 1868
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:_block_tuples@244-247",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 245
+        },
+        {
+          "surface": "pipeline_execution_order",
+          "source_declaration_id": "LSD-09",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_mid@3683-3687",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 3684
+        },
+        {
+          "surface": "global_prompt_template_whitelist",
+          "source_declaration_id": "LSD-04",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@618",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 618
+        },
+        {
+          "surface": "project_prompt_whitelist",
+          "source_declaration_id": "LSD-05",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@841",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 841
+        },
+        {
+          "surface": "public_skip_api",
+          "source_declaration_id": "LSD-07",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157-1158",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 1157
+        },
+        {
+          "surface": "provider_requirement_set",
+          "source_declaration_id": "LSD-20",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/provider_requirement.py:AUDIT_MODEL_STAGES@72-80",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 73
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"block_analysis\"",
+          "evidence_line": 2189
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "blocks_analysis",
+      "surface": "resume_alias_vocabulary",
+      "source_declaration_id": "LSD-08",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+      "evidence_literal": "\"blocks_analysis\"",
+      "evidence_line": 3247,
+      "observed_surfaces": [
+        "resume_alias_vocabulary",
+        "ui_artifact_alias"
+      ],
+      "observed_declaration_ids": [
+        "LSD-08",
+        "LSD-25"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "block_analysis",
+      "rationale": "Plural spelling accepted by the resume normalizer and used by the UI artifact alias list.",
+      "additional_observations": [
+        {
+          "surface": "ui_artifact_alias",
+          "source_declaration_id": "LSD-25",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:STAGES@2837",
+          "evidence_literal": "'blocks_analysis'",
+          "evidence_line": 2837
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "block_batch",
+      "surface": "routing_stage_scope_map",
+      "source_declaration_id": "LSD-14",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+      "evidence_literal": "\"block_batch\"",
+      "evidence_line": 47,
+      "observed_surfaces": [
+        "model_routing_config",
+        "model_validation_subset",
+        "routing_plan_order",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-02",
+        "LSD-03",
+        "LSD-14",
+        "LSD-15",
+        "LSD-16",
+        "LSD-17",
+        "LSD-24"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "block_analysis",
+      "rationale": "Routing model-table key; the routing compiler itself maps `block_batch` onto pipeline stage `block_analysis`.",
+      "additional_observations": [
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"block_batch\"",
+          "evidence_line": 264
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"block_batch\"",
+          "evidence_line": 49
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"block_batch\"",
+          "evidence_line": 587
+        },
+        {
+          "surface": "routing_plan_order",
+          "source_declaration_id": "LSD-15",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:stages@690-702",
+          "evidence_literal": "\"block_batch\"",
+          "evidence_line": 691
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"block_batch\"",
+          "evidence_line": 39
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "block_batch:",
+          "evidence_line": 3051
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "block_retry",
+      "surface": "audit_log_status_order",
+      "source_declaration_id": "LSD-12",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+      "evidence_literal": "\"block_retry\"",
+      "evidence_line": 84,
+      "observed_surfaces": [
+        "audit_log_status_order",
+        "project_status_order"
+      ],
+      "observed_declaration_ids": [
+        "LSD-12",
+        "LSD-13"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-10",
+      "rationale": "Retry of unreadable blocks is an Attempt-level recovery step inside block analysis. Under PD-03 a retry produces a new Attempt of the same Job, never a separate stage or Run.",
+      "additional_observations": [
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"block_retry\"",
+          "evidence_line": 1869
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "tile_audit",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"tile_audit\"",
+      "evidence_line": 11,
+      "observed_surfaces": [
+        "failure_recovery_order",
+        "persisted_stage_enum",
+        "public_retry_api",
+        "public_skip_api",
+        "resume_alias_vocabulary",
+        "status_alias_table"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-06",
+        "LSD-07",
+        "LSD-08",
+        "LSD-11",
+        "LSD-28"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "block_analysis",
+      "rationale": "Pre-OCR tile audit; the retry table and the resume normalizer both map it onto block_analysis.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"tile_audit\"",
+          "evidence_line": 1120
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"tile_audit\"",
+          "evidence_line": 3248
+        },
+        {
+          "surface": "status_alias_table",
+          "source_declaration_id": "LSD-28",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175-2180",
+          "evidence_literal": "\"tile_audit\"",
+          "evidence_line": 2178
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:_block_tuples@244-247",
+          "evidence_literal": "\"tile_audit\"",
+          "evidence_line": 246
+        },
+        {
+          "surface": "public_skip_api",
+          "source_declaration_id": "LSD-07",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157-1158",
+          "evidence_literal": "\"tile_audit\"",
+          "evidence_line": 1158
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "v4_extraction",
+      "surface": "status_alias_table",
+      "source_declaration_id": "LSD-28",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175-2180",
+      "evidence_literal": "\"v4_extraction\"",
+      "evidence_line": 2178,
+      "observed_surfaces": [
+        "status_alias_table"
+      ],
+      "observed_declaration_ids": [
+        "LSD-28"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "block_analysis",
+      "rationale": "Legacy pipeline-log alias of block_analysis in the status alias table."
+    },
+    {
+      "legacy_stage_name": "01_blocks_analysis",
+      "surface": "persisted_stage_value_alias",
+      "source_declaration_id": "LSD-30",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/storage/stage_artifacts.py:BLOCKS_ANALYSIS_STAGE@35",
+      "evidence_literal": "\"01_blocks_analysis\"",
+      "evidence_line": 35,
+      "observed_surfaces": [
+        "persisted_stage_value_alias"
+      ],
+      "observed_declaration_ids": [
+        "LSD-30"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "block_analysis",
+      "rationale": "Canonical legacy persisted `stage` value for block analysis after the 01/02 swap."
+    },
+    {
+      "legacy_stage_name": "02_blocks_analysis",
+      "surface": "persisted_stage_value_alias",
+      "source_declaration_id": "LSD-30",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/storage/stage_artifacts.py:STAGE_VALUE_ALIASES@61-65",
+      "evidence_literal": "\"02_blocks_analysis\"",
+      "evidence_line": 63,
+      "observed_surfaces": [
+        "persisted_stage_value_alias"
+      ],
+      "observed_declaration_ids": [
+        "LSD-30"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "block_analysis",
+      "rationale": "Legacy persisted `stage` value canonicalized by the storage alias table."
+    },
+    {
+      "legacy_stage_name": "01_blocks_for_text",
+      "surface": "persisted_stage_value_alias",
+      "source_declaration_id": "LSD-30",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/storage/stage_artifacts.py:BLOCKS_FOR_TEXT_STAGE@36",
+      "evidence_literal": "\"01_blocks_for_text\"",
+      "evidence_line": 36,
+      "observed_surfaces": [
+        "persisted_stage_value_alias"
+      ],
+      "observed_declaration_ids": [
+        "LSD-30"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "block_analysis",
+      "rationale": "Compact block view produced by block analysis for the text stage; a persisted stage value, not a separate stage."
+    },
+    {
+      "legacy_stage_name": "02_blocks_for_text",
+      "surface": "persisted_stage_value_alias",
+      "source_declaration_id": "LSD-30",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/storage/stage_artifacts.py:STAGE_VALUE_ALIASES@61-65",
+      "evidence_literal": "\"02_blocks_for_text\"",
+      "evidence_line": 64,
+      "observed_surfaces": [
+        "persisted_stage_value_alias"
+      ],
+      "observed_declaration_ids": [
+        "LSD-30"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "block_analysis",
+      "rationale": "Legacy persisted `stage` value for the compact block view, canonicalized by the storage alias table."
+    },
+    {
+      "legacy_stage_name": "findings_merge",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"findings_merge\"",
+      "evidence_line": 26,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "failure_recovery_order",
+        "global_prompt_template_whitelist",
+        "model_routing_config",
+        "model_validation_subset",
+        "persisted_stage_enum",
+        "pipeline_execution_order",
+        "project_prompt_whitelist",
+        "project_status_order",
+        "provider_requirement_set",
+        "public_retry_api",
+        "public_skip_api",
+        "remote_eligibility_set",
+        "resume_alias_vocabulary",
+        "routing_plan_order",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "runtime_orchestration_body",
+        "status_alias_table",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-02",
+        "LSD-03",
+        "LSD-04",
+        "LSD-05",
+        "LSD-06",
+        "LSD-07",
+        "LSD-08",
+        "LSD-09",
+        "LSD-10",
+        "LSD-11",
+        "LSD-12",
+        "LSD-13",
+        "LSD-14",
+        "LSD-15",
+        "LSD-16",
+        "LSD-17",
+        "LSD-18",
+        "LSD-20",
+        "LSD-24",
+        "LSD-28",
+        "LSD-29"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "finding_merge",
+      "rationale": "Mandatory owner-named alias. The persisted legacy enum value `findings_merge` resolves to canonical stage_id `finding_merge`; the golden fixture field public_stage_name=findings_merge is resolvable through this entry.",
+      "additional_observations": [
+        {
+          "surface": "routing_stage_scope_map",
+          "source_declaration_id": "LSD-14",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 49
+        },
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 1113
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 3249
+        },
+        {
+          "surface": "status_alias_table",
+          "source_declaration_id": "LSD-28",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175-2180",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 2179
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:REMOTE_AUDIT_PILOT_STAGES@39-49",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 45
+        },
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 265
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 50
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 85
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 1870
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253-264",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 259
+        },
+        {
+          "surface": "pipeline_execution_order",
+          "source_declaration_id": "LSD-09",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:ocr_stages@3688-3698",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 3692
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 588
+        },
+        {
+          "surface": "global_prompt_template_whitelist",
+          "source_declaration_id": "LSD-04",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@618",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 618
+        },
+        {
+          "surface": "project_prompt_whitelist",
+          "source_declaration_id": "LSD-05",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@841",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 841
+        },
+        {
+          "surface": "public_skip_api",
+          "source_declaration_id": "LSD-07",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157-1158",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 1157
+        },
+        {
+          "surface": "runtime_orchestration_body",
+          "source_declaration_id": "LSD-10",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_run_ocr_pipeline@5346-5607",
+          "evidence_literal": "AuditStage.FINDINGS_MERGE",
+          "evidence_line": 5473
+        },
+        {
+          "surface": "routing_plan_order",
+          "source_declaration_id": "LSD-15",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:stages@690-702",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 693
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 41
+        },
+        {
+          "surface": "provider_requirement_set",
+          "source_declaration_id": "LSD-20",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/provider_requirement.py:AUDIT_MODEL_STAGES@72-80",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 75
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "findings_merge:",
+          "evidence_line": 3052
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"findings_merge\"",
+          "evidence_line": 2190
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "findings",
+      "surface": "resume_alias_vocabulary",
+      "source_declaration_id": "LSD-08",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+      "evidence_literal": "\"findings\"",
+      "evidence_line": 3249,
+      "observed_surfaces": [
+        "resume_alias_vocabulary",
+        "ui_artifact_alias"
+      ],
+      "observed_declaration_ids": [
+        "LSD-08",
+        "LSD-25"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "finding_merge",
+      "rationale": "Short artifact-derived alias accepted by the resume normalizer and the UI artifact alias list.",
+      "additional_observations": [
+        {
+          "surface": "ui_artifact_alias",
+          "source_declaration_id": "LSD-25",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:STAGES@2837",
+          "evidence_literal": "'findings'",
+          "evidence_line": 2837
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "main_audit",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"main_audit\"",
+      "evidence_line": 12,
+      "observed_surfaces": [
+        "failure_recovery_order",
+        "persisted_stage_enum",
+        "public_retry_api",
+        "public_skip_api",
+        "resume_alias_vocabulary",
+        "status_alias_table"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-06",
+        "LSD-07",
+        "LSD-08",
+        "LSD-11",
+        "LSD-28"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "finding_merge",
+      "rationale": "Pre-OCR main audit; the retry table and the resume normalizer both map it onto findings_merge.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"main_audit\"",
+          "evidence_line": 1121
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"main_audit\"",
+          "evidence_line": 3250
+        },
+        {
+          "surface": "status_alias_table",
+          "source_declaration_id": "LSD-28",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175-2180",
+          "evidence_literal": "\"main_audit\"",
+          "evidence_line": 2179
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253-264",
+          "evidence_literal": "\"main_audit\"",
+          "evidence_line": 258
+        },
+        {
+          "surface": "public_skip_api",
+          "source_declaration_id": "LSD-07",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157-1158",
+          "evidence_literal": "\"main_audit\"",
+          "evidence_line": 1158
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "merge",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"merge\"",
+      "evidence_line": 13,
+      "observed_surfaces": [
+        "persisted_stage_enum"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "finding_merge",
+      "rationale": "Pre-OCR merge value of the persisted stage enum."
+    },
+    {
+      "legacy_stage_name": "v4_formatter",
+      "surface": "status_alias_table",
+      "source_declaration_id": "LSD-28",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ALIASES@2175-2180",
+      "evidence_literal": "\"v4_formatter\"",
+      "evidence_line": 2179,
+      "observed_surfaces": [
+        "status_alias_table"
+      ],
+      "observed_declaration_ids": [
+        "LSD-28"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "finding_merge",
+      "rationale": "Legacy pipeline-log alias of findings_merge in the status alias table."
+    },
+    {
+      "legacy_stage_name": "findings_review",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"findings_review\"",
+      "evidence_line": 27,
+      "observed_surfaces": [
+        "persisted_stage_enum",
+        "pipeline_execution_order",
+        "provider_requirement_set",
+        "public_retry_api",
+        "remote_eligibility_set",
+        "resume_alias_vocabulary",
+        "routing_stage_scope_map"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-06",
+        "LSD-08",
+        "LSD-09",
+        "LSD-14",
+        "LSD-18",
+        "LSD-20"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "finding_review",
+      "rationale": "Review/verifier leg; the routing map folds findings_critic and findings_corrector into this pipeline stage.",
+      "additional_observations": [
+        {
+          "surface": "routing_stage_scope_map",
+          "source_declaration_id": "LSD-14",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+          "evidence_literal": "\"findings_review\"",
+          "evidence_line": 50
+        },
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"findings_review\"",
+          "evidence_line": 1114
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"findings_review\"",
+          "evidence_line": 3256
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:REMOTE_AUDIT_PILOT_STAGES@39-49",
+          "evidence_literal": "\"findings_review\"",
+          "evidence_line": 46
+        },
+        {
+          "surface": "pipeline_execution_order",
+          "source_declaration_id": "LSD-09",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:ocr_stages@3688-3698",
+          "evidence_literal": "\"findings_review\"",
+          "evidence_line": 3693
+        },
+        {
+          "surface": "provider_requirement_set",
+          "source_declaration_id": "LSD-20",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/provider_requirement.py:AUDIT_MODEL_STAGES@72-80",
+          "evidence_literal": "\"findings_review\"",
+          "evidence_line": 76
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "findings_critic",
+      "surface": "routing_stage_scope_map",
+      "source_declaration_id": "LSD-14",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+      "evidence_literal": "\"findings_critic\"",
+      "evidence_line": 50,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "model_routing_config",
+        "model_validation_subset",
+        "project_status_order",
+        "public_retry_api",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-02",
+        "LSD-03",
+        "LSD-06",
+        "LSD-12",
+        "LSD-13",
+        "LSD-14",
+        "LSD-16",
+        "LSD-17",
+        "LSD-24",
+        "LSD-29"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "finding_review",
+      "rationale": "Model-routing name for the critic pass; the routing compiler maps it onto pipeline stage findings_review.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"findings_critic\"",
+          "evidence_line": 1114
+        },
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"findings_critic\"",
+          "evidence_line": 266
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"findings_critic\"",
+          "evidence_line": 51
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"findings_critic\"",
+          "evidence_line": 86
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"findings_critic\"",
+          "evidence_line": 1871
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"findings_critic\"",
+          "evidence_line": 589
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"findings_critic\"",
+          "evidence_line": 42
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "findings_critic:",
+          "evidence_line": 3053
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"findings_critic\"",
+          "evidence_line": 2191
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "findings_corrector",
+      "surface": "routing_stage_scope_map",
+      "source_declaration_id": "LSD-14",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+      "evidence_literal": "\"findings_corrector\"",
+      "evidence_line": 51,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "model_routing_config",
+        "model_validation_subset",
+        "project_status_order",
+        "public_retry_api",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-02",
+        "LSD-03",
+        "LSD-06",
+        "LSD-12",
+        "LSD-13",
+        "LSD-14",
+        "LSD-16",
+        "LSD-17",
+        "LSD-24",
+        "LSD-29"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "finding_correction",
+      "rationale": "Model-routing name for the corrector pass. Legacy routes it into findings_review; the target separates the corrected projection into finding_correction, which is a deliberate divergence, not a parity claim.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"findings_corrector\"",
+          "evidence_line": 1116
+        },
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"findings_corrector\"",
+          "evidence_line": 267
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"findings_corrector\"",
+          "evidence_line": 52
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"findings_corrector\"",
+          "evidence_line": 87
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"findings_corrector\"",
+          "evidence_line": 1872
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"findings_corrector\"",
+          "evidence_line": 590
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"findings_corrector\"",
+          "evidence_line": 43
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "findings_corrector:",
+          "evidence_line": 3054
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"findings_corrector\"",
+          "evidence_line": 2193
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "norm_verify",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"norm_verify\"",
+      "evidence_line": 14,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "concurrency_gate_set",
+        "failure_recovery_order",
+        "model_routing_config",
+        "model_validation_subset",
+        "persisted_stage_enum",
+        "pipeline_execution_order",
+        "project_status_order",
+        "public_retry_api",
+        "public_skip_api",
+        "remote_eligibility_set",
+        "remote_runner_exclusion_set",
+        "resume_alias_vocabulary",
+        "routing_plan_order",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-02",
+        "LSD-03",
+        "LSD-06",
+        "LSD-07",
+        "LSD-08",
+        "LSD-09",
+        "LSD-11",
+        "LSD-12",
+        "LSD-13",
+        "LSD-14",
+        "LSD-15",
+        "LSD-16",
+        "LSD-17",
+        "LSD-18",
+        "LSD-19",
+        "LSD-24",
+        "LSD-29",
+        "LSD-31"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "norm_verification",
+      "rationale": "Normative verification.",
+      "additional_observations": [
+        {
+          "surface": "routing_stage_scope_map",
+          "source_declaration_id": "LSD-14",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 52
+        },
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 1129
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 3251
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:CENTRAL_ONLY_STAGES@52-57",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 53
+        },
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 268
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 53
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 88
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 1873
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253-264",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 260
+        },
+        {
+          "surface": "pipeline_execution_order",
+          "source_declaration_id": "LSD-09",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:ocr_stages@3688-3698",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 3694
+        },
+        {
+          "surface": "concurrency_gate_set",
+          "source_declaration_id": "LSD-31",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/norms/runner.py:norm_stages@313",
+          "evidence_literal": "AuditStage.NORM_VERIFY",
+          "evidence_line": 313
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 591
+        },
+        {
+          "surface": "public_skip_api",
+          "source_declaration_id": "LSD-07",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157-1158",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 1157
+        },
+        {
+          "surface": "routing_plan_order",
+          "source_declaration_id": "LSD-15",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:stages@690-702",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 696
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 44
+        },
+        {
+          "surface": "remote_runner_exclusion_set",
+          "source_declaration_id": "LSD-19",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/remote_audit_runner.py:FORBIDDEN_STAGES@30",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 30
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "norm_verify:",
+          "evidence_line": 3055
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"norm_verify\"",
+          "evidence_line": 2194
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "norm_fix",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"norm_fix\"",
+      "evidence_line": 15,
+      "observed_surfaces": [
+        "concurrency_gate_set",
+        "model_routing_config",
+        "model_validation_subset",
+        "persisted_stage_enum",
+        "routing_plan_order",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-02",
+        "LSD-03",
+        "LSD-14",
+        "LSD-15",
+        "LSD-16",
+        "LSD-17",
+        "LSD-24",
+        "LSD-31"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "norm_verification",
+      "rationale": "Normative fix; the routing compiler already maps it onto pipeline stage norm_verify, and the registry collapses verify and fix into one canonical stage.",
+      "additional_observations": [
+        {
+          "surface": "routing_stage_scope_map",
+          "source_declaration_id": "LSD-14",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+          "evidence_literal": "\"norm_fix\"",
+          "evidence_line": 53
+        },
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"norm_fix\"",
+          "evidence_line": 269
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"norm_fix\"",
+          "evidence_line": 54
+        },
+        {
+          "surface": "concurrency_gate_set",
+          "source_declaration_id": "LSD-31",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/stages/norms/runner.py:norm_stages@313",
+          "evidence_literal": "AuditStage.NORM_FIX",
+          "evidence_line": 313
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"norm_fix\"",
+          "evidence_line": 592
+        },
+        {
+          "surface": "routing_plan_order",
+          "source_declaration_id": "LSD-15",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:stages@690-702",
+          "evidence_literal": "\"norm_fix\"",
+          "evidence_line": 697
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"norm_fix\"",
+          "evidence_line": 45
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "norm_fix:",
+          "evidence_line": 3056
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "norm_requote",
+      "surface": "routing_stage_scope_map",
+      "source_declaration_id": "LSD-14",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+      "evidence_literal": "\"norm_requote\"",
+      "evidence_line": 54,
+      "observed_surfaces": [
+        "model_routing_config",
+        "model_validation_subset",
+        "public_retry_api",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-02",
+        "LSD-03",
+        "LSD-06",
+        "LSD-14",
+        "LSD-16",
+        "LSD-17",
+        "LSD-24"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "norm_verification",
+      "rationale": "Normative requote; the routing compiler maps it onto pipeline stage norm_verify.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"norm_requote\"",
+          "evidence_line": 1129
+        },
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"norm_requote\"",
+          "evidence_line": 270
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"norm_requote\"",
+          "evidence_line": 55
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"norm_requote\"",
+          "evidence_line": 593
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"norm_requote\"",
+          "evidence_line": 46
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "norm_requote:",
+          "evidence_line": 3057
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "norms_verified",
+      "surface": "resume_alias_vocabulary",
+      "source_declaration_id": "LSD-08",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+      "evidence_literal": "\"norms_verified\"",
+      "evidence_line": 3251,
+      "observed_surfaces": [
+        "resume_alias_vocabulary",
+        "ui_artifact_alias"
+      ],
+      "observed_declaration_ids": [
+        "LSD-08",
+        "LSD-25"
+      ],
+      "resolution": "canonical_stage",
+      "canonical_stage_id": "norm_verification",
+      "rationale": "Artifact-derived alias accepted by the resume normalizer and the UI artifact alias list.",
+      "additional_observations": [
+        {
+          "surface": "ui_artifact_alias",
+          "source_declaration_id": "LSD-25",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:STAGES@2837",
+          "evidence_literal": "'norms_verified'",
+          "evidence_line": 2837
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "debt_control",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"debt_control\"",
+      "evidence_line": 16,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "persisted_stage_enum",
+        "pipeline_execution_order",
+        "project_status_order",
+        "public_retry_api",
+        "remote_eligibility_set",
+        "remote_runner_exclusion_set",
+        "resume_alias_vocabulary",
+        "routing_validation_set"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-06",
+        "LSD-08",
+        "LSD-09",
+        "LSD-13",
+        "LSD-17",
+        "LSD-18",
+        "LSD-19",
+        "LSD-29"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-04",
+      "rationale": "Cross-version debt control consumes prior expert verdicts; it belongs to the expert-decision boundary.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"debt_control\"",
+          "evidence_line": 1117
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"debt_control\"",
+          "evidence_line": 3257
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:CENTRAL_ONLY_STAGES@52-57",
+          "evidence_literal": "\"debt_control\"",
+          "evidence_line": 54
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"debt_control\"",
+          "evidence_line": 1877
+        },
+        {
+          "surface": "pipeline_execution_order",
+          "source_declaration_id": "LSD-09",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:ocr_stages@3688-3698",
+          "evidence_literal": "\"debt_control\"",
+          "evidence_line": 3695
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:CENTER_ONLY_PIPELINE_STAGES@55-60",
+          "evidence_literal": "\"debt_control\"",
+          "evidence_line": 57
+        },
+        {
+          "surface": "remote_runner_exclusion_set",
+          "source_declaration_id": "LSD-19",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/remote_audit_runner.py:FORBIDDEN_STAGES@30",
+          "evidence_literal": "\"debt_control\"",
+          "evidence_line": 30
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"debt_control\"",
+          "evidence_line": 2198
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "decision_carryover",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"decision_carryover\"",
+      "evidence_line": 17,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "persisted_stage_enum",
+        "pipeline_execution_order",
+        "project_status_order",
+        "public_retry_api",
+        "remote_eligibility_set",
+        "remote_runner_exclusion_set",
+        "resume_alias_vocabulary",
+        "routing_validation_set"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-06",
+        "LSD-08",
+        "LSD-09",
+        "LSD-13",
+        "LSD-17",
+        "LSD-18",
+        "LSD-19",
+        "LSD-29"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-04",
+      "rationale": "Carryover of prior expert verdicts belongs to the expert-decision boundary.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"decision_carryover\"",
+          "evidence_line": 1118
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"decision_carryover\"",
+          "evidence_line": 3258
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:CENTRAL_ONLY_STAGES@52-57",
+          "evidence_literal": "\"decision_carryover\"",
+          "evidence_line": 55
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"decision_carryover\"",
+          "evidence_line": 1878
+        },
+        {
+          "surface": "pipeline_execution_order",
+          "source_declaration_id": "LSD-09",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:ocr_stages@3688-3698",
+          "evidence_literal": "\"decision_carryover\"",
+          "evidence_line": 3696
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:CENTER_ONLY_PIPELINE_STAGES@55-60",
+          "evidence_literal": "\"decision_carryover\"",
+          "evidence_line": 58
+        },
+        {
+          "surface": "remote_runner_exclusion_set",
+          "source_declaration_id": "LSD-19",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/remote_audit_runner.py:FORBIDDEN_STAGES@30",
+          "evidence_literal": "\"decision_carryover\"",
+          "evidence_line": 30
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"decision_carryover\"",
+          "evidence_line": 2199
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "excel",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"excel\"",
+      "evidence_line": 18,
+      "observed_surfaces": [
+        "audit_log_status_order",
+        "persisted_stage_enum",
+        "pipeline_execution_order",
+        "project_status_order",
+        "public_skip_api",
+        "remote_eligibility_set",
+        "remote_runner_exclusion_set",
+        "resume_alias_vocabulary",
+        "routing_validation_set",
+        "runtime_orchestration_body"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-07",
+        "LSD-08",
+        "LSD-09",
+        "LSD-10",
+        "LSD-12",
+        "LSD-13",
+        "LSD-17",
+        "LSD-18",
+        "LSD-19"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-03",
+      "rationale": "Excel report generation is publication/export, which happens outside the analysis engine after validation.",
+      "additional_observations": [
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"excel\"",
+          "evidence_line": 3258
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:CENTRAL_ONLY_STAGES@52-57",
+          "evidence_literal": "\"excel\"",
+          "evidence_line": 56
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"excel\"",
+          "evidence_line": 92
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"excel\"",
+          "evidence_line": 1879
+        },
+        {
+          "surface": "pipeline_execution_order",
+          "source_declaration_id": "LSD-09",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:ocr_stages@3688-3698",
+          "evidence_literal": "\"excel\"",
+          "evidence_line": 3697
+        },
+        {
+          "surface": "public_skip_api",
+          "source_declaration_id": "LSD-07",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157-1158",
+          "evidence_literal": "\"excel\"",
+          "evidence_line": 1157
+        },
+        {
+          "surface": "runtime_orchestration_body",
+          "source_declaration_id": "LSD-10",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_run_ocr_pipeline@5346-5607",
+          "evidence_literal": "AuditStage.EXCEL",
+          "evidence_line": 5558
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:CENTER_ONLY_PIPELINE_STAGES@55-60",
+          "evidence_literal": "\"excel\"",
+          "evidence_line": 59
+        },
+        {
+          "surface": "remote_runner_exclusion_set",
+          "source_declaration_id": "LSD-19",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/remote_audit_runner.py:FORBIDDEN_STAGES@30",
+          "evidence_literal": "\"excel\"",
+          "evidence_line": 30
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "optimization",
+      "surface": "persisted_stage_enum",
+      "source_declaration_id": "LSD-01",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/audit.py:AuditStage@8-27",
+      "evidence_literal": "\"optimization\"",
+      "evidence_line": 19,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "failure_recovery_order",
+        "global_prompt_template_whitelist",
+        "model_routing_config",
+        "model_validation_subset",
+        "persisted_stage_enum",
+        "project_prompt_whitelist",
+        "project_status_order",
+        "provider_requirement_set",
+        "public_retry_api",
+        "remote_eligibility_set",
+        "resume_alias_vocabulary",
+        "routing_plan_order",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "ui_artifact_alias",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-01",
+        "LSD-02",
+        "LSD-03",
+        "LSD-04",
+        "LSD-05",
+        "LSD-06",
+        "LSD-08",
+        "LSD-11",
+        "LSD-12",
+        "LSD-13",
+        "LSD-14",
+        "LSD-15",
+        "LSD-16",
+        "LSD-17",
+        "LSD-18",
+        "LSD-20",
+        "LSD-24",
+        "LSD-25",
+        "LSD-29"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-11",
+      "rationale": "Optimization proposal generation is a separate product capability with its own sub-pipeline; it is not an audit analysis stage.",
+      "additional_observations": [
+        {
+          "surface": "routing_stage_scope_map",
+          "source_declaration_id": "LSD-14",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 55
+        },
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 1132
+        },
+        {
+          "surface": "resume_alias_vocabulary",
+          "source_declaration_id": "LSD-08",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 3257
+        },
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:REMOTE_AUDIT_PILOT_STAGES@39-49",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 47
+        },
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 271
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 56
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 89
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 1874
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253-264",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 261
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 594
+        },
+        {
+          "surface": "global_prompt_template_whitelist",
+          "source_declaration_id": "LSD-04",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@618",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 618
+        },
+        {
+          "surface": "project_prompt_whitelist",
+          "source_declaration_id": "LSD-05",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@841",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 841
+        },
+        {
+          "surface": "routing_plan_order",
+          "source_declaration_id": "LSD-15",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:stages@690-702",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 699
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 47
+        },
+        {
+          "surface": "provider_requirement_set",
+          "source_declaration_id": "LSD-20",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/provider_requirement.py:AUDIT_MODEL_STAGES@72-80",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 77
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "optimization:",
+          "evidence_line": 3058
+        },
+        {
+          "surface": "ui_artifact_alias",
+          "source_declaration_id": "LSD-25",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:STAGES@2837",
+          "evidence_literal": "'optimization'",
+          "evidence_line": 2837
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"optimization\"",
+          "evidence_line": 2195
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "optimization_critic",
+      "surface": "routing_stage_scope_map",
+      "source_declaration_id": "LSD-14",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+      "evidence_literal": "\"optimization_critic\"",
+      "evidence_line": 56,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "failure_recovery_order",
+        "model_routing_config",
+        "model_validation_subset",
+        "project_status_order",
+        "provider_requirement_set",
+        "public_retry_api",
+        "routing_plan_order",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-02",
+        "LSD-03",
+        "LSD-06",
+        "LSD-11",
+        "LSD-12",
+        "LSD-13",
+        "LSD-14",
+        "LSD-15",
+        "LSD-16",
+        "LSD-17",
+        "LSD-20",
+        "LSD-24",
+        "LSD-29"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-11",
+      "rationale": "Critic pass over optimization proposals; same boundary as optimization.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 1135
+        },
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 272
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 57
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 90
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 1875
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253-264",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 262
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 595
+        },
+        {
+          "surface": "routing_plan_order",
+          "source_declaration_id": "LSD-15",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:stages@690-702",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 700
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 48
+        },
+        {
+          "surface": "provider_requirement_set",
+          "source_declaration_id": "LSD-20",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/provider_requirement.py:AUDIT_MODEL_STAGES@72-80",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 78
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "optimization_critic:",
+          "evidence_line": 3059
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"optimization_critic\"",
+          "evidence_line": 2196
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "optimization_corrector",
+      "surface": "routing_stage_scope_map",
+      "source_declaration_id": "LSD-14",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:PIPELINE_STAGE_OF@46-58",
+      "evidence_literal": "\"optimization_corrector\"",
+      "evidence_line": 57,
+      "observed_surfaces": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "failure_recovery_order",
+        "model_routing_config",
+        "model_validation_subset",
+        "project_status_order",
+        "provider_requirement_set",
+        "public_retry_api",
+        "routing_plan_order",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "ui_stage_model_config"
+      ],
+      "observed_declaration_ids": [
+        "LSD-02",
+        "LSD-03",
+        "LSD-06",
+        "LSD-11",
+        "LSD-12",
+        "LSD-13",
+        "LSD-14",
+        "LSD-15",
+        "LSD-16",
+        "LSD-17",
+        "LSD-20",
+        "LSD-24",
+        "LSD-29"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-11",
+      "rationale": "Corrector pass over optimization proposals; same boundary as optimization.",
+      "additional_observations": [
+        {
+          "surface": "public_retry_api",
+          "source_declaration_id": "LSD-06",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107-1139",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 1135
+        },
+        {
+          "surface": "model_routing_config",
+          "source_declaration_id": "LSD-02",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:_stage_models@262-274",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 273
+        },
+        {
+          "surface": "routing_preset_vocabulary",
+          "source_declaration_id": "LSD-16",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/presets.py:STAGE_MODEL_KEYS@47-58",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 58
+        },
+        {
+          "surface": "audit_log_status_order",
+          "source_declaration_id": "LSD-12",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/audit_logger.py:_PIPELINE_STAGE_ORDER_KEYS@79-93",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 91
+        },
+        {
+          "surface": "project_status_order",
+          "source_declaration_id": "LSD-13",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ORDER@1864-1880",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 1876
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253-264",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 263
+        },
+        {
+          "surface": "model_validation_subset",
+          "source_declaration_id": "LSD-03",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/core/config.py:CRITICAL_STAGE_MODEL_STAGES@585-597",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 596
+        },
+        {
+          "surface": "routing_plan_order",
+          "source_declaration_id": "LSD-15",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/compiler.py:stages@690-702",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 701
+        },
+        {
+          "surface": "routing_validation_set",
+          "source_declaration_id": "LSD-17",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/audit_routing/validator.py:MANDATORY_STAGES@38-50",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 49
+        },
+        {
+          "surface": "provider_requirement_set",
+          "source_declaration_id": "LSD-20",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/distributed_workers/provider_requirement.py:AUDIT_MODEL_STAGES@72-80",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 79
+        },
+        {
+          "surface": "ui_stage_model_config",
+          "source_declaration_id": "LSD-24",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/app.js:BASE_STAGE_MODEL_CONFIG@3049-3061",
+          "evidence_literal": "optimization_corrector:",
+          "evidence_line": 3060
+        },
+        {
+          "surface": "artifact_presence_map",
+          "source_declaration_id": "LSD-29",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/common/project_service.py:_PIPELINE_STAGE_ARTIFACTS@2185-2200",
+          "evidence_literal": "\"optimization_corrector\"",
+          "evidence_line": 2197
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "optimization_review",
+      "surface": "resume_alias_vocabulary",
+      "source_declaration_id": "LSD-08",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/manager.py:_normalize_ocr_stage@3243-3259",
+      "evidence_literal": "\"optimization_review\"",
+      "evidence_line": 3257,
+      "observed_surfaces": [
+        "failure_recovery_order",
+        "remote_eligibility_set",
+        "resume_alias_vocabulary"
+      ],
+      "observed_declaration_ids": [
+        "LSD-08",
+        "LSD-11",
+        "LSD-18"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-11",
+      "rationale": "Resume/eligibility name covering the optimization critic and corrector legs; same boundary as optimization.",
+      "additional_observations": [
+        {
+          "surface": "remote_eligibility_set",
+          "source_declaration_id": "LSD-18",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/models/distributed_workers.py:REMOTE_AUDIT_PILOT_STAGES@39-49",
+          "evidence_literal": "\"optimization_review\"",
+          "evidence_line": 48
+        },
+        {
+          "surface": "failure_recovery_order",
+          "source_declaration_id": "LSD-11",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/pipeline/resume_detector.py:stage_order@253-264",
+          "evidence_literal": "\"optimization_review\"",
+          "evidence_line": 262
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "collect",
+      "surface": "sub_pipeline_stage_list",
+      "source_declaration_id": "LSD-21",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_pipeline_service.py:_STAGES@34-41",
+      "evidence_literal": "\"collect\"",
+      "evidence_line": 35,
+      "observed_surfaces": [
+        "sub_pipeline_stage_list"
+      ],
+      "observed_declaration_ids": [
+        "LSD-21"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-05",
+      "rationale": "Section-optimization substage."
+    },
+    {
+      "legacy_stage_name": "normalize",
+      "surface": "sub_pipeline_stage_list",
+      "source_declaration_id": "LSD-21",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_pipeline_service.py:_STAGES@34-41",
+      "evidence_literal": "\"normalize\"",
+      "evidence_line": 36,
+      "observed_surfaces": [
+        "sub_pipeline_stage_list"
+      ],
+      "observed_declaration_ids": [
+        "LSD-21"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-05",
+      "rationale": "Section-optimization substage."
+    },
+    {
+      "legacy_stage_name": "synthesize",
+      "surface": "sub_pipeline_stage_list",
+      "source_declaration_id": "LSD-21",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_pipeline_service.py:_STAGES@34-41",
+      "evidence_literal": "\"synthesize\"",
+      "evidence_line": 37,
+      "observed_surfaces": [
+        "sub_pipeline_stage_list"
+      ],
+      "observed_declaration_ids": [
+        "LSD-21"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-05",
+      "rationale": "Section-optimization substage."
+    },
+    {
+      "legacy_stage_name": "agent",
+      "surface": "sub_pipeline_stage_list",
+      "source_declaration_id": "LSD-21",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_pipeline_service.py:_STAGES@34-41",
+      "evidence_literal": "\"agent\"",
+      "evidence_line": 38,
+      "observed_surfaces": [
+        "sub_pipeline_stage_list"
+      ],
+      "observed_declaration_ids": [
+        "LSD-21",
+        "LSD-22"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-05",
+      "rationale": "Section-optimization and replication substage.",
+      "additional_observations": [
+        {
+          "surface": "sub_pipeline_stage_list",
+          "source_declaration_id": "LSD-22",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_replication_service.py:_STAGES@45-51",
+          "evidence_literal": "\"agent\"",
+          "evidence_line": 48
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "review",
+      "surface": "sub_pipeline_stage_list",
+      "source_declaration_id": "LSD-21",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_pipeline_service.py:_STAGES@34-41",
+      "evidence_literal": "\"review\"",
+      "evidence_line": 40,
+      "observed_surfaces": [
+        "sub_pipeline_stage_list"
+      ],
+      "observed_declaration_ids": [
+        "LSD-21"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-05",
+      "rationale": "Section-optimization expert substage."
+    },
+    {
+      "legacy_stage_name": "validate",
+      "surface": "sub_pipeline_stage_list",
+      "source_declaration_id": "LSD-22",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_replication_service.py:_STAGES@45-51",
+      "evidence_literal": "\"validate\"",
+      "evidence_line": 46,
+      "observed_surfaces": [
+        "sub_pipeline_stage_list"
+      ],
+      "observed_declaration_ids": [
+        "LSD-22"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-05",
+      "rationale": "Section-replication substage."
+    },
+    {
+      "legacy_stage_name": "package",
+      "surface": "sub_pipeline_stage_list",
+      "source_declaration_id": "LSD-22",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_replication_service.py:_STAGES@45-51",
+      "evidence_literal": "\"package\"",
+      "evidence_line": 47,
+      "observed_surfaces": [
+        "sub_pipeline_stage_list"
+      ],
+      "observed_declaration_ids": [
+        "LSD-22"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-05",
+      "rationale": "Section-replication substage."
+    },
+    {
+      "legacy_stage_name": "expert",
+      "surface": "sub_pipeline_stage_list",
+      "source_declaration_id": "LSD-22",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_replication_service.py:_STAGES@45-51",
+      "evidence_literal": "\"expert\"",
+      "evidence_line": 50,
+      "observed_surfaces": [
+        "sub_pipeline_stage_list"
+      ],
+      "observed_declaration_ids": [
+        "LSD-22"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-05",
+      "rationale": "Section-replication expert substage."
+    },
+    {
+      "legacy_stage_name": "graphics",
+      "surface": "sub_pipeline_stage_list",
+      "source_declaration_id": "LSD-21",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_pipeline_service.py:_STAGES@34-41",
+      "evidence_literal": "\"graphics\"",
+      "evidence_line": 39,
+      "observed_surfaces": [
+        "sub_pipeline_stage_list"
+      ],
+      "observed_declaration_ids": [
+        "LSD-21",
+        "LSD-22"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-07",
+      "rationale": "The only graphic-related legacy substage names. Graphic/vector comparison is future greenfield scope whose first contractual appearance is W7; no graphic analysis stage is fabricated here.",
+      "additional_observations": [
+        {
+          "surface": "sub_pipeline_stage_list",
+          "source_declaration_id": "LSD-22",
+          "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/section_optimization_replication_service.py:_STAGES@45-51",
+          "evidence_literal": "\"graphics\"",
+          "evidence_line": 49
+        }
+      ]
+    },
+    {
+      "legacy_stage_name": "stage_1",
+      "surface": "comparison_upload_slot",
+      "source_declaration_id": "LSD-23",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/stage_upload.py:VALID_STAGES@27",
+      "evidence_literal": "\"stage_1\"",
+      "evidence_line": 27,
+      "observed_surfaces": [
+        "comparison_upload_slot"
+      ],
+      "observed_declaration_ids": [
+        "LSD-23"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-06",
+      "rationale": "Comparison upload slot, not an audit stage."
+    },
+    {
+      "legacy_stage_name": "stage_2",
+      "surface": "comparison_upload_slot",
+      "source_declaration_id": "LSD-23",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/stage_upload.py:VALID_STAGES@27",
+      "evidence_literal": "\"stage_2\"",
+      "evidence_line": 27,
+      "observed_surfaces": [
+        "comparison_upload_slot"
+      ],
+      "observed_declaration_ids": [
+        "LSD-23"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-06",
+      "rationale": "Comparison upload slot, not an audit stage."
+    },
+    {
+      "legacy_stage_name": "queued",
+      "surface": "ui_task_progress_order",
+      "source_declaration_id": "LSD-26",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/distributed-feature.js:TASK_STAGE_ORDER@20",
+      "evidence_literal": "'queued'",
+      "evidence_line": 20,
+      "observed_surfaces": [
+        "ui_task_progress_order"
+      ],
+      "observed_declaration_ids": [
+        "LSD-26"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-08",
+      "rationale": "Transfer/worker task lifecycle step."
+    },
+    {
+      "legacy_stage_name": "transfer",
+      "surface": "ui_task_progress_order",
+      "source_declaration_id": "LSD-26",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/distributed-feature.js:TASK_STAGE_ORDER@20",
+      "evidence_literal": "'transfer'",
+      "evidence_line": 20,
+      "observed_surfaces": [
+        "ui_task_progress_order"
+      ],
+      "observed_declaration_ids": [
+        "LSD-26"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-08",
+      "rationale": "Transfer/worker task lifecycle step."
+    },
+    {
+      "legacy_stage_name": "preparing",
+      "surface": "ui_task_progress_order",
+      "source_declaration_id": "LSD-26",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/distributed-feature.js:TASK_STAGE_ORDER@20",
+      "evidence_literal": "'preparing'",
+      "evidence_line": 20,
+      "observed_surfaces": [
+        "ui_task_progress_order"
+      ],
+      "observed_declaration_ids": [
+        "LSD-26"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-08",
+      "rationale": "Transfer/worker task lifecycle step."
+    },
+    {
+      "legacy_stage_name": "auditing",
+      "surface": "ui_task_progress_order",
+      "source_declaration_id": "LSD-26",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/distributed-feature.js:TASK_STAGE_ORDER@20",
+      "evidence_literal": "'auditing'",
+      "evidence_line": 20,
+      "observed_surfaces": [
+        "ui_task_progress_order"
+      ],
+      "observed_declaration_ids": [
+        "LSD-26"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-08",
+      "rationale": "Transfer/worker task lifecycle step."
+    },
+    {
+      "legacy_stage_name": "collecting",
+      "surface": "ui_task_progress_order",
+      "source_declaration_id": "LSD-26",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/distributed-feature.js:TASK_STAGE_ORDER@20",
+      "evidence_literal": "'collecting'",
+      "evidence_line": 20,
+      "observed_surfaces": [
+        "ui_task_progress_order"
+      ],
+      "observed_declaration_ids": [
+        "LSD-26"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-08",
+      "rationale": "Transfer/worker task lifecycle step."
+    },
+    {
+      "legacy_stage_name": "returning",
+      "surface": "ui_task_progress_order",
+      "source_declaration_id": "LSD-26",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/distributed-feature.js:TASK_STAGE_ORDER@20",
+      "evidence_literal": "'returning'",
+      "evidence_line": 20,
+      "observed_surfaces": [
+        "ui_task_progress_order"
+      ],
+      "observed_declaration_ids": [
+        "LSD-26"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-08",
+      "rationale": "Transfer/worker task lifecycle step."
+    },
+    {
+      "legacy_stage_name": "importing",
+      "surface": "ui_task_progress_order",
+      "source_declaration_id": "LSD-26",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/distributed-feature.js:TASK_STAGE_ORDER@20",
+      "evidence_literal": "'importing'",
+      "evidence_line": 20,
+      "observed_surfaces": [
+        "ui_task_progress_order"
+      ],
+      "observed_declaration_ids": [
+        "LSD-26"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-08",
+      "rationale": "Transfer/worker task lifecycle step."
+    },
+    {
+      "legacy_stage_name": "done",
+      "surface": "ui_task_progress_order",
+      "source_declaration_id": "LSD-26",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:frontend/static/js/distributed-feature.js:TASK_STAGE_ORDER@20",
+      "evidence_literal": "'done'",
+      "evidence_line": 20,
+      "observed_surfaces": [
+        "ui_task_progress_order"
+      ],
+      "observed_declaration_ids": [
+        "LSD-26"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-08",
+      "rationale": "Transfer/worker task lifecycle terminal step."
+    },
+    {
+      "legacy_stage_name": "project_documentation",
+      "surface": "experimental_document_class_gate",
+      "source_declaration_id": "LSD-27",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/text_analysis/stage_gates.py:module@1-16",
+      "evidence_literal": "`project_documentation`",
+      "evidence_line": 6,
+      "observed_surfaces": [
+        "experimental_document_class_gate"
+      ],
+      "observed_declaration_ids": [
+        "LSD-27"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-09",
+      "rationale": "Experimental document class, module not wired into the runtime."
+    },
+    {
+      "legacy_stage_name": "working_documentation",
+      "surface": "experimental_document_class_gate",
+      "source_declaration_id": "LSD-27",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/text_analysis/stage_gates.py:module@1-16",
+      "evidence_literal": "`working_documentation`",
+      "evidence_line": 7,
+      "observed_surfaces": [
+        "experimental_document_class_gate"
+      ],
+      "observed_declaration_ids": [
+        "LSD-27"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-09",
+      "rationale": "Experimental document class, module not wired into the runtime."
+    },
+    {
+      "legacy_stage_name": "detailing",
+      "surface": "experimental_document_class_gate",
+      "source_declaration_id": "LSD-27",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/text_analysis/stage_gates.py:module@1-16",
+      "evidence_literal": "`detailing`",
+      "evidence_line": 10,
+      "observed_surfaces": [
+        "experimental_document_class_gate"
+      ],
+      "observed_declaration_ids": [
+        "LSD-27"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-09",
+      "rationale": "Experimental document class, module not wired into the runtime."
+    },
+    {
+      "legacy_stage_name": "mixed",
+      "surface": "experimental_document_class_gate",
+      "source_declaration_id": "LSD-27",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/text_analysis/stage_gates.py:module@1-16",
+      "evidence_literal": "`mixed`",
+      "evidence_line": 11,
+      "observed_surfaces": [
+        "experimental_document_class_gate"
+      ],
+      "observed_declaration_ids": [
+        "LSD-27"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-09",
+      "rationale": "Experimental document class, module not wired into the runtime."
+    },
+    {
+      "legacy_stage_name": "unknown",
+      "surface": "experimental_document_class_gate",
+      "source_declaration_id": "LSD-27",
+      "evidence": "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/text_analysis/stage_gates.py:module@1-16",
+      "evidence_literal": "`unknown`",
+      "evidence_line": 13,
+      "observed_surfaces": [
+        "experimental_document_class_gate"
+      ],
+      "observed_declaration_ids": [
+        "LSD-27"
+      ],
+      "resolution": "excluded",
+      "excluded_scope_id": "XS-09",
+      "rationale": "Experimental document class, module not wired into the runtime."
+    }
+  ]
+}

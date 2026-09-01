@@ -2,6 +2,36 @@
 
 Это conceptual model для CP-00. SQL model появляется отдельными contract/migration tasks; здесь намеренно нет ORM.
 
+**Owner decisions recorded 2026-09-01.** Two semantics below were prepared in round 1
+and are now decided in [CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md); the
+dispositions and evidence are in
+[CP00_ARCHITECTURE_REVIEW.md](CP00_ARCHITECTURE_REVIEW.md).
+
+- `PD-01` — **approved with modification**: the `ExpertDecision` ledger is
+  append-only; a correction and a revocation each create a new `decision_id`; a
+  revocation moves the current verdict projection to `pending` and does **not**
+  automatically restore the superseded verdict; history is preserved.
+- `PD-03` — **approved with modification**: `AuditRun`, `Job` and `Attempt` are
+  distinct. A new `AuditRun` is created when a top-level audit/re-audit command is
+  accepted for a frozen set of inputs and configurations; the same idempotency key
+  and payload return the existing Run; changed inputs, an explicit re-audit or a
+  repeat of a terminal Run create a new Run; retry, resume, restart and worker
+  failover create a new `Attempt` of the same `Job`, never a new Run; a terminal Run
+  is never reopened. The attempt-authority capability is named `execution_token`
+  (opaque, equality-only, refreshed per `Attempt`, verified in the publishing
+  transaction).
+  - **Precedence clarification, recorded inside `PD-03` on 2026-09-01** (owner; not a
+    new decision): where the two rules above overlap — a repeat of a Run that is
+    already terminal, under the same idempotency key and the same payload — identical
+    idempotency key and payload **always** return the original Run. A repeat of a
+    terminal Run creates a new Run **only** under a new idempotency key. Neither rule
+    is changed and the terminal Run is reopened on neither branch.
+
+A contract lane carries these modifications with the decision. Nothing here is
+ratified until the CP-00 integration task records acceptance, and nothing that
+depends on the still-open `U-04` (tenant model, IdP, retention TTL, legal hold) may
+be encoded at all.
+
 ## Aggregate ownership
 
 | Context | Authoritative aggregates/entities | Notes |
@@ -46,7 +76,7 @@ AuditRun       business request/result history
        └── Attempt  one concrete execution lease/token
 ```
 
-Rerun may create new Run. Retry normally creates new Attempt for same Job according to retry policy. A stale Attempt cannot publish after fencing token changed.
+Rerun may create new Run. Retry normally creates new Attempt for same Job according to retry policy. A stale Attempt cannot publish after fencing token changed. The exact creation rule is the decided `PD-03` semantics above, including its precedence clarification: the same idempotency key with the same payload always returns the original Run, and a repeat of a terminal Run creates a new Run only under a new idempotency key.
 
 ### DocumentVersion
 

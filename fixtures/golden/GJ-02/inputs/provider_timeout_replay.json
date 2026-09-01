@@ -1,0 +1,30 @@
+{
+  "replay_id": "SYNTH-REPLAY-02",
+  "kind": "deterministic_provider_stub",
+  "scope": "block analysis command-line provider leg",
+  "interactions": [
+    {
+      "interaction_id": "PR-01",
+      "request_digest": "synthetic-block-analysis-request-01",
+      "outcome": "timeout",
+      "elapsed_ms": 200000,
+      "returned": {
+        "ok": false,
+        "error": "provider timeout"
+      }
+    },
+    {
+      "interaction_id": "PR-02",
+      "request_digest": "synthetic-block-analysis-request-02",
+      "outcome": "ok",
+      "elapsed_ms": 1200,
+      "returned": {
+        "ok": true,
+        "findings": []
+      }
+    }
+  ],
+  "review_status": "reviewed_for_sensitive_content",
+  "content_policy": "No provider prompt text, model response text, credential, endpoint secret or account identifier is stored. Only the outcome shape is replayed.",
+  "llm_text_equality_asserted": false
+}

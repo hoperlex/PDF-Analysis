@@ -1,0 +1,25 @@
+{
+  "version_id": "SYNTH-VER-02",
+  "items": [
+    {
+      "item_id": "F-101",
+      "section": "AR",
+      "title": "Synthetic finding one",
+      "severity": "major",
+      "restated_from_hint": "F-001"
+    },
+    {
+      "item_id": "F-102",
+      "section": "AR",
+      "title": "Synthetic finding two, reworded",
+      "severity": "minor",
+      "restated_from_hint": "F-002"
+    },
+    {
+      "item_id": "F-103",
+      "section": "AR",
+      "title": "Synthetic finding new in this version",
+      "severity": "minor"
+    }
+  ]
+}

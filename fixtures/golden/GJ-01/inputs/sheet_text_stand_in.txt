@@ -1,0 +1,6 @@
+SYNTHETIC SHEET TEXT STAND-IN
+Object: SYNTH-OBJ-01
+Sheet: AR-101
+Line 1: Wall type W1, fire rating class 2.
+Line 2: Door D1 opens into corridor C1.
+Line 3: Room schedule reference RS-01.

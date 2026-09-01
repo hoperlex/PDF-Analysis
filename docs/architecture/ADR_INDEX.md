@@ -21,6 +21,30 @@
 | [ADR-0017-contract-waves-and-worktree-ownership](adr/ADR-0017-contract-waves-and-worktree-ownership.md) | accepted bootstrap | Contract waves and worktree-per-task ownership |
 | [ADR-0018-checkpoint-versioning](adr/ADR-0018-checkpoint-versioning.md) | accepted bootstrap | Checkpoint version = tag + frozen contracts + automated + manual evidence |
 
+## CP-00 disposition
+
+Task `W0-ARC-01` recorded a disposition for every ADR above in
+[CP00_ARCHITECTURE_REVIEW.md](CP00_ARCHITECTURE_REVIEW.md) and its machine matrix
+[CP00_ARCHITECTURE_REVIEW.json](CP00_ARCHITECTURE_REVIEW.json). No status in the
+table above was changed by that review and no ADR was added, rewritten or removed.
+
+State after the repository owner recorded `PD-01`–`PD-04` on 2026-09-01:
+
+- `adapt` (ratifiable only with the recorded qualification): ADR-0004, ADR-0007,
+  ADR-0008, ADR-0012, ADR-0013, ADR-0017.
+- `defer` (not ratifiable at CP-00): ADR-0014 only — the tenant model, identity
+  provider, retention TTL matrix and legal-hold authority (`U-04`) remain open.
+- `ratify`: the remaining eleven ADRs.
+- `supersede`: none issued; the owner approved all four decisions, so no baseline ADR
+  was contradicted and no replacement ADR was created.
+
+Owner decisions `PD-01`–`PD-04` are recorded in
+[CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md): `PD-01`, `PD-02` and `PD-03`
+approved with modification, `PD-04` approved. ADR-0012 moved from `defer` to `adapt`
+because `PD-01` was decided. A lane consuming an `adapt` ADR must carry its
+qualification: notably `ADR-0008` is not consumable for a registry freeze until the
+name-level legacy alias map required by the approved `PD-02` exists.
+
 ## Status semantics
 
 `accepted bootstrap` means this package selects the decision as its baseline, but the program still requires the explicit CP-00 ratification task so a coding agent cannot silently treat a supplied/refactoring proposal as owner-approved production policy.

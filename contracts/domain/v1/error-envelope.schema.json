@@ -1,0 +1,501 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auditmanager:domain:error-envelope:v1",
+  "title": "ErrorEnvelope v1",
+  "description": "The single externally visible failure shape. error_code is exactly one of the codes declared in error-codes.json, retryable is pinned to the catalog value for that code, and any undeclared property fails closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "error_code",
+    "message",
+    "correlation_id",
+    "retryable"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "1.0.0-draft.1"
+    },
+    "error_code": {
+      "type": "string",
+      "description": "Exactly the key set of contracts/domain/v1/error-codes.json.",
+      "enum": [
+        "validation_failed",
+        "not_found",
+        "authentication_required",
+        "permission_denied",
+        "conflict",
+        "state_transition_not_allowed",
+        "idempotency_key_reuse",
+        "idempotency_key_in_progress",
+        "idempotency_key_stale",
+        "unsupported_contract_version",
+        "storage_integrity_error",
+        "dependency_unavailable",
+        "required_norm_unavailable",
+        "analysis_input_invalid",
+        "analysis_failed",
+        "partial_result_not_publishable",
+        "cost_budget_exceeded",
+        "stale_attempt",
+        "execution_token_invalid",
+        "internal_error"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "description": "Stable caller-safe sentence. No path, object key, URL, credential, token, prompt, payload, query or stack content.",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "correlation_id": {
+      "type": "string",
+      "description": "Correlates this failure with the durable diagnostic record. It is not an entity identity and authorizes nothing.",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "retryable": {
+      "type": "boolean",
+      "description": "Authoritative retry signal. A caller never infers retryability from the HTTP status or the message text."
+    },
+    "details": {
+      "type": "object",
+      "description": "Optional safe classifiers only. Keys are restricted to the safe_detail_keys declared for the reported code; the forbidden key set is rejected here.",
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$",
+        "not": {
+          "enum": [
+            "api_key",
+            "authority_token",
+            "authorization",
+            "bucket",
+            "credential",
+            "directory",
+            "email",
+            "execution_token",
+            "fencing_token",
+            "file_name",
+            "file_path",
+            "filename",
+            "idempotency_key",
+            "ip",
+            "ip_address",
+            "object_key",
+            "password",
+            "path",
+            "payload",
+            "prompt",
+            "query",
+            "raw_response",
+            "response_body",
+            "s3_key",
+            "secret",
+            "sql",
+            "stack",
+            "stacktrace",
+            "token",
+            "traceback",
+            "uri",
+            "url",
+            "user_email"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "integer",
+          "boolean",
+          "null"
+        ],
+        "maxLength": 256
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "validation_failed"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "not_found"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "authentication_required"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "permission_denied"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "conflict"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "state_transition_not_allowed"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "idempotency_key_reuse"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "idempotency_key_in_progress"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "idempotency_key_stale"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "unsupported_contract_version"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "storage_integrity_error"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "dependency_unavailable"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "required_norm_unavailable"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "analysis_input_invalid"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "analysis_failed"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "partial_result_not_publishable"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "cost_budget_exceeded"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "stale_attempt"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "execution_token_invalid"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "internal_error"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
+}

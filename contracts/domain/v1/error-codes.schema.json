@@ -1,0 +1,631 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auditmanager:domain:error-codes:v1",
+  "title": "DomainErrorCatalog v1",
+  "description": "Validates contracts/domain/v1/error-codes.json. The envelope shape declared here is realised by urn:auditmanager:domain:error-envelope:v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "contract_version",
+    "version",
+    "supersedes",
+    "candidate_revision",
+    "revision_note",
+    "status",
+    "frozen",
+    "deprecated_fields",
+    "envelope",
+    "safety",
+    "internal_mapping",
+    "categories",
+    "codes",
+    "open_owner_decisions",
+    "open_questions",
+    "resolved_questions"
+  ],
+  "properties": {
+    "contract": {
+      "const": "auditmanager.domain.errors"
+    },
+    "contract_version": {
+      "const": "1.0.0-draft.1"
+    },
+    "version": {
+      "const": "1.0.0-draft.1",
+      "deprecated": true,
+      "description": "Deprecated compatibility mirror of contract_version, retained only because scripts/validate_bootstrap.py requires it. Pinned to the same const so the two can never diverge. Consumers read contract_version."
+    },
+    "supersedes": {
+      "const": "1.0.0-draft.0"
+    },
+    "candidate_revision": {
+      "const": 4,
+      "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
+    },
+    "revision_note": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "draft_candidate",
+        "frozen"
+      ]
+    },
+    "frozen": {
+      "const": false
+    },
+    "deprecated_fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "version": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "replaced_by",
+            "status",
+            "reason",
+            "consumer_rule",
+            "removal_gate"
+          ],
+          "properties": {
+            "replaced_by": {
+              "const": "contract_version"
+            },
+            "status": {
+              "const": "deprecated_compatibility_mirror"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "consumer_rule": {
+              "type": "string",
+              "minLength": 1
+            },
+            "removal_gate": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "optional",
+        "schema_ref",
+        "description"
+      ],
+      "properties": {
+        "required": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "enum": [
+              "contract_version",
+              "error_code",
+              "message",
+              "correlation_id",
+              "retryable"
+            ]
+          }
+        },
+        "optional": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "enum": [
+              "details"
+            ]
+          }
+        },
+        "schema_ref": {
+          "const": "urn:auditmanager:domain:error-envelope:v1"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rules",
+        "forbidden_detail_keys",
+        "detail_value_rules"
+      ],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "minItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "forbidden_detail_keys": {
+          "type": "array",
+          "minItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          }
+        },
+        "detail_value_rules": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "internal_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule",
+        "unknown_internal_code",
+        "rules",
+        "resolves",
+        "decided_on",
+        "authority"
+      ],
+      "properties": {
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unknown_internal_code": {
+          "const": "internal_error"
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "resolves": {
+          "const": "OQ-06"
+        },
+        "decided_on": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "categories": {
+      "type": "object",
+      "required": [
+        "authorization",
+        "dependency",
+        "execution",
+        "integrity",
+        "internal",
+        "not_found",
+        "policy",
+        "stale_authority",
+        "state_conflict",
+        "validation"
+      ],
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "codes": {
+      "type": "object",
+      "required": [
+        "analysis_failed",
+        "analysis_input_invalid",
+        "authentication_required",
+        "conflict",
+        "cost_budget_exceeded",
+        "dependency_unavailable",
+        "execution_token_invalid",
+        "idempotency_key_in_progress",
+        "idempotency_key_reuse",
+        "idempotency_key_stale",
+        "internal_error",
+        "not_found",
+        "partial_result_not_publishable",
+        "permission_denied",
+        "required_norm_unavailable",
+        "stale_attempt",
+        "state_transition_not_allowed",
+        "storage_integrity_error",
+        "unsupported_contract_version",
+        "validation_failed"
+      ],
+      "minProperties": 20,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{2,63}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "http",
+          "retryable",
+          "category",
+          "summary",
+          "safe_detail_keys",
+          "evidence"
+        ],
+        "properties": {
+          "http": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "category": {
+            "enum": [
+              "authorization",
+              "dependency",
+              "execution",
+              "integrity",
+              "internal",
+              "not_found",
+              "policy",
+              "stale_authority",
+              "state_conflict",
+              "validation"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "safe_detail_keys": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 16,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "not": {
+                "enum": [
+                  "api_key",
+                  "authority_token",
+                  "authorization",
+                  "bucket",
+                  "credential",
+                  "directory",
+                  "email",
+                  "execution_token",
+                  "fencing_token",
+                  "file_name",
+                  "file_path",
+                  "filename",
+                  "idempotency_key",
+                  "ip",
+                  "ip_address",
+                  "object_key",
+                  "password",
+                  "path",
+                  "payload",
+                  "prompt",
+                  "query",
+                  "raw_response",
+                  "response_body",
+                  "s3_key",
+                  "secret",
+                  "sql",
+                  "stack",
+                  "stacktrace",
+                  "token",
+                  "traceback",
+                  "uri",
+                  "url",
+                  "user_email"
+                ]
+              }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "decision_dependency": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04"
+            ]
+          },
+          "notes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "open_owner_decisions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Owner-decision register. Every PD entry this contract depends on is listed with its recorded disposition; an entry never silently disappears.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "statement",
+          "affects"
+        ],
+        "properties": {
+          "id": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04",
+              "OPEN-RETENTION"
+            ]
+          },
+          "external_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "pending_owner_approval",
+              "approved",
+              "approved_with_modification",
+              "rejected",
+              "not_decided"
+            ]
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "modification": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decided_on": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resolves": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^OQ-[0-9]{2}$"
+            }
+          },
+          "gate": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "approved",
+                    "approved_with_modification",
+                    "rejected"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "decided_on",
+                "authority"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "approved_with_modification"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "modification"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "not_decided",
+                    "pending_owner_approval"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "gate"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Questions still open in this catalog. Each names its owning slot and the gate that must close it; an empty array means this catalog has none.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "question",
+          "affects",
+          "owning_slot",
+          "gate"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^OQ-[0-9]{2}$"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "deferred"
+            ]
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "owning_slot": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gate": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "resolved_questions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Questions this catalog previously carried as open and that now have a recorded resolution. Entries are retained so a closed question cannot silently reappear as an assumption.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "question",
+          "resolution",
+          "affects",
+          "decided_on",
+          "authority"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^OQ-[0-9]{2}$"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resolution": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "decision_ref": {
+            "enum": [
+              "PD-01",
+              "PD-02",
+              "PD-03",
+              "PD-04"
+            ]
+          },
+          "decided_on": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

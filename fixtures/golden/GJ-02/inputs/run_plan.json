@@ -1,0 +1,148 @@
+{
+  "run_label": "SYNTH-RUN-02",
+  "project_id": "SYNTH-PRJ-02",
+  "version_id": "SYNTH-VER-02",
+  "pipeline_variants": [
+    {
+      "variant_id": "PV-text-first",
+      "order": [
+        "prepare",
+        "crop_blocks",
+        "text_analysis",
+        "block_analysis",
+        "findings_merge",
+        "review",
+        "norm_verify",
+        "excel"
+      ]
+    },
+    {
+      "variant_id": "PV-block-first",
+      "order": [
+        "prepare",
+        "crop_blocks",
+        "block_analysis",
+        "text_analysis",
+        "findings_merge",
+        "review",
+        "norm_verify",
+        "excel"
+      ]
+    }
+  ],
+  "interruption_points": [
+    {
+      "point_id": "IP-01",
+      "after_stage": "crop_blocks",
+      "operator_action": "resume"
+    },
+    {
+      "point_id": "IP-02",
+      "after_stage": "text_analysis",
+      "operator_action": "retry"
+    },
+    {
+      "point_id": "IP-03",
+      "after_stage": "block_analysis",
+      "operator_action": "skip"
+    },
+    {
+      "point_id": "IP-04",
+      "after_stage": "findings_merge",
+      "operator_action": "resume_after_process_restart"
+    }
+  ],
+  "control_requests": [
+    {
+      "request_id": "CR-01",
+      "kind": "retry_stage",
+      "public_stage_name": "text_analysis"
+    },
+    {
+      "request_id": "CR-02",
+      "kind": "retry_stage",
+      "public_stage_name": "unknown_stage_name"
+    },
+    {
+      "request_id": "CR-03",
+      "kind": "skip_stage",
+      "public_stage_name": "block_analysis"
+    },
+    {
+      "request_id": "CR-04",
+      "kind": "skip_stage",
+      "public_stage_name": "decision_carryover",
+      "expected_disposition": "rejected: decision_carryover is a legacy public retry name but is absent from the skip whitelist"
+    },
+    {
+      "request_id": "CR-05",
+      "kind": "skip_stage",
+      "public_stage_name": "findings_merge",
+      "expected_disposition": "accepted by legacy: findings_merge is a member of the legacy skip whitelist, so the request records a skipped pipeline-log entry for that stage"
+    }
+  ],
+  "note": "Stage names are public request vocabulary observed in the legacy retry alias map and skip whitelist; they are not a ratified target stage registry. See stage_name_authority for the namespace, the ownership of name resolution and the explicit legacy-name annotations, and observed_stage_control_vocabularies for the transcribed legacy sets.",
+  "stage_name_authority": {
+    "name_namespace": "legacy_public_stage_name",
+    "applies_to": [
+      "pipeline_variants[].order[]",
+      "interruption_points[].after_stage",
+      "control_requests[].public_stage_name"
+    ],
+    "is_canonical_stage_id": false,
+    "canonical_registry_in_this_fixture": "none",
+    "resolution_owner": "analysis contract lane (name-level legacy stage alias map); this fixture does not resolve names",
+    "owner_decision_ref": "PD-02",
+    "rule": "Every stage string in this file is a legacy public request name observed in the frozen legacy retry alias map, skip whitelist and status computation. None of them is a canonical target stage_id, and this fixture must never be read as declaring one.",
+    "explicit_legacy_names": [
+      {
+        "legacy_public_name": "findings_merge",
+        "observed_as": "public request vocabulary of the legacy retry alias map and skip whitelist",
+        "canonical_stage_id": "unresolved_in_this_fixture",
+        "resolution_note": "Deliberately kept under its legacy spelling. Mapping this legacy public name onto a canonical stage identifier belongs to the versioned target stage registry and its name-level alias map, not to a golden fixture. Renaming it here would silently pre-empt that mapping."
+      }
+    ]
+  },
+  "observed_stage_control_vocabularies": {
+    "skip_whitelist": [
+      "crop_blocks",
+      "text_analysis",
+      "block_analysis",
+      "findings_merge",
+      "norm_verify",
+      "excel",
+      "tile_audit",
+      "main_audit",
+      "prepare"
+    ],
+    "retry_alias_map_keys": [
+      "crop_blocks",
+      "block_context",
+      "gemma_enrichment",
+      "text_analysis",
+      "block_analysis",
+      "findings_merge",
+      "findings_critic",
+      "findings_review",
+      "findings_corrector",
+      "debt_control",
+      "decision_carryover",
+      "prepare",
+      "tile_audit",
+      "main_audit"
+    ],
+    "retry_extra_branches": [
+      "norm_verify",
+      "norm_requote",
+      "optimization",
+      "optimization_critic",
+      "optimization_corrector"
+    ],
+    "note": "Transcribed from the frozen legacy source, not from a target registry. The two vocabularies are not the same set: decision_carryover is retryable and not skippable, and findings_merge is present in both.",
+    "legacy_evidence": [
+      "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:stage_to_pipeline_stage@1107",
+      "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:skip_stage@1153",
+      "32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/audit.py:valid_stages@1157"
+    ]
+  }
+}

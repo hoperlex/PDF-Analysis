@@ -1,0 +1,58 @@
+{
+  "job_id": "SYNTH-JOB-01",
+  "attempt_number": 2,
+  "upload": {
+    "upload_id": "SYNTH-UP-01",
+    "expected_sha256": "0000000000000000000000000000000000000000000000000000000000000042",
+    "total_size": 3145728,
+    "chunks": [
+      {
+        "idx": 0,
+        "sha256": "00000000000000000000000000000000000000000000000000000000000000a0"
+      },
+      {
+        "idx": 1,
+        "sha256": "00000000000000000000000000000000000000000000000000000000000000a1"
+      },
+      {
+        "idx": 2,
+        "sha256": "00000000000000000000000000000000000000000000000000000000000000a2"
+      }
+    ],
+    "resend_chunk_same_hash": {
+      "idx": 1,
+      "sha256": "00000000000000000000000000000000000000000000000000000000000000a1"
+    },
+    "resend_chunk_other_hash": {
+      "idx": 1,
+      "sha256": "00000000000000000000000000000000000000000000000000000000000000ff"
+    }
+  },
+  "members": [
+    {
+      "path_class": "WORKER_GENERATED",
+      "name": "03_findings.json"
+    },
+    {
+      "path_class": "SOURCE_IMMUTABLE",
+      "name": "project_info.json",
+      "present_in_package": false
+    },
+    {
+      "path_class": "CENTRAL_GENERATED",
+      "name": "audit_report.xlsx",
+      "present_in_package": false
+    }
+  ],
+  "replay_variants": [
+    {
+      "variant_id": "RV-same-hash",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000042"
+    },
+    {
+      "variant_id": "RV-other-hash",
+      "sha256": "00000000000000000000000000000000000000000000000000000000000000fe"
+    }
+  ],
+  "note": "Digests are synthetic constants; no real archive is committed."
+}

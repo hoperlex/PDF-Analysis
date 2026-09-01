@@ -1,0 +1,33 @@
+{
+  "pair_id": "SYNTH-PAIR-01",
+  "accepted_links": [
+    {
+      "link_id": "L-01",
+      "left_sheet": "A-01",
+      "right_sheet": "A-01",
+      "confidence": 1.0,
+      "origin": "explicit_reviewer_decision"
+    },
+    {
+      "link_id": "L-02",
+      "left_sheet": "A-02",
+      "right_sheet": "A-02",
+      "confidence": 1.0,
+      "origin": "explicit_reviewer_decision"
+    }
+  ],
+  "repair_suggestion": {
+    "suggestion_id": "R-01",
+    "left_sheet": "A-03",
+    "right_sheet": "A-03",
+    "confidence": 0.97,
+    "origin": "high_confidence_repair"
+  },
+  "low_confidence_suggestion": {
+    "suggestion_id": "R-02",
+    "left_sheet": "A-03",
+    "right_sheet": "A-04",
+    "confidence": 0.41,
+    "origin": "high_confidence_repair"
+  }
+}

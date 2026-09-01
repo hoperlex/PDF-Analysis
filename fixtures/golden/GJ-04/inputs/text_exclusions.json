@@ -1,0 +1,15 @@
+{
+  "pair_id": "SYNTH-PAIR-01",
+  "valid": true,
+  "excluded_regions": [
+    {
+      "region_id": "E-01",
+      "sheet": "A-01",
+      "reason": "title block"
+    }
+  ],
+  "stale_variant": {
+    "valid": true,
+    "declared_source_signature": "synthetic-signature-outdated"
+  }
+}

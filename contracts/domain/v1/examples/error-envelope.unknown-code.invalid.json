@@ -1,0 +1,7 @@
+{
+  "contract_version": "1.0.0-draft.1",
+  "error_code": "decision_deleted",
+  "message": "This code is not declared in error-codes.json, so the envelope is rejected; every other field in this example is valid.",
+  "correlation_id": "corr_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+  "retryable": false
+}

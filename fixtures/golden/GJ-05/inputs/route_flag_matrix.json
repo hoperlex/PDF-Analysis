@@ -1,0 +1,35 @@
+{
+  "configurations": [
+    {
+      "config_id": "CFG-off",
+      "distributed_workers_enabled": false,
+      "portal_auth_enabled": true,
+      "allow_insecure_admin": false
+    },
+    {
+      "config_id": "CFG-on-auth",
+      "distributed_workers_enabled": true,
+      "portal_auth_enabled": true,
+      "allow_insecure_admin": false
+    },
+    {
+      "config_id": "CFG-on-insecure",
+      "distributed_workers_enabled": true,
+      "portal_auth_enabled": false,
+      "allow_insecure_admin": true
+    },
+    {
+      "config_id": "CFG-on-unprotected",
+      "distributed_workers_enabled": true,
+      "portal_auth_enabled": false,
+      "allow_insecure_admin": false
+    }
+  ],
+  "route_classes": [
+    "worker_status",
+    "agent_api",
+    "admin_api",
+    "bootstrap_api"
+  ],
+  "note": "Flags are named as observed configuration switches. No environment file, secret or deployment value is copied."
+}

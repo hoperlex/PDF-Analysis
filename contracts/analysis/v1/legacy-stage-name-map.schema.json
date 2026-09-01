@@ -1,0 +1,315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auditmanager:analysis:legacy-stage-name-map:v1",
+  "title": "LegacyStageNameMap v1",
+  "contract_version": "1.0.0-draft.1",
+  "description": "Name-level legacy alias map required by owner decision PD-02 (approved with modification on 2026-09-01). Its unit is one concrete legacy stage name read from the frozen legacy tree, not a declaration site. Every name carries the surface it is observable on, the legacy-stage-map declaration site it was read from, an immutable evidence locator and either exactly one canonical registry stage or exactly one explicit exclusion. It complements the 31-site legacy-stage-map; it never replaces it and it is never a source of target truth.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "contract_version",
+    "status",
+    "source_inventory_commit",
+    "legacy_source_commit",
+    "site_map_contract",
+    "purpose",
+    "evidence_locator_format",
+    "resolution_kinds",
+    "alias_bearing_declaration_ids",
+    "name_count",
+    "names"
+  ],
+  "properties": {
+    "contract": {
+      "const": "auditmanager.analysis.legacy_stage_name_map"
+    },
+    "contract_version": {
+      "const": "1.0.0-draft.1"
+    },
+    "status": {
+      "const": "candidate"
+    },
+    "source_inventory_commit": {
+      "const": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba"
+    },
+    "legacy_source_commit": {
+      "const": "32b9d903792b30506048a1d42b0e6b2d07aee403"
+    },
+    "site_map_contract": {
+      "const": "auditmanager.analysis.legacy_stage_map"
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_locator_format": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resolution_kinds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_stage",
+        "excluded"
+      ],
+      "properties": {
+        "canonical_stage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "excluded": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "alias_bearing_declaration_ids": {
+      "type": "array",
+      "description": "Every declaration site of the 31-row legacy-stage-map that literally carries at least one stage name. Each entry must be referenced by at least one observation below; that is what makes 'review every alias-bearing declaration site' mechanically checkable.",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/declaration_id"
+      }
+    },
+    "name_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "names": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/name_entry"
+      }
+    }
+  },
+  "$defs": {
+    "declaration_id": {
+      "type": "string",
+      "pattern": "^LSD-(0[1-9]|[12][0-9]|3[01])$"
+    },
+    "stage_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$"
+    },
+    "excluded_scope_id": {
+      "type": "string",
+      "pattern": "^XS-[0-9]{2}$"
+    },
+    "legacy_stage_name": {
+      "type": "string",
+      "description": "The exact legacy name string as it occurs in the frozen legacy tree. Lower-case, digits and underscore only; legacy persisted values such as 01_blocks_analysis may start with a digit.",
+      "pattern": "^[a-z0-9][a-z0-9_]{2,63}$"
+    },
+    "surface": {
+      "description": "Where the legacy name is observable in the legacy system.",
+      "enum": [
+        "artifact_presence_map",
+        "audit_log_status_order",
+        "comparison_upload_slot",
+        "concurrency_gate_set",
+        "experimental_document_class_gate",
+        "failure_recovery_order",
+        "global_prompt_template_whitelist",
+        "model_routing_config",
+        "model_validation_subset",
+        "persisted_stage_enum",
+        "persisted_stage_value_alias",
+        "pipeline_execution_order",
+        "project_prompt_whitelist",
+        "project_status_order",
+        "provider_requirement_set",
+        "public_retry_api",
+        "public_skip_api",
+        "remote_eligibility_set",
+        "remote_runner_exclusion_set",
+        "resume_alias_vocabulary",
+        "routing_plan_order",
+        "routing_preset_vocabulary",
+        "routing_stage_scope_map",
+        "routing_validation_set",
+        "runtime_orchestration_body",
+        "status_alias_table",
+        "sub_pipeline_stage_list",
+        "ui_artifact_alias",
+        "ui_stage_model_config",
+        "ui_task_progress_order"
+      ]
+    },
+    "evidence_locator": {
+      "type": "string",
+      "description": "<legacy_commit>:<path>:<symbol>@<line> or <legacy_commit>:<path>:<symbol>@<start>-<end>. The symbol is the literal source symbol at the start line, except the reserved region markers module and lines. It must resolve with git show at the pinned legacy commit.",
+      "pattern": "^32b9d903792b30506048a1d42b0e6b2d07aee403:[A-Za-z0-9._/-]+:[A-Za-z_][A-Za-z0-9_.]*@[1-9][0-9]*(-[1-9][0-9]*)?$"
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One place where this legacy name is observable, bound to a declaration site of the 31-row site map and to immutable evidence.",
+      "required": [
+        "surface",
+        "source_declaration_id",
+        "evidence",
+        "evidence_literal",
+        "evidence_line"
+      ],
+      "properties": {
+        "surface": {
+          "$ref": "#/$defs/surface"
+        },
+        "source_declaration_id": {
+          "$ref": "#/$defs/declaration_id"
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidence_locator"
+        },
+        "evidence_literal": {
+          "type": "string",
+          "description": "Exact substring occurring inside the anchored evidence region that carries the legacy name.",
+          "minLength": 1
+        },
+        "evidence_line": {
+          "type": "integer",
+          "description": "Line inside the anchored region on which evidence_literal occurs.",
+          "minimum": 1
+        }
+      }
+    },
+    "name_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One concrete legacy stage name with its primary observation, every further observation, and exactly one resolution.",
+      "required": [
+        "legacy_stage_name",
+        "surface",
+        "source_declaration_id",
+        "evidence",
+        "evidence_literal",
+        "evidence_line",
+        "observed_surfaces",
+        "observed_declaration_ids",
+        "resolution",
+        "rationale"
+      ],
+      "properties": {
+        "legacy_stage_name": {
+          "$ref": "#/$defs/legacy_stage_name"
+        },
+        "surface": {
+          "$ref": "#/$defs/surface"
+        },
+        "source_declaration_id": {
+          "$ref": "#/$defs/declaration_id"
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidence_locator"
+        },
+        "evidence_literal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observed_surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/surface"
+          }
+        },
+        "observed_declaration_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/declaration_id"
+          }
+        },
+        "resolution": {
+          "enum": [
+            "canonical_stage",
+            "excluded"
+          ]
+        },
+        "canonical_stage_id": {
+          "$ref": "#/$defs/stage_id"
+        },
+        "also_covers_stage_ids": {
+          "type": "array",
+          "description": "Further canonical stages a coarse legacy name also covered. It records a known legacy-to-target granularity gap; it is never a second resolution and the control plane resolves the name to canonical_stage_id.",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stage_id"
+          }
+        },
+        "excluded_scope_id": {
+          "$ref": "#/$defs/excluded_scope_id"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "additional_observations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/observation"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "resolution"
+            ],
+            "properties": {
+              "resolution": {
+                "const": "canonical_stage"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "canonical_stage_id"
+            ],
+            "not": {
+              "required": [
+                "excluded_scope_id"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "excluded_scope_id"
+            ],
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "canonical_stage_id"
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "required": [
+                    "also_covers_stage_ids"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

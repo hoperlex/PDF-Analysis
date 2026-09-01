@@ -1,14 +1,34 @@
 {
   "contract": "auditmanager.domain.state-machines",
-  "version": "1.0.0-draft.0",
+  "contract_version": "1.0.0-draft.1",
+  "supersedes": "1.0.0-draft.0",
+  "candidate_revision": 4,
+  "revision_note": "Fourth review round of the unreleased 1.0.0-draft.1 candidate. Round 4 corrects one stale statement and changes nothing else. A round-3 integrator note said that the architecture and program ledgers still recorded U-06 as open and that the fail-soft policy of the excluded optimization names therefore had no encoder; that was read from a state the architecture lane has since superseded. U-06 is resolved, and the same owner decision splits FS-04 into three parts, each with an owner, a contract family and a task, so no part of it is without an encoder. This lane owns and encodes exactly one of them, the AuditRun and Job consumer part. The round-3 decision itself is untouched: optional_branch_policy, the six-row decision table, the guards of machines.audit_run and machines.job, the terminal semantics and the schema pins that hold them are exactly those of round 3, so the rule still cannot be weakened or removed without a deliberate edit of both the catalog and its schema. Rounds 1 and 2 are unchanged: no error code, identifier, state, transition or machine was added, removed or renamed, and PD-01 and PD-03 keep the wording the repository owner approved on 2026-09-01. contract_version stays 1.0.0-draft.1 because no 1.0.0-draft.1 artifact was ever committed or frozen; candidate_revision records the review round.",
+  "status": "draft_candidate",
+  "frozen": false,
+  "rules": [
+    "A machine here is the single authoritative definition of its aggregate's lifecycle. Conflicting boolean flags never encode state.",
+    "A transition that is not declared here is rejected with state_transition_not_allowed. There is no permissive default and no silent fallback.",
+    "A terminal state has no outgoing transition. A terminal aggregate is never reopened; the corrective action is a new aggregate with a new identifier.",
+    "Every transition has exactly one authoritative writer and commits inside one transaction; projections and progress channels are derived and never a source of truth.",
+    "A transition that causes an external side effect commits the intent to the transactional outbox in the same transaction; a direct dual write is not allowed.",
+    "Retry is a normal, bounded, error-class-aware path and is modelled explicitly; it is never an implicit re-entry into a terminal state.",
+    "Guard violations name a code from error-codes.json; state_transition_not_allowed is the default violation for any transition that is not declared.",
+    "Publication happens only after schema, checksum and manifest validation and only under current execution authority.",
+    "A new AuditRun exists only where a top-level audit or re-audit command was accepted over a frozen set of inputs and configurations. Retry, resume, restart and worker failover create a new Attempt under the same Job and never a new AuditRun or Job; machines.audit_run.run_creation is the complete rule.",
+    "A repeat of a command with the same idempotency key and the same payload fingerprint returns the aggregate that command already created; it never creates a second one, and a repeat with a different payload fingerprint creates nothing.",
+    "A projection that loses its authoritative event moves to its declared unknown value and never re-instates a superseded value; recovery is a new appended event.",
+    "Where more than one guard row declares the same from/to pair, every row must hold before the transition commits; the row that does not hold names the reported code.",
+    "An optional branch never degrades silently. An unsuccessful outcome of an admitted optional branch is recorded, typed and visible, and it makes the fully successful terminal of the consuming aggregate unavailable; optional_branch_policy is the complete rule and no consumer may treat such a run as complete."
+  ],
+  "default_violation": "state_transition_not_allowed",
   "machines": {
     "import": {
+      "entity": "Import",
+      "identifier": "import_id",
+      "purpose": "One ingest operation that turns submitted source files into an immutable published DocumentVersion.",
+      "authoritative_writer": "Versions & Ingest module command handler",
       "initial": "received",
-      "terminal": [
-        "completed",
-        "rejected",
-        "failed"
-      ],
       "transitions": {
         "received": [
           "validating",
@@ -27,14 +47,93 @@
           "completed",
           "failed"
         ]
-      }
+      },
+      "terminal": [
+        "completed",
+        "rejected",
+        "failed"
+      ],
+      "terminal_semantics": {
+        "completed": {
+          "outcome": "success",
+          "publishes_result": true,
+          "description": "The DocumentVersion is published and immutable. The current-version pointer moves in the same transaction as the publication."
+        },
+        "rejected": {
+          "outcome": "rejected",
+          "publishes_result": false,
+          "description": "The submission was refused before durable input state existed. Nothing was stored as a version and nothing is partially visible."
+        },
+        "failed": {
+          "outcome": "failure",
+          "publishes_result": false,
+          "description": "The operation stopped after acceptance. No partially materialized version is ever published; recovery is a new import_id."
+        }
+      },
+      "guards": [
+        {
+          "from": "received",
+          "to": "validating",
+          "trigger": "ingest command accepted",
+          "guard": "the caller is authorized for the target project and a command record for the idempotency key was created in the same transaction",
+          "on_violation": "permission_denied"
+        },
+        {
+          "from": "received",
+          "to": "rejected",
+          "trigger": "structural validation",
+          "guard": "declared media types, member names and target version ordering are acceptable",
+          "on_violation": "validation_failed"
+        },
+        {
+          "from": "validating",
+          "to": "rejected",
+          "trigger": "content validation",
+          "guard": "no traversal-like member name, unsupported extension, duplicate of an already published version or version-ordering misuse",
+          "on_violation": "validation_failed"
+        },
+        {
+          "from": "validating",
+          "to": "materializing",
+          "trigger": "inputs accepted",
+          "guard": "every referenced blob_id is available and its sha256, size and media type match the declared values",
+          "on_violation": "storage_integrity_error"
+        },
+        {
+          "from": "materializing",
+          "to": "publishing",
+          "trigger": "input manifest complete",
+          "guard": "the immutable input manifest lists every required role",
+          "on_violation": "validation_failed"
+        },
+        {
+          "from": "publishing",
+          "to": "completed",
+          "trigger": "publication commit",
+          "guard": "publication and the current-version pointer move atomically under optimistic concurrency",
+          "on_violation": "conflict"
+        }
+      ],
+      "retry": {
+        "in_place": false,
+        "creates": "a new import_id",
+        "note": "Repeating the original command with the same idempotency key and the same payload fingerprint replays the recorded outcome and never creates a second version."
+      },
+      "evidence": [
+        "WS-02",
+        "WS-03",
+        "inventory section 4 ingest inputs"
+      ],
+      "notes": [
+        "A published DocumentVersion is immutable. A corrected source file creates a new version; it never overwrites the published one."
+      ]
     },
     "blob": {
+      "entity": "Blob",
+      "identifier": "blob_id",
+      "purpose": "Durable content bytes with checksum and media metadata, addressed only by blob_id.",
+      "authoritative_writer": "Storage & Blobs module",
       "initial": "temporary",
-      "terminal": [
-        "rejected",
-        "deleted"
-      ],
       "transitions": {
         "temporary": [
           "verifying",
@@ -45,18 +144,153 @@
           "rejected"
         ],
         "available": [
-          "deleted"
+          "erasure_pending"
+        ],
+        "erasure_pending": [
+          "erased",
+          "available"
         ]
-      }
-    },
-    "run": {
-      "initial": "created",
+      },
       "terminal": [
-        "published",
-        "failed",
-        "cancelled",
-        "partial"
+        "rejected",
+        "erased"
       ],
+      "terminal_semantics": {
+        "rejected": {
+          "outcome": "rejected",
+          "publishes_result": false,
+          "description": "Bytes were refused, either because verification found a checksum, size or media mismatch or because storage reconciliation found an unconfirmed temporary blob. Rejected bytes are never readable by business code and are never referenced by a manifest."
+        },
+        "erased": {
+          "outcome": "erased",
+          "publishes_result": false,
+          "description": "Bytes were destroyed under an approved erasure_request_id. Metadata, checksums and the append-only audit trail are retained. Erasing bytes never deletes decision, finding or audit history."
+        }
+      },
+      "guards": [
+        {
+          "from": "temporary",
+          "to": "verifying",
+          "trigger": "upload or multipart assembly complete",
+          "guard": "all declared parts are present",
+          "on_violation": "validation_failed"
+        },
+        {
+          "from": "temporary",
+          "to": "rejected",
+          "trigger": "storage reconciliation found an unconfirmed temporary blob",
+          "guard": "the blob was never verified and is referenced by no manifest, no DocumentVersion and no result package; the reconciler records the transition as an append-only audit event",
+          "on_violation": "conflict"
+        },
+        {
+          "from": "verifying",
+          "to": "available",
+          "trigger": "verification",
+          "guard": "computed sha256, byte size and media type equal the declared values",
+          "on_violation": "storage_integrity_error"
+        },
+        {
+          "from": "verifying",
+          "to": "rejected",
+          "trigger": "verification failed",
+          "guard": "mismatch is recorded with the expected and actual checksum",
+          "on_violation": "storage_integrity_error"
+        },
+        {
+          "from": "available",
+          "to": "erasure_pending",
+          "trigger": "approved erasure request",
+          "guard": "an authorized, recorded erasure_request_id exists",
+          "on_violation": "permission_denied"
+        },
+        {
+          "from": "erasure_pending",
+          "to": "available",
+          "trigger": "erasure request denied or withdrawn",
+          "guard": "the reversal is recorded as an append-only audit event"
+        },
+        {
+          "from": "erasure_pending",
+          "to": "erased",
+          "trigger": "erasure executed",
+          "guard": "no live manifest still requires the bytes and the erasure is recorded as an append-only audit event",
+          "on_violation": "conflict"
+        }
+      ],
+      "retry": {
+        "in_place": false,
+        "creates": "a new blob_id",
+        "note": "Re-uploading identical content is idempotent by (sha256, size) and never mutates an available blob."
+      },
+      "evidence": [
+        "WS-03",
+        "DW-04",
+        "inventory section 4 stores"
+      ],
+      "notes": [
+        "available bytes are immutable. Content correction creates a new blob_id and a new DocumentVersion; in-place overwrite is not target behavior.",
+        "A blob in temporary is never readable by the business layer and is never referenced by a published manifest. The only declared exits from temporary are verifying and rejected.",
+        "An unconfirmed temporary blob is moved to the terminal rejected state by storage reconciliation. It is never left in temporary indefinitely and never becomes visible by timeout.",
+        "Physical destruction of bytes by reconciliation is permitted only for an object that was never confirmed and is referenced by nothing. A verified, referenced or erasure-governed object is destroyed only through erasure_pending -> erased under an approved erasure_request_id.",
+        "The numeric window after which reconciliation acts is not declared here; it stays under the open OPEN-RETENTION / U-04 owner decision."
+      ]
+    },
+    "audit_run": {
+      "entity": "AuditRun",
+      "identifier": "run_id",
+      "purpose": "The business history of one audit execution request and its published or explicitly partial result.",
+      "authoritative_writer": "Audit Jobs & Runs module command handler",
+      "run_creation": {
+        "rule": "A new AuditRun is created exactly when a top-level audit or re-audit command is accepted for a frozen set of inputs and configurations. Nothing else creates a Run.",
+        "frozen_at_creation": [
+          "the input manifest, meaning the exact version_uid and blob_id set the run reads",
+          "analysis_profile_id",
+          "prompt_bundle_id",
+          "norms_snapshot_id"
+        ],
+        "cases": [
+          {
+            "trigger": "a top-level audit command is accepted and no command record exists for its idempotency key",
+            "effect": "a new run_id is created over the frozen input and configuration set"
+          },
+          {
+            "trigger": "a top-level audit command repeats with the same idempotency key and the same payload fingerprint",
+            "effect": "the existing run_id is returned; no second AuditRun, Job or Attempt is created, whatever state the existing run is in",
+            "reference": "machines.command_idempotency.repeat_semantics"
+          },
+          {
+            "trigger": "a top-level audit command repeats with the same idempotency key and a different payload fingerprint",
+            "effect": "no run is created and no run is changed",
+            "error_code": "idempotency_key_reuse"
+          },
+          {
+            "trigger": "a top-level audit command declares inputs or configuration references that differ from those frozen on an existing run",
+            "effect": "a new run_id is created; an existing run is never re-executed against changed inputs and its frozen set is never edited"
+          },
+          {
+            "trigger": "an explicit re-audit command for the same target",
+            "effect": "a new run_id is created; the earlier run, its observations and its result stay readable and unmodified"
+          },
+          {
+            "trigger": "a top-level audit command is accepted under a new idempotency key for a target whose previous run is terminal",
+            "effect": "a new run_id is created; the terminal run is never reopened and never re-executed"
+          },
+          {
+            "trigger": "retry, resume, restart or worker failover of work that already belongs to a run",
+            "effect": "no new run_id and no new job_id; the same Job creates a new attempt_id whose execution token supersedes the previous one",
+            "reference": "machines.job.retry"
+          },
+          {
+            "trigger": "any request that would move a terminal run back to a non-terminal state",
+            "effect": "refused; the only corrective action is a new top-level command and a new run_id",
+            "error_code": "state_transition_not_allowed"
+          }
+        ],
+        "decision_dependency": "PD-03",
+        "decided_on": "2026-09-01",
+        "authority": "repository owner"
+      },
+      "initial": "created",
       "transitions": {
         "created": [
           "queued",
@@ -70,24 +304,142 @@
         "running": [
           "validating",
           "failed",
-          "cancelled",
-          "partial"
+          "cancelled"
         ],
         "validating": [
           "published",
-          "failed",
-          "partial"
+          "partial",
+          "failed"
         ]
-      }
+      },
+      "terminal": [
+        "published",
+        "partial",
+        "failed",
+        "cancelled"
+      ],
+      "terminal_semantics": {
+        "published": {
+          "outcome": "success",
+          "publishes_result": true,
+          "description": "Every required stage result validated and no admitted optional branch is recorded unsuccessful. Findings, observations and the result manifest become visible together. This terminal is unavailable while optional_branch_policy.branch_status is any_unsuccessful; the run terminates partial instead."
+        },
+        "partial": {
+          "outcome": "partial",
+          "publishes_result": true,
+          "description": "The run finished with an explicitly recorded set of missing or degraded stage results. The partial outcome and its missing set are named in the result; an operation that requires a complete run refuses it with partial_result_not_publishable instead of treating partial as success. An unsuccessful outcome of an admitted optional branch is a member of that recorded set and reaches this terminal through optional_branch_policy.terminal_selection; it never reaches published."
+        },
+        "failed": {
+          "outcome": "failure",
+          "publishes_result": false,
+          "description": "The run terminated without an acceptable result. Nothing is published as if complete and no earlier published run is altered."
+        },
+        "cancelled": {
+          "outcome": "cancelled",
+          "publishes_result": false,
+          "description": "An authorized operator stopped the run before publication. The current Attempt immediately loses publication authority."
+        }
+      },
+      "guards": [
+        {
+          "from": "created",
+          "to": "queued",
+          "trigger": "run scheduled",
+          "guard": "the input manifest and the AnalysisProfile, PromptBundle and NormsSnapshot references resolve to immutable versioned records",
+          "on_violation": "required_norm_unavailable"
+        },
+        {
+          "from": "created",
+          "to": "queued",
+          "trigger": "input validation",
+          "guard": "declared analysis inputs are structurally acceptable",
+          "on_violation": "analysis_input_invalid"
+        },
+        {
+          "from": "queued",
+          "to": "running",
+          "trigger": "execution started",
+          "guard": "a Job exists for this run and its current Attempt holds the current execution token",
+          "on_violation": "execution_token_invalid"
+        },
+        {
+          "from": "running",
+          "to": "validating",
+          "trigger": "all scheduled stage results delivered",
+          "guard": "every delivered result came from the current Attempt",
+          "on_violation": "stale_attempt"
+        },
+        {
+          "from": "validating",
+          "to": "published",
+          "trigger": "result validated",
+          "guard": "result package schema, declared checksums and required artifact roles all validate before any consumer-visible write",
+          "on_violation": "storage_integrity_error"
+        },
+        {
+          "from": "validating",
+          "to": "partial",
+          "trigger": "incomplete but acceptable result",
+          "guard": "the missing or degraded stage set is explicitly recorded and the delivered subset validated",
+          "on_violation": "analysis_input_invalid"
+        },
+        {
+          "from": "validating",
+          "to": "failed",
+          "trigger": "result rejected",
+          "guard": "required outputs are missing and no explicit partial policy applies",
+          "on_violation": "analysis_failed"
+        },
+        {
+          "from": "validating",
+          "to": "published",
+          "trigger": "result validated",
+          "guard": "optional_branch_policy.branch_status is all_successful; an admitted optional branch whose recorded outcome is not successful, or whose outcome was never recorded, makes this transition unavailable and the run takes the terminal that optional_branch_policy.terminal_selection selects",
+          "on_violation": "partial_result_not_publishable"
+        },
+        {
+          "from": "validating",
+          "to": "partial",
+          "trigger": "an admitted optional branch is recorded unsuccessful",
+          "guard": "every admitted optional branch has exactly one recorded outcome entry, every unsuccessful entry names exactly one error code declared in error-codes.json, and the entries belong to the run's recorded degradation set before the run publishes",
+          "on_violation": "validation_failed"
+        }
+      ],
+      "cancellation": {
+        "allowed_from": [
+          "created",
+          "queued",
+          "running"
+        ],
+        "authorized_actor": "an operator authorized for the project",
+        "effect": "The current Attempt loses publication authority at once; a result delivered afterwards is stored as evidence and answered with stale_attempt."
+      },
+      "retry": {
+        "in_place": false,
+        "creates": "a new run_id",
+        "note": "A rerun is a new top-level audit command and allocates a new run_id. It never reopens a terminal run and never rewrites an earlier run's observations. Stage-level retry, resume, restart and worker failover happen inside the Job and Attempt machines and create no Run; run_creation is the complete rule."
+      },
+      "evidence": [
+        "AN-01",
+        "AN-05",
+        "AN-06",
+        "AN-07",
+        "DW-03"
+      ],
+      "decision_dependency": "PD-03",
+      "notes": [
+        "DW-03 records that legacy has no distinct Run entity. This machine is greenfield target semantics and is not a claim of legacy parity.",
+        "Progress, live logs and WebSocket updates are projections of these transitions and never a source of truth.",
+        "PD-03 was approved with modification by the repository owner on 2026-09-01. run_creation is that modification expressed as a rule set, not as prose.",
+        "An unsuccessful optional branch changes only which terminal this machine selects while the run is still in validating. It creates no Run, no Job and no Attempt and never reopens a terminal Run; optional_branch_policy.interaction records that compatibility with PD-03."
+      ]
     },
     "job": {
+      "entity": "Job",
+      "identifier": "job_id",
+      "purpose": "The durable schedulable work item that owns retry policy and the sequence of Attempts for one unit of execution.",
+      "authoritative_writer": "Audit Jobs & Runs module scheduler",
       "initial": "queued",
-      "terminal": [
-        "succeeded",
-        "failed",
-        "cancelled",
-        "dead_letter"
-      ],
       "transitions": {
         "queued": [
           "leased",
@@ -96,7 +448,8 @@
         "leased": [
           "running",
           "queued",
-          "failed"
+          "failed",
+          "cancelled"
         ],
         "running": [
           "succeeded",
@@ -109,16 +462,130 @@
           "dead_letter",
           "cancelled"
         ]
-      }
-    },
-    "attempt": {
-      "initial": "created",
+      },
       "terminal": [
         "succeeded",
         "failed",
-        "superseded",
-        "cancelled"
+        "cancelled",
+        "dead_letter"
       ],
+      "terminal_semantics": {
+        "succeeded": {
+          "outcome": "success",
+          "publishes_result": true,
+          "description": "The current Attempt published a validated result exactly once."
+        },
+        "failed": {
+          "outcome": "failure",
+          "publishes_result": false,
+          "description": "A non-retryable error class terminated the job. Nothing is published."
+        },
+        "cancelled": {
+          "outcome": "cancelled",
+          "publishes_result": false,
+          "description": "An authorized operator cancelled the job."
+        },
+        "dead_letter": {
+          "outcome": "failure",
+          "publishes_result": false,
+          "description": "The bounded retry budget is exhausted or the job is poison. The job stays durable and inspectable and is never silently dropped; resuming the work requires a new job_id."
+        }
+      },
+      "guards": [
+        {
+          "from": "queued",
+          "to": "leased",
+          "trigger": "worker claim accepted",
+          "guard": "at most one active Job per target and, in the same transaction, a Lease and a new Attempt carrying the new current execution token are created",
+          "on_violation": "conflict"
+        },
+        {
+          "from": "leased",
+          "to": "queued",
+          "trigger": "lease expiry or missed heartbeat",
+          "guard": "the Attempt is moved to lost in the same transaction so it can no longer publish",
+          "on_violation": "stale_attempt"
+        },
+        {
+          "from": "leased",
+          "to": "running",
+          "trigger": "attempt reported start",
+          "guard": "the reporting Attempt presents the current execution token",
+          "on_violation": "execution_token_invalid"
+        },
+        {
+          "from": "running",
+          "to": "succeeded",
+          "trigger": "validated result published",
+          "guard": "the publishing Attempt is the current Attempt",
+          "on_violation": "stale_attempt"
+        },
+        {
+          "from": "running",
+          "to": "retry_wait",
+          "trigger": "retryable error class reported",
+          "guard": "the bounded retry budget is not exhausted"
+        },
+        {
+          "from": "running",
+          "to": "failed",
+          "trigger": "non-retryable error class reported",
+          "guard": "the error class is declared non-retryable in the error catalog"
+        },
+        {
+          "from": "retry_wait",
+          "to": "queued",
+          "trigger": "retry admitted",
+          "guard": "the retry budget allows another Attempt"
+        },
+        {
+          "from": "retry_wait",
+          "to": "dead_letter",
+          "trigger": "retry budget exhausted",
+          "guard": "no further Attempt may be created for this Job"
+        },
+        {
+          "from": "running",
+          "to": "succeeded",
+          "trigger": "validated result published",
+          "guard": "the published result declares the audit_run terminal that optional_branch_policy.terminal_selection selects; a result declaring the outcome success while optional_branch_policy.branch_status is any_unsuccessful is refused and never published",
+          "on_violation": "partial_result_not_publishable"
+        }
+      ],
+      "cancellation": {
+        "allowed_from": [
+          "queued",
+          "leased",
+          "running",
+          "retry_wait"
+        ],
+        "authorized_actor": "an operator authorized for the project, or cancellation of the owning AuditRun",
+        "effect": "The current Attempt loses publication authority at once."
+      },
+      "retry": {
+        "in_place": true,
+        "creates": "a new attempt_id whose execution token supersedes the previous one; never a new run_id and never a new job_id",
+        "bounded_by": "an error-class-aware bounded retry budget owned by the jobs policy; the numeric budget and backoff stay deferred as OQ-04 to W4-C-01 / W4-JOB-01 and are deliberately not fixed by this contract",
+        "on_exhaustion": "dead_letter",
+        "note": "Retry, resume, restart and worker failover reuse the same Job and create a new Attempt. None of them creates, reopens or duplicates an AuditRun."
+      },
+      "evidence": [
+        "AN-01",
+        "AN-07",
+        "DW-02",
+        "DW-05"
+      ],
+      "decision_dependency": "PD-03",
+      "notes": [
+        "An unsuccessful optional branch is not a Job failure and not a retryable error class; optional_branch_policy.job_consumer is the complete rule."
+      ]
+    },
+    "attempt": {
+      "entity": "Attempt",
+      "identifier": "attempt_id",
+      "purpose": "One concrete leased execution of a Job by one Worker, and the only place where publication authority exists.",
+      "authoritative_writer": "Audit Jobs & Runs module attempt handler",
+      "initial": "created",
       "transitions": {
         "created": [
           "leased",
@@ -127,15 +594,627 @@
         "leased": [
           "running",
           "superseded",
-          "failed"
+          "lost",
+          "failed",
+          "cancelled"
         ],
         "running": [
           "succeeded",
           "failed",
           "superseded",
+          "lost",
           "cancelled"
         ]
-      }
+      },
+      "terminal": [
+        "succeeded",
+        "failed",
+        "superseded",
+        "lost",
+        "cancelled"
+      ],
+      "terminal_semantics": {
+        "succeeded": {
+          "outcome": "success",
+          "publishes_result": true,
+          "description": "This Attempt held the current execution token and its validated result was published exactly once."
+        },
+        "failed": {
+          "outcome": "failure",
+          "publishes_result": false,
+          "description": "The Attempt reported a typed failure. The Job decides between retry_wait and a terminal failure; the Attempt is not reopened."
+        },
+        "superseded": {
+          "outcome": "superseded",
+          "publishes_result": false,
+          "description": "A newer Attempt for the same Job took authority. Any result this Attempt delivers afterwards is stored as immutable evidence, is never applied to project state and is answered with stale_attempt."
+        },
+        "lost": {
+          "outcome": "lost",
+          "publishes_result": false,
+          "description": "Lease or heartbeat authority expired, or an operator marked the Attempt lost. The same store-only, never-publish rule as superseded applies."
+        },
+        "cancelled": {
+          "outcome": "cancelled",
+          "publishes_result": false,
+          "description": "The owning Job or AuditRun was cancelled. The same store-only, never-publish rule applies."
+        }
+      },
+      "guards": [
+        {
+          "from": "created",
+          "to": "leased",
+          "trigger": "lease issued",
+          "guard": "the Lease and the new current execution token are created in the same transaction as the Attempt",
+          "on_violation": "conflict"
+        },
+        {
+          "from": "leased",
+          "to": "running",
+          "trigger": "execution started",
+          "guard": "the Worker presents the current execution token",
+          "on_violation": "execution_token_invalid"
+        },
+        {
+          "from": "running",
+          "to": "succeeded",
+          "trigger": "result delivered and validated",
+          "guard": "the presented execution token is still the current one and the result package passed schema, checksum and manifest validation inside the publishing transaction",
+          "on_violation": "stale_attempt"
+        },
+        {
+          "from": "leased",
+          "to": "superseded",
+          "trigger": "a newer Attempt was created for the same Job",
+          "guard": "the newer Attempt holds the current execution token"
+        },
+        {
+          "from": "running",
+          "to": "superseded",
+          "trigger": "a newer Attempt was created for the same Job",
+          "guard": "the newer Attempt holds the current execution token"
+        },
+        {
+          "from": "leased",
+          "to": "lost",
+          "trigger": "heartbeat deadline missed or operator marked the Attempt lost",
+          "guard": "the Job releases the lease in the same transaction"
+        },
+        {
+          "from": "running",
+          "to": "lost",
+          "trigger": "heartbeat deadline missed or operator marked the Attempt lost",
+          "guard": "the Job releases the lease in the same transaction"
+        }
+      ],
+      "cancellation": {
+        "allowed_from": [
+          "created",
+          "leased",
+          "running"
+        ],
+        "authorized_actor": "cancellation of the owning Job or AuditRun",
+        "effect": "Publication authority is removed immediately."
+      },
+      "publication_authority": {
+        "rule": "At most one Attempt per Job may publish at any instant: the Attempt in running that presents the current execution token, checked inside the publishing transaction.",
+        "late_delivery": "A result delivered by an Attempt in superseded, lost, cancelled or failed is accepted for storage as immutable evidence, is never applied to project state, and the delivery is answered with stale_attempt.",
+        "evidence": [
+          "DW-02",
+          "DW-04",
+          "DW-05"
+        ],
+        "decision_dependency": "PD-03"
+      },
+      "retry": {
+        "in_place": false,
+        "creates": "a new attempt_id under the same job_id",
+        "note": "An Attempt is never reopened after a terminal state. A new Attempt is the only effect of retry, resume, restart or worker failover; no new run_id and no new job_id is created."
+      },
+      "evidence": [
+        "DW-02",
+        "DW-04",
+        "DW-05"
+      ],
+      "decision_dependency": "PD-03"
+    },
+    "command_idempotency": {
+      "entity": "CommandRecord",
+      "identifier": "command_id",
+      "purpose": "The durable record that makes one externally issued command safe to repeat without creating a duplicate aggregate, version, run or decision.",
+      "authoritative_writer": "the command handler that owns the target aggregate",
+      "initial": "in_progress",
+      "transitions": {
+        "in_progress": [
+          "succeeded",
+          "failed",
+          "abandoned"
+        ]
+      },
+      "terminal": [
+        "succeeded",
+        "failed",
+        "abandoned"
+      ],
+      "terminal_semantics": {
+        "succeeded": {
+          "outcome": "success",
+          "publishes_result": true,
+          "description": "The recorded outcome, including the identifiers the command created, is replayed verbatim for a repeat with the same key and payload fingerprint."
+        },
+        "failed": {
+          "outcome": "failure",
+          "publishes_result": false,
+          "description": "The recorded typed failure is replayed. Obtaining a different outcome requires a new idempotency key, never a silent re-execution under the old one."
+        },
+        "abandoned": {
+          "outcome": "abandoned",
+          "publishes_result": false,
+          "description": "The outcome could not be established after a crash or reconciliation. A repeat fails closed with idempotency_key_stale; the system never re-executes on a guess."
+        }
+      },
+      "guards": [
+        {
+          "from": "in_progress",
+          "to": "succeeded",
+          "trigger": "command transaction committed",
+          "guard": "the outcome is recorded in the same transaction as the business effect",
+          "on_violation": "internal_error"
+        },
+        {
+          "from": "in_progress",
+          "to": "failed",
+          "trigger": "command produced a typed failure",
+          "guard": "the recorded failure is one of the declared error codes"
+        },
+        {
+          "from": "in_progress",
+          "to": "abandoned",
+          "trigger": "reconciliation could not establish the outcome",
+          "guard": "the abandonment is recorded as an append-only audit event"
+        }
+      ],
+      "repeat_semantics": [
+        {
+          "condition": "no record exists for the key",
+          "result": "the command executes and its record is created in the same transaction"
+        },
+        {
+          "condition": "same key, same payload fingerprint, record in_progress",
+          "result": "idempotency_key_in_progress; the caller retries and never re-issues under a new key"
+        },
+        {
+          "condition": "same key, same payload fingerprint, record succeeded",
+          "result": "the recorded outcome is replayed; no second aggregate, version, run, attempt or decision is created"
+        },
+        {
+          "condition": "same key, same payload fingerprint, record failed",
+          "result": "the recorded typed failure is replayed"
+        },
+        {
+          "condition": "same key, same payload fingerprint, record abandoned",
+          "result": "idempotency_key_stale; the request fails closed"
+        },
+        {
+          "condition": "same key, different payload fingerprint, any record state",
+          "result": "idempotency_key_reuse; nothing is created or changed"
+        },
+        {
+          "condition": "the record for the key is no longer available",
+          "result": "idempotency_key_stale; the original outcome cannot be replayed and is not guessed"
+        }
+      ],
+      "retry": {
+        "in_place": false,
+        "creates": "nothing; the record is the retry mechanism itself",
+        "note": "Retrying a command means repeating it with the same idempotency key and the same payload."
+      },
+      "evidence": [
+        "DW-04",
+        "CP-02",
+        "EX-09"
+      ],
+      "notes": [
+        "The retention window for command records is the unresolved OPEN-RETENTION owner decision. idempotency_key_stale is the fail-closed answer once a record is no longer available; no window value is invented here."
+      ]
     }
-  }
+  },
+  "optional_branch_policy": {
+    "id": "FS-04-consumer",
+    "title": "Optional branch outcomes consumed by AuditRun and Job",
+    "owner_decision": {
+      "recorded_on": "2026-09-01",
+      "authority": "repository owner",
+      "statement": "AuditRun and Job act as consumers of an optional branch outcome. An unsuccessful optional branch means an explicit partial and never a full success.",
+      "policy_ref": "FS-04",
+      "part": "3 of 3",
+      "parts_not_owned_here": [
+        {
+          "part": "FS-04-A: norm and core stage terminal semantics",
+          "owner": "the analysis contract owner",
+          "family": "contracts/analysis/v1/**"
+        },
+        {
+          "part": "FS-04-B: project-optimization stage and result semantics",
+          "owner": "the project-optimization contract owner",
+          "family": "contracts/optimization/v1/**"
+        }
+      ],
+      "scope_limit": "This catalog fixes only what a consuming AuditRun or Job must do with an optional branch outcome. It declares no branch stage vocabulary, no branch status vocabulary, no branch package and no branch result semantics, it names the two parts above only to point at their owners, and it claims neither of them."
+    },
+    "definition": {
+      "optional_branch": "A unit of work that an accepted top-level command may admit to an AuditRun and whose absence alone does not make the run's required outputs incomplete. Which branches are optional, and what a branch does internally, is declared by the contract family that owns the branch, never here.",
+      "admitted": "An optional branch is admitted when the accepted command and the run's frozen configuration include it and the run started it. A branch that was never admitted records no outcome, is not a degradation and is not a member of any recorded degradation set.",
+      "consumer": "machines.audit_run and machines.job. Neither ever executes, retries, reclassifies or repairs branch-internal work.",
+      "outcome_values_are_consumer_side": "succeeded, failed and unknown are the consumer classification of a branch outcome. They are not a branch status vocabulary and they do not name, replace or constrain the states any branch declares in its own contract family."
+    },
+    "outcome_values": {
+      "succeeded": {
+        "successful": true,
+        "typed_reason": "forbidden",
+        "description": "The admitted branch delivered what it was admitted for and the delivery validated."
+      },
+      "failed": {
+        "successful": false,
+        "typed_reason": "required",
+        "description": "The admitted branch did not deliver what it was admitted for. Refusal, abort, a skip taken after admission and a degraded or unvalidated artifact are all this one consumer value; any finer classification belongs to the branch's own contract family and is never inferred here."
+      },
+      "unknown": {
+        "successful": false,
+        "typed_reason": "required",
+        "description": "The outcome of an admitted branch could not be established. It is never read as success. This is the same fail-closed rule that machines.command_idempotency applies with abandoned."
+      }
+    },
+    "unrecorded_outcome": {
+      "evaluates_to": "unknown",
+      "rule": "An admitted optional branch with no recorded outcome entry is evaluated as unknown, which is unsuccessful. Absence never evaluates as success, never disappears and is never defaulted away.",
+      "on_violation": "validation_failed"
+    },
+    "recorded_outcome": {
+      "rule": "AuditRun records exactly one outcome entry for every optional branch it admitted, before the run leaves validating. The entries are part of the run's recorded degradation set and are readable by every consumer that may read the run result.",
+      "entry_content": [
+        {
+          "element": "branch_reference",
+          "requirement": "the opaque reference of the admitted optional branch, allocated by the contract family that owns the branch. This catalog declares no identifier for it and adds none to identifiers.json. It is never a path, file name, folder, display name, provider name or ordinal."
+        },
+        {
+          "element": "outcome",
+          "requirement": "exactly one value declared in optional_branch_policy.outcome_values"
+        },
+        {
+          "element": "typed_reason",
+          "requirement": "exactly one error_code declared in contracts/domain/v1/error-codes.json. Required when the outcome value has successful false, forbidden when it has successful true. An internal branch reason this catalog does not declare surfaces as internal_error under error-codes.json internal_mapping; it is never passed through, prefixed or turned into a new code."
+        }
+      ],
+      "wire_shape_owner": "The transport and package shape of the entry belongs to the API family and to the contract family that owns the branch. This catalog fixes that the entry exists, what it must contain, that it is typed and that it is never omitted.",
+      "safety": "The entry obeys the error-codes.json safety rules unchanged: no path, file name, object key, credential, token, prompt, payload or other forbidden detail key, in the entry or in any envelope that reports it.",
+      "on_violation": "validation_failed"
+    },
+    "branch_status": {
+      "derivation": "aggregate over every optional branch the run admitted, evaluated with unrecorded_outcome applied first",
+      "values": {
+        "all_successful": "every admitted optional branch has a recorded outcome whose successful flag is true. A run that admitted no optional branch is all_successful.",
+        "any_unsuccessful": "at least one admitted optional branch has a recorded or evaluated outcome whose successful flag is false"
+      }
+    },
+    "terminal_selection": {
+      "applies_to": "machines.audit_run",
+      "evaluated_at": "the validating state, inside the transaction that commits the terminal transition",
+      "inputs": [
+        "core_terminal",
+        "branch_status"
+      ],
+      "core_terminal": {
+        "meaning": "the audit_run terminal that the core rules alone select for this run, through the existing validating guards and the core and norm part of FS-04",
+        "values": [
+          "published",
+          "partial",
+          "failed"
+        ],
+        "not_owned_here": "How the core terminal is selected is not decided by this policy. This policy is a function of it."
+      },
+      "total": true,
+      "totality_rule": "The table is total over the product of core_terminal and branch_status: six input combinations, six rows, exactly one row per combination, no default branch and no fall-through. A combination that matched no row would be an undeclared transition and is refused with the catalog default_violation.",
+      "monotonicity_rule": "This policy never upgrades a terminal. Its only decision is row 2: it replaces published with partial when an admitted optional branch is unsuccessful. The other five rows restate the terminal the core rules already selected, so that the allowed and forbidden terminal of every combination is derivable from this table alone.",
+      "table": [
+        {
+          "core_terminal": "published",
+          "branch_status": "all_successful",
+          "terminal": "published",
+          "terminal_forbidden": [],
+          "note": "Nothing is degraded. The run publishes."
+        },
+        {
+          "core_terminal": "published",
+          "branch_status": "any_unsuccessful",
+          "terminal": "partial",
+          "terminal_forbidden": [
+            "published"
+          ],
+          "on_violation": "partial_result_not_publishable",
+          "note": "The decision of this policy. The core result is publishable and an admitted optional branch is not successful, so the run terminates partial. published is unavailable: a run may not reach a fully successful terminal while an admitted optional branch is unsuccessful, and failed is not selected either, because an optional branch never by itself fails a run whose core result is publishable."
+        },
+        {
+          "core_terminal": "partial",
+          "branch_status": "all_successful",
+          "terminal": "partial",
+          "terminal_forbidden": [
+            "published"
+          ],
+          "on_violation": "partial_result_not_publishable",
+          "note": "The core rules already selected partial. This policy adds nothing."
+        },
+        {
+          "core_terminal": "partial",
+          "branch_status": "any_unsuccessful",
+          "terminal": "partial",
+          "terminal_forbidden": [
+            "published"
+          ],
+          "on_violation": "partial_result_not_publishable",
+          "note": "Both the core and an optional branch are degraded. The recorded degradation set carries both; the terminal is the same partial."
+        },
+        {
+          "core_terminal": "failed",
+          "branch_status": "all_successful",
+          "terminal": "failed",
+          "terminal_forbidden": [
+            "published",
+            "partial"
+          ],
+          "on_violation": "analysis_failed",
+          "note": "The core rules selected failed. This policy adds nothing."
+        },
+        {
+          "core_terminal": "failed",
+          "branch_status": "any_unsuccessful",
+          "terminal": "failed",
+          "terminal_forbidden": [
+            "published",
+            "partial"
+          ],
+          "on_violation": "analysis_failed",
+          "note": "The core failure decides the terminal. An unsuccessful optional branch never upgrades a failed run to partial and never to published; it is still recorded in the run's degradation set."
+        }
+      ]
+    },
+    "job_consumer": {
+      "applies_to": "machines.job",
+      "role": "The Job publishes the run result under the current Attempt. It consumes the branch outcome and never reclassifies it.",
+      "success_terminal": "succeeded",
+      "published_outcome_forbidden": [
+        "success"
+      ],
+      "rule": "machines.job running -> succeeded requires that the result the current Attempt publishes declares exactly the audit_run terminal that terminal_selection selects. While branch_status is any_unsuccessful, a result declaring the outcome success is refused and never published; the Job publishes the partial result and reaches succeeded on that partial result.",
+      "on_violation": "partial_result_not_publishable",
+      "not_a_job_failure": "An unsuccessful optional branch is not by itself a Job failure. It is not a retryable error class, it does not move the Job to retry_wait, it does not consume the retry budget and it never produces failed or dead_letter, because a Job that never publishes cannot produce the explicit partial this policy requires. Retry inside the branch, before the branch reports an outcome, belongs to the branch's own contract family and is invisible here.",
+      "attempt_unchanged": "machines.attempt is unchanged. Publication authority, stale_attempt and execution_token_invalid are decided by the execution token alone and never by a branch outcome."
+    },
+    "no_silent_degradation": [
+      "An optional branch never degrades silently. Its outcome is recorded on the run before the run reaches a terminal state, an unsuccessful outcome names exactly one declared error code, and the recorded set is visible in the run result to every consumer that may read it.",
+      "No warning artifact, log line, progress event or projection value substitutes for the recorded outcome. Projections are derived and are never a source of truth.",
+      "A consumer that requires a complete run refuses a run whose branch_status is any_unsuccessful with partial_result_not_publishable instead of treating it as complete.",
+      "A missing, malformed or untyped outcome entry is refused with validation_failed. The run does not publish on a guess and does not substitute a default outcome.",
+      "This policy adds no error code, no identifier, no state, no transition and no machine to this family. It reuses partial_result_not_publishable, validation_failed and analysis_failed, all already declared in error-codes.json."
+    ],
+    "interaction": {
+      "PD-03": "Compatible and unchanged. An unsuccessful optional branch changes only which terminal machines.audit_run selects while the run is still in validating. It creates no AuditRun, no Job and no Attempt, it never reopens a terminal Run and it never re-executes one. Recovering an optional branch after a run is terminal is a new top-level command and a new run_id under machines.audit_run.run_creation, exactly like any other rerun.",
+      "partial_semantics": "Compatible and unchanged. terminal_semantics.partial already means an explicitly recorded set of missing or degraded results, with publishes_result true and partial_result_not_publishable for a consumer that needs completeness. This policy adds one further member to that recorded set and changes neither the outcome value, nor publishes_result, nor the code.",
+      "run_creation": "Unchanged. machines.audit_run.run_creation stays the complete rule for when an AuditRun exists.",
+      "cancellation": "Unchanged. machines.audit_run.cancellation is allowed from created, queued and running only, so cancelled is not reachable from validating and is not an outcome this table can select.",
+      "conflicts_found": "None. This policy adds a precondition to an existing terminal transition and a member to an already declared recorded set; it contradicts no rule recorded for PD-01 or PD-03 and changes no accepted state, code or identifier."
+    },
+    "capability_status": {
+      "capability": "project_optimization",
+      "enabled_at_cp_00": false,
+      "runtime_semantics_at_cp_00": "excluded",
+      "statement": "The project-optimization branch is switched off at CP-00 and CP-00 explicitly excludes its runtime semantics. Nothing here declares, enables, schedules or models it. This policy is the consumer contract that AuditRun and Job must already satisfy, written before the capability exists so that it can never be introduced later as a silent success path.",
+      "owning_family": "contracts/optimization/v1/**",
+      "owning_role": "the project-optimization contract owner, who is neither the analysis contract owner nor the domain contract owner",
+      "planned_task": "W5-OPT-01",
+      "gate": "W5-OPT-01 is planned after the core audit freeze and the decision contracts. Until it is accepted the capability stays disabled and no optional optimization branch may be admitted to an AuditRun, so branch_status is all_successful for every run at CP-00 and table row 2 is unreachable in practice while staying binding by contract.",
+      "no_runtime_effect": "Because the capability is disabled, this policy changes no CP-00 runtime behavior. It fixes what a conforming implementation is allowed to do once such a branch exists."
+    },
+    "integrator_notes": [
+      "U-06 is resolved. The repository owner recorded the disposition on 2026-09-01 and the architecture lane holds it in its ledger: project optimization is a separate bounded context whose contract family is contracts/optimization/v1/**, owned by a dedicated OPT contract owner who is neither the analysis nor the domain owner, and carried by the planned task W5-OPT-01 after the core audit freeze and the decision contracts. Until W5-OPT-01 is accepted two obligations bind every lane: the capability stays disabled and no lane models its stage vocabulary, status semantics or packages, and CP-00 explicitly excludes its runtime semantics. capability_status above encodes both as the precondition this catalog depends on.",
+      "The same owner decision splits FS-04 into three owned parts, so no part of it is without an encoder: FS-04-A, the norm and core part, to the analysis lane in contracts/analysis/v1/** under W0-ANA-01; FS-04-B, the optimization stage and result part, to the OPT contract owner in contracts/optimization/v1/** under W5-OPT-01; and FS-04-C, the AuditRun and Job consumer part, to this lane in contracts/domain/v1/** under W0-DOM-01. This catalog is the encoder of FS-04-C and of nothing else.",
+      "The authoritative record of U-06 and of the FS-04 split is the architecture lane ledger, which this lane may not write and does not mirror. The two notes above restate it only far enough to fix this lane's boundary; if they and that ledger ever disagree, the ledger governs and the disagreement is a cross-lane mismatch for the integrator, not a local patch here.",
+      "FS-04-C is encoded here and only here. If another lane encodes the same consumer rule in its own family, the duplicate is a cross-lane mismatch to return to the integrator, not a local patch.",
+      "The identifier PD-05, used by other lanes for the project-optimization split, is not referenced by this catalog. This policy depends on the owner decision itself, not on that lane-assigned number."
+    ]
+  },
+  "non_state_machine_aggregates": {
+    "ExpertDecision": {
+      "identifier": "decision_id",
+      "reason": "An expert decision is an immutable append-only event, not a mutable record, so it has no lifecycle states.",
+      "rules": [
+        "A verdict, a correction and a revocation each append a new event with a new decision_id. An earlier event is never updated, replaced or removed.",
+        "A revocation is an event of its own kind. It withdraws authority from an earlier verdict inside the projection, which then reads pending, and it removes nothing from the ledger. Re-establishing a verdict requires a new decision event appended by an authorized expert; a superseded verdict is never returned automatically.",
+        "The legacy behavior of replacing a matching decision-log entry and deleting on revoke is recorded as legacy evidence in EX-02 and is explicitly not the target behavior of this contract.",
+        "An AI or reverification component may append a recommendation event; it may never append or rewrite a human verdict.",
+        "PD-01 was approved with modification by the repository owner on 2026-09-01: append-only correction and revocation are the target semantics, and revocation leaves the projection at pending."
+      ],
+      "evidence": [
+        "EX-01",
+        "EX-02",
+        "inventory section 7 item 1"
+      ],
+      "authority": "ADR-0012",
+      "decision_dependency": "PD-01"
+    },
+    "FindingObservation": {
+      "identifier": "finding_observation_id",
+      "reason": "A run observation is immutable evidence of what one AuditRun saw; it has no lifecycle beyond being emitted.",
+      "rules": [
+        "An observation belongs to exactly one run_id and is never edited after the run publishes.",
+        "A rerun emits new observations; it never rewrites, renumbers or deletes earlier ones.",
+        "Review state lives on the Finding projection, not on the observation."
+      ],
+      "evidence": [
+        "FD-01",
+        "FD-02",
+        "EX-08"
+      ],
+      "authority": "ADR-0010"
+    },
+    "AuditEvent": {
+      "identifier": "audit_event_id",
+      "reason": "The operational and security audit trail is append-only by construction.",
+      "rules": [
+        "Audit events are never updated or deleted by application code.",
+        "Redaction happens before an event is written, never by rewriting a written event."
+      ],
+      "evidence": [
+        "LO-01"
+      ],
+      "authority": "ARCHITECTURE_BIBLE section 6"
+    },
+    "AnalysisProvenance": {
+      "identifier": "analysis_profile_id",
+      "reason": "AnalysisProfile, PromptBundle, NormsSnapshot and ModelCallRecord are immutable versioned or content-addressed provenance records.",
+      "rules": [
+        "A configuration change creates a new versioned record; it never mutates the record a published run referenced.",
+        "A published run keeps resolving its exact referenced provenance for as long as the run is readable."
+      ],
+      "evidence": [
+        "AN-09",
+        "inventory section 5 replay and cost accounting"
+      ],
+      "authority": "ADR-0011"
+    }
+  },
+  "projections": {
+    "finding_current_verdict": {
+      "source": "the append-only ExpertDecision event stream for one finding_uid",
+      "rule": "the last valid event under the versioned projection rules",
+      "values": [
+        "pending",
+        "accepted",
+        "rejected",
+        "needs_manual_review"
+      ],
+      "rebuildable": true,
+      "rules": [
+        "A projection is never an authoritative writer and is never repaired by editing history; it is repaired by rebuilding it or by appending a new event.",
+        "needs_manual_review is an explicit visible outcome, not a silent fallback: a carryover or provider failure must produce it instead of inventing or inheriting a verdict.",
+        "A revocation event withdraws the revoked verdict and the projection moves to pending. The projection never restores an earlier superseded verdict automatically; a verdict after a revocation exists only where an authorized expert appended a new decision event. This is the PD-01 modification recorded by the repository owner on 2026-09-01 and it closes OQ-03."
+      ],
+      "evidence": [
+        "EX-01",
+        "EX-08",
+        "EX-09",
+        "inventory section 7 item 6"
+      ],
+      "decision_dependency": "PD-01"
+    },
+    "execution_progress": {
+      "source": "durable AuditRun, Job and Attempt transitions",
+      "rule": "derived from committed transitions only",
+      "values": [],
+      "rebuildable": true,
+      "rules": [
+        "Progress, live logs and WebSocket updates are never a source of truth and never authorize a publication.",
+        "Losing the projection loses no durable state; it is rebuilt from the aggregates."
+      ],
+      "evidence": [
+        "AN-01",
+        "DW-02"
+      ]
+    },
+    "knowledge_base": {
+      "source": "accepted ExpertDecision events plus the evidence they reference",
+      "rule": "rebuildable index over the decision ledger",
+      "values": [],
+      "rebuildable": true,
+      "rules": [
+        "The knowledge base is not an independent write model and never becomes the only copy of a decision.",
+        "A knowledge-base repair is a rebuild or a new event, never an edit of an existing decision."
+      ],
+      "evidence": [
+        "EX-04",
+        "EX-05"
+      ],
+      "decision_dependency": "PD-01"
+    }
+  },
+  "open_owner_decisions": [
+    {
+      "id": "PD-01",
+      "status": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "authority": "repository owner",
+      "statement": "Expert correction and revocation append new decision events and change projections instead of copying the legacy overwrite and delete behavior recorded in EX-02.",
+      "modification": "Revocation moves the current projection for the affected finding to pending. The projection never restores an earlier superseded verdict automatically; a verdict after a revocation exists only where an authorized expert appended a new decision event. This modification also resolves OQ-03.",
+      "resolves": [
+        "OQ-03"
+      ],
+      "affects": [
+        "non_state_machine_aggregates.ExpertDecision",
+        "projections.finding_current_verdict",
+        "projections.knowledge_base"
+      ]
+    },
+    {
+      "id": "PD-03",
+      "status": "approved_with_modification",
+      "decided_on": "2026-09-01",
+      "authority": "repository owner",
+      "statement": "AuditRun, Job and Attempt are distinct and current-attempt authority is mandatory. DW-03 records that legacy has no distinct Run entity, so machines.audit_run is target semantics rather than parity.",
+      "modification": "The AuditRun creation rule is fixed. A new AuditRun is created when a top-level audit or re-audit command is accepted for a frozen set of inputs and configurations. A repeat with the same idempotency key and the same payload returns the existing Run. Changed inputs, an explicit re-audit, or a repeat of a terminal Run create a new Run. Retry, resume, restart and worker failover create no Run and no Job: the Job stays the same and a new Attempt is created. A terminal Run is never reopened.",
+      "affects": [
+        "machines.audit_run",
+        "machines.audit_run.run_creation",
+        "machines.job",
+        "machines.attempt",
+        "machines.attempt.publication_authority"
+      ]
+    },
+    {
+      "id": "OPEN-RETENTION",
+      "external_id": "U-04",
+      "status": "not_decided",
+      "statement": "No retention window, time-to-live, legal-hold, tenant or identity-provider value is declared. The blob erasure states describe who must approve an erasure, not when erasure happens, and storage reconciliation of an unconfirmed temporary blob has no declared window.",
+      "gate": "Owner input U-04 (tenant model, identity provider, retention TTL matrix, legal-hold authority) recorded in docs/architecture/CP00_ARCHITECTURE_REVIEW.md section 11. It keeps ADR-0014 in proposed status. No numeric retention, TTL or legal-hold value may be declared by any lane before that input exists.",
+      "affects": [
+        "machines.blob",
+        "machines.command_idempotency"
+      ]
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "OQ-04",
+      "status": "deferred",
+      "question": "What retry budget and backoff apply per error class before a Job reaches dead_letter?",
+      "affects": [
+        "machines.job.retry"
+      ],
+      "owning_slot": "jobs/operations slot",
+      "gate": "Deferred to W4-C-01 (freeze core stage registry/DAG) and W4-JOB-01 (durable stage state and bounded retry/resume) in docs/stages/S04_core_audit_engine.md, before the core engine executes. No numeric budget or backoff value is chosen here."
+    }
+  ],
+  "resolved_questions": [
+    {
+      "id": "OQ-03",
+      "question": "When a revocation event withdraws a verdict, does the projection fall back to the previous still-valid verdict or to pending?",
+      "resolution": "The projection moves to pending. It never restores an earlier superseded verdict automatically; a verdict after a revocation exists only where an authorized expert appended a new decision event.",
+      "affects": [
+        "projections.finding_current_verdict",
+        "non_state_machine_aggregates.ExpertDecision"
+      ],
+      "decision_ref": "PD-01",
+      "decided_on": "2026-09-01",
+      "authority": "repository owner"
+    },
+    {
+      "id": "OQ-05",
+      "question": "What cleanup policy applies to a blob that stays temporary and is never verified?",
+      "resolution": "A blob in temporary is never available to the business layer. Storage reconciliation moves an unconfirmed temporary blob to the terminal rejected state. Physical destruction of bytes is permitted only for an object that was never confirmed and is referenced by nothing. The numeric window after which reconciliation acts stays under the open OPEN-RETENTION / U-04 owner decision.",
+      "affects": [
+        "machines.blob"
+      ],
+      "decided_on": "2026-09-01",
+      "authority": "repository owner"
+    }
+  ]
 }

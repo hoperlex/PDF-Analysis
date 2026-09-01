@@ -1,0 +1,10 @@
+{
+  "contract_version": "1.0.0-draft.1",
+  "stage_id": "text_analysis",
+  "stage_version": "1.0.0",
+  "status": "failed",
+  "artifacts": [],
+  "metrics": {
+    "observations": 0
+  }
+}

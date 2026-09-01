@@ -1,0 +1,12 @@
+{
+  "contract_version": "1.0.0-draft.1",
+  "error_code": "stale_attempt",
+  "message": "This attempt is no longer the current execution authority for its job; the delivered result was stored as evidence and not published.",
+  "correlation_id": "corr_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "retryable": false,
+  "details": {
+    "job_id": "job_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "attempt_id": "att_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "current_attempt_id": "att_01ARZ3NDEKTSV4RRFFQ69G5FAW"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "contract_version": "1.0.0-draft.1",
+  "stage_id": "text_analysis",
+  "stage_version": "1.0.0",
+  "status": "succeeded",
+  "artifacts": [
+    {
+      "role": "analysis.text_observations",
+      "blob_id": "blob_DJSG7YC9CSEBG55F5V58E293EQ",
+      "sha256": "07fc5a6410290e7467842f4913e25d44e61e17da36dba43a49f652d92247bd4a",
+      "size_bytes": 16384,
+      "media_type": "application/json"
+    }
+  ],
+  "metrics": {
+    "observations": 7
+  },
+  "error": {
+    "code": "analysis_incomplete",
+    "message": "Hidden error state on a succeeded stage is rejected.",
+    "retryable": true
+  }
+}

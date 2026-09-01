@@ -1,0 +1,36 @@
+{
+  "replay_id": "SYNTH-REPLAY-03",
+  "kind": "deterministic_provider_stub",
+  "scope": "decision carryover matching leg",
+  "interactions": [
+    {
+      "interaction_id": "CO-01",
+      "request_digest": "synthetic-carryover-batch-01",
+      "outcome": "timeout",
+      "returned": {
+        "ok": false
+      }
+    },
+    {
+      "interaction_id": "CO-02",
+      "request_digest": "synthetic-carryover-batch-02",
+      "outcome": "call_budget_exhausted",
+      "returned": {
+        "ok": false
+      }
+    },
+    {
+      "interaction_id": "CO-03",
+      "request_digest": "synthetic-carryover-batch-03",
+      "outcome": "ok_low_confidence",
+      "returned": {
+        "ok": true,
+        "match_origin_id": "F-002",
+        "confidence": 0.12
+      }
+    }
+  ],
+  "review_status": "reviewed_for_sensitive_content",
+  "content_policy": "Outcome shapes only. No prompt text, model output text, credential or account identifier is stored.",
+  "llm_text_equality_asserted": false
+}
