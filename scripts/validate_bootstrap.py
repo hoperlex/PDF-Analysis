@@ -438,7 +438,7 @@ def _validate_error_catalog(reader: RepositoryReader, errors: list[str]) -> None
     if document is None:
         return
 
-    for field in ("contract", "version"):
+    for field in ("contract", "contract_version"):
         if not isinstance(document.get(field), str) or not document[field]:
             _add_error(
                 errors,

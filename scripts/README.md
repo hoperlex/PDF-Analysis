@@ -47,6 +47,14 @@ discovery or content/invariant validation failed with accumulated artifact-speci
 diagnostics. Exit `2` means required `jsonschema` machinery was unavailable or
 unusable. Expected malformed or missing repository inputs never emit a traceback.
 
+Domain error-catalog validation reads `contract_version` from
+`contracts/domain/v1/error-codes.json` and requires it to be a non-empty string. That
+key is canonical by owner decision `ID-01`. The bare `version` key is neither required
+nor rejected: it remains only as a transitional deprecated mirror, and its removal is
+the domain contract owner's follow-up (`W0-DOM-02`). A catalog that declares only the
+bare `version` key fails with an accumulated, artifact-specific diagnostic naming the
+missing `contract_version`.
+
 ADR validation preserves baseline IDs ADR-0001 through ADR-0018 and requires exact
 agreement between current ADR files and `docs/architecture/ADR_INDEX.md`. Additional
 uniquely numbered ADRs are allowed only when indexed.

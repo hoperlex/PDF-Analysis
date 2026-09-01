@@ -64,6 +64,7 @@ def _write_adr_index(root: Path, filenames: list[str]) -> None:
 def _valid_error_catalog() -> dict[str, object]:
     return {
         "contract": "auditmanager.domain.errors",
+        "contract_version": "1.0.0-draft.0",
         "version": "1.0.0-draft.0",
         "envelope": {
             "required": ["error_code", "message", "correlation_id"],
@@ -522,6 +523,81 @@ class ValidateBootstrapTests(unittest.TestCase):
             "dependency_unavailable: http must be integer 400..599",
             "dependency_unavailable: retryable must be boolean",
         )
+
+    def test_error_catalog_accepts_canonical_key_without_deprecated_mirror(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            validator = _make_validator_checkout(root)
+            _make_valid_bootstrap(root)
+            catalog = _valid_error_catalog()
+            del catalog["version"]
+            self.assertNotIn("version", catalog)
+            self.assertIn("contract_version", catalog)
+            _write_json(root, "contracts/domain/v1/error-codes.json", catalog)
+            result = _run_validator(validator)
+
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIsNotNone(re.search(r"(?m)^PASS$", output))
+        self.assertNotIn("; version must be non-empty string", output)
+
+    def test_error_catalog_accepts_deprecated_version_mirror_beside_canonical_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            validator = _make_validator_checkout(root)
+            _make_valid_bootstrap(root)
+            catalog = _valid_error_catalog()
+            self.assertEqual(catalog["contract_version"], catalog["version"])
+            _write_json(root, "contracts/domain/v1/error-codes.json", catalog)
+            result = _run_validator(validator)
+
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIsNotNone(re.search(r"(?m)^PASS$", output))
+        self.assertNotIn("Error catalog invalid", output)
+
+    def test_error_catalog_without_canonical_key_names_contract_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            validator = _make_validator_checkout(root)
+            _make_valid_bootstrap(root)
+            catalog = _valid_error_catalog()
+            del catalog["contract_version"]
+            self.assertIn("version", catalog)
+            _write_json(root, "contracts/domain/v1/error-codes.json", catalog)
+            _write_markdown(root, "docs/also-broken.md", "[missing](not-here.md)\n")
+            result = _run_validator(validator)
+
+        self.assert_validation_failure(
+            result,
+            "Error catalog invalid: contracts/domain/v1/error-codes.json; "
+            "contract_version must be non-empty string",
+            "Broken md link: docs/also-broken.md -> not-here.md",
+        )
+
+    def test_error_catalog_rejects_non_string_or_empty_contract_version(self) -> None:
+        cases = {
+            "empty string": "",
+            "integer": 1,
+            "null": None,
+            "array": ["1.0.0-draft.0"],
+        }
+        for case, value in cases.items():
+            with self.subTest(case=case):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    root = Path(temporary_directory)
+                    validator = _make_validator_checkout(root)
+                    _make_valid_bootstrap(root)
+                    catalog = _valid_error_catalog()
+                    catalog["contract_version"] = value
+                    _write_json(root, "contracts/domain/v1/error-codes.json", catalog)
+                    result = _run_validator(validator)
+
+                self.assert_validation_failure(
+                    result,
+                    "Error catalog invalid: contracts/domain/v1/error-codes.json; "
+                    "contract_version must be non-empty string",
+                )
 
     def test_adr_registry_allows_indexed_addition(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
