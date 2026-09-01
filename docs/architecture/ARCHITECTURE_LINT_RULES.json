@@ -1,0 +1,1733 @@
+{
+  "document": "auditmanager.architecture.lint_rules",
+  "contract_version": "1.0.0-draft.1",
+  "status": "candidate",
+  "frozen": false,
+  "ratified": false,
+  "task_id": "W0-ARC-02",
+  "wave": "W0.3",
+  "checkpoint": "CP-00",
+  "base_commit": "43a84d93fd544573226b82860ab24f924ed66d83",
+  "human_document": "docs/architecture/ARCHITECTURE_LINT_RULES.md",
+  "specification_only": true,
+  "compliance_claim": "none. This document specifies what must be detectable. It implements no linter, selects no tool, runs no enforcement and asserts nothing about whether the repository satisfies any rule.",
+  "interpreter": ".venv/bootstrap/bin/python",
+  "frozen_inputs": {
+    "base_commit": "43a84d93fd544573226b82860ab24f924ed66d83",
+    "prohibitions": "AGENTS.md section 4",
+    "architecture_review": [
+      "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+      "docs/architecture/CP00_ARCHITECTURE_REVIEW.json"
+    ],
+    "owner_decisions": "docs/architecture/CP00_OWNER_DECISIONS.md",
+    "bible": "docs/architecture/ARCHITECTURE_BIBLE.md",
+    "adrs": [
+      "docs/architecture/adr/ADR-0004-repository-layout-and-module-boundaries.md",
+      "docs/architecture/adr/ADR-0016-testing-evidence-model.md"
+    ],
+    "layout": "docs/architecture/REPOSITORY_LAYOUT.md",
+    "adrs_note": "ADR-0004 and ADR-0016 are the ADRs the task file names. Other ADRs enter only where the accepted CP-00 review carries them, and every ADR a rule cites is listed in that rule's anchor_files and resolved at the base commit by GATE-E."
+  },
+  "enforcement_vocabulary": {
+    "static": "Decidable by inspecting repository files without executing the application: import graph, module and symbol names, declaration shapes, path layout and JSON keys.",
+    "test": "Decidable only by running something: regenerating an artifact, or applying migrations to a database. The decision is mechanical, but it needs an execution environment rather than the source tree.",
+    "review": "Not mechanically decidable. The violation is a property of meaning, role, ordering or design intent that no checker can read off the repository. A review rule names what the reviewer must establish and why a checker cannot."
+  },
+  "severity_vocabulary": {
+    "error": "A violation blocks the change once W1-ARC-01 implements enforcement.",
+    "warning": "A violation is reported and tracked but does not block. Used only where the frozen input states the rule as discipline rather than as an invariant, and the rule carries a severity_rationale."
+  },
+  "field_semantics": {
+    "rule_id": "Stable identity. Changing it after acceptance is a freeze-break.",
+    "slug": "Stable short name, unique, used together with rule_id by the identity pin.",
+    "source_anchor": "Prose citation of the frozen input the rule derives from.",
+    "anchor_files": "Repository paths of every frozen input the rule cites in any field, not only in source_anchor: a citation in statement, detection, false_positive_notes, review_reason or severity_rationale is listed here as well. GATE-E resolves each path at the base commit, not in the working tree.",
+    "scope": "Path globs the rule applies to. An empty match is not a pass.",
+    "detection": "What a checker, or for review rules a reviewer, must observe to decide a violation.",
+    "false_positive_notes": "Legitimate shapes that must not be flagged.",
+    "waiver_policy": "Whether a waiver exists and who may grant it. No rule has a self-service bypass.",
+    "covers_prohibitions": "AGENTS.md section 4 prohibition IDs this rule covers. Empty when the rule derives from the Bible, an ADR or the CP-00 review only.",
+    "review_reason": "Present on review rules only: why the rule cannot be decided statically.",
+    "severity_rationale": "Present on warning rules only: why the severity is not error."
+  },
+  "agents_md_prohibitions": {
+    "AG4-01": {
+      "text": "direct SQL/S3/filesystem from a router or React component",
+      "decidable_statically": "yes",
+      "note": "Decidable at the import, annotation and call-shape level. A router that delegates to a project helper which itself performs the I/O is caught only when that helper is itself in scope; no whole-program call graph is assumed."
+    },
+    "AG4-02": {
+      "text": "business logic in an ORM/Pydantic/transport schema/UI",
+      "decidable_statically": "partial",
+      "note": "The dependency direction into schema, model and component modules is static (ALR-08). Whether a conditional is a transport check or a domain invariant is a semantic judgment and stays review-only (ALR-09)."
+    },
+    "AG4-03": {
+      "text": "deep imports into the internals of another bounded context",
+      "decidable_statically": "yes",
+      "note": "Fully decidable from the import graph plus the declared layout: backend cross-context imports (ALR-05), frontend FSD layer and slice direction (ALR-06) and the shared layer (ALR-07)."
+    },
+    "AG4-04": {
+      "text": "generic repository/base service/global utils without proven semantics",
+      "decidable_statically": "partial",
+      "note": "The three names the Bible spells out are static (ALR-10). The operative clause 'without proven semantics' is P-14's two-independent-applications-or-mandatory-boundary judgment and stays review-only (ALR-11, ALR-32)."
+    },
+    "AG4-05": {
+      "text": "job state held only in memory",
+      "decidable_statically": "partial",
+      "note": "A module-level or class-level container that holds job, run, attempt or progress execution state is a static shape (ALR-12); a constant table of the same Python type is not. 'Only in memory' is a claim about which copy answers a status query and about ordering against the side effect, and so is the residue of which unflagged container actually holds state; both stay review-only (ALR-13)."
+    },
+    "AG4-06": {
+      "text": "path/filename/display number used as identity",
+      "decidable_statically": "partial",
+      "note": "Identifier values derived from a path, filename or ordinal are a static shape (ALR-14). Whether a value is used in the role of identity is semantic and stays review-only (ALR-15)."
+    },
+    "AG4-07": {
+      "text": "dual-write to the database plus an external side effect without outbox/reconciliation",
+      "decidable_statically": "partial",
+      "note": "An external side effect inside a transaction block is static (ALR-16). Whether an effect outside the transaction has a matching outbox record and a reconciliation owner is operational design and stays review-only (ALR-17)."
+    },
+    "AG4-08": {
+      "text": "silent fallback",
+      "decidable_statically": "partial",
+      "note": "Swallowed exceptions and empty catch blocks are static (ALR-18). Silent fallback in general is a statement about the meaning of a result: the same returned default is a declared partial in one contract and a swallowed failure in another, which is why the CP-00 review maps FS-01 to FS-08 case by case (ALR-19)."
+    },
+    "AG4-09": {
+      "text": "LLM output treated as the canonical expert decision",
+      "decidable_statically": "partial",
+      "note": "An AI or analysis module importing a decision-write surface is static (ALR-20). Whether a stored recommendation is consumed as the canonical verdict is a property of the read model's meaning and stays review-only (ALR-21)."
+    },
+    "AG4-10": {
+      "text": "modification of raw deterministic comparison evidence by the AI layer",
+      "decidable_statically": "partial",
+      "note": "A write or delete on a raw-evidence artifact from an AI module is static (ALR-22). Re-derivation republished under the same artifact identity preserves every syntactic constraint and stays review-only (ALR-23)."
+    }
+  },
+  "rules": [
+    {
+      "rule_id": "ALR-01",
+      "slug": "router-no-sql",
+      "statement": "A router or HTTP transport module never executes SQL and never touches an ORM session, connection or engine.",
+      "source_anchor": "AGENTS.md section 4 bullet 1; ARCHITECTURE_BIBLE.md section 5 backend dependency rule; ADR-0004 module boundaries",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/adr/ADR-0004-repository-layout-and-module-boundaries.md"
+      ],
+      "scope": [
+        "src/auditmanager/api/**",
+        "src/auditmanager/*/adapters/http/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "In a module in scope, flag: (a) an import of a database driver or ORM package (sqlalchemy, psycopg, asyncpg, sqlite3, databases); (b) a parameter, attribute or annotation typed Session, AsyncSession, Connection or Engine; (c) a string literal matching the SQL statement pattern select/insert/update/delete/create/alter/drop/with at the start, case-insensitive, that is passed as a call argument. A compliant router references only application command and query handlers plus typed transport DTOs.",
+      "false_positive_notes": [
+        "A use-case object with an execute method is not a session: no database symbol is imported or annotated, so nothing is flagged.",
+        "A route path or an error message containing the word select is a string, not a statement passed to a call.",
+        "Modules under tests/** are out of scope."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-01"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "async def list_runs(uc: ListRuns = Depends(get_list_runs)): return await uc.execute(query)",
+        "negative": "async def list_runs(session: AsyncSession = Depends(get_session)): return await session.execute(text('select * from runs'))"
+      }
+    },
+    {
+      "rule_id": "ALR-02",
+      "slug": "object-storage-key-only-in-adapter",
+      "statement": "Only the storage adapter imports an object-storage SDK or builds or parses an object key; routers, application code, domain code and UI know blob_id, role, size, sha256 and media type.",
+      "source_anchor": "AGENTS.md section 4 bullet 1; ARCHITECTURE_BIBLE.md section 7 storage rules; P-02",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md"
+      ],
+      "scope": [
+        "src/auditmanager/**",
+        "web/src/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Outside src/auditmanager/storage/adapters/**, flag: an import of boto3, aioboto3, botocore, minio or an equivalent object-storage client; a call to a presign, put_object, get_object or upload_fileobj method; and a string literal or f-string that starts with the s3 URI scheme or concatenates a bucket name with a key path. Inside the storage adapter these are the intended shapes.",
+      "false_positive_notes": [
+        "Passing a blob_id, role, size, sha256 or media type across a port is the intended shape and carries no key.",
+        "A signed URL received from the storage port and returned to the client is a value, not a key construction.",
+        "infra/** deployment descriptors are not application code."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-01"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "url = await self.storage.presigned_read(blob_id=version.blob_id, ttl_seconds=300)",
+        "negative": "url = s3.generate_presigned_url('get_object', Params={'Bucket': 'audit', 'Key': f'projects/{project_id}/v1.pdf'})"
+      }
+    },
+    {
+      "rule_id": "ALR-03",
+      "slug": "router-no-filesystem",
+      "statement": "A router or HTTP transport module performs no filesystem I/O; bytes reach it through the storage port.",
+      "source_anchor": "AGENTS.md section 4 bullet 1; ARCHITECTURE_BIBLE.md P-06 side effects at edges",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md"
+      ],
+      "scope": [
+        "src/auditmanager/api/**",
+        "src/auditmanager/*/adapters/http/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "In a module in scope, flag a call to open, os.remove, os.makedirs, shutil.copy, shutil.rmtree or tempfile.NamedTemporaryFile, a pathlib.Path constructed from a request value, and any read_text, write_text, read_bytes or write_bytes call. Streaming a response from a storage port iterator is not filesystem access.",
+      "false_positive_notes": [
+        "A pathlib import used only inside an if TYPE_CHECKING block for a port signature performs no I/O.",
+        "Reading a static OpenAPI document at process start belongs to the composition root, not to a router.",
+        "Modules under tests/** are out of scope."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-01"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "stream = await self.storage.open_read(blob_id)",
+        "negative": "data = open(f'/var/audit/{project_id}/report.pdf', 'rb').read()"
+      }
+    },
+    {
+      "rule_id": "ALR-04",
+      "slug": "react-no-data-access",
+      "statement": "A React component performs no data access: no database or object-storage SDK, no node filesystem module and no raw HTTP outside the generated transport in web/src/shared/api.",
+      "source_anchor": "AGENTS.md section 4 bullet 1; ARCHITECTURE_BIBLE.md section 10 frontend rules; ADR-0009",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/adr/ADR-0009-nextjs-react-typescript-fsd.md"
+      ],
+      "scope": [
+        "web/src/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag in any module under web/src/** except web/src/shared/api/**: an import of node:fs, fs, path, pg, mysql, or an aws-sdk client package; and a direct call to fetch, axios or XMLHttpRequest. A component obtains server state from a query hook that calls the generated transport.",
+      "false_positive_notes": [
+        "The generated transport under web/src/shared/api/** is the single place fetch appears.",
+        "A bounded client island opening a WebSocket for live progress is a declared exception in the Bible section 10 and is not raw HTTP.",
+        "Test doubles and mock servers under tests/** are out of scope."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-01"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "const { data } = useRunsQuery({ projectId });",
+        "negative": "const data = await fetch('/api/v1/runs?project=' + projectId).then(r => r.json());"
+      }
+    },
+    {
+      "rule_id": "ALR-05",
+      "slug": "backend-cross-context-public-only",
+      "statement": "A backend bounded context imports another context only through that context's public module; any deeper target is a violation.",
+      "source_anchor": "AGENTS.md section 4 bullet 3; ADR-0004 Decision; ADR-0002 Boundary; REPOSITORY_LAYOUT.md backend module shape",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/REPOSITORY_LAYOUT.md",
+        "docs/architecture/adr/ADR-0002-modular-monolith-control-plane.md",
+        "docs/architecture/adr/ADR-0004-repository-layout-and-module-boundaries.md"
+      ],
+      "scope": [
+        "src/auditmanager/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Resolve every absolute and relative import in src/auditmanager/A/** that targets src/auditmanager/B/** with A different from B and B not equal to shared. The only admissible target module is auditmanager.B.public. Any import of auditmanager.B.domain, .application, .ports, .adapters or a submodule of them is a violation, including an import guarded by TYPE_CHECKING.",
+      "false_positive_notes": [
+        "auditmanager.shared is cross-cutting and importable by every context; its own direction is governed by ALR-07.",
+        "src/auditmanager/bootstrap/** is the composition root and wires concrete adapters of every context by design.",
+        "A contract event payload type published under contracts/** is a contract, not a context internal."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-03"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "from auditmanager.documents.public import DocumentSummary",
+        "negative": "from auditmanager.documents.adapters.persistence.models import DocumentRow"
+      }
+    },
+    {
+      "rule_id": "ALR-06",
+      "slug": "frontend-fsd-import-direction",
+      "statement": "Frontend imports run strictly downward through the layer order app, _app, _pages, widgets, features, entities, shared, and reach another slice only through that slice's public entry.",
+      "source_anchor": "AGENTS.md section 4 bullet 3; ADR-0004 Decision (FSD upward and cross-slice imports); ARCHITECTURE_BIBLE.md section 10; ADR-0009",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/adr/ADR-0004-repository-layout-and-module-boundaries.md",
+        "docs/architecture/adr/ADR-0009-nextjs-react-typescript-fsd.md"
+      ],
+      "scope": [
+        "web/src/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Assign every module its layer from its path. Flag an import whose target layer is the same as or above the importer's layer, except an import inside the importer's own slice. Flag an import that reaches past a slice's public entry into its internal folders. app/page.tsx may only re-export or render a _pages entry.",
+      "false_positive_notes": [
+        "External packages such as react and next/* carry no layer and are never flagged.",
+        "A module importing its own sibling inside the same slice is intra-slice, not cross-slice.",
+        "shared is the lowest layer and may be imported from everywhere."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-03"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "import { RunStatusBadge } from 'entities/run';",
+        "negative": "import { useRunFilters } from 'features/run-filter/model/useRunFilters';"
+      }
+    },
+    {
+      "rule_id": "ALR-07",
+      "slug": "shared-imports-no-context",
+      "statement": "A shared module imports no bounded context and no domain slice; the dependency arrow into shared is one-way.",
+      "source_anchor": "REPOSITORY_LAYOUT.md Shared; ARCHITECTURE_BIBLE.md section 5 and P-14; AGENTS.md section 4 bullet 3",
+      "anchor_files": [
+        "docs/architecture/REPOSITORY_LAYOUT.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "AGENTS.md"
+      ],
+      "scope": [
+        "src/auditmanager/shared/**",
+        "web/src/shared/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag any import in src/auditmanager/shared/** that targets auditmanager.<context> for any context other than shared, and any import in web/src/shared/** that targets _app, _pages, widgets, features or entities. A TYPE_CHECKING-guarded import is still a dependency and is flagged.",
+      "false_positive_notes": [
+        "Third-party packages and the standard library are not contexts.",
+        "A generic protocol defined in shared and implemented by a context creates no import from shared.",
+        "Whether the primitive belongs in shared at all is a separate, semantic question carried by ALR-32."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-03"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "shared/checksum.py: class Checksum(Protocol) with def hexdigest(self) -> str, importing only the standard library",
+        "negative": "from auditmanager.findings.domain.finding import Finding"
+      }
+    },
+    {
+      "rule_id": "ALR-08",
+      "slug": "schema-layer-no-domain-import",
+      "statement": "ORM models, transport schemas and UI components do not import application or domain modules and do not call repositories or ports.",
+      "source_anchor": "AGENTS.md section 4 bullet 2; ARCHITECTURE_BIBLE.md section 5 backend dependency rule",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md"
+      ],
+      "scope": [
+        "src/auditmanager/*/adapters/persistence/**",
+        "src/auditmanager/api/schemas/**",
+        "src/auditmanager/*/adapters/http/schemas/**",
+        "web/src/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag a runtime import of auditmanager.<context>.domain or auditmanager.<context>.application from a module in scope, and any call to a repository, unit-of-work or port symbol inside an ORM model class body, a Pydantic model body, a validator, or a React component body. Mapping code that converts a row or a DTO into a plain value object is not a call.",
+      "false_positive_notes": [
+        "An import guarded by if TYPE_CHECKING that is used only in annotations creates no runtime coupling and is not flagged.",
+        "Importing a typed identifier or checksum primitive from auditmanager.shared is allowed.",
+        "Field type, format, length and range constraints are transport validation, not a domain call."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-02"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "class RunOut(BaseModel) declaring run_id: str and status: Literal of the five declared run states",
+        "negative": "class RunOut(BaseModel) declaring def is_billable(self) that calls pricing_repository.rate_for(self.tenant)"
+      }
+    },
+    {
+      "rule_id": "ALR-09",
+      "slug": "no-business-logic-in-schema-or-ui",
+      "statement": "No business rule is decided in an ORM model, a Pydantic or transport schema, or a UI component.",
+      "source_anchor": "AGENTS.md section 4 bullet 2; ARCHITECTURE_BIBLE.md section 5 and section 10",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md"
+      ],
+      "scope": [
+        "src/auditmanager/*/adapters/persistence/**",
+        "src/auditmanager/api/schemas/**",
+        "src/auditmanager/*/adapters/http/schemas/**",
+        "web/src/**"
+      ],
+      "enforcement": "review",
+      "severity": "error",
+      "detection": "The reviewer reads each changed schema, model or component and asks whether it decides something the domain owns: eligibility, a state transition, an authorization outcome, a merge or carryover policy, a cost or budget outcome, or an invariant that must hold regardless of transport. Any such decision is a violation even when it is expressed as a validator, a computed property or a rendering condition.",
+      "false_positive_notes": [
+        "Type, format, length, range and required checks are transport validation.",
+        "Presentation formatting of a value the backend already decided is not a business rule.",
+        "A disabled button that mirrors a permission the server already enforced is presentation, provided the server enforcement exists."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-02"
+      ],
+      "review_reason": "No syntactic property separates a transport check from a domain invariant. The same conditional is validation in one context and an owned rule in another, and deciding which requires the domain model, not the file.",
+      "severity_rationale": null,
+      "examples": {
+        "positive": "Reviewer records: the schema declares types and ranges only; the eligibility decision lives in the application handler.",
+        "negative": "Reviewer records: the schema validator rejects a finding whose severity is below the tenant threshold, which is a domain rule executed in transport."
+      }
+    },
+    {
+      "rule_id": "ALR-10",
+      "slug": "forbidden-generic-abstraction-names",
+      "statement": "The names the Bible forbids do not appear: BaseService, GenericRepository and their variants as classes, and utils, helpers, common or misc as catch-all modules under shared.",
+      "source_anchor": "AGENTS.md section 4 bullet 4; ARCHITECTURE_BIBLE.md P-14",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md"
+      ],
+      "scope": [
+        "src/auditmanager/**",
+        "web/src/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag a class named BaseService, BaseRepository, GenericRepository, AbstractService or BaseManager anywhere in scope, and a module or package named utils, helpers, common or misc directly under src/auditmanager/shared/** or web/src/shared/**.",
+      "false_positive_notes": [
+        "A module named for its concept, such as shared/errors.py, shared/ids.py or shared/clock.py, is not a dumping ground and is not flagged.",
+        "A third-party package that happens to be named utils is not repository code.",
+        "Helper modules under tests/** and fixtures/** are out of scope.",
+        "Whether an abstraction with an acceptable name is premature is a separate, semantic question carried by ALR-11."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-04"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "src/auditmanager/shared/checksum.py exporting Sha256 and verify_sha256",
+        "negative": "src/auditmanager/shared/utils.py exporting normalize, to_dict, retry and parse_any"
+      }
+    },
+    {
+      "rule_id": "ALR-11",
+      "slug": "abstraction-requires-proven-semantics",
+      "statement": "An abstraction is introduced only after two independent applications or because it is a mandatory boundary, and it carries a declared semantics.",
+      "source_anchor": "AGENTS.md section 4 bullet 4; ARCHITECTURE_BIBLE.md P-14; REPOSITORY_LAYOUT.md backend module shape",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/REPOSITORY_LAYOUT.md"
+      ],
+      "scope": [
+        "src/auditmanager/**",
+        "web/src/**"
+      ],
+      "enforcement": "review",
+      "severity": "error",
+      "detection": "For each new base class, generic wrapper, shared helper or framework-like layer, the reviewer names the two independent applications that already exist, or the mandatory boundary it implements, and the semantics it guarantees. Absence of that record is the violation.",
+      "false_positive_notes": [
+        "A port or protocol at a declared architectural boundary is mandatory by definition and needs no second application.",
+        "An abstraction introduced together with its second real caller in the same change satisfies the rule."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-04"
+      ],
+      "review_reason": "Counting import sites does not establish that two applications are independent, and mandatory boundary is an architectural judgment. A checker cannot decide whether a base class carries proven semantics or is premature framework.",
+      "severity_rationale": null,
+      "examples": {
+        "positive": "Reviewer records: the retry decorator has two independent callers, the storage adapter and the provider adapter, and its semantics are declared as bounded, error-class aware retry.",
+        "negative": "Reviewer records: the new AggregateRoot base class has one subclass and implements no declared boundary."
+      }
+    },
+    {
+      "rule_id": "ALR-12",
+      "slug": "no-module-level-job-state",
+      "statement": "Job, run, attempt and progress state is never held in a module-level or class-level mutable container.",
+      "source_anchor": "AGENTS.md section 4 bullet 5; ARCHITECTURE_BIBLE.md section 8 jobs and execution; P-09",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md"
+      ],
+      "scope": [
+        "src/auditmanager/jobs/**",
+        "src/auditmanager/workers/**",
+        "src/auditmanager/analysis/**",
+        "src/auditmanager/api/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag a module-level or class-level mutable container in scope only where it holds execution state: (a) its elements are asyncio task handles, futures, threads, or per-identifier locks, events or semaphores; or (b) its elements are job, run, attempt, stage-execution or progress records, statuses, counters or timestamps, read off the value annotation (dict[str, Attempt], dict[JobId, RunStatus], list[ProgressEvent]) or off the name of the binding (ACTIVE_RUNS, _JOB_STATE, PROGRESS_BY_ATTEMPT, LAST_HEARTBEAT). In both cases the container must also be mutated after its definition somewhere in scope: an assignment to an index, a del, or a call to append, add, update, setdefault, pop or clear. That mutation is what separates a state container from a table built once and only read, and a container that is never mutated is not flagged. Flag any read of a flagged container in a code path that produces an API response, a status projection or a scheduling decision.",
+      "false_positive_notes": [
+        "An immutable lookup table annotated Final and built from literals or frozen tuples is a constant, not state.",
+        "A constant lookup table is not flagged for being a dict, a list or a set: a stage-name map, an error-code table, or a registry whose values are types or callables, holds no execution state. This rule does not flag a container merely for being mutable in principle.",
+        "A container created inside a function and not escaping it is local state.",
+        "Whether a container this rule did not flag is nevertheless where job, run, attempt or progress state actually lives is a semantic question and belongs to ALR-13, which is review.",
+        "Modules under tests/** are out of scope."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-05"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "status = await self.jobs.get_attempt_status(attempt_id)",
+        "negative": "ACTIVE_TASKS: dict[str, asyncio.Task] = {}"
+      }
+    },
+    {
+      "rule_id": "ALR-13",
+      "slug": "durable-job-state-and-fencing",
+      "statement": "A durable Job and Attempt record exists before any side effect, process memory and progress transport are never a status source, and the attempt's execution_token is verified inside the publishing transaction.",
+      "source_anchor": "AGENTS.md section 4 bullet 5; ARCHITECTURE_BIBLE.md section 8; ADR-0007 with its adapt qualification; owner decision PD-03; integration decision ID-02; CP00_ARCHITECTURE_REVIEW.md FS-06",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+        "docs/architecture/CP00_OWNER_DECISIONS.md",
+        "docs/architecture/adr/ADR-0007-postgres-jobs-outbox-and-attempt-fencing.md"
+      ],
+      "scope": [
+        "src/auditmanager/jobs/**",
+        "src/auditmanager/workers/**",
+        "src/auditmanager/analysis/**",
+        "src/auditmanager/api/**",
+        "contracts/domain/v1/**",
+        "contracts/analysis/v1/**"
+      ],
+      "enforcement": "review",
+      "severity": "error",
+      "detection": "For each execution path the reviewer traces the order of the durable write and the side effect, names which record answers a status query, and confirms that the publishing transaction reads and compares the execution_token of the attempt it is publishing for. A recovery after failover must be a declared transition creating a new Attempt of the same Job, never a new AuditRun. The reviewer also decides the two residues the static rules in this area deliberately leave. First, whether a module-level or class-level container that ALR-12 did not flag is nevertheless where job, run, attempt or progress state lives. Second, whether any declared value of another name - an epoch, a sequence, a counter or a version - is used as the authority of the current attempt, a role only the opaque, equality-compared execution_token may hold. No static rule carries any part of that second question: ALR-25 flags only the two names ID-02 renames and the numeric or ordered shape of execution_token itself, so every value whose authority role has to be established rather than read off a name arrives here.",
+      "false_positive_notes": [
+        "A progress projection rebuilt from durable events is allowed; it is not the source of truth but it may be the read path.",
+        "An in-process cache in front of the durable record is allowed when the durable record remains the answer of record."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-05"
+      ],
+      "review_reason": "Ordering between a durable write and a side effect, and the question of which copy answers a status query, are properties of an execution path rather than of a syntactic shape. Verification inside the publishing transaction depends on the transaction scope actually taken at run time. The two residues handed here by ALR-12 and ALR-25 are undecidable for the same reason: what a container holds and what role a field plays are established by the execution path that reads them, not by the declaration. A name is not a role, and neither is a neighbour - a field declared beside the authority token is not thereby an authority token, which is why no narrower name test was substituted for this one. The static rules stop at the shapes AGENTS.md section 4 bullet 5 and integration decision ID-02 actually name, and the role question is answered here.",
+      "severity_rationale": null,
+      "examples": {
+        "positive": "Reviewer records: the attempt row is inserted and committed before the provider call, and publish compares the stored execution_token inside the same transaction that writes the result.",
+        "negative": "Reviewer records: the worker sends the provider request first and inserts the attempt row afterwards, so a crash in between leaves an effect with no durable record."
+      }
+    },
+    {
+      "rule_id": "ALR-14",
+      "slug": "no-path-derived-identity",
+      "statement": "No identifier is constructed from, or resolved through, a path, a filename or a display ordinal, and identifiers are compared only by equality.",
+      "source_anchor": "AGENTS.md section 4 bullet 6; ARCHITECTURE_BIBLE.md P-01 and P-02; CP00_ARCHITECTURE_REVIEW.md FS-07 and DV-08",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md"
+      ],
+      "scope": [
+        "src/auditmanager/**",
+        "web/src/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag an assignment to a name or field whose name ends in _id or Id, or which is annotated with a declared identifier type, whose value derives from a path or filename expression such as Path(...).stem, .name, os.path.basename, a split on a separator, or a removesuffix call, or from a display ordinal such as index, row_number or counter. Flag a comparison of two identifier-typed values using startswith, endswith or membership instead of equality.",
+      "false_positive_notes": [
+        "Building a storage key from an identifier is the allowed direction and lives in the storage adapter under ALR-02.",
+        "Parsing a filename to produce a display label or an ingest hint is allowed when the result is never stored or compared as identity.",
+        "Reading an identifier out of a request path parameter is transport binding, not derivation from a filesystem path."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-06"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "project_id = ProjectId(request.path_params['project_id'])",
+        "negative": "project_id = Path(upload.filename).stem.removesuffix('.pdf')"
+      }
+    },
+    {
+      "rule_id": "ALR-15",
+      "slug": "typed-identity-resolution",
+      "statement": "Identity resolution is an explicit typed lookup; an unresolvable identifier yields a typed error and never a guessed alternative form, and human or display numbers stay presentation fields.",
+      "source_anchor": "AGENTS.md section 4 bullet 6; ARCHITECTURE_BIBLE.md P-01 and P-02; CP00_ARCHITECTURE_REVIEW.md FS-07",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md"
+      ],
+      "scope": [
+        "src/auditmanager/**",
+        "web/src/**"
+      ],
+      "enforcement": "review",
+      "severity": "error",
+      "detection": "The reviewer determines, for each value crossing a boundary, whether it is used in the role of identity, and confirms that resolution is a single typed lookup with a typed failure. The FS-07 shape, retrying a lookup with a stripped or appended extension after the first lookup misses, is a violation even though both lookups are typed.",
+      "false_positive_notes": [
+        "A display ordinal rendered next to a record is presentation and is not identity.",
+        "A migration mapping legacy identifiers to new ones is explicit evidence, not a guessed alternative form."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-06"
+      ],
+      "review_reason": "Whether a value plays the role of identity is semantic: the same string is a label in one call and a lookup key in another. The FS-07 fallback is only visible once that role is known.",
+      "severity_rationale": null,
+      "examples": {
+        "positive": "Reviewer records: an unknown project identifier returns the typed error project_not_found with a correlation id and no second lookup is attempted.",
+        "negative": "Reviewer records: the lookup misses, the code appends the pdf extension and looks up again, so two different inputs resolve to one entity."
+      }
+    },
+    {
+      "rule_id": "ALR-16",
+      "slug": "no-external-side-effect-in-transaction",
+      "statement": "Inside a database transaction or unit of work there is no external side effect; the intent is appended to the outbox and executed after commit.",
+      "source_anchor": "AGENTS.md section 4 bullet 7; ARCHITECTURE_BIBLE.md P-07 and section 6; ADR-0007",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/adr/ADR-0007-postgres-jobs-outbox-and-attempt-fencing.md"
+      ],
+      "scope": [
+        "src/auditmanager/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Determine the transaction blocks: a with or async with on a unit-of-work or session.begin object, or a function decorated as transactional. Inside such a block flag a call to an object-storage port write method, an HTTP or provider client, an event or broker publish, or a mail or webhook send. The admissible statement is an append to the outbox repository.",
+      "false_positive_notes": [
+        "Reading from an external system inside the transaction is not a dual write, although it holds the transaction open.",
+        "Appending an outbox row is the intended shape and is never flagged.",
+        "A side effect performed after commit is outside this rule and is governed by ALR-17."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-07"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "async with self.uow: the handler calls self.runs.add(run) and then self.outbox.append(RunPublished(run_id=run.id))",
+        "negative": "async with self.uow: the handler calls self.runs.add(run) and then await self.storage.put(blob_id, payload)"
+      }
+    },
+    {
+      "rule_id": "ALR-17",
+      "slug": "outbox-and-reconciliation",
+      "statement": "Every external side effect paired with a database mutation has an outbox record and a named reconciliation or recovery procedure with an owner.",
+      "source_anchor": "AGENTS.md section 4 bullet 7; ARCHITECTURE_BIBLE.md P-07 and section 6; CP00_ARCHITECTURE_REVIEW.md FS-03",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md"
+      ],
+      "scope": [
+        "src/auditmanager/**",
+        "infra/runbooks/**"
+      ],
+      "enforcement": "review",
+      "severity": "error",
+      "detection": "For each pair of a database mutation and an external effect, the reviewer names the outbox record that carries the intent, the dispatcher that performs it, the retry and poison policy, and the reconciliation procedure that detects an effect without a record or a record without an effect.",
+      "false_positive_notes": [
+        "A read-only external call needs no outbox record.",
+        "An effect that is idempotent and re-driven from the outbox needs no separate compensation, only a bounded retry policy."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-07"
+      ],
+      "review_reason": "A checker sees the call site, not the operational design. It cannot tell whether the outbox row that exists corresponds to the effect that was performed, nor whether a reconciliation procedure exists and has an owner.",
+      "severity_rationale": null,
+      "examples": {
+        "positive": "Reviewer records: the export publication intent is an outbox row, the dispatcher is at-least-once and idempotent by export_id, and the reconciliation job is named with its owner.",
+        "negative": "Reviewer records: the provider webhook is sent by the request handler after commit with no record of the intent, so a crash loses it with no way to detect the loss."
+      }
+    },
+    {
+      "rule_id": "ALR-18",
+      "slug": "no-swallowed-error",
+      "statement": "No caught error is discarded: a handler re-raises, maps to a typed error, or returns a declared partial or degraded result that the caller can observe.",
+      "source_anchor": "AGENTS.md section 4 bullet 8; ARCHITECTURE_BIBLE.md P-10; CP00_ARCHITECTURE_REVIEW.md section 7",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md"
+      ],
+      "scope": [
+        "src/auditmanager/**",
+        "web/src/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag a bare except clause; an except body that is only pass or only a debug or info log; an except body that returns None, an empty container, zero or False without raising; in TypeScript an empty catch block, a catch that neither rethrows nor records, and a catch handler on a promise that returns a literal default.",
+      "false_positive_notes": [
+        "A handler that raises a typed adapter or domain error is the intended mapping shape.",
+        "A retry loop that suppresses intermediate attempts and re-raises after the last one is compliant.",
+        "A UI error boundary that renders an error state makes the failure visible and is compliant.",
+        "A finally block is cleanup, not a handler."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "the declared, observable degraded mode that the suppressed path resolves to; a waiver may never produce a silent success, which ALR-19 forbids without exception",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-08"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "except ProviderTimeout as exc: raise AnalysisUnavailable(correlation_id=ctx.correlation_id) from exc",
+        "negative": "except Exception: return an empty list"
+      }
+    },
+    {
+      "rule_id": "ALR-19",
+      "slug": "no-silent-fallback",
+      "statement": "An unknown or failed contract, auth, norm, provider or stage state resolves to a typed failure, a declared partial, or a named, observable and temporary degraded mode; no path resolves a failure to success.",
+      "source_anchor": "AGENTS.md section 4 bullet 8; ARCHITECTURE_BIBLE.md P-10; CP00_ARCHITECTURE_REVIEW.md section 7 target policies FS-01 to FS-08",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md"
+      ],
+      "scope": [
+        "src/auditmanager/**",
+        "web/src/**",
+        "contracts/**"
+      ],
+      "enforcement": "review",
+      "severity": "error",
+      "detection": "For each failure path the reviewer names the resolved outcome and checks it against the target policy of the matching FS row: a required export member that is missing yields partial or failed (FS-01); a carryover failure is a declared state with a recorded failure class (FS-02); a projection build failure is a named degraded mode (FS-03); a degraded stage resolves to a declared non-success terminal state (FS-04-A); a failed optional optimization branch resolves the consuming run to partial and never to success (FS-04-C); a deterministic summary substituted for AI review is marked and states its provenance (FS-05).",
+      "false_positive_notes": [
+        "A declared partial with a stable error code is the intended outcome, not a fallback.",
+        "A compatibility mode that is named, observable, time-boxed and owned is admissible under P-10."
+      ],
+      "waiver_policy": {
+        "waivable": false,
+        "authority": "none",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "not applicable",
+        "reason": "CP00_ARCHITECTURE_REVIEW.md section 7 records that the no-silent-success rule binds FS-04-A, FS-04-B and FS-04-C in full and admits no exception.",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-08"
+      ],
+      "review_reason": "Silent fallback in the general case is a statement about the meaning of a result, not its shape. The same returned default is a declared partial in one contract and a swallowed failure in another, which is exactly why the CP-00 review maps FS-01 to FS-08 one at a time instead of by pattern.",
+      "severity_rationale": null,
+      "examples": {
+        "positive": "Reviewer records: the export omits a declared member, so the response is partial with a stable error code and the manifest lists the missing member.",
+        "negative": "Reviewer records: the embedded workbook failed to render, the archive was produced without it and the response is success."
+      }
+    },
+    {
+      "rule_id": "ALR-20",
+      "slug": "ai-modules-no-decision-write",
+      "statement": "Analysis, model-provider and AI synthesis modules never write an expert decision or the verdict projection; their output is a recommendation artifact.",
+      "source_anchor": "AGENTS.md section 4 bullet 9; ARCHITECTURE_BIBLE.md P-18; ADR-0012; owner decision PD-01",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/CP00_OWNER_DECISIONS.md",
+        "docs/architecture/adr/ADR-0012-expert-decision-ledger-and-kb-projection.md"
+      ],
+      "scope": [
+        "src/auditmanager/analysis/**",
+        "src/auditmanager/comparison/**",
+        "src/auditmanager/workers/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag an import or call of a decision-write surface from a module in scope or from any module that imports a model-provider port: the append or revoke command of the decisions context, the verdict projection writer, and any repository write on the decision aggregate. Writing a recommendation record that references a finding is the admissible shape.",
+      "false_positive_notes": [
+        "Reading the current verdict projection for context is allowed.",
+        "Modules of the decisions context itself are out of scope.",
+        "A replay test that seeds decisions through the public command surface lives under tests/** and is out of scope."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-09"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "await self.recommendations.add(Recommendation(finding_id=f.id, model_call_id=call.id))",
+        "negative": "await self.decisions.append(DecisionEvent(finding_id=f.id, verdict='confirmed', actor='llm'))"
+      }
+    },
+    {
+      "rule_id": "ALR-21",
+      "slug": "llm-output-not-canonical-verdict",
+      "statement": "LLM output is a recommendation; the canonical expert verdict is a projection of append-only decision events, and a revocation projects the current verdict to pending without restoring a superseded one.",
+      "source_anchor": "AGENTS.md section 4 bullet 9; ARCHITECTURE_BIBLE.md P-18 and section 2; ADR-0012; owner decision PD-01 as approved with modification",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/CP00_OWNER_DECISIONS.md",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+        "docs/architecture/adr/ADR-0012-expert-decision-ledger-and-kb-projection.md"
+      ],
+      "scope": [
+        "src/auditmanager/**",
+        "contracts/**",
+        "web/src/**"
+      ],
+      "enforcement": "review",
+      "severity": "error",
+      "detection": "The reviewer follows the read path of the current verdict and confirms that it is a projection over decision events only, that no recommendation table feeds it, and that the interface presents a recommendation as a recommendation. A recommendation consumed as a verdict by a projection or by the UI is a violation even when no forbidden import exists.",
+      "false_positive_notes": [
+        "An AI recommendation displayed beside the verdict, clearly attributed, is the intended shape.",
+        "An AI-suggested review flag that creates work for a human is not a verdict."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-09"
+      ],
+      "review_reason": "Whether a stored value is consumed as the canonical verdict is a semantic role of the read model. A recommendation table can be projected as if it were a decision without any forbidden import appearing anywhere.",
+      "severity_rationale": null,
+      "examples": {
+        "positive": "Reviewer records: the verdict projection is built from decision events only; recommendations are joined for display and are labelled.",
+        "negative": "Reviewer records: when no human decision exists the projection falls back to the model recommendation and presents it in the verdict column."
+      }
+    },
+    {
+      "rule_id": "ALR-22",
+      "slug": "raw-evidence-write-once",
+      "statement": "Raw deterministic comparison evidence is write-once for the AI layer: an AI module never writes, deletes, overwrites or recomputes the checksum of a raw evidence artifact.",
+      "source_anchor": "AGENTS.md section 4 bullet 10; ARCHITECTURE_BIBLE.md P-17 and section 11; ADR-0013",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/adr/ADR-0013-comparison-evidence-layers.md",
+        "docs/architecture/adr/ADR-0014-authz-classification-retention.md"
+      ],
+      "scope": [
+        "src/auditmanager/comparison/**",
+        "src/auditmanager/analysis/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag, in a module that imports a model-provider port or lives under an AI or synthesis package, a storage write or delete on a blob whose declared role is a raw evidence role, a repository update or delete on the raw evidence record, and a checksum recomputation that overwrites the stored checksum. Creating a new derived artifact that references the source checksum is the admissible shape.",
+      "false_positive_notes": [
+        "The deterministic comparison stage that produces the artifact is its writer and is not an AI module.",
+        "Retention or erasure of a whole retired comparison revision is a lifecycle operation, and its authority is the deferred ADR-0014.",
+        "Reading the raw artifact and its checksum is always allowed."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-10"
+      ],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "await self.artifacts.add(AiReview(source_checksum=raw.sha256, revision=raw.revision))",
+        "negative": "await self.artifacts.update(raw.id, body=ai_summary, sha256=sha256(ai_summary))"
+      }
+    },
+    {
+      "rule_id": "ALR-23",
+      "slug": "ai-artifacts-stay-derived",
+      "statement": "AI output stays a separate versioned derived artifact that references the source checksum; it is never republished under the identity of the raw evidence.",
+      "source_anchor": "AGENTS.md section 4 bullet 10; ARCHITECTURE_BIBLE.md P-17 and section 11; ADR-0013; CP00_ARCHITECTURE_REVIEW.md FS-05",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+        "docs/architecture/adr/ADR-0013-comparison-evidence-layers.md"
+      ],
+      "scope": [
+        "src/auditmanager/comparison/**",
+        "src/auditmanager/analysis/**",
+        "contracts/**"
+      ],
+      "enforcement": "review",
+      "severity": "error",
+      "detection": "The reviewer follows the provenance chain of every artifact a consumer may read as raw evidence and confirms that each AI artifact has its own identity, its own revision and a reference to the source checksum. Re-deriving an artifact and publishing it under the same identity, or copying an AI summary into a field consumers read as raw evidence, is a violation.",
+      "false_positive_notes": [
+        "A new AI revision produced for an unchanged raw artifact is normal, as long as it carries its own identity.",
+        "A deterministic re-run that reproduces the raw artifact byte for byte is a deterministic stage output, not an AI write."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-10"
+      ],
+      "review_reason": "The prohibition is about substance. Republishing under the same identity, or presenting a synthesis in a raw-evidence field, preserves every syntactic constraint; only the artifact's meaning and provenance chain decide it.",
+      "severity_rationale": null,
+      "examples": {
+        "positive": "Reviewer records: the AI review artifact has its own id and revision and names the raw diff checksum it was derived from.",
+        "negative": "Reviewer records: the AI summary is written into the diff artifact record so consumers reading raw evidence receive synthesis."
+      }
+    },
+    {
+      "rule_id": "ALR-24",
+      "slug": "canonical-contract-version-key",
+      "statement": "A machine contract declares its version under contract_version; a bare version key and a schema_version envelope key are violations.",
+      "source_anchor": "Integration decision ID-01 recorded in CP00_ARCHITECTURE_REVIEW.md section 6.3 and CP00_OWNER_DECISIONS.md",
+      "anchor_files": [
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+        "docs/architecture/CP00_OWNER_DECISIONS.md"
+      ],
+      "scope": [
+        "contracts/**/*.json"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Walk every JSON document under contracts/** and flag an object key named version or schema_version at any depth. The dialect key is not a version key and neither is the identity key; both keep their JSON Schema meaning.",
+      "false_positive_notes": [
+        "contract_version is the required key and is never flagged.",
+        "A distinct domain field with its own name, such as a norms snapshot version field, is a different key and is not flagged.",
+        "A string value that contains the word version is not a key.",
+        "docs/** prose is out of scope."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner, recorded by the program integrator",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "the integration decision it departs from, exact scope, expiry checkpoint and removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "\"contract_version\": \"1.0.0-draft.1\"",
+        "negative": "\"schema_version\": 1"
+      }
+    },
+    {
+      "rule_id": "ALR-25",
+      "slug": "canonical-execution-token-name",
+      "statement": "The attempt fencing capability is named execution_token, is opaque and is compared only for equality; fencing_token, fence_token and a numeric or ordered token are violations.",
+      "source_anchor": "Integration decision ID-02 recorded in CP00_ARCHITECTURE_REVIEW.md section 6.3; ADR-0007 with the adapt qualification recorded in that review; owner decision PD-03",
+      "anchor_files": [
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+        "docs/architecture/CP00_OWNER_DECISIONS.md",
+        "docs/architecture/adr/ADR-0007-postgres-jobs-outbox-and-attempt-fencing.md"
+      ],
+      "scope": [
+        "contracts/**",
+        "src/auditmanager/**",
+        "web/src/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag a declared field named fencing_token or fence_token in a contract schema or in code; flag an execution_token declared with a numeric type in a schema or annotated as an integer in code; and flag an ordering comparison - <, >, <=, >=, min, max, sorted - applied to an execution_token value. Those three shapes are the whole of this rule. No field is flagged for being named epoch, sequence, counter or version, in any position and next to any neighbour: ID-02 fixes the name of the attempt-authority token, and which value holds that role is not a syntactic property. The role question is ALR-13, which is review.",
+      "false_positive_notes": [
+        "A database sequence used internally by an adapter is not the domain token and is not a declared field.",
+        "The name epoch is not part of this rule's detection. A created_epoch timestamp declared on an Attempt, a connection, session or gateway epoch, a unix time epoch, a cache or configuration generation: none of them is examined here, including when declared beside attempt_id or execution_token. Being declared next to the authority token is adjacency, not the authority role, and no owner decision bans the word epoch.",
+        "The connection-epoch mechanism is recorded as DW-05 legacy evidence in the ADR-0007 row of CP00_ARCHITECTURE_REVIEW.md section 5, which states that no domain-level fencing_token field was established. It is an observed legacy behavior, not a target field, and is not relabelled by this rule.",
+        "Whether a value of another name - an epoch, a sequence, a counter or a version - is in fact used as the authority of the current attempt is not decided here; that whole question is ALR-13, which is review.",
+        "docs/** and fixtures/** records of legacy behavior are out of scope."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner, recorded by the program integrator",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "the integration decision it departs from, exact scope, expiry checkpoint and removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "\"execution_token\": {\"type\": \"string\", \"minLength\": 16}",
+        "negative": "\"fencing_token\": {\"type\": \"integer\"}"
+      }
+    },
+    {
+      "rule_id": "ALR-26",
+      "slug": "optimization-vocabulary-disabled",
+      "statement": "Until W5-OPT-01 is accepted, the four project-optimization names are declared nowhere as a stage, status, endpoint, package or capability.",
+      "source_anchor": "Owner decision PD-05 and obligation U-06-OB-1 recorded in CP00_ARCHITECTURE_REVIEW.md section 11 and CP00_OWNER_DECISIONS.md",
+      "anchor_files": [
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+        "docs/architecture/CP00_OWNER_DECISIONS.md"
+      ],
+      "scope": [
+        "contracts/analysis/v1/**",
+        "contracts/domain/v1/**",
+        "contracts/events/v1/**",
+        "src/auditmanager/**",
+        "web/src/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag the names optimization, optimization_critic, optimization_corrector and optimization_review appearing as the value of a stage, status, endpoint or capability declaration key, or as a module, route or component name, in scope.",
+      "false_positive_notes": [
+        "The legacy stage name map records these four names as explicit exclusions with evidence; an exclusion record is the required form, not a declaration.",
+        "Prose in docs/** that describes the decision is out of scope.",
+        "contracts/optimization/v1/** does not exist yet; when W5-OPT-01 creates it this rule is re-scoped by that task, not waived."
+      ],
+      "waiver_policy": {
+        "waivable": false,
+        "authority": "none",
+        "record": "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+        "requires": "not applicable",
+        "reason": "U-06-OB-1 is an owner obligation that expires by acceptance of W5-OPT-01, not by waiver.",
+        "self_service": false
+      },
+      "covers_prohibitions": [],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "\"excluded_reason\": \"PD-05 moves optimization_review to the project-optimization sub-pipeline\"",
+        "negative": "\"stage_id\": \"optimization_review\""
+      }
+    },
+    {
+      "rule_id": "ALR-27",
+      "slug": "backend-tests-outside-src",
+      "statement": "Backend test modules live under tests/; a test module or a test-framework import inside src/auditmanager/ is a violation.",
+      "source_anchor": "REPOSITORY_LAYOUT.md repository tree; ADR-0004 Decision; ADR-0016 evidence model",
+      "anchor_files": [
+        "docs/architecture/REPOSITORY_LAYOUT.md",
+        "docs/architecture/adr/ADR-0004-repository-layout-and-module-boundaries.md",
+        "docs/architecture/adr/ADR-0016-testing-evidence-model.md"
+      ],
+      "scope": [
+        "src/auditmanager/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Flag a module in src/auditmanager/** whose filename matches the test module pattern, and a runtime import of pytest, unittest or a test double library from product code.",
+      "false_positive_notes": [
+        "A fixture builder shipped as product code is not a test module, provided it is not named as one.",
+        "tests/** itself is out of scope.",
+        "Frontend test placement is not decided by any frozen input and is deliberately out of scope; see escalation E-ARC02-01."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "tests/contract/test_stage_registry.py",
+        "negative": "src/auditmanager/jobs/test_lease.py"
+      }
+    },
+    {
+      "rule_id": "ALR-28",
+      "slug": "coverage-not-sole-release-evidence",
+      "statement": "No release, checkpoint or merge gate uses a coverage percentage as its sole proof; each gate names the ADR-0016 evidence classes it rests on.",
+      "source_anchor": "ADR-0016 Decision; ARCHITECTURE_BIBLE.md section 12; P-20 and P-21",
+      "anchor_files": [
+        "docs/architecture/adr/ADR-0016-testing-evidence-model.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md"
+      ],
+      "scope": [
+        "docs/stages/**",
+        "docs/manual-tests/**",
+        "docs/program/**",
+        "infra/**"
+      ],
+      "enforcement": "review",
+      "severity": "error",
+      "detection": "The reviewer reads the acceptance record of the gate and lists the evidence classes it actually rests on. A gate whose only stated proof is a coverage number, or whose other evidence classes are named but not produced, is a violation.",
+      "false_positive_notes": [
+        "A coverage threshold used as one signal beside named evidence classes is admissible.",
+        "A coverage report attached as context to a checkpoint bundle is evidence about tests, not a substitute for them."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [],
+      "review_reason": "The rule constrains what a human accepts as proof. A threshold in CI configuration is detectable, but whether it is the sole proof depends on the whole acceptance record, which lives in the manual runbook and the integration report.",
+      "severity_rationale": null,
+      "examples": {
+        "positive": "Reviewer records: the checkpoint names characterization, contract and manual runbook evidence, each with a produced artifact.",
+        "negative": "Reviewer records: the release gate is the coverage threshold and nothing else is required to be green."
+      }
+    },
+    {
+      "rule_id": "ALR-29",
+      "slug": "no-empty-framework-layer",
+      "statement": "A module sublayer exists only when a real use case populates it; a sublayer directory holding only an init file or a placeholder is a violation.",
+      "source_anchor": "ADR-0004 Decision, empty folders are not architecture; REPOSITORY_LAYOUT.md backend module shape",
+      "anchor_files": [
+        "docs/architecture/adr/ADR-0004-repository-layout-and-module-boundaries.md",
+        "docs/architecture/REPOSITORY_LAYOUT.md"
+      ],
+      "scope": [
+        "src/auditmanager/*/domain/**",
+        "src/auditmanager/*/application/**",
+        "src/auditmanager/*/ports/**",
+        "src/auditmanager/*/adapters/**"
+      ],
+      "enforcement": "static",
+      "severity": "warning",
+      "detection": "Flag a sublayer directory in scope that contains no module other than an init file, and a sublayer whose modules define no symbol.",
+      "false_positive_notes": [
+        "The context-level boundary README that the frozen skeleton ships is required by REPOSITORY_LAYOUT.md and is not a sublayer.",
+        "Declared top-level layout directories such as db/migrations and tests/<class> are layout, not module sublayers.",
+        "A namespace package intentionally left empty for packaging reasons must be declared as such."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [],
+      "review_reason": null,
+      "severity_rationale": "ADR-0004 states this as layout discipline rather than a runtime invariant, and a sublayer can be legitimately empty for the length of one in-progress change. The rule is fully decidable from the tree, so it stays static; only its severity is warning.",
+      "examples": {
+        "positive": "src/auditmanager/jobs/application/lease_attempt.py exists together with the application package",
+        "negative": "src/auditmanager/jobs/application/ contains only an init file"
+      }
+    },
+    {
+      "rule_id": "ALR-30",
+      "slug": "composition-root-only-wiring",
+      "statement": "Concrete adapters are constructed only in the composition root; domain and application code receives ports as parameters and no module resolves a dependency from a global container or service locator.",
+      "source_anchor": "ARCHITECTURE_BIBLE.md section 5, dependency injection at the composition root and no service locator; REPOSITORY_LAYOUT.md bootstrap module",
+      "anchor_files": [
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/REPOSITORY_LAYOUT.md"
+      ],
+      "scope": [
+        "src/auditmanager/**"
+      ],
+      "enforcement": "static",
+      "severity": "error",
+      "detection": "Outside src/auditmanager/bootstrap/**, flag: an import of a module under an adapters package by a module under a domain or application package; instantiation of an adapter class inside a domain or application function; and a call of the shape container.get, registry.resolve or a service-locator lookup, including a module-level singleton accessor that returns a wired service.",
+      "false_positive_notes": [
+        "FastAPI dependency declarations in src/auditmanager/api/** resolve against providers declared in the composition root and are not a service locator.",
+        "A factory function that receives its dependencies as arguments is compliant wherever it lives.",
+        "Importing a port protocol is not importing an adapter."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "def build_run_service(storage: StoragePort, runs: RunRepository) -> RunService: ...",
+        "negative": "def handle(cmd): storage = S3StorageAdapter(settings.bucket); ..."
+      }
+    },
+    {
+      "rule_id": "ALR-31",
+      "slug": "generated-client-parity",
+      "statement": "The generated TypeScript API client is byte-identical to a fresh generation from the committed OpenAPI document; a hand edit is a violation.",
+      "source_anchor": "ARCHITECTURE_BIBLE.md section 9 and section 10, the generated client is not edited by hand; ADR-0009",
+      "anchor_files": [
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/adr/ADR-0009-nextjs-react-typescript-fsd.md"
+      ],
+      "scope": [
+        "web/src/shared/api/**",
+        "contracts/api/v1/**"
+      ],
+      "enforcement": "test",
+      "severity": "error",
+      "detection": "An evidence job regenerates the client from the committed OpenAPI document with the pinned generator version into a temporary directory and diffs it against the committed client. Any difference is a violation. A generated-file header check is a supporting signal, not the decision.",
+      "false_positive_notes": [
+        "A generator version bump changes the whole output; that is a recorded regeneration with a new pin, not a hand edit.",
+        "Formatting applied by a repository-wide formatter is admissible only if the same formatter runs on the regenerated output before the diff."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "The regeneration job reports no diff against web/src/shared/api",
+        "negative": "A response type in the committed client gains an extra optional field that the OpenAPI document does not declare"
+      }
+    },
+    {
+      "rule_id": "ALR-32",
+      "slug": "shared-only-cross-cutting",
+      "statement": "A shared module holds only genuinely cross-cutting primitives; a domain-specific helper placed there for convenience is a violation.",
+      "source_anchor": "AGENTS.md section 4 bullet 4; REPOSITORY_LAYOUT.md Shared; ARCHITECTURE_BIBLE.md P-14",
+      "anchor_files": [
+        "AGENTS.md",
+        "docs/architecture/REPOSITORY_LAYOUT.md",
+        "docs/architecture/ARCHITECTURE_BIBLE.md"
+      ],
+      "scope": [
+        "src/auditmanager/shared/**",
+        "web/src/shared/**"
+      ],
+      "enforcement": "review",
+      "severity": "error",
+      "detection": "For each module in shared the reviewer names the cross-cutting concern it implements and confirms the concern is not owned by a single context. A helper that encodes a rule of one context, even if three contexts call it, belongs to that context and is a violation.",
+      "false_positive_notes": [
+        "Typed identifiers, checksum, clock, error base types and telemetry abstractions are the declared cross-cutting set.",
+        "A primitive used by one context today but defined by a mandatory boundary is admissible under P-14."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [
+        "AG4-04"
+      ],
+      "review_reason": "Cross-cutting is a judgment about meaning, not about imports. A helper can be imported by three contexts and still be a rule owned by one of them; the import graph shows usage, never ownership.",
+      "severity_rationale": null,
+      "examples": {
+        "positive": "Reviewer records: shared/clock.py exposes a Clock protocol used as a port by several contexts and encodes no rule.",
+        "negative": "Reviewer records: shared/finding_merge.py encodes the merge policy of the findings context and was placed in shared to avoid an import."
+      }
+    },
+    {
+      "rule_id": "ALR-33",
+      "slug": "forward-only-migrations",
+      "statement": "Migrations are forward-only and re-runnable, a breaking data change follows expand, backfill, switch and contract, and a down path is never the recovery procedure.",
+      "source_anchor": "ARCHITECTURE_BIBLE.md section 6 PostgreSQL rules; section 12 evidence class 5; ADR-0016",
+      "anchor_files": [
+        "docs/architecture/ARCHITECTURE_BIBLE.md",
+        "docs/architecture/adr/ADR-0016-testing-evidence-model.md"
+      ],
+      "scope": [
+        "db/migrations/**",
+        "infra/runbooks/**"
+      ],
+      "enforcement": "test",
+      "severity": "error",
+      "detection": "The migration evidence job applies the full chain to an empty database, then to a database seeded with the previous release fixture, then re-applies the head migration to prove idempotence. A violation is a chain that fails on either database, a head that is not re-runnable, or a runbook that names a down path as the recovery procedure.",
+      "false_positive_notes": [
+        "An individually reversible expand-phase migration is still forward-only as a chain.",
+        "A down implementation kept for local development is admissible while no runbook names it as recovery.",
+        "A re-runnable data backfill is compliant."
+      ],
+      "waiver_policy": {
+        "waivable": true,
+        "authority": "repository owner",
+        "record": "docs/architecture/EXCEPTIONS.md",
+        "requires": "principle/ADR violated, exact scope, reason, risk, compensating control, owner, expiry checkpoint, removal task",
+        "self_service": false
+      },
+      "covers_prohibitions": [],
+      "review_reason": null,
+      "severity_rationale": null,
+      "examples": {
+        "positive": "The chain applies to an empty and to a seeded database and the head re-applies with no change",
+        "negative": "The rollback runbook instructs the operator to run the down migration to recover"
+      }
+    }
+  ],
+  "rule_identity_pin": {
+    "ALR-01": {
+      "slug": "router-no-sql",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-02": {
+      "slug": "object-storage-key-only-in-adapter",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-03": {
+      "slug": "router-no-filesystem",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-04": {
+      "slug": "react-no-data-access",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-05": {
+      "slug": "backend-cross-context-public-only",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-06": {
+      "slug": "frontend-fsd-import-direction",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-07": {
+      "slug": "shared-imports-no-context",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-08": {
+      "slug": "schema-layer-no-domain-import",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-09": {
+      "slug": "no-business-logic-in-schema-or-ui",
+      "enforcement": "review",
+      "severity": "error"
+    },
+    "ALR-10": {
+      "slug": "forbidden-generic-abstraction-names",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-11": {
+      "slug": "abstraction-requires-proven-semantics",
+      "enforcement": "review",
+      "severity": "error"
+    },
+    "ALR-12": {
+      "slug": "no-module-level-job-state",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-13": {
+      "slug": "durable-job-state-and-fencing",
+      "enforcement": "review",
+      "severity": "error"
+    },
+    "ALR-14": {
+      "slug": "no-path-derived-identity",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-15": {
+      "slug": "typed-identity-resolution",
+      "enforcement": "review",
+      "severity": "error"
+    },
+    "ALR-16": {
+      "slug": "no-external-side-effect-in-transaction",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-17": {
+      "slug": "outbox-and-reconciliation",
+      "enforcement": "review",
+      "severity": "error"
+    },
+    "ALR-18": {
+      "slug": "no-swallowed-error",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-19": {
+      "slug": "no-silent-fallback",
+      "enforcement": "review",
+      "severity": "error"
+    },
+    "ALR-20": {
+      "slug": "ai-modules-no-decision-write",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-21": {
+      "slug": "llm-output-not-canonical-verdict",
+      "enforcement": "review",
+      "severity": "error"
+    },
+    "ALR-22": {
+      "slug": "raw-evidence-write-once",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-23": {
+      "slug": "ai-artifacts-stay-derived",
+      "enforcement": "review",
+      "severity": "error"
+    },
+    "ALR-24": {
+      "slug": "canonical-contract-version-key",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-25": {
+      "slug": "canonical-execution-token-name",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-26": {
+      "slug": "optimization-vocabulary-disabled",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-27": {
+      "slug": "backend-tests-outside-src",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-28": {
+      "slug": "coverage-not-sole-release-evidence",
+      "enforcement": "review",
+      "severity": "error"
+    },
+    "ALR-29": {
+      "slug": "no-empty-framework-layer",
+      "enforcement": "static",
+      "severity": "warning"
+    },
+    "ALR-30": {
+      "slug": "composition-root-only-wiring",
+      "enforcement": "static",
+      "severity": "error"
+    },
+    "ALR-31": {
+      "slug": "generated-client-parity",
+      "enforcement": "test",
+      "severity": "error"
+    },
+    "ALR-32": {
+      "slug": "shared-only-cross-cutting",
+      "enforcement": "review",
+      "severity": "error"
+    },
+    "ALR-33": {
+      "slug": "forward-only-migrations",
+      "enforcement": "test",
+      "severity": "error"
+    }
+  },
+  "rule_identity_pin_note": "The pin makes a rename, a duplicate, a silent removal and a post-acceptance change of enforcement or severity fail GATE-C. It cannot stop a coordinated edit of both the rule and its pin; what it guarantees is that such an edit is a deliberate, visible change to a declared identity block, which is exactly the freeze-break the integration contract requires.",
+  "review_only_subset": [
+    "ALR-09",
+    "ALR-11",
+    "ALR-13",
+    "ALR-15",
+    "ALR-17",
+    "ALR-19",
+    "ALR-21",
+    "ALR-23",
+    "ALR-28",
+    "ALR-32"
+  ],
+  "handoff_w1_arc_01": {
+    "implement_first": [
+      "ALR-01",
+      "ALR-02",
+      "ALR-03",
+      "ALR-04",
+      "ALR-05",
+      "ALR-06",
+      "ALR-07",
+      "ALR-08",
+      "ALR-10",
+      "ALR-12",
+      "ALR-14",
+      "ALR-16",
+      "ALR-18",
+      "ALR-20",
+      "ALR-22",
+      "ALR-24",
+      "ALR-25",
+      "ALR-26",
+      "ALR-27",
+      "ALR-30"
+    ],
+    "implement_first_count": 20,
+    "then": [
+      "ALR-29",
+      "ALR-31",
+      "ALR-33"
+    ],
+    "not_automatable": [
+      "ALR-09",
+      "ALR-11",
+      "ALR-13",
+      "ALR-15",
+      "ALR-17",
+      "ALR-19",
+      "ALR-21",
+      "ALR-23",
+      "ALR-28",
+      "ALR-32"
+    ],
+    "stable_surface": [
+      "rule_id",
+      "slug",
+      "enforcement",
+      "severity",
+      "detection"
+    ],
+    "may_not_rely_on": "any claim that the repository currently satisfies a rule"
+  },
+  "escalations": [
+    {
+      "escalation_id": "E-ARC02-01",
+      "rule_id": "ALR-27",
+      "conflicting_adr": [
+        "ADR-0004",
+        "ADR-0016"
+      ],
+      "contradiction": "The obvious form of this rule, pinning every test module to the five directories the repository layout declares, contradicts ADR-0016. REPOSITORY_LAYOUT.md declares tests/characterization, tests/contract, tests/integration, tests/e2e and tests/replay. ADR-0016 and ARCHITECTURE_BIBLE.md section 12 require ten evidence classes, and four of them have no declared home: domain unit tests, migration and re-run tests, live-quality policy tests for LLM, and restore/rollback drills. Frontend test placement is likewise undeclared, although ADR-0009 puts the frontend under web/src.",
+      "evidence": [
+        "docs/architecture/REPOSITORY_LAYOUT.md repository tree, tests subtree lists five directories",
+        "docs/architecture/adr/ADR-0016-testing-evidence-model.md Decision names the evidence classes",
+        "docs/architecture/ARCHITECTURE_BIBLE.md section 12 lists ten required evidence types"
+      ],
+      "action_taken_here": "ALR-27 was written to the intersection both inputs agree on: a backend test module must not live under src/auditmanager. The directory set is deliberately not pinned and the frontend is explicitly out of scope.",
+      "routed_to": "program integrator, for an ADR-owning task under docs/architecture/adr/**",
+      "not_executed_here": "docs/architecture/adr/** and ADR_INDEX.md are forbidden hotspots for W0-ARC-02; this task authors, supersedes and indexes no ADR."
+    },
+    {
+      "escalation_id": "E-ARC02-02",
+      "rule_id": "ALR-25",
+      "conflicting_adr": [
+        "ADR-0007"
+      ],
+      "contradiction": "ALR-25 makes the field names fencing_token and fence_token violations, while the accepted ADR-0007 text says each Attempt carries a lease/heartbeat and fencing token. The CP-00 review disposes ADR-0007 as adapt and records the qualification that the capability is named execution_token, is opaque and equality-only, and that fencing is behavior rather than a field name; integration decision ID-02 fixes the name. The rule therefore follows a recorded qualification that the ADR body itself does not carry, so an implementer reading only ADR-0007 would write the forbidden name.",
+      "evidence": [
+        "docs/architecture/adr/ADR-0007-postgres-jobs-outbox-and-attempt-fencing.md Decision",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md section 5, ADR-0007 row, adapt qualification",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md section 6.3, integration decision ID-02"
+      ],
+      "action_taken_here": "ALR-25 is published as specified, with its source anchor naming ID-02 and the ADR-0007 adapt qualification, so the conflict is visible at the rule rather than hidden in it.",
+      "routed_to": "program integrator, to decide at W0-INT-01 whether the qualification is carried into an ADR-owning task or recorded as a ratification note",
+      "not_executed_here": "No ADR text, status or index row was touched; recording the qualification inside ADR-0007 would be an ADR write this task is not authorized to make."
+    }
+  ],
+  "conflicts_checked_not_escalated": [
+    {
+      "rule_id": "ALR-24",
+      "checked_against": "ADR-0003",
+      "finding": "ADR-0003 requires every boundary to be versioned by a machine schema but names no version key, so pinning the key to contract_version adds a naming decision without contradicting the ADR. The conflict that does exist is with repository state, not with an ADR: scripts/validate_bootstrap.py currently requires a bare version key in the domain error catalog. That is the ID-01 work of W0-QA-03 and W0-DOM-02 and is recorded as an open item."
+    },
+    {
+      "rule_id": "ALR-26",
+      "checked_against": "ADR-0008",
+      "finding": "ADR-0008 makes the stage registry a package-contract boundary and says nothing about optimization membership. PD-05 decided membership and U-06 assigned the capability to a separate bounded context, so the rule implements an owner decision rather than contradicting the ADR."
+    },
+    {
+      "rule_id": "ALR-29",
+      "checked_against": "ADR-0004",
+      "finding": "ADR-0004 states that empty folders are not architecture and the frozen skeleton ships context-level boundary READMEs, which REPOSITORY_LAYOUT.md requires. The rule is scoped to module sublayers, so the required skeleton shape is not a violation and no ADR is contradicted."
+    }
+  ],
+  "open_items": [
+    "No compliance claim is made by this task. The repository holds a skeleton only: src/auditmanager and web/src contain boundary READMEs and one package init, so most scopes currently match no code. A first enforcement run under W1-ARC-01 will produce findings, and that is expected.",
+    "ALR-24 is contradicted by repository state at the base commit, not by an ADR: scripts/validate_bootstrap.py requires a bare version key in contracts/domain/v1/error-codes.json. W0-QA-03 teaches the validator to read contract_version and W0-DOM-02 removes the mirror. Until both are integrated, an enforcement run of ALR-24 and the bootstrap validator cannot both be green, and neither task is owned here.",
+    "Scope globs are written against the layout ADR-0004 and REPOSITORY_LAYOUT.md declare, including directories that do not exist yet, such as the module sublayers and web/src/shared/api. W1-ARC-01 must treat an empty glob as no finding, never as a pass.",
+    "ALR-31 and ALR-33 need infrastructure that does not exist at CP-00: a pinned client generator and a database evidence job. They are specified as test enforcement precisely so that no reader mistakes them for a static check available today.",
+    "The rules constrain code that is prohibited before CP-00 anyway. They are a specification for W1-ARC-01, not a gate on this wave.",
+    "U-04 stays open, so no rule mentions a tenant, an identity provider, a TTL, a retention period or a legal hold; ALR-22 defers artifact lifecycle authority to the deferred ADR-0014 rather than deciding it."
+  ],
+  "verification": {
+    "gates": [
+      {
+        "gate_id": "GATE-A",
+        "purpose": "The JSON rule set is well-formed, rule IDs are unique and match ALR-NN, every required field is present and typed, and the Markdown table covers exactly the same IDs once each.",
+        "source": "Required tests of docs/program/tasks/W0-ARC-02.md",
+        "documented_in": "ARCHITECTURE_LINT_RULES.md, Verification"
+      },
+      {
+        "gate_id": "GATE-B",
+        "purpose": "Every declared AGENTS.md section 4 prohibition is covered by at least one rule, with no orphan on either side.",
+        "source": "Required tests of docs/program/tasks/W0-ARC-02.md",
+        "documented_in": "ARCHITECTURE_LINT_RULES.md, Verification"
+      },
+      {
+        "gate_id": "GATE-C",
+        "purpose": "Rule identity is pinned: rule_identity_pin and the rule set agree on the exact ID set, and each ID keeps its slug, enforcement and severity.",
+        "source": "Integration contract of W0-ARC-02, which makes rule_id, enforcement and severity freeze-break surface",
+        "documented_in": "ARCHITECTURE_LINT_RULES.md, Verification"
+      },
+      {
+        "gate_id": "GATE-D",
+        "purpose": "Mutation probe: GATE-C actually rejects a renamed rule_id, a duplicated rule_id, a flipped severity and a silently removed rule.",
+        "source": "W0.2 lesson recorded in docs/program/CURRENT_STATE.md, a mutation probe proves only what it mutates",
+        "documented_in": "ARCHITECTURE_LINT_RULES.md, Verification"
+      },
+      {
+        "gate_id": "GATE-E",
+        "purpose": "Provenance is complete and resolvable. Every frozen input a rule cites in any field except waiver_policy - the five named documents and every ADR id - appears in that rule's anchor_files, and every anchor_files path exists at the frozen base commit, resolved with git --no-replace-objects cat-file -e against that commit rather than with a working-tree path test. A probe proves the check reports a path that is present in the working tree and absent from the base commit.",
+        "source": "Non-goal of W0-ARC-02: no rule invented beyond the frozen inputs",
+        "documented_in": "ARCHITECTURE_LINT_RULES.md, Verification"
+      },
+      {
+        "gate_id": "GATE-F",
+        "purpose": "Repository-level gates required by the task file: the bootstrap validator exits 0 with a standalone PASS, git diff --check -- docs/architecture is clean, and git status --porcelain -- docs/architecture lists exactly the two owned files as untracked and nothing else. git diff --name-only against the base commit is not part of this gate: it reads tracked content only and is blind to both untracked deliverables.",
+        "source": "Required tests of docs/program/tasks/W0-ARC-02.md",
+        "documented_in": "ARCHITECTURE_LINT_RULES.md, Verification"
+      }
+    ]
+  },
+  "counts": {
+    "rules_total": 33,
+    "by_enforcement": {
+      "static": 21,
+      "test": 2,
+      "review": 10
+    },
+    "by_severity": {
+      "error": 32,
+      "warning": 1
+    },
+    "static_error_subset": 20,
+    "prohibitions_declared": 10,
+    "prohibitions_covered": 10,
+    "prohibitions_with_review_component": 8,
+    "escalations": 2
+  }
+}
