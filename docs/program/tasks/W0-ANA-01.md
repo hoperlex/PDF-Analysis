@@ -25,11 +25,18 @@ implementation.
 
 - Completed `W0-BHV-01`, accepted at
   `667fb00fe3e45d1ce0bce7860725c1654b4cdeba`.
+- Completed `W0-DEP-01`, accepted at
+  `ab1cfdab0ec5c413b188a44ff82a99586ecd7994`.
+- Completed `W0-EVD-01`, accepted at
+  `134436502b7ee40ca9abb061e0080741a863ffda`.
+- Completed `W0-QA-02`, accepted at
+  `6c82004b35f49463c8e7fc8602fbced2f374167e`.
 
 ## Frozen inputs
 
-- base commit: `667fb00fe3e45d1ce0bce7860725c1654b4cdeba`
-- accepted inventory including 31/31 legacy declaration ledger
+- base commit: `6c82004b35f49463c8e7fc8602fbced2f374167e`
+- accepted inventory semantics including the 31/31 legacy declaration ledger at
+  `667fb00fe3e45d1ce0bce7860725c1654b4cdeba`; normalized locators are evidence only
 - current analysis package drafts at the base commit
 - domain `1.0.0-draft.0` and Bible/ADR package invariants: read-only
 - `W0-ARC-01` and `W0-DOM-01` are parallel candidates; semantic mismatch blocks
@@ -107,30 +114,30 @@ legacy parity claims.
 
 ## Required tests
 
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 -c "import glob,json; from jsonschema import Draft202012Validator as V; [V.check_schema(json.load(open(p))) for p in glob.glob('contracts/analysis/v1/*.schema.json')]"`.
+- Command: `.venv/bootstrap/bin/python -c "import glob,json; from jsonschema import Draft202012Validator as V; [V.check_schema(json.load(open(p))) for p in glob.glob('contracts/analysis/v1/*.schema.json')]"`.
   Expected: exit `0`; every schema passes the Draft 2020-12 metaschema check.
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 -m jsonschema -i contracts/analysis/v1/stage-registry.json contracts/analysis/v1/stage-registry.schema.json`.
+- Command: `.venv/bootstrap/bin/python -m jsonschema -i contracts/analysis/v1/stage-registry.json contracts/analysis/v1/stage-registry.schema.json`.
   Expected: exit `0`.
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 -m jsonschema -i contracts/analysis/v1/legacy-stage-map.json contracts/analysis/v1/legacy-stage-map.schema.json`.
+- Command: `.venv/bootstrap/bin/python -m jsonschema -i contracts/analysis/v1/legacy-stage-map.json contracts/analysis/v1/legacy-stage-map.schema.json`.
   Expected: exit `0`.
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 -m jsonschema -i contracts/analysis/v1/examples/job-package.example.json contracts/analysis/v1/job-package.schema.json`.
+- Command: `.venv/bootstrap/bin/python -m jsonschema -i contracts/analysis/v1/examples/job-package.example.json contracts/analysis/v1/job-package.schema.json`.
   Expected: exit `0`.
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 -m jsonschema -i contracts/analysis/v1/examples/stage-result.example.json contracts/analysis/v1/stage-result.schema.json`.
+- Command: `.venv/bootstrap/bin/python -m jsonschema -i contracts/analysis/v1/examples/stage-result.example.json contracts/analysis/v1/stage-result.schema.json`.
   Expected: exit `0`.
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 -m jsonschema -i contracts/analysis/v1/examples/result-package.example.json contracts/analysis/v1/result-package.schema.json`.
+- Command: `.venv/bootstrap/bin/python -m jsonschema -i contracts/analysis/v1/examples/result-package.example.json contracts/analysis/v1/result-package.schema.json`.
   Expected: exit `0`.
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 -m jsonschema -i contracts/analysis/v1/examples/stage-result.failed-missing-error.invalid.json contracts/analysis/v1/stage-result.schema.json`.
+- Command: `.venv/bootstrap/bin/python -m jsonschema -i contracts/analysis/v1/examples/stage-result.failed-missing-error.invalid.json contracts/analysis/v1/stage-result.schema.json`.
   Expected: non-zero exit because `failed` requires a typed error.
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 -m jsonschema -i contracts/analysis/v1/examples/stage-result.succeeded-with-error.invalid.json contracts/analysis/v1/stage-result.schema.json`.
+- Command: `.venv/bootstrap/bin/python -m jsonschema -i contracts/analysis/v1/examples/stage-result.succeeded-with-error.invalid.json contracts/analysis/v1/stage-result.schema.json`.
   Expected: non-zero exit because `succeeded` forbids error state.
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 -m jsonschema -i contracts/analysis/v1/examples/result-package.missing-attempt-authority.invalid.json contracts/analysis/v1/result-package.schema.json`.
+- Command: `.venv/bootstrap/bin/python -m jsonschema -i contracts/analysis/v1/examples/result-package.missing-attempt-authority.invalid.json contracts/analysis/v1/result-package.schema.json`.
   Expected: non-zero exit because the full authority tuple is required.
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 -c "import json,re; from pathlib import Path; inventory=Path('docs/behavior/legacy_capability_inventory.md').read_text().split('### 2.2 Pipeline stage/order declarations',1)[1].split('Declaration coverage:',1)[0]; rows=[line for line in inventory.splitlines() if re.match(r'^\|\s*\d+\s*\|',line)]; expected={(f'LSD-{int(cols[1]):02d}',cols[2].strip().replace(chr(96),'')) for line in rows for cols in [[x.strip() for x in line.split('|')]]}; m=json.loads(Path('contracts/analysis/v1/legacy-stage-map.json').read_text()); r=json.loads(Path('contracts/analysis/v1/stage-registry.json').read_text()); d=m['declarations']; actual={(x['source_declaration_id'],x['source_declaration_site']) for x in d}; stages=[x['stage_id'] for x in r['stages']]; assert len(rows)==len(expected)==len(d)==len(actual)==31 and actual==expected; assert all(x['source_inventory_commit']=='667fb00fe3e45d1ce0bce7860725c1654b4cdeba' and x['legacy_source_commit']=='32b9d903792b30506048a1d42b0e6b2d07aee403' for x in d); assert len(stages)==len(set(stages)); assert all(x['target_kind']!='stage' or x['canonical_stage_id'] in stages for x in d)"`.
+- Command: `.venv/bootstrap/bin/python -c "import json,re,subprocess; from pathlib import Path; commit='667fb00fe3e45d1ce0bce7860725c1654b4cdeba'; inventory=subprocess.run(['git','--no-replace-objects','show',f'{commit}:docs/behavior/legacy_capability_inventory.md'],check=True,capture_output=True,text=True).stdout.split('### 2.2 Pipeline stage/order declarations',1)[1].split('Declaration coverage:',1)[0]; rows=[line for line in inventory.splitlines() if re.match(r'^\|\s*\d+\s*\|',line)]; expected={(f'LSD-{int(cols[1]):02d}',cols[2].strip().replace(chr(96),'')) for line in rows for cols in [[x.strip() for x in line.split('|')]]}; m=json.loads(Path('contracts/analysis/v1/legacy-stage-map.json').read_text()); r=json.loads(Path('contracts/analysis/v1/stage-registry.json').read_text()); d=m['declarations']; actual={(x['source_declaration_id'],x['source_declaration_site']) for x in d}; stages=[x['stage_id'] for x in r['stages']]; assert len(rows)==len(expected)==len(d)==len(actual)==31 and actual==expected; assert all(x['source_inventory_commit']==commit and x['legacy_source_commit']=='32b9d903792b30506048a1d42b0e6b2d07aee403' for x in d); assert len(stages)==len(set(stages)); assert all(x['target_kind']!='stage' or x['canonical_stage_id'] in stages for x in d)"`.
   Expected: exit `0`; exact IDs and normalized site names match the accepted 31-row
   ledger, both provenance SHAs are pinned, canonical registry IDs are unique and
   many-to-one legacy-to-canonical mappings remain allowed. Any omission plus
   substitution fails set equality.
-- Command: `PYTHONPATH=/tmp/pdf-analysis-validator-deps python3 scripts/validate_bootstrap.py`.
+- Command: `.venv/bootstrap/bin/python scripts/validate_bootstrap.py`.
   Expected: exit `0` and a standalone `PASS`.
 - Command: `git diff --check -- contracts/analysis/v1`.
   Expected: exit `0` and no output.
