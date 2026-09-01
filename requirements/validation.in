@@ -1,0 +1,2 @@
+# Bootstrap repository/schema validation only; not an application dependency set.
+jsonschema==4.26.0
