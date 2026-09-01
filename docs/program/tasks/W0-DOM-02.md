@@ -1,9 +1,8 @@
 # Contract task W0-DOM-02 — remove the deprecated domain `version` mirror
 
 > **Status: backlog draft. Not executable yet.**
-> `AGENTS.md` §2 allows `depends_on` to name completed task IDs only. Both
-> dependencies below are backlog drafts or uncommitted candidates today. Pin the real
-> commits when they exist; the task then becomes executable unchanged.
+> `W0-DOM-01` is integrated, but `W0-QA-03` must complete first. Pin that integration
+> commit when it exists; the task then becomes executable unchanged.
 
 ## Outcome
 
@@ -43,8 +42,9 @@ contract are different hotspots with different owners.
 - `W0-QA-03`, integrated at `<pending integration commit>`. Removing the key before
   the validator stops requiring it makes `scripts/validate_bootstrap.py` fail, which
   is a required gate of this very task.
-- `W0-DOM-01`, integrated at `<pending integration commit>`, which is what introduces
-  the mirror and the `deprecated_fields` block this task removes.
+- `W0-DOM-01`, integrated at
+  `cf7740474b1786163f54d93b013a0d526ef989e0`, which introduces the mirror and the
+  `deprecated_fields` block this task removes.
 
 ## Frozen inputs
 

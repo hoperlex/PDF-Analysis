@@ -49,16 +49,17 @@ Integrator reconciles Bible/ADR/domain contracts, records unresolved owner decis
 | W0-QA-01 | QA | Contract examples/schema checks + golden test plan | W0-BHV-02,W0-ARC-01,W0-DOM-01,W0-ANA-01 | tests docs | Independent consumer view. |
 | W0-INT-01 | INT | CP-00 integration/decision report/tag | all required W0 tasks | checkpoint evidence | No production domain implementation. |
 
-### Backlog drafts — not executable until their dependencies are integrated
+### W0.3 preparation tasks
 
-`AGENTS.md` §2 allows `depends_on` to name completed task IDs only. Each row below
-carries a `backlog draft` banner and a `<pending integration commit>` placeholder; it
-becomes executable when its dependency is integrated at a recorded commit, not before.
+The W0.2 candidate set is integrated at
+`cf7740474b1786163f54d93b013a0d526ef989e0`. Tasks whose complete dependency set is
+pinned may be assigned; the remaining tasks become executable only in the serial
+order shown below.
 
 | Task | Lane | Result | Depends on | Blocked because |
 |---|---|---|---|---|
-| W0-ARC-02 | ARC | Architecture lint rule specification (`U-03`) | W0-ARC-01 | W0-ARC-01 accepted as candidate, not integrated. |
-| W0-QA-03 | QA | Validator reads `contract_version` (`ID-01`) | W0-QA-02, W0-ARC-01 | `ID-01` exists only in uncommitted architecture artifacts. |
+| W0-ARC-02 | ARC | Architecture lint rule specification (`U-03`) | W0-ARC-01 | Ready; dependency integrated at the W0.2 candidate commit. |
+| W0-QA-03 | QA | Validator reads `contract_version` (`ID-01`) | W0-QA-02, W0-ARC-01 | Ready; `ID-01` is committed at the W0.2 candidate commit. |
 | W0-DOM-02 | DOM | Remove deprecated domain `version` mirror (`ID-01`) | W0-QA-03, W0-DOM-01 | Validator still hard-requires the bare key. |
 | W0-EVT-01 | EVT | Event envelope on `contract_version` (`ID-01`) | W0-DOM-02, W0-QA-03, W0-DOM-01, W0-ANA-01 | Last in the `ID-01` chain; its sweep cannot pass earlier. |
 

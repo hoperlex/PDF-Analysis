@@ -1,11 +1,8 @@
 # Task W0-ARC-02 — architecture lint rule specification
 
-> **Status: backlog draft. Not executable yet.**
-> `AGENTS.md` §2 allows `depends_on` to name completed task IDs only. This task's
-> dependency is accepted as a W0.2 candidate but is not yet integrated at a recorded
-> commit, so no agent may be assigned to it. When the dependency is integrated,
-> replace the placeholder below with the real commit SHA, re-pin `base commit`, and
-> the task becomes executable unchanged.
+> **Status: ready for W0.3 assignment.**
+> Its sole dependency is independently accepted and integrated at the commit pinned
+> below. No contract or ADR write is authorized by this task.
 
 ## Outcome
 
@@ -28,11 +25,11 @@ This task **specifies** rules. It does not implement, run or enforce them.
 
 ## Depends on
 
-- `W0-ARC-01`, integrated at `<pending integration commit>`.
+- `W0-ARC-01`, integrated at
+  `cf7740474b1786163f54d93b013a0d526ef989e0`.
 
 Independent review accepted `W0-ARC-01` as a candidate, not as ratification, and its
-artifacts are uncommitted working-tree work. Until that integration commit exists,
-this dependency does not name a completed task ID and the task stays a backlog draft.
+artifacts are now committed as W0.3 ratification inputs.
 
 ## Origin
 
@@ -42,7 +39,7 @@ CP-00, enforcement is deferred to `W1-ARC-01`.
 
 ## Frozen inputs
 
-- base commit: `337efcc4239912f323aa53fa747e9452edd25785`
+- base commit: `cf7740474b1786163f54d93b013a0d526ef989e0`
 - architectural prohibitions: `AGENTS.md` §4 at the base commit
 - accepted CP-00 architecture review: `docs/architecture/CP00_ARCHITECTURE_REVIEW.md`
   and `.json` at their accepted commit

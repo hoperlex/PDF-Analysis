@@ -3,9 +3,9 @@
 **Program state:** CP-00 discovery wave W0.1 accepted; all four W0.2 lanes have
 produced candidates, the repository owner has recorded an explicit disposition for
 `PD-01`–`PD-05` plus integration decisions `ID-01`–`ID-03`, and every lane has passed
-independent review. The accepted candidates are awaiting their W0.2 integration
-commit. Nothing is frozen, nothing is ratified, and production implementation remains
-locked.
+independent review. The accepted W0.2 candidate set is integrated at
+`cf7740474b1786163f54d93b013a0d526ef989e0`. Nothing is frozen, nothing is ratified,
+and production implementation remains locked.
 
 ## Active checkpoint
 
@@ -13,7 +13,7 @@ Target: `CP-00 / v0.0.0-architecture`.
 
 ## Active wave
 
-`W0.2 — golden baseline and architecture/domain contracts`.
+`W0.2 — completed candidate integration`; next is `W0.3 — ratification/integration`.
 
 Completed inputs:
 
@@ -30,7 +30,8 @@ Completed inputs:
 - canonical behavioral oracle — `32b9d903792b30506048a1d42b0e6b2d07aee403`;
 - refactoring architecture source — `0b937dc0e24d38fb98485a920152b83d2f19c982`.
 
-Lane candidates produced and independently accepted, pending integration:
+Lane candidates produced, independently accepted and integrated at
+`cf7740474b1786163f54d93b013a0d526ef989e0`:
 
 - `W0-BHV-02` — five golden journeys, 95 assertions (92 inventory-mapped plus 3 under
   `TSA-01`), `inventory_assertion_coverage` mapping all eleven inventory candidates to
@@ -169,11 +170,10 @@ not review lanes it coordinated.
 
 ## Next integration tasks
 
-Record the accepted W0.2 candidate set in one integration commit. Then open W0.3 and
-run `W0-ARC-02` plus the serial `ID-01` chain `W0-QA-03` → `W0-DOM-02` →
-`W0-EVT-01`, followed by the independent cross-family QA task and CP-00 integration
-runbook. Do not record a contract or checkpoint freeze until those tasks and the
-manual CP-00 acceptance are complete.
+Open W0.3 and run `W0-ARC-02` plus the serial `ID-01` chain `W0-QA-03` →
+`W0-DOM-02` → `W0-EVT-01`, followed by the independent cross-family QA task and
+CP-00 integration runbook. Do not record a contract or checkpoint freeze until those
+tasks and the manual CP-00 acceptance are complete.
 
 `U-04` does **not** block a CP-00 contract freeze. Its owner disposition sets its own
 deadlines — tenant/IdP before `W2-C-01`, TTL and legal hold before `W9-C-01` — which

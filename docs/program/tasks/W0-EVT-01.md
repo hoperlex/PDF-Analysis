@@ -1,10 +1,9 @@
 # Contract task W0-EVT-01 — event envelope contract version key
 
 > **Status: backlog draft. Not executable yet.**
-> This task sits last in the `ID-01` chain. `W0-DOM-01` and `W0-ANA-01` are accepted
-> candidates awaiting the W0.2 integration commit; `W0-QA-03` and `W0-DOM-02` remain
-> backlog drafts. Its repository-wide sweep cannot pass until the whole chain lands.
-> Pin the real commits below when they exist.
+> This task sits last in the `ID-01` chain. `W0-DOM-01` and `W0-ANA-01` are integrated;
+> `W0-QA-03` and `W0-DOM-02` remain pending. Its repository-wide sweep cannot pass
+> until the whole chain lands. Pin their real commits below when they exist.
 
 ## Outcome
 
@@ -42,9 +41,9 @@ not silently edit an unowned contract family. This task creates that ownership.
 
 ## Depends on
 
-- `W0-DOM-01` and `W0-ANA-01`, integrated at `<pending integration commits>`, so the
-  exact string form used by the other two families is fixed before the event family
-  copies it. Both candidates have passed independent review.
+- `W0-DOM-01` and `W0-ANA-01`, integrated at
+  `cf7740474b1786163f54d93b013a0d526ef989e0`, so the exact string form used by the
+  other two families is fixed before the event family copies it.
 - `W0-QA-03` and `W0-DOM-02`, integrated at `<pending integration commits>`. Without
   both, the repository-wide sweep below cannot pass: `scripts/validate_bootstrap.py`
   hard-requires the bare `version` key on `contracts/domain/v1/error-codes.json`, so
@@ -60,8 +59,8 @@ is `contract_version` with a string semver/draft value; `version` and
 
 ## Frozen inputs
 
-- base commit: `337efcc4239912f323aa53fa747e9452edd25785`
-- current event contract: `contracts/events/v1/**` at the base commit
+- base commit: the `W0-DOM-02` integration commit
+- current event contract: `contracts/events/v1/**` at that base commit
 - canonical key decision: `docs/architecture/CP00_OWNER_DECISIONS.md` at its accepted
   commit
 - accepted domain and analysis candidates: read-only reference for the exact version
