@@ -116,9 +116,18 @@ deliverable 6 and let the integrator open an ADR task with the right owner.
   Expected: exit `0` with a standalone `PASS`.
 - Command: `git diff --check -- docs/architecture`.
   Expected: exit `0` and no output.
-- Command: `git diff --name-only 43a84d93fd544573226b82860ab24f924ed66d83 -- docs/architecture`.
-  Expected: exactly `docs/architecture/ARCHITECTURE_LINT_RULES.json` and
-  `docs/architecture/ARCHITECTURE_LINT_RULES.md`.
+- Command: `git status --porcelain -- docs/architecture`.
+  Expected: exactly two lines, `?? docs/architecture/ARCHITECTURE_LINT_RULES.json` and
+  `?? docs/architecture/ARCHITECTURE_LINT_RULES.md`, and nothing else under
+  `docs/architecture`.
+
+  This deliberately replaces `git diff --name-only <base> -- docs/architecture`, which
+  was unusable here: both deliverables are new files, the task forbids `git add`, and
+  `git diff` sees only tracked content — so the command returns empty output whether
+  the author wrote both files or nothing at all, while the stated expectation of two
+  paths can never be met. `git status --porcelain` reports untracked and modified paths
+  alike and therefore discriminates. After the integrator stages the files, the
+  `git diff` form becomes meaningful again and is worth re-running then.
 - Independent reviewer confirms every `static` rule is genuinely decidable without
   running the application, and that no `review`-only rule was silently downgraded to
   a `warning` to appear enforceable.

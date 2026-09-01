@@ -147,6 +147,15 @@ assert not bad, bad"`.
   Expected: exit `0` with a standalone `PASS`.
 - Command: `git diff --check -- contracts/events/v1`.
   Expected: exit `0` and no output.
+- Command: `git status --porcelain -- contracts docs fixtures scripts tests requirements`.
+  Expected: every line is under `contracts/events/v1/`, and the new negative fixture
+  appears as `?? contracts/events/v1/examples/event-envelope.legacy-schema-version.invalid.json`.
+
+  Use `git status --porcelain`, not `git diff --name-only <base>`, for this proof. The
+  negative fixture is a new file and this task forbids `git add`, so `git diff` cannot
+  see it: the command would return only the modified paths and silently omit the one
+  deliverable most worth checking. `git diff --check` above is blind to it for the same
+  reason, so verify the fixture's whitespace and trailing newline directly.
 - Independent reviewer confirms no event semantics changed: the field set apart from
   the version key, `$id`, the dialect and every pattern are identical to the base
   commit.
