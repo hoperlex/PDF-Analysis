@@ -1,0 +1,42 @@
+{
+  "checkpoint": "CP-00",
+  "tag_planned": "v0.0.0-architecture",
+  "ratified": false,
+  "status": "pre_ratification_candidate",
+  "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
+  "qa_evidence_commit": "854a68201cdd857abf6a12989f254f5d2e0928af",
+  "manual_candidate_commit": "854a68201cdd857abf6a12989f254f5d2e0928af",
+  "artifact_count": 101,
+  "artifact_manifest_sha256": "23960e96f2dec8e0b4b30f63beaf08153afc01b6a5914244bcd9f020902bb78b",
+  "frozen_inputs": {
+    "behavioral_oracle": "32b9d903792b30506048a1d42b0e6b2d07aee403",
+    "accepted_inventory": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba",
+    "refactoring_architecture_source": "0b937dc0e24d38fb98485a920152b83d2f19c982",
+    "w02_candidate_set": "cf7740474b1786163f54d93b013a0d526ef989e0"
+  },
+  "contract_versions": {
+    "domain": "1.0.0-draft.1",
+    "analysis": "1.0.0-draft.1",
+    "events": "1.0.0-draft.1",
+    "golden_selection_schema": 1
+  },
+  "integrated_w03_tasks": {
+    "W0-ARC-02": "a67ba31e7748c02974ae9ae93c7f30b6f141d417",
+    "W0-QA-03": "23dddf99f833d12cd4cc22d11e224d4b278872bf",
+    "W0-DOM-02": "478d32e90d1cbb2c691e0ac0b61b68dadcf0d397",
+    "W0-EVT-01": "3ca8e25413426ff8efec41cd850c325331d181fc",
+    "W0-CLN-01": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
+    "W0-QA-01": "854a68201cdd857abf6a12989f254f5d2e0928af"
+  },
+  "open_inputs_carried_forward": {
+    "U-04": "tenant/IdP before W2-C-01; TTL and legal hold before W9-C-01. No value invented.",
+    "OQ-02": "lease/heartbeat/grace values, deferred to the jobs/operations slot.",
+    "OQ-04": "retry budget and backoff, deferred to W4-C-01/W4-JOB-01."
+  },
+  "architecture_defer": [
+    "ADR-0014"
+  ],
+  "runtime_fields": "not applicable - architecture-only checkpoint",
+  "manual_acceptance": "pending",
+  "automated_acceptance": "pending"
+}
