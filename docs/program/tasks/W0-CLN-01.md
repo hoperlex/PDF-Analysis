@@ -117,7 +117,18 @@ No other path is writable.
    contradicted.
 3. `ARCHITECTURE_LINT_RULES.md` is updated wherever it mirrors either statement, so the
    two artifacts agree.
-4. In `identifiers.json` and `state-machines.json`, the clause *"because no
+4. `ALR-24`'s `false_positive_notes` gain the negative-fixture exception. Its
+   `detection` flags an object key named `version` or `schema_version` at any depth in
+   `contracts/**/*.json`, which mechanically catches
+   `contracts/events/v1/examples/event-envelope.legacy-schema-version.invalid.json` —
+   a fixture whose entire purpose is to carry that forbidden key so the event schema
+   can be proved to reject it. The rule's `statement` is narrower than its
+   `detection`: it says a machine contract *declares* its version under
+   `contract_version`, and an `*.invalid.json` fixture declares nothing. Record the
+   exception in `false_positive_notes` so `statement` and `detection` are the same
+   width, exactly as `ALR-25` and `ALR-12` were narrowed. Do not change the rule's
+   `statement`, `scope`, `enforcement` or `severity`.
+5. In `identifiers.json` and `state-machines.json`, the clause *"because no
    1.0.0-draft.1 artifact was ever committed or frozen"* is replaced by the true
    reason: the contract version does not move because the round redefined no meaning,
    while round-to-round distinguishability is carried by `candidate_revision`. The rest

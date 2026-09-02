@@ -139,6 +139,7 @@ def scan(o,path,out):
         for i,v in enumerate(o): scan(v,f'{path}[{i}]',out)
 bad=[]
 for p in sorted(glob.glob('contracts/**/*.json',recursive=True)):
+    if p.endswith('.invalid.json'): continue
     d=json.load(open(p)); hits=[f'<top>/{k}' for k in B if isinstance(d,dict) and k in d]
     scan(d,'',hits)
     if hits: bad.append((p,hits))
@@ -159,6 +160,17 @@ assert not bad, bad"`.
 - Command: `git status --porcelain -- contracts docs fixtures scripts tests requirements`.
   Expected: every line is under `contracts/events/v1/`, and the new negative fixture
   appears as `?? contracts/events/v1/examples/event-envelope.legacy-schema-version.invalid.json`.
+
+  `*.invalid.json` is excluded, and the exclusion is the point rather than a
+  loophole. This task's own negative fixture is *required* to carry a top-level
+  `schema_version` beside a valid `contract_version` — that is what the preceding gate
+  proves. Without the exclusion the two gates are mutually unsatisfiable: every fixture
+  that satisfies the negative gate fails the sweep, and there is no third option,
+  because renaming the file breaks the negative gate's literal path and moving it
+  outside `contracts/**` violates allowed paths. A negative fixture exists to hold the
+  forbidden shape; sweeping it for forbidden shapes is a category error. The sweep's
+  subject is what a contract *declares*, and an `*.invalid.json` file declares nothing.
+  Verified after the exclusion: zero hits across all 27 JSON files under `contracts/**`.
 
   Use `git status --porcelain`, not `git diff --name-only <base>`, for this proof. The
   negative fixture is a new file and this task forbids `git add`, so `git diff` cannot
