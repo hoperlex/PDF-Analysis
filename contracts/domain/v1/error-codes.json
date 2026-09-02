@@ -1,21 +1,11 @@
 {
   "contract": "auditmanager.domain.errors",
   "contract_version": "1.0.0-draft.1",
-  "version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 4,
-  "revision_note": "Fourth review round of the unreleased 1.0.0-draft.1 candidate. Round 4 is a correction round: it adds, removes and renames nothing and changes no rule. The one substantive change in the family is in state-machines.json and README.md, where a stale statement about another lane's ledger is corrected: U-06 is resolved, not open, and every part of the FS-04 fail-soft policy has an assigned encoder. This catalog is unchanged apart from candidate_revision and this note: the 20 codes and every http status, retryable flag, category, summary, safe detail key list and evidence list are exactly those of rounds 2 and 3, the envelope declaration, safety rules and internal_mapping are untouched, the deprecated version mirror is deliberately retained because removing it is the separate W0-DOM-02 task that follows W0-QA-03, and the optional-branch policy still declares no code of its own: it reuses partial_result_not_publishable, validation_failed and analysis_failed. The family carries one candidate_revision, so this catalog moves with the round. contract_version stays 1.0.0-draft.1 because no 1.0.0-draft.1 artifact was ever committed or frozen.",
+  "candidate_revision": 5,
+  "revision_note": "Fifth review round of the unreleased 1.0.0-draft.1 candidate. Round 5 completes owner decision ID-01 for the domain family: the deprecated bare version mirror and the deprecated_fields block that declared it are removed from this catalog, and both names are removed from the owning schema's root required and properties, so the root additionalProperties false now rejects either key instead of pinning it. The removal gate recorded in round 4 is satisfied: W0-QA-03 taught scripts/validate_bootstrap.py to read contract_version and is integrated, so nothing requires the mirror any longer. Nothing else changed: the 20 codes and every http status, retryable flag, category, summary, safe detail key list and evidence list are exactly those of rounds 2, 3 and 4, and the envelope declaration, safety rules, internal_mapping, categories and the open decision and question registers are untouched. contract_version stays 1.0.0-draft.1 and its value is unchanged; the mirror carried no independent meaning, was pinned to the same const and no consumer was ever permitted to read it, so no code generator, runtime type or other contract family loses a value. No alias, shim or coercion replaces it: a catalog carrying version is now invalid, not tolerated. The family carries one candidate_revision, so all three catalogs and all three schemas move to 5; identifiers.json and state-machines.json carry only that integer in this round and their revision notes still describe round 4, because W0-DOM-02 permits no other byte in those files.",
   "status": "draft_candidate",
   "frozen": false,
-  "deprecated_fields": {
-    "version": {
-      "replaced_by": "contract_version",
-      "status": "deprecated_compatibility_mirror",
-      "reason": "scripts/validate_bootstrap.py, hardened and frozen by W0-QA-02 and not writable by this contract lane, requires a non-empty 'version' string in this catalog specifically. The mirror keeps that gate green while contract_version becomes canonical. This catalog's schema pins both to the same const, so the two values can never diverge.",
-      "consumer_rule": "Consumers MUST read contract_version. No consumer, code generator, runtime type or other contract family may read 'version' from this catalog; it carries no independent meaning.",
-      "removal_gate": "A QA-lane task that updates scripts/validate_bootstrap.py to read contract_version instead of version. This contract lane may not edit that validator, so the mirror is removed in the same change that updates it, not before."
-    }
-  },
   "envelope": {
     "required": [
       "contract_version",

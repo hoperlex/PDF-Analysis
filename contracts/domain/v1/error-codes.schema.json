@@ -8,13 +8,11 @@
   "required": [
     "contract",
     "contract_version",
-    "version",
     "supersedes",
     "candidate_revision",
     "revision_note",
     "status",
     "frozen",
-    "deprecated_fields",
     "envelope",
     "safety",
     "internal_mapping",
@@ -31,16 +29,11 @@
     "contract_version": {
       "const": "1.0.0-draft.1"
     },
-    "version": {
-      "const": "1.0.0-draft.1",
-      "deprecated": true,
-      "description": "Deprecated compatibility mirror of contract_version, retained only because scripts/validate_bootstrap.py requires it. Pinned to the same const so the two can never diverge. Consumers read contract_version."
-    },
     "supersedes": {
       "const": "1.0.0-draft.0"
     },
     "candidate_revision": {
-      "const": 4,
+      "const": 5,
       "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
     },
     "revision_note": {
@@ -55,46 +48,6 @@
     },
     "frozen": {
       "const": false
-    },
-    "deprecated_fields": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "version"
-      ],
-      "properties": {
-        "version": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "replaced_by",
-            "status",
-            "reason",
-            "consumer_rule",
-            "removal_gate"
-          ],
-          "properties": {
-            "replaced_by": {
-              "const": "contract_version"
-            },
-            "status": {
-              "const": "deprecated_compatibility_mirror"
-            },
-            "reason": {
-              "type": "string",
-              "minLength": 1
-            },
-            "consumer_rule": {
-              "type": "string",
-              "minLength": 1
-            },
-            "removal_gate": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        }
-      }
     },
     "envelope": {
       "type": "object",

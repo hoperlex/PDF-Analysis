@@ -1,9 +1,9 @@
-# Domain contract v1 — candidate `1.0.0-draft.1`, revision 4
+# Domain contract v1 — candidate `1.0.0-draft.1`, revision 5
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
-owner). Status: **candidate draft, not frozen.** Every catalog in this directory
-declares `contract_version` `1.0.0-draft.1`, `candidate_revision` `4`, `status`
-`draft_candidate` and `frozen` `false`.
+owner). Status: **candidate draft — committed, not frozen, not ratified.** Every
+catalog in this directory declares `contract_version` `1.0.0-draft.1`,
+`candidate_revision` `5`, `status` `draft_candidate` and `frozen` `false`.
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a
@@ -35,6 +35,15 @@ lane's part is `FS-04-C`, already encoded here. Both statements are corrected in
 [Owner decisions](#owner-decisions); nothing else moved. See
 [What changed in revision 4](#what-changed-in-revision-4-and-what-breaks-for-a-reader-of-revision-3).
 
+Revision 5 records **no** decision and changes **no** rule either. It completes owner
+decision `ID-01` for this family: the deprecated bare `version` mirror in
+`error-codes.json` and the `deprecated_fields` block that declared it are **removed**,
+and both names are removed from the owning schema's root `required` and `properties`,
+so the root `additionalProperties: false` now **rejects** either key. The domain family
+declares its envelope version exactly once, under `contract_version`, whose value is
+unchanged. See
+[What changed in revision 5](#what-changed-in-revision-5-and-what-breaks-for-a-reader-of-revision-4).
+
 ## Files
 
 | File | Role |
@@ -56,27 +65,43 @@ string semver/draft version. `$schema` stays the JSON Schema dialect and `$id` s
 schema identity; neither is a contract version. The bare `version` key that revision 1
 used as the contract-envelope version is gone.
 
-`1.0.0-draft.1` was never committed or frozen — the repository's committed domain
-contract is still `1.0.0-draft.0`. So the version line stays `1.0.0-draft.0` →
-`1.0.0-draft.1`, and the review round is recorded by `candidate_revision`, which the
-owning schemas pin with `const`. That gives an unreleased candidate exactly the
-guarantee a released version has: it cannot change meaning while keeping its number.
-Bumping to a `draft.2` instead would have published a version that exists in no
-commit and would have left `supersedes` pointing at a version nobody can fetch.
+`1.0.0-draft.1` is **committed, but neither frozen nor ratified.** The candidate set
+was integrated at `cf7740474b1786163f54d93b013a0d526ef989e0`, where every catalog
+already declares `contract_version` `1.0.0-draft.1` alongside `status`
+`draft_candidate` and `frozen` `false`; `1.0.0-draft.0` is the version it supersedes.
+Being committed is not what governs whether a review round may still change the
+candidate — being unfrozen and unratified is. Until the integrator records a freeze, a
+round edits the candidate in place; after it, the same edit requires the formal
+freeze-break and version procedure.
 
-### The one deviation: `version` in `error-codes.json`
+So the version line stays `1.0.0-draft.0` → `1.0.0-draft.1`, and each review round is
+recorded by `candidate_revision`, which the owning schemas pin with `const`. The
+version string does not move because the **meaning** of the contract did not: round 5
+removes a deprecated mirror that carried no independent value and that no consumer was
+permitted to read, so nothing a consumer keys on changed. What must stay
+distinguishable between rounds is the round itself, and `candidate_revision` carries
+that — giving an unfrozen candidate exactly the guarantee a released version has: it
+cannot change meaning while keeping its number. Bumping to `1.0.0-draft.2` instead
+would announce a new contract version for a round that redefined nothing, and would
+make every consumer re-pin a version string on every review round.
 
-`error-codes.json` still carries a bare `version` key **as a deprecated compatibility
-mirror**, declared machine-readably in its `deprecated_fields` block. Reason:
-`scripts/validate_bootstrap.py` — hardened and frozen by `W0-QA-02`, and not writable
-by this lane — hard-requires a non-empty `version` string in that one file. The
-catalog's schema pins `version` and `contract_version` to the same `const`, so they
-cannot diverge, and marks `version` `deprecated: true`.
+### `ID-01` is complete for this family: no catalog carries `version`
 
-**Consumers must read `contract_version`.** Nothing may read `version`. Removal gate:
-a QA-lane change that teaches `scripts/validate_bootstrap.py` to read
-`contract_version`; the mirror is deleted in that same change, not before. The other
-two catalogs carry no `version` key at all, and their schemas reject one.
+Revisions 1–4 of `error-codes.json` carried a bare `version` key as a deprecated
+compatibility mirror, declared machine-readably in a `deprecated_fields` block, because
+`scripts/validate_bootstrap.py` hard-required a non-empty `version` string in that one
+file and the validator was not writable by this lane. `W0-QA-03` moved the validator to
+`contract_version`, and revision 5 (`W0-DOM-02`) removed the contract-side half: the
+`version` key and the whole `deprecated_fields` block are gone from the catalog, and
+both names are gone from the root `required` and `properties` of
+`error-codes.schema.json` — together with the mirror's `const` pin and its
+`deprecated: true` marker.
+
+**All three catalogs now behave identically:** none declares `version`, and because
+every catalog root sets `additionalProperties: false`, each schema **rejects** the key
+if it is reintroduced. The mirror fails closed rather than returning unnoticed. No
+alias, shim or coercion replaces it: a consumer that read `version` from this catalog
+must read `contract_version`, whose value did not change.
 
 ## How the schemas fail closed
 
@@ -89,8 +114,8 @@ two catalogs carry no `version` key at all, and their schemas reject one.
   constrains key names with `propertyNames` and validates every value against a
   strict item schema. Losing an entry fails the schema.
 - `contract`, `contract_version`, `supersedes` and `candidate_revision` are `const`.
-  A released version cannot change meaning while keeping its number, and an
-  unreleased candidate cannot change meaning while keeping its revision.
+  A released version cannot change meaning while keeping its number, and a committed
+  but unfrozen candidate cannot change meaning while keeping its revision.
 - `error_code` in the envelope is an `enum` **exactly equal** to the key set of
   `error-codes.json`, and `retryable` is pinned per code by `if`/`then`. A provider
   cannot invent a code or contradict the catalog's retry signal.
@@ -432,7 +457,7 @@ it can leave the trust boundary.
 
 Codes added in `draft.1`: `idempotency_key_in_progress`, `execution_token_invalid`,
 `required_norm_unavailable`, `partial_result_not_publishable`. No code was removed or
-renamed relative to `1.0.0-draft.0`, and revisions 2, 3 and 4 add and remove none.
+renamed relative to `1.0.0-draft.0`, and revisions 2 through 5 add and remove none.
 
 ## Evidence walks
 
@@ -680,7 +705,7 @@ assumption.
 
 - Backward compatible with `1.0.0-draft.0`: **no**. Meaning and required semantics
   tightened.
-- Version: `1.0.0-draft.0` → `1.0.0-draft.1` (`candidate_revision` 4). Safe because
+- Version: `1.0.0-draft.0` → `1.0.0-draft.1` (`candidate_revision` 5). Safe because
   no frozen production consumer exists. After freeze, any change requires the formal
   freeze-break and version procedure.
 - Breaking changes for a reader of `draft.0`:
@@ -694,6 +719,27 @@ assumption.
   - the error envelope gains required `contract_version` and required `retryable`;
   - two identifiers are added: `lease_id` (`lse`) and `command_id` (`cmd`).
 
+### What changed in revision 5, and what breaks for a reader of revision 4
+
+Revision 5 is the contract-side half of `ID-01`. No owner decision was recorded, no
+rule was added, weakened or removed, and every code, category, HTTP status,
+`retryable` flag, identifier, state, transition, guard, machine and register entry is
+byte-stable.
+
+| Change | Consumer impact |
+|---|---|
+| The bare `version` key is **removed** from `error-codes.json`, together with the `deprecated_fields` block that declared it | **Breaking only for a reader that ignored the deprecation.** `version` was declared a mirror with no independent meaning and no permitted reader; consumers already had to read `contract_version`, whose value is unchanged at `1.0.0-draft.1`. |
+| `version` and `deprecated_fields` are **removed** from the root `required` and `properties` of `error-codes.schema.json`, including the mirror's `const` pin and `deprecated: true` marker | **Fail-closed tightening.** With root `additionalProperties: false` retained, either key is now **rejected**, matching `identifiers.schema.json` and `state-machines.schema.json`. A catalog carrying `version` is invalid, not tolerated. |
+| `candidate_revision` `4` → `5` in all three catalogs and their schemas | Shape-neutral. A consumer pinning `candidate_revision == 4` must move. |
+| Everything else — the 20 error codes with their categories, statuses, `retryable` flags, summaries, safe detail keys and evidence, the envelope declaration, `safety`, `internal_mapping`, all 25 identifiers, six machines, `run_creation`, `optional_branch_policy`, `terminal_semantics`, `PD-01`, `PD-03` and the open `U-04`/`OQ-02`/`OQ-04` register | **Unchanged.** Nothing was added, removed or renamed. `contract_version` and its value are untouched. |
+
+One residue is recorded rather than hidden: `W0-DOM-02` permits a single-value write in
+`identifiers.json`, `identifiers.schema.json`, `state-machines.json` and
+`state-machines.schema.json` — the `candidate_revision` integer and its `const` pin and
+nothing else — so those two catalogs advance to revision 5 while their
+`revision_note` text still describes round 4. `error-codes.json` → `revision_note`
+carries the round-5 note for the family and says so explicitly.
+
 ### What changed in revision 4, and what breaks for a reader of revision 3
 
 Revision 4 is a **correction round**. No owner decision was recorded, no rule was
@@ -705,7 +751,7 @@ added, weakened or removed, and every normative element of revision 3 is byte-st
 | `owner_decision.parts_not_owned_here[].part` now carries the `FS-04-A` / `FS-04-B` part identifiers | Clarifying. The `owner` and `family` strings are unchanged, and no semantics of either part is described here. |
 | The README's integrator paragraph is replaced by the resolved disposition, the `FS-04` split table and an explicit statement that the architecture ledger, not this file, is the authoritative record | Clarifying. |
 | `candidate_revision` `3` → `4` in all three catalogs and their schemas | Shape-neutral. A consumer pinning `candidate_revision == 3` must move. |
-| `optional_branch_policy` and its six-row decision table, both `audit_run` guards, the `job` guard, `terminal_semantics`, `run_creation`, `PD-01`, `PD-03`, all 25 identifiers, all 20 error codes, six machines, the open `U-04`/`OQ-02`/`OQ-04` register and the deprecated `version` mirror | **Unchanged.** Nothing was added, removed or renamed. The mirror still waits on `W0-DOM-02` after `W0-QA-03`. |
+| `optional_branch_policy` and its six-row decision table, both `audit_run` guards, the `job` guard, `terminal_semantics`, `run_creation`, `PD-01`, `PD-03`, all 25 identifiers, all 20 error codes, six machines, the open `U-04`/`OQ-02`/`OQ-04` register and the then-deprecated `version` mirror | **Unchanged in revision 4.** Nothing was added, removed or renamed. The mirror was still waiting on `W0-DOM-02` after `W0-QA-03`; revision 5 removed it. |
 
 ### What changed in revision 3, and what breaks for a reader of revision 2
 
@@ -718,13 +764,13 @@ added, weakened or removed, and every normative element of revision 3 is byte-st
 | Two root `rules` added: guard rows for one `from`/`to` pair are conjunctive; an optional branch never degrades silently | Clarifying; the conjunction rule makes the existing two-row `created → queued` pair explicit as well. |
 | `machines.job` gains a `notes` array | Additive. |
 | `candidate_revision` `2` → `3` in all three catalogs and their schemas | Shape-neutral. A consumer pinning `candidate_revision == 2` must move. |
-| Error codes, identifiers, states, transitions, machines, prefixes, `PD-01`, `PD-03`, `run_creation`, the deprecated `version` mirror | **Unchanged.** Nothing was added, removed or renamed. The `version` mirror stays until `W0-QA-03` teaches the validator `contract_version`; removing it is the separate `W0-DOM-02` task. |
+| Error codes, identifiers, states, transitions, machines, prefixes, `PD-01`, `PD-03`, `run_creation`, the then-deprecated `version` mirror | **Unchanged in revision 3.** Nothing was added, removed or renamed. The mirror was held until `W0-QA-03` taught the validator `contract_version`; `W0-DOM-02` removed it in revision 5. |
 
 ### What changed in revision 2, and what breaks for a reader of revision 1
 
 | Change | Consumer impact |
 |---|---|
-| `version` → **`contract_version`** in all three catalogs | **Breaking.** Any reader keyed on `version` must switch. `error-codes.json` keeps a deprecated `version` mirror only for `scripts/validate_bootstrap.py`; nothing else may read it, and the other two catalogs reject the key outright. |
+| `version` → **`contract_version`** in all three catalogs | **Breaking.** Any reader keyed on `version` must switch. `error-codes.json` kept a deprecated `version` mirror only for `scripts/validate_bootstrap.py` and nothing else could read it, while the other two catalogs rejected the key outright; revision 5 removed the mirror, so all three now reject it. |
 | `authority_capabilities.execution_token.aliases` → `canonical_field_name` + `legacy_evidence_names` | **Breaking** for anyone who treated `fencing_token`/`authority_token` as substitutable field names. They are legacy evidence only. Analysis-lane payloads naming `authority_token` are a cross-lane mismatch for the integrator, not a local patch. |
 | `command_keys.payload_fingerprint.open_question` → `canonicalization` | **Breaking** shape change; the fingerprint algorithm is now normative. A provider that chose its own serialization must adopt RFC 8785 JCS. |
 | New required `candidate_revision` and `revision_note` on all three catalogs | Additive; strict readers with `additionalProperties: false` mirrors must add them. |
@@ -764,7 +810,7 @@ reviewer:
 .venv/bootstrap/bin/python -c "import json; from pathlib import Path; r=Path('contracts/domain/v1'); sm=json.loads((r/'state-machines.json').read_text()); codes=set(json.loads((r/'error-codes.json').read_text())['codes']); refs={sm['default_violation']}|{g['on_violation'] for m in sm['machines'].values() for g in m['guards'] if 'on_violation' in g}|{c['error_code'] for m in sm['machines'].values() if 'run_creation' in m for c in m['run_creation']['cases'] if 'error_code' in c}; assert refs<=codes, sorted(refs-codes); print('guard and run_creation codes OK', len(refs))"
 
 # every machine/aggregate identifier is declared, and one contract_version and revision hold across the family
-.venv/bootstrap/bin/python -c "import json; from pathlib import Path; r=Path('contracts/domain/v1'); sm=json.loads((r/'state-machines.json').read_text()); idc=json.loads((r/'identifiers.json').read_text()); ec=json.loads((r/'error-codes.json').read_text()); env=json.loads((r/'error-envelope.schema.json').read_text()); ids=set(idc['identifiers']); used={m['identifier'] for m in sm['machines'].values()}|{a['identifier'] for a in sm['non_state_machine_aggregates'].values()}; assert used<=ids, sorted(used-ids); vs={c['contract_version'] for c in (idc,sm,ec)}|{ec['version']}|{env['properties']['contract_version']['const']}; assert len(vs)==1, sorted(vs); revs={c['candidate_revision'] for c in (idc,sm,ec)}; assert len(revs)==1, sorted(revs); print('identifier bindings OK', len(used), '| contract_version OK', vs.pop(), '| candidate_revision', revs.pop())"
+.venv/bootstrap/bin/python -c "import json; from pathlib import Path; r=Path('contracts/domain/v1'); sm=json.loads((r/'state-machines.json').read_text()); idc=json.loads((r/'identifiers.json').read_text()); ec=json.loads((r/'error-codes.json').read_text()); env=json.loads((r/'error-envelope.schema.json').read_text()); ids=set(idc['identifiers']); used={m['identifier'] for m in sm['machines'].values()}|{a['identifier'] for a in sm['non_state_machine_aggregates'].values()}; assert used<=ids, sorted(used-ids); vs={c['contract_version'] for c in (idc,sm,ec)}|{env['properties']['contract_version']['const']}; assert len(vs)==1, sorted(vs); assert not any('version' in c for c in (idc,sm,ec)), 'bare version key present'; revs={c['candidate_revision'] for c in (idc,sm,ec)}; assert len(revs)==1, sorted(revs); print('identifier bindings OK', len(used), '| contract_version OK', vs.pop(), '| candidate_revision', revs.pop())"
 ```
 
 The optional-branch rule, including the negative probe that a fully successful
