@@ -66,9 +66,22 @@ architecture acceptance, ratify the eligible candidate set, fast-forward it to
   recorded decision's precondition has since been satisfied. The `PD-02` alias-map
   precondition is the known case: it is recorded as unmet in two documents, and only
   one of them was in any task's scope.
-- `docs/program/CHECKPOINT_REGISTRY.md`, `docs/INDEX.md`, `docs/REPOSITORY_LAYOUT.md`
-  — checkpoint status, index status column and the `artifacts/` tree, so the package
-  can describe where its own checkpoint evidence lives
+- `docs/program/CHECKPOINT_REGISTRY.md` and `docs/INDEX.md` — checkpoint status and the
+  index status column.
+
+`docs/architecture/REPOSITORY_LAYOUT.md` is deliberately **not** writable, even though
+describing the `artifacts/` tree there would be natural. It sits inside
+`docs/architecture/`, one of the four families `W0-QA-01` certified byte-identical, and
+`test_cp00_candidate.py` fails the moment any of them drifts from the reviewed
+candidate. The integrator learned this by breaking it: the `artifacts/` description was
+written there and the test caught it immediately. `docs/INDEX.md` is outside the
+reviewed families and carries the pointer instead.
+
+Note that `CP00_ARCHITECTURE_REVIEW.{md,json}` above are inside a reviewed family too.
+Editing them is this task's declared job and will make that byte-identity test fail by
+design — ratification changes the reviewed artifact. That is expected and is why
+`W0-QA-01`'s `ACCEPT` is bound to `reviewed_candidate_commit`, not to whatever follows
+ratification.
 
 The Git merge, annotated tag and push are integration operations authorized only after
 the file-level gates and manual acceptance succeed.
