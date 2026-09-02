@@ -4,8 +4,10 @@
 produced candidates, the repository owner has recorded an explicit disposition for
 `PD-01`–`PD-05` plus integration decisions `ID-01`–`ID-03`, and every lane has passed
 independent review. The accepted W0.2 candidate set is integrated at
-`cf7740474b1786163f54d93b013a0d526ef989e0`. Nothing is frozen, nothing is ratified,
-and production implementation remains locked. W0.3 is in progress on
+`cf7740474b1786163f54d93b013a0d526ef989e0`. Both CP-00 acceptance streams returned `PASS` on 2026-09-02. Ratification is blocked
+by a contradiction between two accepted tasks, recorded in the manifest as
+`ratification_blocked`. Nothing is tagged and production implementation remains
+locked until CP-01. W0.3 is in progress on
 `integration/W0.3`. All six W0.3 tasks are independently accepted and integrated; the
 candidate is assembled and both acceptance streams have run. See "CP-00 candidate"
 below for the three commits the plan keeps distinct.
@@ -16,7 +18,7 @@ Target: `CP-00 / v0.0.0-architecture`.
 
 ## Active wave
 
-`W0.3 — CP-00 ratification and integration` (in progress). See
+`W0.3 — CP-00 ratification and integration` (accepted; ratification blocked). See
 `docs/program/waves/W0.3_ratification_integration.md`.
 
 Stage one integrated:
@@ -222,9 +224,14 @@ not review lanes it coordinated.
 
 ## Next integration tasks
 
-Rebuild the CP-00 candidate after the first acceptance round, which returned `FAIL`
-from both streams. Every blocker was in integrator-owned metadata and gate text, not
-in a contract: both streams independently confirmed the four reviewed families
-byte-identical and all 96 tests green, so the `W0-QA-01` `ACCEPT` transfers to the
-rebuilt candidate. Then re-run both streams and, only on two `PASS`, execute
-`W0-INT-01`.
+Three acceptance rounds ran. Rounds one and two returned `FAIL` from both streams;
+round three returned `PASS` from both. Every blocker across all three was in
+integrator-owned metadata, gate text or state documents — none in a contract, fixture,
+schema or test. Both streams confirmed the four reviewed families byte-identical to
+`reviewed_candidate_commit` in every round, which is what let the `W0-QA-01` `ACCEPT`
+carry forward across two rebuilds without re-running QA.
+
+`W0-INT-01` executes next: reconcile the recorded point-in-time statements, ratify,
+assemble the evidence bundle, and only then fast-forward `main` onto
+`integration/W0.3` and publish the annotated tag. Publication is a separate,
+explicitly authorised step.

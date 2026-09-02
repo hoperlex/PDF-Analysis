@@ -73,8 +73,9 @@ architecture acceptance, ratify the eligible candidate set, fast-forward it to
   could not write either file: the lint document's GATE-E prose still calls its own
   JSON untracked, false since `a67ba31e`, and the ADR index enumerates `PD-01`–`PD-04`
   against five recorded decisions. `ARCHITECTURE_LINT_RULES.md` is otherwise writable
-  only by `W0-ARC-02` and `W0-CLN-01`, both closed and accepted and both barred from
-  reopening by the recorded wave exception; `ADR_INDEX.md` was writable by no task at
+  only by `W0-ARC-02` and `W0-CLN-01`, both closed and accepted. `W0-CLN-01` is one of
+  the three commits named in the recorded wave exception; `W0-ARC-02` is not, and is
+  simply an accepted task whose reopening would invalidate an independent `ACCEPT`. `ADR_INDEX.md` was writable by no task at
   all, since `W0-ARC-02` removed that slot as impossible. Assigning an item to an owner
   who cannot act on it is how the same defect survived two acceptance rounds.
 

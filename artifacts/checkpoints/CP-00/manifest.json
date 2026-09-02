@@ -2,7 +2,7 @@
   "checkpoint": "CP-00",
   "tag_planned": "v0.0.0-architecture",
   "ratified": false,
-  "status": "pre_ratification_candidate",
+  "status": "accepted_candidate_awaiting_ratification",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "854a68201cdd857abf6a12989f254f5d2e0928af",
   "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash; two rebuilds were rejected for claiming the value was recorded elsewhere when it was not. candidate_digest covers every git-tracked file except this manifest, so it is computable before the commit exists and differs for every candidate.",
@@ -38,9 +38,9 @@
     "ADR-0014"
   ],
   "runtime_fields": "not applicable - architecture-only checkpoint",
-  "manual_acceptance": "pending",
-  "automated_acceptance": "pending",
-  "artifact_manifest_recipe": "git ls-tree -r --name-only <this commit> -- contracts fixtures docs/architecture scripts, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the sha256 digest of the file content. Git-tracked files only: an earlier form globbed the working tree and hashed a gitignored scripts/__pycache__ .pyc, so the digest was unreproducible on a fresh clone and the drift detector fired on an unmodified checkout.",
+  "manual_acceptance": "PASS (round 3 of 3) - artifacts/checkpoints/CP-00/acceptance.md",
+  "automated_acceptance": "PASS (round 3 of 3) - artifacts/checkpoints/CP-00/acceptance.md",
+  "artifact_manifest_recipe": "git ls-tree -r --name-only <this commit> -- contracts fixtures docs/architecture scripts, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. Git-tracked files only: an earlier form globbed the working tree and hashed a gitignored scripts/__pycache__ .pyc, so the digest was unreproducible on a fresh clone and the drift detector fired on an unmodified checkout.",
   "frozen_inputs_note": "behavioral_oracle and refactoring_architecture_source are commits of the separate legacy repository at /root/projects/PDF-proverka/PDF-proverka, documented in docs/SOURCE_TRACEABILITY.md. They do not resolve in this repository and are not expected to. Every other SHA here is a commit of this repository.",
   "open_escalations": {
     "E-05": "source-ADR proposed statuses are not inherited as accepted; recorded as an integrator obligation at W0.3 ratification and carried forward, not closed by it."
@@ -63,9 +63,9 @@
       "three further gates asserted in prose and could not fail"
     ]
   },
-  "candidate_digest": "a05fc3085a801f2df22c39531918831f9b0b430c31a9177ce14fb826ca2fab6d",
-  "candidate_digest_recipe": "git ls-files, excluding artifacts/checkpoints/CP-00/manifest.json, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the sha256 digest of the working-tree file content. This identifies the candidate. artifact_manifest_sha256 is a different measurement with a different job: it certifies the four reviewed families unchanged and is identical across every rebuild that leaves them alone, which is why it cannot identify anything.",
-  "candidate_file_count": 211,
+  "candidate_digest": "725d3109e932f76d0e848afc0a2ba1c9ba54cd81c6fa192c013ea5285794fccf",
+  "candidate_digest_recipe": "git ls-files plus git ls-files --others --exclude-standard, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. The manifest itself IS included: its contribution is the sha256 of json.dumps(manifest, sort_keys=True, separators=(',',':')) with candidate_digest set to the empty string, so the field can hold the digest of a tree that contains it. Excluding the manifest, as an earlier form did, left a blind spot exactly the shape of the round-two failure: two candidates differing only in manifest prose shared one digest, so a rebuild fixing only manifest text would have carried the digest of the tree that already failed. Found by the round-three manual tester, who produced the counterexample rather than accepting the claim.",
+  "candidate_file_count": 213,
   "second_acceptance_round": {
     "verdict": "FAIL from both streams",
     "manual_candidate_commit_digest": "7170ff5bf6734947d4c5 (prefix)",
@@ -76,5 +76,11 @@
       "the manifest's own prose still said 101 files after the count was corrected to 100",
       "the candidate had no identifier: artifact_manifest_sha256 is identical across every rebuild that leaves the reviewed families alone, so it cannot distinguish this candidate from the one that already failed. Replaced by candidate_digest, which covers the whole tracked tree minus this manifest."
     ]
+  },
+  "ratification_blocked": {
+    "reason": "W0-QA-01's test_the_review_is_not_yet_ratified asserts review.ratified is False, and W0-INT-01's job is to set it True. The two accepted tasks contradict each other by construction: ratification cannot be recorded in the artifact it ratifies without turning the suite red.",
+    "observed": "Setting ratified true, and reconciling the three known point-in-time statements, edits five files inside the four reviewed families and fails five tests: the byte-identity check, its drift mutation, the write-boundary check, the documented-gates drift check, and the not-yet-ratified assertion itself.",
+    "not_a_contract_defect": "All five failures are drift assertions against reviewed_candidate_commit plus the explicit ratified-is-false assertion. No contract, schema or semantic check fails.",
+    "decision_required": "Either narrow-reopen W0-QA-01 so its test compares review.ratified against the checkpoint registry rather than pinning False, or open a follow-up task owning that test. Both acceptance streams passed against the unratified candidate, so the acceptance itself stands."
   }
 }
