@@ -10,8 +10,11 @@
 Remove two stale point-in-time statements that the completed `ID-01` chain has
 overtaken, so no CP-00 artifact carries a claim its neighbour contradicts.
 
-Both are text. Neither changes a rule, a code, a state, an identifier, a schema
-constraint or any value a consumer reads.
+Both are **metadata**: recorded notes about when and why something was decided. Neither
+changes contract semantics. No rule, code, state, identifier, transition, schema
+constraint, `contract_version` or `candidate_revision` moves, and no value a consumer
+reads changes. A reader who ignores `open_items`, `conflicts_checked_not_escalated`
+and `revision_note` sees byte-identical contracts before and after this task.
 
 ## Problem
 
@@ -58,6 +61,10 @@ corrections into two tasks would add ceremony without adding a control.
   `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`, and `W0-QA-03`, integrated at
   `23dddf99f833d12cd4cc22d11e224d4b278872bf`, which are what make both statements
   false.
+- `W0-ARC-02`, integrated at `a67ba31e7748c02974ae9ae93c7f30b6f141d417`. This is a
+  direct dependency, not a transitive one: the architecture half edits that task's
+  accepted deliverable, so its exact accepted bytes are the baseline every diff of
+  this task is measured against.
 
 ## Frozen inputs
 

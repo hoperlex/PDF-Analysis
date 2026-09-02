@@ -117,8 +117,17 @@ No other contract family or path is writable.
   Expected: exit `0`.
 - Command: `.venv/bootstrap/bin/python -m jsonschema -i contracts/events/v1/examples/event-envelope.example.json contracts/events/v1/event-envelope.schema.json`.
   Expected: exit `0`.
-- Command: `.venv/bootstrap/bin/python -m jsonschema -i contracts/events/v1/examples/event-envelope.legacy-schema-version.invalid.json contracts/events/v1/event-envelope.schema.json`.
-  Expected: non-zero, because the removed `schema_version` key is no longer permitted.
+- Command: `.venv/bootstrap/bin/python -c "import json; from pathlib import Path; from jsonschema import Draft202012Validator as V; r=Path('contracts/events/v1'); s=json.loads((r/'event-envelope.schema.json').read_text()); d=json.loads((r/'examples/event-envelope.legacy-schema-version.invalid.json').read_text()); assert d.get('contract_version'), 'fixture must carry a valid contract_version'; errs=list(V(s).iter_errors(d)); assert errs, 'fixture was accepted'; blame=[e for e in errs if 'schema_version' in e.message or list(e.path)[:1]==['schema_version']]; assert blame, [e.message for e in errs]; clean=json.loads(json.dumps(d)); clean.pop('schema_version'); assert not list(V(s).iter_errors(clean)), 'fixture is rejected for some other reason too'; print('rejected for schema_version alone:', blame[0].message)"`.
+  Expected: exit `0`, printing the rejection message that names `schema_version`.
+
+  A bare non-zero exit is not acceptable evidence here. `-m jsonschema` exits non-zero
+  for any invalid document, so a fixture that was malformed, missing a required field
+  or broken in some unrelated way would produce the same green result while proving
+  nothing about the removed key. This form proves three things instead: the fixture
+  carries a **valid** `contract_version`, so it is not rejected merely for lacking one;
+  at least one error is attributable to `schema_version` by message or instance path;
+  and removing that single key makes the document validate cleanly, so no other defect
+  contributes to the rejection.
 - Command: `.venv/bootstrap/bin/python -c "import json,glob; B={'version','schema_version'}
 def scan(o,path,out):
     if isinstance(o,dict):

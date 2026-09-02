@@ -53,6 +53,10 @@ architecture acceptance, ratify the eligible candidate set, fast-forward it to
 - `docs/program/waves/W0.3_ratification_integration.md`
 - `docs/stages/S00_architecture_and_behavior_freeze.md`
 - `artifacts/checkpoints/CP-00/**`
+- `docs/INDEX.md` — final status column only, so the index does not contradict the
+  ratified state it indexes
+- `docs/program/tasks/W0-INT-01.md` — this task's own status banner and handoff, which
+  no other task may close
 
 The Git merge, annotated tag and push are integration operations authorized only after
 the file-level gates and manual acceptance succeed.
@@ -92,10 +96,33 @@ the file-level gates and manual acceptance succeed.
 5. `CURRENT_STATE`, the checkpoint registry, W0.3 plan and S00 checklist agree on the
    accepted commit, tag, frozen contract set, explicit exclusions and next unlocked
    S01 preparation tasks.
-6. After the evidence commit and clean final rerun, `integration/W0.3` is
-   fast-forwarded to `main`; annotated tag `v0.0.0-architecture` is created at the
-   resulting checkpoint commit and both refs are pushed. The tag message names CP-00,
-   the evidence folder and frozen contract versions.
+6. After the evidence commit and clean final rerun, **`main` is fast-forwarded to
+   `integration/W0.3`** — the branch is the source and `main` is the ref that moves.
+   The earlier wording had it backwards, which would have described moving the
+   integration branch onto `main` and losing the accepted checkpoint. The
+   fast-forward must be a genuine one: if `main` is not an ancestor of
+   `integration/W0.3`, stop rather than merge or force. The annotated tag
+   `v0.0.0-architecture` is then created at the resulting checkpoint commit, and the
+   branch, `main` and the tag are pushed together. The tag message names CP-00, the
+   evidence folder and the frozen contract versions.
+
+## CP-00 runtime fields are not applicable
+
+`docs/manual-tests/CP-00_architecture.md` carries `backend_runtime` and
+`frontend_runtime` header fields, inherited from the shared runbook template used by
+every later checkpoint. CP-00 is an **architecture-only** checkpoint: no production
+backend, frontend, worker, migration or composition root exists yet, and building one
+is prohibited before CP-01. Both fields are therefore recorded verbatim as
+
+```text
+not applicable - architecture-only checkpoint
+```
+
+This is a recorded disposition, not a skipped field. Leaving them blank would read as
+an untested runtime; inventing a version string would assert a runtime that does not
+exist. The same applies to any other runbook field that presupposes a running system.
+What CP-00 acceptance does test is reproducibility of the architecture package, its
+schemas, its evidence and its recorded decisions.
 
 ## Required tests
 
