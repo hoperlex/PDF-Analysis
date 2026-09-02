@@ -61,9 +61,26 @@ contract are different hotspots with different owners.
 
 ## Allowed paths
 
+Full write, the substance of this task:
+
 - `contracts/domain/v1/error-codes.json`
 - `contracts/domain/v1/error-codes.schema.json`
 - `contracts/domain/v1/README.md`
+
+Single-value write, permitted **only** to advance `candidate_revision` and its `const`
+pin, with every other byte unchanged:
+
+- `contracts/domain/v1/identifiers.json`
+- `contracts/domain/v1/identifiers.schema.json`
+- `contracts/domain/v1/state-machines.json`
+- `contracts/domain/v1/state-machines.schema.json`
+
+The family holds `candidate_revision` as one value across all three catalogs, pinned
+by `const` in all three schemas, so a round that advances it must touch six files. An
+earlier draft of this task listed only the three full-write paths while also requiring
+the advance — which made it unexecutable as written. Widening is deliberately
+minimal: in the four single-value paths, a diff that changes anything other than that
+one integer is a scope violation, and the gate below proves it.
 
 No other path is writable. `scripts/**` in particular is not: the validator change
 belongs to `W0-QA-03` and must already be integrated.
@@ -128,9 +145,45 @@ belongs to `W0-QA-03` and must already be integrated.
   `version` key.
 - Command: `git diff --check -- contracts/domain/v1`.
   Expected: exit `0` and no output.
-- Independent reviewer confirms the diff touches only the version key, its schema
-  entry, the `deprecated_fields` block and the README paragraph — and that the 20
-  error codes, their categories, statuses and `retryable` flags are byte-identical.
+- Command: `.venv/bootstrap/bin/python -c "import subprocess,re,json; base='a67ba31e7748c02974ae9ae93c7f30b6f141d417'; paths=['identifiers.json','identifiers.schema.json','state-machines.json','state-machines.schema.json']; bad=[]
+def rev(d):
+    if 'candidate_revision' in d: return d['candidate_revision']
+    pr=d.get('properties')
+    if isinstance(pr,dict) and isinstance(pr.get('candidate_revision'),dict): return pr['candidate_revision'].get('const')
+    return None
+for p in paths:
+    rel='contracts/domain/v1/'+p
+    out=subprocess.run(['git','diff','-U0',base,'--',rel],capture_output=True,text=True).stdout
+    ch=[l for l in out.splitlines() if re.match(r'^[+-][^+-]',l)]
+    if len(ch)!=2: bad.append((p,f'{len(ch)} changed lines, expected exactly 2')); continue
+    o=[l for l in ch if l[0]=='-'][0][1:]; n=[l for l in ch if l[0]=='+'][0][1:]
+    if re.sub(r'\d+','N',o)!=re.sub(r'\d+','N',n): bad.append((p,'changed line is not a numeric-only change')); continue
+    old=json.loads(subprocess.run(['git','show',f'{base}:{rel}'],capture_output=True,text=True,check=True).stdout)
+    new=json.loads(open(rel).read())
+    if rev(new) is None or rev(new)==rev(old): bad.append((p,'revision not advanced'))
+assert not bad, bad
+print('single-value paths: exactly one changed line each, numeric only, revision advanced')"`.
+  Expected: exit `0`. In each of the four single-value paths the diff against the
+  commit this task started from consists of exactly one removed and one added line,
+  those two lines are identical once every run of digits is normalised, and the
+  revision value actually advanced.
+
+  This is a byte-level check, matching the byte-level promise in Allowed paths. An
+  earlier form compared parsed JSON, which would have accepted a reformat, a key
+  reorder or a whitespace change while the task text promised bytes. It also read the
+  revision from the document root only, so the two `*.schema.json` files — which hold
+  it at `properties.candidate_revision.const` and have no root key — were reported as
+  never advanced and the gate could not pass at all. Both defects are corrected here.
+  Verified before being written down, in all three directions: a correct
+  revision-only change passes; a foreign edit in one of these paths is rejected with
+  `6 changed lines, expected exactly 2`; a revision rolled back in a schema pin is
+  rejected with `revision not advanced`.
+- Independent reviewer confirms the diff across all seven paths. In the three
+  full-write paths it touches only the `version` key, its schema entry, the
+  `deprecated_fields` block and the README prose, and the 20 error codes with their
+  categories, statuses and `retryable` flags are byte-identical. In the four
+  single-value paths it is one line each, the `candidate_revision` integer or its
+  schema `const` pin, and nothing else.
 
 ## Integration contract
 
@@ -151,14 +204,20 @@ completes `ID-01` for the domain family and unblocks the repository-wide sweep i
 ## Rollback / feature flag
 
 Contract-only change; no bypass feature flag, because a contract-version gate must not
-be skippable. Before freeze, revert this task's three paths — which restores the
-mirror and is safe only while `W0-QA-03` keeps the key optional. After freeze, stop
-consumers and follow the freeze-break procedure.
+be skippable. Before freeze, revert all seven declared paths **as one unit** — the
+three full-write paths and the four single-value paths together. A partial revert is
+not a rollback: restoring the catalog while leaving `candidate_revision` at the
+advanced value, or the reverse, leaves the family declaring one revision in some files
+and another in the rest, which is precisely the split the single value exists to
+prevent. Reverting restores the mirror and is safe only while `W0-QA-03` keeps the key
+optional. After freeze, stop consumers and follow the freeze-break procedure.
 
 ## Handoff
 
-- changed files and confirmation that only the version key, its schema entry, the
-  `deprecated_fields` block and the README paragraph moved
+- changed files split by write mode: the three full-write paths, where only the
+  `version` key, its schema entry, the `deprecated_fields` block and the README prose
+  moved; and the four single-value paths, where the only change is `candidate_revision`
+  in a catalog or its `const` pin in a schema, with the old and new values stated
 - commands/results, including the schema-rejects-reintroduction probe
 - new/changed contracts: domain error catalog only; `contract_version` value unchanged
 - known limits: `U-04` remains open and unaffected by this task
