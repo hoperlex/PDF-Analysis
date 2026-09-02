@@ -1,9 +1,10 @@
 # Task W0-CLN-01 — retire point-in-time notes overtaken by the `ID-01` chain
 
 > **Status: backlog draft. Not executable yet.**
-> `AGENTS.md` §2 allows `depends_on` to name completed task IDs only. `W0-EVT-01` has
-> not run. Pin its integration commit below and this task becomes executable
-> unchanged.
+> **Status: ready for assignment.**
+> `W0-EVT-01` is independently accepted and integrated at
+> `3ca8e25413426ff8efec41cd850c325331d181fc`. Every dependency is now a completed task ID
+> pinned to a real commit; no placeholder remains.
 
 ## Outcome
 
@@ -55,7 +56,8 @@ corrections into two tasks would add ceremony without adding a control.
 
 ## Depends on
 
-- `W0-EVT-01`, integrated at `<pending integration commit>`. Running earlier would
+- `W0-EVT-01`, integrated at
+  `3ca8e25413426ff8efec41cd850c325331d181fc`. Running earlier would
   rewrite notes about a chain that is not yet finished.
 - `W0-DOM-02`, integrated at
   `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`, and `W0-QA-03`, integrated at
@@ -68,7 +70,7 @@ corrections into two tasks would add ceremony without adding a control.
 
 ## Frozen inputs
 
-- base commit: the `W0-EVT-01` integration commit
+- base commit: `3ca8e25413426ff8efec41cd850c325331d181fc`
 - accepted lint-rule specification from `W0-ARC-02`
 - accepted domain candidate as left by `W0-DOM-02`, revision 5
 - `docs/architecture/CP00_OWNER_DECISIONS.md` for `ID-01`; read-only
@@ -139,7 +141,7 @@ No other path is writable.
 
 - Command: `.venv/bootstrap/bin/python -c "import json,glob; bad=[p for p in glob.glob('contracts/domain/v1/*.json')+glob.glob('docs/architecture/ARCHITECTURE_LINT_RULES.json') for t in [open(p).read()] if 'never committed' in t or 'was ever committed' in t or 'cannot both be green' in t]; assert not bad, bad"`.
   Expected: exit `0`; neither retired claim survives in either family.
-- Command: `.venv/bootstrap/bin/python -c "import json,subprocess; base='<the commit this task started from>'
+- Command: `.venv/bootstrap/bin/python -c "import json,subprocess; base='3ca8e25413426ff8efec41cd850c325331d181fc'
 import re
 for p in ['identifiers.json','state-machines.json']:
     rel='contracts/domain/v1/'+p
