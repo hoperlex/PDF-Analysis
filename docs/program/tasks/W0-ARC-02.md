@@ -118,9 +118,19 @@ deliverable 6 and let the integrator open an ADR task with the right owner.
 - Command: `git diff --check -- docs/architecture`.
   Expected: exit `0` and no output.
 - Command: `git status --porcelain -- docs/architecture`.
-  Expected: exactly two lines, `?? docs/architecture/ARCHITECTURE_LINT_RULES.json` and
-  `?? docs/architecture/ARCHITECTURE_LINT_RULES.md`, and nothing else under
-  `docs/architecture`.
+  Expected: exactly two lines, both naming
+  `docs/architecture/ARCHITECTURE_LINT_RULES.json` and
+  `docs/architecture/ARCHITECTURE_LINT_RULES.md`, and nothing else under
+  `docs/architecture`. Assert the **path set**, not the status code: `??` while the
+  deliverables are untracked, ` M` once they are committed and edited again, and an
+  empty result once they are committed and clean.
+
+  An earlier form pinned the status to `??`. That was correct while it was written and
+  became permanently unsatisfiable the moment this task's own output was integrated at
+  `a67ba31e7748c02974ae9ae93c7f30b6f141d417` — from then on a clean tree returns an
+  empty list and the gate fails with `AssertionError: []`. A boundary gate that only
+  works before its own integration cannot be re-run to check the integrated state,
+  which is exactly when a later task most needs it.
 
   This deliberately replaces `git diff --name-only <base> -- docs/architecture`, which
   was unusable here: both deliverables are new files, the task forbids `git add`, and

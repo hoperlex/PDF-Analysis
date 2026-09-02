@@ -376,7 +376,7 @@ Every rule appears once in this table and once, in more detail, in section 5.
 - **Scope:** `contracts/**/*.json`
 - **Enforcement / severity:** `static` / `error`
 - **Detection:** Walk every JSON document under contracts/** and flag an object key named version or schema_version at any depth. The dialect key is not a version key and neither is the identity key; both keep their JSON Schema meaning.
-- **Not a violation:** contract_version is the required key and is never flagged. A distinct domain field with its own name, such as a norms snapshot version field, is a different key and is not flagged. A string value that contains the word version is not a key. docs/** prose is out of scope.
+- **Not a violation:** contract_version is the required key and is never flagged. A distinct domain field with its own name, such as a norms snapshot version field, is a different key and is not flagged. A string value that contains the word version is not a key. docs/** prose is out of scope. A negative fixture declares nothing. An *.invalid.json example under contracts/**/examples/ exists to carry a forbidden shape so the owning schema can be proved to reject it. contracts/events/v1/examples/event-envelope.legacy-schema-version.invalid.json is the one such file in the repository: it holds a valid contract_version beside the removed schema_version key precisely so the event envelope schema can be shown to reject that key, and contracts/events/v1/README.md records that purpose. It is not flagged. That exception makes statement and detection the same width, exactly as was already done for ALR-25 and ALR-12: the statement is about a machine contract declaring its version, while the detection walks object keys at any depth under contracts/**. It is bounded by the *.invalid.json fixture name together with the demonstrated-rejection purpose; a positive example, a schema or a catalog carrying version or schema_version is flagged exactly as before.
 - **Waiver:** granted by the repository owner, recorded by the program integrator, recorded in [EXCEPTIONS.md](EXCEPTIONS.md) with the integration decision it departs from, exact scope, expiry checkpoint and removal task. No self-service bypass.
 
 ### ALR-25 - canonical-execution-token-name
@@ -516,14 +516,14 @@ no ADR file, status or index row was touched by this task.
 
 Three further candidate conflicts were checked and are **not** escalated:
 
-- **ALR-24** against ADR-0003 - ADR-0003 requires every boundary to be versioned by a machine schema but names no version key, so pinning the key to contract_version adds a naming decision without contradicting the ADR. The conflict that does exist is with repository state, not with an ADR: scripts/validate_bootstrap.py currently requires a bare version key in the domain error catalog. That is the ID-01 work of W0-QA-03 and W0-DOM-02 and is recorded as an open item.
+- **ALR-24** against ADR-0003 - ADR-0003 requires every boundary to be versioned by a machine schema but names no version key, so pinning the key to contract_version adds a naming decision without contradicting the ADR. That is the finding, and it is unchanged. The conflict this entry also recorded was with repository state at the W0-ARC-02 base commit rather than with an ADR - scripts/validate_bootstrap.py then required a bare version key in the domain error catalog - and the completed ID-01 work of W0-QA-03, W0-DOM-02 and W0-EVT-01 has closed it; the ALR-24 open item names the three integration commits. No escalation was opened then and none is opened now.
 - **ALR-26** against ADR-0008 - ADR-0008 makes the stage registry a package-contract boundary and says nothing about optimization membership. PD-05 decided membership and U-06 assigned the capability to a separate bounded context, so the rule implements an owner decision rather than contradicting the ADR.
 - **ALR-29** against ADR-0004 - ADR-0004 states that empty folders are not architecture and the frozen skeleton ships context-level boundary READMEs, which REPOSITORY_LAYOUT.md requires. The rule is scoped to module sublayers, so the required skeleton shape is not a violation and no ADR is contradicted.
 
 ## 9. Known limits and open items
 
 - No compliance claim is made by this task. The repository holds a skeleton only: src/auditmanager and web/src contain boundary READMEs and one package init, so most scopes currently match no code. A first enforcement run under W1-ARC-01 will produce findings, and that is expected.
-- ALR-24 is contradicted by repository state at the base commit, not by an ADR: scripts/validate_bootstrap.py requires a bare version key in contracts/domain/v1/error-codes.json. W0-QA-03 teaches the validator to read contract_version and W0-DOM-02 removes the mirror. Until both are integrated, an enforcement run of ALR-24 and the bootstrap validator cannot both be green, and neither task is owned here.
+- ALR-24 was contradicted by repository state at the W0-ARC-02 base commit 43a84d93fd544573226b82860ab24f924ed66d83, not by an ADR: scripts/validate_bootstrap.py then required a bare version key in contracts/domain/v1/error-codes.json, so an enforcement run of ALR-24 and a passing bootstrap validator were mutually exclusive, and neither remedy was owned by W0-ARC-02. That repository state no longer exists. The ID-01 chain closed it: W0-QA-03 moved the validator onto contract_version, integrated at 23dddf99f833d12cd4cc22d11e224d4b278872bf; W0-DOM-02 removed the deprecated domain version mirror, integrated at 478d32e90d1cbb2c691e0ac0b61b68dadcf0d397; W0-EVT-01 replaced the event envelope schema_version key with contract_version, integrated at 3ca8e25413426ff8efec41cd850c325331d181fc. The entry is kept rather than deleted because it records why this rule could not have been satisfiable at acceptance of W0-ARC-02, and when that stopped being so. Closing the conflict is not a compliance claim: this specification still asserts nothing about whether any rule passes, and the task that retired this statement, W0-CLN-01, changed no rule.
 - Scope globs are written against the layout ADR-0004 and REPOSITORY_LAYOUT.md declare, including directories that do not exist yet, such as the module sublayers and web/src/shared/api. W1-ARC-01 must treat an empty glob as no finding, never as a pass.
 - ALR-31 and ALR-33 need infrastructure that does not exist at CP-00: a pinned client generator and a database evidence job. They are specified as test enforcement precisely so that no reader mistakes them for a static check available today.
 - The rules constrain code that is prohibited before CP-00 anyway. They are a specification for W1-ARC-01, not a gate on this wave.
@@ -618,24 +618,48 @@ git status --porcelain -- docs/architecture
 ```
 
 The validator must exit `0` and print a standalone `PASS`; `git diff --check` must print
-nothing; and `git status --porcelain -- docs/architecture` must print exactly two lines,
-`?? docs/architecture/ARCHITECTURE_LINT_RULES.json` and
-`?? docs/architecture/ARCHITECTURE_LINT_RULES.md`, with nothing else under
-`docs/architecture`. The strict form of that last expectation, which fails on a third line
-as well as on a missing one:
+nothing; and `git status --porcelain -- docs/architecture` must report no path under
+`docs/architecture` other than the two owned files, both of which must exist. The strict
+form of that last expectation asserts the **path set**, never the status code, so it holds
+in every phase of the deliverables' lifecycle; it still fails on a third path as well as
+on a missing file:
 
 ```bash
-.venv/bootstrap/bin/python -c "import subprocess; out=subprocess.run(['git','status','--porcelain','--','docs/architecture'],capture_output=True,text=True).stdout.splitlines(); assert sorted(out)==['?? docs/architecture/ARCHITECTURE_LINT_RULES.json','?? docs/architecture/ARCHITECTURE_LINT_RULES.md'], out; print('write boundary holds: exactly the two owned files')"
+.venv/bootstrap/bin/python -c "import subprocess; from pathlib import Path; owned={'docs/architecture/ARCHITECTURE_LINT_RULES.json', 'docs/architecture/ARCHITECTURE_LINT_RULES.md'}; out=subprocess.run(['git','status','--porcelain','--','docs/architecture'],capture_output=True,text=True).stdout.splitlines(); reported={l[3:] for l in out}; foreign=sorted(reported-owned); assert not foreign, foreign; missing=sorted(p for p in owned if not Path(p).is_file()); assert not missing, missing; print('write boundary holds: exactly the two owned files under docs/architecture; git status reports', sorted(reported) or 'nothing, so both are committed and clean')"
 ```
+
+**Why the strict form changed.** It previously pinned the result to the two lines
+`?? docs/architecture/ARCHITECTURE_LINT_RULES.json` and
+`?? docs/architecture/ARCHITECTURE_LINT_RULES.md`. `??` means untracked, so the gate was
+satisfiable only while this task's own deliverables had not yet been integrated. They were
+committed at `a67ba31e7748c02974ae9ae93c7f30b6f141d417`, and from that moment it could
+never pass again: on a clean tree `git status` reports nothing and the assertion fails with
+`AssertionError: []`, and on a tree where the two files are edited it reports ` M` and the
+assertion fails with those two lines. `W0-CLN-01`, the next task authorized to write this
+document, executed both directions and recorded them. A boundary gate that works only
+before its own integration cannot be re-run against the integrated state, which is exactly
+when a later task needs it.
+
+The repair keeps the intent and drops the accident. The intent is that nothing under
+`docs/architecture` is written except the two owned files; the accident was reading that
+intent off a lifecycle status. A path set answers it in every phase - `??` before
+integration, ` M` after it while the files are being edited, and an empty result once they
+are committed and clean - while a third path still fails. The one claim the status code
+carried that a path set does not, that both deliverables exist rather than one having been
+silently skipped, is now asserted directly, so nothing the earlier form proved was lost.
+This is the third gate in W0.3 found able to move in only one direction; a gate is
+exercised in both directions before a green result from it is trusted.
 
 The command
 `git diff --name-only 43a84d93fd544573226b82860ab24f924ed66d83 -- docs/architecture`
 is **not** part of this gate and is recorded here only as history. `git diff` reads
-tracked content; both deliverables of this task are untracked and `git add` is not
-authorized here, so it prints nothing whether the two files were written or nothing at
-all was. It cannot distinguish the two cases it would have to distinguish, and its
-stated expectation of two paths is unreachable while the files are untracked. It becomes
-meaningful again once the integrator stages them, and is worth re-running at that point.
+tracked content; while `W0-ARC-02` ran, both deliverables were untracked and `git add` was
+not authorized there, so the command printed nothing whether the two files had been written
+or nothing at all had. It could not distinguish the two cases it would have had to
+distinguish, and its stated expectation of two paths was unreachable. That objection
+expired with integration: the two files are tracked from
+`a67ba31e7748c02974ae9ae93c7f30b6f141d417` onward, so the `git diff` form is meaningful
+again and is worth re-running against a chosen base.
 
 ## 11. Waivers
 

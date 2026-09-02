@@ -1030,7 +1030,9 @@
         "contract_version is the required key and is never flagged.",
         "A distinct domain field with its own name, such as a norms snapshot version field, is a different key and is not flagged.",
         "A string value that contains the word version is not a key.",
-        "docs/** prose is out of scope."
+        "docs/** prose is out of scope.",
+        "A negative fixture declares nothing. An *.invalid.json example under contracts/**/examples/ exists to carry a forbidden shape so the owning schema can be proved to reject it. contracts/events/v1/examples/event-envelope.legacy-schema-version.invalid.json is the one such file in the repository: it holds a valid contract_version beside the removed schema_version key precisely so the event envelope schema can be shown to reject that key, and contracts/events/v1/README.md records that purpose. It is not flagged.",
+        "That exception makes statement and detection the same width, exactly as was already done for ALR-25 and ALR-12: the statement is about a machine contract declaring its version, while the detection walks object keys at any depth under contracts/**. It is bounded by the *.invalid.json fixture name together with the demonstrated-rejection purpose; a positive example, a schema or a catalog carrying version or schema_version is flagged exactly as before."
       ],
       "waiver_policy": {
         "waivable": true,
@@ -1652,7 +1654,7 @@
     {
       "rule_id": "ALR-24",
       "checked_against": "ADR-0003",
-      "finding": "ADR-0003 requires every boundary to be versioned by a machine schema but names no version key, so pinning the key to contract_version adds a naming decision without contradicting the ADR. The conflict that does exist is with repository state, not with an ADR: scripts/validate_bootstrap.py currently requires a bare version key in the domain error catalog. That is the ID-01 work of W0-QA-03 and W0-DOM-02 and is recorded as an open item."
+      "finding": "ADR-0003 requires every boundary to be versioned by a machine schema but names no version key, so pinning the key to contract_version adds a naming decision without contradicting the ADR. That is the finding, and it is unchanged. The conflict this entry also recorded was with repository state at the W0-ARC-02 base commit rather than with an ADR - scripts/validate_bootstrap.py then required a bare version key in the domain error catalog - and the completed ID-01 work of W0-QA-03, W0-DOM-02 and W0-EVT-01 has closed it; the ALR-24 open item names the three integration commits. No escalation was opened then and none is opened now."
     },
     {
       "rule_id": "ALR-26",
@@ -1667,7 +1669,7 @@
   ],
   "open_items": [
     "No compliance claim is made by this task. The repository holds a skeleton only: src/auditmanager and web/src contain boundary READMEs and one package init, so most scopes currently match no code. A first enforcement run under W1-ARC-01 will produce findings, and that is expected.",
-    "ALR-24 is contradicted by repository state at the base commit, not by an ADR: scripts/validate_bootstrap.py requires a bare version key in contracts/domain/v1/error-codes.json. W0-QA-03 teaches the validator to read contract_version and W0-DOM-02 removes the mirror. Until both are integrated, an enforcement run of ALR-24 and the bootstrap validator cannot both be green, and neither task is owned here.",
+    "ALR-24 was contradicted by repository state at the W0-ARC-02 base commit 43a84d93fd544573226b82860ab24f924ed66d83, not by an ADR: scripts/validate_bootstrap.py then required a bare version key in contracts/domain/v1/error-codes.json, so an enforcement run of ALR-24 and a passing bootstrap validator were mutually exclusive, and neither remedy was owned by W0-ARC-02. That repository state no longer exists. The ID-01 chain closed it: W0-QA-03 moved the validator onto contract_version, integrated at 23dddf99f833d12cd4cc22d11e224d4b278872bf; W0-DOM-02 removed the deprecated domain version mirror, integrated at 478d32e90d1cbb2c691e0ac0b61b68dadcf0d397; W0-EVT-01 replaced the event envelope schema_version key with contract_version, integrated at 3ca8e25413426ff8efec41cd850c325331d181fc. The entry is kept rather than deleted because it records why this rule could not have been satisfiable at acceptance of W0-ARC-02, and when that stopped being so. Closing the conflict is not a compliance claim: this specification still asserts nothing about whether any rule passes, and the task that retired this statement, W0-CLN-01, changed no rule.",
     "Scope globs are written against the layout ADR-0004 and REPOSITORY_LAYOUT.md declare, including directories that do not exist yet, such as the module sublayers and web/src/shared/api. W1-ARC-01 must treat an empty glob as no finding, never as a pass.",
     "ALR-31 and ALR-33 need infrastructure that does not exist at CP-00: a pinned client generator and a database evidence job. They are specified as test enforcement precisely so that no reader mistakes them for a static check available today.",
     "The rules constrain code that is prohibited before CP-00 anyway. They are a specification for W1-ARC-01, not a gate on this wave.",
@@ -1707,7 +1709,7 @@
       },
       {
         "gate_id": "GATE-F",
-        "purpose": "Repository-level gates required by the task file: the bootstrap validator exits 0 with a standalone PASS, git diff --check -- docs/architecture is clean, and git status --porcelain -- docs/architecture lists exactly the two owned files as untracked and nothing else. git diff --name-only against the base commit is not part of this gate: it reads tracked content only and is blind to both untracked deliverables.",
+        "purpose": "Repository-level gates required by the task file: the bootstrap validator exits 0 with a standalone PASS, git diff --check -- docs/architecture is clean, and git status --porcelain -- docs/architecture reports no path under docs/architecture other than the two owned files, both of which exist on disk. The strict form asserts that path set and that existence, never the status code. An earlier form pinned the status to ??, which means untracked, and so could never pass again once this task's own deliverables were committed at a67ba31e7748c02974ae9ae93c7f30b6f141d417: a clean tree then reports nothing and an edited tree reports M. W0-CLN-01 retired that form, keeping the intent that nothing under docs/architecture is written except the two owned files and dropping the dependence on a lifecycle status. git diff --name-only against the base commit is not part of this gate: it reads tracked content only, and while W0-ARC-02 ran both deliverables were untracked and invisible to it.",
         "source": "Required tests of docs/program/tasks/W0-ARC-02.md",
         "documented_in": "ARCHITECTURE_LINT_RULES.md, Verification"
       }
