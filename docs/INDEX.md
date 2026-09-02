@@ -36,8 +36,8 @@
 - [Task W0-QA-03](program/tasks/W0-QA-03.md) — accepted and integrated
 - [Task W0-DOM-02](program/tasks/W0-DOM-02.md) — accepted and integrated
 - [Task W0-EVT-01](program/tasks/W0-EVT-01.md) — ready for W0.3 assignment
-- [Task W0-CLN-01](program/tasks/W0-CLN-01.md) — ready for assignment
-- [Task W0-QA-01](program/tasks/W0-QA-01.md) — backlog draft
+- [Task W0-CLN-01](program/tasks/W0-CLN-01.md) — accepted and integrated
+- [Task W0-QA-01](program/tasks/W0-QA-01.md) — ready for assignment
 - [Task W0-INT-01](program/tasks/W0-INT-01.md) — backlog draft
 - [Checkpoint registry](program/CHECKPOINT_REGISTRY.md)
 - [Version/freeze policy](program/VERSIONING_AND_FREEZE_POLICY.md)
