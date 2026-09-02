@@ -1,9 +1,9 @@
 # Contract task W0-EVT-01 — event envelope contract version key
 
-> **Status: backlog draft. Not executable yet.**
-> This task sits last in the `ID-01` chain. `W0-DOM-01` and `W0-ANA-01` are integrated;
-> `W0-QA-03` is integrated and `W0-DOM-02` is ready but not yet completed. Its
-> repository-wide sweep cannot pass until the domain change lands.
+> **Status: ready for W0.3 assignment.**
+> This task sits last in the `ID-01` chain. `W0-QA-03` and `W0-DOM-02` are
+> independently accepted and integrated; the repository-wide sweep now fails only
+> on the event paths this task owns.
 
 ## Outcome
 
@@ -46,8 +46,9 @@ not silently edit an unowned contract family. This task creates that ownership.
   other two families is fixed before the event family copies it.
 - `W0-QA-03`, integrated at
   `23dddf99f833d12cd4cc22d11e224d4b278872bf`.
-- `W0-DOM-02`, integrated at `<pending integration commit>`. Until it lands, the
-  repository-wide sweep below still fails on a domain file this task does not own.
+- `W0-DOM-02`, integrated at
+  `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`. Its accepted sweep leaves only the
+  event schema and example named below.
 
 ## Origin
 
@@ -58,7 +59,7 @@ is `contract_version` with a string semver/draft value; `version` and
 
 ## Frozen inputs
 
-- base commit: the `W0-DOM-02` integration commit
+- base commit: `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`
 - current event contract: `contracts/events/v1/**` at that base commit
 - canonical key decision: `docs/architecture/CP00_OWNER_DECISIONS.md` at its accepted
   commit

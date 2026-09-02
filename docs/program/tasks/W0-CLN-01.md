@@ -54,7 +54,10 @@ corrections into two tasks would add ceremony without adding a control.
 
 - `W0-EVT-01`, integrated at `<pending integration commit>`. Running earlier would
   rewrite notes about a chain that is not yet finished.
-- `W0-DOM-02` and `W0-QA-03`, integrated, which are what make both statements false.
+- `W0-DOM-02`, integrated at
+  `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`, and `W0-QA-03`, integrated at
+  `23dddf99f833d12cd4cc22d11e224d4b278872bf`, which are what make both statements
+  false.
 
 ## Frozen inputs
 

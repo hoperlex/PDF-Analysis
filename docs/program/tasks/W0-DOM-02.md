@@ -1,9 +1,8 @@
 # Contract task W0-DOM-02 — remove the deprecated domain `version` mirror
 
-> **Status: ready for W0.3 assignment.**
-> `W0-QA-03` is independently accepted and integrated at
-> `23dddf99f833d12cd4cc22d11e224d4b278872bf`. The stage-one convergence commit is
-> pinned below; no dependency placeholder remains.
+> **Status: completed, independently accepted and integrated.**
+> Integration commit: `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`.
+> Domain candidate revision 5 remains unfrozen and unratified.
 
 ## Outcome
 

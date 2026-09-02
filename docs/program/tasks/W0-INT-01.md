@@ -26,8 +26,10 @@ architecture acceptance, ratify the eligible candidate set, fast-forward it to
   `a67ba31e7748c02974ae9ae93c7f30b6f141d417`.
 - `W0-QA-03`, integrated at
   `23dddf99f833d12cd4cc22d11e224d4b278872bf`.
-- `W0-DOM-02`, integrated at `<pending integration commit>`.
+- `W0-DOM-02`, integrated at
+  `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`.
 - `W0-EVT-01`, integrated at `<pending integration commit>`.
+- `W0-CLN-01`, integrated at `<pending integration commit>`.
 - `W0-QA-01`, accepted and integrated at `<pending integration commit>` with an
   `ACCEPT` report for the exact convergence commit.
 

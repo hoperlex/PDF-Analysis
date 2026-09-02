@@ -62,8 +62,8 @@ order shown below.
 |---|---|---|---|---|
 | W0-ARC-02 | ARC | Architecture lint rule specification (`U-03`) | W0-ARC-01 | Accepted and integrated at `a67ba31e`. |
 | W0-QA-03 | QA | Validator reads `contract_version` (`ID-01`) | W0-QA-02, W0-ARC-01 | Accepted and integrated at `23dddf99`. |
-| W0-DOM-02 | DOM | Remove deprecated domain `version` mirror (`ID-01`) | W0-QA-03, W0-DOM-01 | Ready; validator dependency is integrated. |
-| W0-EVT-01 | EVT | Event envelope on `contract_version` (`ID-01`) | W0-DOM-02, W0-QA-03, W0-DOM-01, W0-ANA-01 | Last in the `ID-01` chain; its sweep cannot pass earlier. |
+| W0-DOM-02 | DOM | Remove deprecated domain `version` mirror (`ID-01`) | W0-QA-03, W0-DOM-01 | Accepted and integrated at `478d32e9`. |
+| W0-EVT-01 | EVT | Event envelope on `contract_version` (`ID-01`) | W0-DOM-02, W0-QA-03, W0-DOM-01, W0-ANA-01 | Ready; the sweep now finds only owned event paths. |
 
 `ID-01` completes only in that order: `W0-QA-03` → `W0-DOM-02` → `W0-EVT-01`.
 

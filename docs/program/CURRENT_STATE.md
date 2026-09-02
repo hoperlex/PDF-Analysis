@@ -25,6 +25,14 @@ Stage one integrated:
 - `W0-ARC-02` — 33 architecture lint rules specified, independently accepted after
   narrow remediation, commit `a67ba31e7748c02974ae9ae93c7f30b6f141d417`.
 
+Stage two progress:
+
+- `W0-DOM-02` — deprecated domain `version`/`deprecated_fields` mirror removed,
+  domain candidate revision advanced coherently to 5, independently accepted and
+  integrated at `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`;
+- `W0-EVT-01` is now ready from that exact commit. The recursive version-key sweep
+  reports only its owned event schema and example.
+
 Completed inputs:
 
 - `W0-QA-00` — fail-closed bootstrap validator, commit
@@ -159,9 +167,9 @@ not review lanes it coordinated.
 - A legacy defect is now recorded as observed fact and must not drift into a target
   rule: the export download guard compares resolved paths with `str.startswith` and
   no component boundary, so a sibling directory sharing the base prefix is served.
-- The remaining `ID-01` chain is `W0-DOM-02` → `W0-EVT-01`. `W0-DOM-02` must remove
-  both `version` and `deprecated_fields` from the catalog and from the schema's root
-  `required`/`properties`; root `additionalProperties: false` then rejects either key.
+- The remaining `ID-01` work is `W0-EVT-01`. After it lands, `W0-CLN-01` must retire
+  the two point-in-time ALR-24 records and the false committed-state clause retained
+  inside two historical domain `revision_note` strings before `W0-QA-01` or freeze.
 
 ## Allowed work before CP-00
 
@@ -180,10 +188,10 @@ not review lanes it coordinated.
 
 ## Next integration tasks
 
-Assign `W0-DOM-02` from the stage-one convergence commit, independently review and
-integrate it, then re-pin and execute `W0-EVT-01`. Follow with independent
-`W0-QA-01` and final `W0-INT-01`. Do not record a contract or checkpoint freeze until
-those tasks and the manual CP-00 acceptance are complete.
+Assign `W0-EVT-01` from the accepted DOM integration commit, independently review and
+integrate it, then run `W0-CLN-01`. Follow with independent `W0-QA-01` and final
+`W0-INT-01`. Do not record a contract or checkpoint freeze until those tasks and the
+manual CP-00 acceptance are complete.
 
 `U-04` does **not** block a CP-00 contract freeze. Its owner disposition sets its own
 deadlines — tenant/IdP before `W2-C-01`, TTL and legal hold before `W9-C-01` — which
