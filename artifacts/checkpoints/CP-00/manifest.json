@@ -5,7 +5,7 @@
   "status": "pre_ratification_candidate",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "854a68201cdd857abf6a12989f254f5d2e0928af",
-  "manual_candidate_commit": "the commit carrying this manifest; a manifest cannot name its own SHA, so the integrator records it in CURRENT_STATE and in the acceptance instruction. Drift is detected by artifact_manifest_sha256 below, which covers all 101 files of the four reviewed families and is independent of this commit's identity.",
+  "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash; two rebuilds were rejected for claiming the value was recorded elsewhere when it was not. candidate_digest covers every git-tracked file except this manifest, so it is computable before the commit exists and differs for every candidate.",
   "artifact_count": 100,
   "artifact_manifest_sha256": "39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08",
   "frozen_inputs": {
@@ -47,8 +47,8 @@
   },
   "known_pre_ratification_items": {
     "PD-02_precondition_text": "CP00_ARCHITECTURE_REVIEW.md and CP00_OWNER_DECISIONS.md still record the PD-02 alias-map precondition as unmet. It is satisfied: legacy-stage-name-map.json carries 62 name rows over 31 alias-bearing sites. Reconciling point-in-time statements in the CP-00 review is W0-INT-01's declared job and is deliberately not done before ratification. Both documents are now inside W0-INT-01's allowed paths; earlier only one was.",
-    "ARCHITECTURE_LINT_RULES_line_604": "The GATE-E probe prose still says the document's own JSON is 'still untracked', false since a67ba31e. Not a gate failure: GATE-E asserts presence at the base commit, not trackedness, and passes. Owned by W0-INT-01's metadata pass.",
-    "ADR_INDEX_decision_count": "ADR_INDEX.md enumerates PD-01 through PD-04 while five owner decisions are recorded. Substance unaffected - no supersede was issued. Owned by W0-INT-01."
+    "ARCHITECTURE_LINT_RULES_line_604": "The GATE-E probe prose still says the document's own JSON is 'still untracked', false since a67ba31e. Not a gate failure: GATE-E asserts presence at the base commit, not trackedness, and passes. Owned by W0-INT-01, whose allowed paths were widened to include this file after the second acceptance round found the item assigned to an owner that could not write it.",
+    "ADR_INDEX_decision_count": "ADR_INDEX.md enumerates PD-01 through PD-04 while five owner decisions are recorded. Substance unaffected - no supersede was issued. Owned by W0-INT-01, whose allowed paths were widened to include this file; before that it was writable by no task at all."
   },
   "first_acceptance_round": {
     "verdict": "FAIL from both streams",
@@ -61,6 +61,20 @@
       "three integrated commits carried integrator edits outside the task's allowed paths - recorded as an owner-accepted exception, not silently absorbed",
       "the W0-DOM-02 scope gate compared against the working tree and broke when a later task legitimately edited the same files",
       "three further gates asserted in prose and could not fail"
+    ]
+  },
+  "candidate_digest": "a05fc3085a801f2df22c39531918831f9b0b430c31a9177ce14fb826ca2fab6d",
+  "candidate_digest_recipe": "git ls-files, excluding artifacts/checkpoints/CP-00/manifest.json, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the sha256 digest of the working-tree file content. This identifies the candidate. artifact_manifest_sha256 is a different measurement with a different job: it certifies the four reviewed families unchanged and is identical across every rebuild that leaves them alone, which is why it cannot identify anything.",
+  "candidate_file_count": 211,
+  "second_acceptance_round": {
+    "verdict": "FAIL from both streams",
+    "manual_candidate_commit_digest": "7170ff5bf6734947d4c5 (prefix)",
+    "outcome": "Again entirely integrator-owned metadata and state; no contract, fixture, schema or test defect. Both streams re-confirmed the reviewed families byte-identical and all 96 tests green.",
+    "blockers_closed": [
+      "S00 still described W0-EVT-01 as ready and omitted W0-CLN-01 and W0-QA-01 from its table entirely, contradicting every other state document",
+      "two known items named W0-INT-01 as owner while its allowed paths covered neither file; ADR_INDEX.md was writable by no task at all - the round-one defect recurring inside the record written to close it",
+      "the manifest's own prose still said 101 files after the count was corrected to 100",
+      "the candidate had no identifier: artifact_manifest_sha256 is identical across every rebuild that leaves the reviewed families alone, so it cannot distinguish this candidate from the one that already failed. Replaced by candidate_digest, which covers the whole tracked tree minus this manifest."
     ]
   }
 }

@@ -49,12 +49,22 @@ Three commits, deliberately distinct:
   contracts `W0-QA-01` certified;
 - `qa_evidence_commit` `854a68201cdd857abf6a12989f254f5d2e0928af` — where its test and
   report live; it certifies nothing by itself;
-- `manual_candidate_commit` — recorded in `artifacts/checkpoints/CP-00/manifest.json`
-  and reproduced here whenever the candidate is rebuilt. Both acceptance streams run
-  against it and it must not move while they do.
+- the manual candidate — **identified by content, not by commit name.** A commit
+  cannot record its own SHA, and two rebuilds were rejected for promising one anyway:
+  the manifest said the value lived here, this document said it lived in the manifest,
+  and neither held it. `candidate_digest` in
+  `artifacts/checkpoints/CP-00/manifest.json` is the identifier. It is a sha256 over
+  every git-tracked file except the manifest itself, so it is computable before the
+  commit exists, self-consistent, and different for every candidate.
 
-The manifest is the checkpoint's self-description. Drift is detected by
-`artifact_manifest_sha256` over the git-tracked files of the four reviewed families.
+Two digests with two different jobs, which the earlier rebuilds conflated:
+
+- `candidate_digest` **identifies** the candidate. It covers the whole tracked tree
+  minus the manifest, so it changes when any state document changes.
+- `artifact_manifest_sha256` **certifies** that the four reviewed families are
+  unchanged, which is what carries the `W0-QA-01` `ACCEPT` forward. It is deliberately
+  identical across every rebuild that leaves the reviewed contracts alone — and that
+  is precisely why it cannot serve as the candidate's identity.
 
 Completed inputs:
 

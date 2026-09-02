@@ -68,6 +68,24 @@ architecture acceptance, ratify the eligible candidate set, fast-forward it to
   one of them was in any task's scope.
 - `docs/program/CHECKPOINT_REGISTRY.md` and `docs/INDEX.md` — checkpoint status and the
   index status column.
+- `docs/architecture/ARCHITECTURE_LINT_RULES.md` and `docs/architecture/ADR_INDEX.md` —
+  point-in-time statements only. Two stale claims were assigned to this task while it
+  could not write either file: the lint document's GATE-E prose still calls its own
+  JSON untracked, false since `a67ba31e`, and the ADR index enumerates `PD-01`–`PD-04`
+  against five recorded decisions. `ARCHITECTURE_LINT_RULES.md` is otherwise writable
+  only by `W0-ARC-02` and `W0-CLN-01`, both closed and accepted and both barred from
+  reopening by the recorded wave exception; `ADR_INDEX.md` was writable by no task at
+  all, since `W0-ARC-02` removed that slot as impossible. Assigning an item to an owner
+  who cannot act on it is how the same defect survived two acceptance rounds.
+
+  Both files sit inside `docs/architecture/`, one of the four families `W0-QA-01`
+  certified byte-identical, so editing them changes `artifact_manifest_sha256` and
+  fails `test_reviewed_families_are_byte_identical_to_the_candidate`. That is expected
+  and is the same by-design consequence already recorded for
+  `CP00_ARCHITECTURE_REVIEW.{md,json}`: ratification changes the reviewed artifact,
+  which is why the `W0-QA-01` `ACCEPT` binds to `reviewed_candidate_commit` and not to
+  what follows it. Change nothing in either file but the stale statement itself — no
+  rule, `rule_id`, `severity`, `detection`, `enforcement` or ADR row.
 
 `docs/architecture/REPOSITORY_LAYOUT.md` is deliberately **not** writable, even though
 describing the `artifacts/` tree there would be natural. It sits inside
