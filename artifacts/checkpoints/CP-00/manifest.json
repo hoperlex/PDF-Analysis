@@ -5,7 +5,7 @@
   "status": "pre_ratification_candidate",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "854a68201cdd857abf6a12989f254f5d2e0928af",
-  "manual_candidate_commit": "f4b8882de441058cea9f57dac29a4692056bdd6c",
+  "manual_candidate_commit": "the commit carrying this manifest; a manifest cannot name its own SHA, so the integrator records it in CURRENT_STATE and in the acceptance instruction. Drift is detected by artifact_manifest_sha256 below, which covers all 101 files of the four reviewed families and is independent of this commit's identity.",
   "artifact_count": 101,
   "artifact_manifest_sha256": "23960e96f2dec8e0b4b30f63beaf08153afc01b6a5914244bcd9f020902bb78b",
   "frozen_inputs": {
