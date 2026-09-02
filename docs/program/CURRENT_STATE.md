@@ -6,8 +6,9 @@ produced candidates, the repository owner has recorded an explicit disposition f
 independent review. The accepted W0.2 candidate set is integrated at
 `cf7740474b1786163f54d93b013a0d526ef989e0`. Nothing is frozen, nothing is ratified,
 and production implementation remains locked. W0.3 is in progress on
-`integration/W0.3`; its two stage-one tasks are independently accepted and integrated
-through `a67ba31e7748c02974ae9ae93c7f30b6f141d417`.
+`integration/W0.3`. All six W0.3 tasks are independently accepted and integrated; the
+candidate is assembled and both acceptance streams have run. See "CP-00 candidate"
+below for the three commits the plan keeps distinct.
 
 ## Active checkpoint
 
@@ -30,8 +31,30 @@ Stage two progress:
 - `W0-DOM-02` — deprecated domain `version`/`deprecated_fields` mirror removed,
   domain candidate revision advanced coherently to 5, independently accepted and
   integrated at `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`;
-- `W0-EVT-01` is now ready from that exact commit. The recursive version-key sweep
-  reports only its owned event schema and example.
+- `W0-EVT-01` — event envelope on `contract_version`, integrated at
+  `3ca8e25413426ff8efec41cd850c325331d181fc`. `ID-01` is complete across every contract
+  family: the recursive sweep finds no bare `version` or `schema_version` declaration
+  anywhere under `contracts/**`;
+- `W0-CLN-01` — notes overtaken by the `ID-01` chain retired, integrated at
+  `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368`;
+- `W0-QA-01` — independent cross-family verification, 70 tests, accepted by two
+  independent reviewers, evidence at
+  `854a68201cdd857abf6a12989f254f5d2e0928af`.
+
+## CP-00 candidate
+
+Three commits, deliberately distinct:
+
+- `reviewed_candidate_commit` `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368` — the
+  contracts `W0-QA-01` certified;
+- `qa_evidence_commit` `854a68201cdd857abf6a12989f254f5d2e0928af` — where its test and
+  report live; it certifies nothing by itself;
+- `manual_candidate_commit` — recorded in `artifacts/checkpoints/CP-00/manifest.json`
+  and reproduced here whenever the candidate is rebuilt. Both acceptance streams run
+  against it and it must not move while they do.
+
+The manifest is the checkpoint's self-description. Drift is detected by
+`artifact_manifest_sha256` over the git-tracked files of the four reviewed families.
 
 Completed inputs:
 
@@ -167,7 +190,8 @@ not review lanes it coordinated.
 - A legacy defect is now recorded as observed fact and must not drift into a target
   rule: the export download guard compares resolved paths with `str.startswith` and
   no component boundary, so a sibling directory sharing the base prefix is served.
-- The remaining `ID-01` work is `W0-EVT-01`. After it lands, `W0-CLN-01` must retire
+- (closed) The `ID-01` chain completed as `W0-QA-03` → `W0-DOM-02` → `W0-EVT-01`, and
+  `W0-CLN-01` retired
   the two point-in-time ALR-24 records and the false committed-state clause retained
   inside two historical domain `revision_note` strings before `W0-QA-01` or freeze.
 
@@ -188,17 +212,9 @@ not review lanes it coordinated.
 
 ## Next integration tasks
 
-Assign `W0-EVT-01` from the accepted DOM integration commit, independently review and
-integrate it, then run `W0-CLN-01`. Follow with independent `W0-QA-01` and final
-`W0-INT-01`. Do not record a contract or checkpoint freeze until those tasks and the
-manual CP-00 acceptance are complete.
-
-`U-04` does **not** block a CP-00 contract freeze. Its owner disposition sets its own
-deadlines — tenant/IdP before `W2-C-01`, TTL and legal hold before `W9-C-01` — which
-would be meaningless if CP-00 required it closed first. What `U-04` blocks is exact
-and bounded: `ADR-0014` stays `proposed`, the retention and legal-hold clauses of
-`ADR-0015` and the classification obligations of `P-13` stay unratified, and no
-tenant, IdP, TTL, retention or legal-hold value may appear in any contract. A freeze
-recorded while `U-04` is open must state that it excludes those.
-
-Owner decisions being recorded is not ratification: CP-00 ratification remains W0.3.
+Rebuild the CP-00 candidate after the first acceptance round, which returned `FAIL`
+from both streams. Every blocker was in integrator-owned metadata and gate text, not
+in a contract: both streams independently confirmed the four reviewed families
+byte-identical and all 96 tests green, so the `W0-QA-01` `ACCEPT` transfers to the
+rebuilt candidate. Then re-run both streams and, only on two `PASS`, execute
+`W0-INT-01`.

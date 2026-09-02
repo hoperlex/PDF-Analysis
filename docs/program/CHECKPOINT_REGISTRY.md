@@ -2,7 +2,7 @@
 
 | CP | Tag | Entry requirement | Manual runbook | Status |
 |---|---|---|---|---|
-| CP-00 | `v0.0.0-architecture` | S00 complete | `manual-tests/CP-00_architecture.md` | planned |
+| CP-00 | `v0.0.0-architecture` | S00 complete | `manual-tests/CP-00_architecture.md` | pre-ratification candidate; not ratified, not tagged |
 | CP-01 | `v0.1.0-foundation` | reproducible toolchain/local services | `manual-tests/CP-01_foundation.md` | planned |
 | CP-02 | `v0.2.0-walking-skeleton` | fake E2E route | `manual-tests/CP-02_walking_skeleton.md` | planned |
 | CP-03 | `v0.3.0-audit-alpha` | real stage/evidence | `manual-tests/CP-03_audit_alpha.md` | planned |

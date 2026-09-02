@@ -6,8 +6,8 @@
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "854a68201cdd857abf6a12989f254f5d2e0928af",
   "manual_candidate_commit": "the commit carrying this manifest; a manifest cannot name its own SHA, so the integrator records it in CURRENT_STATE and in the acceptance instruction. Drift is detected by artifact_manifest_sha256 below, which covers all 101 files of the four reviewed families and is independent of this commit's identity.",
-  "artifact_count": 101,
-  "artifact_manifest_sha256": "23960e96f2dec8e0b4b30f63beaf08153afc01b6a5914244bcd9f020902bb78b",
+  "artifact_count": 100,
+  "artifact_manifest_sha256": "39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08",
   "frozen_inputs": {
     "behavioral_oracle": "32b9d903792b30506048a1d42b0e6b2d07aee403",
     "accepted_inventory": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba",
@@ -31,12 +31,36 @@
   "open_inputs_carried_forward": {
     "U-04": "tenant/IdP before W2-C-01; TTL and legal hold before W9-C-01. No value invented.",
     "OQ-02": "lease/heartbeat/grace values, deferred to the jobs/operations slot.",
-    "OQ-04": "retry budget and backoff, deferred to W4-C-01/W4-JOB-01."
+    "OQ-04": "retry budget and backoff, deferred to W4-C-01/W4-JOB-01.",
+    "U-01": "numeric cost thresholds deferred to W3-C-01; must be defined before the first paid-provider canary. No value invented."
   },
   "architecture_defer": [
     "ADR-0014"
   ],
   "runtime_fields": "not applicable - architecture-only checkpoint",
   "manual_acceptance": "pending",
-  "automated_acceptance": "pending"
+  "automated_acceptance": "pending",
+  "artifact_manifest_recipe": "git ls-tree -r --name-only <this commit> -- contracts fixtures docs/architecture scripts, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the sha256 digest of the file content. Git-tracked files only: an earlier form globbed the working tree and hashed a gitignored scripts/__pycache__ .pyc, so the digest was unreproducible on a fresh clone and the drift detector fired on an unmodified checkout.",
+  "frozen_inputs_note": "behavioral_oracle and refactoring_architecture_source are commits of the separate legacy repository at /root/projects/PDF-proverka/PDF-proverka, documented in docs/SOURCE_TRACEABILITY.md. They do not resolve in this repository and are not expected to. Every other SHA here is a commit of this repository.",
+  "open_escalations": {
+    "E-05": "source-ADR proposed statuses are not inherited as accepted; recorded as an integrator obligation at W0.3 ratification and carried forward, not closed by it."
+  },
+  "known_pre_ratification_items": {
+    "PD-02_precondition_text": "CP00_ARCHITECTURE_REVIEW.md and CP00_OWNER_DECISIONS.md still record the PD-02 alias-map precondition as unmet. It is satisfied: legacy-stage-name-map.json carries 62 name rows over 31 alias-bearing sites. Reconciling point-in-time statements in the CP-00 review is W0-INT-01's declared job and is deliberately not done before ratification. Both documents are now inside W0-INT-01's allowed paths; earlier only one was.",
+    "ARCHITECTURE_LINT_RULES_line_604": "The GATE-E probe prose still says the document's own JSON is 'still untracked', false since a67ba31e. Not a gate failure: GATE-E asserts presence at the base commit, not trackedness, and passes. Owned by W0-INT-01's metadata pass.",
+    "ADR_INDEX_decision_count": "ADR_INDEX.md enumerates PD-01 through PD-04 while five owner decisions are recorded. Substance unaffected - no supersede was issued. Owned by W0-INT-01."
+  },
+  "first_acceptance_round": {
+    "verdict": "FAIL from both streams",
+    "manual_candidate_commit": "718f90aada14479eeabee22af481448bfb67a8e1",
+    "outcome": "Every blocker was in integrator-owned metadata, gate text or state documents. No contract, fixture or test defect was found: both streams independently confirmed the four reviewed families byte-identical to reviewed_candidate_commit and all 96 tests green, so the W0-QA-01 ACCEPT transfers to the rebuilt candidate.",
+    "blockers_closed": [
+      "manifest digest hashed a gitignored .pyc and was unreproducible on a fresh clone",
+      "manifest pointed at a CURRENT_STATE record that did not exist",
+      "five state documents contradicted the manifest, and no task was authorized to fix three of them",
+      "three integrated commits carried integrator edits outside the task's allowed paths - recorded as an owner-accepted exception, not silently absorbed",
+      "the W0-DOM-02 scope gate compared against the working tree and broke when a later task legitimately edited the same files",
+      "three further gates asserted in prose and could not fail"
+    ]
+  }
 }

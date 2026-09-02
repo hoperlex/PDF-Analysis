@@ -1,9 +1,9 @@
 # Contract task W0-EVT-01 — event envelope contract version key
 
-> **Status: ready for W0.3 assignment.**
-> This task sits last in the `ID-01` chain. `W0-QA-03` and `W0-DOM-02` are
-> independently accepted and integrated; the repository-wide sweep now fails only
-> on the event paths this task owns.
+> **Status: completed, independently accepted and integrated.**
+> Integration commit: `3ca8e25413426ff8efec41cd850c325331d181fc`.
+> This task closed the `ID-01` chain: the repository-wide sweep now finds no bare
+> `version` or `schema_version` declaration anywhere under `contracts/**`.
 
 ## Outcome
 
@@ -158,8 +158,11 @@ assert not bad, bad"`.
 - Command: `git diff --check -- contracts/events/v1`.
   Expected: exit `0` and no output.
 - Command: `git status --porcelain -- contracts docs fixtures scripts tests requirements`.
-  Expected: every line is under `contracts/events/v1/`, and the new negative fixture
-  appears as `?? contracts/events/v1/examples/event-envelope.legacy-schema-version.invalid.json`.
+  Expected: no path outside `contracts/events/v1/`. Assert the **path set**, never a
+  status code, and accept an empty result: while the task is in flight the four
+  deliverables appear as ` M`/`??`, and once integrated the tree is clean and the
+  command prints nothing. Pinning `??` would make the gate unsatisfiable after its own
+  integration, the defect already found and repaired in `W0-ARC-02`.
 
   `*.invalid.json` is excluded, and the exclusion is the point rather than a
   loophole. This task's own negative fixture is *required* to carry a top-level

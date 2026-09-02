@@ -1,10 +1,7 @@
 # Task W0-CLN-01 — retire point-in-time notes overtaken by the `ID-01` chain
 
-> **Status: backlog draft. Not executable yet.**
-> **Status: ready for assignment.**
-> `W0-EVT-01` is independently accepted and integrated at
-> `3ca8e25413426ff8efec41cd850c325331d181fc`. Every dependency is now a completed task ID
-> pinned to a real commit; no placeholder remains.
+> **Status: completed, independently accepted and integrated.**
+> Integration commit: `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368`.
 
 ## Outcome
 
@@ -162,7 +159,10 @@ print('domain halves differ in revision_note and nothing else')"`.
 - Command: `.venv/bootstrap/bin/python -m unittest discover -s tests/contract -p 'test_validate_bootstrap.py'`.
   Expected: exit `0`.
 - Command: `git status --porcelain -- contracts docs fixtures scripts tests requirements`.
-  Expected: exactly the four declared paths and nothing else.
+  Expected: no path outside the four declared ones. Assert the **path set**, never a
+  status code, and accept an empty result once the task is integrated and the tree is
+  clean. A gate that demands a non-empty diff can only pass before its own
+  integration.
 - Independent reviewer confirms both retired statements are gone, that each was
   replaced by a true statement rather than deleted into silence, and that no rule,
   code, schema constraint or revision value moved.

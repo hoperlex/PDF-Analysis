@@ -47,6 +47,9 @@
 ## Stage plans
 See [stage plan index](stages/README.md) — S00 through S10.
 
+## Checkpoint evidence
+See `artifacts/checkpoints/` — one directory per checkpoint; CP-00 holds its manifest and acceptance records.
+
 ## Manual acceptance
 See `docs/manual-tests/` — one runbook per checkpoint.
 

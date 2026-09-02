@@ -57,6 +57,18 @@ architecture acceptance, ratify the eligible candidate set, fast-forward it to
   ratified state it indexes
 - `docs/program/tasks/W0-INT-01.md` — this task's own status banner and handoff, which
   no other task may close
+- `docs/program/tasks/W0-*.md` — status banners only, for tasks whose own execution is
+  finished. A completed task cannot update its own banner, and the CP-00 audit found
+  five state documents disagreeing because no task was authorized to. Nothing but the
+  banner may change here: requirements, gates and deliverables of an accepted task are
+  frozen by its acceptance.
+- `docs/architecture/CP00_OWNER_DECISIONS.md` — point-in-time statements only, where a
+  recorded decision's precondition has since been satisfied. The `PD-02` alias-map
+  precondition is the known case: it is recorded as unmet in two documents, and only
+  one of them was in any task's scope.
+- `docs/program/CHECKPOINT_REGISTRY.md`, `docs/INDEX.md`, `docs/REPOSITORY_LAYOUT.md`
+  — checkpoint status, index status column and the `artifacts/` tree, so the package
+  can describe where its own checkpoint evidence lives
 
 The Git merge, annotated tag and push are integration operations authorized only after
 the file-level gates and manual acceptance succeed.

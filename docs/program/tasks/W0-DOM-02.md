@@ -144,7 +144,7 @@ belongs to `W0-QA-03` and must already be integrated.
   `version` key.
 - Command: `git diff --check -- contracts/domain/v1`.
   Expected: exit `0` and no output.
-- Command: `.venv/bootstrap/bin/python -c "import subprocess,re,json; base='a67ba31e7748c02974ae9ae93c7f30b6f141d417'; paths=['identifiers.json','identifiers.schema.json','state-machines.json','state-machines.schema.json']; bad=[]
+- Command: `.venv/bootstrap/bin/python -c "import subprocess,re,json; base='a67ba31e7748c02974ae9ae93c7f30b6f141d417'; head='478d32e90d1cbb2c691e0ac0b61b68dadcf0d397'; paths=['identifiers.json','identifiers.schema.json','state-machines.json','state-machines.schema.json']; bad=[]
 def rev(d):
     if 'candidate_revision' in d: return d['candidate_revision']
     pr=d.get('properties')
@@ -152,13 +152,13 @@ def rev(d):
     return None
 for p in paths:
     rel='contracts/domain/v1/'+p
-    out=subprocess.run(['git','diff','-U0',base,'--',rel],capture_output=True,text=True).stdout
+    out=subprocess.run(['git','diff','-U0',base,head,'--',rel],capture_output=True,text=True).stdout
     ch=[l for l in out.splitlines() if re.match(r'^[+-][^+-]',l)]
     if len(ch)!=2: bad.append((p,f'{len(ch)} changed lines, expected exactly 2')); continue
     o=[l for l in ch if l[0]=='-'][0][1:]; n=[l for l in ch if l[0]=='+'][0][1:]
     if re.sub(r'\d+','N',o)!=re.sub(r'\d+','N',n): bad.append((p,'changed line is not a numeric-only change')); continue
     old=json.loads(subprocess.run(['git','show',f'{base}:{rel}'],capture_output=True,text=True,check=True).stdout)
-    new=json.loads(open(rel).read())
+    new=json.loads(subprocess.run(['git','show',f'{head}:{rel}'],capture_output=True,text=True,check=True).stdout)
     if rev(new) is None or rev(new)==rev(old): bad.append((p,'revision not advanced'))
 assert not bad, bad
 print('single-value paths: exactly one changed line each, numeric only, revision advanced')"`.
@@ -177,6 +177,14 @@ print('single-value paths: exactly one changed line each, numeric only, revision
   revision-only change passes; a foreign edit in one of these paths is rejected with
   `6 changed lines, expected exactly 2`; a revision rolled back in a schema pin is
   rejected with `revision not advanced`.
+
+  The comparison is a **fixed commit range**, base to this task's own integration
+  commit, not base to the working tree. An earlier form read the working tree and so
+  began failing the moment `W0-CLN-01` edited `revision_note` in these same two
+  catalogs — entirely within that task's own allowed paths. A scope gate that a
+  legitimate later task can break is measuring the wrong thing: this task's scope
+  discipline is a fact about the change it made, fixed forever once integrated, not a
+  claim about every tree that follows it.
 - Independent reviewer confirms the diff across all seven paths. In the three
   full-write paths it touches only the `version` key, its schema entry, the
   `deprecated_fields` block and the README prose, and the 20 error codes with their
