@@ -1,5 +1,6 @@
 {
   "contract_version": "1.0.0-draft.1",
+  "schema_version": 1,
   "event_id": "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "event_type": "audit.run.created.v1",
   "aggregate_type": "AuditRun",

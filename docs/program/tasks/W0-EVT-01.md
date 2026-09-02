@@ -170,7 +170,9 @@ assert not bad, bad"`.
   outside `contracts/**` violates allowed paths. A negative fixture exists to hold the
   forbidden shape; sweeping it for forbidden shapes is a category error. The sweep's
   subject is what a contract *declares*, and an `*.invalid.json` file declares nothing.
-  Verified after the exclusion: zero hits across all 27 JSON files under `contracts/**`.
+  Verified after the exclusion: zero hits. Twenty-two of the twenty-seven JSON files
+  under `contracts/**` are swept and five `*.invalid.json` fixtures are skipped; run
+  without the exclusion, the only hit in the whole tree is this task's own fixture.
 
   Use `git status --porcelain`, not `git diff --name-only <base>`, for this proof. The
   negative fixture is a new file and this task forbids `git add`, so `git diff` cannot
