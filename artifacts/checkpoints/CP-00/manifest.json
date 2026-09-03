@@ -88,7 +88,7 @@
       "three further gates asserted in prose and could not fail"
     ]
   },
-  "candidate_digest_recipe": "git ls-files plus git ls-files --others --exclude-standard, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. This manifest IS included. Its contribution is the sha256 of json.dumps(manifest, sort_keys=True, separators=(',',':')) with BOTH acceptance digest fields blanked to the empty string - top-level tested_candidate_digest and evidence_bundle_digest, and the same two fields inside every entry of acceptance_rounds. Blanking both, not one, is what keeps the value computable before the commit that carries it exists: a rule naming a single field would be self-referentially impossible as soon as the second field held a value. The recipe is identical for both digests; what differs is WHEN it is run - tested_candidate_digest before the acceptance streams start, evidence_bundle_digest after their results are written.",
+  "candidate_digest_recipe": "git ls-files plus git ls-files --others --exclude-standard, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. This manifest IS included. Its contribution is the sha256 of json.dumps(manifest, sort_keys=True, separators=(',',':')) with ONLY THE FIELD BEING COMPUTED blanked to the empty string - that one field at the top level and in every acceptance_rounds entry. The other digest keeps its real value. Computing tested_candidate_digest blanks tested_candidate_digest alone; evidence_bundle_digest is still empty at that point, so nothing is lost. Computing evidence_bundle_digest blanks evidence_bundle_digest alone; tested_candidate_digest is already frozen, so the evidence digest depends on it. That dependency IS the binding between the evidence and the input the acceptance streams judged. An earlier form blanked BOTH fields, on the stated rationale that naming a single field would be self-referentially impossible once the second field held a value. That rationale was wrong: each field is computed at a moment when the other is either empty or already frozen, so both directions are deterministic. The consequence was measured, not argued - under blank-both, three different tested_candidate_digest values produced one identical evidence digest, so the field naming which tree was judged could hold any 64-hex string forever while every check stayed silent. Found by independent review, at exactly the place the surrounding prose claimed a binding the arithmetic could not provide.",
   "second_acceptance_round": {
     "verdict": "FAIL from both streams",
     "manual_candidate_commit_digest": "7170ff5bf6734947d4c5 (prefix)",
@@ -101,10 +101,11 @@
     ]
   },
   "ratification_blocked": {
-    "reason": "W0-QA-01's test_the_review_is_not_yet_ratified asserts review.ratified is False, and W0-INT-01's job is to set it True. The two accepted tasks contradict each other by construction: ratification cannot be recorded in the artifact it ratifies without turning the suite red.",
+    "reason": "W0-QA-01 was reopened three times over one defect that moved a layer down each round: a ratification could be declared with fewer paths than required, then declared in full and not performed, then performed as a byte change with the stale claims intact, then bound to its input only in prose while the arithmetic left evidence_bundle_digest independent of tested_candidate_digest. All four are closed and independently verified. The earlier statement here named test_the_review_is_not_yet_ratified as the blocker; that test no longer exists - it was replaced by the two-way test_ratified_agrees_with_the_external_record, which fails both when the review claims ratification the external record does not, and when the record claims it and the review does not.",
     "observed": "Setting ratified true, and reconciling the three known point-in-time statements, edits five files inside the four reviewed families and fails five tests: the byte-identity check, its drift mutation, the write-boundary check, the documented-gates drift check, and the not-yet-ratified assertion itself.",
     "not_a_contract_defect": "All five failures are drift assertions against reviewed_candidate_commit plus the explicit ratified-is-false assertion. No contract, schema or semantic check fails.",
-    "decision_required": "Either narrow-reopen W0-QA-01 so its test compares review.ratified against the checkpoint registry rather than pinning False, or open a follow-up task owning that test. Both acceptance streams passed against the unratified candidate, so the acceptance itself stands."
+    "decision_required": "Either narrow-reopen W0-QA-01 so its test compares review.ratified against the checkpoint registry rather than pinning False, or open a follow-up task owning that test. Both acceptance streams passed against the unratified candidate, so the acceptance itself stands.",
+    "remaining": "A fresh acceptance round on the corrected candidate. Rounds one through three are spent; round four was voided when the tree moved after its digest was frozen."
   },
   "digest_model": {
     "tested_candidate_digest": "Frozen BEFORE the acceptance streams start. It identifies the immutable input they judge. Recorded here once the streams are dispatched and never edited afterwards; if it must change, the round is void and a new one begins.",
@@ -192,5 +193,8 @@
       "note": "Cannot freeze its digest until the reopened W0-QA-01 is integrated. Both streams must produce a primary report file; round 3's automated stream produced none."
     }
   ],
-  "current_round": 5
+  "current_round": 5,
+  "recorded_limits": {
+    "evidence_report_visibility": "The acceptance digests enumerate git ls-files --exclude-standard, so a report path added to .gitignore leaves the digest and every check silent about its content - an independent reviewer demonstrated a fabricated manual report passing that way. It is a declared scope limit rather than a hidden hole: the attack requires editing .gitignore, which is tracked and inside the digest, so it appears in the diff a reviewer reads. The next task touching the QA module must assert that both report paths are tracked and not ignored; it is not opened as its own round because the current mechanism makes the manoeuvre visible rather than invisible."
+  }
 }

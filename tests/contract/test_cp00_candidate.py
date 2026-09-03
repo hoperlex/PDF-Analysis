@@ -27,7 +27,9 @@ import re
 import shutil
 import subprocess
 import tempfile
+import sys
 import unittest
+import unittest.mock
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -122,6 +124,69 @@ RATIFICATION_DELTA_CEILING = frozenset(
 #: results changes the tree — which is why the single retired `candidate_digest` was
 #: wrong: computed last, it certified a tree the streams never saw.
 ACCEPTANCE_DIGEST_FIELDS = ("tested_candidate_digest", "evidence_bundle_digest")
+
+#: **What each of the five ceiling files must actually say once CP-00 is ratified.**
+#:
+#: Round four made the delta an equality of *paths*. An independent probe then declared
+#: all five, edited four of them with a comment, changed no stale statement, and passed.
+#: Path equality proves a file moved; it cannot prove the reconciliation was made. Each
+#: entry below names the stale claim that must go and what must stand in its place.
+#:
+#: `stale` is also an anti-vacuity guard: it must be present in the file **at the
+#: reviewed candidate**, or the anchor has rotted into a no-op and the test fails saying
+#: so, instead of silently passing forever.
+RECONCILIATIONS = (
+    {
+        "item": "PD-02 acceptance precondition, CP-00 architecture review",
+        "path": "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+        "stale": "so the acceptance precondition is not yet met",
+        "sentence_requires": ("62", "31", "satisfied"),
+        "requires_note": (
+            "a sentence recording the precondition as satisfied, with the 62 legacy "
+            "names and 31 alias-bearing sites that show it"
+        ),
+    },
+    {
+        "item": "PD-02 acceptance precondition, owner decision ledger",
+        "path": "docs/architecture/CP00_OWNER_DECISIONS.md",
+        "stale": "so the precondition is not yet met",
+        "sentence_requires": ("62", "31", "satisfied"),
+        "requires_note": (
+            "a sentence recording the precondition as satisfied, with the 62 legacy "
+            "names and 31 alias-bearing sites that show it"
+        ),
+    },
+    {
+        "item": "stale GATE-E probe prose",
+        "path": "docs/architecture/ARCHITECTURE_LINT_RULES.md",
+        "stale": "still untracked",
+        # Removal-only, and marked as such. `GATE-E` is already in the document, so it
+        # cannot distinguish a made reconciliation from an unmade one; it is a guard
+        # against gutting the file, not evidence that the work was done. Calling it
+        # `must_contain` alongside genuinely-new requirements invited exactly that
+        # confusion.
+        "removal_only": True,
+        "must_still_contain": ("GATE-E",),
+        "requires_note": (
+            "the GATE-E probe description with the untracked claim removed; the probe "
+            "itself must still be documented"
+        ),
+    },
+    {
+        "item": "owner-decision count in the ADR index",
+        "path": "docs/architecture/ADR_INDEX.md",
+        "stale": "`PD-01`\u2013`PD-04`",
+        "new_text": ("`PD-01`\u2013`PD-05`",),
+        "requires_note": "the decision range widened to `PD-01`-`PD-05`",
+    },
+)
+
+#: The review carries its own status twice, as JSON and as prose. Ratification must move
+#: both; this is the value the Markdown must quote verbatim.
+REVIEW_JSON = "docs/architecture/CP00_ARCHITECTURE_REVIEW.json"
+REVIEW_MARKDOWN = "docs/architecture/CP00_ARCHITECTURE_REVIEW.md"
+UNRATIFIED_REVIEW_STATUS = "owner_decisions_recorded"
+REVIEW_DISCLAIMER = "still not the ratification act"
 
 #: Provenance a ratification record must carry. A delta authorised by a bare boolean
 #: would be an accident with a flag on it.
@@ -506,6 +571,401 @@ def _ratification_record(root: Path) -> tuple[bool, frozenset[str], list[str]]:
     return True, frozenset(declared), []
 
 
+def _flat(text: str) -> str:
+    """Whitespace-normalised text, so a re-wrapped paragraph still matches."""
+    return re.sub(r"\s+", " ", text)
+
+
+def _sentences(text: str) -> list[str]:
+    return re.split(r"(?<=[.!?])\s+", _flat(text))
+
+
+def _acceptance_digest(root: Path, field: str = "evidence_bundle_digest") -> str:
+    """The manifest's own recipe: blank **only the field being computed**.
+
+    Tracked plus untracked-not-ignored, sorted; path bytes then the raw 32-byte SHA-256
+    of the content. The manifest contributes the SHA-256 of its canonical JSON with
+    ``field`` blanked at the top level and in every `acceptance_rounds` entry. The other
+    digest keeps its real value.
+
+    An earlier form blanked *both* fields, on the stated rationale that naming one would
+    be self-referentially impossible once the other held a value. That rationale was
+    wrong — each field is computed when the other is either still empty or already
+    frozen — and the consequence was not theoretical: with both blanked, the evidence
+    digest was arithmetically independent of `tested_candidate_digest`, so the field
+    naming which tree the streams judged could hold any 64-hex string, forever, with
+    every check silent. Found by independent review at exactly the place the surrounding
+    prose claimed a binding the arithmetic could not provide.
+    """
+    if field not in ACCEPTANCE_DIGEST_FIELDS:
+        raise AssertionError(f"not an acceptance digest field: {field}")
+    listing = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    running = hashlib.sha256()
+    for relative in sorted({path for path in listing.split("\n") if path}):
+        running.update(relative.encode("utf-8"))
+        if relative == CHECKPOINT_MANIFEST:
+            document = json.loads((root / relative).read_text(encoding="utf-8"))
+            document[field] = ""
+            for entry in document.get("acceptance_rounds", []):
+                if isinstance(entry, dict) and field in entry:
+                    entry[field] = ""
+            canonical = json.dumps(document, sort_keys=True, separators=(",", ":"))
+            running.update(hashlib.sha256(canonical.encode("utf-8")).digest())
+        else:
+            running.update(hashlib.sha256((root / relative).read_bytes()).digest())
+    return running.hexdigest()
+
+
+def _verdict_token(value: object) -> str | None:
+    """The leading verdict token of a stream result, or ``None`` if there is not one.
+
+    A stream field carries a verdict and may carry detail after it (`PASS 6/6`,
+    `FAIL - MT00-01`). Only the leading token is read: this is tokenising a verdict
+    field, not interpreting a sentence.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.split()[0]
+
+
+def _acceptance_problems(root: Path) -> list[str]:
+    """Ratification requires an accepted round, not merely a well-formed one.
+
+    An independent probe ratified with both streams `owed`, the round's verdict `null`,
+    both report paths `null` and invented digests, and the module passed: it checked
+    shape and difference only. What ratification must structurally require is that a
+    round actually passed, that both streams passed, that their primary reports exist as
+    files, that the round's digests are the ones recorded at the top level, and that the
+    evidence digest reproduces over the tree in front of you.
+
+    The evidence digest also binds the evidence to its input — but only because the
+    recipe was corrected to blank the computed field alone. While both fields were
+    blanked the evidence digest was arithmetically independent of
+    `tested_candidate_digest`, and this docstring claimed a binding that could not exist.
+    The claim now stands on a probe rather than on prose:
+    `test_the_evidence_digest_depends_on_the_tested_digest` builds two trees differing
+    only in that value and requires the evidence digests to differ.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return [f"{CHECKPOINT_MANIFEST} is missing"]
+    problems: list[str] = []
+
+    rounds = manifest.get("acceptance_rounds")
+    if not isinstance(rounds, list) or not rounds:
+        return [f"{CHECKPOINT_MANIFEST}: acceptance_rounds must be a non-empty list"]
+    numbers = [entry.get("round") for entry in rounds if isinstance(entry, dict)]
+    if len(numbers) != len(rounds) or not all(isinstance(n, int) for n in numbers):
+        problems.append("every acceptance_rounds entry must be an object with an int round")
+        return problems
+    if len(set(numbers)) != len(numbers) or numbers != sorted(numbers):
+        problems.append(f"acceptance_rounds numbers must be unique and ascending: {numbers}")
+    current_number = manifest.get("current_round")
+    if not isinstance(current_number, int):
+        return problems + [f"{CHECKPOINT_MANIFEST}: current_round must be an integer"]
+    matching = [entry for entry in rounds if entry.get("round") == current_number]
+    if len(matching) != 1:
+        return problems + [
+            f"current_round is {current_number} and acceptance_rounds carries "
+            f"{len(matching)} entries for it"
+        ]
+    current = matching[0]
+
+    # The top level always speaks for the current round, ratified or not.
+    for field in ACCEPTANCE_DIGEST_FIELDS:
+        top = manifest.get(field)
+        scoped = current.get(field)
+        if top not in (None, "") and top != scoped:
+            problems.append(
+                f"{field}: the top level says {top!r} and round {current_number} says "
+                f"{scoped!r}; the per-round copy exists so a retro-edit cannot hide"
+            )
+
+    if manifest.get("ratified") is not True:
+        return problems
+
+    if current.get("verdict") != "PASS":
+        problems.append(
+            f"CP-00 cannot ratify on round {current_number}, whose verdict is "
+            f"{current.get('verdict')!r}. Ratification requires an accepted round."
+        )
+    streams = current.get("streams")
+    if not isinstance(streams, dict):
+        problems.append(f"round {current_number} records no streams object")
+    else:
+        for name in ("automated", "manual"):
+            if _verdict_token(streams.get(name)) != "PASS":
+                problems.append(
+                    f"the {name} stream of round {current_number} is "
+                    f"{streams.get(name)!r}; both streams must pass"
+                )
+    for field in ("manual_report", "automated_report"):
+        value = current.get(field)
+        if not isinstance(value, str) or not value:
+            problems.append(
+                f"round {current_number} has no {field}: a ratified round must leave a "
+                "primary report, not a claim that one was produced"
+            )
+        elif not (root / value).is_file():
+            problems.append(f"round {current_number} names {field} {value!r}, which does not exist")
+    for name in ("manual_acceptance", "automated_acceptance"):
+        record = manifest.get(name)
+        if not isinstance(record, dict):
+            problems.append(f"{name} must be an object")
+            continue
+        if record.get("status") != "PASS":
+            problems.append(
+                f"{name}.status is {record.get('status')!r}; ratification requires PASS"
+            )
+        if record.get("round") != current_number:
+            problems.append(
+                f"{name}.round is {record.get('round')!r} and current_round is "
+                f"{current_number}"
+            )
+        path_value = record.get("report_path")
+        if not isinstance(path_value, str) or not path_value:
+            problems.append(f"{name}.report_path is not recorded")
+        elif not (root / path_value).is_file():
+            problems.append(f"{name}.report_path {path_value!r} does not exist")
+    for field in ACCEPTANCE_DIGEST_FIELDS:
+        for where, value in (("top level", manifest.get(field)), (f"round {current_number}", current.get(field))):
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+                problems.append(
+                    f"{field} at the {where} is {value!r}; a ratified checkpoint must "
+                    "record both digests"
+                )
+    evidence = manifest.get("evidence_bundle_digest")
+    if isinstance(evidence, str) and re.fullmatch(r"[0-9a-f]{64}", evidence):
+        recomputed = _acceptance_digest(root)
+        if evidence != recomputed:
+            problems.append(
+                "evidence_bundle_digest does not reproduce over this tree with the "
+                f"recipe the manifest records: declared {evidence}, recomputed "
+                f"{recomputed}. The evidence must describe the tree that carries it."
+            )
+    return problems
+
+
+def _digest_history_problems(past: list[dict], current: dict) -> list[str]:
+    """Pure comparison of per-round digests across manifest revisions.
+
+    Extracted so the rule can be proved on synthetic history. Against the repository as
+    it stands the check is silent — every committed manifest so far carries `""` in
+    every per-round digest, because no round has yet been sealed — and a rule that
+    cannot fail today is a rule nobody has tested.
+    """
+    now = {
+        entry.get("round"): entry
+        for entry in current.get("acceptance_rounds", [])
+        if isinstance(entry, dict)
+    }
+    changed: set[str] = set()
+    for revision, label in past:
+        for entry in revision.get("acceptance_rounds", []):
+            if not isinstance(entry, dict):
+                continue
+            number = entry.get("round")
+            for field in ACCEPTANCE_DIGEST_FIELDS:
+                was = entry.get(field)
+                if not was:
+                    continue
+                is_now = now.get(number, {}).get(field)
+                if is_now != was:
+                    changed.add(
+                        f"round {number} {field} was {was!r} in {label} and is "
+                        f"{is_now!r} now"
+                    )
+    return sorted(changed)
+
+
+def _retro_edited_digests(root: Path) -> list[str]:
+    """Per-round digests that changed value between commits.
+
+    `tested_candidate_digest` is frozen before the streams run and never edited
+    afterwards; if it must change, the round is void and a new one begins. Round scoping
+    is what makes that checkable — a legitimate new round adds an entry, while a
+    retro-edit changes an existing one.
+    """
+    history = subprocess.run(
+        ["git", "-C", str(root), "log", "--format=%H", "-n", "60", "--", CHECKPOINT_MANIFEST],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return []
+    past: list[tuple[dict, str]] = []
+    for commit in (line for line in history.split("\n") if line):
+        blob = subprocess.run(
+            ["git", "-C", str(root), "--no-replace-objects", "show", f"{commit}:{CHECKPOINT_MANIFEST}"],
+            capture_output=True,
+            check=False,
+        )
+        if blob.returncode != 0:
+            continue
+        try:
+            past.append((json.loads(blob.stdout.decode("utf-8")), commit[:12]))
+        except ValueError:
+            continue
+    return _digest_history_problems(past, manifest)
+
+
+def _reconciliation_problems(root: Path) -> list[str]:
+    """Did ratification actually make each recorded reconciliation, or only touch bytes?
+
+    Round four required the declared and observed path sets to be equal. That proves a
+    file changed; it cannot prove the change was the one owed. An independent probe
+    declared all five, added a comment to four of them and passed. These checks read the
+    content each reconciliation is for.
+
+    Every anchor is verified against the file **at the reviewed candidate** first. If a
+    stale phrase is not there, the anchor has rotted and the check would silently pass
+    forever, so it fails loudly instead.
+    """
+    problems: list[str] = []
+    ratified = _checkpoint_manifest(root) is not None and (
+        _checkpoint_manifest(root).get("ratified") is True
+    )
+    for entry in RECONCILIATIONS:
+        relative = entry["path"]
+        blob = _candidate_blob(root, relative)
+        if blob is None:
+            problems.append(f"{relative} does not exist at the reviewed candidate")
+            continue
+        at_candidate = _flat(blob.decode("utf-8"))
+        stale = entry["stale"]
+        if stale not in at_candidate:
+            problems.append(
+                f"anchor rot: {relative} does not contain {stale!r} at the reviewed "
+                "candidate, so this reconciliation check proves nothing and must be "
+                "re-anchored before it is trusted"
+            )
+            continue
+        # The same guard on the other side. A positive requirement already satisfied by
+        # the candidate cannot tell a made reconciliation from an unmade one, so every
+        # `new_text` needle and every sentence conjunction must be *absent* there.
+        # Removal-only entries declare that they have no positive signal instead of
+        # dressing an existing phrase up as one.
+        for needle in entry.get("new_text", ()):
+            if needle in at_candidate:
+                problems.append(
+                    f"degenerate requirement: {relative} already carries {needle!r} at "
+                    "the reviewed candidate, so requiring it proves nothing"
+                )
+        required_at_candidate = entry.get("sentence_requires")
+        if required_at_candidate and any(
+            all(token in sentence for token in required_at_candidate)
+            for sentence in _sentences(blob.decode("utf-8"))
+        ):
+            problems.append(
+                f"degenerate requirement: {relative} already has a sentence carrying "
+                f"{list(required_at_candidate)} at the reviewed candidate"
+            )
+        if not entry.get("removal_only") and not (
+            entry.get("new_text") or entry.get("sentence_requires")
+        ):
+            problems.append(
+                f"{entry['item']}: no positive requirement and not marked removal_only, "
+                "so removing the stale phrase is all that is ever checked"
+            )
+
+        on_disk_path = root / relative
+        if not on_disk_path.is_file():
+            problems.append(f"{relative} is missing")
+            continue
+        current = _flat(on_disk_path.read_text(encoding="utf-8"))
+
+        if not ratified:
+            if stale not in current:
+                problems.append(
+                    f"{relative}: the stale claim {stale!r} was removed without a "
+                    "recorded ratification. Reconciling it is ratification's job and "
+                    "needs the record that authorises the delta."
+                )
+            continue
+
+        if stale in current:
+            problems.append(
+                f"{entry['item']}: {relative} still says {stale!r}. Ratification "
+                "declared this reconciliation; changing the file without making it is "
+                "not making it."
+            )
+        for needle in entry.get("must_still_contain", ()):
+            if needle not in current:
+                problems.append(
+                    f"{entry['item']}: {relative} does not carry {needle!r}. Expected "
+                    + entry["requires_note"]
+                )
+        for needle in entry.get("new_text", ()):
+            if needle not in current:
+                problems.append(
+                    f"{entry['item']}: {relative} does not carry {needle!r}. Expected "
+                    + entry["requires_note"]
+                )
+        required = entry.get("sentence_requires")
+        if required and not any(
+            all(token in sentence for token in required)
+            for sentence in _sentences(on_disk_path.read_text(encoding="utf-8"))
+        ):
+            problems.append(
+                f"{entry['item']}: {relative} has no single sentence carrying all of "
+                f"{list(required)}. Expected " + entry["requires_note"]
+            )
+
+    problems.extend(_review_consistency_problems(root, ratified))
+    return problems
+
+
+def _review_consistency_problems(root: Path, ratified: bool) -> list[str]:
+    """The review states its status twice, as JSON and as prose. Both must move.
+
+    Checking each document against itself would let the machine-readable half be
+    ratified while the human half still tells the reader it ratifies nothing.
+    """
+    problems: list[str] = []
+    try:
+        review = json.loads((root / REVIEW_JSON).read_text(encoding="utf-8"))
+        markdown = _flat((root / REVIEW_MARKDOWN).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [f"{REVIEW_JSON} or {REVIEW_MARKDOWN} is unreadable"]
+
+    status = review.get("review_status")
+    if not isinstance(status, str) or not status:
+        return [f"{REVIEW_JSON}: review_status must be a non-empty string"]
+    if status not in markdown:
+        problems.append(
+            f"{REVIEW_MARKDOWN} does not quote the review_status {status!r} that "
+            f"{REVIEW_JSON} declares; the two halves of one review disagree"
+        )
+    if ratified:
+        candidate_markdown = _candidate_blob(root, REVIEW_MARKDOWN)
+        if candidate_markdown is not None and status in _flat(
+            candidate_markdown.decode("utf-8")
+        ):
+            problems.append(
+                f"{REVIEW_JSON}: review_status {status!r} already appears in "
+                f"{REVIEW_MARKDOWN} at the reviewed candidate, so requiring the "
+                "Markdown to quote it proves nothing about ratification"
+            )
+        if status == UNRATIFIED_REVIEW_STATUS:
+            problems.append(
+                f"{REVIEW_JSON} declares ratified while review_status is still "
+                f"{UNRATIFIED_REVIEW_STATUS!r}"
+            )
+        if REVIEW_DISCLAIMER in markdown:
+            problems.append(
+                f"{REVIEW_MARKDOWN} still tells the reader it is {REVIEW_DISCLAIMER!r} "
+                "while the review declares itself ratified"
+            )
+    return problems
+
+
 def _registry_state_problem(root: Path) -> str | None:
     """Compare the two external records by structure. ``None`` means they agree.
 
@@ -729,6 +1189,28 @@ class _CheckpointSandbox:
             document = json.loads(manifest_path.read_text(encoding="utf-8"))
             document["ratified"] = False
             document.pop("ratification", None)
+            # The acceptance state is normalised too. Leaving the host's accepted round
+            # in place would make every probe below mean something different depending
+            # on whether the repository happened to be mid-ratification — the ambient
+            # coupling this module has had to remove three times now.
+            for field in ACCEPTANCE_DIGEST_FIELDS:
+                document[field] = None
+            for entry in document.get("acceptance_rounds", []):
+                if isinstance(entry, dict) and entry.get("round") == document.get(
+                    "current_round"
+                ):
+                    entry["verdict"] = None
+                    entry["streams"] = {"automated": None, "manual": None}
+                    entry["manual_report"] = None
+                    entry["automated_report"] = None
+                    for field in ACCEPTANCE_DIGEST_FIELDS:
+                        entry[field] = ""
+            for stream in ("manual", "automated"):
+                record = document.get(f"{stream}_acceptance")
+                if isinstance(record, dict):
+                    record["status"] = "owed"
+                    record["report_path"] = None
+                    record["round"] = document.get("current_round")
             manifest_path.write_text(
                 json.dumps(document, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
@@ -811,6 +1293,104 @@ class _CheckpointSandbox:
         else:  # pragma: no cover - the registry always carries the row
             raise AssertionError("no CP-00 row to rewrite")
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def reconcile(self, entry: dict) -> None:
+        """Actually make one recorded reconciliation, the way ratification must."""
+        self._remember(entry["path"])
+        path = self.root / entry["path"]
+        text = path.read_text(encoding="utf-8")
+        stale = entry["stale"]
+        flat = _flat(text)
+        assert stale in flat, f"anchor missing before reconciliation: {entry['path']}"
+        # Replace in place, tolerating the line wrapping the anchor may have crossed,
+        # so the document keeps its structure — flattening it would quietly break the
+        # Markdown table gates that read the same file.
+        replacement = ""
+        for needle in entry.get("new_text", ()):
+            replacement = needle
+        pattern = re.compile(r"\s+".join(re.escape(word) for word in stale.split()))
+        text, count = pattern.subn(replacement or "the precondition is satisfied", text)
+        assert count, f"anchor did not match in place: {entry['path']}"
+        if entry.get("sentence_requires"):
+            text += (
+                "\n\nThe precondition is satisfied: `legacy-stage-name-map.json` carries "
+                "62 legacy names over 31 alias-bearing declaration sites.\n"
+            )
+        path.write_text(text, encoding="utf-8")
+
+    def touch_without_reconciling(self, entry: dict) -> None:
+        """Change the bytes and leave every stale claim exactly where it was."""
+        self._remember(entry["path"])
+        path = self.root / entry["path"]
+        path.write_text(
+            path.read_text(encoding="utf-8") + "\n<!-- reviewed at ratification -->\n",
+            encoding="utf-8",
+        )
+
+    def accept_round(
+        self,
+        *,
+        verdict: str = "PASS",
+        streams: tuple[str, str] = ("PASS", "PASS 6/6"),
+        reports: bool = True,
+        stream_status: str = "PASS",
+    ) -> None:
+        """Record a passing current round with primary reports that exist on disk."""
+        self._remember(CHECKPOINT_MANIFEST)
+        path = self.root / CHECKPOINT_MANIFEST
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        number = manifest["current_round"]
+        report_paths = {}
+        for stream in ("manual", "automated"):
+            relative = f"artifacts/checkpoints/CP-00/{stream}-report-round-{number}.md"
+            report_paths[stream] = relative if reports else None
+            if reports:
+                target = self.root / relative
+                self._remember(relative)
+                target.write_text(f"# {stream} report round {number}\n", encoding="utf-8")
+        for entry in manifest["acceptance_rounds"]:
+            if entry.get("round") == number:
+                entry["verdict"] = verdict
+                entry["streams"] = {"automated": streams[0], "manual": streams[1]}
+                entry["manual_report"] = report_paths["manual"]
+                entry["automated_report"] = report_paths["automated"]
+        for stream in ("manual", "automated"):
+            manifest[f"{stream}_acceptance"] = {
+                "status": stream_status,
+                "round": number,
+                "report_path": report_paths[stream],
+                "history": manifest.get(f"{stream}_acceptance", {}).get("history", []),
+            }
+        path.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+
+    def seal_digests(self, tested: str | None = None, evidence: str | None = None) -> None:
+        """Write both digests at the top level and into the current round."""
+        self._remember(CHECKPOINT_MANIFEST)
+        path = self.root / CHECKPOINT_MANIFEST
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        number = manifest["current_round"]
+        tested_value = tested or ("c" * 64)
+        manifest["tested_candidate_digest"] = tested_value
+        manifest["evidence_bundle_digest"] = evidence if evidence is not None else ""
+        for entry in manifest["acceptance_rounds"]:
+            if entry.get("round") == number:
+                entry["tested_candidate_digest"] = tested_value
+                entry["evidence_bundle_digest"] = manifest["evidence_bundle_digest"]
+        path.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        if evidence is None:
+            computed = _acceptance_digest(self.root)
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            manifest["evidence_bundle_digest"] = computed
+            for entry in manifest["acceptance_rounds"]:
+                if entry.get("round") == number:
+                    entry["evidence_bundle_digest"] = computed
+            path.write_text(
+                json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
 
     def restore_one(self, relative: str) -> None:
         """Put a single remembered path back, leaving the rest of the mutation alone."""
@@ -2471,6 +3051,216 @@ class RatificationRecordTests(unittest.TestCase):
         """
         self.assertIsNone(_registry_state_problem(REPOSITORY_ROOT))
 
+    # ---- round five: content, and an accepted round ------------------------------
+
+    def _ratify_for_real(self, **round_kwargs: object) -> None:
+        """A ratification that does the work: record, flag, five reconciliations, round."""
+        self.sandbox.declare_ratification(self.full_delta)
+        self.sandbox.patch_json(
+            self.review, ratified=True, review_status="ratified_at_w0_3"
+        )
+        for entry in RECONCILIATIONS:
+            self.sandbox.reconcile(entry)
+        markdown = self.sandbox.root / REVIEW_MARKDOWN
+        disclaimer = re.compile(
+            r"\s+".join(re.escape(word) for word in REVIEW_DISCLAIMER.split())
+        )
+        markdown.write_text(
+            disclaimer.sub("the ratification act", markdown.read_text(encoding="utf-8"))
+            + "\nStatus: ratified_at_w0_3.\n",
+            encoding="utf-8",
+        )
+        self.sandbox.set_registry_state(RATIFIED_STATE_TOKEN, "ratified")
+        self.sandbox.accept_round(**round_kwargs)
+        self.sandbox.seal_digests()
+
+    def test_a_ratification_that_does_the_work_is_accepted(self) -> None:
+        self._ratify_for_real()
+        self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+        self.assertIsNone(_registry_state_problem(self.sandbox.root))
+
+    def test_each_reconciliation_touched_but_not_made_is_named(self) -> None:
+        """The round-five false positive, one file at a time."""
+        for entry in RECONCILIATIONS:
+            with self.subTest(item=entry["item"]):
+                self._ratify_for_real()
+                self.sandbox.restore_one(entry["path"])
+                self.sandbox.touch_without_reconciling(entry)
+                problems = _reconciliation_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(entry["item"] in problem for problem in problems),
+                    f"a commented-out reconciliation passed: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_a_dead_anchor_fails_instead_of_passing_forever(self) -> None:
+        """Anti-vacuity: if a stale phrase is not in the candidate, say so."""
+        entry = dict(RECONCILIATIONS[0])
+        entry["stale"] = "a phrase that was never in this document"
+        table = (entry,) + RECONCILIATIONS[1:]
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "RECONCILIATIONS", table
+        ):
+            problems = _reconciliation_problems(self.sandbox.root)
+        self.assertTrue(any("anchor rot" in problem for problem in problems), problems)
+
+    def test_the_review_json_and_markdown_must_agree_on_ratification(self) -> None:
+        self._ratify_for_real()
+        markdown = self.sandbox.root / REVIEW_MARKDOWN
+        markdown.write_text(
+            markdown.read_text(encoding="utf-8") + f"\n{REVIEW_DISCLAIMER}\n",
+            encoding="utf-8",
+        )
+        problems = _reconciliation_problems(self.sandbox.root)
+        self.assertTrue(any(REVIEW_DISCLAIMER in problem for problem in problems), problems)
+
+    def test_ratifying_on_an_unaccepted_round_is_rejected(self) -> None:
+        """Both streams owed, no verdict, no reports — the probe's construction."""
+        self.sandbox.declare_ratification(self.full_delta)
+        self.sandbox.patch_json(self.review, ratified=True)
+        self.sandbox.seal_digests(tested="1" * 64, evidence="2" * 64)
+        problems = _acceptance_problems(self.sandbox.root)
+        for expected in ("whose verdict is", "must leave a", "requires PASS"):
+            self.assertTrue(
+                any(expected in problem for problem in problems),
+                f"{expected!r} not reported: {problems}",
+            )
+
+    def test_a_single_failing_stream_blocks_ratification(self) -> None:
+        for streams in (("FAIL - 2 blockers", "PASS 6/6"), ("PASS", "FAIL - MT00-01")):
+            with self.subTest(streams=streams):
+                self._ratify_for_real(streams=streams)
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any("both streams must pass" in problem for problem in problems),
+                    problems,
+                )
+                self.sandbox.restore()
+
+    def test_a_missing_primary_report_blocks_ratification(self) -> None:
+        self._ratify_for_real(reports=False)
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any("must leave a" in problem for problem in problems), problems
+        )
+
+    def test_an_owed_stream_status_blocks_ratification(self) -> None:
+        self._ratify_for_real(stream_status="owed")
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(any("requires PASS" in problem for problem in problems), problems)
+
+    def test_top_level_and_round_digests_must_agree(self) -> None:
+        self._ratify_for_real()
+        self.sandbox.patch_json(CHECKPOINT_MANIFEST, tested_candidate_digest="d" * 64)
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any("the per-round copy exists" in problem for problem in problems), problems
+        )
+
+    def test_the_evidence_digest_depends_on_the_tested_digest(self) -> None:
+        """The binding, measured. This is the check the prose used to stand in for.
+
+        Two trees identical in every byte except the value of
+        `tested_candidate_digest` — including a value describing a tree that never
+        existed — must produce **different** evidence digests. Under the old blank-both
+        recipe they produced one identical digest, so the field naming the judged tree
+        could hold anything at all.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+        digests = {}
+        for tested in ("a" * 64, "0" * 64, "deadbeef" * 8):
+            self.sandbox.seal_digests(tested=tested)
+            digests[tested] = _acceptance_digest(
+                self.sandbox.root, "evidence_bundle_digest"
+            )
+        self.assertEqual(
+            len(set(digests.values())),
+            len(digests),
+            "the evidence digest is independent of tested_candidate_digest, so evidence "
+            f"from any tree can be presented as this round's: {digests}",
+        )
+
+    def test_swapping_the_tested_digest_alone_breaks_the_evidence_digest(self) -> None:
+        """The same fact as a rejection, end to end through the live check."""
+        self._ratify_for_real()
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+        manifest = json.loads(
+            (self.sandbox.root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8")
+        )
+        number = manifest["current_round"]
+        manifest["tested_candidate_digest"] = "deadbeef" * 8
+        for entry in manifest["acceptance_rounds"]:
+            if entry.get("round") == number:
+                entry["tested_candidate_digest"] = "deadbeef" * 8
+        (self.sandbox.root / CHECKPOINT_MANIFEST).write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any("does not reproduce over this tree" in problem for problem in problems),
+            "a tested_candidate_digest naming a tree that never existed was accepted: "
+            f"{problems}",
+        )
+
+    def test_an_evidence_digest_that_does_not_reproduce_is_rejected(self) -> None:
+        """Evidence from another tree cannot be presented as this round's."""
+        self._ratify_for_real()
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+        self.sandbox.edit("docs/architecture/GLOSSARY.md")
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any("does not reproduce over this tree" in problem for problem in problems),
+            problems,
+        )
+
+    def test_the_retro_edit_rule_is_proved_on_synthetic_history(self) -> None:
+        """The real history has nothing to compare yet, so prove the rule directly.
+
+        Every committed manifest so far carries `""` in every per-round digest — no
+        round has been sealed — so `_retro_edited_digests` is silent against the
+        repository and a green result from it means nothing on its own.
+        """
+        sealed = {
+            "acceptance_rounds": [
+                {"round": 4, "tested_candidate_digest": "a" * 64, "evidence_bundle_digest": "b" * 64},
+                {"round": 5, "tested_candidate_digest": "", "evidence_bundle_digest": ""},
+            ]
+        }
+        unchanged = json.loads(json.dumps(sealed))
+        self.assertEqual(_digest_history_problems([(sealed, "HEAD~1")], unchanged), [])
+
+        retro = json.loads(json.dumps(sealed))
+        retro["acceptance_rounds"][0]["tested_candidate_digest"] = "c" * 64
+        self.assertTrue(
+            any("was 'aaa" in problem for problem in _digest_history_problems([(sealed, "HEAD~1")], retro)),
+            "a retro-edited tested_candidate_digest was accepted",
+        )
+
+        dropped = {"acceptance_rounds": [sealed["acceptance_rounds"][1]]}
+        self.assertTrue(
+            _digest_history_problems([(sealed, "HEAD~1")], dropped),
+            "deleting the round entry hid its sealed digest",
+        )
+
+        renumbered = json.loads(json.dumps(sealed))
+        renumbered["acceptance_rounds"][0]["round"] = 9
+        self.assertTrue(
+            _digest_history_problems([(sealed, "HEAD~1")], renumbered),
+            "renumbering the round hid its sealed digest",
+        )
+
+        opened = json.loads(json.dumps(sealed))
+        opened["acceptance_rounds"].append(
+            {"round": 6, "tested_candidate_digest": "d" * 64, "evidence_bundle_digest": ""}
+        )
+        self.assertEqual(
+            _digest_history_problems([(sealed, "HEAD~1")], opened),
+            [],
+            "opening a new round is not a retro-edit and must stay silent",
+        )
+
     def test_the_two_records_are_compared_on_all_four_combinations(self) -> None:
         """Manifest state x registry state, every pairing, prose deliberately hostile.
 
@@ -2552,6 +3342,24 @@ class RatificationRecordTests(unittest.TestCase):
         problem = _registry_state_problem(self.sandbox.root)
         self.assertIsNotNone(problem)
         self.assertIn("must cite exactly one manifest state key", problem)
+
+    def test_each_recorded_reconciliation_is_actually_made(self) -> None:
+        """Content, not bytes. Round five's blocker.
+
+        Path equality proves a file moved. It cannot tell an edit that removed a stale
+        claim from one that appended a comment beside it, and an independent probe used
+        exactly that gap: all five declared, four given comments, no stale statement
+        touched, 98/98 green.
+        """
+        self.assertEqual(_reconciliation_problems(REPOSITORY_ROOT), [])
+
+    def test_ratification_requires_an_accepted_acceptance_round(self) -> None:
+        """Ratification is not a field you set; it is a round you passed."""
+        self.assertEqual(_acceptance_problems(REPOSITORY_ROOT), [])
+
+    def test_no_per_round_digest_was_edited_after_the_fact(self) -> None:
+        """`tested_candidate_digest` is frozen when the round opens."""
+        self.assertEqual(_retro_edited_digests(REPOSITORY_ROOT), [])
 
     def test_the_acceptance_digest_model_is_structurally_sound(self) -> None:
         """The split into a tested-input digest and an evidence digest is correct.

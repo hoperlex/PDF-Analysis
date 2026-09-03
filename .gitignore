@@ -20,3 +20,8 @@ build/
 .local/
 artifacts/local/
 fixtures/private/
+
+# Editor state. Must never enter the checkpoint candidate digest, which walks
+# git ls-files --others --exclude-standard.
+.vscode/
+.idea/
