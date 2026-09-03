@@ -65,7 +65,7 @@ order shown below.
 | W0-DOM-02 | DOM | Remove deprecated domain `version` mirror (`ID-01`) | W0-QA-03, W0-DOM-01 | Accepted and integrated at `478d32e9`. |
 | W0-EVT-01 | EVT | Event envelope on `contract_version` (`ID-01`) | W0-DOM-02, W0-QA-03, W0-DOM-01, W0-ANA-01 | Accepted and integrated at `3ca8e254`. |
 | W0-CLN-01 | CLN | Retire notes overtaken by the `ID-01` chain | W0-EVT-01, W0-DOM-02, W0-QA-03, W0-ARC-02 | Accepted and integrated at `92e13fa4`. |
-| W0-QA-01 | QA | Independent cross-family verification | W0-ARC-02, W0-CLN-01 | Accepted by two independent reviewers; evidence at `854a6820`. |
+| W0-QA-01 | QA | Independent cross-family verification | W0-ARC-02, W0-CLN-01 | Accepted after six review rounds; evidence at `e7f39890`. |
 
 `ID-01` completes only in that order: `W0-QA-03` → `W0-DOM-02` → `W0-EVT-01`.
 

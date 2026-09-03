@@ -33,7 +33,7 @@ architecture acceptance, ratify the eligible candidate set, fast-forward it to
   `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`.
 - `W0-EVT-01`, integrated at `3ca8e25413426ff8efec41cd850c325331d181fc`.
 - `W0-CLN-01`, integrated at `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368`.
-- `W0-QA-01`, accepted and integrated at `854a68201cdd857abf6a12989f254f5d2e0928af` with an
+- `W0-QA-01`, accepted and integrated at `e7f39890211b52e10d2619c5ddcb85a3d8c7df22` with an
   `ACCEPT` report for the exact convergence commit.
 
 ## Frozen inputs
