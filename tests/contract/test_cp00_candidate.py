@@ -62,8 +62,70 @@ LEGACY_KEY_FIXTURE = f"{EVENTS}/examples/event-envelope.legacy-schema-version.in
 #: lists, legacy evidence names), so only object keys are checked.
 FORBIDDEN_AUTHORITY_KEYS = frozenset({"authority_token", "fencing_token", "fence_token"})
 
-#: Every reviewed family. Byte identity with the candidate is asserted over all of them.
+#: Every reviewed family. Byte identity with the candidate is asserted over all of them,
+#: except for the narrow, externally declared ratification delta defined below.
 REVIEWED_PREFIXES = ("contracts/", "fixtures/", "docs/architecture/", "scripts/")
+
+#: Three of the four reviewed families are touched by nothing, ever. Ratification does
+#: not reach them, so no record can license a byte of change here.
+IMMUTABLE_REVIEWED_PREFIXES = ("contracts/", "fixtures/", "scripts/")
+
+#: The one family ratification does reach, and then only inside the declared set.
+RATIFIABLE_REVIEWED_PREFIX = "docs/architecture/"
+
+#: The external record. It is outside every reviewed family on purpose: a record that
+#: lived inside the tree it authorises could licence its own drift.
+CHECKPOINT_MANIFEST = "artifacts/checkpoints/CP-00/manifest.json"
+CHECKPOINT_REGISTRY = "docs/program/CHECKPOINT_REGISTRY.md"
+
+#: **The registry's state vocabulary, closed and machine-readable.** The CP-00 row of
+#: `CHECKPOINT_REGISTRY.md` states its state by citing, in a code span, the manifest key
+#: that holds it. These are identifiers, not English words, so a sentence that negates
+#: one cannot be mistaken for one that asserts it — the failure the first form of this
+#: check had, where `\bratified\b` matched inside "not ratified" and a row denying
+#: ratification read as a row confirming it.
+RATIFIED_STATE_TOKEN = "ratification"
+UNRATIFIED_STATE_TOKEN = "ratification_blocked"
+REGISTRY_STATE_TOKENS = frozenset({RATIFIED_STATE_TOKEN, UNRATIFIED_STATE_TOKEN})
+
+#: Only this task may ratify CP-00. `W0.3_ratification_integration.md` assigns the
+#: ratification act, the CP-00 review and the checkpoint evidence to it alone.
+RATIFYING_TASK = "W0-INT-01"
+
+#: **The ceiling on any ratification delta, and the reason it cannot be widened
+#: silently.** A ratification record names the files it changes, but a record that could
+#: name anything would be no control at all — the integrator would only have to add a
+#: path to the record it writes itself. So the record may name *fewer* paths than this
+#: set and never one outside it. Widening the ceiling means editing this module, which
+#: only `W0-QA-01` owns, which means reopening this task and passing another independent
+#: review.
+#:
+#: The five entries are exactly the artifacts CP-00 ratification is recorded as needing:
+#: the review document whose `ratified` flag is the ratification act, in both its forms,
+#: and the three point-in-time statements listed under `known_pre_ratification_items` in
+#: the checkpoint manifest — the `PD-02` precondition text in two documents, the stale
+#: `GATE-E` prose in the lint specification, and the owner-decision count in the ADR
+#: index. Nothing else in `docs/architecture/**` is reconciled by ratification.
+RATIFICATION_DELTA_CEILING = frozenset(
+    {
+        "docs/architecture/ADR_INDEX.md",
+        "docs/architecture/ARCHITECTURE_LINT_RULES.md",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.json",
+        "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+        "docs/architecture/CP00_OWNER_DECISIONS.md",
+    }
+)
+
+#: The two acceptance digests of the current manifest form. One identifies the immutable
+#: input the acceptance streams judged, frozen before they run; the other identifies the
+#: tree that carries their results. They are necessarily different, because writing the
+#: results changes the tree — which is why the single retired `candidate_digest` was
+#: wrong: computed last, it certified a tree the streams never saw.
+ACCEPTANCE_DIGEST_FIELDS = ("tested_candidate_digest", "evidence_bundle_digest")
+
+#: Provenance a ratification record must carry. A delta authorised by a bare boolean
+#: would be an accident with a flag on it.
+RATIFICATION_REQUIRED_FIELDS = ("task", "decided_on", "decided_by", "reason")
 
 GATE_MARKERS = {
     "A": "name-map gate PASS",
@@ -240,33 +302,533 @@ def _candidate_reviewed_paths(root: Path) -> list[str]:
     return [path for path in listing.stdout.split("\n") if path.startswith(REVIEWED_PREFIXES)]
 
 
+def _present_reviewed_paths(root: Path) -> list[str]:
+    """Every reviewed-family path present in the checkout now.
+
+    Tracked plus untracked-not-ignored, which is the set the checkpoint manifest's own
+    digest recipe describes. Globbing the working tree instead would pick up a
+    gitignored ``scripts/__pycache__`` byte-code file and make the answer depend on
+    whether anyone had run the validator; the manifest records that exact mistake.
+    """
+    listing = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "contracts",
+            "fixtures",
+            "docs/architecture",
+            "scripts",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if listing.returncode != 0:
+        raise AssertionError("git could not enumerate the reviewed families")
+    return sorted(path for path in listing.stdout.split("\n") if path)
+
+
+def _candidate_blob(root: Path, relative: str) -> bytes | None:
+    blob = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "--no-replace-objects",
+            "show",
+            f"{REVIEWED_CANDIDATE_COMMIT}:{relative}",
+        ],
+        capture_output=True,
+        check=False,
+    )
+    return blob.stdout if blob.returncode == 0 else None
+
+
 def _drifted_reviewed_paths(root: Path) -> list[str]:
-    """Reviewed paths whose bytes on disk differ from the candidate commit's blob.
+    """Reviewed paths that are not byte-identical to the candidate commit.
+
+    Three ways a path drifts, and all three are reported: its bytes changed, it was
+    deleted, or it did not exist at the candidate and exists now. The third was a blind
+    spot in the first form of this check — it only walked the candidate's own file list,
+    so a *new* architecture document could have been added without the check noticing.
 
     The comparison is byte-for-byte on purpose. A parsed-JSON comparison is blind to
-    re-indentation and key reordering, and the hashes this review records are hashes of
-    bytes, so anything weaker would certify a document nobody hashed.
+    re-indentation and key reordering — the domain scope gate of `W0-DOM-02` had exactly
+    that hole — and the hashes this review records are hashes of bytes, so anything
+    weaker would certify a document nobody hashed.
     """
-    drifted: list[str] = []
-    for relative in _candidate_reviewed_paths(root):
-        blob = subprocess.run(
+    at_candidate = set(_candidate_reviewed_paths(root))
+    present = set(_present_reviewed_paths(root))
+    drifted: set[str] = set()
+    for relative in at_candidate:
+        blob = _candidate_blob(root, relative)
+        on_disk = root / relative
+        if blob is None or not on_disk.is_file() or blob != on_disk.read_bytes():
+            drifted.add(relative)
+    drifted |= present - at_candidate
+    return sorted(drifted)
+
+
+def _checkpoint_manifest(root: Path) -> dict | None:
+    """The external checkpoint record, or ``None`` when there is not one."""
+    path = root / CHECKPOINT_MANIFEST
+    if not path.is_file():
+        return None
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return None
+    return document if isinstance(document, dict) else None
+
+
+def _ratification_record(root: Path) -> tuple[bool, frozenset[str], list[str]]:
+    """Read the declared ratification from the external record.
+
+    Returns ``(externally_ratified, declared_delta, problems)``. ``problems`` is empty
+    only when the record is admissible; an inadmissible record licenses **nothing**, so
+    the caller treats it exactly like a missing one and reports why.
+
+    The policy this implements, in full:
+
+    * No record, or ``ratified`` false — no delta at all. Every reviewed family stays
+      byte-identical to the candidate. A record cannot pre-authorise an edit before the
+      ratification it authorises has actually been taken.
+    * ``ratified`` true — a delta is admissible only if the record names the paths
+      explicitly, every named path lies under ``docs/architecture/``, every named path
+      is inside :data:`RATIFICATION_DELTA_CEILING`, and every named path already existed
+      at the candidate. A path that did not exist at the candidate is a **new** reviewed
+      artifact; that needs review, not ratification.
+    * The record must name the task that took the act, when, on whose authority, and
+      why. A delta authorised by a bare boolean would be an accident with a flag on it.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return False, frozenset(), []
+
+    problems: list[str] = []
+    ratified = manifest.get("ratified")
+    if not isinstance(ratified, bool):
+        return False, frozenset(), [
+            f"{CHECKPOINT_MANIFEST}: 'ratified' must be a boolean, got {ratified!r}"
+        ]
+    if not ratified:
+        return False, frozenset(), []
+
+    record = manifest.get("ratification")
+    if not isinstance(record, dict):
+        return True, frozenset(), [
+            f"{CHECKPOINT_MANIFEST} declares ratified true but carries no 'ratification' "
+            "object. Ratification may change the reviewed architecture family only "
+            "through a record that names, explicitly: 'allowed_delta_paths' (a list of "
+            "repository-relative paths under docs/architecture/), plus "
+            + ", ".join(f"'{field}'" for field in RATIFICATION_REQUIRED_FIELDS)
+            + "."
+        ]
+
+    for field in RATIFICATION_REQUIRED_FIELDS:
+        value = record.get(field)
+        if not isinstance(value, str) or not value.strip():
+            problems.append(
+                f"{CHECKPOINT_MANIFEST}: ratification.{field} must be a non-empty string"
+            )
+    task = record.get("task")
+    if isinstance(task, str) and task != RATIFYING_TASK:
+        problems.append(
+            f"{CHECKPOINT_MANIFEST}: ratification.task is {task!r}; only "
+            f"{RATIFYING_TASK} may ratify CP-00"
+        )
+
+    declared = record.get("allowed_delta_paths")
+    if not isinstance(declared, list) or not declared:
+        problems.append(
+            f"{CHECKPOINT_MANIFEST}: ratification.allowed_delta_paths must be a "
+            "non-empty list of repository-relative paths"
+        )
+        return True, frozenset(), problems
+    if not all(isinstance(item, str) and item for item in declared):
+        problems.append(
+            f"{CHECKPOINT_MANIFEST}: ratification.allowed_delta_paths must hold strings"
+        )
+        return True, frozenset(), problems
+    if len(declared) != len(set(declared)):
+        problems.append(
+            f"{CHECKPOINT_MANIFEST}: ratification.allowed_delta_paths repeats a path"
+        )
+
+    outside_family = sorted(
+        item for item in declared if not item.startswith(RATIFIABLE_REVIEWED_PREFIX)
+    )
+    if outside_family:
+        problems.append(
+            "ratification may not reach outside "
+            f"{RATIFIABLE_REVIEWED_PREFIX}: {outside_family}"
+        )
+    above_ceiling = sorted(set(declared) - RATIFICATION_DELTA_CEILING - set(outside_family))
+    if above_ceiling:
+        problems.append(
+            "these paths are outside the ratification ceiling this module pins, so the "
+            "record cannot authorise them: "
+            f"{above_ceiling}. Widening the ceiling means reopening W0-QA-01."
+        )
+    absent_at_candidate = sorted(
+        item
+        for item in declared
+        if item.startswith(RATIFIABLE_REVIEWED_PREFIX)
+        and _candidate_blob(root, item) is None
+    )
+    if absent_at_candidate:
+        problems.append(
+            "these paths did not exist at the reviewed candidate, so they are new "
+            f"reviewed artifacts and need review rather than ratification: "
+            f"{absent_at_candidate}"
+        )
+    # The ceiling is not only an upper bound. For CP-00 the five files are not a menu:
+    # each one is a reconciliation ratification is obliged to perform — the flag, the
+    # `PD-02` precondition in two documents, the stale `GATE-E` sentence, the ADR-index
+    # decision count. An earlier form of this check said "the record may name fewer
+    # paths than the ceiling", which let a record declare the work and skip it.
+    understated = sorted(RATIFICATION_DELTA_CEILING - set(declared))
+    if understated:
+        problems.append(
+            "the record does not declare every reconciliation CP-00 ratification owes; "
+            f"missing: {understated}. For this checkpoint the declared set is the whole "
+            "ceiling, not a subset of it."
+        )
+
+    if problems:
+        return True, frozenset(), problems
+    return True, frozenset(declared), []
+
+
+def _registry_state_problem(root: Path) -> str | None:
+    """Compare the two external records by structure. ``None`` means they agree.
+
+    The CP-00 row of the checkpoint registry states its state by citing, in a code span,
+    the manifest key that holds it — `ratification_blocked` while blocked,
+    `ratification` once ratified. Identifiers, not English: a row reading "not ratified"
+    cannot be mistaken for one reading "ratified", which is exactly what the first form
+    of this check got wrong.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return f"{CHECKPOINT_MANIFEST} is missing"
+    external = manifest.get("ratified") is True
+    rows = [
+        line
+        for line in (root / CHECKPOINT_REGISTRY).read_text(encoding="utf-8").splitlines()
+        if line.startswith("| CP-00 ")
+    ]
+    if len(rows) != 1:
+        return f"{CHECKPOINT_REGISTRY} does not carry exactly one CP-00 row"
+    cited = {
+        span for span in re.findall(r"`([^`]+)`", rows[0]) if span in REGISTRY_STATE_TOKENS
+    }
+    if len(cited) != 1:
+        return (
+            "the CP-00 registry row must cite exactly one manifest state key in a code "
+            f"span, one of {sorted(REGISTRY_STATE_TOKENS)}; the row's prose is not read "
+            f"and cannot carry the state. Row: {rows[0]}"
+        )
+    token = cited.pop()
+    # Deliberately *not* also requiring the manifest to still carry a key of that name.
+    # An unratified manifest has no `ratification` object and a ratified one may drop
+    # `ratification_blocked` as spent history, so tying the comparison to key presence
+    # would make it depend on whether history was kept — the ambient-state coupling this
+    # module has had to remove twice already. The token is a state name from a closed
+    # vocabulary; the comparison is between two states.
+    if (token == RATIFIED_STATE_TOKEN) != external:
+        return (
+            f"{CHECKPOINT_REGISTRY} cites `{token}` for CP-00 while "
+            f"{CHECKPOINT_MANIFEST} declares ratified={external}. A ratified checkpoint "
+            f"cites `{RATIFIED_STATE_TOKEN}`; an unratified one cites "
+            f"`{UNRATIFIED_STATE_TOKEN}`."
+        )
+    return None
+
+
+def _undeclared_drift(root: Path) -> list[str]:
+    """Reviewed-family drift that no admissible ratification record accounts for.
+
+    One direction only — what changed without being declared. On its own this is not
+    the policy: see :func:`_ratification_delta_problems`, which also requires the other
+    direction, because a record that declares five reconciliations and performs one
+    leaves nothing undeclared and would otherwise pass.
+    """
+    _, declared, problems = _ratification_record(root)
+    licensed = frozenset() if problems else declared
+    return sorted(set(_drifted_reviewed_paths(root)) - licensed)
+
+
+def _unperformed_declarations(root: Path) -> list[str]:
+    """Paths a valid record declares that are byte-identical to the candidate anyway.
+
+    The other direction, and the one an independent negative probe found missing. A
+    ratification record is a statement that these reconciliations were made; a declared
+    path that never changed means the statement is false, whether by oversight or
+    because the work was skipped and the record written anyway.
+    """
+    _, declared, problems = _ratification_record(root)
+    if problems:
+        return []
+    return sorted(declared - set(_drifted_reviewed_paths(root)))
+
+
+def _ratification_delta_problems(root: Path) -> list[str]:
+    """The whole reviewed-family delta policy, both directions, in one answer.
+
+    * every reviewed family byte-identical to the candidate, **except**
+    * exactly the paths an admissible record declares — no more (undeclared drift) and
+      no fewer (declared but not performed),
+    * with `contracts/**`, `fixtures/**` and `scripts/**` untouchable regardless.
+    """
+    problems: list[str] = []
+    _, declared, record_problems = _ratification_record(root)
+    problems.extend(record_problems)
+
+    immutable = _immutable_family_drift(root)
+    if immutable:
+        problems.append(
+            "ratification does not reach these families and no record can license a "
+            f"byte of them: {immutable}"
+        )
+    undeclared = _undeclared_drift(root)
+    if undeclared:
+        problems.append(
+            "these reviewed artifacts differ from the candidate and no ratification "
+            f"record accounts for them: {undeclared}"
+        )
+    unperformed = _unperformed_declarations(root)
+    if unperformed:
+        problems.append(
+            "the ratification record declares these reconciliations and they were not "
+            f"made — the files are byte-identical to the candidate: {unperformed}. "
+            "Declaring the work is not doing it."
+        )
+    return problems
+
+
+def _immutable_family_drift(root: Path) -> list[str]:
+    """Drift in the three families ratification never reaches.
+
+    Redundant with :func:`_undeclared_drift` while the ceiling holds, and stated
+    separately anyway: the guarantee that `contracts/**`, `fixtures/**` and `scripts/**`
+    are untouchable should not depend on reading the ceiling correctly.
+    """
+    return [
+        path
+        for path in _drifted_reviewed_paths(root)
+        if path.startswith(IMMUTABLE_REVIEWED_PREFIXES)
+    ]
+
+
+def _reviewed_manifest_digest(root: Path) -> tuple[str, int]:
+    """The checkpoint manifest's own `artifact_manifest_sha256` recipe, recomputed.
+
+    For each tracked reviewed path in sorted order: the UTF-8 path bytes, then the raw
+    32-byte SHA-256 of the file content — not its hex text.
+    """
+    tracked = sorted(
+        subprocess.run(
             [
                 "git",
                 "-C",
                 str(root),
-                "--no-replace-objects",
-                "show",
-                f"{REVIEWED_CANDIDATE_COMMIT}:{relative}",
+                "ls-tree",
+                "-r",
+                "--name-only",
+                "HEAD",
+                "--",
+                "contracts",
+                "fixtures",
+                "docs/architecture",
+                "scripts",
             ],
             capture_output=True,
-            check=False,
+            text=True,
+            check=True,
+        ).stdout.split("\n")
+    )
+    tracked = [path for path in tracked if path]
+    running = hashlib.sha256()
+    for relative in tracked:
+        running.update(relative.encode("utf-8"))
+        running.update(hashlib.sha256((root / relative).read_bytes()).digest())
+    return running.hexdigest(), len(tracked)
+
+
+class _CheckpointSandbox:
+    """A throwaway working copy of the whole repository, object database included.
+
+    Ratification probes have to answer questions about `git status`, about blobs at the
+    candidate commit and about the external record all at once, so a partial copy will
+    not do. Nothing here touches the repository under review: the object database is
+    copied, never shared, and no Git command that writes is ever run — the sandbox is
+    reset by rewriting bytes, not by asking Git to restore them.
+    """
+
+    #: Never copied: the live virtual environment, which is symlinked instead, and the
+    #: object database, which is copied separately.
+    NOT_COPIED = frozenset({".git", ".venv"})
+
+    def __init__(self) -> None:
+        self.root = Path(tempfile.mkdtemp(prefix="w0-qa-01-checkpoint-"))
+        shutil.copytree(REPOSITORY_ROOT / ".git", self.root / ".git")
+        # The whole tree, not a hand-listed subset. The candidate digest enumerates
+        # every tracked path, so a sandbox that carried only the interesting
+        # directories would make the recipe unrunnable rather than make the probe
+        # meaningful — and a hand-listed subset silently rots as the repository grows.
+        for entry in sorted(REPOSITORY_ROOT.iterdir()):
+            if entry.name in self.NOT_COPIED:
+                continue
+            if entry.is_dir():
+                shutil.copytree(entry, self.root / entry.name, symlinks=True)
+            elif entry.is_file():
+                shutil.copy2(entry, self.root / entry.name)
+        (self.root / ".venv").symlink_to(REPOSITORY_ROOT / ".venv")
+        # `.gitignore` ignores `.venv/` as a directory; here it is a symlink, which that
+        # pattern does not match, so the sandbox would enumerate it as an untracked file
+        # and the digest recipe would try to read a directory. Excluded in the sandbox's
+        # own copied metadata — a plain file write, not a Git command — so the sandbox
+        # enumerates exactly what the repository does.
+        exclude = self.root / ".git/info/exclude"
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        with exclude.open("a", encoding="utf-8") as handle:
+            handle.write("\n.venv\n")
+        self._pristine: dict[str, bytes] = {}
+
+    def normalise_to_candidate(self) -> None:
+        """Put the sandbox into the pre-ratification state, whatever the host tree is.
+
+        These probes are about the policy, not about today's repository. Without this
+        the whole class would silently change meaning the moment `W0-INT-01` ratifies —
+        half of it passing for the wrong reason and half failing for the wrong reason —
+        which is exactly the ambient-state dependence that made the original
+        `ratified is False` pin a trap. Reviewed files are rewritten from the candidate
+        blob, anything added since is removed, and the external record is returned to
+        `ratified: false` with no `ratification` object.
+        """
+        at_candidate = set(_candidate_reviewed_paths(self.root))
+        for relative in sorted(set(_present_reviewed_paths(self.root)) - at_candidate):
+            (self.root / relative).unlink(missing_ok=True)
+        for relative in sorted(at_candidate):
+            blob = _candidate_blob(self.root, relative)
+            if blob is None:
+                raise AssertionError(f"candidate blob unavailable for {relative}")
+            target = self.root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.is_file() or target.read_bytes() != blob:
+                target.write_bytes(blob)
+        manifest_path = self.root / CHECKPOINT_MANIFEST
+        if manifest_path.is_file():
+            document = json.loads(manifest_path.read_text(encoding="utf-8"))
+            document["ratified"] = False
+            document.pop("ratification", None)
+            manifest_path.write_text(
+                json.dumps(document, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+
+    def __enter__(self) -> "_CheckpointSandbox":
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def _remember(self, relative: str) -> None:
+        if relative not in self._pristine:
+            path = self.root / relative
+            self._pristine[relative] = path.read_bytes() if path.is_file() else b""
+
+    def edit(self, relative: str, marker: str = "\n<!-- ratification edit -->\n") -> None:
+        """Append a visible marker, so the file drifts without becoming nonsense."""
+        self._remember(relative)
+        path = self.root / relative
+        path.write_bytes(path.read_bytes() + marker.encode("utf-8"))
+
+    def patch_json(self, relative: str, **fields: object) -> None:
+        self._remember(relative)
+        path = self.root / relative
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document.update(fields)
+        path.write_text(
+            json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
-        on_disk = root / relative
-        if blob.returncode != 0 or not on_disk.is_file():
-            drifted.append(relative)
-        elif blob.stdout != on_disk.read_bytes():
-            drifted.append(relative)
-    return drifted
+
+    def drop_json_key(self, relative: str, key: str) -> None:
+        self._remember(relative)
+        path = self.root / relative
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document.pop(key, None)
+        path.write_text(
+            json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+
+    def declare_ratification(
+        self,
+        paths: list[str],
+        *,
+        ratified: bool = True,
+        task: str = RATIFYING_TASK,
+        omit: tuple[str, ...] = (),
+    ) -> None:
+        """Write the external record the way `W0-INT-01` is expected to write it."""
+        record: dict[str, object] = {
+            "task": task,
+            "decided_on": "2026-09-02",
+            "decided_by": "repository owner, recorded by the program integrator",
+            "reason": (
+                "CP-00 ratification: set review.ratified and reconcile the three "
+                "recorded point-in-time statements."
+            ),
+            "allowed_delta_paths": paths,
+        }
+        for field in omit:
+            record.pop(field, None)
+        self.patch_json(CHECKPOINT_MANIFEST, ratified=ratified, ratification=record)
+
+    def set_registry_state(self, token: str | None, prose: str) -> None:
+        """Rewrite the CP-00 registry row: a state token plus deliberate prose.
+
+        `prose` exists so the probes can prove the English is never consulted — the
+        combinations below pair a confirming token with denying prose and vice versa.
+        """
+        self._remember(CHECKPOINT_REGISTRY)
+        path = self.root / CHECKPOINT_REGISTRY
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if line.startswith("| CP-00 "):
+                cells = line.split("|")
+                citation = f" see manifest `{token}`;" if token else ""
+                cells[-2] = f" {prose};{citation} "
+                lines[index] = "|".join(cells)
+                break
+        else:  # pragma: no cover - the registry always carries the row
+            raise AssertionError("no CP-00 row to rewrite")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def restore_one(self, relative: str) -> None:
+        """Put a single remembered path back, leaving the rest of the mutation alone."""
+        payload = self._pristine.pop(relative)
+        path = self.root / relative
+        if payload:
+            path.write_bytes(payload)
+        elif path.is_file():
+            path.unlink()
+
+    def restore(self) -> None:
+        for relative, payload in self._pristine.items():
+            path = self.root / relative
+            if payload:
+                path.write_bytes(payload)
+            elif path.is_file():
+                path.unlink()
+        self._pristine.clear()
 
 
 class _MutableCopy:
@@ -311,9 +873,16 @@ class ACandidateIntegrityTests(unittest.TestCase):
 
     Named to sort first: if this fails, every other result in this module describes some
     other tree and the review report is void.
+
+    One narrow exception exists, and it is the whole subject of
+    :class:`RatificationRecordTests`. Ratification is recorded *in* the artifact it
+    ratifies, so `W0-INT-01` cannot do its job without changing files inside
+    `docs/architecture/**`. That is a declared act, not drift — but only when an external
+    record says so, names the files, and stays inside the ceiling this module pins.
+    Everything else, in every family, is still drift and still a failure.
     """
 
-    def test_reviewed_families_are_byte_identical_to_the_candidate(self) -> None:
+    def test_the_candidate_file_set_is_the_one_this_report_describes(self) -> None:
         reviewed = _candidate_reviewed_paths(REPOSITORY_ROOT)
         # The candidate is immutable, so its reviewed file count is a fixed number. A
         # different count means a different tree, not a looser check.
@@ -322,10 +891,24 @@ class ACandidateIntegrityTests(unittest.TestCase):
             100,
             "the candidate's reviewed file set is not the one this report describes",
         )
+
+    def test_the_three_untouchable_families_are_byte_identical(self) -> None:
+        """`contracts/**`, `fixtures/**`, `scripts/**` — no record can license a byte."""
         self.assertEqual(
-            _drifted_reviewed_paths(REPOSITORY_ROOT),
+            _immutable_family_drift(REPOSITORY_ROOT),
             [],
-            "these reviewed artifacts differ from the candidate the report certifies",
+            "ratification does not reach these families; any difference from the "
+            "candidate voids the report",
+        )
+
+    def test_the_reviewed_delta_is_exactly_what_is_declared(self) -> None:
+        """Both directions: nothing undeclared changed, and nothing declared was skipped."""
+        external_ratified, declared, _ = _ratification_record(REPOSITORY_ROOT)
+        self.assertEqual(
+            _ratification_delta_problems(REPOSITORY_ROOT),
+            [],
+            f"record ratified={external_ratified}, declared={sorted(declared)}, "
+            f"observed drift={_drifted_reviewed_paths(REPOSITORY_ROOT)}",
         )
 
     def test_recorded_analysis_hashes_are_reproducible(self) -> None:
@@ -523,13 +1106,29 @@ class DocumentedNeighbourGateTests(unittest.TestCase):
             ["GATE-A", "GATE-B", "GATE-C", "GATE-D", "GATE-E", "GATE-F"],
             "the architecture specification no longer records all six gates",
         )
+        declared = _ratification_record(REPOSITORY_ROOT)[1]
         for position, (label, block) in enumerate(blocks):
             with self.subTest(gate=label, position=position):
                 result = _run_shell(block, REPOSITORY_ROOT)
-                self.assertEqual(
-                    result.returncode,
-                    0,
-                    f"{label} block {position} failed: {result.stderr.strip()}",
+                if result.returncode == 0:
+                    continue
+                # The one admissible failure. GATE-F's strict form asserts that nothing
+                # under docs/architecture is dirty except the two lint-rule files that
+                # `W0-ARC-02` owned; it is a claim about *that* task's write boundary,
+                # made against the working tree. A ratification edit in progress dirties
+                # other files in the same directory and trips it. The gate is not
+                # skipped and not weakened: it must still fail for no reason other than
+                # the declared ratification delta, and the reported paths must be a
+                # subset of it.
+                reported = {
+                    line.strip().strip("'\"")
+                    for line in re.findall(r"'docs/architecture/[^']+'", result.stderr)
+                }
+                self.assertTrue(
+                    reported and reported <= set(declared),
+                    f"{label} block {position} failed for something other than the "
+                    f"declared ratification delta.\nreported: {sorted(reported)}\n"
+                    f"declared: {sorted(declared)}\nstderr: {result.stderr.strip()}",
                 )
 
 
@@ -1187,9 +1786,34 @@ class ArchitectureCoverageTests(unittest.TestCase):
         ]
         self.assertEqual(missing, [])
 
-    def test_the_review_is_not_yet_ratified(self) -> None:
-        """`W0-INT-01` ratifies; a candidate that ratified itself would be the defect."""
-        self.assertIs(self.review["ratified"], False)
+    def test_ratified_agrees_with_the_external_record(self) -> None:
+        """The review may not decide its own ratification.
+
+        This replaces a flat `assertIs(ratified, False)`. That pin was correct about the
+        danger and wrong about the mechanism: it made ratification impossible rather than
+        making self-ratification impossible, and `W0-INT-01` could not do its declared
+        job without turning the suite red. The danger is unchanged and so is the answer
+        to it — the flag is compared against a record kept outside the artifact.
+        """
+        external_ratified, _, problems = _ratification_record(REPOSITORY_ROOT)
+        declared_here = self.review["ratified"]
+        self.assertIsInstance(declared_here, bool)
+        if declared_here:
+            self.assertEqual(
+                problems,
+                [],
+                "the review declares itself ratified and the external record does not "
+                "admissibly say so",
+            )
+        self.assertEqual(
+            declared_here,
+            external_ratified,
+            f"{LINT_RULES_JSON.rsplit('/', 1)[0]}/CP00_ARCHITECTURE_REVIEW.json says "
+            f"ratified={declared_here} while {CHECKPOINT_MANIFEST} says "
+            f"ratified={external_ratified}. A candidate cannot ratify itself, and a "
+            "recorded ratification that the review does not carry is equally a "
+            "contradiction.",
+        )
 
 
 class MutationTests(unittest.TestCase):
@@ -1473,19 +2097,21 @@ class MutationTests(unittest.TestCase):
 
         A green byte-identity result is worthless unless the same comparison rejects a
         changed byte. This copies the object database into a scratch tree, changes one
-        contract there and asserts the comparison names exactly that path.
+        contract there and asserts the comparison names exactly that path — and it uses
+        the same policy function the live check uses, so it exercises the real predicate
+        rather than a simplified twin.
         """
-        scratch = Path(tempfile.mkdtemp(prefix="w0-qa-01-drift-"))
-        try:
-            shutil.copytree(REPOSITORY_ROOT / ".git", scratch / ".git")
-            for subtree in ("contracts", "fixtures", "docs", "scripts"):
-                shutil.copytree(REPOSITORY_ROOT / subtree, scratch / subtree)
+        with _CheckpointSandbox() as sandbox:
+            # Normalised, so this probe means the same thing before and after
+            # ratification. Without it the sandbox inherits whatever the host tree
+            # happens to be, and every negative assertion below inherits it too.
+            sandbox.normalise_to_candidate()
             self.assertEqual(
-                _drifted_reviewed_paths(scratch),
+                _undeclared_drift(sandbox.root),
                 [],
                 "the scratch copy did not start out identical to the candidate",
             )
-            target = scratch / DOMAIN / "error-codes.json"
+            target = sandbox.root / DOMAIN / "error-codes.json"
             # A pure reformat: the parsed value is unchanged and only the bytes move.
             target.write_text(
                 json.dumps(json.loads(target.read_text(encoding="utf-8")), indent=4)
@@ -1493,20 +2119,25 @@ class MutationTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(
-                _drifted_reviewed_paths(scratch),
+                _undeclared_drift(sandbox.root),
                 [f"{DOMAIN}/error-codes.json"],
                 "a re-indented contract was accepted as byte-identical",
             )
-            (scratch / ANALYSIS / "stage-registry.json").unlink()
+            (sandbox.root / ANALYSIS / "stage-registry.json").unlink()
             self.assertEqual(
-                sorted(_drifted_reviewed_paths(scratch)),
+                _undeclared_drift(sandbox.root),
                 sorted(
                     [f"{DOMAIN}/error-codes.json", f"{ANALYSIS}/stage-registry.json"]
                 ),
                 "a deleted contract was not reported as drift",
             )
-        finally:
-            shutil.rmtree(scratch, ignore_errors=True)
+            new_artifact = sandbox.root / "docs/architecture/NEW_DOCUMENT.md"
+            new_artifact.write_text("# added after the candidate\n", encoding="utf-8")
+            self.assertIn(
+                "docs/architecture/NEW_DOCUMENT.md",
+                _undeclared_drift(sandbox.root),
+                "a file added after the candidate was invisible to the drift check",
+            )
 
     def test_mutation_lint_rule_rename_breaks_the_identity_pin(self) -> None:
         """A `rule_id` renamed inside a rule row while its pin entry stays put."""
@@ -1523,6 +2154,507 @@ class MutationTests(unittest.TestCase):
         self.assertEqual(len(gate_c), 1)
         result = copy.run_block(gate_c[0])
         self.assertNotEqual(result.returncode, 0, "the identity pin accepted a rename")
+
+
+class RatificationRecordTests(unittest.TestCase):
+    """What counts as a declared ratification delta, proved in both directions.
+
+    The policy, stated once so it cannot be widened by reading:
+
+    * **`contracts/**`, `fixtures/**`, `scripts/**` — never.** Ratification does not
+      reach them. No record licenses a byte.
+    * **`docs/architecture/**` — only under all four conditions at once.** An external
+      record in `artifacts/checkpoints/CP-00/manifest.json` says `ratified: true`; that
+      record carries a `ratification` object naming `allowed_delta_paths` plus its task,
+      date, authority and reason; every named path lies under `docs/architecture/`, is
+      inside `RATIFICATION_DELTA_CEILING`, and already existed at the reviewed
+      candidate. A file outside the named set is drift, exactly as before.
+    * **The ceiling is pinned here, not in the record.** The record may name fewer paths
+      than the ceiling and never one outside it, so nobody can widen the delta by
+      editing the record they also write. Widening means editing this module, which only
+      `W0-QA-01` owns, which means reopening this task and another independent review.
+    * **The review may not decide its own ratification.** `ratified` in
+      `CP00_ARCHITECTURE_REVIEW.json` must equal the external record's, in both
+      directions.
+
+    Every probe below runs against a throwaway copy of the whole repository. The
+    candidate is never written.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.sandbox = _CheckpointSandbox()
+        cls.sandbox.normalise_to_candidate()
+        cls.review = "docs/architecture/CP00_ARCHITECTURE_REVIEW.json"
+        cls.full_delta = sorted(RATIFICATION_DELTA_CEILING)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.sandbox.__exit__()
+
+    def setUp(self) -> None:
+        self.addCleanup(self.sandbox.restore)
+        self.assertEqual(
+            _undeclared_drift(self.sandbox.root),
+            [],
+            "the sandbox did not start clean",
+        )
+
+    def _ratify(self, paths: list[str] | None = None, **kwargs: object) -> None:
+        """Apply a realistic ratification: the record, the flag, and the five edits."""
+        declared = self.full_delta if paths is None else paths
+        self.sandbox.declare_ratification(declared, **kwargs)
+        self.sandbox.patch_json(self.review, ratified=True)
+        for relative in declared:
+            if relative != self.review and relative in RATIFICATION_DELTA_CEILING:
+                self.sandbox.edit(relative)
+
+    # ---- the direction that must pass -------------------------------------------
+
+    def test_declared_ratification_of_the_whole_ceiling_is_accepted(self) -> None:
+        self._ratify()
+        external, declared, problems = _ratification_record(self.sandbox.root)
+        self.assertTrue(external)
+        self.assertEqual(problems, [])
+        self.assertEqual(sorted(declared), self.full_delta)
+        self.assertEqual(
+            _undeclared_drift(self.sandbox.root),
+            [],
+            "a fully declared ratification was rejected, so ratification is still "
+            "impossible and this reopening achieved nothing",
+        )
+        self.assertEqual(_immutable_family_drift(self.sandbox.root), [])
+        self.assertEqual(
+            sorted(_drifted_reviewed_paths(self.sandbox.root)),
+            self.full_delta,
+            "the drift is still observed and reported; it is licensed, not invisible",
+        )
+
+    def test_a_partial_declaration_is_rejected(self) -> None:
+        """Inverted in round four. It used to assert the opposite, and was wrong.
+
+        `test_a_partial_declared_ratification_is_accepted` asserted that "the record may
+        name fewer paths than the ceiling", which pinned the defect as a property: an
+        independent negative probe declared all five files, changed one, and the suite
+        stayed green — four obligatory reconciliations skippable with the record still
+        claiming them. For CP-00 the ceiling is not a menu. Each of the five is a
+        reconciliation ratification owes, so the declared set must be all of it.
+        """
+        subset = [self.review, "docs/architecture/ADR_INDEX.md"]
+        self._ratify(subset)
+        _, declared, problems = _ratification_record(self.sandbox.root)
+        self.assertEqual(declared, frozenset())
+        self.assertTrue(
+            any("does not declare every reconciliation" in problem for problem in problems),
+            problems,
+        )
+        self.assertNotEqual(_ratification_delta_problems(self.sandbox.root), [])
+
+    # ---- the directions that must fail ------------------------------------------
+
+    def test_declaring_five_reconciliations_and_making_one_is_rejected(self) -> None:
+        """The exact false positive an independent negative probe produced.
+
+        Full record, full declared set, one file actually reconciled. Nothing is
+        undeclared, so the one-directional check said `[]` and the suite was green while
+        four obligatory reconciliations had not been made.
+        """
+        self.sandbox.declare_ratification(self.full_delta)
+        self.sandbox.patch_json(self.review, ratified=True)
+        _, declared, problems = _ratification_record(self.sandbox.root)
+        self.assertEqual(problems, [], "the record itself is admissible")
+        self.assertEqual(sorted(declared), self.full_delta)
+        self.assertEqual(
+            _undeclared_drift(self.sandbox.root),
+            [],
+            "precondition: the one-directional check sees nothing wrong here",
+        )
+        skipped = [path for path in self.full_delta if path != self.review]
+        self.assertEqual(
+            _unperformed_declarations(self.sandbox.root),
+            skipped,
+            "the four unmade reconciliations must be named",
+        )
+        delta_problems = _ratification_delta_problems(self.sandbox.root)
+        self.assertTrue(
+            any("Declaring the work is not doing it" in problem for problem in delta_problems),
+            delta_problems,
+        )
+
+    def test_a_fully_declared_and_fully_performed_ratification_is_accepted(self) -> None:
+        """The other side of the same rule: do all five and the suite is green."""
+        self._ratify()
+        self.assertEqual(_ratification_delta_problems(self.sandbox.root), [])
+        self.assertEqual(_unperformed_declarations(self.sandbox.root), [])
+
+    def test_ratification_without_any_record_is_drift(self) -> None:
+        self.sandbox.patch_json(self.review, ratified=True)
+        self.sandbox.edit("docs/architecture/ADR_INDEX.md")
+        external, _, _ = _ratification_record(self.sandbox.root)
+        self.assertFalse(external, "the manifest still says unratified")
+        self.assertEqual(
+            _undeclared_drift(self.sandbox.root),
+            ["docs/architecture/ADR_INDEX.md", self.review],
+            "a self-declared ratification with no external record was accepted",
+        )
+
+    def test_both_directions_are_reported_at_once(self) -> None:
+        """One reconciliation skipped and one stranger edited, in the same tree.
+
+        The two failure modes are independent and neither may mask the other: the
+        stranger must be named as undeclared drift and the skipped file as an unmade
+        reconciliation, from a single evaluation.
+        """
+        self._ratify()
+        skipped = "docs/architecture/ADR_INDEX.md"
+        self.sandbox.restore_one(skipped)
+        self.sandbox.edit("docs/architecture/GLOSSARY.md")
+        self.assertEqual(
+            _undeclared_drift(self.sandbox.root), ["docs/architecture/GLOSSARY.md"]
+        )
+        self.assertEqual(_unperformed_declarations(self.sandbox.root), [skipped])
+        problems = _ratification_delta_problems(self.sandbox.root)
+        self.assertTrue(any("no ratification record accounts" in x for x in problems), problems)
+        self.assertTrue(any("Declaring the work is not doing it" in x for x in problems), problems)
+
+    def test_an_undeclared_architecture_file_outside_the_ceiling_is_drift(self) -> None:
+        """`GLOSSARY.md` is in the reviewed family and outside the ceiling."""
+        self._ratify()
+        self.sandbox.edit("docs/architecture/GLOSSARY.md")
+        self.assertEqual(
+            _undeclared_drift(self.sandbox.root),
+            ["docs/architecture/GLOSSARY.md"],
+        )
+
+    def test_a_record_naming_a_path_above_the_ceiling_licenses_nothing(self) -> None:
+        """The anti-widening control: the record cannot enlarge its own authority."""
+        self._ratify(self.full_delta + ["docs/architecture/GLOSSARY.md"])
+        _, declared, problems = _ratification_record(self.sandbox.root)
+        self.assertEqual(declared, frozenset())
+        self.assertTrue(
+            any("outside the ratification ceiling" in problem for problem in problems),
+            problems,
+        )
+        self.assertEqual(
+            _undeclared_drift(self.sandbox.root),
+            self.full_delta,
+            "an inadmissible record still licensed a delta; every path it named must "
+            "come back as drift, including the ones that were inside the ceiling",
+        )
+
+    def test_a_record_naming_a_path_outside_the_family_licenses_nothing(self) -> None:
+        self._ratify([self.review, f"{DOMAIN}/error-codes.json"])
+        _, declared, problems = _ratification_record(self.sandbox.root)
+        self.assertEqual(declared, frozenset())
+        self.assertTrue(
+            any("may not reach outside" in problem for problem in problems), problems
+        )
+
+    def test_a_record_naming_a_path_absent_at_the_candidate_licenses_nothing(self) -> None:
+        new_path = "docs/architecture/RATIFICATION_NOTE.md"
+        (self.sandbox.root / new_path).write_text("# new\n", encoding="utf-8")
+        self.addCleanup(lambda: (self.sandbox.root / new_path).unlink(missing_ok=True))
+        self._ratify([self.review, new_path])
+        _, declared, problems = _ratification_record(self.sandbox.root)
+        self.assertEqual(declared, frozenset())
+        self.assertTrue(
+            any("need review rather than ratification" in p for p in problems), problems
+        )
+
+    def test_every_immutable_family_stays_immutable_under_ratification(self) -> None:
+        self._ratify()
+        for relative in (
+            f"{DOMAIN}/error-codes.json",
+            f"{GOLDEN}/selection.json",
+            "scripts/validate_bootstrap.py",
+        ):
+            with self.subTest(path=relative):
+                self.sandbox.edit(relative, marker="\n")
+                self.assertIn(relative, _immutable_family_drift(self.sandbox.root))
+                self.assertIn(relative, _undeclared_drift(self.sandbox.root))
+
+    def test_a_record_missing_its_provenance_licenses_nothing(self) -> None:
+        for field in RATIFICATION_REQUIRED_FIELDS:
+            with self.subTest(missing=field):
+                self._ratify(omit=(field,))
+                _, declared, problems = _ratification_record(self.sandbox.root)
+                self.assertEqual(declared, frozenset())
+                self.assertTrue(
+                    any(f"ratification.{field}" in problem for problem in problems),
+                    problems,
+                )
+                self.sandbox.restore()
+
+    def test_a_record_from_the_wrong_task_licenses_nothing(self) -> None:
+        self._ratify(task="W0-ARC-02")
+        _, declared, problems = _ratification_record(self.sandbox.root)
+        self.assertEqual(declared, frozenset())
+        self.assertTrue(any("may ratify CP-00" in problem for problem in problems))
+
+    def test_a_ratified_flag_with_no_ratification_object_licenses_nothing(self) -> None:
+        self.sandbox.patch_json(CHECKPOINT_MANIFEST, ratified=True)
+        _, declared, problems = _ratification_record(self.sandbox.root)
+        self.assertEqual(declared, frozenset())
+        self.assertTrue(any("carries no 'ratification' object" in p for p in problems))
+
+    def test_an_empty_or_repeating_path_list_licenses_nothing(self) -> None:
+        for paths in ([], [self.review, self.review]):
+            with self.subTest(paths=paths):
+                self.sandbox.declare_ratification(paths)
+                _, declared, problems = _ratification_record(self.sandbox.root)
+                self.assertEqual(declared, frozenset())
+                self.assertTrue(problems)
+                self.sandbox.restore()
+
+    def test_a_recorded_ratification_the_review_does_not_carry_is_a_contradiction(
+        self,
+    ) -> None:
+        """The other direction of the flag check: record true, artifact still false."""
+        self.sandbox.declare_ratification(self.full_delta)
+        external, _, problems = _ratification_record(self.sandbox.root)
+        self.assertTrue(external)
+        self.assertEqual(problems, [])
+        review = json.loads(
+            (self.sandbox.root / self.review).read_text(encoding="utf-8")
+        )
+        self.assertIs(
+            review["ratified"],
+            False,
+            "probe precondition: the review has not been ratified in the sandbox",
+        )
+        self.assertNotEqual(
+            review["ratified"],
+            external,
+            "the flag check must reject a record the artifact does not carry",
+        )
+
+    def test_the_manifest_does_not_contradict_itself(self) -> None:
+        """A record cannot pre-authorise a delta it has not taken.
+
+        Structural, and independent of the registry: whatever format the human registry
+        ends up carrying, the machine record must not hold a `ratification` object while
+        declaring `ratified: false`.
+        """
+        manifest = _checkpoint_manifest(REPOSITORY_ROOT)
+        self.assertIsNotNone(manifest)
+        if manifest.get("ratified") is not True:
+            self.assertNotIn(
+                "ratification",
+                manifest,
+                f"{CHECKPOINT_MANIFEST} carries a ratification object while declaring "
+                "itself unratified",
+            )
+
+    def test_the_two_external_records_do_not_contradict_each_other(self) -> None:
+        """Compared by structure. The previous form read English and was wrong.
+
+        It asked whether the row contained the word `ratified`, which matches inside
+        `not ratified`: a registry line *denying* ratification was indistinguishable
+        from one confirming it, in both directions — a manifest saying `ratified: true`
+        beside a row reading "not ratified" passed, and today's honest "not ratified"
+        beside `ratified: false` failed. That is the same defect class this wave
+        rejected three candidates for: a gate whose claim lives in prose rather than in
+        checkable structure. No better prose parser replaces it; the row is not read as
+        English at all.
+
+        What is read instead is the one machine-readable element the row already
+        carries: it cites, in a code span, the manifest key that holds CP-00's state.
+        Today it cites `ratification_blocked`; a ratified checkpoint cites
+        `ratification`. The vocabulary is closed, the tokens are identifiers rather than
+        words, and negation cannot flip their meaning because no English is consulted.
+
+        This formalises an existing convention rather than inventing a field, and it is
+        satisfied by the registry as it stands. If the repository owner would rather the
+        registry carry a first-class state column, that is a registry-format decision
+        for the checkpoint-registry owner, not something this module should guess at;
+        `docs/program/reviews/W0-QA-01.md` §11.4 records the request.
+        """
+        self.assertIsNone(_registry_state_problem(REPOSITORY_ROOT))
+
+    def test_the_two_records_are_compared_on_all_four_combinations(self) -> None:
+        """Manifest state x registry state, every pairing, prose deliberately hostile.
+
+        Each row pairs the structural token with English that says the opposite of what
+        the token says, so a predicate that read the prose would get every row wrong.
+        The two agreeing combinations must pass and the two contradicting ones must
+        fail, whatever the sentence around the token happens to say.
+        """
+        confirming = "ratified 2026-09-02; tag not yet published"
+        denying = "not ratified; not tagged"
+        cases = [
+            (True, RATIFIED_STATE_TOKEN, denying, None),
+            (True, UNRATIFIED_STATE_TOKEN, confirming, "declares ratified=True"),
+            (False, UNRATIFIED_STATE_TOKEN, confirming, None),
+            (False, RATIFIED_STATE_TOKEN, denying, "declares ratified=False"),
+        ]
+        for ratified, token, prose, expected in cases:
+            with self.subTest(manifest=ratified, registry=token):
+                if ratified:
+                    self.sandbox.declare_ratification(self.full_delta)
+                else:
+                    self.sandbox.patch_json(CHECKPOINT_MANIFEST, ratified=False)
+                self.sandbox.set_registry_state(token, prose)
+                problem = _registry_state_problem(self.sandbox.root)
+                if expected is None:
+                    self.assertIsNone(
+                        problem,
+                        f"agreeing records were rejected; the prose read {prose!r}",
+                    )
+                else:
+                    self.assertIsNotNone(
+                        problem,
+                        f"contradicting records were accepted; the prose read {prose!r}",
+                    )
+                    self.assertIn(expected, problem)
+                self.sandbox.restore()
+
+    def test_a_registry_row_carrying_no_state_token_is_rejected(self) -> None:
+        """The exact counterexamples the independent reviewer produced.
+
+        Both sentences defeated the previous predicate: `\\bratified\\b` matched inside
+        `not ratified`, so a denial read as a confirmation. Neither carries a state
+        token, so both are now definite failures naming the token to write.
+        """
+        for prose in ("ratified 2026-09-02; tag not yet published", "not ratified; not tagged"):
+            for ratified in (True, False):
+                with self.subTest(prose=prose, manifest=ratified):
+                    if ratified:
+                        self.sandbox.declare_ratification(self.full_delta)
+                    else:
+                        self.sandbox.patch_json(CHECKPOINT_MANIFEST, ratified=False)
+                    self.sandbox.set_registry_state(None, prose)
+                    problem = _registry_state_problem(self.sandbox.root)
+                    self.assertIsNotNone(problem, "a stateless row was accepted")
+                    self.assertIn("must cite exactly one manifest state key", problem)
+                    self.sandbox.restore()
+
+    def test_the_comparison_does_not_depend_on_manifest_history(self) -> None:
+        """Dropping the spent `ratification_blocked` key must not change the verdict.
+
+        The first form of this check also demanded that the manifest still carry a key
+        named by the token. That coupled the two-record comparison to whether history
+        was kept: a ratified manifest that retired the blocked entry, exactly as
+        `W0-INT-01` would, flipped agreeing records into a failure. Removed, and pinned
+        here so it cannot come back.
+        """
+        self.sandbox.patch_json(CHECKPOINT_MANIFEST, ratified=False)
+        self.sandbox.drop_json_key(CHECKPOINT_MANIFEST, UNRATIFIED_STATE_TOKEN)
+        self.sandbox.set_registry_state(UNRATIFIED_STATE_TOKEN, "not ratified")
+        self.assertIsNone(_registry_state_problem(self.sandbox.root))
+
+    def test_a_registry_row_citing_both_tokens_is_rejected(self) -> None:
+        """Ambiguity is a failure, not a coin toss."""
+        self.sandbox.patch_json(CHECKPOINT_MANIFEST, ratified=False)
+        self.sandbox.set_registry_state(
+            UNRATIFIED_STATE_TOKEN,
+            f"not ratified, and not yet `{RATIFIED_STATE_TOKEN}`",
+        )
+        problem = _registry_state_problem(self.sandbox.root)
+        self.assertIsNotNone(problem)
+        self.assertIn("must cite exactly one manifest state key", problem)
+
+    def test_the_acceptance_digest_model_is_structurally_sound(self) -> None:
+        """The split into a tested-input digest and an evidence digest is correct.
+
+        An earlier form recorded one digest computed after the acceptance results were
+        written, so it identified the post-acceptance tree rather than the input the
+        streams judged. Splitting it is the right fix and this test does not argue with
+        it. What it checks is that the split is *present and closed*: both fields exist,
+        the retired single field has not come back, and the model documents both.
+
+        What it deliberately does **not** do is recompute either value. See
+        `docs/program/reviews/W0-QA-01.md` §11.9: three fields are missing before that
+        is possible, and a test that recomputed them anyway would be implementing a
+        recipe nobody wrote down.
+        """
+        manifest = _checkpoint_manifest(REPOSITORY_ROOT)
+        self.assertIsNotNone(manifest, f"{CHECKPOINT_MANIFEST} is missing")
+        for field in ACCEPTANCE_DIGEST_FIELDS:
+            self.assertIn(
+                field, manifest, f"{CHECKPOINT_MANIFEST} lost the {field} field"
+            )
+        self.assertNotIn(
+            "candidate_digest",
+            manifest,
+            "the retired single-digest field is back; it identified the tree that "
+            "carried the acceptance results rather than the tree the streams judged",
+        )
+        model = manifest.get("digest_model")
+        self.assertIsInstance(model, dict, "digest_model is missing")
+        for field in ACCEPTANCE_DIGEST_FIELDS + ("artifact_manifest_sha256",):
+            self.assertIn(field, model, f"digest_model does not explain {field}")
+
+    def test_the_acceptance_digests_are_well_formed_distinct_and_present_when_ratified(
+        self,
+    ) -> None:
+        """Shape, mutual difference, and the link that stops them staying empty.
+
+        `null` is a legitimate state — the candidate is being rebuilt and no round has
+        been dispatched — but it may not survive into ratification, or the split would
+        be decorative: a checkpoint could ratify with no record of what was tested.
+        """
+        manifest = _checkpoint_manifest(REPOSITORY_ROOT)
+        values = {field: manifest.get(field) for field in ACCEPTANCE_DIGEST_FIELDS}
+        for field, value in values.items():
+            with self.subTest(field=field):
+                if value is not None:
+                    self.assertRegex(
+                        str(value),
+                        r"^[0-9a-f]{64}$",
+                        f"{field} is neither null nor a SHA-256 digest",
+                    )
+        if manifest.get("ratified") is True:
+            unset = sorted(field for field, value in values.items() if value is None)
+            self.assertEqual(
+                unset,
+                [],
+                "CP-00 cannot ratify while these are unrecorded: a ratified checkpoint "
+                "must say which tree the streams judged and which tree carries their "
+                "evidence",
+            )
+        recorded = [value for value in values.values() if value is not None]
+        if len(recorded) == 2:
+            self.assertNotEqual(
+                recorded[0],
+                recorded[1],
+                "the two digests are equal, so the evidence tree and the tested tree "
+                "are the same tree — which is the defect the split exists to prevent: "
+                "writing the results changes the tree",
+            )
+
+    def test_the_reviewed_manifest_recipe_moves_when_a_reviewed_file_does(self) -> None:
+        """A digest nobody proves sensitive is a digest nobody has verified.
+
+        `artifact_manifest_sha256` is the one manifest digest whose recipe is still
+        recorded accurately, so it is the one whose sensitivity can be demonstrated
+        rather than assumed. One byte in any tracked reviewed file must change it.
+        """
+        baseline, count = _reviewed_manifest_digest(self.sandbox.root)
+        self.sandbox.edit("docs/architecture/GLOSSARY.md")
+        changed, changed_count = _reviewed_manifest_digest(self.sandbox.root)
+        self.assertNotEqual(
+            baseline, changed, "a changed reviewed file left the manifest digest alone"
+        )
+        self.assertEqual(count, changed_count)
+
+    def test_the_manifest_digest_describes_the_tree_it_manifests(self) -> None:
+        """The external record must be true about the tree it covers.
+
+        Recomputed with the manifest's own recipe. Before ratification this is the
+        candidate digest; after ratification the integrator must recompute it, which is
+        the point — a record that kept the pre-ratification digest would be describing a
+        tree that no longer exists.
+        """
+        manifest = _checkpoint_manifest(REPOSITORY_ROOT)
+        self.assertIsNotNone(manifest, f"{CHECKPOINT_MANIFEST} is missing")
+        digest, count = _reviewed_manifest_digest(REPOSITORY_ROOT)
+        self.assertEqual(manifest["artifact_count"], count)
+        self.assertEqual(
+            manifest["artifact_manifest_sha256"],
+            digest,
+            "artifact_manifest_sha256 does not match the tracked reviewed families; "
+            "recompute it with the recipe the manifest itself records",
+        )
 
 
 class WriteBoundaryTests(unittest.TestCase):
@@ -1571,7 +2703,16 @@ class WriteBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(missing, [], "an owned deliverable is missing")
 
-    def test_the_reviewed_families_are_clean(self) -> None:
+    def test_the_reviewed_families_carry_nothing_undeclared(self) -> None:
+        """No working-tree change under a reviewed family beyond the declared delta.
+
+        The earlier form asserted the status output was empty. That was one-directional
+        in the way this wave keeps finding: it passed before a ratification edit and
+        again after the edit was committed, and failed only in between — a gate that
+        reports on the phase of the work rather than on the work. It now asserts the
+        path set against the same declared delta the drift check uses, so it holds in
+        every phase and still fails on any path nobody declared.
+        """
         result = subprocess.run(
             [
                 "git",
@@ -1579,6 +2720,7 @@ class WriteBoundaryTests(unittest.TestCase):
                 str(REPOSITORY_ROOT),
                 "status",
                 "--porcelain",
+                "--untracked-files=all",
                 "--",
                 "contracts",
                 "fixtures",
@@ -1590,10 +2732,14 @@ class WriteBoundaryTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 0)
+        reported = {line[3:] for line in result.stdout.splitlines() if line}
+        _, declared, problems = _ratification_record(REPOSITORY_ROOT)
+        licensed = frozenset() if problems else declared
         self.assertEqual(
-            result.stdout.strip(),
-            "",
-            "this review wrote to an artifact it was reviewing",
+            sorted(reported - licensed),
+            [],
+            "a reviewed artifact is dirty and no ratification record declares it; "
+            "this review writes to nothing it reviews",
         )
 
 

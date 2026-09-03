@@ -1,9 +1,12 @@
 # Task W0-INT-01 — ratify and publish CP-00 architecture checkpoint
 
-> **Status: backlog draft. Not executable yet.**
-> Start only after every preceding W0.3 task is independently accepted and integrated,
-> and after `W0-QA-01` records `ACCEPT` for that exact convergence commit. Pin all
-> placeholders before executing the task.
+> **Status: candidate preparation permitted; ratification and publication blocked.**
+> Every preceding W0.3 task is integrated and both acceptance streams returned `PASS`
+> on the third round, but two conditions are unmet. `W0-QA-01` is reopened: its suite
+> currently accepts a ratification that is declared and not performed. And the
+> acceptance that returned `PASS` ran against a candidate whose digest has since been
+> corrected, so a fresh round is owed on the corrected tree. Executing before both
+> land would ratify against evidence that no longer describes the tree.
 
 ## Outcome
 
@@ -28,9 +31,9 @@ architecture acceptance, ratify the eligible candidate set, fast-forward it to
   `23dddf99f833d12cd4cc22d11e224d4b278872bf`.
 - `W0-DOM-02`, integrated at
   `478d32e90d1cbb2c691e0ac0b61b68dadcf0d397`.
-- `W0-EVT-01`, integrated at `<pending integration commit>`.
-- `W0-CLN-01`, integrated at `<pending integration commit>`.
-- `W0-QA-01`, accepted and integrated at `<pending integration commit>` with an
+- `W0-EVT-01`, integrated at `3ca8e25413426ff8efec41cd850c325331d181fc`.
+- `W0-CLN-01`, integrated at `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368`.
+- `W0-QA-01`, accepted and integrated at `854a68201cdd857abf6a12989f254f5d2e0928af` with an
   `ACCEPT` report for the exact convergence commit.
 
 ## Frozen inputs

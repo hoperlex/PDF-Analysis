@@ -4,13 +4,17 @@
 produced candidates, the repository owner has recorded an explicit disposition for
 `PD-01`–`PD-05` plus integration decisions `ID-01`–`ID-03`, and every lane has passed
 independent review. The accepted W0.2 candidate set is integrated at
-`cf7740474b1786163f54d93b013a0d526ef989e0`. Both CP-00 acceptance streams returned `PASS` on 2026-09-02. Ratification is blocked
-by a contradiction between two accepted tasks, recorded in the manifest as
-`ratification_blocked`. Nothing is tagged and production implementation remains
-locked until CP-01. W0.3 is in progress on
-`integration/W0.3`. All six W0.3 tasks are independently accepted and integrated; the
-candidate is assembled and both acceptance streams have run. See "CP-00 candidate"
-below for the three commits the plan keeps distinct.
+`cf7740474b1786163f54d93b013a0d526ef989e0`.
+
+W0.3 is on `integration/W0.3`. All six of its tasks are integrated, and both CP-00
+acceptance streams returned `PASS` on 2026-09-02 — but that `PASS` is **spent**.
+`W0-QA-01` was reopened afterwards because its suite accepted a ratification that is
+declared and not performed, and the candidate digest was corrected in the same period.
+A fresh acceptance round is owed on the corrected tree before ratification, and none of
+the earlier `PASS` results transfers to it.
+
+Nothing is ratified, nothing is tagged, and production implementation remains locked
+until CP-01.
 
 ## Active checkpoint
 
@@ -56,13 +60,17 @@ Three commits, deliberately distinct:
   the manifest said the value lived here, this document said it lived in the manifest,
   and neither held it. `candidate_digest` in
   `artifacts/checkpoints/CP-00/manifest.json` is the identifier. It is a sha256 over
-  every git-tracked file except the manifest itself, so it is computable before the
-  commit exists, self-consistent, and different for every candidate.
+  every git-tracked file **including** the manifest, whose own contribution is hashed
+  with `candidate_digest` blanked. That keeps it computable before the commit exists
+  and self-consistent, while still changing when the manifest alone changes — an
+  earlier form excluded the manifest and so gave one value to two candidates that
+  differed only in manifest prose.
 
 Two digests with two different jobs, which the earlier rebuilds conflated:
 
-- `candidate_digest` **identifies** the candidate. It covers the whole tracked tree
-  minus the manifest, so it changes when any state document changes.
+- `candidate_digest` **identifies** the candidate. It covers the whole tracked tree,
+  manifest included, so it changes when any state document changes and also when only
+  the manifest changes.
 - `artifact_manifest_sha256` **certifies** that the four reviewed families are
   unchanged, which is what carries the `W0-QA-01` `ACCEPT` forward. It is deliberately
   identical across every rebuild that leaves the reviewed contracts alone — and that
@@ -224,14 +232,20 @@ not review lanes it coordinated.
 
 ## Next integration tasks
 
-Three acceptance rounds ran. Rounds one and two returned `FAIL` from both streams;
-round three returned `PASS` from both. Every blocker across all three was in
-integrator-owned metadata, gate text or state documents — none in a contract, fixture,
-schema or test. Both streams confirmed the four reviewed families byte-identical to
-`reviewed_candidate_commit` in every round, which is what let the `W0-QA-01` `ACCEPT`
-carry forward across two rebuilds without re-running QA.
+Five acceptance rounds are now in the record. Rounds one and two failed; round three
+passed and is **spent**; round four was voided before dispatch; round five is owed and
+cannot start until the reopened `W0-QA-01` is integrated.
 
-`W0-INT-01` executes next: reconcile the recorded point-in-time statements, ratify,
-assemble the evidence bundle, and only then fast-forward `main` onto
-`integration/W0.3` and publish the annotated tag. Publication is a separate,
-explicitly authorised step.
+Every blocker across all five rounds sat in integrator-owned metadata, gate text, state
+documents or the QA suite. None was a contract, fixture, schema or semantic defect: the
+four reviewed families have stayed byte-identical to `reviewed_candidate_commit`
+throughout, and the contract-level `ACCEPT` still holds. What repeatedly failed is the
+checkpoint *procedure* — three times in the same shape, each time one layer deeper:
+first a ratification could be declared with fewer paths than required, then declared in
+full and not performed, then performed as a byte change that did not do the
+reconciliation.
+
+Order from here: integrate the reopened `W0-QA-01` after independent review; freeze
+`tested_candidate_digest` for round five; run both streams, each producing a primary
+report file; and only on two `PASS` execute the ratification half of `W0-INT-01`.
+Publication is a separate, explicitly authorised step after that.

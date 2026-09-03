@@ -2,10 +2,10 @@
   "checkpoint": "CP-00",
   "tag_planned": "v0.0.0-architecture",
   "ratified": false,
-  "status": "accepted_candidate_awaiting_ratification",
+  "status": "candidate_rebuilding_after_spent_acceptance",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "854a68201cdd857abf6a12989f254f5d2e0928af",
-  "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash; two rebuilds were rejected for claiming the value was recorded elsewhere when it was not. candidate_digest covers every git-tracked file except this manifest, so it is computable before the commit exists and differs for every candidate.",
+  "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash. candidate_digest covers every git-tracked file INCLUDING this manifest, whose contribution is hashed with the candidate_digest field blanked - that is what makes a self-referential identifier possible. An earlier form excluded the manifest entirely and was rejected: two candidates differing only in manifest prose then shared one value.",
   "artifact_count": 100,
   "artifact_manifest_sha256": "39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08",
   "frozen_inputs": {
@@ -26,7 +26,7 @@
     "W0-DOM-02": "478d32e90d1cbb2c691e0ac0b61b68dadcf0d397",
     "W0-EVT-01": "3ca8e25413426ff8efec41cd850c325331d181fc",
     "W0-CLN-01": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
-    "W0-QA-01": "854a68201cdd857abf6a12989f254f5d2e0928af"
+    "W0-QA-01": "854a68201cdd857abf6a12989f254f5d2e0928af (SUPERSEDED - task reopened, new evidence commit owed)"
   },
   "open_inputs_carried_forward": {
     "U-04": "tenant/IdP before W2-C-01; TTL and legal hold before W9-C-01. No value invented.",
@@ -38,8 +38,33 @@
     "ADR-0014"
   ],
   "runtime_fields": "not applicable - architecture-only checkpoint",
-  "manual_acceptance": "PASS (round 3 of 3) - artifacts/checkpoints/CP-00/acceptance.md",
-  "automated_acceptance": "PASS (round 3 of 3) - artifacts/checkpoints/CP-00/acceptance.md",
+  "manual_acceptance": {
+    "status": "owed",
+    "round": 5,
+    "report_path": null,
+    "history": [
+      {
+        "round": 3,
+        "verdict": "PASS",
+        "report_path": "artifacts/checkpoints/CP-00/manual-report-round-3.md",
+        "status": "spent"
+      }
+    ]
+  },
+  "automated_acceptance": {
+    "status": "owed",
+    "round": 5,
+    "report_path": null,
+    "history": [
+      {
+        "round": 3,
+        "verdict": "PASS",
+        "report_path": null,
+        "status": "spent",
+        "note": "No primary report file was written."
+      }
+    ]
+  },
   "artifact_manifest_recipe": "git ls-tree -r --name-only <this commit> -- contracts fixtures docs/architecture scripts, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. Git-tracked files only: an earlier form globbed the working tree and hashed a gitignored scripts/__pycache__ .pyc, so the digest was unreproducible on a fresh clone and the drift detector fired on an unmodified checkout.",
   "frozen_inputs_note": "behavioral_oracle and refactoring_architecture_source are commits of the separate legacy repository at /root/projects/PDF-proverka/PDF-proverka, documented in docs/SOURCE_TRACEABILITY.md. They do not resolve in this repository and are not expected to. Every other SHA here is a commit of this repository.",
   "open_escalations": {
@@ -63,9 +88,7 @@
       "three further gates asserted in prose and could not fail"
     ]
   },
-  "candidate_digest": "725d3109e932f76d0e848afc0a2ba1c9ba54cd81c6fa192c013ea5285794fccf",
-  "candidate_digest_recipe": "git ls-files plus git ls-files --others --exclude-standard, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. The manifest itself IS included: its contribution is the sha256 of json.dumps(manifest, sort_keys=True, separators=(',',':')) with candidate_digest set to the empty string, so the field can hold the digest of a tree that contains it. Excluding the manifest, as an earlier form did, left a blind spot exactly the shape of the round-two failure: two candidates differing only in manifest prose shared one digest, so a rebuild fixing only manifest text would have carried the digest of the tree that already failed. Found by the round-three manual tester, who produced the counterexample rather than accepting the claim.",
-  "candidate_file_count": 213,
+  "candidate_digest_recipe": "git ls-files plus git ls-files --others --exclude-standard, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. This manifest IS included. Its contribution is the sha256 of json.dumps(manifest, sort_keys=True, separators=(',',':')) with BOTH acceptance digest fields blanked to the empty string - top-level tested_candidate_digest and evidence_bundle_digest, and the same two fields inside every entry of acceptance_rounds. Blanking both, not one, is what keeps the value computable before the commit that carries it exists: a rule naming a single field would be self-referentially impossible as soon as the second field held a value. The recipe is identical for both digests; what differs is WHEN it is run - tested_candidate_digest before the acceptance streams start, evidence_bundle_digest after their results are written.",
   "second_acceptance_round": {
     "verdict": "FAIL from both streams",
     "manual_candidate_commit_digest": "7170ff5bf6734947d4c5 (prefix)",
@@ -82,5 +105,92 @@
     "observed": "Setting ratified true, and reconciling the three known point-in-time statements, edits five files inside the four reviewed families and fails five tests: the byte-identity check, its drift mutation, the write-boundary check, the documented-gates drift check, and the not-yet-ratified assertion itself.",
     "not_a_contract_defect": "All five failures are drift assertions against reviewed_candidate_commit plus the explicit ratified-is-false assertion. No contract, schema or semantic check fails.",
     "decision_required": "Either narrow-reopen W0-QA-01 so its test compares review.ratified against the checkpoint registry rather than pinning False, or open a follow-up task owning that test. Both acceptance streams passed against the unratified candidate, so the acceptance itself stands."
-  }
+  },
+  "digest_model": {
+    "tested_candidate_digest": "Frozen BEFORE the acceptance streams start. It identifies the immutable input they judge. Recorded here once the streams are dispatched and never edited afterwards; if it must change, the round is void and a new one begins.",
+    "evidence_bundle_digest": "Computed AFTER the results are written. It identifies the tree that carries the acceptance evidence. It necessarily differs from tested_candidate_digest, because writing PASS into the tree changes the tree.",
+    "why_split": "An earlier form recorded one digest, computed after the acceptance records were written. It therefore identified the post-acceptance evidence tree rather than the input the streams actually judged - the acceptance appeared to certify a tree that did not exist when it ran. Found by independent review.",
+    "artifact_manifest_sha256": "Unrelated to both. It certifies the four reviewed families unchanged and is deliberately invariant across rebuilds that leave the contracts alone.",
+    "round_scoped": "Both digests are recorded twice: at the top level for the current round, and inside the matching acceptance_rounds entry as history. Without the per-round copy a retro-edit of the top-level value and a genuine new round would be indistinguishable, so 'frozen and never edited afterwards' would not be checkable. Named by the QA author, who declined to write a test asserting a property the structure could not support."
+  },
+  "tested_candidate_digest": null,
+  "evidence_bundle_digest": null,
+  "third_acceptance_round": {
+    "verdict": "PASS from both streams on 2026-09-02",
+    "status": "SPENT - does not carry to ratification",
+    "reason": "Two things changed after the streams ran: W0-QA-01 was reopened because its suite accepted a ratification that is declared and not performed, and the digest recipe was corrected after the manual tester produced a counterexample. Acceptance certifies a tree; both changes moved the tree. A fourth round is owed on the corrected candidate.",
+    "manual_report": "artifacts/checkpoints/CP-00/manual-report-round-3.md",
+    "carried_forward": "Nothing. Neither stream's PASS transfers. The reviewed families are still byte-identical to reviewed_candidate_commit, so the W0-QA-01 contract-level ACCEPT stands, but the acceptance of the candidate as a whole does not."
+  },
+  "acceptance_rounds": [
+    {
+      "round": 1,
+      "verdict": "FAIL",
+      "streams": {
+        "automated": "FAIL - 5 blockers",
+        "manual": "FAIL - MT00-01"
+      },
+      "tested_candidate_digest": "",
+      "evidence_bundle_digest": "",
+      "manual_report": null,
+      "automated_report": null,
+      "note": "Digests not recorded: the round predates the two-digest model."
+    },
+    {
+      "round": 2,
+      "verdict": "FAIL",
+      "streams": {
+        "automated": "FAIL - 4 blockers",
+        "manual": "FAIL - MT00-01"
+      },
+      "tested_candidate_digest": "",
+      "evidence_bundle_digest": "",
+      "manual_report": null,
+      "automated_report": null,
+      "note": "Digests not recorded: the round predates the two-digest model."
+    },
+    {
+      "round": 3,
+      "verdict": "PASS",
+      "status": "spent",
+      "streams": {
+        "automated": "PASS",
+        "manual": "PASS 6/6"
+      },
+      "tested_candidate_digest": "",
+      "evidence_bundle_digest": "",
+      "manual_report": "artifacts/checkpoints/CP-00/manual-report-round-3.md",
+      "automated_report": null,
+      "note": "Recorded before the two-digest model existed, so its single digest a05fc308... described the post-evidence tree rather than the input. SPENT: W0-QA-01 was reopened and the digest recipe corrected after this round ran, so neither PASS transfers."
+    },
+    {
+      "round": 4,
+      "verdict": null,
+      "status": "void",
+      "streams": {
+        "automated": null,
+        "manual": null
+      },
+      "tested_candidate_digest": "",
+      "evidence_bundle_digest": "",
+      "manual_report": null,
+      "automated_report": null,
+      "note": "Voided before dispatch. Its tested_candidate_digest was frozen, then independent review found further defects and the tree changed. By the recorded rule a frozen digest that must change voids its round."
+    },
+    {
+      "round": 5,
+      "verdict": null,
+      "status": "awaiting_qa_integration",
+      "streams": {
+        "automated": null,
+        "manual": null
+      },
+      "tested_candidate_digest": "",
+      "evidence_bundle_digest": "",
+      "manual_report": null,
+      "automated_report": null,
+      "note": "Cannot freeze its digest until the reopened W0-QA-01 is integrated. Both streams must produce a primary report file; round 3's automated stream produced none."
+    }
+  ],
+  "current_round": 5
 }

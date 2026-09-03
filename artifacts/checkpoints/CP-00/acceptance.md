@@ -1,5 +1,15 @@
 # CP-00 acceptance record
 
+> **Round 3 is spent; this document is history, not current acceptance.** Both streams
+> returned `PASS` on 2026-09-02, then two things moved the tree: `W0-QA-01` was reopened
+> because its suite accepted a ratification that is declared and not performed, and the
+> digest model was corrected. Acceptance certifies a tree; both changes replaced it.
+> Round 4 was prepared and then voided before dispatch for the same reason. Round 5 is
+> owed and neither earlier `PASS` transfers to it.
+>
+> Primary reports: `manual-report-round-3.md`. No primary automated report exists for
+> round 3 — that stream reported to the integrator only, which round 5 must not repeat.
+
 Three rounds ran. Rounds one and two returned `FAIL` from both streams; round three
 returned `PASS` from both. Every blocker across all three sat in integrator-owned
 metadata, gate text or state documents. None was a contract, fixture, schema or test
