@@ -114,7 +114,7 @@
     "artifact_manifest_sha256": "Unrelated to both. It certifies the four reviewed families unchanged and is deliberately invariant across rebuilds that leave the contracts alone.",
     "round_scoped": "Both digests are recorded twice: at the top level for the current round, and inside the matching acceptance_rounds entry as history. Without the per-round copy a retro-edit of the top-level value and a genuine new round would be indistinguishable, so 'frozen and never edited afterwards' would not be checkable. Named by the QA author, who declined to write a test asserting a property the structure could not support."
   },
-  "tested_candidate_digest": null,
+  "tested_candidate_digest": "22e3027b2721d60810ed088911c4cf3ebcfe86a50f6a1fa9e606c2da91177c3a",
   "evidence_bundle_digest": null,
   "third_acceptance_round": {
     "verdict": "PASS from both streams on 2026-09-02",
@@ -181,16 +181,18 @@
     {
       "round": 5,
       "verdict": null,
-      "status": "awaiting_qa_integration",
+      "status": "dispatched",
       "streams": {
         "automated": null,
         "manual": null
       },
-      "tested_candidate_digest": "",
+      "tested_candidate_digest": "22e3027b2721d60810ed088911c4cf3ebcfe86a50f6a1fa9e606c2da91177c3a",
       "evidence_bundle_digest": "",
       "manual_report": null,
       "automated_report": null,
-      "note": "Cannot freeze its digest until the reopened W0-QA-01 is integrated. Both streams must produce a primary report file; round 3's automated stream produced none."
+      "note": "Frozen after the reopened W0-QA-01 was integrated at e7f39890211b52e10d2619c5ddcb85a3d8c7df22 and the state documents were brought into agreement with it. Both streams must produce a primary report file on disk; round 3 passed while its automated stream produced none, which is why the requirement is now checked rather than assumed.",
+      "dispatched_on": "2026-09-03",
+      "candidate_frozen_at_commit": "pending: the freeze commit carries this manifest"
     }
   ],
   "current_round": 5,
