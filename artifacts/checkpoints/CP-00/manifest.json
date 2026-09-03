@@ -4,7 +4,7 @@
   "ratified": false,
   "status": "candidate_rebuilding_after_spent_acceptance",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
-  "qa_evidence_commit": "854a68201cdd857abf6a12989f254f5d2e0928af",
+  "qa_evidence_commit": "e7f39890211b52e10d2619c5ddcb85a3d8c7df22",
   "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash. candidate_digest covers every git-tracked file INCLUDING this manifest, whose contribution is hashed with the candidate_digest field blanked - that is what makes a self-referential identifier possible. An earlier form excluded the manifest entirely and was rejected: two candidates differing only in manifest prose then shared one value.",
   "artifact_count": 100,
   "artifact_manifest_sha256": "39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08",
@@ -26,7 +26,7 @@
     "W0-DOM-02": "478d32e90d1cbb2c691e0ac0b61b68dadcf0d397",
     "W0-EVT-01": "3ca8e25413426ff8efec41cd850c325331d181fc",
     "W0-CLN-01": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
-    "W0-QA-01": "854a68201cdd857abf6a12989f254f5d2e0928af (SUPERSEDED - task reopened, new evidence commit owed)"
+    "W0-QA-01": "e7f39890211b52e10d2619c5ddcb85a3d8c7df22"
   },
   "open_inputs_carried_forward": {
     "U-04": "tenant/IdP before W2-C-01; TTL and legal hold before W9-C-01. No value invented.",
@@ -196,5 +196,12 @@
   "current_round": 5,
   "recorded_limits": {
     "evidence_report_visibility": "The acceptance digests enumerate git ls-files --exclude-standard, so a report path added to .gitignore leaves the digest and every check silent about its content - an independent reviewer demonstrated a fabricated manual report passing that way. It is a declared scope limit rather than a hidden hole: the attack requires editing .gitignore, which is tracked and inside the digest, so it appears in the diff a reviewer reads. The next task touching the QA module must assert that both report paths are tracked and not ignored; it is not opened as its own round because the current mechanism makes the manoeuvre visible rather than invisible."
-  }
+  },
+  "qa_evidence_history": [
+    {
+      "commit": "854a68201cdd857abf6a12989f254f5d2e0928af",
+      "status": "superseded",
+      "note": "First QA evidence. Superseded after three reopenings closed a defect that let a ratification be declared, or performed as a byte change, or bound to its input only in prose."
+    }
+  ]
 }

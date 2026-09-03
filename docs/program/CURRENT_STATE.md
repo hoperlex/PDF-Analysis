@@ -43,9 +43,9 @@ Stage two progress:
   anywhere under `contracts/**`;
 - `W0-CLN-01` — notes overtaken by the `ID-01` chain retired, integrated at
   `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368`;
-- `W0-QA-01` — independent cross-family verification, 70 tests, accepted by two
-  independent reviewers, evidence at
-  `854a68201cdd857abf6a12989f254f5d2e0928af`.
+- `W0-QA-01` — independent cross-family verification, 114 tests after three
+  reopenings, accepted by independent review, evidence at
+  `e7f39890211b52e10d2619c5ddcb85a3d8c7df22`.
 
 ## CP-00 candidate
 
@@ -53,28 +53,25 @@ Three commits, deliberately distinct:
 
 - `reviewed_candidate_commit` `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368` — the
   contracts `W0-QA-01` certified;
-- `qa_evidence_commit` `854a68201cdd857abf6a12989f254f5d2e0928af` — where its test and
+- `qa_evidence_commit` `e7f39890211b52e10d2619c5ddcb85a3d8c7df22` — where its test and
   report live; it certifies nothing by itself;
 - the manual candidate — **identified by content, not by commit name.** A commit
-  cannot record its own SHA, and two rebuilds were rejected for promising one anyway:
-  the manifest said the value lived here, this document said it lived in the manifest,
-  and neither held it. `candidate_digest` in
-  `artifacts/checkpoints/CP-00/manifest.json` is the identifier. It is a sha256 over
-  every git-tracked file **including** the manifest, whose own contribution is hashed
-  with `candidate_digest` blanked. That keeps it computable before the commit exists
-  and self-consistent, while still changing when the manifest alone changes — an
-  earlier form excluded the manifest and so gave one value to two candidates that
-  differed only in manifest prose.
+  cannot record its own SHA, and two rebuilds were rejected for promising one anyway.
 
-Two digests with two different jobs, which the earlier rebuilds conflated:
+Three measurements with three different jobs, which earlier rebuilds conflated:
 
-- `candidate_digest` **identifies** the candidate. It covers the whole tracked tree,
-  manifest included, so it changes when any state document changes and also when only
-  the manifest changes.
-- `artifact_manifest_sha256` **certifies** that the four reviewed families are
-  unchanged, which is what carries the `W0-QA-01` `ACCEPT` forward. It is deliberately
-  identical across every rebuild that leaves the reviewed contracts alone — and that
-  is precisely why it cannot serve as the candidate's identity.
+- `tested_candidate_digest` **identifies the input** the acceptance streams judge. It
+  is frozen before they are dispatched and never edited afterwards; if it must change,
+  the round is void and a new one opens.
+- `evidence_bundle_digest` **identifies the tree carrying the results**, and is
+  computed after they are written. It necessarily differs from the tested digest,
+  because writing `PASS` into a tree changes it. Its recipe blanks only the field being
+  computed, so it depends on `tested_candidate_digest` — that dependency is what stops
+  evidence from one tree being presented as another's acceptance. An earlier recipe
+  blanked both fields and so provided no such binding while the prose claimed one.
+- `artifact_manifest_sha256` **certifies** the four reviewed families unchanged, which
+  is what carries the `W0-QA-01` `ACCEPT` forward. It is deliberately identical across
+  every rebuild that leaves the contracts alone, and therefore cannot identify anything.
 
 Completed inputs:
 
