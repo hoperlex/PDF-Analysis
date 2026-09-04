@@ -6,12 +6,13 @@ produced candidates, the repository owner has recorded an explicit disposition f
 independent review. The accepted W0.2 candidate set is integrated at
 `cf7740474b1786163f54d93b013a0d526ef989e0`.
 
-W0.3 is on `integration/W0.3`. All six of its tasks are integrated, and both CP-00
-acceptance streams returned `PASS` on 2026-09-02 — but that `PASS` is **spent**.
-`W0-QA-01` was reopened afterwards because its suite accepted a ratification that is
-declared and not performed, and the candidate digest was corrected in the same period.
-A fresh acceptance round is owed on the corrected tree before ratification, and none of
-the earlier `PASS` results transfers to it.
+W0.3 is on `integration/W0.3`. All six of its contract and QA tasks are integrated;
+`W0-INT-01` remains blocked. Both CP-00 acceptance streams returned `PASS` on
+2026-09-02, on round three, and that `PASS` is **spent**: `W0-QA-01` was reopened
+afterwards and took nine further rounds to accept, and the candidate digest model was
+corrected in the same period. Rounds four and five were voided before either stream
+reported. Rounds six and seven ran in full and failed on integrator-owned state
+metadata, not on any contract. Round eight is owed. No earlier result transfers to it.
 
 Nothing is ratified, nothing is tagged, and production implementation remains locked
 until CP-01.
@@ -22,7 +23,8 @@ Target: `CP-00 / v0.0.0-architecture`.
 
 ## Active wave
 
-`W0.3 — CP-00 ratification and integration` (accepted; ratification blocked). See
+`W0.3 — CP-00 ratification and integration` (six tasks accepted; `W0-INT-01` and
+ratification blocked pending acceptance round eight). See
 `docs/program/waves/W0.3_ratification_integration.md`.
 
 Stage one integrated:
@@ -229,20 +231,22 @@ not review lanes it coordinated.
 
 ## Next integration tasks
 
-Five acceptance rounds are now in the record. Rounds one and two failed; round three
-passed and is **spent**; round four was voided before dispatch; round five is owed and
-cannot start until the reopened `W0-QA-01` is integrated.
+Seven acceptance rounds are now in the record. Rounds one and two failed; round three
+passed and is **spent**; round four was voided before dispatch; round five was frozen,
+dispatched and voided before either stream reported; rounds six and seven each ran in
+full and failed — six on automated `PASS` with manual `FAIL` 5/6, seven on both streams —
+every time on integrator-owned state metadata. Round eight is owed.
 
-Every blocker across all five rounds sat in integrator-owned metadata, gate text, state
+Every blocker across all seven rounds sat in integrator-owned metadata, gate text, state
 documents or the QA suite. None was a contract, fixture, schema or semantic defect: the
 four reviewed families have stayed byte-identical to `reviewed_candidate_commit`
 throughout, and the contract-level `ACCEPT` still holds. What repeatedly failed is the
-checkpoint *procedure* — three times in the same shape, each time one layer deeper:
+checkpoint *procedure*, in the same shape each time, one layer deeper:
 first a ratification could be declared with fewer paths than required, then declared in
 full and not performed, then performed as a byte change that did not do the
 reconciliation.
 
-Order from here: integrate the reopened `W0-QA-01` after independent review; freeze
-`tested_candidate_digest` for round five; run both streams, each producing a primary
-report file; and only on two `PASS` execute the ratification half of `W0-INT-01`.
+Order from here: freeze `tested_candidate_digest` for round eight on the remediated
+tree; run both streams, each producing a primary report file; and only on two `PASS`
+execute the ratification half of `W0-INT-01`.
 Publication is a separate, explicitly authorised step after that.

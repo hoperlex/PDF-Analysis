@@ -1,12 +1,12 @@
 # Task W0-INT-01 — ratify and publish CP-00 architecture checkpoint
 
 > **Status: candidate preparation permitted; ratification and publication blocked.**
-> Every preceding W0.3 task is integrated and both acceptance streams returned `PASS`
-> on the third round, but two conditions are unmet. `W0-QA-01` is reopened: its suite
-> currently accepts a ratification that is declared and not performed. And the
-> acceptance that returned `PASS` ran against a candidate whose digest has since been
-> corrected, so a fresh round is owed on the corrected tree. Executing before both
-> land would ratify against evidence that no longer describes the tree.
+> Every preceding W0.3 task is integrated, `W0-QA-01` included, accepted at
+> `3da104e5d6fafb2a581bda377a07911183af803f` after twelve review rounds. CP-00
+> acceptance rounds one through seven are spent, void or failed; round eight is owed on
+> the remediated tree. Ratification waits on two acceptance-stream `PASS` against that
+> round's frozen candidate. Executing before they land would ratify against evidence
+> that no longer describes the tree.
 
 ## Outcome
 

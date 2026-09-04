@@ -2,7 +2,7 @@
   "checkpoint": "CP-00",
   "tag_planned": "v0.0.0-architecture",
   "ratified": false,
-  "status": "candidate_rebuilding_after_spent_acceptance",
+  "status": "acceptance_round_8_pending_freeze",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "3da104e5d6fafb2a581bda377a07911183af803f",
   "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash. candidate_digest covers every git-tracked file INCLUDING this manifest, whose contribution is hashed with the candidate_digest field blanked - that is what makes a self-referential identifier possible. An earlier form excluded the manifest entirely and was rejected: two candidates differing only in manifest prose then shared one value.",
@@ -51,12 +51,15 @@
   "artifact_manifest_recipe": "git ls-tree -r --name-only <this commit> -- contracts fixtures docs/architecture scripts, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. Git-tracked files only: an earlier form globbed the working tree and hashed a gitignored scripts/__pycache__ .pyc, so the digest was unreproducible on a fresh clone and the drift detector fired on an unmodified checkout.",
   "frozen_inputs_note": "behavioral_oracle and refactoring_architecture_source are commits of the separate legacy repository at /root/projects/PDF-proverka/PDF-proverka, documented in docs/SOURCE_TRACEABILITY.md. They do not resolve in this repository and are not expected to. Every other SHA here is a commit of this repository.",
   "open_escalations": {
-    "E-05": "source-ADR proposed statuses are not inherited as accepted; recorded as an integrator obligation at W0.3 ratification and carried forward, not closed by it."
+    "E-05": "source-ADR proposed statuses are not inherited as accepted; recorded as an integrator obligation at W0.3 ratification and carried forward, not closed by it.",
+    "E-06": "W0-QA-01 section 11.16.6, blocking and open: scripts/validate_bootstrap.py:116 and tests/contract/test_validate_bootstrap.py:32 spawn Git with an inherited environment, so a hostile ambient HOME, GIT_CONFIG_PARAMETERS or GIT_CONFIG_COUNT executes an attacker's command. Both paths are forbidden hotspots for W0-QA-01 and sit under the frozen scripts/ family, so no record can license a repair inside this checkpoint. Owner: W1, as the first task of the stage that reopens scripts/ for writing."
   },
   "known_pre_ratification_items": {
     "PD-02_precondition_text": "CP00_ARCHITECTURE_REVIEW.md and CP00_OWNER_DECISIONS.md still record the PD-02 alias-map precondition as unmet. It is satisfied: legacy-stage-name-map.json carries 62 name rows over 31 alias-bearing sites. Reconciling point-in-time statements in the CP-00 review is W0-INT-01's declared job and is deliberately not done before ratification. Both documents are now inside W0-INT-01's allowed paths; earlier only one was.",
     "ARCHITECTURE_LINT_RULES_line_604": "The GATE-E probe prose still says the document's own JSON is 'still untracked', false since a67ba31e. Not a gate failure: GATE-E asserts presence at the base commit, not trackedness, and passes. Owned by W0-INT-01, whose allowed paths were widened to include this file after the second acceptance round found the item assigned to an owner that could not write it.",
-    "ADR_INDEX_decision_count": "ADR_INDEX.md enumerates PD-01 through PD-04 while five owner decisions are recorded. Substance unaffected - no supersede was issued. Owned by W0-INT-01, whose allowed paths were widened to include this file; before that it was writable by no task at all."
+    "ADR_INDEX_decision_count": "ADR_INDEX.md enumerates PD-01 through PD-04 while five owner decisions are recorded. Substance unaffected - no supersede was issued. Owned by W0-INT-01, whose allowed paths were widened to include this file; before that it was writable by no task at all.",
+    "integrator_edit_to_an_accepted_deliverable": "afe1895 edited docs/program/reviews/W0-QA-01.md section 1, a W0-QA-01-owned deliverable, after that task was accepted; the round-eight remediation edited sections 1, 12.1 and 12.5 of the same file for the same reason. The path is in no other task's allowed_paths, W0-INT-01's included. A report cannot name the commit that contains it, so section 1 named its predecessor as the live value and that became false when round twelve was integrated. The edits change no verification claim and are labelled as the integrator's in the text. A distinct shape from the wave's three earlier exceptions: not a task-specification correction bundled into a task commit, but a write into an accepted task's own deliverable. Raised for the stage-closing review.",
+    "stale_PD_enumeration_inside_the_frozen_candidate": "docs/architecture/ARCHITECTURE_BIBLE.md:9, contracts/domain/v1/README.md:962 and fixtures/golden/SELECTION.md:19 enumerate PD-01 to PD-04, omitting the approved PD-05. Unreachable by design: contracts/ and fixtures/ are immutable reviewed families and ARCHITECTURE_BIBLE.md is outside RATIFICATION_DELTA_CEILING, so editing any of them is undeclared drift. They are inside the bytes W0-QA-01 certified and covered by its ACCEPT. Recorded so a later tester does not raise them as new. ADR_INDEX.md carries the same enumeration twice, at lines 31 and 41; ratification must remove both occurrences."
   },
   "first_acceptance_round": {
     "verdict": "FAIL from both streams",
@@ -69,7 +72,8 @@
       "three integrated commits carried integrator edits outside the task's allowed paths - recorded as an owner-accepted exception, not silently absorbed",
       "the W0-DOM-02 scope gate compared against the working tree and broke when a later task legitimately edited the same files",
       "three further gates asserted in prose and could not fail"
-    ]
+    ],
+    "superseded_by": "acceptance_rounds"
   },
   "candidate_digest_recipe": "git ls-files plus git ls-files --others --exclude-standard, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. This manifest IS included. Its contribution is the sha256 of json.dumps(manifest, sort_keys=True, separators=(',',':')) with ONLY THE FIELD BEING COMPUTED blanked to the empty string - that one field at the top level and in every acceptance_rounds entry. The other digest keeps its real value. Computing tested_candidate_digest blanks tested_candidate_digest alone; evidence_bundle_digest is still empty at that point, so nothing is lost. Computing evidence_bundle_digest blanks evidence_bundle_digest alone; tested_candidate_digest is already frozen, so the evidence digest depends on it. That dependency IS the binding between the evidence and the input the acceptance streams judged. An earlier form blanked BOTH fields, on the stated rationale that naming a single field would be self-referentially impossible once the second field held a value. That rationale was wrong: each field is computed at a moment when the other is either empty or already frozen, so both directions are deterministic. The consequence was measured, not argued - under blank-both, three different tested_candidate_digest values produced one identical evidence digest, so the field naming which tree was judged could hold any 64-hex string forever while every check stayed silent. Found by independent review, at exactly the place the surrounding prose claimed a binding the arithmetic could not provide.",
   "second_acceptance_round": {
@@ -81,14 +85,14 @@
       "two known items named W0-INT-01 as owner while its allowed paths covered neither file; ADR_INDEX.md was writable by no task at all - the round-one defect recurring inside the record written to close it",
       "the manifest's own prose still said 101 files after the count was corrected to 100",
       "the candidate had no identifier: artifact_manifest_sha256 is identical across every rebuild that leaves the reviewed families alone, so it cannot distinguish this candidate from the one that already failed. Replaced by candidate_digest, which covers the whole tracked tree minus this manifest."
-    ]
+    ],
+    "superseded_by": "acceptance_rounds"
   },
   "ratification_blocked": {
-    "reason": "W0-QA-01 was reopened three times over one defect that moved a layer down each round: a ratification could be declared with fewer paths than required, then declared in full and not performed, then performed as a byte change with the stale claims intact, then bound to its input only in prose while the arithmetic left evidence_bundle_digest independent of tested_candidate_digest. All four are closed and independently verified. The earlier statement here named test_the_review_is_not_yet_ratified as the blocker; that test no longer exists - it was replaced by the two-way test_ratified_agrees_with_the_external_record, which fails both when the review claims ratification the external record does not, and when the record claims it and the review does not.",
-    "observed": "Setting ratified true, and reconciling the three known point-in-time statements, edits five files inside the four reviewed families and fails five tests: the byte-identity check, its drift mutation, the write-boundary check, the documented-gates drift check, and the not-yet-ratified assertion itself.",
-    "not_a_contract_defect": "All five failures are drift assertions against reviewed_candidate_commit plus the explicit ratified-is-false assertion. No contract, schema or semantic check fails.",
-    "decision_required": "Either narrow-reopen W0-QA-01 so its test compares review.ratified against the checkpoint registry rather than pinning False, or open a follow-up task owning that test. Both acceptance streams passed against the unratified candidate, so the acceptance itself stands.",
-    "remaining": "A fresh acceptance round on the corrected candidate. Rounds one through three are spent; round four was voided when the tree moved after its digest was frozen."
+    "reason": "W0-QA-01 was reopened eleven times across twelve review rounds and is now accepted and integrated at 3da104e5d6fafb2a581bda377a07911183af803f. Every reopening closed one defect shape: a guarantee stated in prose beside a check that could not fail on the thing the prose named. All eleven are closed and independently verified. An earlier statement here named test_the_review_is_not_yet_ratified as the blocker; that test no longer exists - it was replaced by the two-directional test_ratified_agrees_with_the_external_record.",
+    "observed": "Round twelve rebuilt the four probes that asserted the unratified state so they are two-directional. An independent reviewer then executed the complete publication path on a throwaway clone - deliverables committed, round re-frozen, five reconciliations made, both external records moved, both digests sealed in the recorded order - and the suite was 'Ran 281 tests ... OK' on that clean ratified tree as well as on the unratified tree. See W0-QA-01.md section 11.18. An honest ratification no longer reds the suite; a partial one names which half is missing.",
+    "not_a_contract_defect": "No contract, schema or semantic check has ever failed in this checkpoint. Every blocker in seven acceptance rounds has been integrator-owned metadata or state.",
+    "remaining": "A round-eight freeze on the remediated tree, then both streams. Rounds one and two failed; round three passed and is spent; rounds four and five were voided when the tree moved after their digests were frozen; round six ran and failed on integrator metadata; round seven ran and failed on the same class. No result carries forward."
   },
   "digest_model": {
     "tested_candidate_digest": "Frozen BEFORE the acceptance streams start. It identifies the immutable input they judge. Recorded here once the streams are dispatched and never edited afterwards; if it must change, the round is void and a new one begins.",
@@ -104,7 +108,8 @@
     "status": "SPENT - does not carry to ratification",
     "reason": "Two things changed after the streams ran: W0-QA-01 was reopened because its suite accepted a ratification that is declared and not performed, and the digest recipe was corrected after the manual tester produced a counterexample. Acceptance certifies a tree; both changes moved the tree. A fourth round is owed on the corrected candidate.",
     "manual_report": "artifacts/checkpoints/CP-00/manual-report-round-3.md",
-    "carried_forward": "Nothing. Neither stream's PASS transfers. The reviewed families are still byte-identical to reviewed_candidate_commit, so the W0-QA-01 contract-level ACCEPT stands, but the acceptance of the candidate as a whole does not."
+    "carried_forward": "Nothing. Neither stream's PASS transfers. The reviewed families are still byte-identical to reviewed_candidate_commit, so the W0-QA-01 contract-level ACCEPT stands, but the acceptance of the candidate as a whole does not.",
+    "superseded_by": "acceptance_rounds"
   },
   "acceptance_rounds": [
     {
@@ -118,7 +123,8 @@
       "evidence_bundle_digest": "",
       "manual_report": null,
       "automated_report": null,
-      "note": "Digests not recorded: the round predates the two-digest model."
+      "note": "Digests not recorded: the round predates the two-digest model.",
+      "status": "failed"
     },
     {
       "round": 2,
@@ -131,7 +137,8 @@
       "evidence_bundle_digest": "",
       "manual_report": null,
       "automated_report": null,
-      "note": "Digests not recorded: the round predates the two-digest model."
+      "note": "Digests not recorded: the round predates the two-digest model.",
+      "status": "failed"
     },
     {
       "round": 3,
@@ -175,7 +182,7 @@
       "automated_report": null,
       "note": "Void. Round five was frozen at 5207fb5 and dispatched, but W0-QA-01 was then reopened repeatedly: the suite that judges the candidate was itself part of what changed, so the frozen input is no longer the input under test. Neither stream reported before the round was voided; no result is carried forward.",
       "dispatched_on": "2026-09-03",
-      "candidate_frozen_at_commit": "pending: the freeze commit carries this manifest"
+      "candidate_frozen_at_commit": "5207fb557292d454779a3e3d4648393e62b6d892"
     },
     {
       "round": 6,
@@ -189,7 +196,8 @@
       "evidence_bundle_digest": "",
       "manual_report": "artifacts/checkpoints/CP-00/manual-report-round-6.md",
       "automated_report": "artifacts/checkpoints/CP-00/automated-report-round-6.md",
-      "note": "Both streams ran against the tree frozen at 5b70ee4 and both confirmed the tested_candidate_digest by recomputing it from the recipe. The automated stream returned PASS over 281 tests, the documented gates and every recomputed count, and wrote the first primary automated report in this program. The manual stream failed MT00-01: the superseded QA evidence commit e7f3989 is still recorded as current in five sites, two of which lie outside the post-freeze delta ceiling, so correcting them voids this round. No contract, schema, fixture, state-machine or identifier defect was found in any of the six walks."
+      "note": "Both streams ran against the tree frozen at 5b70ee4 and both confirmed the tested_candidate_digest by recomputing it from the recipe. The automated stream returned PASS over 281 tests, the documented gates and every recomputed count, and wrote the first primary automated report in this program. The manual stream failed MT00-01: the superseded QA evidence commit e7f3989 is still recorded as current in five sites, two of which lie outside the post-freeze delta ceiling, so correcting them voids this round. No contract, schema, fixture, state-machine or identifier defect was found in any of the six walks.",
+      "candidate_frozen_at_commit": "5b70ee4e6c29931924f0ff56da499c5cfa0ef9a7"
     },
     {
       "round": 7,
@@ -208,17 +216,20 @@
   ],
   "current_round": 7,
   "recorded_limits": {
-    "evidence_report_visibility": "The acceptance digests enumerate git ls-files --exclude-standard, so a report path added to .gitignore leaves the digest and every check silent about its content - an independent reviewer demonstrated a fabricated manual report passing that way. It is a declared scope limit rather than a hidden hole: the attack requires editing .gitignore, which is tracked and inside the digest, so it appears in the diff a reviewer reads. The next task touching the QA module must assert that both report paths are tracked and not ignored; it is not opened as its own round because the current mechanism makes the manoeuvre visible rather than invisible."
+    "evidence_report_visibility": "The acceptance digests enumerate git ls-files --exclude-standard, so a report path added to .gitignore leaves the digest and every check silent about its content - an independent reviewer demonstrated a fabricated manual report passing that way. It is a declared scope limit rather than a hidden hole: the attack requires editing .gitignore, which is tracked and inside the digest, so it appears in the diff a reviewer reads. The next task touching the QA module must assert that both report paths are tracked and not ignored; it is not opened as its own round because the current mechanism makes the manoeuvre visible rather than invisible.",
+    "prefix_widening_unpinned": "ACCEPTANCE_EVIDENCE_PREFIX and RATIFIABLE_REVIEWED_PREFIX are unpinned in the widening direction only; narrowing is caught, at 38 and 9 failures respectively. Measured, not argued. See W0-QA-01.md section 8 item 18.",
+    "dynamic_dispatch_unenumerable": "eval, importlib and getattr with a computed name cannot be resolved by the module's static spawn enumeration. Recorded rather than chased: a test module does not outrank its own author. See W0-QA-01.md section 8 item 17."
   },
   "qa_evidence_history": [
     {
       "commit": "854a68201cdd857abf6a12989f254f5d2e0928af",
       "status": "superseded",
-      "note": "First QA evidence. Superseded after three reopenings closed a defect that let a ratification be declared, or performed as a byte change, or bound to its input only in prose."
+      "note": "First QA evidence, the round-one deliverables. Superseded by e7f39890211b52e10d2619c5ddcb85a3d8c7df22 after five reopenings - rounds two to six - closed a defect that let a ratification be declared, or performed as a byte change, or bound to its input only in prose."
     },
     {
       "commit": "e7f39890211b52e10d2619c5ddcb85a3d8c7df22",
-      "note": "Second QA evidence. Superseded after eight further reopenings closed, in order: a fabricated tested_candidate_digest sealed in the prescribed order passing in silence; a suite that could not survive its own publication; a writing guard that validated a path while the environment redirected the write; and probes that iterated the constant their own guard read."
+      "status": "superseded",
+      "note": "Second QA evidence, carrying rounds two to six. Superseded by 3da104e5d6fafb2a581bda377a07911183af803f after six further reopenings - rounds seven to twelve - closed, in order: a fabricated tested_candidate_digest sealed in the prescribed order passing in silence; a suite that could not survive its own publication; a writing guard that validated a path while the environment redirected the write; a Git-configuration injection reaching arbitrary command execution past a denylist complete only for the discovery class, with 23 Git call sites and no chokepoint; probes that iterated the constant their own guard read; and four anchors that asserted the unratified state and made the suite red on an honestly ratified tree."
     }
   ]
 }

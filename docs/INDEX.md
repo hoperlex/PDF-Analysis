@@ -38,7 +38,7 @@
 - [Task W0-EVT-01](program/tasks/W0-EVT-01.md) — accepted and integrated
 - [Task W0-CLN-01](program/tasks/W0-CLN-01.md) — accepted and integrated
 - [Task W0-QA-01](program/tasks/W0-QA-01.md) — accepted and integrated
-- [Task W0-INT-01](program/tasks/W0-INT-01.md) — backlog draft
+- [Task W0-INT-01](program/tasks/W0-INT-01.md) — specified; blocked on acceptance
 - [Checkpoint registry](program/CHECKPOINT_REGISTRY.md)
 - [Version/freeze policy](program/VERSIONING_AND_FREEZE_POLICY.md)
 - [Integration policy](program/INTEGRATION_POLICY.md)

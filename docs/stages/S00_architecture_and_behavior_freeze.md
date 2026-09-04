@@ -58,7 +58,7 @@ The W0.2 candidate set is integrated at
 pinned may be assigned; the remaining tasks become executable only in the serial
 order shown below.
 
-| Task | Lane | Result | Depends on | Blocked because |
+| Task | Lane | Result | Depends on | Status |
 |---|---|---|---|---|
 | W0-ARC-02 | ARC | Architecture lint rule specification (`U-03`) | W0-ARC-01 | Accepted and integrated at `a67ba31e`. |
 | W0-QA-03 | QA | Validator reads `contract_version` (`ID-01`) | W0-QA-02, W0-ARC-01 | Accepted and integrated at `23dddf99`. |
