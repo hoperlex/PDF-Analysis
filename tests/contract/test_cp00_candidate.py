@@ -19,9 +19,13 @@ Two rules the module holds itself to:
 
 from __future__ import annotations
 
+import ast
+import atexit
 from collections import Counter
 import hashlib
+import inspect
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -30,6 +34,7 @@ import tempfile
 import sys
 import unittest
 import unittest.mock
+from typing import NamedTuple
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -124,6 +129,76 @@ RATIFICATION_DELTA_CEILING = frozenset(
 #: results changes the tree — which is why the single retired `candidate_digest` was
 #: wrong: computed last, it certified a tree the streams never saw.
 ACCEPTANCE_DIGEST_FIELDS = ("tested_candidate_digest", "evidence_bundle_digest")
+
+#: Where the acceptance streams' primary reports live. `manual_report`,
+#: `automated_report` and both `report_path` values are **data**, so a manifest that
+#: could license any path by naming it as a report would license its own drift. A
+#: declared report path is honoured by the post-freeze delta only inside this prefix.
+ACCEPTANCE_EVIDENCE_PREFIX = "artifacts/checkpoints/CP-00/"
+
+#: The program's own state document: the **third** external record.
+#:
+#: It sits in the same structural position as :data:`CHECKPOINT_REGISTRY`. Both are
+#: program-level records that state CP-00's status in prose, and both must move *at the
+#: ratification act itself* — after any possible freeze, because neither can truthfully
+#: say CP-00 is ratified before CP-00 is ratified. That is why the registry is licensed
+#: below and why this document has to be too.
+PROGRAM_STATE_DOCUMENT = "docs/program/CURRENT_STATE.md"
+
+#: The state document's standing denial, and the anchor that keeps the check honest.
+#:
+#: While the manifest says `ratified: false` this sentence must be **present**; once it
+#: says `true` the same sentence must be **gone**. Both directions are checked, so the
+#: anchor cannot rot silently: reword the sentence while CP-00 is unratified and the
+#: check fails immediately, saying so, instead of passing forever afterwards. That is
+#: the property a one-directional removal check does not have, and the reason this is
+#: not modelled as a :data:`RECONCILIATIONS` entry — see
+#: :func:`_state_document_problems`.
+STATE_DOCUMENT_DENIAL = "Nothing is ratified, nothing is tagged"
+
+#: A guard against satisfying the removal by deleting the document, nothing more.
+#: Neither needle is evidence that the state document was brought up to date — both are
+#: in it already — exactly as `must_still_contain` is for the removal-only `GATE-E`
+#: entry. The report says so rather than letting the pair read as content verification.
+STATE_DOCUMENT_MUST_STILL_CONTAIN = ("# Current state", "CP-00")
+
+#: **What may differ between the tree whose digest was frozen and the tree in front of a
+#: ratification.**
+#:
+#: Recomputing `tested_candidate_digest` over the commit that froze it proves the value
+#: names a real tree. It cannot prove that tree is the one the streams judged, because
+#: the freeze commit is immutable: that half stays green however far the working tree
+#: drifts afterwards. So the delta is bounded as well. After the freeze only the
+#: acceptance evidence the round itself declares (and only inside
+#: :data:`ACCEPTANCE_EVIDENCE_PREFIX`), the three external records, and the five files
+#: ratification reconciles may move. Anything else means the streams judged a different
+#: input, and the rule the manifest already states in prose applies — "if it must
+#: change, the round is void and a new one begins".
+#:
+#: :data:`PROGRAM_STATE_DOCUMENT` was **not** in this set until round seven, and
+#: leaving it out was a deadlock rather than a strictness: the state document is inside
+#: :func:`_digest_paths`, so ratification either edited it and voided its own round or
+#: left it denying the ratification it had just performed. Licensing it is not a free
+#: pass — :func:`_state_document_problems` is what the licence is paid for, and it is
+#: checked in both directions so that the licence cannot be spent silently.
+#:
+#: Pinned here rather than read out of the record, for the same reason
+#: :data:`RATIFICATION_DELTA_CEILING` is: a ceiling the integrator can widen by editing
+#: the document they also write is not a ceiling.
+POST_FREEZE_DELTA_CEILING = frozenset(
+    {CHECKPOINT_MANIFEST, CHECKPOINT_REGISTRY, PROGRAM_STATE_DOCUMENT}
+) | RATIFICATION_DELTA_CEILING
+
+#: The path the post-freeze probes move to prove the delta check fires.
+#:
+#: It has to be a path that can never *become* licensed, or the probe rots into a
+#: tautology the day the ceiling widens — which is exactly what happened to its
+#: predecessor, `docs/program/CURRENT_STATE.md`, when round seven licensed it.
+#: `contracts/` is one of the :data:`IMMUTABLE_REVIEWED_PREFIXES`: this module's stated
+#: policy is that ratification does not reach them and no record licenses a byte.
+#: Widening the ceiling to cover this file would mean abandoning that policy, not
+#: adjusting a list, and the probes assert the prefix property rather than assuming it.
+POST_FREEZE_STRANGER = "contracts/README.md"
 
 #: **What each of the five ceiling files must actually say once CP-00 is ratified.**
 #:
@@ -247,6 +322,25 @@ def _declared_properties(document: object):
             yield from _declared_properties(value)
 
 
+def _forbidden_name_hits(document: object, forbidden: frozenset[str]) -> list[str]:
+    """Every forbidden name this document declares, by any of the three routes.
+
+    §4 claims the sweep covers a name "neither as an object key at any depth, nor as a
+    `properties` member, nor as a `required` entry". Three routes, one expression, so
+    the claim is made in one place and can be controlled in one place —
+    :class:`ForbiddenNameSweepControlTests` plants a name on each route in turn and
+    requires *this* function to find it. It was previously written out twice, in the two
+    sweeps, with nothing planting anything: four separate mutations
+    (``FORBIDDEN_VERSION_KEYS = frozenset()``, ``FORBIDDEN_AUTHORITY_KEYS =
+    frozenset()``, `_object_keys` not descending into lists, `_declared_properties` not
+    yielding `required` entries) each left the whole suite green.
+    """
+    return sorted(
+        {key for key in _object_keys(document) if key in forbidden}
+        | {name for name in _declared_properties(document) if name in forbidden}
+    )
+
+
 def _values_for_key(document: object, wanted: str):
     if isinstance(document, dict):
         for key, value in document.items():
@@ -318,6 +412,216 @@ def _documented_blocks(relative: str, language: str = "bash") -> list[str]:
     return blocks
 
 
+# ---------------------------------------------------------------------------
+# The subprocess chokepoint.
+#
+# Round nine removed three names — ``GIT_DIR``, ``GIT_WORK_TREE``,
+# ``GIT_INDEX_FILE`` — from an inherited environment. That list is complete for the
+# *discovery* class, and an independent reviewer confirmed it: ``GIT_COMMON_DIR``,
+# ``GIT_OBJECT_DIRECTORY``, ``GIT_ALTERNATE_OBJECT_DIRECTORIES``, ``GIT_NAMESPACE``
+# and ``GIT_CEILING_DIRECTORIES`` all leave a seeded victim intact.
+#
+# It is the wrong class. Git *configuration* injection is strictly more powerful,
+# because injected configuration is executed as a command. With no ``GIT_*`` variable
+# set at all — only a ``HOME`` whose ``.gitconfig`` names ``core.fsmonitor`` — the same
+# reviewer took three files out of another repository's index while this module's suite
+# reported ``OK`` and ``_refuse_to_write_outside`` passed cleanly. Confirmed members:
+# ``GIT_CONFIG_PARAMETERS``; ``HOME``/``XDG_CONFIG_HOME`` reaching ``.gitconfig``;
+# ``GIT_CONFIG_COUNT`` with ``GIT_CONFIG_KEY_n``/``GIT_CONFIG_VALUE_n``; reaching
+# ``core.fsmonitor``, ``core.hooksPath``, and ``core.attributesFile`` with
+# ``filter.*.clean``; and ``PATH`` shadowing of ``git`` itself.
+#
+# The class is not closed by a longer denylist, because a denylist is a list of the
+# names known on the day it was written. It is closed by never inheriting: the
+# environment below is *constructed*, and a variable this module has not deliberately
+# put there cannot reach a subprocess whatever it is called. That is why
+# :func:`_allowlisted_env` has no reference to ``os.environ`` at all, and why
+# :class:`GitSpawnChokepointTests` enumerates the module's own source rather than
+# trusting the convention to hold.
+# ---------------------------------------------------------------------------
+
+#: The only ``PATH`` any subprocess this module spawns will see. The system
+#: directories, and nothing the caller supplied.
+#:
+#: Inheriting ``PATH`` is a hole of the same class: a reviewer put an attacker's
+#: executable named ``git`` earlier on the inherited ``PATH`` and routed all 28 of this
+#: module's Git invocations through it with the suite still reporting ``OK``. Handing
+#: Git *this* ``PATH`` closes it both for the programs this module names and for
+#: everything Git itself goes on to spawn — hook scripts, ``git-`` subcommands,
+#: ``core.fsmonitor``, clean and smudge filters.
+#:
+#: What it does not close is recorded rather than papered over: an attacker who can
+#: write into these directories owns the host already, and no test module outranks
+#: that. §11.15.4 states the limitation.
+TRUSTED_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+#: Every variable a subprocess spawned by this module receives, and **the reason it is
+#: there**. The environment is built from this set and nothing else; the mapping is the
+#: written justification the allowlist owes, and
+#: :meth:`GitSpawnChokepointTests.test_the_allowlist_justifies_every_variable_it_admits`
+#: fails if a variable is ever added without one.
+GIT_ENV_ALLOWLIST: dict[str, str] = {
+    "PATH": (
+        "git, bash and the programs Git spawns have to be findable; TRUSTED_PATH, "
+        "never the caller's"
+    ),
+    "HOME": (
+        "an empty directory this module makes. Git reads ~/.gitconfig, "
+        "~/.config/git/config, ~/.config/git/ignore and ~/.git-credentials from it; "
+        "an empty HOME is the only value that makes all of them absent at once, and "
+        "unsetting HOME entirely makes Git fall back to the passwd entry, which is the "
+        "real user's home"
+    ),
+    "XDG_CONFIG_HOME": (
+        "the second path to a global config and a global ignore file; pointed at an "
+        "empty directory for the same reason as HOME"
+    ),
+    "GIT_CONFIG_GLOBAL": (
+        "os.devnull, so the global config is empty by explicit statement and not only "
+        "by HOME being empty — two independent reasons for the same fact"
+    ),
+    "GIT_CONFIG_SYSTEM": "os.devnull, the same for /etc/gitconfig",
+    "GIT_CONFIG_NOSYSTEM": (
+        "1, which suppresses the system config on Git versions predating "
+        "GIT_CONFIG_SYSTEM"
+    ),
+    "GIT_TERMINAL_PROMPT": (
+        "0: no probe here may block on a credential prompt, and a suite that hangs "
+        "reports nothing"
+    ),
+    "LC_ALL": (
+        "C.UTF-8. Not inherited, because the digest recipes sort paths and the "
+        "documented gates read UTF-8 contract files; a locale reaching this module "
+        "from outside would make both answer differently on different hosts"
+    ),
+    "LANG": "C.UTF-8, for the same reason and for programs that read LANG only",
+    "TZ": "UTC, so any timestamp a documented gate prints is host-independent",
+}
+
+#: ``git`` and ``bash``, resolved from :data:`TRUSTED_PATH` alone, cached after the
+#: first lookup. A test clears this to prove the resolution ignores the caller's
+#: ``PATH``.
+_PROGRAM_CACHE: dict[str, str] = {}
+
+#: Filled on first use by :func:`_neutral_home` and removed at interpreter exit.
+_NEUTRAL_HOME: Path | None = None
+
+
+def _program(name: str) -> str:
+    """The absolute path of ``name``, found on :data:`TRUSTED_PATH` and nowhere else.
+
+    There is deliberately no fall back to the caller's ``PATH``. A fall back is how a
+    shadowing attack succeeds on exactly the host where it matters, and "I could not
+    find git in the system directories" is a failure a human can read and fix, whereas
+    "I ran the git I was handed" is not a failure at all until much later.
+    """
+    resolved = _PROGRAM_CACHE.get(name)
+    if resolved is None:
+        resolved = shutil.which(name, path=TRUSTED_PATH)
+        if resolved is None:
+            raise AssertionError(
+                f"{name!r} is not on the trusted path {TRUSTED_PATH!r}. This module "
+                "refuses to fall back to the caller's PATH, because that is the "
+                "shadowing vector it is closing; install the program in a system "
+                "directory or widen TRUSTED_PATH deliberately."
+            )
+        _PROGRAM_CACHE[name] = resolved
+    return resolved
+
+
+def _neutral_home() -> Path:
+    """An empty directory, made once, that every subprocess sees as its ``HOME``.
+
+    It must be a real, existing, empty directory rather than a name: Git creates
+    nothing here, but a ``HOME`` that does not exist makes some programs fall back to
+    the passwd entry, which is the home this is supposed to replace.
+    """
+    global _NEUTRAL_HOME
+    if _NEUTRAL_HOME is None or not _NEUTRAL_HOME.is_dir():
+        home = Path(tempfile.mkdtemp(prefix="w0-qa-01-neutral-home-"))
+        (home / "xdg").mkdir()
+        atexit.register(shutil.rmtree, home, True)
+        _NEUTRAL_HOME = home
+    return _NEUTRAL_HOME
+
+
+def _allowlisted_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment for every subprocess this module spawns, built from nothing.
+
+    **This function never reads** ``os.environ``. That is the property, not an
+    implementation detail: a denylist is correct only for the names its author knew,
+    and the defect this replaces was a denylist that was complete for the class its
+    author was looking at and empty for the class that mattered. Construction from an
+    allowlist is right for names nobody has thought of yet.
+
+    ``extra`` is for a variable a *caller* names on purpose and can justify — today
+    only :attr:`_MutableCopy.run_gate` and :class:`DocumentedGateTests`, which set
+    ``GIT_DIR`` so that documented Gate C can reach the repository's object database
+    from a copy that has none. It is a deliberate widening at one named call site, in
+    the argument list where a reader can see it, and it is not inheritance.
+    """
+    home = _neutral_home()
+    env = {
+        "PATH": TRUSTED_PATH,
+        "HOME": str(home),
+        "XDG_CONFIG_HOME": str(home / "xdg"),
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_SYSTEM": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+        "LC_ALL": "C.UTF-8",
+        "LANG": "C.UTF-8",
+        "TZ": "UTC",
+    }
+    if set(env) != set(GIT_ENV_ALLOWLIST):
+        raise AssertionError(
+            "the constructed environment and the allowlist that justifies it have "
+            f"drifted: {sorted(set(env) ^ set(GIT_ENV_ALLOWLIST))}"
+        )
+    if extra:
+        env.update(extra)
+    return env
+
+
+def _git(
+    *arguments: str,
+    cwd: Path | str | None = None,
+    stdin: bytes | None = None,
+    text: bool = False,
+    check: bool = False,
+    env_extra: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
+    """**The one place this module spawns Git.** Reading or writing, no exceptions.
+
+    Before round ten there was no such place. 23 ``subprocess.run(["git", ...])`` calls
+    were spread through the module; 5 passed a sanitised ``env=`` and 18 inherited the
+    caller's environment whole, nine of those in production helpers rather than test
+    bodies. The docstring of the sanitiser claimed it was "shared by every Git
+    subprocess this module spawns" and it was shared by five of twenty-three.
+
+    A convention that every call site should pass ``env=`` is not a structure: the
+    nineteenth caller inherits nothing but the convention, and no test notices. This
+    function is the structure, and :class:`GitSpawnChokepointTests` is what keeps it
+    one — it parses this module's own source and fails on any Git subprocess spawned
+    anywhere else.
+
+    Note that the guard on *where a write may land*, :func:`_refuse_to_write_outside`,
+    is deliberately not folded in here. It applies to the two writing helpers and takes
+    a sandbox root and a prefix that a read has no notion of; putting it here would mean
+    inventing a root for every ``ls-tree``. The two checks are orthogonal and both are
+    enumerated by their own test.
+    """
+    return subprocess.run(
+        [_program("git"), *arguments],
+        input=stdin,
+        cwd=None if cwd is None else str(cwd),
+        capture_output=True,
+        text=text,
+        check=check,
+        env=_allowlisted_env(env_extra),
+    )
+
+
 def _run_shell(script: str, cwd: Path, env_overrides: dict[str, str] | None = None):
     """Execute a documented block through a shell, exactly as it is written.
 
@@ -325,39 +629,36 @@ def _run_shell(script: str, cwd: Path, env_overrides: dict[str, str] | None = No
     them because a ``$`` inside a double-quoted ``python -c`` string was expanded by the
     shell before Python ever saw it. Running the recorded text through ``bash`` is what
     exposes that class of defect; re-typing the body into Python would hide it.
-    """
-    import os
 
-    env = dict(os.environ)
-    env.pop("GIT_DIR", None)
-    if env_overrides:
-        env.update(env_overrides)
+    **The second chokepoint.** A documented gate is a shell script and several of them
+    run ``git``; handing one the caller's environment hands Git the caller's
+    environment one level down, so this builds its environment the same way
+    :func:`_git` does, from :func:`_allowlisted_env`. Round nine's form did sanitise
+    here, and nothing tested it: replacing that line with ``dict(os.environ)`` left all
+    189 tests green. It is covered now by
+    :meth:`ShellChokepointEnvironmentTests.test_a_gate_never_sees_the_callers_git_environment`.
+    """
     return subprocess.run(
-        ["bash", "-c", script],
+        [_program("bash"), "-c", script],
         cwd=str(cwd),
         capture_output=True,
         text=True,
         check=False,
-        env=env,
+        env=_allowlisted_env(env_overrides),
     )
 
 
 def _candidate_reviewed_paths(root: Path) -> list[str]:
     """Every reviewed-family path recorded in the candidate commit."""
-    listing = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(root),
-            "--no-replace-objects",
-            "ls-tree",
-            "-r",
-            "--name-only",
-            REVIEWED_CANDIDATE_COMMIT,
-        ],
-        capture_output=True,
+    listing = _git(
+        "-C",
+        str(root),
+        "--no-replace-objects",
+        "ls-tree",
+        "-r",
+        "--name-only",
+        REVIEWED_CANDIDATE_COMMIT,
         text=True,
-        check=False,
     )
     if listing.returncode != 0:
         raise AssertionError(
@@ -375,24 +676,19 @@ def _present_reviewed_paths(root: Path) -> list[str]:
     gitignored ``scripts/__pycache__`` byte-code file and make the answer depend on
     whether anyone had run the validator; the manifest records that exact mistake.
     """
-    listing = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(root),
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "--",
-            "contracts",
-            "fixtures",
-            "docs/architecture",
-            "scripts",
-        ],
-        capture_output=True,
+    listing = _git(
+        "-C",
+        str(root),
+        "ls-files",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "--",
+        "contracts",
+        "fixtures",
+        "docs/architecture",
+        "scripts",
         text=True,
-        check=False,
     )
     if listing.returncode != 0:
         raise AssertionError("git could not enumerate the reviewed families")
@@ -400,17 +696,12 @@ def _present_reviewed_paths(root: Path) -> list[str]:
 
 
 def _candidate_blob(root: Path, relative: str) -> bytes | None:
-    blob = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(root),
-            "--no-replace-objects",
-            "show",
-            f"{REVIEWED_CANDIDATE_COMMIT}:{relative}",
-        ],
-        capture_output=True,
-        check=False,
+    blob = _git(
+        "-C",
+        str(root),
+        "--no-replace-objects",
+        "show",
+        f"{REVIEWED_CANDIDATE_COMMIT}:{relative}",
     )
     return blob.stdout if blob.returncode == 0 else None
 
@@ -580,13 +871,81 @@ def _sentences(text: str) -> list[str]:
     return re.split(r"(?<=[.!?])\s+", _flat(text))
 
 
-def _acceptance_digest(root: Path, field: str = "evidence_bundle_digest") -> str:
-    """The manifest's own recipe: blank **only the field being computed**.
+#: A commit's tree never changes, and reading 214 blobs one ``git show`` at a time
+#: costs 214 processes per probe. Cached per (repository, commit).
+_TREE_BLOBS: dict[tuple[str, str], dict[str, bytes]] = {}
 
-    Tracked plus untracked-not-ignored, sorted; path bytes then the raw 32-byte SHA-256
-    of the content. The manifest contributes the SHA-256 of its canonical JSON with
-    ``field`` blanked at the top level and in every `acceptance_rounds` entry. The other
-    digest keeps its real value.
+
+def _tree_blobs(root: Path, commit: str) -> dict[str, bytes] | None:
+    """Every blob of a commit's tree, by path. ``None`` when the commit is unreadable.
+
+    Two Git calls, whatever the size of the tree: one ``ls-tree -r -z`` for the object
+    names and one ``cat-file --batch`` for the contents.
+    """
+    key = (str(root), commit)
+    cached = _TREE_BLOBS.get(key)
+    if cached is not None:
+        return cached
+    listing = _git(
+        "-C", str(root), "--no-replace-objects", "ls-tree", "-r", "-z", commit
+    )
+    if listing.returncode != 0:
+        return None
+    entries: list[tuple[str, str]] = []
+    for record in listing.stdout.decode("utf-8").split("\0"):
+        if not record:
+            continue
+        meta, _, path = record.partition("\t")
+        fields = meta.split()
+        if len(fields) != 3 or fields[1] != "blob":
+            continue
+        entries.append((path, fields[2]))
+    batch = _git(
+        "-C",
+        str(root),
+        "--no-replace-objects",
+        "cat-file",
+        "--batch",
+        stdin=b"\n".join(name.encode("ascii") for _, name in entries) + b"\n",
+    )
+    if batch.returncode != 0:
+        return None
+    payload = batch.stdout
+    blobs: dict[str, bytes] = {}
+    cursor = 0
+    for path, _name in entries:
+        newline = payload.find(b"\n", cursor)
+        header = payload[cursor:newline].split()
+        if newline < 0 or len(header) != 3:
+            return None
+        size = int(header[2])
+        blobs[path] = payload[newline + 1 : newline + 1 + size]
+        cursor = newline + 1 + size + 1
+    _TREE_BLOBS[key] = blobs
+    return blobs
+
+
+def _digest_paths(root: Path) -> list[str]:
+    """The path set the manifest's digest recipe enumerates.
+
+    Tracked plus untracked-not-ignored, which is the recipe's own wording. Globbing the
+    working tree instead would hash a gitignored ``.pyc``; the manifest records that
+    mistake as the reason the recipe says what it says.
+    """
+    listing = _git(
+        "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard",
+        text=True, check=True,
+    ).stdout
+    return sorted({path for path in listing.split("\n") if path})
+
+
+def _digest_over(field: str, paths, read) -> str:
+    """The manifest's recipe over an arbitrary tree: blank **only the field computed**.
+
+    Path bytes then the raw 32-byte SHA-256 of the content, in sorted path order. The
+    manifest contributes the SHA-256 of its canonical JSON with ``field`` blanked at the
+    top level and in every `acceptance_rounds` entry; the other digest keeps its real
+    value.
 
     An earlier form blanked *both* fields, on the stated rationale that naming one would
     be self-referentially impossible once the other held a value. That rationale was
@@ -594,31 +953,329 @@ def _acceptance_digest(root: Path, field: str = "evidence_bundle_digest") -> str
     frozen — and the consequence was not theoretical: with both blanked, the evidence
     digest was arithmetically independent of `tested_candidate_digest`, so the field
     naming which tree the streams judged could hold any 64-hex string, forever, with
-    every check silent. Found by independent review at exactly the place the surrounding
-    prose claimed a binding the arithmetic could not provide.
+    every check silent.
+
+    The recipe is expressed over an abstract ``(paths, read)`` pair because it must run
+    over two different trees: the working tree, and the tree of the commit that froze
+    `tested_candidate_digest`. Those are the same arithmetic and must not be two
+    implementations that can drift apart.
     """
     if field not in ACCEPTANCE_DIGEST_FIELDS:
         raise AssertionError(f"not an acceptance digest field: {field}")
-    listing = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
     running = hashlib.sha256()
-    for relative in sorted({path for path in listing.split("\n") if path}):
+    for relative in sorted(paths):
         running.update(relative.encode("utf-8"))
+        content = read(relative)
         if relative == CHECKPOINT_MANIFEST:
-            document = json.loads((root / relative).read_text(encoding="utf-8"))
+            document = json.loads(content.decode("utf-8"))
             document[field] = ""
             for entry in document.get("acceptance_rounds", []):
                 if isinstance(entry, dict) and field in entry:
                     entry[field] = ""
-            canonical = json.dumps(document, sort_keys=True, separators=(",", ":"))
-            running.update(hashlib.sha256(canonical.encode("utf-8")).digest())
-        else:
-            running.update(hashlib.sha256((root / relative).read_bytes()).digest())
+            content = json.dumps(
+                document, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+        running.update(hashlib.sha256(content).digest())
     return running.hexdigest()
+
+
+def _acceptance_digest(root: Path, field: str = "evidence_bundle_digest") -> str:
+    """The recipe over the tree in front of you."""
+    return _digest_over(
+        field, _digest_paths(root), lambda relative: (root / relative).read_bytes()
+    )
+
+
+def _acceptance_digest_at(root: Path, commit: str, field: str) -> str | None:
+    """The same recipe over a commit's tree. ``None`` when the commit is unreadable."""
+    blobs = _tree_blobs(root, commit)
+    if blobs is None:
+        return None
+    return _digest_over(field, blobs.keys(), blobs.__getitem__)
+
+
+def _freeze_commit(root: Path) -> str | None:
+    """The commit that froze the live `tested_candidate_digest`, or ``None``.
+
+    **The manifest never records its own commit; history supplies it.** A commit cannot
+    name its own hash, which is why the manifest identifies its candidate by content —
+    and the same fact makes the freeze commit discoverable rather than recordable. Walk
+    the manifest's own history newest-to-oldest and take the *oldest consecutive* commit
+    whose manifest already carries today's value both at the top level and in the entry
+    for today's `current_round`. The walk stops at the first commit that does not, so a
+    value that was set, changed, and set back again resolves to the commit that froze
+    the value now in force, not to an older coincidence.
+
+    §8.12 of the review used to assert that this was impossible — that the tree
+    `tested_candidate_digest` describes "stops existing once the results are written",
+    so nobody could ever recompute it. That is false, and it licensed leaving the field
+    unchecked through four review rounds. The recipe blanks the field being computed, so
+    the value is exactly the digest of the tree at the commit that froze it, and Git
+    keeps that tree forever.
+
+    **Oldest-consecutive is the whole property, and round eight is the first round that
+    tested it.** Replacing ``freeze = commit`` with ``return commit`` — "the newest
+    commit carrying the value" — left all 159 tests green, because every test ran where
+    the freeze commit *was* `HEAD`: the live repository has one, and the sandboxes never
+    commit. On the honest sequence the difference is the whole check. Freeze at `F`,
+    record the streams' results at `G`; both carry the value, `G`'s tree carries the
+    results, and only `F`'s tree digests to the declared value. A newest-first
+    implementation returns `G` and the digest does not reproduce.
+    :class:`FreezeCommitHistoryTests` builds that sequence as real commits in a
+    throwaway repository, where the freeze commit is deliberately not `HEAD`.
+
+    **No commit window, and the walk fails closed.** An earlier form passed ``-n 200``.
+    That is not a safety margin, it is a wrong answer waiting: with more manifest
+    revisions than the window, the walk ran off the end and returned the oldest commit
+    *inside* the window — a commit that did not freeze the value — which
+    :func:`_tested_digest_problems` then named as the commit that did. The history of one
+    file is bounded by its own revisions and the loop already stops at the first commit
+    that does not carry the value, so the window bought nothing. It is gone. An
+    unreadable or unparseable ancestor now returns ``None`` rather than breaking the
+    walk: breaking would silently yield a *newer* commit than the true freeze, which is
+    the unsafe direction, and "I cannot tell" is the honest answer.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return None
+    declared = manifest.get("tested_candidate_digest")
+    if not isinstance(declared, str) or not re.fullmatch(r"[0-9a-f]{64}", declared):
+        return None
+    number = manifest.get("current_round")
+    history = _git(
+        "-C", str(root), "log", "--format=%H", "--", CHECKPOINT_MANIFEST, text=True
+    ).stdout
+    freeze: str | None = None
+    for commit in (line for line in history.split("\n") if line):
+        blob = _git(
+            "-C", str(root), "--no-replace-objects", "show",
+            f"{commit}:{CHECKPOINT_MANIFEST}",
+        )
+        if blob.returncode != 0:
+            return None
+        try:
+            past = json.loads(blob.stdout.decode("utf-8"))
+        except ValueError:
+            return None
+        entries = [
+            entry
+            for entry in past.get("acceptance_rounds", [])
+            if isinstance(entry, dict) and entry.get("round") == number
+        ]
+        if (
+            past.get("tested_candidate_digest") != declared
+            or len(entries) != 1
+            or entries[0].get("tested_candidate_digest") != declared
+        ):
+            # The first revision that does not carry the value. Everything older is a
+            # different value or none, so the previous iteration is the freeze.
+            break
+        freeze = commit
+    return freeze
+
+
+def _tested_digest_problems(root: Path) -> list[str]:
+    """**Half one: does `tested_candidate_digest` name a tree that ever existed?**
+
+    Until round seven this field was checked for 64-hex shape and for top-level /
+    per-round agreement, and never again. `_retro_edited_digests` catches a value
+    changed *after* its commit and is silent by construction when the fabricated value
+    is the one that got committed, and only `evidence_bundle_digest` was ever
+    recomputed. An independent reviewer built a complete, content-correct ratification
+    carrying `deadbeef…` as the tree the streams judged, sealed in the order the
+    manifest's own recipe prescribes, and every check stayed silent.
+
+    So the value is recomputed, with the manifest's own recipe, over the tree of the
+    commit that froze it. A fabricated value fails twice over: it is frozen at no commit
+    at all, and if one were manufactured it would not reproduce.
+
+    Silent while no digest is recorded — `null` is the legitimate state of a round that
+    has not been dispatched — and this is deliberately *not* gated on ratification: a
+    frozen digest is a claim about the world from the moment it is written, not from the
+    moment somebody ratifies on it.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return [f"{CHECKPOINT_MANIFEST} is missing"]
+    declared = manifest.get("tested_candidate_digest")
+    if declared in (None, ""):
+        return []
+    if not isinstance(declared, str) or not re.fullmatch(r"[0-9a-f]{64}", declared):
+        # Shape is reported by :func:`_acceptance_problems`; saying it twice would make
+        # one defect look like two.
+        return []
+    number = manifest.get("current_round")
+    commit = _freeze_commit(root)
+    if commit is None:
+        return [
+            f"tested_candidate_digest {declared} is frozen at no commit: no commit of "
+            f"{CHECKPOINT_MANIFEST} carries it both at the top level and in the round "
+            f"{number} entry, so it names no tree this repository can produce. Freezing "
+            "a round means committing the value that identifies its input; a value that "
+            "exists only in a working tree identifies nothing."
+        ]
+    recomputed = _acceptance_digest_at(root, commit, "tested_candidate_digest")
+    if recomputed != declared:
+        return [
+            "tested_candidate_digest does not reproduce over the tree of "
+            f"{commit[:12]}, the commit that froze it: declared {declared}, recomputed "
+            f"{recomputed}. The value must be the digest of the tree the acceptance "
+            "streams judged, computed by the recipe the manifest itself records."
+        ]
+    return []
+
+
+def _declared_evidence_paths(manifest: dict) -> set[str]:
+    """The current round's acceptance-evidence files, as the manifest declares them.
+
+    Report paths are data, so they are honoured only under
+    :data:`ACCEPTANCE_EVIDENCE_PREFIX`. Otherwise a round could license any drift it
+    liked by naming the drifted file as its own report.
+    """
+    number = manifest.get("current_round")
+    candidates: list[object] = []
+    for entry in manifest.get("acceptance_rounds", []):
+        if isinstance(entry, dict) and entry.get("round") == number:
+            candidates.extend([entry.get("manual_report"), entry.get("automated_report")])
+    for stream in ("manual_acceptance", "automated_acceptance"):
+        record = manifest.get(stream)
+        if isinstance(record, dict):
+            candidates.append(record.get("report_path"))
+    return {
+        value
+        for value in candidates
+        if isinstance(value, str)
+        and value.startswith(ACCEPTANCE_EVIDENCE_PREFIX)
+        and ".." not in value.split("/")
+    }
+
+
+def _post_freeze_delta_problems(root: Path) -> list[str]:
+    """**Half two: is the tree in front of you still the tree that was frozen?**
+
+    Half one proves the digest names a real tree. It cannot prove that tree is the one
+    the streams judged, and it never will: the freeze commit is immutable, so half one
+    stays green however far the working tree drifts afterwards. The two halves are not
+    interchangeable and neither is sufficient.
+
+    So the delta is bounded by :data:`POST_FREEZE_DELTA_CEILING` plus the round's own
+    declared acceptance evidence. A path outside it means the acceptance streams judged
+    a different input from the one being ratified, and the manifest's own rule applies:
+    the round is void and a new one opens.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return []
+    commit = _freeze_commit(root)
+    if commit is None:
+        return []  # half one already reports it
+    blobs = _tree_blobs(root, commit)
+    if blobs is None:
+        return []
+    frozen = {path: hashlib.sha256(content).digest() for path, content in blobs.items()}
+    present: dict[str, bytes] = {}
+    for relative in _digest_paths(root):
+        path = root / relative
+        if path.is_file():
+            present[relative] = hashlib.sha256(path.read_bytes()).digest()
+    delta = sorted(
+        path
+        for path in set(frozen) | set(present)
+        if frozen.get(path) != present.get(path)
+    )
+    licensed = set(POST_FREEZE_DELTA_CEILING) | _declared_evidence_paths(manifest)
+    strangers = [path for path in delta if path not in licensed]
+    if not strangers:
+        return []
+    return [
+        f"round {manifest.get('current_round')} is void: these paths differ from the "
+        f"tree frozen at {commit[:12]} as tested_candidate_digest, and nothing licenses "
+        f"them: {strangers}. The acceptance streams judged the frozen tree; a delta "
+        "outside the round's declared acceptance evidence, the two external records and "
+        "the declared ratification set means they judged a different input. The "
+        "manifest's own rule: if it must change, the round is void and a new one begins."
+    ]
+
+
+def _state_document_problems(root: Path) -> list[str]:
+    """**The price of licensing the third external record.**
+
+    :data:`PROGRAM_STATE_DOCUMENT` is inside :func:`_digest_paths`, so before round seven
+    it was an unlicensed path in the post-freeze delta — and CP-00 could not be ratified
+    without changing it, because the document says in as many words that nothing is
+    ratified. That is a deadlock, not a guarantee: ratification either edited the file
+    and :func:`_post_freeze_delta_problems` declared its own round void, or left it and
+    the repository shipped a ratified checkpoint whose state document denies the
+    ratification. Nothing checked the second horn — the registry had
+    :func:`_registry_state_problem` and the state document had nothing at all.
+
+    Licensing the path removes the deadlock. This function is what the licence buys back,
+    and it is deliberately **two-directional**, which is the only reason it can be
+    trusted:
+
+    * `ratified: false` — the denial must be **present**. This is the anti-vacuity half.
+      Reword the sentence and the check fails *now*, loudly, while CP-00 is still
+      unratified and re-anchoring costs nothing.
+    * `ratified: true` — the denial must be **gone**, and the document must still be a
+      document rather than an empty file that satisfies the removal by deletion.
+
+    **Why this is not a :data:`RECONCILIATIONS` entry.** Every entry in that table is
+    anchored to the file *at the reviewed candidate*, and the state document is not a
+    reviewed artifact: the program rewrites it every round, outside review. The
+    ratification-relevant sentence has already been rewritten twice since
+    :data:`REVIEWED_CANDIDATE_COMMIT` — the candidate says "Nothing is frozen, nothing is
+    ratified", today's tree says "Nothing is ratified, nothing is tagged" — so a
+    candidate-anchored entry would report anchor rot the moment the integrator writes an
+    ordinary state update. The live document, checked in both directions, is the anchor
+    that actually holds for a living document.
+
+    **What this does not prove.** The `ratified: true` half is removal-only. It shows the
+    denial is gone; it cannot show the document now says anything true, and
+    :data:`STATE_DOCUMENT_MUST_STILL_CONTAIN` is a guard against deletion, not evidence.
+    The stronger form — the closed-vocabulary code-span citation
+    :func:`_registry_state_problem` reads out of the registry row — is not available
+    here: the state document carries no such citation, so requiring one would mean
+    either editing `docs/program/CURRENT_STATE.md`, which this task may not do, or
+    inventing a convention for a document QA does not own. Recorded in
+    `docs/program/reviews/W0-QA-01.md` §11.12 as a request, the same way §11.7 records
+    the registry-format request, rather than decided here.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return [f"{CHECKPOINT_MANIFEST} is missing"]
+    path = root / PROGRAM_STATE_DOCUMENT
+    if not path.is_file():
+        return [f"{PROGRAM_STATE_DOCUMENT} is missing"]
+    current = _flat(path.read_text(encoding="utf-8"))
+
+    if manifest.get("ratified") is not True:
+        if STATE_DOCUMENT_DENIAL not in current:
+            return [
+                f"anchor rot: {CHECKPOINT_MANIFEST} says ratified=false and "
+                f"{PROGRAM_STATE_DOCUMENT} no longer carries {STATE_DOCUMENT_DENIAL!r}. "
+                "That sentence is what the ratified half of this check requires to be "
+                "removed, so with it already gone the check would pass forever without "
+                "ever proving the state document was brought up to date. Re-anchor it "
+                "in tests/contract/test_cp00_candidate.py before trusting it again."
+            ]
+        return []
+
+    problems: list[str] = []
+    if STATE_DOCUMENT_DENIAL in current:
+        problems.append(
+            f"{PROGRAM_STATE_DOCUMENT} still says {STATE_DOCUMENT_DENIAL!r} while "
+            f"{CHECKPOINT_MANIFEST} declares ratified=true. A ratified checkpoint may "
+            "not ship a state document that denies the ratification; this is the same "
+            "two-record contradiction _registry_state_problem exists to prevent, in the "
+            "one direction nothing was checking."
+        )
+    for needle in STATE_DOCUMENT_MUST_STILL_CONTAIN:
+        if needle not in current:
+            problems.append(
+                f"{PROGRAM_STATE_DOCUMENT} does not carry {needle!r}. The denial must be "
+                "removed by updating the state document, not by gutting it."
+            )
+    return problems
 
 
 def _verdict_token(value: object) -> str | None:
@@ -650,6 +1307,14 @@ def _acceptance_problems(root: Path) -> list[str]:
     The claim now stands on a probe rather than on prose:
     `test_the_evidence_digest_depends_on_the_tested_digest` builds two trees differing
     only in that value and requires the evidence digests to differ.
+
+    Dependence is not verification, and round seven found the difference. Four trees
+    differing only in `tested_candidate_digest` do produce four different evidence
+    digests — and a ratification whose `tested_candidate_digest` named a tree that never
+    existed was still accepted with every check silent, because nothing recomputed *that*
+    field. Both halves are now checked: :func:`_tested_digest_problems` recomputes it
+    over the commit that froze it, and :func:`_post_freeze_delta_problems` bounds what
+    may have moved since.
     """
     manifest = _checkpoint_manifest(root)
     if manifest is None:
@@ -686,8 +1351,22 @@ def _acceptance_problems(root: Path) -> list[str]:
                 f"{scoped!r}; the per-round copy exists so a retro-edit cannot hide"
             )
 
+    # Half one of the tested-digest check, deliberately outside the ratification gate:
+    # a frozen digest is a claim from the moment it is written.
+    problems.extend(_tested_digest_problems(root))
+
+    # Also outside the gate, and for the same kind of reason: the unratified half of
+    # this check is the anti-vacuity anchor, and an anchor that is only consulted once
+    # somebody ratifies is an anchor nobody can re-place in time.
+    problems.extend(_state_document_problems(root))
+
     if manifest.get("ratified") is not True:
         return problems
+
+    # Half two. "At ratification, the tree in front of you is still the tree the streams
+    # judged" is a precondition of ratifying, not of working: the licensed delta grows
+    # legitimately while a round is in flight and is only closed when someone ratifies.
+    problems.extend(_post_freeze_delta_problems(root))
 
     if current.get("verdict") != "PASS":
         problems.append(
@@ -754,10 +1433,18 @@ def _acceptance_problems(root: Path) -> list[str]:
 def _digest_history_problems(past: list[dict], current: dict) -> list[str]:
     """Pure comparison of per-round digests across manifest revisions.
 
-    Extracted so the rule can be proved on synthetic history. Against the repository as
-    it stands the check is silent — every committed manifest so far carries `""` in
-    every per-round digest, because no round has yet been sealed — and a rule that
-    cannot fail today is a rule nobody has tested.
+    Extracted so the rule can be proved on synthetic history, because a rule that cannot
+    fail today is a rule nobody has tested.
+
+    **Why it is silent against this repository, stated correctly.** An earlier form of
+    this docstring said every committed manifest carries `""` in every per-round digest
+    "because no round has yet been sealed". That is false: `5207fb5` seals round 5 with
+    `22e3027b…`, and it is the only commit of ten that carries a per-round value at all.
+    The check is silent because that one value has not *changed* between commits, which
+    is the thing it looks for — not because there is nothing to look at. Round eight's
+    reviewer made it fire on real commits with a set/changed/set-back history, and the
+    difference matters: "nothing to compare" would mean the rule is untested here, while
+    "one value, unchanged" means it is running and satisfied.
     """
     now = {
         entry.get("round"): entry
@@ -791,21 +1478,18 @@ def _retro_edited_digests(root: Path) -> list[str]:
     is what makes that checkable — a legitimate new round adds an entry, while a
     retro-edit changes an existing one.
     """
-    history = subprocess.run(
-        ["git", "-C", str(root), "log", "--format=%H", "-n", "60", "--", CHECKPOINT_MANIFEST],
-        capture_output=True,
+    history = _git(
+        "-C", str(root), "log", "--format=%H", "-n", "60", "--", CHECKPOINT_MANIFEST,
         text=True,
-        check=False,
     ).stdout
     manifest = _checkpoint_manifest(root)
     if manifest is None:
         return []
     past: list[tuple[dict, str]] = []
     for commit in (line for line in history.split("\n") if line):
-        blob = subprocess.run(
-            ["git", "-C", str(root), "--no-replace-objects", "show", f"{commit}:{CHECKPOINT_MANIFEST}"],
-            capture_output=True,
-            check=False,
+        blob = _git(
+            "-C", str(root), "--no-replace-objects", "show",
+            f"{commit}:{CHECKPOINT_MANIFEST}",
         )
         if blob.returncode != 0:
             continue
@@ -896,6 +1580,11 @@ def _reconciliation_problems(root: Path) -> list[str]:
                 "declared this reconciliation; changing the file without making it is "
                 "not making it."
             )
+        # Live, and it has to be: for a `removal_only` entry this is the *only* check
+        # left standing on the far side of ratification. A guard written `if False and
+        # …` is unreachable, so the removal could be satisfied by deleting the whole
+        # passage the removal was supposed to leave behind — which is the exact defect
+        # class this module exists to catch.
         for needle in entry.get("must_still_contain", ()):
             if needle not in current:
                 problems.append(
@@ -1094,22 +1783,18 @@ def _reviewed_manifest_digest(root: Path) -> tuple[str, int]:
     32-byte SHA-256 of the file content — not its hex text.
     """
     tracked = sorted(
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(root),
-                "ls-tree",
-                "-r",
-                "--name-only",
-                "HEAD",
-                "--",
-                "contracts",
-                "fixtures",
-                "docs/architecture",
-                "scripts",
-            ],
-            capture_output=True,
+        _git(
+            "-C",
+            str(root),
+            "ls-tree",
+            "-r",
+            "--name-only",
+            "HEAD",
+            "--",
+            "contracts",
+            "fixtures",
+            "docs/architecture",
+            "scripts",
             text=True,
             check=True,
         ).stdout.split("\n")
@@ -1122,22 +1807,99 @@ def _reviewed_manifest_digest(root: Path) -> tuple[str, int]:
     return running.hexdigest(), len(tracked)
 
 
+#: Each way a root can be wrong, and the reason given when it is. Separate messages are
+#: not decoration: a probe that only asserted "something raised" cannot tell one branch
+#: from another, and an independent reviewer of round eight's submission removed a
+#: branch and stayed green precisely because the surviving branch caught the same input
+#: with a different message.
+WRITE_REFUSAL_IS_THE_REPOSITORY = "it is the repository under review"
+WRITE_REFUSAL_CONTAINS_THE_REPOSITORY = "it contains the repository under review"
+WRITE_REFUSAL_INSIDE_THE_REPOSITORY = "it is inside the repository under review"
+WRITE_REFUSAL_NOT_OURS = "it is not a throwaway directory this module created"
+
+
+def _refuse_to_write_outside(root: Path, prefix: str) -> None:
+    """Raise unless ``root`` is a throwaway this module made. **The safety guard.**
+
+    Two helpers here run Git commands that write — :meth:`_CheckpointSandbox._git_write`
+    drops paths from a sandbox's own index, and :meth:`_ManifestHistory._run` runs
+    ``init``, ``add`` and ``commit``. Everything this task is allowed to claim rests on
+    neither of them ever reaching the repository under review.
+
+    **Round nine's blocker, and why this function exists at all.** The guard used to live
+    inline in both places, byte-for-byte identical, and tested `root == repository or
+    repository.is_relative_to(root)` — the target being the repository, or *containing*
+    it. It never tested the direction that actually matters: the target being **inside**
+    the repository. A directory under `REPOSITORY_ROOT` whose name happened to carry the
+    `mkdtemp` prefix satisfied both asserted facts, and ``git -C`` walks up from there and
+    finds the real `.git`. An independent reviewer used exactly that to drop
+    `contracts/analysis/v1/README.md` — one of the immutable reviewed families — from the
+    index. Nothing had ever pointed a root there, so the exposure was latent; the defect
+    was the guard.
+
+    The prefix branch was worse than untested: it was unreachable from the one probe that
+    existed, which set the root to `REPOSITORY_ROOT` itself and so always tripped the
+    first branch. Deleting the prefix check entirely left the suite green.
+
+    All four branches are now distinct, carry distinct reasons, and are asserted
+    individually against both callers by :class:`WritingCommandGuardTests` — which also
+    asserts that no subprocess is spawned, so the guard is proved to run *before* the
+    command rather than beside it.
+    """
+    resolved = root.resolve()
+    repository = REPOSITORY_ROOT.resolve()
+    if resolved == repository:
+        reason = WRITE_REFUSAL_IS_THE_REPOSITORY
+    elif repository.is_relative_to(resolved):
+        reason = WRITE_REFUSAL_CONTAINS_THE_REPOSITORY
+    elif resolved.is_relative_to(repository):
+        reason = WRITE_REFUSAL_INSIDE_THE_REPOSITORY
+    elif not resolved.name.startswith(prefix):
+        reason = WRITE_REFUSAL_NOT_OURS
+    else:
+        return
+    raise AssertionError(
+        f"refusing to run a writing Git command against {resolved}: {reason}"
+    )
+
+
 class _CheckpointSandbox:
     """A throwaway working copy of the whole repository, object database included.
 
     Ratification probes have to answer questions about `git status`, about blobs at the
     candidate commit and about the external record all at once, so a partial copy will
-    not do. Nothing here touches the repository under review: the object database is
-    copied, never shared, and no Git command that writes is ever run — the sandbox is
-    reset by rewriting bytes, not by asking Git to restore them.
+    not do. **The invariant is that nothing here touches the repository under review**:
+    the object database is copied, never shared, and every path any command is pointed at
+    is inside :attr:`root`, which :meth:`_git_write` refuses to run without.
+
+    Until round eight that invariant was stated as the stricter "no Git command that
+    writes is ever run", and the strictness had a cost that only showed up at
+    publication. Resetting to the frozen tree unlinks paths that are absent from it, and
+    a *tracked* path cannot be unlinked without also leaving the index, so those were
+    recorded in :attr:`unresettable` and every probe that needs a reset sandbox failed
+    loudly. That is correct behaviour for an unresettable sandbox and the wrong rule: the
+    moment the integrator commits this round's acceptance reports — which
+    `docs/program/reviews/W0-QA-01.md` §11.12.6 tells them to do before ratifying — 26
+    `RatificationRecordTests` die on a clean, unratified tree, and they are exactly the
+    family certifying this round's repairs. A checkpoint would be tagged with none of
+    them exercised. Narrowing the gate at publication was considered and rejected for the
+    same reason.
+
+    So the index of the sandbox's **own private copy** is now writable, through
+    :meth:`_git_write`, guarded by :func:`_refuse_to_write_outside`. One arithmetic still
+    serves both trees: `_digest_paths` is the recipe's own wording and is not
+    special-cased anywhere.
     """
 
     #: Never copied: the live virtual environment, which is symlinked instead, and the
     #: object database, which is copied separately.
     NOT_COPIED = frozenset({".git", ".venv"})
 
+    #: The `mkdtemp` prefix, and half of what :func:`_refuse_to_write_outside` checks.
+    PREFIX = "w0-qa-01-checkpoint-"
+
     def __init__(self) -> None:
-        self.root = Path(tempfile.mkdtemp(prefix="w0-qa-01-checkpoint-"))
+        self.root = Path(tempfile.mkdtemp(prefix=self.PREFIX))
         shutil.copytree(REPOSITORY_ROOT / ".git", self.root / ".git")
         # The whole tree, not a hand-listed subset. The candidate digest enumerates
         # every tracked path, so a sandbox that carried only the interesting
@@ -1161,6 +1923,37 @@ class _CheckpointSandbox:
         with exclude.open("a", encoding="utf-8") as handle:
             handle.write("\n.venv\n")
         self._pristine: dict[str, bytes] = {}
+        #: The commit that froze the live `tested_candidate_digest`, the value it froze,
+        #: and any path this sandbox could not return to that tree. Filled by
+        #: :meth:`normalise_to_candidate`.
+        self.frozen_commit: str | None = None
+        self.frozen_digest: str | None = None
+        self.unresettable: list[str] = []
+
+    def _git_write(self, *arguments: str) -> None:
+        """Run a Git command that writes, having proved it cannot reach the repository.
+
+        Two independent things have to hold, and each has been found insufficient alone.
+
+        **The path argument** is checked by :func:`_refuse_to_write_outside`, shared with
+        :meth:`_ManifestHistory._run` rather than copied into it — an independent
+        reviewer of round eight's submission found the copy carrying the original's blind
+        spot, which is what a copied safety check is for.
+
+        **The environment** is not checked at all here; it is :func:`_git`'s, and
+        :func:`_git` constructs it. That division is deliberate. Round nine's form of
+        this docstring said the environment was "sanitised too", meaning three
+        discovery variables were deleted from the inherited one — and a reviewer walked
+        around it with a ``HOME`` whose ``.gitconfig`` named ``core.fsmonitor``, which
+        Git *executes*, taking three immutable-family files out of another repository's
+        index while this guard passed cleanly and all 189 tests stayed green. A guard
+        validates its argument; only measuring the destination establishes a property of
+        the destination, and only an environment nobody outside this module contributed
+        to makes that property hold for names nobody has thought of yet. See
+        :func:`_allowlisted_env` and §11.16.
+        """
+        _refuse_to_write_outside(self.root, self.PREFIX)
+        _git("-C", str(self.root.resolve()), *arguments, check=True)
 
     def normalise_to_candidate(self) -> None:
         """Put the sandbox into the pre-ratification state, whatever the host tree is.
@@ -1173,6 +1966,7 @@ class _CheckpointSandbox:
         blob, anything added since is removed, and the external record is returned to
         `ratified: false` with no `ratification` object.
         """
+        self._reset_to_the_frozen_tree()
         at_candidate = set(_candidate_reviewed_paths(self.root))
         for relative in sorted(set(_present_reviewed_paths(self.root)) - at_candidate):
             (self.root / relative).unlink(missing_ok=True)
@@ -1215,6 +2009,60 @@ class _CheckpointSandbox:
                 json.dumps(document, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
+
+    def _reset_to_the_frozen_tree(self) -> None:
+        """Return the whole sandbox to the tree whose digest the manifest froze.
+
+        The probes below ask "is this the tree the acceptance streams judged?", and the
+        answer must not depend on what the host working tree happens to be carrying —
+        the fourth ambient-state coupling this module has had to remove. Without this,
+        the very edit that fixes this module would sit in the sandbox's post-freeze
+        delta and the *positive* probe would fail for a reason that has nothing to do
+        with the policy it tests.
+
+        Content is rewritten from the commit's blobs and strangers are unlinked. An
+        untracked stranger needs nothing else; a *tracked* one must also leave the index,
+        or `git ls-files --cached` keeps reporting it and `_digest_paths` — the recipe's
+        own wording — keeps enumerating a path the frozen tree does not have. That
+        deletion goes through :meth:`_git_write`, so it can only ever reach this
+        sandbox's private index. Anything that still cannot be reset is recorded in
+        :attr:`unresettable`, so a probe fails loudly rather than mysteriously; the list
+        is no longer routinely non-empty, but it is the thing that would catch a reset
+        this method got wrong.
+        """
+        commit = _freeze_commit(self.root)
+        if commit is None:
+            return
+        blobs = _tree_blobs(self.root, commit)
+        if blobs is None:
+            return
+        untracked = set(
+            _git(
+                "-C", str(self.root), "ls-files", "--others", "--exclude-standard",
+                text=True, check=True,
+            ).stdout.split("\n")
+        )
+        for relative, content in blobs.items():
+            target = self.root / relative
+            if not target.is_file() or target.read_bytes() != content:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+        strangers = sorted(set(_digest_paths(self.root)) - set(blobs))
+        tracked_strangers = [item for item in strangers if item not in untracked]
+        if tracked_strangers:
+            # Tracked and absent from the frozen tree: committed after the freeze. The
+            # index of this sandbox's own copied object database is dropped for them, in
+            # batches so a long list cannot overflow the argument limit.
+            for start in range(0, len(tracked_strangers), 200):
+                self._git_write(
+                    "rm", "--cached", "--quiet", "--", *tracked_strangers[start : start + 200]
+                )
+        for relative in strangers:
+            (self.root / relative).unlink(missing_ok=True)
+        self.unresettable = sorted(set(_digest_paths(self.root)) - set(blobs))
+        self.frozen_commit = commit
+        manifest = json.loads(blobs[CHECKPOINT_MANIFEST].decode("utf-8"))
+        self.frozen_digest = manifest.get("tested_candidate_digest")
 
     def __enter__(self) -> "_CheckpointSandbox":
         return self
@@ -1318,6 +2166,32 @@ class _CheckpointSandbox:
             )
         path.write_text(text, encoding="utf-8")
 
+    def update_state_document(
+        self, replacement: str = "CP-00 is ratified and tagged"
+    ) -> None:
+        """Bring the third external record up to date, the way ratification must.
+
+        Whitespace-tolerant as defence against a future rewrap, not as a description of
+        today's document: `docs/program/CURRENT_STATE.md:16` carries the denial entirely
+        on one line and that is its only occurrence. §11.16.7 corrected this sentence in
+        the report and left the module's copy saying the opposite, which is the same
+        defect one level down — a claim standing beside a check that does not make it.
+        The flattening stays because a Markdown sentence is re-wrapped by any editor or
+        formatter, and the day it wraps is the day an unmeasured check goes quiet; what
+        keeps it honest is
+        :meth:`RatificationRecordTests.test_the_state_document_denial_is_found_across_a_line_wrap`,
+        which wraps the sentence in a sandbox copy and requires the check to still find
+        it.
+        """
+        self._remember(PROGRAM_STATE_DOCUMENT)
+        path = self.root / PROGRAM_STATE_DOCUMENT
+        pattern = re.compile(
+            r"\s+".join(re.escape(word) for word in STATE_DOCUMENT_DENIAL.split())
+        )
+        text, count = pattern.subn(replacement, path.read_text(encoding="utf-8"))
+        assert count, f"no denial to update in {PROGRAM_STATE_DOCUMENT}"
+        path.write_text(text, encoding="utf-8")
+
     def touch_without_reconciling(self, entry: dict) -> None:
         """Change the bytes and leave every stale claim exactly where it was."""
         self._remember(entry["path"])
@@ -1366,7 +2240,12 @@ class _CheckpointSandbox:
         )
 
     def seal_digests(self, tested: str | None = None, evidence: str | None = None) -> None:
-        """Write both digests at the top level and into the current round."""
+        """Write both digests at the top level and into the current round.
+
+        The default `tested` is deliberately a value no commit ever froze, so a probe
+        that forgets to pass the real one fails instead of quietly certifying a tree
+        that never existed.
+        """
         self._remember(CHECKPOINT_MANIFEST)
         path = self.root / CHECKPOINT_MANIFEST
         manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -1391,6 +2270,14 @@ class _CheckpointSandbox:
             path.write_text(
                 json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
             )
+
+    def rewrite(self, relative: str, old: str, new: str) -> None:
+        """Replace a literal inside a sandbox file, remembering the original bytes."""
+        self._remember(relative)
+        path = self.root / relative
+        text = path.read_text(encoding="utf-8")
+        assert old in text, f"{old!r} is not in {relative}"
+        path.write_text(text.replace(old, new), encoding="utf-8")
 
     def restore_one(self, relative: str) -> None:
         """Put a single remembered path back, leaving the rest of the mutation alone."""
@@ -1446,6 +2333,129 @@ class _MutableCopy:
 
     def run_block(self, script: str):
         return _run_shell(script, self.root)
+
+
+class _ManifestHistory:
+    """A throwaway Git repository whose manifest has a real, scripted history.
+
+    **Why this exists.** Every other probe in this module runs where the freeze commit
+    *is* `HEAD`: the live repository has one commit that froze the digest and nothing
+    after it, and the sandboxes copy a tree and never commit. So "the oldest consecutive
+    commit carrying the value" and "the newest commit carrying the value" name the same
+    commit in every one of them, and :func:`_freeze_commit` with ``freeze = commit``
+    replaced by ``return commit`` passed all 159 tests. That mutant was the only survivor
+    of seventeen in round eight's independent review, and the degeneracy that hid it is
+    the same one §11.11 claims to have removed: a probe that cannot distinguish the thing
+    it is named after.
+
+    Real commits are the only way to separate the two, and this repository may not gain
+    any — so the history is built somewhere else entirely: ``git init`` in a
+    :func:`tempfile.mkdtemp`, commits made there under an explicit throwaway identity,
+    and the directory removed in ``tearDown``. :meth:`_run` refuses any root that is, or
+    contains, the repository under review, and any root this class did not create.
+    """
+
+    PREFIX = "w0-qa-01-history-"
+
+    def __init__(self) -> None:
+        self.root = Path(tempfile.mkdtemp(prefix=self.PREFIX))
+        (self.root / CHECKPOINT_MANIFEST).parent.mkdir(parents=True, exist_ok=True)
+        self._run("init", "--quiet", "--initial-branch=history")
+        self._run("config", "user.email", "w0-qa-01@example.invalid")
+        self._run("config", "user.name", "W0-QA-01 freeze-history probe")
+
+    def _run(self, *arguments: str) -> str:
+        """Every Git command here writes — ``init``, ``add``, ``commit`` — so the same
+        guard applies, and it is the *same function*, not a second copy of it.
+
+        The environment is sanitised the same way :meth:`_CheckpointSandbox._git_write`
+        is now — see its docstring. This class builds a whole repository from ``init``
+        onward, so a hostile ``GIT_DIR`` here would not edit an existing repository's
+        index quietly; it would make every command in this class address that
+        repository from the start.
+        """
+        _refuse_to_write_outside(self.root, self.PREFIX)
+        return _git(
+            "-C", str(self.root.resolve()), *arguments, text=True, check=True
+        ).stdout
+
+    def write(self, document: dict, files: dict[str, str] | None = None) -> None:
+        """Put a manifest, and optionally other files, in the working tree."""
+        (self.root / CHECKPOINT_MANIFEST).write_text(
+            json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        for relative, text in (files or {}).items():
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+
+    def commit(
+        self, message: str, document: dict, files: dict[str, str] | None = None
+    ) -> str:
+        self.write(document, files)
+        self._run("add", "-A")
+        self._run("commit", "--quiet", "-m", message)
+        return self.head()
+
+    def head(self) -> str:
+        return self._run("rev-parse", "HEAD").strip()
+
+    def manifest_commits(self) -> list[str]:
+        """Every commit that touched the manifest, oldest first."""
+        listing = self._run("log", "--format=%H", "--reverse", "--", CHECKPOINT_MANIFEST)
+        return [line for line in listing.split("\n") if line]
+
+    def oldest_manifest_commit(self) -> str:
+        return self.manifest_commits()[0]
+
+    def seal(self, **shape: object) -> str:
+        """Structure first, then compute, then write only the value.
+
+        The recipe blanks the field being computed, so the digest of a tree does not
+        depend on the value about to be written into it — which is what makes a freeze
+        commit recomputable at all, and it is the ordering rule this task has had to
+        relearn: never write a digest before the structure it covers is final. The
+        document is put in the working tree with the field unset, the digest is taken
+        over that tree, and only the value is written afterwards.
+        """
+        self.write(_history_manifest(None, **shape))
+        return _acceptance_digest(self.root, "tested_candidate_digest")
+
+    def close(self) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+
+def _history_manifest(
+    digest: str | None,
+    *,
+    number: int = 5,
+    rounds: tuple[int, ...] = (4, 5),
+    verdict: str | None = None,
+    note: object = None,
+) -> dict:
+    """A minimal manifest of the shape :func:`_freeze_commit` reads.
+
+    ``note`` carries nothing the walk reads; it exists so consecutive revisions can
+    differ in bytes while carrying the same digest, which is the case the deep-history
+    probe needs and `git commit` otherwise refuses to create.
+    """
+    return {
+        "checkpoint": "CP-00",
+        "ratified": False,
+        "revision_note": note,
+        "current_round": number,
+        "tested_candidate_digest": digest,
+        "evidence_bundle_digest": None,
+        "acceptance_rounds": [
+            {
+                "round": item,
+                "verdict": verdict if item == number else "FAIL",
+                "tested_candidate_digest": digest if item == number else "",
+                "evidence_bundle_digest": "",
+            }
+            for item in rounds
+        ],
+    }
 
 
 class ACandidateIntegrityTests(unittest.TestCase):
@@ -1712,6 +2722,207 @@ class DocumentedNeighbourGateTests(unittest.TestCase):
                 )
 
 
+class ForbiddenNameSweepControlTests(unittest.TestCase):
+    """**B3.** The `ID-01`/`ALR-25` sweeps had no negative control at all.
+
+    Four mutations each left the whole suite green: `FORBIDDEN_VERSION_KEYS` emptied,
+    `FORBIDDEN_AUTHORITY_KEYS` emptied, :func:`_object_keys` not descending into lists,
+    and :func:`_declared_properties` not yielding `required` entries. All four are
+    load-bearing — the live helpers find `schema_version` at depth inside a list and as
+    a `required` entry, and the mutants do not — but nothing anywhere planted a
+    forbidden name and required *this module's* sweep to find it. `MutationTests` rows
+    7-9 do plant keys, and then assert the **documented gates** and the **owning
+    schemas** reject them, which is a statement about the contract family, not about
+    this module's own sweep. A sweep with no negative control reports `{}` for the same
+    reason an empty sweep does.
+
+    Every planted document below reaches the forbidden name by exactly one *shape*, so
+    a document carrying it everywhere cannot pass for a document carrying it once. What
+    that does **not** give — and what this docstring and §11.16.7 claimed until round
+    eleven — is one route per branch. It is false for two of the six rows: a name
+    declared as a `properties` member is also an object key at that depth, so
+    :func:`_object_keys` finds it on its own and :func:`_declared_properties` is never
+    consulted.
+
+    Four rows do isolate a branch, two each way, and
+    :meth:`test_each_route_helper_reaches_its_own_route` has carried the correct matrix
+    all along: the two object-key rows isolate :func:`_object_keys`, because a bare key
+    at depth is not a declaration either helper reads as one; the two `required` rows
+    isolate :func:`_declared_properties`, because a `required` entry is a list *value*
+    and no object key anywhere names it. Round eleven's form of this paragraph said
+    "only the two `required` rows isolate a branch", which understated its own coverage
+    and disagreed with the matrix twenty lines below it. Corrected in round twelve; the
+    matrix is the normative statement and this prose now repeats it rather than
+    competing with it.
+
+    The consequence was measurable: `_declared_properties`' `properties` branch reduced
+    to ``if False:`` left all 244 tests green.
+    :meth:`test_each_route_helper_reaches_its_own_route` states the real matrix and
+    asserts each helper directly, which is the only way to drive a branch whose output
+    another helper duplicates.
+    """
+
+    #: The routes, and a document that reaches the forbidden name only by that route.
+    @staticmethod
+    def _only_via(route: str, name: str) -> dict:
+        if route == "an object key at depth inside a list":
+            return {
+                "contract_version": CANDIDATE_CONTRACT_VERSION,
+                "oneOf": [{"then": {"examples": [{"payload": {name: "x"}}]}}],
+            }
+        if route == "an object key at depth inside nested objects":
+            return {"a": {"b": {"c": {name: "x"}}}}
+        if route == "a properties member":
+            return {"$defs": {"envelope": {"properties": {name: {"type": "string"}}}}}
+        if route == "a properties member reached through a list":
+            return {"allOf": [{"properties": {name: {"type": "string"}}}]}
+        if route == "a required entry":
+            return {"$defs": {"envelope": {"required": ["contract_version", name]}}}
+        if route == "a required entry reached through a list":
+            return {"anyOf": [{"required": [name]}]}
+        raise AssertionError(route)
+
+    ROUTES = (
+        "an object key at depth inside a list",
+        "an object key at depth inside nested objects",
+        "a properties member",
+        "a properties member reached through a list",
+        "a required entry",
+        "a required entry reached through a list",
+    )
+
+    def test_the_forbidden_tables_are_not_empty(self) -> None:
+        """An empty table makes every sweep below report nothing, forever."""
+        self.assertEqual(FORBIDDEN_VERSION_KEYS, frozenset({"version", "schema_version"}))
+        self.assertEqual(
+            FORBIDDEN_AUTHORITY_KEYS,
+            frozenset({"authority_token", "fencing_token", "fence_token"}),
+        )
+
+    def test_the_sweep_finds_a_planted_name_by_every_route_it_claims_to_cover(
+        self,
+    ) -> None:
+        for forbidden in (FORBIDDEN_VERSION_KEYS, FORBIDDEN_AUTHORITY_KEYS):
+            for name in sorted(forbidden):
+                for route in self.ROUTES:
+                    with self.subTest(name=name, route=route):
+                        planted = self._only_via(route, name)
+                        self.assertEqual(
+                            _forbidden_name_hits(planted, forbidden),
+                            [name],
+                            f"the sweep does not find {name!r} as {route}, so §4's "
+                            "claim to cover that route is not measured anywhere",
+                        )
+
+    def test_each_route_helper_reaches_its_own_route(self) -> None:
+        """**Which helper finds each planted name — including the two that are not a
+        route at all.**
+
+        `_forbidden_name_hits` unions two sweeps, so a route both sweeps reach is a route
+        that measures neither of them. Reducing `_declared_properties`' `properties`
+        branch to ``if False:`` left the whole suite green for exactly that reason: the
+        two `properties` rows above were passing through `_object_keys`.
+
+        The matrix is written out and both helpers are asserted separately, so the
+        `properties` branch is driven by an assertion nothing else can satisfy. The
+        third column is the honest statement of what the sweep covers: two rows isolate
+        `_object_keys`, two isolate `_declared_properties`, and two isolate neither.
+        """
+        name = "schema_version"
+        matrix = (
+            ("an object key at depth inside a list", True, False),
+            ("an object key at depth inside nested objects", True, False),
+            ("a properties member", True, True),
+            ("a properties member reached through a list", True, True),
+            ("a required entry", False, True),
+            ("a required entry reached through a list", False, True),
+        )
+        self.assertEqual(
+            [route for route, _keys, _declarations in matrix],
+            list(self.ROUTES),
+            "the matrix and the route table have drifted apart",
+        )
+        for route, by_keys, by_declarations in matrix:
+            with self.subTest(route=route):
+                planted = self._only_via(route, name)
+                self.assertEqual(
+                    name in set(_object_keys(planted)),
+                    by_keys,
+                    f"_object_keys does not reach {name!r} as {route} the way this "
+                    "matrix says it does",
+                )
+                self.assertEqual(
+                    name in set(_declared_properties(planted)),
+                    by_declarations,
+                    f"_declared_properties does not reach {name!r} as {route} the way "
+                    "this matrix says it does",
+                )
+        self.assertEqual(
+            [
+                route
+                for route, by_keys, by_declarations in matrix
+                if by_keys and by_declarations
+            ],
+            ["a properties member", "a properties member reached through a list"],
+            "the rows that isolate no branch are not the two this class records",
+        )
+
+    def test_the_sweep_is_silent_on_a_document_that_declares_nothing_forbidden(
+        self,
+    ) -> None:
+        """The other direction: a sweep that reports everything proves nothing either."""
+        clean = {
+            "contract_version": CANDIDATE_CONTRACT_VERSION,
+            "oneOf": [{"properties": {"execution_token": {"type": "string"}}}],
+            "$defs": {"envelope": {"required": ["contract_version", "execution_token"]}},
+            "notes": ["schema_version is forbidden", "version is forbidden"],
+        }
+        for forbidden in (FORBIDDEN_VERSION_KEYS, FORBIDDEN_AUTHORITY_KEYS):
+            with self.subTest(table=sorted(forbidden)):
+                self.assertEqual(_forbidden_name_hits(clean, forbidden), [])
+
+    def test_a_forbidden_name_as_a_string_value_is_not_a_declaration(self) -> None:
+        """`ALR-25`'s names legitimately occur as values in forbidden-key lists and in
+        legacy evidence. Only declarations are swept, and that distinction is the
+        reason the sweep can be run over the whole family without exceptions."""
+        values_only = {"forbidden_detail_keys": ["authority_token", "fencing_token"]}
+        self.assertEqual(_forbidden_name_hits(values_only, FORBIDDEN_AUTHORITY_KEYS), [])
+
+    def test_the_real_sweep_reports_a_planted_name_in_a_real_contract(self) -> None:
+        """End to end, on a copy of an actual contract rather than a synthetic dict.
+
+        The synthetic cases above prove the helper; this proves the helper is what the
+        family sweep is made of, over a document with the shape and size of the real
+        thing.
+        """
+        copy = _MutableCopy()
+        self.addCleanup(copy.close)
+        relative = f"{ANALYSIS}/job-package.schema.json"
+        document = copy.load(relative)
+        self.assertEqual(_forbidden_name_hits(document, FORBIDDEN_VERSION_KEYS), [])
+        document.setdefault("$defs", {}).setdefault("planted", {})["required"] = [
+            "schema_version"
+        ]
+        self.assertEqual(
+            _forbidden_name_hits(document, FORBIDDEN_VERSION_KEYS), ["schema_version"]
+        )
+
+    def test_the_value_sweep_descends_into_lists_too(self) -> None:
+        """`_values_for_key` has the same shape and the same gap.
+
+        It is what collects every `stage_id` an example names, and the analysis examples
+        put those inside arrays. Not descending into lists makes the referential check
+        pass by finding nothing to check.
+        """
+        nested = {"stages": [{"stage_id": "finding_merge"}, {"stage_id": "text_analysis"}]}
+        self.assertEqual(
+            sorted(_values_for_key(nested, "stage_id")),
+            ["finding_merge", "text_analysis"],
+        )
+        deeper = {"a": [[{"b": {"stage_id": "norm_verification"}}]]}
+        self.assertEqual(list(_values_for_key(deeper, "stage_id")), ["norm_verification"])
+
+
 class ContractVersionKeyTests(unittest.TestCase):
     """`ID-01`: exactly one version key across the three contract families."""
 
@@ -1721,18 +2932,7 @@ class ContractVersionKeyTests(unittest.TestCase):
             if relative == LEGACY_KEY_FIXTURE:
                 continue
             document = _load(relative)
-            hits = sorted(
-                {
-                    key
-                    for key in _object_keys(document)
-                    if key in FORBIDDEN_VERSION_KEYS
-                }
-                | {
-                    name
-                    for name in _declared_properties(document)
-                    if name in FORBIDDEN_VERSION_KEYS
-                }
-            )
+            hits = _forbidden_name_hits(document, FORBIDDEN_VERSION_KEYS)
             if hits:
                 offenders[relative] = hits
         self.assertEqual(offenders, {})
@@ -1828,18 +3028,7 @@ class ForbiddenAuthorityFieldNameTests(unittest.TestCase):
         offenders: dict[str, list[str]] = {}
         for relative in _repository_json_files("contracts"):
             document = _load(relative)
-            hits = sorted(
-                {
-                    key
-                    for key in _object_keys(document)
-                    if key in FORBIDDEN_AUTHORITY_KEYS
-                }
-                | {
-                    name
-                    for name in _declared_properties(document)
-                    if name in FORBIDDEN_AUTHORITY_KEYS
-                }
-            )
+            hits = _forbidden_name_hits(document, FORBIDDEN_AUTHORITY_KEYS)
             if hits:
                 offenders[relative] = hits
         self.assertEqual(offenders, {})
@@ -2965,6 +4154,64 @@ class RatificationRecordTests(unittest.TestCase):
                 )
                 self.sandbox.restore()
 
+    def test_the_ratifying_task_is_anchored_to_the_documents_that_assign_the_act(
+        self,
+    ) -> None:
+        r"""**A fifth self-referential anchor, and the one that did not have to be.**
+
+        §11.16.8 disclosed four values that could be set to anything with the suite
+        green, because the only thing writing the value was the probe that later looked
+        for it. There were five: `RATIFYING_TASK` could be rotated to any string and all
+        244 tests stayed green, because `_ratification_record` compares the record's
+        `task` against this constant and the probe that builds the record reads the same
+        constant to fill it in.
+
+        It is unlike the other four in the way that matters: it has real external
+        documents to anchor to. `W0.3_ratification_integration.md` assigns the CP-00
+        ratification act to exactly one task, and that task has a file. So it is
+        anchored rather than disclosed, and the count in §11.16.8 is corrected to four
+        remaining.
+
+        The row is asserted to name **one** task, not merely to contain this one: a row
+        that assigned the act to two tasks would satisfy a containment test while
+        meaning the opposite of what this constant claims.
+
+        **Round twelve, RL-1.** That was the claim; the pattern did not make it. `W0-`
+        task ids in this program are not all three letters — `W0-INT-01` and `W0-QA-01`
+        sit side by side in the manifest — and ``W0-[A-Z]{3}-\d{2}`` cannot see a
+        two-letter one. A row co-assigning the act to ``W0-INT-01`` and ``W0-QA-01``
+        matched only `W0-INT-01`, so the set was still ``[RATIFYING_TASK]`` and all 281
+        tests stayed green on a document saying the opposite of what is asserted here.
+        The same row written with `W0-ARC-02` went red, which is why the finding failed
+        closed and was weighed as a limitation rather than a blocker; it is closed
+        anyway, because "fails closed for the ids that happen to be three letters" is
+        not the property the paragraph above claims. ``{2,4}`` spans every id form this
+        program uses.
+        """
+        self.assertEqual(RATIFYING_TASK, "W0-INT-01")
+        wave = _read("docs/program/waves/W0.3_ratification_integration.md")
+        rows = [
+            line
+            for line in wave.split("\n")
+            if "CP-00 review ratification" in line and line.strip().startswith("|")
+        ]
+        self.assertEqual(
+            len(rows),
+            1,
+            "the wave document no longer carries exactly one CP-00 ratification "
+            "assignment row; re-anchor this probe rather than deleting it",
+        )
+        self.assertEqual(
+            sorted(set(re.findall(r"W0-[A-Z]{2,4}-\d{2}", rows[0]))),
+            [RATIFYING_TASK],
+            "the document that assigns the CP-00 ratification act does not assign it to "
+            f"{RATIFYING_TASK} alone",
+        )
+        self.assertTrue(
+            (REPOSITORY_ROOT / f"docs/program/tasks/{RATIFYING_TASK}.md").is_file(),
+            f"{RATIFYING_TASK} is not a task in this program",
+        )
+
     def test_a_record_from_the_wrong_task_licenses_nothing(self) -> None:
         self._ratify(task="W0-ARC-02")
         _, declared, problems = _ratification_record(self.sandbox.root)
@@ -2978,12 +4225,28 @@ class RatificationRecordTests(unittest.TestCase):
         self.assertTrue(any("carries no 'ratification' object" in p for p in problems))
 
     def test_an_empty_or_repeating_path_list_licenses_nothing(self) -> None:
-        for paths in ([], [self.review, self.review]):
+        """Each malformation named, not merely "something was reported".
+
+        Round nine's reviewer found this probe passing for a reason other than its name:
+        both cases also trip an earlier check, and asserting `problems` is truthy could
+        not tell which. The repeats case in particular said nothing about repetition. Each
+        case now asserts the message for the defect it is named after — which also
+        records, rather than hides, that an empty list is rejected as an empty list and
+        never reaches the ceiling comparison.
+        """
+        expectations = (
+            ([], "must be a non-empty list of repository-relative paths"),
+            ([self.review, self.review], "repeats a path"),
+        )
+        for paths, expected in expectations:
             with self.subTest(paths=paths):
                 self.sandbox.declare_ratification(paths)
                 _, declared, problems = _ratification_record(self.sandbox.root)
                 self.assertEqual(declared, frozenset())
-                self.assertTrue(problems)
+                self.assertTrue(
+                    any(expected in problem for problem in problems),
+                    f"{paths} was rejected, but not for {expected!r}: {problems}",
+                )
                 self.sandbox.restore()
 
     def test_a_recorded_ratification_the_review_does_not_carry_is_a_contradiction(
@@ -3047,14 +4310,34 @@ class RatificationRecordTests(unittest.TestCase):
         satisfied by the registry as it stands. If the repository owner would rather the
         registry carry a first-class state column, that is a registry-format decision
         for the checkpoint-registry owner, not something this module should guess at;
-        `docs/program/reviews/W0-QA-01.md` §11.4 records the request.
+        `docs/program/reviews/W0-QA-01.md` §11.7 records the request.
         """
         self.assertIsNone(_registry_state_problem(REPOSITORY_ROOT))
 
     # ---- round five: content, and an accepted round ------------------------------
 
     def _ratify_for_real(self, **round_kwargs: object) -> None:
-        """A ratification that does the work: record, flag, five reconciliations, round."""
+        """A ratification that does the work: record, flag, five reconciliations, round.
+
+        The tested digest sealed here is the **real** one — the value frozen at the
+        commit the sandbox was reset to. A harness that sealed an invented value would
+        be constructing the defect these probes exist to reject, and would make the
+        positive case unfalsifiable in the same breath: that is exactly how
+        `tested_candidate_digest` stayed unchecked for four rounds.
+        """
+        self.assertIsNotNone(
+            self.sandbox.frozen_digest,
+            "this repository records no frozen tested_candidate_digest, so no genuine "
+            "ratification can be built here; refusing to build one on a fabricated "
+            "value instead",
+        )
+        self.assertEqual(
+            self.sandbox.unresettable,
+            [],
+            "the sandbox could not be returned to the frozen tree: these paths are "
+            "tracked now and absent there, so every post-freeze probe would be "
+            "measuring the host checkout instead of the policy",
+        )
         self.sandbox.declare_ratification(self.full_delta)
         self.sandbox.patch_json(
             self.review, ratified=True, review_status="ratified_at_w0_3"
@@ -3071,8 +4354,12 @@ class RatificationRecordTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.sandbox.set_registry_state(RATIFIED_STATE_TOKEN, "ratified")
+        # The third external record, licensed in POST_FREEZE_DELTA_CEILING and required
+        # to move by _state_document_problems. Before round seven a "ratification that
+        # does the work" left this document denying the ratification and nothing minded.
+        self.sandbox.update_state_document()
         self.sandbox.accept_round(**round_kwargs)
-        self.sandbox.seal_digests()
+        self.sandbox.seal_digests(tested=self.sandbox.frozen_digest)
 
     def test_a_ratification_that_does_the_work_is_accepted(self) -> None:
         self._ratify_for_real()
@@ -3105,6 +4392,310 @@ class RatificationRecordTests(unittest.TestCase):
             problems = _reconciliation_problems(self.sandbox.root)
         self.assertTrue(any("anchor rot" in problem for problem in problems), problems)
 
+    def _with_reconciliations(self, table: tuple) -> list[str]:
+        """Run the reconciliation checks over a substituted requirement table."""
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "RECONCILIATIONS", table
+        ):
+            return _reconciliation_problems(self.sandbox.root)
+
+    def test_a_new_text_requirement_already_in_the_candidate_is_rejected(self) -> None:
+        """Degeneracy, `new_text` side. The guard no test could tell from its absence.
+
+        A positive requirement the candidate already satisfies cannot distinguish work
+        done from work skipped: the reconciliation could be entirely unmade and the
+        needle would still be found. This is the defect that put `must_contain:
+        ("GATE-E",)` in the table as reconciliation evidence while `GATE-E` was already
+        in the document three times, so the guard that detects it must itself be shown
+        to fire.
+        """
+        entry = dict(RECONCILIATIONS[3])
+        self.assertEqual(entry["path"], "docs/architecture/ADR_INDEX.md")
+        entry["new_text"] = ("`PD-01`",)
+        problems = self._with_reconciliations(RECONCILIATIONS[:3] + (entry,))
+        self.assertTrue(
+            any(
+                "degenerate requirement" in problem and "`PD-01`" in problem
+                for problem in problems
+            ),
+            "a new_text needle the candidate already carries was accepted as a "
+            f"requirement: {problems}",
+        )
+
+    def test_a_sentence_requirement_already_satisfiable_at_the_candidate_is_rejected(
+        self,
+    ) -> None:
+        """Degeneracy, `sentence_requires` side. Same principle, sentence granularity.
+
+        The real requirement is one sentence carrying `62`, `31` and `satisfied`, none
+        of which co-occur at the candidate. Substituted here is a conjunction the
+        candidate's own stale sentence already satisfies — a requirement that would be
+        met by doing nothing at all.
+        """
+        entry = dict(RECONCILIATIONS[0])
+        self.assertEqual(
+            entry["path"], "docs/architecture/CP00_ARCHITECTURE_REVIEW.md"
+        )
+        entry["sentence_requires"] = ("31", "alias", "precondition")
+        problems = self._with_reconciliations((entry,) + RECONCILIATIONS[1:])
+        self.assertTrue(
+            any(
+                "degenerate requirement" in problem
+                and "already has a sentence carrying" in problem
+                for problem in problems
+            ),
+            "a sentence conjunction the candidate already satisfies was accepted as a "
+            f"requirement: {problems}",
+        )
+
+    def test_a_removal_with_no_positive_requirement_must_declare_itself(self) -> None:
+        """The `removal_only` rule, which is the reason the other two guards are enough.
+
+        An entry with no positive requirement checks one thing: that a phrase went away.
+        Rewording alone satisfies it. That is a weaker guarantee than the other entries
+        carry and it must be declared, not arrived at by omitting a field — otherwise a
+        future editor drops a `new_text` and nobody can tell the difference between a
+        deliberate removal-only anchor and an incomplete one.
+        """
+        entry = dict(RECONCILIATIONS[2])
+        self.assertEqual(
+            entry["path"], "docs/architecture/ARCHITECTURE_LINT_RULES.md"
+        )
+        entry.pop("removal_only")
+        problems = self._with_reconciliations(
+            RECONCILIATIONS[:2] + (entry,) + RECONCILIATIONS[3:]
+        )
+        self.assertTrue(
+            any(
+                "no positive requirement and not marked removal_only" in problem
+                for problem in problems
+            ),
+            f"an undeclared removal-only requirement passed as a full one: {problems}",
+        )
+
+    def test_a_reconciliation_naming_a_path_absent_from_the_candidate_is_reported(
+        self,
+    ) -> None:
+        """The other anti-vacuity direction: the file itself has to be there.
+
+        `anchor rot` covers a phrase that stopped matching. A whole path that never
+        existed at the reviewed candidate is the same failure one level up, and it is
+        not hypothetical — the ceiling and the requirement table are edited by hand and
+        by different tasks.
+        """
+        entry = {
+            "item": "a reconciliation whose document is not in the candidate",
+            "path": "docs/architecture/A_DOCUMENT_THAT_WAS_NEVER_REVIEWED.md",
+            "stale": "anything at all",
+            "new_text": ("anything else",),
+            "requires_note": "a document that exists",
+        }
+        problems = self._with_reconciliations(RECONCILIATIONS + (entry,))
+        self.assertTrue(
+            any(
+                "does not exist at the reviewed candidate" in problem
+                and "A_DOCUMENT_THAT_WAS_NEVER_REVIEWED" in problem
+                for problem in problems
+            ),
+            f"a requirement anchored on a file nobody reviewed passed: {problems}",
+        )
+
+    def test_removing_a_stale_claim_with_no_recorded_ratification_is_reported(
+        self,
+    ) -> None:
+        """Reconciling is ratification's job, and needs the record that authorises it.
+
+        The unratified direction. Without this the reconciliations could be made
+        quietly, one commit at a time, and the ratification record would arrive later to
+        find the work already done and nothing left to authorise — the delta control
+        reduced to bookkeeping.
+        """
+        entry = RECONCILIATIONS[3]
+        self.sandbox.reconcile(entry)
+        problems = _reconciliation_problems(self.sandbox.root)
+        self.assertTrue(
+            any(
+                "was removed without a recorded ratification" in problem
+                and entry["path"] in problem
+                for problem in problems
+            ),
+            f"a stale claim was reconciled with no record authorising it: {problems}",
+        )
+
+    def test_a_reconciliation_that_removes_the_stale_claim_and_adds_nothing_is_named(
+        self,
+    ) -> None:
+        """Removal is half the requirement; `new_text` is the other half.
+
+        `test_each_reconciliation_touched_but_not_made_is_named` covers the file that
+        never moved. This is its complement: the stale claim genuinely goes, and what
+        was supposed to replace it never arrives, so the document now says nothing at
+        all where it used to say something false.
+        """
+        entry = RECONCILIATIONS[3]
+        self._ratify_for_real()
+        self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
+        self.sandbox.rewrite(
+            entry["path"], entry["new_text"][0], "the recorded owner decisions"
+        )
+        problems = _reconciliation_problems(self.sandbox.root)
+        self.assertTrue(
+            any(
+                entry["item"] in problem and "does not carry" in problem
+                for problem in problems
+            ),
+            f"a reconciliation that deleted the false claim and replaced it with "
+            f"nothing passed: {problems}",
+        )
+
+    def test_a_reconciliation_that_drops_its_evidence_sentence_is_named(self) -> None:
+        """The sentence conjunction, on the ratified side — for **every** entry that has
+        one, and on each of the three tokens separately.
+
+        The `62`/`31`/`satisfied` sentence is the evidence that the `PD-02` precondition
+        is met. Removing the stale denial without it leaves a document that has stopped
+        saying the precondition is unmet and never says it is met.
+
+        Round ten drove entry 0 only, while the live code names both `PD-02` documents.
+        That is the difference between a probe and a table: weakening
+        ``RECONCILIATIONS[1]["sentence_requires"]`` from ``("62", "31", "satisfied")`` to
+        ``("satisfied",)`` left all 244 tests green, because the appended sentence still
+        contained the one surviving token and no probe ever asked entry 1 anything.
+        Emptying the tuple outright *was* caught; only the weakening survived, which is
+        why the loop below removes the tokens one at a time rather than removing the
+        sentence.
+        """
+        entries = [entry for entry in RECONCILIATIONS if entry.get("sentence_requires")]
+        self.assertEqual(
+            [entry["path"] for entry in entries],
+            [
+                "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+                "docs/architecture/CP00_OWNER_DECISIONS.md",
+            ],
+            "the entries carrying an evidence sentence are not the two this probe "
+            "was written for",
+        )
+        # One token removed at a time: the conjunction has to be a conjunction. The
+        # replacements keep the sentence and take out exactly the evidence.
+        removals = (
+            ("62", "62 legacy names", "the legacy names"),
+            ("31", "31 alias-bearing", "several alias-bearing"),
+            ("satisfied", "precondition is satisfied", "precondition is addressed"),
+        )
+        for entry in entries:
+            for token, old_text, new_text in removals:
+                with self.subTest(item=entry["item"], token=token):
+                    self.assertIn(
+                        token,
+                        entry["sentence_requires"],
+                        f"{entry['item']} no longer requires {token!r}, so this "
+                        "subtest is measuring a token nothing asks for",
+                    )
+                    self._ratify_for_real()
+                    self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
+                    self.sandbox.rewrite(entry["path"], old_text, new_text)
+                    problems = _reconciliation_problems(self.sandbox.root)
+                    self.assertTrue(
+                        any(
+                            entry["item"] in problem
+                            and "has no single sentence carrying" in problem
+                            for problem in problems
+                        ),
+                        f"a reconciliation with no evidence sentence passed: {problems}",
+                    )
+                    self.sandbox.restore()
+
+    def test_the_candidate_novelty_check_is_found_across_a_line_wrap(self) -> None:
+        """**The third `_flat` site, and §11.16.7's "both sites" corrected to three.**
+
+        Round ten found `_flat` unmeasured in two places and gave each a probe. There
+        are three on the ratified path: `_state_document_problems`, the *present*
+        review-Markdown comparison, and this one — the novelty check that reads the
+        review Markdown **at the reviewed candidate** and refuses a `review_status` the
+        candidate already contains. Dropping the flattening here left all 244 tests
+        green.
+
+        The candidate blob is immutable, so this probe cannot re-wrap it; it uses a
+        phrase that is *already* wrapped in the candidate document instead, and asserts
+        both halves of that fact before relying on it. Unflattened, the token is not
+        found and a `review_status` the candidate has carried since `W0-ARC-01` passes
+        as novel — which is the whole point of the check: requiring the Markdown to
+        quote a token it already quotes proves nothing about ratification.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
+
+        candidate = _candidate_blob(self.sandbox.root, REVIEW_MARKDOWN)
+        self.assertIsNotNone(candidate, "the candidate review Markdown is unreadable")
+        text = candidate.decode("utf-8")
+        wrapped = "integration act by the program integrator"
+        self.assertNotIn(
+            wrapped,
+            text,
+            "the anchor no longer spans a line wrap in the candidate, so this probe "
+            "measures nothing and must be re-anchored rather than deleted",
+        )
+        self.assertIn(wrapped, _flat(text))
+
+        self.sandbox.patch_json(self.review, review_status=wrapped)
+        problems = _reconciliation_problems(self.sandbox.root)
+        self.assertTrue(
+            any(
+                "already appears in" in problem and "proves nothing" in problem
+                for problem in problems
+            ),
+            f"a review_status the candidate already carries across a line wrap passed "
+            f"as novel: {problems}",
+        )
+
+    def test_a_review_status_already_in_the_candidate_markdown_proves_nothing(
+        self,
+    ) -> None:
+        """`review_status` novelty — the same degeneracy across two documents.
+
+        Ratification must move both halves of the review, and the Markdown half is
+        checked by requiring it to quote the JSON half's `review_status` verbatim. If
+        that token is one the candidate's Markdown already contains, the requirement is
+        satisfied before any ratification happens and the cross-document check is
+        decorative.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
+        self.sandbox.patch_json(self.review, review_status="ratification")
+        problems = _reconciliation_problems(self.sandbox.root)
+        self.assertTrue(
+            any(
+                "already appears in" in problem and "proves nothing" in problem
+                for problem in problems
+            ),
+            "a review_status the candidate's Markdown already carried was accepted as "
+            f"proof that the Markdown half moved: {problems}",
+        )
+
+    def test_gutting_the_probe_description_is_caught_by_must_still_contain(self) -> None:
+        """`must_still_contain`, the only guarantee the removal-only entry has left.
+
+        Removing the stale "still untracked" claim by deleting the whole `GATE-E` probe
+        description would satisfy the removal and destroy the thing being reconciled.
+        `must_still_contain` is not evidence the reconciliation was made — `GATE-E` is
+        already in the document — it is the guard against gutting the file, and it is
+        the entry's only remaining protection, so it must be shown to fire.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
+        self.sandbox.rewrite(
+            "docs/architecture/ARCHITECTURE_LINT_RULES.md", "GATE-E", "GATE-Q"
+        )
+        problems = _reconciliation_problems(self.sandbox.root)
+        self.assertTrue(
+            any(
+                "does not carry 'GATE-E'" in problem
+                and "stale GATE-E probe prose" in problem
+                for problem in problems
+            ),
+            f"the probe description was deleted and the reconciliation passed: {problems}",
+        )
+
     def test_the_review_json_and_markdown_must_agree_on_ratification(self) -> None:
         self._ratify_for_real()
         markdown = self.sandbox.root / REVIEW_MARKDOWN
@@ -3114,6 +4705,47 @@ class RatificationRecordTests(unittest.TestCase):
         )
         problems = _reconciliation_problems(self.sandbox.root)
         self.assertTrue(any(REVIEW_DISCLAIMER in problem for problem in problems), problems)
+
+    def test_a_markdown_that_does_not_quote_the_declared_status_is_rejected(self) -> None:
+        """The cross-document check itself, which nothing exercised.
+
+        `_ratify_for_real` appends the status line to the Markdown in every probe, so the
+        requirement that the Markdown quote the JSON's `review_status` was satisfied by
+        the harness everywhere and deleting the check left the suite green. Here the
+        harness does its job and then the line is taken away again: the machine-readable
+        half says ratified and the human half no longer carries the word.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
+        self.sandbox.rewrite(REVIEW_MARKDOWN, "Status: ratified_at_w0_3.", "")
+        problems = _reconciliation_problems(self.sandbox.root)
+        self.assertTrue(
+            any("does not quote the review_status" in problem for problem in problems),
+            f"the two halves of one review disagreed and nothing said so: {problems}",
+        )
+
+    def test_ratifying_while_the_status_is_still_the_unratified_one_is_rejected(
+        self,
+    ) -> None:
+        """The other unexercised branch: `ratified: true` beside the pre-ratification
+        status token.
+
+        Asserted on the specific message rather than on "something was reported". Setting
+        the status back also trips the *degeneracy* branch — the candidate's Markdown
+        already carries that token — so a probe that only checked for a non-empty list
+        would still pass with this branch deleted, which is exactly how it survived.
+        """
+        self._ratify_for_real()
+        self.sandbox.patch_json(self.review, review_status=UNRATIFIED_REVIEW_STATUS)
+        problems = _reconciliation_problems(self.sandbox.root)
+        self.assertTrue(
+            any(
+                f"declares ratified while review_status is still "
+                f"{UNRATIFIED_REVIEW_STATUS!r}" in problem
+                for problem in problems
+            ),
+            f"a ratified review kept its pre-ratification status: {problems}",
+        )
 
     def test_ratifying_on_an_unaccepted_round_is_rejected(self) -> None:
         """Both streams owed, no verdict, no reports — the probe's construction."""
@@ -3158,6 +4790,482 @@ class RatificationRecordTests(unittest.TestCase):
             any("the per-round copy exists" in problem for problem in problems), problems
         )
 
+    # ---- deletion, line wraps, and the anchors nothing anchors --------------------
+
+    def test_a_reviewed_path_deleted_after_the_freeze_voids_the_round(self) -> None:
+        """**B5.** Three ways a path can differ from the frozen tree; only two were
+        tested.
+
+        `_post_freeze_delta_problems` walks ``set(frozen) | set(present)``, so it reports
+        a path that changed, one that was *added*, and one that was **deleted**.
+        Restricting the walk to ``present`` — dropping the deletion case — left all 189
+        tests green, and deleting `contracts/analysis/v1/README.md`, a file in one of the
+        `IMMUTABLE_REVIEWED_PREFIXES` families, is exactly the drift this check exists to
+        void a round over. A tree missing a reviewed file is not the tree the acceptance
+        streams judged.
+        """
+        # The frozen digest has to be back in the manifest, or `_freeze_commit` finds
+        # no commit and this check returns early — which is how the deletion case could
+        # look covered while measuring nothing at all.
+        self._ratify_for_real()
+        self.assertIsNotNone(_freeze_commit(self.sandbox.root))
+        self.assertEqual(
+            _post_freeze_delta_problems(self.sandbox.root),
+            [],
+            "the sandbox already differs from the frozen tree, so a deletion would not "
+            "isolate the deletion case",
+        )
+        deleted = f"{ANALYSIS}/README.md"
+        self.sandbox._remember(deleted)
+        (self.sandbox.root / deleted).unlink()
+        self.assertFalse((self.sandbox.root / deleted).is_file())
+
+        problems = _post_freeze_delta_problems(self.sandbox.root)
+        self.assertTrue(
+            any("is void" in problem and deleted in problem for problem in problems),
+            f"a reviewed file was deleted after the freeze and the round stayed live: "
+            f"{problems}",
+        )
+
+    def test_the_state_document_denial_is_found_across_a_line_wrap(self) -> None:
+        """**B7.** The report claimed the denial *does* wrap in the real document.
+
+        It does not — `docs/program/CURRENT_STATE.md` carries the sentence entirely on
+        one line — so the flattening was unmeasured and the prose said something the
+        tree contradicts. Both are worth fixing rather than one: the flattening earns
+        its place because a Markdown sentence is re-wrapped by any editor or formatter,
+        and the day it wraps is the day an unmeasured check goes quietly silent. This is
+        the probe that makes the claim true, and §11.16 states the corrected version of
+        the prose.
+        """
+        document = self.sandbox.root / PROGRAM_STATE_DOCUMENT
+        original = document.read_text(encoding="utf-8")
+        self.assertIn(
+            STATE_DOCUMENT_DENIAL, original, "the denial is not there to be wrapped"
+        )
+        head, _, tail = STATE_DOCUMENT_DENIAL.partition(" ")
+        wrapped = original.replace(STATE_DOCUMENT_DENIAL, f"{head}\n{tail}")
+        self.sandbox._remember(PROGRAM_STATE_DOCUMENT)
+        document.write_text(wrapped, encoding="utf-8")
+        self.assertNotIn(
+            STATE_DOCUMENT_DENIAL,
+            document.read_text(encoding="utf-8"),
+            "the sentence did not actually cross a line, so this probe measures nothing",
+        )
+
+        # Unratified: the anchor is still found, so no anchor rot is reported.
+        self.assertEqual(
+            _state_document_problems(self.sandbox.root),
+            [],
+            "a re-wrapped denial was read as a missing denial, which would void the "
+            "anti-vacuity anchor the moment anyone reflowed the document",
+        )
+
+        # Ratified: the same wrapped sentence must still be found and reported as
+        # surviving into a ratified checkpoint.
+        self._ratify_for_real()
+        self.sandbox._remember(PROGRAM_STATE_DOCUMENT)
+        document.write_text(wrapped, encoding="utf-8")
+        self.assertTrue(
+            any(
+                f"still says {STATE_DOCUMENT_DENIAL!r}" in problem
+                for problem in _state_document_problems(self.sandbox.root)
+            ),
+            "a ratified checkpoint shipped a state document that still denies the "
+            "ratification, because the sentence had been re-wrapped",
+        )
+
+    def test_the_review_disclaimer_is_found_across_a_line_wrap(self) -> None:
+        """**B7**, the second unmeasured flattening: the review Markdown comparison."""
+        self._ratify_for_real()
+        self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
+        markdown = self.sandbox.root / REVIEW_MARKDOWN
+        head, _, tail = REVIEW_DISCLAIMER.partition(" ")
+        self.sandbox._remember(REVIEW_MARKDOWN)
+        markdown.write_text(
+            markdown.read_text(encoding="utf-8") + f"\nIt is {head}\n{tail}.\n",
+            encoding="utf-8",
+        )
+        self.assertNotIn(
+            REVIEW_DISCLAIMER,
+            markdown.read_text(encoding="utf-8"),
+            "the disclaimer did not cross a line, so this probe measures nothing",
+        )
+        self.assertTrue(
+            any(
+                REVIEW_DISCLAIMER in problem
+                for problem in _reconciliation_problems(self.sandbox.root)
+            ),
+            "a ratified review still tells the reader it ratifies nothing, and the "
+            "check missed it because the sentence was re-wrapped",
+        )
+
+    def test_the_sandbox_does_not_enumerate_its_own_virtual_environment(self) -> None:
+        """The `.venv` exclude the sandbox writes into its own copied metadata.
+
+        `.gitignore` ignores `.venv/` as a *directory*; in the sandbox it is a symlink,
+        which that pattern does not match. Without the exclude the sandbox enumerates it
+        as an untracked path, the digest recipe tries to read a directory, and
+        `_reset_to_the_frozen_tree` deletes the sandbox's own symlink to the live
+        virtual environment — after which every documented gate in that sandbox fails
+        for a reason that has nothing to do with what it is testing. Removing the
+        exclude left the suite green.
+        """
+        self.assertEqual(
+            [path for path in _digest_paths(self.sandbox.root) if path.startswith(".venv")],
+            [],
+            "the sandbox enumerates its own .venv symlink",
+        )
+        self.assertTrue(
+            (self.sandbox.root / ".venv").is_symlink(),
+            "the sandbox lost its .venv symlink, so its documented gates cannot run",
+        )
+        self.assertTrue((self.sandbox.root / ".venv/bootstrap/bin/python").exists())
+
+    # ---- the acceptance gate, one branch at a time (B1) ---------------------------
+    #
+    # An independent reviewer disabled six branches of `_acceptance_problems`
+    # individually and the whole suite stayed green, while each one was demonstrably
+    # load-bearing when driven against a fully ratified sandbox. The branches were not
+    # untested by oversight: every existing probe drives an *unratified* or
+    # *deliberately broken* tree, and these six live behind `if manifest.get("ratified")
+    # is not True: return problems`. What was missing was a fixture that is a clean,
+    # complete, accepted ratification — one thing broken at a time, everything else
+    # right. `_ratify_for_real` builds one; `_a_clean_ratification` asserts it is clean
+    # before anything is broken, because a probe run against an already-failing fixture
+    # proves nothing about the branch it names.
+
+    def _a_clean_ratification(self) -> Path:
+        """A ratification with nothing wrong with it, asserted to be so."""
+        self._ratify_for_real()
+        self.assertEqual(
+            _acceptance_problems(self.sandbox.root),
+            [],
+            "the fixture is not a clean ratification, so breaking one thing in it "
+            "would not isolate the branch under test",
+        )
+        return self.sandbox.root / CHECKPOINT_MANIFEST
+
+    @staticmethod
+    def _amend(path: Path, mutate) -> int:
+        """Apply one change to the manifest and its current round. Returns the round."""
+        document = json.loads(path.read_text(encoding="utf-8"))
+        number = document["current_round"]
+        current = next(
+            entry
+            for entry in document["acceptance_rounds"]
+            if entry.get("round") == number
+        )
+        mutate(document, current)
+        path.write_text(
+            json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        return number
+
+    def test_a_ratification_recording_no_digests_at_all_is_rejected(self) -> None:
+        """**B1, the material one.** The only check between CP-00 and a ratification
+        that records nothing about what was tested.
+
+        With the digest-shape branch disabled, a complete and content-correct
+        ratification carrying ``tested_candidate_digest: null`` and
+        ``evidence_bundle_digest: null`` produced `[]` from every check in the module —
+        and not by coincidence. `_tested_digest_problems` returns `[]` on `None` **by
+        design**, because `null` is a legitimate pre-round state; the evidence
+        recomputation is gated on ``isinstance(evidence, str)`` for the same reason.
+        Both halves of §8.12's two-half guarantee go silent together on exactly this
+        input, so this one branch is the whole of the guarantee at ratification time.
+
+        The probe therefore asserts the silence of the neighbours too. Without that it
+        would be a test of one message; with it, it is the record of *why* the branch
+        cannot be dropped.
+        """
+        path = self._a_clean_ratification()
+
+        def blank(document, current):
+            for field in ACCEPTANCE_DIGEST_FIELDS:
+                document[field] = None
+                current[field] = None
+
+        number = self._amend(path, blank)
+        root = self.sandbox.root
+
+        # Every neighbouring check is silent on this tree — by design, not by accident.
+        self.assertEqual(_tested_digest_problems(root), [])
+        self.assertEqual(_reconciliation_problems(root), [])
+        self.assertIsNone(_registry_state_problem(root))
+        self.assertEqual(_ratification_delta_problems(root), [])
+        self.assertEqual(_post_freeze_delta_problems(root), [])
+
+        self.assertEqual(
+            sorted(_acceptance_problems(root)),
+            sorted(
+                f"{field} at the {where} is None; a ratified checkpoint must record "
+                "both digests"
+                for field in ACCEPTANCE_DIGEST_FIELDS
+                for where in ("top level", f"round {number}")
+            ),
+            "a ratified checkpoint recording neither digest was accepted",
+        )
+
+    def test_a_ratification_whose_digests_are_not_digests_is_rejected(self) -> None:
+        """The other half of the same branch: present, wrong shape.
+
+        `null` and ``"pending"`` fail for different reasons in the same expression, and
+        a probe for one does not cover the other.
+        """
+        for bad in ("pending", "", "DEADBEEF" * 8, "a" * 63, 5):
+            with self.subTest(value=bad):
+                path = self._a_clean_ratification()
+                number = self._amend(
+                    path,
+                    lambda document, current, value=bad: [
+                        document.__setitem__("tested_candidate_digest", value),
+                        current.__setitem__("tested_candidate_digest", value),
+                    ],
+                )
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(
+                        f"tested_candidate_digest at the top level is {bad!r}" in problem
+                        for problem in problems
+                    ),
+                    f"{bad!r} was accepted as a digest: {problems}",
+                )
+                self.assertTrue(
+                    any(
+                        f"tested_candidate_digest at the round {number} is" in problem
+                        for problem in problems
+                    ),
+                    f"only the top level was checked: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_a_round_whose_streams_are_not_an_object_is_rejected(self) -> None:
+        """**B1's one uncovered branch of that class.**
+
+        The B1 table drove the *contents* of `streams` — a stream that is not `PASS` —
+        and never its *shape*. Reducing ``if not isinstance(streams, dict):`` to ``if
+        False:`` left all 244 tests green, and the branch is load-bearing in both
+        directions at once: live code reports ``round 5 records no streams object``,
+        while the mutant reaches ``streams.get(name)`` and raises `AttributeError`
+        against the same input. A check whose removal turns a reported problem into a
+        crash is not decoration.
+
+        Every shape a hand-edited manifest plausibly reaches this with, including the
+        one that matters most — the key absent altogether, which is what a record
+        written from a template that never had it looks like.
+        """
+        cases = (
+            ("absent", None),
+            ("a string", "PASS"),
+            ("a list of the two stream names", ["automated", "manual"]),
+            ("null", None),
+            ("a bare boolean", True),
+        )
+        for label, value in cases:
+            with self.subTest(streams=label):
+                try:
+                    path = self._a_clean_ratification()
+                    if label == "absent":
+                        number = self._amend(
+                            path, lambda document, current: current.pop("streams", None)
+                        )
+                    else:
+                        number = self._amend(
+                            path,
+                            lambda document, current, v=value: current.__setitem__(
+                                "streams", v
+                            ),
+                        )
+                    problems = _acceptance_problems(self.sandbox.root)
+                    self.assertIn(
+                        f"round {number} records no streams object",
+                        problems,
+                        "a round with no usable streams object was accepted",
+                    )
+                    # And not by the branch below it: a non-object never reaches the
+                    # per-stream comparison, so a probe that accepted either message
+                    # would pass on the mutant, which raises before reporting anything.
+                    self.assertEqual(
+                        [
+                            problem
+                            for problem in problems
+                            if "both streams must pass" in problem
+                        ],
+                        [],
+                    )
+                finally:
+                    self.sandbox.restore()
+        self.assertEqual(len(cases), 5)
+
+    def test_a_round_naming_a_primary_report_that_is_not_there_is_rejected(self) -> None:
+        """B1: `manual_report`/`automated_report` must exist **as files**.
+
+        `test_a_missing_primary_report_blocks_ratification` covers the branch above this
+        one — the field being absent or not a string. The `elif` that opens the file is
+        a different branch and had nothing driving it, so a round could name a report
+        that was never written and ratify.
+        """
+        absent = "artifacts/checkpoints/CP-00/manual-report-round-never.md"
+        for field in ("manual_report", "automated_report"):
+            with self.subTest(field=field):
+                path = self._a_clean_ratification()
+                number = self._amend(
+                    path,
+                    lambda document, current, name=field: current.__setitem__(
+                        name, absent
+                    ),
+                )
+                self.assertFalse((self.sandbox.root / absent).exists())
+                self.assertIn(
+                    f"round {number} names {field} {absent!r}, which does not exist",
+                    _acceptance_problems(self.sandbox.root),
+                )
+                self.sandbox.restore()
+
+    def test_a_stream_acceptance_record_that_is_not_an_object_is_rejected(self) -> None:
+        """B1: `manual_acceptance`/`automated_acceptance` must be objects.
+
+        A string here does not merely fail to carry a status — it makes every field
+        read off it silently absent, so without this branch the three checks below it
+        become unreachable rather than failing.
+        """
+        for name in ("manual_acceptance", "automated_acceptance"):
+            for value in ("PASS", ["PASS"], True, None):
+                with self.subTest(record=name, value=value):
+                    path = self._a_clean_ratification()
+                    self._amend(
+                        path,
+                        lambda document, current, n=name, v=value: document.__setitem__(
+                            n, v
+                        ),
+                    )
+                    problems = _acceptance_problems(self.sandbox.root)
+                    self.assertIn(f"{name} must be an object", problems)
+                    self.assertFalse(
+                        any(f"{name}.status" in problem for problem in problems),
+                        "the branch fell through to the field reads, so it did not "
+                        f"stop the way it must: {problems}",
+                    )
+                    self.sandbox.restore()
+
+    def test_a_stream_acceptance_record_for_another_round_is_rejected(self) -> None:
+        """B1: the stream's own record must be about the round being ratified.
+
+        Otherwise last round's passing acceptance record ratifies this round — the
+        record says `PASS`, it names a report that exists, and nothing compares the
+        number it carries with `current_round`.
+        """
+        for name in ("manual_acceptance", "automated_acceptance"):
+            with self.subTest(record=name):
+                path = self._a_clean_ratification()
+                number = self._amend(
+                    path,
+                    lambda document, current, n=name: document[n].__setitem__(
+                        "round", document["current_round"] - 1
+                    ),
+                )
+                self.assertIn(
+                    f"{name}.round is {number - 1} and current_round is {number}",
+                    _acceptance_problems(self.sandbox.root),
+                )
+                self.sandbox.restore()
+
+    def test_a_stream_acceptance_report_path_that_is_not_there_is_rejected(self) -> None:
+        """B1: `<stream>_acceptance.report_path` must exist as a file."""
+        absent = "artifacts/checkpoints/CP-00/acceptance-that-was-never-written.md"
+        for name in ("manual_acceptance", "automated_acceptance"):
+            with self.subTest(record=name):
+                path = self._a_clean_ratification()
+                self._amend(
+                    path,
+                    lambda document, current, n=name: document[n].__setitem__(
+                        "report_path", absent
+                    ),
+                )
+                self.assertFalse((self.sandbox.root / absent).exists())
+                self.assertIn(
+                    f"{name}.report_path {absent!r} does not exist",
+                    _acceptance_problems(self.sandbox.root),
+                )
+                self.sandbox.restore()
+
+    def test_an_acceptance_round_that_is_not_an_object_with_an_int_round_is_rejected(
+        self,
+    ) -> None:
+        """B1: the shape every later read of `acceptance_rounds` depends on.
+
+        This branch guards the arithmetic, not the policy: `numbers` is zipped against
+        `rounds` and every downstream comparison assumes an int. It fires before the
+        ratification gate, so unlike the five above it is reachable on an unratified
+        tree — it was untested all the same.
+        """
+        cases = (
+            ("a non-object entry", "round six"),
+            ("an entry with no round at all", {"verdict": "PASS"}),
+            ("an entry whose round is a string", {"round": "6"}),
+            ("an entry whose round is a float", {"round": 6.0}),
+        )
+        for label, entry in cases:
+            with self.subTest(case=label):
+                path = self._a_clean_ratification()
+                self._amend(
+                    path,
+                    lambda document, current, e=entry: document[
+                        "acceptance_rounds"
+                    ].append(e),
+                )
+                self.assertEqual(
+                    _acceptance_problems(self.sandbox.root),
+                    [
+                        "every acceptance_rounds entry must be an object with an int "
+                        "round"
+                    ],
+                    "a malformed acceptance_rounds entry was read as a round",
+                )
+                self.sandbox.restore()
+
+    # ---- the two admissibility guards on the data W0-INT-01 writes (B6) ------------
+
+    def test_a_ratified_flag_that_is_not_a_boolean_is_rejected(self) -> None:
+        """B6: ``"true"`` is a string, and a truthy one.
+
+        `_ratification_record` reads this field and every delta decision hangs off it.
+        The live code catches the string; nothing required it to, so the guard could be
+        deleted with 189 tests green — and then the *string* ``"false"`` would license
+        the full ratification delta, because a non-empty string is truthy.
+        """
+        for value in ("true", "false", 1, 0, [], None):
+            with self.subTest(value=value):
+                self.sandbox.patch_json(CHECKPOINT_MANIFEST, ratified=value)
+                _flag, _paths, problems = _ratification_record(self.sandbox.root)
+                self.assertIn(
+                    f"{CHECKPOINT_MANIFEST}: 'ratified' must be a boolean, got {value!r}",
+                    problems,
+                )
+                self.sandbox.restore()
+
+    def test_allowed_delta_paths_holding_something_other_than_strings_is_rejected(
+        self,
+    ) -> None:
+        """B6: the list `W0-INT-01` writes is the licence, so its contents are checked.
+
+        Without this, a non-string entry survives into the set the delta is compared
+        against, where it can never match a path and so silently narrows nothing — or,
+        worse, a dict is compared for membership and raises inside the check that is
+        supposed to be reporting problems.
+        """
+        for bad in (["docs/architecture/GLOSSARY.md", 7], [None], [{"path": "x"}], [[]]):
+            with self.subTest(value=bad):
+                self.sandbox.declare_ratification(bad)
+                _flag, _paths, problems = _ratification_record(self.sandbox.root)
+                self.assertIn(
+                    f"{CHECKPOINT_MANIFEST}: ratification.allowed_delta_paths must "
+                    "hold strings",
+                    problems,
+                )
+                self.sandbox.restore()
+
     def test_the_evidence_digest_depends_on_the_tested_digest(self) -> None:
         """The binding, measured. This is the check the prose used to stand in for.
 
@@ -3181,6 +5289,21 @@ class RatificationRecordTests(unittest.TestCase):
             "the evidence digest is independent of tested_candidate_digest, so evidence "
             f"from any tree can be presented as this round's: {digests}",
         )
+        # The line this probe used to stop one short of. Arithmetic dependence is not
+        # verification: each of those three trees is a complete, content-correct
+        # ratification whose `tested_candidate_digest` names a tree that never existed,
+        # and every one of them was accepted with every check silent until round seven.
+        for tested in digests:
+            with self.subTest(tested=tested[:16]):
+                self.sandbox.seal_digests(tested=tested)
+                self.assertTrue(
+                    any(
+                        "is frozen at no commit" in problem
+                        for problem in _acceptance_problems(self.sandbox.root)
+                    ),
+                    "a tested_candidate_digest naming a tree that never existed was "
+                    "accepted; depending on a value is not checking it",
+                )
 
     def test_swapping_the_tested_digest_alone_breaks_the_evidence_digest(self) -> None:
         """The same fact as a rejection, end to end through the live check."""
@@ -3204,6 +5327,529 @@ class RatificationRecordTests(unittest.TestCase):
             f"{problems}",
         )
 
+    def test_a_fabricated_tested_digest_is_rejected(self) -> None:
+        """Round seven's blocker, in the construction the reviewer used.
+
+        A complete, content-correct ratification — record, flag, five real
+        reconciliations, an accepted round with both primary reports on disk, the
+        registry in agreement — whose `tested_candidate_digest` names a tree that never
+        existed. Sealed in the order the manifest's own recipe prescribes: all structure
+        first, the tested value frozen, the evidence digest computed last over the
+        finished tree, so it reproduces and nothing downstream notices.
+
+        Every check was silent. `_acceptance_problems` read the field for 64-hex shape
+        and for top-level/per-round agreement and never again; `_retro_edited_digests`
+        catches a value changed *after* its commit and is silent by construction when
+        the fabricated value is the one that got committed.
+        """
+        for fabricated in ("deadbeef" * 8, "c" * 64, "0" * 64):
+            with self.subTest(tested=fabricated[:16]):
+                self._ratify_for_real()
+                self.sandbox.seal_digests(tested=fabricated)
+                self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
+                self.assertIsNone(_registry_state_problem(self.sandbox.root))
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any("is frozen at no commit" in problem for problem in problems),
+                    "a ratification naming a tree that never existed was accepted: "
+                    f"{problems}",
+                )
+                self.sandbox.restore()
+
+    def test_the_tested_digest_recomputes_over_the_commit_that_froze_it(self) -> None:
+        """The premise that licensed leaving this field unchecked, tested and false.
+
+        §8.12 said the value "cannot be recomputed after the fact by anyone", because
+        the tree it describes stops existing once the results are written. The recipe
+        blanks the field being computed, so the value is exactly the digest of the tree
+        at the commit that froze it — and Git keeps that tree forever. The manifest
+        never has to record its own commit: history supplies it.
+
+        Two-way, so it cannot rot into a pass. If a digest is recorded it must be frozen
+        at a commit and reproduce there; if none is recorded there must be no freeze
+        commit to find. The recipe's tree-sensitivity is shown on real data rather than
+        asserted: the same recipe over a different real tree gives a different value, so
+        this is a comparison between trees and not a shape check that any 64-hex string
+        would pass.
+        """
+        self.assertEqual(_tested_digest_problems(REPOSITORY_ROOT), [])
+        manifest = _checkpoint_manifest(REPOSITORY_ROOT)
+        declared = manifest.get("tested_candidate_digest")
+        commit = _freeze_commit(REPOSITORY_ROOT)
+        if not declared:
+            self.assertIsNone(
+                commit,
+                "no tested_candidate_digest is recorded, yet a commit was accepted as "
+                "having frozen one",
+            )
+            return
+        self.assertIsNotNone(
+            commit, f"tested_candidate_digest {declared} is frozen at no commit"
+        )
+        self.assertEqual(
+            _acceptance_digest_at(REPOSITORY_ROOT, commit, "tested_candidate_digest"),
+            declared,
+            "the declared tested_candidate_digest is not the digest of the tree at the "
+            "commit that froze it",
+        )
+        self.assertNotEqual(
+            _acceptance_digest_at(
+                REPOSITORY_ROOT, REVIEWED_CANDIDATE_COMMIT, "tested_candidate_digest"
+            ),
+            declared,
+            "the recipe returns the same value over two different trees, so recomputing "
+            "it proves nothing about which tree was judged",
+        )
+
+    def test_a_tested_digest_that_does_not_reproduce_at_its_freeze_commit_is_rejected(
+        self,
+    ) -> None:
+        """The second failure mode of half one, which needs a commit to construct.
+
+        A value that no commit carries is caught by discovery. A value a commit *does*
+        carry but that does not describe that commit's tree can only be built by writing
+        a commit, which this module does not do — so the freeze commit is substituted
+        instead, which mutates exactly the thing under test: which tree the declared
+        value is claimed to be the digest of.
+        """
+        with unittest.mock.patch.object(
+            sys.modules[__name__],
+            "_freeze_commit",
+            lambda root: REVIEWED_CANDIDATE_COMMIT,
+        ):
+            problems = _tested_digest_problems(REPOSITORY_ROOT)
+        self.assertTrue(
+            any("does not reproduce over the tree of" in problem for problem in problems),
+            problems,
+        )
+
+    def test_a_tree_that_moved_after_the_freeze_voids_the_round(self) -> None:
+        """Half two: the judged tree must be the frozen tree.
+
+        Recomputing over the freeze commit proves the value names a real tree. It cannot
+        prove that tree is the one in front of you — the freeze commit is immutable, so
+        half one stays green however far the working tree drifts. What bounds the drift
+        is the ceiling: the round's declared acceptance evidence, the three external
+        records, and the five files ratification itself reconciles. Anything else and
+        the streams judged a different input.
+
+        The probe also asserts the ceiling is a ceiling and not a shrug: the licensed
+        paths a real ratification moves are *not* named as strangers.
+
+        The stranger used to be `docs/program/CURRENT_STATE.md`, and round seven had to
+        license that path — so the probe would have been asserting that a licensed file
+        is unlicensed. The replacement is chosen so it can never become licensed rather
+        than because it reads well: `contracts/**` is one of the
+        :data:`IMMUTABLE_REVIEWED_PREFIXES` this module states ratification never
+        reaches, and the assertions below pin that property instead of trusting it.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+        stranger = POST_FREEZE_STRANGER
+        self.assertTrue(stranger.startswith(IMMUTABLE_REVIEWED_PREFIXES))
+        self.assertNotIn(stranger, POST_FREEZE_DELTA_CEILING)
+        self.assertFalse(stranger.startswith(ACCEPTANCE_EVIDENCE_PREFIX))
+        self.sandbox.edit(stranger, marker="\n<!-- moved after the freeze -->\n")
+        problems = _post_freeze_delta_problems(self.sandbox.root)
+        self.assertTrue(
+            any("is void" in problem and stranger in problem for problem in problems),
+            f"the tree moved outside the ceiling and the round stayed live: {problems}",
+        )
+        reported = "\n".join(problems)
+        for licensed in sorted(POST_FREEZE_DELTA_CEILING):
+            self.assertNotIn(
+                licensed,
+                reported,
+                "a path ratification is entitled to move was reported as voiding the "
+                "round",
+            )
+        self.assertTrue(
+            any("is void" in problem for problem in _acceptance_problems(self.sandbox.root)),
+            "the void round was still ratifiable",
+        )
+
+    def test_an_untracked_path_added_after_the_freeze_voids_the_round(self) -> None:
+        """The other half of the digest recipe, which nothing measured.
+
+        `_digest_paths` is `--cached --others --exclude-standard`: tracked **and**
+        untracked-not-ignored, which is the recipe's own wording and the reason the
+        manifest gives for it — globbing the working tree would hash a gitignored
+        `.pyc`. Round nine's reviewer deleted `--others` and the suite stayed green,
+        because the probe above moves a *tracked* file and every other digest probe edits
+        one too. An untracked file dropped into a reviewed family after the freeze is a
+        different tree by the recipe's own definition, and until now nothing said so.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+        stranger = "contracts/POST_FREEZE_UNTRACKED.md"
+        path = self.sandbox.root / stranger
+        self.addCleanup(path.unlink, True)
+        path.write_text("added after the freeze, never committed\n", encoding="utf-8")
+
+        self.assertIn(
+            stranger,
+            _digest_paths(self.sandbox.root),
+            "the recipe does not enumerate untracked files, so this probe measures "
+            "nothing",
+        )
+        self.assertNotIn(
+            stranger,
+            _git(
+                "-C", str(self.sandbox.root), "ls-files", "--cached",
+                text=True, check=True,
+            ).stdout.split("\n"),
+            "the path is tracked, so this is the case the probe above already covers",
+        )
+        problems = _post_freeze_delta_problems(self.sandbox.root)
+        self.assertTrue(
+            any("is void" in problem and stranger in problem for problem in problems),
+            f"an untracked file appeared after the freeze and the round stayed live: "
+            f"{problems}",
+        )
+
+    def test_a_report_path_outside_the_evidence_prefix_licenses_nothing(self) -> None:
+        """The round declares its own evidence, so the declaration is bounded.
+
+        `manual_report` and `automated_report` are data. Without a prefix a round could
+        license any drift it liked by naming the drifted file as its own report — the
+        same manoeuvre the ceiling on `allowed_delta_paths` exists to stop one level up.
+        """
+        self._ratify_for_real()
+        stranger = POST_FREEZE_STRANGER
+        self.assertFalse(stranger.startswith(ACCEPTANCE_EVIDENCE_PREFIX))
+        self.sandbox.edit(stranger, marker="\n<!-- moved after the freeze -->\n")
+        manifest = json.loads(
+            (self.sandbox.root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8")
+        )
+        for entry in manifest["acceptance_rounds"]:
+            if entry.get("round") == manifest["current_round"]:
+                entry["manual_report"] = stranger
+        manifest["manual_acceptance"]["report_path"] = stranger
+        (self.sandbox.root / CHECKPOINT_MANIFEST).write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        problems = _post_freeze_delta_problems(self.sandbox.root)
+        self.assertTrue(
+            any("is void" in problem and stranger in problem for problem in problems),
+            f"a round licensed its own drift by calling it a report: {problems}",
+        )
+
+    def test_a_declared_report_path_that_escapes_the_prefix_is_not_honoured(self) -> None:
+        """The traversal clause, exercised where it is decidable — and its real reach,
+        stated rather than overclaimed.
+
+        ``".." not in value.split("/")`` survives removal with the whole suite green,
+        and it is worth being exact about why. `_declared_evidence_paths` feeds one
+        consumer, `_post_freeze_delta_problems`, which tests membership against a delta
+        built from `git`-normalised repository-relative paths. A string containing `..`
+        never equals one of those, so today the clause changes no verdict and no
+        end-to-end probe can make it change one. Round eleven does not pretend otherwise
+        by dressing an unreachable branch in a behavioural probe.
+
+        What it *is* is the difference between a prefix test and a containment test, on
+        a value that is manifest **data** — and the manifest is written by the task this
+        module exists to constrain. `artifacts/checkpoints/CP-00/../../contracts/x`
+        starts with `ACCEPTANCE_EVIDENCE_PREFIX` and names a file two families away. The
+        clause is asserted here at the level it decides, so that removing it is red, and
+        §11.17.5 records that its effect is defence for a future consumer rather than a
+        live control.
+        """
+        escapes = (
+            f"{ACCEPTANCE_EVIDENCE_PREFIX}../../contracts/README.md",
+            f"{ACCEPTANCE_EVIDENCE_PREFIX}../manifest.json",
+            f"{ACCEPTANCE_EVIDENCE_PREFIX}reports/../../../etc/passwd",
+        )
+        inside = f"{ACCEPTANCE_EVIDENCE_PREFIX}reports/round-5-manual.md"
+        for value in escapes:
+            with self.subTest(declared=value):
+                self.assertTrue(
+                    value.startswith(ACCEPTANCE_EVIDENCE_PREFIX),
+                    "this case does not reach the traversal clause at all, because the "
+                    "prefix test rejects it first",
+                )
+                manifest = {
+                    "current_round": 5,
+                    "acceptance_rounds": [{"round": 5, "manual_report": value}],
+                    "manual_acceptance": {"report_path": value},
+                }
+                self.assertEqual(_declared_evidence_paths(manifest), set())
+        # The control: a path that stays inside the prefix is still honoured, so the
+        # clause is not simply rejecting everything.
+        self.assertEqual(
+            _declared_evidence_paths(
+                {
+                    "current_round": 5,
+                    "acceptance_rounds": [{"round": 5, "manual_report": inside}],
+                }
+            ),
+            {inside},
+        )
+        self.assertEqual(len(escapes), 3)
+
+    def test_a_closed_rounds_report_path_does_not_license_drift(self) -> None:
+        """`_declared_evidence_paths`' current-round filter, exercised directly.
+
+        The probe above proves a report path needs the `ACCEPTANCE_EVIDENCE_PREFIX`.
+        This one proves the separate half: it also needs to belong to the round that is
+        open *now*. Without `entry.get("round") == number`, any past round's
+        `manual_report` or `automated_report` — however long closed — would go on
+        licensing drift to that path forever, the same "declaring the work is not doing
+        it" shape §11.8 closed for the ratification delta, one field over. A round that
+        is `spent` or `void` cannot un-declare a stranger just by having once named a
+        path near it.
+        """
+        self._ratify_for_real()
+        manifest = json.loads(
+            (self.sandbox.root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8")
+        )
+        current = manifest["current_round"]
+        closed_rounds = [
+            entry.get("round")
+            for entry in manifest["acceptance_rounds"]
+            if entry.get("round") != current
+        ]
+        self.assertTrue(closed_rounds, "this manifest has no closed round to attack")
+
+        stranger = f"{ACCEPTANCE_EVIDENCE_PREFIX}old-round-report.md"
+        path = self.sandbox.root / stranger
+        self.addCleanup(path.unlink, True)
+        path.write_text("claimed by a closed round, not the open one\n", encoding="utf-8")
+        for entry in manifest["acceptance_rounds"]:
+            if entry.get("round") == closed_rounds[0]:
+                entry["manual_report"] = stranger
+        (self.sandbox.root / CHECKPOINT_MANIFEST).write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        self.assertNotIn(
+            stranger,
+            _declared_evidence_paths(manifest),
+            "a closed round's report path is licensed forever; the filter is not "
+            "running",
+        )
+        problems = _post_freeze_delta_problems(self.sandbox.root)
+        self.assertTrue(
+            any("is void" in problem and stranger in problem for problem in problems),
+            f"a closed round's declared report path licensed drift after the freeze: "
+            f"{problems}",
+        )
+
+    # ---- round seven: the third external record ----------------------------------
+
+    def test_the_state_document_is_licensed_and_moving_it_does_not_void_the_round(
+        self,
+    ) -> None:
+        """The deadlock round seven had to break, shown from the licensed side.
+
+        `docs/program/CURRENT_STATE.md` is inside `_digest_paths`, and ratification
+        cannot leave it alone: it says in as many words that nothing is ratified. Before
+        this round it was unlicensed, so the very edit ratification owes voided the round
+        that ratification stood on. The probe asserts both halves of the fix at once —
+        the document really did move after the freeze, and the move is not a stranger.
+        """
+        self._ratify_for_real()
+        frozen = _tree_blobs(self.sandbox.root, self.sandbox.frozen_commit)
+        self.assertNotEqual(
+            frozen[PROGRAM_STATE_DOCUMENT],
+            (self.sandbox.root / PROGRAM_STATE_DOCUMENT).read_bytes(),
+            "the harness did not move the state document, so this proves nothing",
+        )
+        self.assertEqual(_post_freeze_delta_problems(self.sandbox.root), [])
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+
+    def test_a_ratified_checkpoint_may_not_still_deny_the_ratification(self) -> None:
+        """What the licence is paid for. Nothing checked this before round seven.
+
+        The registry had `_registry_state_problem`; the state document had nothing at
+        all, so a ratified CP-00 could ship a state document reading "Nothing is
+        ratified, nothing is tagged" and no check anywhere would notice.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_state_document_problems(self.sandbox.root), [])
+        self.sandbox.restore_one(PROGRAM_STATE_DOCUMENT)
+        problems = _state_document_problems(self.sandbox.root)
+        self.assertTrue(
+            any(
+                "denies the ratification" in problem
+                and STATE_DOCUMENT_DENIAL in problem
+                for problem in problems
+            ),
+            f"a ratified checkpoint kept its denial and passed: {problems}",
+        )
+        self.assertTrue(
+            any("denies the ratification" in problem for problem in
+                _acceptance_problems(self.sandbox.root)),
+            "the contradiction did not block ratification",
+        )
+
+    def test_gutting_the_state_document_is_not_a_way_to_remove_the_denial(self) -> None:
+        """Removal-only checks are satisfiable by deletion; this is the guard.
+
+        The same defect class as the `GATE-E` entry, whose `must_still_contain` guard
+        sat unreachable behind `if False and ...` until this round. Neither needle is
+        evidence the document was updated — both are already in it — and the report
+        says so rather than letting the guard read as content verification.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_state_document_problems(self.sandbox.root), [])
+        self.sandbox._remember(PROGRAM_STATE_DOCUMENT)
+        (self.sandbox.root / PROGRAM_STATE_DOCUMENT).write_text(
+            "gutted\n", encoding="utf-8"
+        )
+        problems = _state_document_problems(self.sandbox.root)
+
+        # B2, the round-seven defect one constant over. Looping over the table means
+        # `STATE_DOCUMENT_MUST_STILL_CONTAIN = ()` runs zero subtests, asserts nothing
+        # and leaves the suite green with the anti-gutting guard gone. The identical
+        # guard for `RECONCILIATIONS[2]` is killed by its own probe precisely because
+        # that one asserts the literal message instead of looping over the table, so
+        # this one now does the same: the needles are pinned here, in the test, and the
+        # message for each is asserted by name.
+        self.assertEqual(
+            STATE_DOCUMENT_MUST_STILL_CONTAIN,
+            ("# Current state", "CP-00"),
+            "the anti-gutting table changed. Emptying or narrowing it must be a "
+            "decision made here, in the probe, and not a silent one that leaves this "
+            "test asserting nothing",
+        )
+        for needle in ("# Current state", "CP-00"):
+            with self.subTest(needle=needle):
+                self.assertIn(
+                    f"{PROGRAM_STATE_DOCUMENT} does not carry {needle!r}. The denial "
+                    "must be removed by updating the state document, not by gutting "
+                    "it.",
+                    problems,
+                    f"the denial was removed by deleting the document: {problems}",
+                )
+
+    def test_removing_the_denial_before_ratification_is_reported_as_anchor_rot(
+        self,
+    ) -> None:
+        """The anti-vacuity half, and the reason this is not a one-directional check.
+
+        A removal requirement whose phrase has quietly been reworded passes forever
+        without ever proving anything. Because the unratified state *requires* the
+        sentence, a reword fails immediately — while CP-00 is still unratified and
+        re-anchoring the module costs nothing — instead of failing to fire years later
+        at the one moment it mattered.
+        """
+        self.assertIs(
+            _checkpoint_manifest(self.sandbox.root).get("ratified"),
+            False,
+            "the sandbox is not in the unratified state this probe needs",
+        )
+        self.assertEqual(_state_document_problems(self.sandbox.root), [])
+        self.sandbox.update_state_document()
+        problems = _state_document_problems(self.sandbox.root)
+        self.assertTrue(
+            any(
+                "anchor rot" in problem and STATE_DOCUMENT_DENIAL in problem
+                for problem in problems
+            ),
+            f"the anchor was removed while unratified and nothing said so: {problems}",
+        )
+
+    # ---- round nine: branches no probe had reached --------------------------------
+
+    def test_a_malformed_acceptance_record_is_named_branch_by_branch(self) -> None:
+        """Structural branches of `_acceptance_problems`, each with its own message.
+
+        All of these survived round nine's mutation sweep: every probe fed the check a
+        well-formed manifest and attacked the *policy*, so the shape checks underneath ran
+        and could not fail. They are cheap, they are the difference between a clear
+        rejection and a `KeyError`, and the reviewer was right that nothing measured them.
+        """
+        cases = (
+            ("acceptance_rounds is not a list", {"acceptance_rounds": {}},
+             "must be a non-empty list"),
+            ("acceptance_rounds is empty", {"acceptance_rounds": []},
+             "must be a non-empty list"),
+            ("an entry is not an object", {"acceptance_rounds": [1, 2]},
+             "must be an object with an int round"),
+            ("round numbers repeat", {"acceptance_rounds": [{"round": 5}, {"round": 5}]},
+             "unique and ascending"),
+            ("round numbers descend", {"acceptance_rounds": [{"round": 6}, {"round": 5}]},
+             "unique and ascending"),
+            ("current_round is not an integer", {"current_round": "five"},
+             "current_round must be an integer"),
+            ("no entry for the current round", {"current_round": 99},
+             "acceptance_rounds carries 0 entries for it"),
+        )
+        for label, fields, expected in cases:
+            with self.subTest(case=label):
+                self.sandbox.patch_json(CHECKPOINT_MANIFEST, **fields)
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(expected in problem for problem in problems),
+                    f"{label} was accepted, or reported as something else: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_a_per_round_digest_that_disagrees_with_the_top_level_is_named(self) -> None:
+        """The per-round copy exists so a retro-edit cannot hide. The comparison must run."""
+        self._ratify_for_real()
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+        path = self.sandbox.root / CHECKPOINT_MANIFEST
+        self.sandbox._remember(CHECKPOINT_MANIFEST)
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        for entry in manifest["acceptance_rounds"]:
+            if entry.get("round") == manifest["current_round"]:
+                entry["tested_candidate_digest"] = "f" * 64
+        path.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any(
+                "the per-round copy exists so a retro-edit cannot hide" in problem
+                for problem in problems
+            ),
+            f"the two copies of the tested digest disagreed and nothing said so: {problems}",
+        )
+
+    def test_the_registry_must_carry_exactly_one_cp00_row(self) -> None:
+        """Zero rows and two rows are both ambiguity, and ambiguity is a failure."""
+        path = self.sandbox.root / CHECKPOINT_REGISTRY
+        original = path.read_text(encoding="utf-8")
+        row = next(
+            line for line in original.splitlines() if line.startswith("| CP-00 ")
+        )
+        cases = (
+            ("no CP-00 row", original.replace(row, row.replace("| CP-00 ", "| CP-99 ", 1))),
+            ("two CP-00 rows", original.replace(row, row + "\n" + row, 1)),
+        )
+        for label, text in cases:
+            with self.subTest(case=label):
+                self.sandbox._remember(CHECKPOINT_REGISTRY)
+                path.write_text(text, encoding="utf-8")
+                self.assertEqual(
+                    _registry_state_problem(self.sandbox.root),
+                    f"{CHECKPOINT_REGISTRY} does not carry exactly one CP-00 row",
+                )
+                self.sandbox.restore()
+
+    def test_the_absent_document_branches_report_rather_than_assume_agreement(self) -> None:
+        """A record that is not there is not a record that agrees.
+
+        Nothing in the suite ever removed one of these files, so every "is missing"
+        branch was removable while green. Absence has to be reported: the alternative is
+        a check that reads nothing and returns nothing to say about it.
+        """
+        self.sandbox._remember(PROGRAM_STATE_DOCUMENT)
+        (self.sandbox.root / PROGRAM_STATE_DOCUMENT).unlink()
+        self.assertEqual(
+            _state_document_problems(self.sandbox.root),
+            [f"{PROGRAM_STATE_DOCUMENT} is missing"],
+        )
+        self.sandbox.restore()
+
+        self.sandbox._remember(CHECKPOINT_MANIFEST)
+        (self.sandbox.root / CHECKPOINT_MANIFEST).unlink()
+        missing = f"{CHECKPOINT_MANIFEST} is missing"
+        self.assertEqual(_registry_state_problem(self.sandbox.root), missing)
+        self.assertEqual(_state_document_problems(self.sandbox.root), [missing])
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [missing])
+        self.assertEqual(_tested_digest_problems(self.sandbox.root), [missing])
+
     def test_an_evidence_digest_that_does_not_reproduce_is_rejected(self) -> None:
         """Evidence from another tree cannot be presented as this round's."""
         self._ratify_for_real()
@@ -3216,11 +5862,22 @@ class RatificationRecordTests(unittest.TestCase):
         )
 
     def test_the_retro_edit_rule_is_proved_on_synthetic_history(self) -> None:
-        """The real history has nothing to compare yet, so prove the rule directly.
+        """The repository cannot exercise the rule, so prove it directly.
 
-        Every committed manifest so far carries `""` in every per-round digest — no
-        round has been sealed — so `_retro_edited_digests` is silent against the
-        repository and a green result from it means nothing on its own.
+        **Corrected in round nine.** This docstring used to say "every committed manifest
+        so far carries `""` in every per-round digest — no round has been sealed". That
+        is false, and round eight had already retracted it in `_digest_history_problems`
+        and in §11.11 without following the retraction here. `5207fb5` seals round 5 with
+        `22e3027b…`, and it is the only one of the manifest's ten commits carrying a
+        per-round value at all.
+
+        The correction matters because it inverts what the sibling probe
+        `test_no_per_round_digest_was_edited_after_the_fact` means. "Nothing to compare"
+        would make its green meaningless; "one value present and unchanged across every
+        commit that carries it" makes it a rule that is running and satisfied. What the
+        repository still cannot supply is a value that *changed*, which is what this probe
+        constructs and `test_a_real_retro_edit_is_caught_on_real_commits` now builds as
+        actual commits.
         """
         sealed = {
             "acceptance_rounds": [
@@ -3361,6 +6018,24 @@ class RatificationRecordTests(unittest.TestCase):
         """`tested_candidate_digest` is frozen when the round opens."""
         self.assertEqual(_retro_edited_digests(REPOSITORY_ROOT), [])
 
+    def test_the_state_document_and_the_manifest_do_not_contradict_each_other(
+        self,
+    ) -> None:
+        """The third external record, against this repository rather than a sandbox.
+
+        Non-vacuous today: CP-00 is unratified, so this asserts the state document does
+        carry the denial the ratified half will require to be gone. A one-directional
+        removal check would be silent here and would stay silent if the sentence were
+        reworded out of existence.
+        """
+        self.assertEqual(_state_document_problems(REPOSITORY_ROOT), [])
+        self.assertIn(
+            PROGRAM_STATE_DOCUMENT,
+            _digest_paths(REPOSITORY_ROOT),
+            "the state document is outside the digest recipe, so the deadlock this "
+            "check was licensed to break no longer exists and the licence should go",
+        )
+
     def test_the_acceptance_digest_model_is_structurally_sound(self) -> None:
         """The split into a tested-input digest and an evidence digest is correct.
 
@@ -3370,10 +6045,23 @@ class RatificationRecordTests(unittest.TestCase):
         it. What it checks is that the split is *present and closed*: both fields exist,
         the retired single field has not come back, and the model documents both.
 
-        What it deliberately does **not** do is recompute either value. See
-        `docs/program/reviews/W0-QA-01.md` §11.9: three fields are missing before that
-        is possible, and a test that recomputed them anyway would be implementing a
-        recipe nobody wrote down.
+        Both values *are* recomputed, and not here.
+        `test_the_tested_digest_recomputes_over_the_commit_that_froze_it` and
+        `_tested_digest_problems` recompute `tested_candidate_digest` over the tree of
+        the commit that froze it; `_acceptance_problems` recomputes
+        `evidence_bundle_digest` over the tree in front of you. An earlier form of this
+        docstring cited §11.9 to say recomputation was impossible until three missing
+        fields were supplied. That was wrong, and it licensed leaving the field
+        arithmetically unchecked for four rounds — the manifest's recipe blanks only the
+        field being computed, and Git keeps the frozen tree forever, so nothing was
+        missing.
+
+        This test stops where it stops because the arithmetic and the *shape* are
+        separate claims. Recomputation cannot notice that the retired single
+        `candidate_digest` came back, that `digest_model` stopped explaining a field, or
+        that one of the two fields was dropped altogether — a manifest with one digest
+        reproduces perfectly over the one tree it names. That is what this checks, and
+        only that.
         """
         manifest = _checkpoint_manifest(REPOSITORY_ROOT)
         self.assertIsNotNone(manifest, f"{CHECKPOINT_MANIFEST} is missing")
@@ -3465,39 +6153,3302 @@ class RatificationRecordTests(unittest.TestCase):
         )
 
 
+class SandboxResetTests(unittest.TestCase):
+    """The sandbox must reset to the frozen tree on the tree that actually gets published.
+
+    Round eight's independent review found the whole `RatificationRecordTests` family
+    dead — 26 tests, on a clean working tree with `ratified: false` — as soon as the
+    integrator committed this round's acceptance reports, which
+    `docs/program/reviews/W0-QA-01.md` §11.12.6 instructs them to do before ratifying.
+    A path that is tracked and absent from the frozen tree could not be unlinked without
+    leaving the index, the reset recorded it as unresettable, and every probe that needs
+    a reset sandbox refused to run. The checkpoint would have been tagged with none of
+    round seven's guarantees exercised.
+
+    Both green orderings were illegitimate: leaving the reports untracked never publishes
+    the evidence, and committing them before the freeze puts the streams' own verdicts
+    inside the tree they judge — the retired single-`candidate_digest` defect. So the
+    fix is not an ordering, and it is not a narrower gate at publication either.
+
+    This probe reproduces the published tree inside the module: a sandbox, a file
+    committed to its **own private copy** after the freeze, and a reset that must
+    succeed. It is the permanent form of the clone reproduction in §11.13.1.
+    """
+
+    IDENTITY = (
+        "-c",
+        "user.email=w0-qa-01@example.invalid",
+        "-c",
+        "user.name=W0-QA-01 reset probe",
+    )
+
+    def setUp(self) -> None:
+        self.sandbox = _CheckpointSandbox()
+        self.addCleanup(self.sandbox.__exit__)
+
+    def test_a_path_committed_after_the_freeze_still_resets(self) -> None:
+        published = "artifacts/checkpoints/CP-00/probe-report-after-the-freeze.md"
+        frozen = _freeze_commit(self.sandbox.root)
+        self.assertIsNotNone(frozen, "this repository records no frozen digest")
+        blobs = _tree_blobs(self.sandbox.root, frozen)
+        self.assertNotIn(
+            published, blobs, "the probe path is already in the frozen tree"
+        )
+
+        (self.sandbox.root / published).write_text("PASS\n", encoding="utf-8")
+        self.sandbox._git_write("add", "--", published)
+        self.sandbox._git_write(*self.IDENTITY, "commit", "--quiet", "-m", "publish")
+        self.assertIn(
+            published,
+            _digest_paths(self.sandbox.root),
+            "the probe did not actually publish anything",
+        )
+        self.assertNotIn(
+            published,
+            _git(
+                "-C", str(self.sandbox.root), "ls-files", "--others",
+                "--exclude-standard", text=True, check=True,
+            ).stdout.split("\n"),
+            "the published path is untracked, so it is not the case this probe is for",
+        )
+
+        self.sandbox.normalise_to_candidate()
+
+        self.assertEqual(
+            self.sandbox.unresettable,
+            [],
+            "the sandbox could not be returned to the frozen tree after a publication",
+        )
+        self.assertFalse((self.sandbox.root / published).exists())
+        self.assertNotIn(published, _digest_paths(self.sandbox.root))
+        self.assertEqual(
+            _acceptance_digest(self.sandbox.root, "tested_candidate_digest"),
+            self.sandbox.frozen_digest,
+            "the reset tree does not digest to the frozen value, so the reset put the "
+            "sandbox somewhere other than the tree the streams judged",
+        )
+
+    def test_unresettable_names_a_reset_that_did_not_finish(self) -> None:
+        """The net is connected to something.
+
+        Both call sites only ever assert that `unresettable` is empty, so replacing its
+        computation with a literal `[]` passed the whole suite — an alarm nobody could
+        distinguish from a disconnected one. Suppressing the index drop reproduces
+        exactly the state the attribute exists to name: the published path is gone from
+        the working tree, still in the index, still enumerated by the recipe, so the
+        sandbox is genuinely not the frozen tree and must say so.
+
+        **Round twelve: the literal expectation was itself pinned to the unratified
+        tree.** ``[published]`` is the whole answer only while this probe's own file is
+        the one thing committed since the freeze. On the tree that actually gets tagged
+        it is not: `docs/program/reviews/W0-QA-01.md` §11.12.6 has the integrator commit
+        both acceptance reports *before* ratifying, so they are post-freeze tracked paths
+        too and the suppressed reset cannot return them either. The probe went red on a
+        correctly published tree while the attribute it tests was behaving exactly as
+        designed.
+
+        So the expectation is **derived**, in both states, from what a legitimate
+        publication is allowed to have added: this probe's own path plus the round's own
+        declared acceptance evidence, taken from the manifest and filtered to what is
+        actually in the index and actually absent from the frozen tree. On the
+        unratified tree no round declares any evidence and the expectation is
+        ``[published]``, exactly as before; on a published tree it is the honest three.
+        It is still an equality against an independently produced set — the declared
+        report paths and the index come from somewhere other than
+        ``_digest_paths(...) - blobs`` — so `[]` fails in both states and so does a
+        hardcoded ``[published]``, which is one more mutant than round eleven caught.
+
+        Nothing else may appear here. A post-freeze path that is *not* declared
+        acceptance evidence is what :func:`_post_freeze_delta_problems` voids the round
+        for, so widening this expectation to "whatever turned up" would launder exactly
+        the drift that check exists to refuse.
+        """
+        published = "artifacts/checkpoints/CP-00/probe-report-unresettable.md"
+        (self.sandbox.root / published).write_text("PASS\n", encoding="utf-8")
+        self.sandbox._git_write("add", "--", published)
+        self.sandbox._git_write(*self.IDENTITY, "commit", "--quiet", "-m", "publish")
+
+        frozen = _freeze_commit(self.sandbox.root)
+        self.assertIsNotNone(frozen, "this repository records no frozen digest")
+        blobs = _tree_blobs(self.sandbox.root, frozen)
+        self.assertIsNotNone(blobs, "the frozen tree is unreadable in the sandbox")
+        cached = set(
+            _git(
+                "-C", str(self.sandbox.root), "ls-files", "--cached", text=True, check=True
+            ).stdout.split("\n")
+        )
+        evidence = {
+            path
+            for path in _declared_evidence_paths(
+                _checkpoint_manifest(self.sandbox.root) or {}
+            )
+            if path not in blobs and path in cached
+        }
+        expected = sorted({published} | evidence)
+
+        with unittest.mock.patch.object(_CheckpointSandbox, "_git_write"):
+            self.sandbox._reset_to_the_frozen_tree()
+
+        self.assertEqual(
+            self.sandbox.unresettable,
+            expected,
+            "the reset left a path the frozen tree does not have and reported nothing",
+        )
+
+    def test_the_sandbox_root_this_class_built_is_accepted(self) -> None:
+        """The positive direction, so the guard cannot be satisfied by refusing always.
+
+        Every refusal probe lives in :class:`WritingCommandGuardTests`; without this one
+        a guard that raised unconditionally would pass all of them.
+        """
+        self.assertIsNone(_refuse_to_write_outside(self.sandbox.root, _CheckpointSandbox.PREFIX))
+
+    def test_normalise_to_candidate_erases_an_ambient_mid_ratification_state(self) -> None:
+        """`normalise_to_candidate`'s manifest reset, exercised against a dirtied tree.
+
+        Every `RatificationRecordTests` probe trusts that starting from a normalised
+        sandbox means starting from the same state regardless of what the *host*
+        repository happens to be carrying — round five's fix for the third instance of
+        this module's ambient-state coupling (§11.10). Nothing had directly attacked the
+        reset itself: every existing caller only ever normalises a sandbox that was
+        already close to clean. Here the manifest is driven into a fully ratified,
+        fully accepted shape first — flag, record, sealed digests, an accepted round
+        with reports on disk — and `normalise_to_candidate` is then required to erase
+        all of it, not just the fields the other probes happen to touch.
+        """
+        self.sandbox.normalise_to_candidate()
+        self.sandbox.declare_ratification(
+            [POST_FREEZE_STRANGER]
+        )  # any non-empty delta; only the manifest shape is under test here
+        self.sandbox.accept_round()
+        self.sandbox.seal_digests(tested=self.sandbox.frozen_digest)
+        dirtied = json.loads(
+            (self.sandbox.root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8")
+        )
+        self.assertIs(dirtied["ratified"], True, "the harness did not dirty ratified")
+        self.assertIn("ratification", dirtied, "the harness did not dirty the record")
+        number = dirtied["current_round"]
+        dirty_entry = next(
+            e for e in dirtied["acceptance_rounds"] if e.get("round") == number
+        )
+        self.assertEqual(dirty_entry["verdict"], "PASS", "the harness did not dirty verdict")
+        self.assertIsNotNone(
+            dirty_entry["manual_report"], "the harness did not dirty manual_report"
+        )
+
+        self.sandbox.normalise_to_candidate()
+
+        clean = json.loads(
+            (self.sandbox.root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8")
+        )
+        self.assertIs(clean["ratified"], False, "ratified was not reset")
+        self.assertNotIn("ratification", clean, "the ratification record was not removed")
+        for field in ACCEPTANCE_DIGEST_FIELDS:
+            self.assertIsNone(clean[field], f"{field} was not reset at the top level")
+        entry = next(e for e in clean["acceptance_rounds"] if e.get("round") == number)
+        self.assertIsNone(entry["verdict"], "the round verdict was not reset")
+        self.assertEqual(
+            entry["streams"], {"automated": None, "manual": None},
+            "the round's stream results were not reset",
+        )
+        self.assertIsNone(entry["manual_report"], "manual_report was not reset")
+        self.assertIsNone(entry["automated_report"], "automated_report was not reset")
+        for field in ACCEPTANCE_DIGEST_FIELDS:
+            self.assertEqual(entry[field], "", f"the round's {field} copy was not reset")
+        for stream in ("manual_acceptance", "automated_acceptance"):
+            record = clean[stream]
+            self.assertEqual(record["status"], "owed", f"{stream}.status was not reset")
+            self.assertIsNone(record["report_path"], f"{stream}.report_path was not reset")
+            self.assertEqual(record["round"], number, f"{stream}.round was not reset")
+        # And the checks that read the manifest agree it is clean, not just the fields
+        # this test happened to name.
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+        external, declared, problems = _ratification_record(self.sandbox.root)
+        self.assertFalse(external)
+        self.assertEqual(declared, frozenset())
+        self.sandbox._git_write("status", "--porcelain")
+
+
+class WritingCommandGuardTests(unittest.TestCase):
+    """`_refuse_to_write_outside`, one branch at a time, against both of its callers.
+
+    Round nine's blocker was that this guard's prose named a property its code did not
+    have — it never tested whether the target was *inside* `REPOSITORY_ROOT` — and that
+    its prefix branch was unreachable from the only probe that existed, so deleting
+    either left the suite green. An independent reviewer used the gap to drop a file from
+    one of the immutable reviewed families out of the index.
+
+    Every case below asserts the **specific reason**, not merely that something raised.
+    That is the whole difference: with a single shared message, deleting one branch
+    leaves another catching the same input and every probe still passes. And every case
+    asserts that `subprocess.run` was never called, so the guard is proved to run before
+    the command rather than beside it.
+
+    None of the bad roots is ever created on disk. The guard refuses on the path, so a
+    probe that made a directory inside the repository to prove the point would be dirtying
+    the tree it is protecting.
+    """
+
+    #: `(reason, root factory)`. The factory takes the prefix so a case can be built that
+    #: passes every earlier branch and can only be caught by the one it is for.
+    CASES = (
+        (WRITE_REFUSAL_IS_THE_REPOSITORY, lambda prefix: REPOSITORY_ROOT),
+        (WRITE_REFUSAL_CONTAINS_THE_REPOSITORY, lambda prefix: REPOSITORY_ROOT.parent),
+        (
+            WRITE_REFUSAL_INSIDE_THE_REPOSITORY,
+            lambda prefix: REPOSITORY_ROOT / f"{prefix}not-really-a-sandbox",
+        ),
+        (
+            WRITE_REFUSAL_NOT_OURS,
+            lambda prefix: Path(tempfile.gettempdir()) / "not-one-of-ours",
+        ),
+    )
+
+    def _refusals(self, prefix: str):
+        for reason, factory in self.CASES:
+            yield reason, factory(prefix)
+
+    def test_every_branch_refuses_with_its_own_reason(self) -> None:
+        for reason, root in self._refusals(_CheckpointSandbox.PREFIX):
+            with self.subTest(reason=reason):
+                with self.assertRaises(AssertionError) as caught:
+                    _refuse_to_write_outside(root, _CheckpointSandbox.PREFIX)
+                self.assertIn(reason, str(caught.exception))
+
+    def test_the_case_for_each_branch_passes_every_earlier_branch(self) -> None:
+        """Otherwise a case proves only that *some* branch fired.
+
+        The inside-the-repository root carries the sandbox prefix, so the prefix branch
+        cannot catch it; the wrong-prefix root is outside the repository, so none of the
+        first three can. That is what makes deleting either one turn a probe red.
+        """
+        prefix = _CheckpointSandbox.PREFIX
+        inside = REPOSITORY_ROOT / f"{prefix}not-really-a-sandbox"
+        self.assertTrue(inside.name.startswith(prefix))
+        self.assertTrue(inside.resolve().is_relative_to(REPOSITORY_ROOT.resolve()))
+
+        stranger = Path(tempfile.gettempdir()) / "not-one-of-ours"
+        resolved = stranger.resolve()
+        repository = REPOSITORY_ROOT.resolve()
+        self.assertNotEqual(resolved, repository)
+        self.assertFalse(repository.is_relative_to(resolved))
+        self.assertFalse(resolved.is_relative_to(repository))
+        self.assertFalse(resolved.name.startswith(prefix))
+
+    def test_the_sandbox_caller_refuses_before_spawning_anything(self) -> None:
+        sandbox = _CheckpointSandbox.__new__(_CheckpointSandbox)
+        for reason, root in self._refusals(_CheckpointSandbox.PREFIX):
+            with self.subTest(reason=reason):
+                sandbox.root = root
+                with unittest.mock.patch.object(subprocess, "run") as spawned:
+                    with self.assertRaises(AssertionError) as caught:
+                        sandbox._git_write("rm", "--cached", "--", "contracts/README.md")
+                self.assertIn(reason, str(caught.exception))
+                spawned.assert_not_called()
+
+    def test_the_history_caller_refuses_before_spawning_anything(self) -> None:
+        """F2: the same guard, on the helper that runs `init`, `add` and `commit`.
+
+        It used to be a byte-for-byte copy carrying the copy's blind spot, and nothing
+        exercised it at all. It is now the same function, and this probe is what says so.
+        """
+        history = _ManifestHistory.__new__(_ManifestHistory)
+        for reason, root in self._refusals(_ManifestHistory.PREFIX):
+            with self.subTest(reason=reason):
+                history.root = root
+                with unittest.mock.patch.object(subprocess, "run") as spawned:
+                    with self.assertRaises(AssertionError) as caught:
+                        history._run("commit", "--allow-empty", "-m", "probe")
+                self.assertIn(reason, str(caught.exception))
+                spawned.assert_not_called()
+
+    def test_both_callers_share_one_guard(self) -> None:
+        """A copy is what failed; this is the probe that a copy has not come back."""
+        source = inspect.getsource(_CheckpointSandbox._git_write) + inspect.getsource(
+            _ManifestHistory._run
+        )
+        self.assertEqual(source.count("_refuse_to_write_outside("), 2)
+        self.assertNotIn("is_relative_to", source)
+
+    def test_a_throwaway_history_root_is_accepted(self) -> None:
+        """The positive direction for the second caller."""
+        history = _ManifestHistory()
+        self.addCleanup(history.close)
+        self.assertIsNone(_refuse_to_write_outside(history.root, _ManifestHistory.PREFIX))
+
+    def _seed_victim_repository(self) -> Path:
+        """A throwaway repository this test may lose, distinct from every root the
+        module itself creates, standing in for "some other repository on the same
+        host" — a post-commit hook's checkout, a colleague's clone, anything a
+        hostile ``GIT_DIR`` could name."""
+        victim = Path(tempfile.mkdtemp(prefix="w0-qa-01-victim-"))
+        self.addCleanup(shutil.rmtree, victim, True)
+        (victim / "contracts").mkdir()
+        (victim / "contracts" / "README.md").write_text(
+            "victim content, never written by this module\n", encoding="utf-8"
+        )
+        identity = ("-c", "user.email=victim@example.invalid", "-c", "user.name=victim")
+        for arguments in (
+            ["init", "--quiet"],
+            [*identity, "add", "-A"],
+            [*identity, "commit", "--quiet", "-m", "seed"],
+        ):
+            _git("-C", str(victim), *arguments, check=True)
+        return victim
+
+    @staticmethod
+    def _tracked_listing(root: Path) -> str:
+        return _git("-C", str(root), "ls-files", text=True, check=True).stdout
+
+    @classmethod
+    def _tracked_files(cls, root: Path) -> set[str]:
+        """Tracked paths only — unlike :func:`_digest_paths`, dropping a path from
+        the index does not make it vanish from this set's complement: the file is
+        still on disk, so `_digest_paths` would immediately re-report it as
+        untracked. This is the set that actually answers "is it still in the
+        index"."""
+        return {line for line in cls._tracked_listing(root).split("\n") if line}
+
+    @staticmethod
+    def _head(root: Path) -> str:
+        """The victim's own `HEAD`. `_ManifestHistory._run` runs `commit`, not only
+        index-editing commands, and `commit --allow-empty` changes no tracked file at
+        all — so a tracked-file comparison alone would miss a spurious commit injected
+        into the victim's history. This is what would catch that."""
+        return _git(
+            "-C", str(root), "rev-parse", "HEAD", text=True, check=True
+        ).stdout.strip()
+
+    def test_a_hostile_git_dir_cannot_redirect_either_writer(self) -> None:
+        """BLOCKING 1, reproduced against a throwaway victim and shown closed.
+
+        ``-C`` only sets the working directory Git starts discovery from. ``GIT_DIR``,
+        ``GIT_WORK_TREE`` and ``GIT_INDEX_FILE`` override discovery outright and are not
+        overridden by ``-C`` — the guard validated the path argument and never inspected
+        the environment that actually decides where a write lands. An independent
+        reviewer used exactly that gap, with a legitimate sandbox root, to drop a file
+        from one of the immutable reviewed families out of another repository's index.
+
+        The victim here is a throwaway this test seeds and deletes, never
+        `REPOSITORY_ROOT` — this task may not write to the repository under review even
+        to prove the point. Both writers are pointed at it through the environment,
+        exactly the way a post-commit hook or ``git bisect run`` would set it, and the
+        assertion is on the victim's bytes, not on a caught exception: a guard that
+        raises proves the path argument was checked, which is precisely what round nine's
+        blocker showed is not enough.
+        """
+        victim = self._seed_victim_repository()
+        before_listing = self._tracked_listing(victim)
+        before_content = (victim / "contracts" / "README.md").read_bytes()
+        before_head = self._head(victim)
+
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+        self.assertIn("contracts/README.md", self._tracked_files(sandbox.root))
+        history = _ManifestHistory()
+        self.addCleanup(history.close)
+        history_head_before = history.commit("seed", _history_manifest(None))
+
+        hostile = {
+            "GIT_DIR": str(victim / ".git"),
+            "GIT_WORK_TREE": str(victim),
+            "GIT_INDEX_FILE": str(victim / ".git" / "index"),
+        }
+        with unittest.mock.patch.dict(os.environ, hostile):
+            sandbox._git_write("rm", "--cached", "--", "contracts/README.md")
+            history._run("commit", "--allow-empty", "-m", "hostile-environment probe")
+
+        self.assertEqual(
+            self._tracked_listing(victim),
+            before_listing,
+            "the victim repository's tracked-file set moved",
+        )
+        self.assertEqual(
+            (victim / "contracts" / "README.md").read_bytes(),
+            before_content,
+            "the victim's tracked file moved",
+        )
+        self.assertEqual(
+            self._head(victim),
+            before_head,
+            "the victim gained a commit — `commit --allow-empty` changes no tracked "
+            "file, so the two assertions above would miss this on their own",
+        )
+
+        # Both commands still did what they were asked — against the right target.
+        self.assertNotIn(
+            "contracts/README.md",
+            self._tracked_files(sandbox.root),
+            "the sandbox's own write did not take effect; this probe would prove "
+            "nothing about redirection",
+        )
+        self.assertNotEqual(
+            history.head(),
+            history_head_before,
+            "the history's own write did not take effect; this probe would prove "
+            "nothing about redirection",
+        )
+
+    def test_removing_the_environment_sanitiser_lets_the_hostile_git_dir_through(
+        self,
+    ) -> None:
+        """The mutation this guard exists to fail: shown red without the fix.
+
+        Without this, :meth:`test_a_hostile_git_dir_cannot_redirect_either_writer`
+        proves nothing — a probe that asserts a victim is intact passes just as well
+        when the redirect never worked in the first place. This is the other direction:
+        the discovery variables *do* reach Git, and the write lands in the victim.
+
+        **What is reconstructed, and what deliberately is not.** Round nine's form of
+        this probe put the hostile names on ``os.environ`` and called
+        ``subprocess.run`` with no ``env=`` at all, inheriting the caller's environment
+        whole. That is a faithful reconstruction of the old *call*, and it is also a
+        live copy of the defect this round exists to close: run the suite under a
+        ``HOME`` whose ``.gitconfig`` sets ``core.fsmonitor``, and this one probe — the
+        only remaining unsanitised spawn in the module — executed the attacker's
+        script. The acceptance gate for round ten caught exactly this and nothing else.
+
+        So the reconstruction is narrowed to the property under demonstration: the
+        three discovery variables reach Git, through :func:`_git`'s one deliberate
+        widening, ``env_extra``. Everything else is still the allowlist. The probe
+        proves what it mutates and no longer ships what it is testing for — and it
+        doubles as the record of what ``env_extra`` costs, which is why the widening
+        exists at exactly one production call site and is named in the argument list
+        where a reader can see it.
+        """
+        victim = self._seed_victim_repository()
+        before_listing = self._tracked_listing(victim)
+
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+        self.assertIn("contracts/README.md", self._tracked_files(sandbox.root))
+
+        hostile = {
+            "GIT_DIR": str(victim / ".git"),
+            "GIT_WORK_TREE": str(victim),
+            "GIT_INDEX_FILE": str(victim / ".git" / "index"),
+        }
+
+        def unguarded_git_write(self: _CheckpointSandbox, *arguments: str) -> None:
+            _refuse_to_write_outside(self.root, self.PREFIX)
+            # The path argument is checked, exactly as before; the environment that
+            # actually decides where the write lands is not.
+            _git("-C", str(self.root.resolve()), *arguments, check=True,
+                 env_extra=hostile)
+
+        with unittest.mock.patch.object(
+            _CheckpointSandbox, "_git_write", unguarded_git_write
+        ):
+            sandbox._git_write("rm", "--cached", "--", "contracts/README.md")
+
+        self.assertNotEqual(
+            self._tracked_listing(victim),
+            before_listing,
+            "the unguarded call left the victim untouched, so it is not a faithful "
+            "reconstruction of the pre-fix defect and this probe proves nothing",
+        )
+        # The victim is a throwaway seeded by this test and removed in cleanup; the
+        # drift just proved is the point of the probe, not something to repair here.
+
+
+#: The only functions in this module allowed to spawn a subprocess at all. Everything
+#: else that needs Git calls :func:`_git`; everything that needs a documented shell
+#: block calls :func:`_run_shell`.
+#:
+#: These are **module-level** names, and :func:`_spawn_sites` reports the whole enclosing
+#: scope, so a chokepoint is a position in the file and not a spelling. Round ten matched
+#: the innermost enclosing function *name*, which made "chokepoint" a property of what a
+#: function is called: a helper named `_git` defined inside a test body was exempted from
+#: the outside-a-chokepoint rule — the exact placement
+#: :meth:`GitSpawnChokepointTests.test_a_helper_nested_inside_a_test_is_attributed_to_itself`
+#: advertises this enumeration closes. A nested `_git` is now
+#: ``ClassName.test_name._git``, which is not in this tuple and never can be.
+GIT_SPAWN_CHOKEPOINTS = ("_git", "_run_shell")
+
+#: The process-spawning APIs this enumeration covers, by **resolved** dotted name rather
+#: than by the spelling at the call site — see :func:`_resolved_target`.
+#:
+#: **What "covers" means, stated at the width the method actually has.** Round eleven's
+#: form of this comment said "every process-spawning API a future edit might reach for",
+#: and an independent reviewer named three it does not reach:
+#: `concurrent.futures.ProcessPoolExecutor`, a locally defined subclass of
+#: `subprocess.Popen`, and `multiprocessing.get_context("fork").Process`. The first was
+#: a real gap and is closed below — it is an ordinary dotted name and belongs in the
+#: list. The other two are not spellings this list was missing; they are shapes
+#: :func:`_resolved_target` does not resolve, and they are recorded as such in
+#: :data:`UNRESOLVABLE_SPAWN_ROUTES` rather than chased with more entries. §11.17.3's
+#: operative claim was already bounded correctly; it was this comment that overstated
+#: it, which is the defect of putting a check beside a claim it cannot make — and
+#: exactly why the sentence is narrowed rather than the list padded.
+#:
+#: What is claimed: a call whose target resolves, through any import spelling and in any
+#: nesting, to one of the names below, outside a chokepoint, fails the suite the moment
+#: it is written.
+#:
+#: Round ten's form of this list matched ``ast.unparse(node.func)`` against 19 literal
+#: spellings, which is the failure mode §8.15 and §11.16.2 claim to have escaped, moved
+#: up one level: from a list of Git command names known on the day it was written to a
+#: list of Python API spellings known on the day it was written. ``import subprocess as
+#: sp``, ``from subprocess import run``, ``from os import system`` and ``import os as
+#: _o`` are four different spellings of three calls already in this list, and all four
+#: walked past it. The ``l``-variants of the ``exec``/``spawn`` families were missing
+#: outright while their ``v``-variants were present.
+SPAWN_APIS = (
+    "subprocess.run",
+    "subprocess.Popen",
+    "subprocess.call",
+    "subprocess.check_call",
+    "subprocess.check_output",
+    "subprocess.getoutput",
+    "subprocess.getstatusoutput",
+    "os.system",
+    "os.popen",
+    "os.execl",
+    "os.execle",
+    "os.execlp",
+    "os.execlpe",
+    "os.execv",
+    "os.execve",
+    "os.execvp",
+    "os.execvpe",
+    "os.spawnl",
+    "os.spawnle",
+    "os.spawnlp",
+    "os.spawnlpe",
+    "os.spawnv",
+    "os.spawnve",
+    "os.spawnvp",
+    "os.spawnvpe",
+    "os.posix_spawn",
+    "os.posix_spawnp",
+    "os.fork",
+    "os.forkpty",
+    "pty.spawn",
+    "pty.fork",
+    "asyncio.create_subprocess_exec",
+    "asyncio.create_subprocess_shell",
+    "asyncio.subprocess.create_subprocess_exec",
+    "asyncio.subprocess.create_subprocess_shell",
+    "multiprocessing.Process",
+    "multiprocessing.Pool",
+    "concurrent.futures.ProcessPoolExecutor",
+)
+
+#: **The cap on what a static enumeration can claim, recorded rather than chased.**
+#:
+#: Every route below reaches a subprocess through a target :func:`_resolved_target`
+#: cannot reduce to a member of :data:`SPAWN_APIS`, so no list of API spellings contains
+#: it. Five of the seven name something that does not exist until the program runs. The
+#: last two, added in round twelve, are different and are described as what they are: a
+#: subclass of a spawning API is a name that *does* exist statically, and an attribute
+#: of a call's return value is spelled out in the source — resolving either would take
+#: class-hierarchy analysis or return-type inference, neither of which this module does
+#: and neither of which it claims. They are a limitation of the method, not a defect to
+#: close, and pretending otherwise would put a check beside a claim it cannot make — the
+#: shape of defect this module has had to repair in every round since seven.
+#:
+#: What the enumeration does claim is bounded and worth having: an *honest* edit — a
+#: nineteenth caller written the way the eighteen were, under any import spelling, in
+#: any nesting, at any of the API families above — fails the suite the moment it is
+#: written. An author with write access to this file who is determined to run a
+#: subprocess can run one; a test module does not outrank its own author, and §11.17.3
+#: says so in the report rather than here alone.
+UNRESOLVABLE_SPAWN_ROUTES = (
+    "eval() or exec() over a string assembled at runtime",
+    "importlib.import_module() with a computed module name",
+    "getattr(subprocess, <computed attribute name>)",
+    "a callable passed in as an argument, or read out of a dict or attribute",
+    "rebinding an imported name at runtime, so the import no longer describes the call",
+    "a class defined in this file whose base is a spawning API, called by its own name",
+    "an attribute reached through a call's return value, such as "
+    "multiprocessing.get_context('fork').Process",
+)
+
+#: The two keyword names that widen a constructed environment, kept as data so that
+#: :func:`_widening_sites` and the two chokepoint signatures cannot drift into two
+#: different lists.
+ENV_WIDENING_KEYWORDS = ("env_extra", "env_overrides")
+
+#: Names :func:`_table_reference` and :func:`_is_a_literal_expectation` treat as pure
+#: shape, so ``sorted(TABLE)``, ``len(TABLE)`` and ``frozenset({"a"})`` read as a table
+#: reference and a literal respectively. Nothing here can reach a value that is not in
+#: the expression itself.
+PURE_CONSTRUCTORS = frozenset({"frozenset", "set", "tuple", "list", "dict", "sorted", "len"})
+
+
+def _import_bindings(tree: ast.AST) -> dict[str, str]:
+    """``local name -> the dotted path it actually names``, for every import in ``tree``.
+
+    This is the whole of the bounded repair. ``from subprocess import run as _spawn``
+    binds ``_spawn`` to ``subprocess.run``; ``import os as _o`` binds ``_o`` to ``os``.
+    Resolving the binding is what lets :data:`SPAWN_APIS` be a list of *APIs* instead of
+    a list of *spellings*, and a list of spellings is a denylist wearing an allowlist's
+    clothes: correct for the names its author typed.
+
+    Imports are collected from the whole tree, not only module level, because a function
+    body may import too — which is exactly where somebody would put one.
+    """
+    bindings: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname:
+                    bindings[alias.asname] = alias.name
+                else:
+                    head = alias.name.split(".")[0]
+                    bindings[head] = head
+        elif isinstance(node, ast.ImportFrom):
+            if node.level or not node.module:
+                continue  # a relative import; this module has none and never will
+            for alias in node.names:
+                bindings[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+    return bindings
+
+
+def _resolved_target(node: ast.expr, bindings: dict[str, str]) -> str:
+    """The dotted name a call reaches, with import aliases resolved.
+
+    ``sp.run`` under ``import subprocess as sp`` resolves to ``subprocess.run``;
+    ``_spawn`` under ``from subprocess import run as _spawn`` resolves to the same
+    thing. A name this module did not import is returned as written, which is what makes
+    ``_git``, ``_run_shell`` and ``_allowlisted_env`` resolvable by the same function.
+    """
+    spelled = ast.unparse(node)
+    head, dot, rest = spelled.partition(".")
+    resolved = bindings.get(head)
+    if resolved is None:
+        return spelled
+    return f"{resolved}.{rest}" if dot else resolved
+
+
+def _scopes(tree: ast.AST) -> list[tuple[int, int, str]]:
+    """``(first line, last line, dotted scope)`` for every function, classes included.
+
+    Class bodies contribute their name to the path, so two classes may each hold an
+    ``_arm`` and the enumeration can still tell them apart — and so that a chokepoint
+    cannot be counterfeited by naming a nested helper ``_git``.
+    """
+    spans: list[tuple[int, int, str]] = []
+
+    def descend(node: ast.AST, prefix: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                qualified = f"{prefix}.{child.name}" if prefix else child.name
+                if not isinstance(child, ast.ClassDef):
+                    spans.append(
+                        (child.lineno, child.end_lineno or child.lineno, qualified)
+                    )
+                descend(child, qualified)
+            else:
+                descend(child, prefix)
+
+    descend(tree, "")
+    return spans
+
+
+def _enclosing_functions(tree: ast.AST):
+    """``(line) -> innermost enclosing function, fully qualified``, for one module."""
+    spans = _scopes(tree)
+
+    def enclosing(line: int) -> str:
+        inner = [span for span in spans if span[0] <= line <= span[1]]
+        return max(inner, key=lambda span: span[0])[2] if inner else "<module>"
+
+    return enclosing
+
+
+class _SpawnSite(NamedTuple):
+    """One process spawn, as the enumeration sees it.
+
+    ``function`` is the innermost enclosing function by simple name and is what a reader
+    recognises; ``qualname`` is the whole scope path and is what the chokepoint test
+    compares, because a simple name can be chosen and a position cannot.
+    """
+
+    line: int
+    function: str
+    qualname: str
+    api: str
+    env: str | None
+    sanitised: bool
+
+
+def _spawn_sites(source: str) -> list[_SpawnSite]:
+    """Every process spawn in ``source``, with its scope and its ``env=``.
+
+    Static, over the module's own text, because that is the only thing that answers the
+    question actually being asked — not "did the calls we happened to exercise behave"
+    but "is there anywhere in this file that spawns a process another way". A runtime
+    spy answers the first and the first is what round nine passed.
+
+    Three things are resolved rather than matched on surface text: the call target
+    (:func:`_resolved_target`, so an aliased import is the same call), the enclosing
+    scope (:func:`_scopes`, so a nested helper is not the function it sits in and cannot
+    borrow a chokepoint's name), and ``env=``, which must be a **call to**
+    :func:`_allowlisted_env` and not merely an expression that starts with its name.
+    The round-ten predicate was ``environment.startswith("_allowlisted_env(")``, which
+    accepts ``env=_allowlisted_env() | dict(os.environ)`` — the sanitiser and then the
+    caller's whole environment on top of it.
+    """
+    tree = ast.parse(source)
+    bindings = _import_bindings(tree)
+    enclosing = _enclosing_functions(tree)
+
+    sites: list[_SpawnSite] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        api = _resolved_target(node.func, bindings)
+        if api not in SPAWN_APIS:
+            continue
+        keyword = next((word for word in node.keywords if word.arg == "env"), None)
+        qualified = enclosing(node.lineno)
+        sites.append(
+            _SpawnSite(
+                line=node.lineno,
+                function=qualified.rsplit(".", 1)[-1],
+                qualname=qualified,
+                api=api,
+                env=None if keyword is None else ast.unparse(keyword.value),
+                sanitised=(
+                    keyword is not None
+                    and isinstance(keyword.value, ast.Call)
+                    and _resolved_target(keyword.value.func, bindings)
+                    == "_allowlisted_env"
+                ),
+            )
+        )
+    return sites
+
+
+def _spawn_offenders(source: str) -> list[str]:
+    """Spawn sites that are not a chokepoint building an allowlisted environment."""
+    offenders = []
+    for site in _spawn_sites(source):
+        if site.qualname not in GIT_SPAWN_CHOKEPOINTS:
+            offenders.append(
+                f"{site.qualname}:{site.line} spawns a process outside a chokepoint"
+            )
+        elif not site.sanitised:
+            offenders.append(
+                f"{site.qualname}:{site.line} is a chokepoint but its env= is "
+                f"{site.env!r}, not _allowlisted_env(...)"
+            )
+    return offenders
+
+
+def _is_a_widening(node: ast.Call, target: str) -> bool:
+    """Does this call add anything to the environment a subprocess will see?
+
+    Four spellings, because a widening passed a fourth way is still a widening:
+
+    * the named keyword, ``_git(..., env_extra=...)``;
+    * :func:`_run_shell`'s third positional argument, which is how the documented-gate
+      callers pass ``GIT_DIR``;
+    * ``**{"env_extra": hostile}`` — a dict display, readable, and invisible to a scan
+      that only looks at ``keyword.arg``;
+    * ``**kw`` into a chokepoint, which cannot be read at all. A scan that cannot read
+      it must not conclude it is safe, so it is reported. That is the only conservative
+      answer available and it costs nothing: this module passes ``**`` to no chokepoint.
+
+    A direct call to :func:`_allowlisted_env` with anything other than the chokepoints'
+    own forwarding parameter is a widening too. Without that clause a helper nested
+    inside a test could call ``subprocess.run(a, env=_allowlisted_env({"GIT_DIR": ...}))``
+    and be a widening nothing enumerated.
+    """
+    for word in node.keywords:
+        if word.arg in ENV_WIDENING_KEYWORDS:
+            if not (isinstance(word.value, ast.Constant) and word.value.value is None):
+                return True
+        elif word.arg is None:
+            if isinstance(word.value, ast.Dict):
+                if any(
+                    isinstance(key, ast.Constant) and key.value in ENV_WIDENING_KEYWORDS
+                    for key in word.value.keys
+                ):
+                    return True
+            elif target in GIT_SPAWN_CHOKEPOINTS or target == "_allowlisted_env":
+                return True
+    if target == "_run_shell" and len(node.args) >= 3:
+        return True
+    if target == "_allowlisted_env":
+        forwarding = all(
+            isinstance(argument, ast.Name) and argument.id in ENV_WIDENING_KEYWORDS
+            for argument in node.args
+        )
+        if node.keywords or not forwarding:
+            return True
+    return False
+
+
+def _widening_sites(source: str) -> list[str]:
+    """Every scope that adds a variable to the constructed environment.
+
+    Reported by fully qualified scope, for the same reason :func:`_spawn_sites` is: two
+    classes may each define a helper called ``_arm``, and a justification list keyed by
+    simple name would let the second inherit the first's reason without anybody saying
+    so.
+    """
+    tree = ast.parse(source)
+    bindings = _import_bindings(tree)
+    enclosing = _enclosing_functions(tree)
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and _is_a_widening(
+            node, _resolved_target(node.func, bindings)
+        ):
+            found.add(enclosing(node.lineno))
+    return sorted(found)
+
+
+#: Tables this module deliberately holds no literal expectation over, and why. Both are
+#: mutable caches: they start empty, are filled while the suite runs, and pinning a value
+#: would pin a cache state rather than a property. They are named here — and the name set
+#: is itself pinned — so that a real table cannot join the exemption by accident.
+UNPINNED_RUNTIME_CACHES = ("_PROGRAM_CACHE", "_TREE_BLOBS")
+
+
+def _module_tables(source: str) -> dict[str, int]:
+    """``name -> line`` for every table this module defines.
+
+    A *table* is an ``UPPER_CASE`` name bound to a container — a display, a
+    ``frozenset``/``set``/``tuple``/``list``/``dict`` call, or a union of those — at
+    module level or in a class body. Locals inside a function are not tables: they
+    cannot be emptied from anywhere but the function they live in.
+    """
+    tree = ast.parse(source)
+    tables: dict[str, int] = {}
+
+    def container(value: ast.expr) -> bool:
+        if isinstance(value, (ast.Tuple, ast.List, ast.Set, ast.Dict)):
+            return True
+        if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
+            return value.func.id in ("frozenset", "set", "tuple", "list", "dict")
+        if isinstance(value, ast.BinOp):
+            return container(value.left) or container(value.right)
+        return False
+
+    def scan(body) -> None:
+        for statement in body:
+            target = value = None
+            if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+                target, value = statement.targets[0], statement.value
+            elif isinstance(statement, ast.AnnAssign) and statement.value is not None:
+                target, value = statement.target, statement.value
+            if (
+                isinstance(target, ast.Name)
+                and target.id.isupper()
+                and container(value)
+            ):
+                tables[target.id] = statement.lineno
+
+    scan(tree.body)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            scan(node.body)
+    return tables
+
+
+def _is_a_literal_expectation(node: ast.expr) -> bool:
+    """True when ``node`` names nothing — its whole value is written in the source.
+
+    This is the half that makes a pin a pin. ``sorted(_allowlisted_env())`` compared to
+    ``sorted(GIT_ENV_ALLOWLIST)`` is not an expectation about the allowlist; it is the
+    allowlist compared with itself, and emptying it satisfies both sides at once.
+    """
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Attribute):
+            return False
+        if isinstance(sub, ast.Name) and sub.id not in PURE_CONSTRUCTORS:
+            return False
+        if isinstance(sub, ast.Call) and not (
+            isinstance(sub.func, ast.Name) and sub.func.id in PURE_CONSTRUCTORS
+        ):
+            return False
+    return True
+
+
+def _table_reference(node: ast.expr, tables) -> str | None:
+    """The table an expression is *wholly* about, or ``None``.
+
+    ``TABLE``, ``self.TABLE``, ``sorted(TABLE)``, ``len(TABLE)`` — nothing else. A
+    projection such as ``[row[0] for row in TABLE]`` is deliberately not a pin: it can
+    be true of a table with a field removed, and this test exists because partial
+    agreement is what let four tables go quiet.
+    """
+    if isinstance(node, ast.Name):
+        return node.id if node.id in tables else None
+    if isinstance(node, ast.Attribute):
+        return node.attr if node.attr in tables else None
+    if isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name) or node.func.id not in PURE_CONSTRUCTORS:
+            return None
+        if node.keywords or len(node.args) != 1:
+            return None
+        return _table_reference(node.args[0], tables)
+    return None
+
+
+#: The assertions that can carry a pin. ``assertIn``/``assertTrue`` cannot: they are
+#: true of a table with entries removed, which is the mutation being caught.
+PINNING_ASSERTIONS = (
+    "assertEqual",
+    "assertCountEqual",
+    "assertSetEqual",
+    "assertTupleEqual",
+    "assertListEqual",
+    "assertDictEqual",
+)
+
+
+def _pinned_tables(source: str) -> dict[str, list[int]]:
+    """``table -> the lines where a literal expectation pins it``.
+
+    A pin is an equality assertion with the table (or ``sorted``/``len``/… of it) on one
+    side and a literal on the other. Both orders are read, because ``assertEqual`` is
+    symmetric and a reviewer should not have to remember which way round it was written.
+    """
+    tree = ast.parse(source)
+    tables = set(_module_tables(source))
+    pins: dict[str, list[int]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or len(node.args) < 2:
+            continue
+        if (
+            not isinstance(node.func, ast.Attribute)
+            or node.func.attr not in PINNING_ASSERTIONS
+        ):
+            continue
+        for observed, expected in (
+            (node.args[0], node.args[1]),
+            (node.args[1], node.args[0]),
+        ):
+            name = _table_reference(observed, tables)
+            if name is not None and _is_a_literal_expectation(expected):
+                pins.setdefault(name, []).append(node.lineno)
+    return pins
+
+
+def _unpinned_tables(source: str) -> list[str]:
+    """Every table with no literal expectation anywhere, minus the named caches."""
+    pinned = set(_pinned_tables(source))
+    return sorted(
+        name
+        for name in _module_tables(source)
+        if name not in pinned and name not in UNPINNED_RUNTIME_CACHES
+    )
+
+
+#: Every place this module widens the constructed environment, and why. The widening
+#: itself is legitimate — Gate C genuinely needs the repository's object database and a
+#: mutable copy has none — but it is the one way back to inheritance, so it is written
+#: down rather than left to convention.
+DELIBERATE_ENV_WIDENINGS: dict[str, str] = {
+    "_MutableCopy.run_gate": (
+        "documented Gate C reads the repository's object database and a _MutableCopy "
+        "has none, so GIT_DIR names the real one on purpose (GATE_NEEDS_OBJECT_STORE)"
+    ),
+    "DocumentedAnalysisGateTests._assert_gate_passes": (
+        "the same widening for the same gate, run from REPOSITORY_ROOT rather than "
+        "from a copy"
+    ),
+    "AmbientGitConfigurationTests._arm": (
+        "proves the hostile configuration is effective before any probe asserts it did "
+        "not fire; an unarmed negative assertion measures nothing"
+    ),
+    "WritingCommandGuardTests.test_removing_the_environment_sanitiser_lets_the_hostile_git_dir_through.unguarded_git_write": (
+        "reconstructs the pre-round-ten defect narrowly — the three discovery "
+        "variables reach Git and nothing else does — so the positive probe is not "
+        "passing because the redirect never worked"
+    ),
+    "AmbientGitConfigurationTests.test_a_global_ignore_file_cannot_change_what_a_read_enumerates": (
+        "arms the injected core.excludesFile, showing it really does remove paths from "
+        "the enumeration when it is let through"
+    ),
+    "AmbientGitConfigurationTests.test_core_hookspath_cannot_make_a_commit_run_an_attackers_hook": (
+        "arms the injected core.hooksPath against this probe's own throwaway history"
+    ),
+    "AmbientGitConfigurationTests.test_no_ambient_form_can_reach_another_repository_through_a_writer": (
+        "arms the end-to-end payload and watches the victim lose all three immutable "
+        "families before asserting that no ambient form can do it"
+    ),
+    "ShellChokepointEnvironmentTests.test_a_gate_run_under_an_ambient_git_dir_does_not_reach_that_repository": (
+        "arms the gate-level redirect through the same named widening the documented "
+        "gate callers use"
+    ),
+}
+
+
+class GitSpawnChokepointTests(unittest.TestCase):
+    """**The structure, not the convention.** Every Git subprocess goes through one door.
+
+    Round nine's blocking finding was not that a particular call was wrong. It was that
+    there was no such door. An independent reviewer's AST scan found 23
+    ``subprocess.run(["git", ...])`` calls in this module, 5 passing a sanitised ``env=``
+    and 18 inheriting the caller's environment whole — nine of those in production
+    helpers rather than test bodies: `_candidate_reviewed_paths`, `_present_reviewed_paths`,
+    `_candidate_blob`, `_tree_blobs` twice, `_digest_paths`, `_freeze_commit` twice,
+    `_retro_edited_digests` twice, `_reviewed_manifest_digest` and
+    `_reset_to_the_frozen_tree`. The sanitiser's own docstring said it was "shared by
+    every Git subprocess this module spawns, reading or writing … Neither is safe
+    without this". It was shared by five of twenty-three, and nothing measured the gap.
+
+    What existed instead was `test_both_callers_share_one_guard`, which counted the
+    string ``_refuse_to_write_outside(`` inside two named writers. A writer added later
+    is not one of those two, so it inherited neither the guard nor the sanitiser and no
+    test noticed. That is a convention with a spot-check, and this class is what makes
+    it a structure: the assertion is over *every* spawn in the file, so the nineteenth
+    caller fails the suite the moment it is written.
+    """
+
+    @staticmethod
+    def _own_source() -> str:
+        return Path(__file__).resolve().read_text(encoding="utf-8")
+
+    def test_the_scan_is_reading_this_modules_real_source(self) -> None:
+        """Otherwise every assertion below is vacuously true over an empty string."""
+        source = self._own_source()
+        self.assertIn("def _allowlisted_env(", source)
+        self.assertIn("class GitSpawnChokepointTests", source)
+        self.assertGreaterEqual(len(_spawn_sites(source)), 2)
+
+    def test_every_process_this_module_spawns_goes_through_a_chokepoint(self) -> None:
+        self.assertEqual(_spawn_offenders(self._own_source()), [])
+
+    def test_the_chokepoints_are_the_only_spawn_sites_and_there_are_two(self) -> None:
+        """Named, so that adding a third door is a decision somebody has to make here.
+
+        Compared on the **qualified** scope. Round ten compared the innermost function
+        name, so a helper called `_git` nested inside a test body read as the chokepoint
+        it was named after; the only thing that caught it was the accident that the
+        sorted list then held ``_git`` twice.
+        """
+        self.assertEqual(
+            sorted(site.qualname for site in _spawn_sites(self._own_source())),
+            sorted(GIT_SPAWN_CHOKEPOINTS),
+        )
+
+    def test_the_enumeration_reports_a_git_subprocess_added_outside_the_chokepoint(
+        self,
+    ) -> None:
+        """A probe proves only what it mutates. This mutates the thing.
+
+        The nineteenth caller, written the way the eighteen were, applied to a source
+        the scanner has never seen. If this ever passes with an empty offender list the
+        enumeration above is decoration.
+        """
+        added = (
+            "import subprocess\n"
+            "def _git(*a, env_extra=None):\n"
+            "    return subprocess.run(a, env=_allowlisted_env(env_extra))\n"
+            "def _a_writer_added_later(root):\n"
+            "    return subprocess.run(['git', '-C', root, 'rm', '--cached', 'x'],\n"
+            "                          capture_output=True, check=True)\n"
+        )
+        self.assertEqual(
+            _spawn_offenders(added),
+            ["_a_writer_added_later:5 spawns a process outside a chokepoint"],
+        )
+
+    def test_the_enumeration_reports_a_chokepoint_that_stops_sanitising(self) -> None:
+        """The other way the structure can rot: the door stays, the lock goes."""
+        weakened = (
+            "import os, subprocess\n"
+            "def _git(*a):\n"
+            "    return subprocess.run(a, env=dict(os.environ))\n"
+        )
+        self.assertEqual(
+            _spawn_offenders(weakened),
+            [
+                "_git:3 is a chokepoint but its env= is 'dict(os.environ)', "
+                "not _allowlisted_env(...)"
+            ],
+        )
+
+    def test_the_enumeration_reports_a_chokepoint_that_passes_no_environment(
+        self,
+    ) -> None:
+        silent = "import subprocess\ndef _git(*a):\n    return subprocess.run(a)\n"
+        self.assertEqual(
+            _spawn_offenders(silent),
+            ["_git:3 is a chokepoint but its env= is None, not _allowlisted_env(...)"],
+        )
+
+    #: **The spellings round ten's enumeration walked past.** Each row is a source, and
+    #: the offender the enumeration must now report for it — a literal expectation per
+    #: row, so this table cannot go quiet by shrinking without the pin below saying so.
+    #:
+    #: The last two rows are the cap, not a gap: a name assembled at run time is not
+    #: there to be read, and they carry an empty expectation on purpose.
+    ALIAS_BYPASSES = (
+        (
+            "from subprocess import run as _spawn, in the helper it was demonstrated in",
+            "from subprocess import run as _spawn\n"
+            "def _reviewed_manifest_digest(root):\n"
+            "    return _spawn(['git', '-C', str(root), 'rm', '--cached', 'x'])\n",
+            ["_reviewed_manifest_digest:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "import subprocess as sp",
+            "import subprocess as sp\n"
+            "def _a_writer_added_later(root):\n"
+            "    return sp.run(['git', '-C', root, 'rm', '--cached', 'x'])\n",
+            ["_a_writer_added_later:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "from subprocess import run",
+            "from subprocess import run\n"
+            "def _a_writer_added_later(root):\n"
+            "    return run(['git', '-C', root, 'rm', '--cached', 'x'])\n",
+            ["_a_writer_added_later:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "from os import system",
+            "from os import system\n"
+            "def _a_writer_added_later(root):\n"
+            "    return system('git rm --cached x')\n",
+            ["_a_writer_added_later:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "import os as _o",
+            "import os as _o\n"
+            "def _a_writer_added_later(root):\n"
+            "    return _o.system('git rm --cached x')\n",
+            ["_a_writer_added_later:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "an import inside the function body, where nobody looks for one",
+            "def _a_writer_added_later(root):\n"
+            "    import subprocess as q\n"
+            "    return q.Popen(['git', 'rm', '--cached', 'x'])\n",
+            ["_a_writer_added_later:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "os.execlp — the l-variant whose v-variant was listed",
+            "import os\n"
+            "def _a_writer_added_later(root):\n"
+            "    return os.execlp('git', 'git', 'rm', '--cached', 'x')\n",
+            ["_a_writer_added_later:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "os.spawnlp — the same omission in the other family",
+            "import os\n"
+            "def _a_writer_added_later(root):\n"
+            "    return os.spawnlp(os.P_WAIT, 'git', 'git', 'rm')\n",
+            ["_a_writer_added_later:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "pty.spawn",
+            "import pty\n"
+            "def _a_writer_added_later(root):\n"
+            "    return pty.spawn(['git', 'rm', '--cached', 'x'])\n",
+            ["_a_writer_added_later:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "asyncio.create_subprocess_exec",
+            "import asyncio\n"
+            "async def _a_writer_added_later(root):\n"
+            "    return await asyncio.create_subprocess_exec('git', 'rm')\n",
+            ["_a_writer_added_later:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "concurrent.futures.ProcessPoolExecutor — the third route round eleven's "
+            "comment claimed and the list did not carry",
+            "from concurrent.futures import ProcessPoolExecutor\n"
+            "def _a_writer_added_later(root):\n"
+            "    return ProcessPoolExecutor().submit(print, 'git')\n",
+            ["_a_writer_added_later:3 spawns a process outside a chokepoint"],
+        ),
+        (
+            "a subclass of subprocess.Popen, called by its own name — RECORDED LIMITATION",
+            "import subprocess\n"
+            "class _Runner(subprocess.Popen):\n"
+            "    pass\n"
+            "def _a_writer_added_later(root):\n"
+            "    return _Runner(['git', 'rm', '--cached', 'x'])\n",
+            [],
+        ),
+        (
+            "multiprocessing.get_context('fork').Process — RECORDED LIMITATION",
+            "import multiprocessing\n"
+            "def _a_writer_added_later(root):\n"
+            "    ctx = multiprocessing.get_context('fork')\n"
+            "    return ctx.Process(target=print, args=('git',))\n",
+            [],
+        ),
+        (
+            "getattr with a computed attribute name — RECORDED LIMITATION",
+            "import subprocess\n"
+            "def _a_writer_added_later(root):\n"
+            "    return getattr(subprocess, 'ru' + 'n')(['git', 'rm'])\n",
+            [],
+        ),
+        (
+            "eval over an assembled string — RECORDED LIMITATION",
+            "def _a_writer_added_later(root):\n"
+            "    return eval(\"__import__('os').sys\" + \"tem('git rm x')\")\n",
+            [],
+        ),
+    )
+
+    def test_the_enumeration_resolves_the_import_binding_not_the_spelling(self) -> None:
+        """**The bounded repair, row by row, including the demonstrated bypass.**
+
+        An independent reviewer put ``from subprocess import run as _spawn`` at the top
+        of this module and one call to `_spawn` inside `_reviewed_manifest_digest` — a
+        production helper the behavioural net does not reach — then ran the suite under
+        a hostile ambient ``HOME`` with no ``GIT_*`` variable set. The victim repository
+        lost all three `IMMUTABLE_REVIEWED_PREFIXES` families from its index over 60
+        payload executions, the suite reported ``Ran 244 … OK``, and this enumeration
+        reported ``offenders: []``.
+
+        It reported nothing because it matched ``ast.unparse(node.func)`` against 19
+        literal spellings and ``_spawn`` was not one of them — a list of names known on
+        the day it was written, which is the failure mode §11.16.2 claims to have
+        escaped. Resolving the import binding is what turns that list back into a list
+        of *APIs*.
+        """
+        for label, source, expected in self.ALIAS_BYPASSES:
+            with self.subTest(bypass=label):
+                self.assertEqual(_spawn_offenders(source), expected)
+
+    def test_the_bypass_table_still_carries_every_row_it_was_built_with(self) -> None:
+        """A table-driven probe with an empty table runs zero subtests and reports OK.
+
+        Eleven of the fifteen rows above are the enumeration's claim and four are its
+        cap, so both the total and the split are pinned. See
+        :class:`TableExpectationTests` for the property this is one instance of.
+
+        Round twelve moved the split from 10/2 to 11/4: one route an independent
+        reviewer named was a genuine gap and is now caught
+        (`concurrent.futures.ProcessPoolExecutor`), and two are shapes
+        :func:`_resolved_target` does not reduce, kept here as silent rows so that the
+        cap is exercised rather than asserted in prose alone.
+        """
+        self.assertEqual(len(self.ALIAS_BYPASSES), 15)
+        self.assertEqual(
+            [bool(expected) for _, _, expected in self.ALIAS_BYPASSES],
+            [True] * 11 + [False] * 4,
+        )
+
+    def test_dynamic_dispatch_is_a_recorded_limitation_and_says_so(self) -> None:
+        """The cap, asserted as a fact of the method rather than left as a hope.
+
+        `getattr(subprocess, 'ru' + 'n')` and `eval` reach the same call the rows above
+        reach, and no static analysis resolves either: the attribute name does not exist
+        until the expression runs. This test exists so that the two silent rows in
+        :data:`ALIAS_BYPASSES` are silent *on purpose*, with the reasoning written down,
+        rather than being two rows nobody noticed were empty.
+
+        What the enumeration claims is bounded and stated plainly in §11.17.3: an honest
+        edit is caught; an author with write access who is determined to run a
+        subprocess is not. A test module does not outrank its own author.
+        """
+        self.assertEqual(len(UNRESOLVABLE_SPAWN_ROUTES), 7)
+        for route in UNRESOLVABLE_SPAWN_ROUTES:
+            with self.subTest(route=route):
+                self.assertGreater(len(route), 20, "a limitation without a description")
+
+    def test_a_chokepoints_name_cannot_be_borrowed_by_a_nested_helper(self) -> None:
+        """`GIT_SPAWN_CHOKEPOINTS` names positions, not spellings.
+
+        Round ten compared the innermost enclosing function *name*, so a helper called
+        `_git` defined inside a test body satisfied the chokepoint rule by being called
+        `_git`. It passed `_spawn_offenders` cleanly; the only thing that caught it was
+        the accident that `test_the_chokepoints_are_the_only_spawn_sites_and_there_are_two`
+        then saw ``_git`` twice in a sorted list. That is a catch by side effect and it
+        disappears the moment the counterfeit is named something the real list can
+        absorb.
+        """
+        counterfeit = (
+            "import subprocess\n"
+            "class T:\n"
+            "    def test_x(self):\n"
+            "        def _git(*a):\n"
+            "            return subprocess.run(\n"
+            "                a, env=_allowlisted_env({'GIT_DIR': '/tmp/evil/.git'})\n"
+            "            )\n"
+            "        _git('rm', '--cached', 'x')\n"
+        )
+        self.assertEqual(
+            _spawn_offenders(counterfeit),
+            ["T.test_x._git:5 spawns a process outside a chokepoint"],
+        )
+        # And the widening it performs is reported too — see the next test for why the
+        # keyword scan alone would not have seen it.
+        self.assertEqual(_widening_sites(counterfeit), ["T.test_x._git"])
+
+    def test_a_sanitiser_with_the_callers_environment_on_top_is_not_sanitised(
+        self,
+    ) -> None:
+        """``env=`` is an equality on the call, not a prefix match on the text.
+
+        Round ten's predicate was ``environment.startswith("_allowlisted_env(")``. It
+        accepts ``env=_allowlisted_env() | dict(os.environ)``: the allowlist, and then
+        the caller's whole environment merged over the top of it, which is precisely the
+        inheritance the chokepoint exists to end.
+        """
+        widened = (
+            "import os, subprocess\n"
+            "def _git(*a):\n"
+            "    return subprocess.run(a, env=_allowlisted_env() | dict(os.environ))\n"
+        )
+        self.assertEqual(
+            _spawn_offenders(widened),
+            [
+                "_git:3 is a chokepoint but its env= is "
+                "'_allowlisted_env() | dict(os.environ)', not _allowlisted_env(...)"
+            ],
+        )
+
+    def test_the_widening_enumeration_reads_the_three_other_spellings(self) -> None:
+        """A widening passed as ``**`` or straight into the sanitiser is still one.
+
+        The keyword scan saw ``env_extra=`` and `_run_shell`'s third positional argument
+        and nothing else. Three spellings walked past it: a dict display splatted into
+        the call, an unreadable ``**kw`` — where the only conservative answer is to
+        report it — and a direct ``_allowlisted_env({...})``, which is how a helper that
+        had already borrowed a chokepoint's name would widen without naming a keyword at
+        all.
+        """
+        cases = (
+            (
+                "a dict display splatted in",
+                "def f(hostile):\n"
+                "    return _git('-C', 'x', 'status', **{'env_extra': hostile})\n",
+            ),
+            (
+                "keywords this scan cannot read",
+                "def f(**kw):\n    return _git('-C', 'x', 'status', **kw)\n",
+            ),
+            (
+                "the sanitiser widened directly",
+                "import subprocess\n"
+                "def f(hostile):\n"
+                "    return subprocess.run(['git'], env=_allowlisted_env(hostile))\n",
+            ),
+        )
+        for label, source in cases:
+            with self.subTest(spelling=label):
+                self.assertEqual(_widening_sites(source), ["f"])
+        self.assertEqual(len(cases), 3)
+
+    def test_the_widening_enumeration_reports_the_scope_not_the_bare_name(self) -> None:
+        """Two classes may each hold an ``_arm``; a list keyed by simple name would let
+        the second inherit the first's justification without anybody saying so."""
+        source = (
+            "class A:\n"
+            "    def _arm(self, h):\n"
+            "        return _git('-C', 'x', 'status', env_extra=h)\n"
+            "class B:\n"
+            "    def _arm(self, h):\n"
+            "        return _git('-C', 'x', 'status', env_extra=h)\n"
+        )
+        self.assertEqual(_widening_sites(source), ["A._arm", "B._arm"])
+
+    def test_a_helper_nested_inside_a_test_is_attributed_to_itself(self) -> None:
+        """Round nine's unsanitised reconstruction lived inside a test body. An
+        enumeration that attributed it to the enclosing test would have to exempt the
+        test, and exempting a test exempts everything anyone later writes in it."""
+        nested = (
+            "import subprocess\n"
+            "class T:\n"
+            "    def test_x(self):\n"
+            "        def helper():\n"
+            "            return subprocess.run(['git', 'status'])\n"
+            "        helper()\n"
+        )
+        self.assertEqual([site[1] for site in _spawn_sites(nested)], ["helper"])
+
+    def test_the_allowlist_justifies_every_variable_it_admits(self) -> None:
+        """An allowlist without reasons is a denylist's twin: nobody can review it."""
+        self.assertEqual(sorted(_allowlisted_env()), sorted(GIT_ENV_ALLOWLIST))
+        for name, reason in GIT_ENV_ALLOWLIST.items():
+            with self.subTest(variable=name):
+                self.assertGreater(
+                    len(reason), 30, f"{name} is admitted without a stated reason"
+                )
+
+    def test_a_variable_nobody_has_thought_of_does_not_reach_a_subprocess(self) -> None:
+        """The property a denylist cannot have, stated over a name invented here.
+
+        This is the whole difference between round nine and round ten. A denylist is
+        correct for the names its author knew; the class that broke it — Git
+        configuration injection — was reachable through ``HOME`` alone, a variable no
+        denylist of ``GIT_*`` names would ever contain. The assertion is not "these
+        particular hostile names are absent" but "nothing this module did not put there
+        is present", which holds for names that do not exist yet.
+        """
+        invented = "W0_QA_01_A_VARIABLE_INVENTED_AFTER_THE_DENYLIST_WAS_WRITTEN"
+        hostile = {
+            invented: "x",
+            "HOME": "/nonexistent/attacker",
+            "GIT_CONFIG_PARAMETERS": "'core.fsmonitor'='/tmp/evil.sh'",
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.hooksPath",
+            "GIT_CONFIG_VALUE_0": "/tmp/evil-hooks",
+            "GIT_DIR": "/tmp/evil/.git",
+        }
+        with unittest.mock.patch.dict(os.environ, hostile):
+            self.assertEqual(sorted(_allowlisted_env()), sorted(GIT_ENV_ALLOWLIST))
+            # And the same fact measured on a real child rather than on the dict.
+            observed = _run_shell(
+                'env | sed "s/=.*//" | sort', REPOSITORY_ROOT
+            ).stdout.split()
+        # bash adds a handful of its own; nothing else may appear.
+        self.assertEqual(
+            sorted(set(observed) - set(GIT_ENV_ALLOWLIST) - {"PWD", "SHLVL", "_", "OLDPWD"}),
+            [],
+            "a variable this module did not construct reached a child process",
+        )
+        self.assertNotIn(invented, observed)
+        self.assertEqual(sorted(set(GIT_ENV_ALLOWLIST) - set(observed)), [])
+
+    def test_the_constructed_environment_does_not_depend_on_the_callers_at_all(
+        self,
+    ) -> None:
+        """Every **value**, not only every name — which is a different claim.
+
+        A name-only assertion passes an environment built as
+        ``{"GIT_CONFIG_GLOBAL": os.environ.get("GIT_CONFIG_GLOBAL", os.devnull), ...}``:
+        the key set is right and the caller still chooses the global config file. That
+        mutation survived the first version of this class with all 215 tests green,
+        which is precisely the shape of defect this round exists to stop — a guard
+        beside a check that cannot fail on the thing the guard names.
+
+        Stating independence over the whole mapping covers every entry at once,
+        including the ones added later, and it covers the determinism entries — an
+        inherited ``LC_ALL`` changes how the digest recipes sort and how the documented
+        gates decode UTF-8 contract files — which no security-shaped probe would think
+        to look at.
+        """
+        clean = _allowlisted_env()
+        poison = {name: f"hostile-value-for-{name}" for name in GIT_ENV_ALLOWLIST}
+        poison.update(
+            {
+                "GIT_CONFIG_GLOBAL": "/tmp/attacker/.gitconfig",
+                "GIT_CONFIG_SYSTEM": "/tmp/attacker/system.gitconfig",
+                "GIT_CONFIG_NOSYSTEM": "0",
+                "GIT_CONFIG_PARAMETERS": "'core.fsmonitor'='/tmp/evil.sh'",
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "core.hooksPath",
+                "GIT_CONFIG_VALUE_0": "/tmp/evil-hooks",
+                "GIT_DIR": "/tmp/attacker/.git",
+                "HOME": "/tmp/attacker",
+                "XDG_CONFIG_HOME": "/tmp/attacker/.config",
+                "LC_ALL": "tr_TR.UTF-8",
+                "TZ": "Pacific/Kiritimati",
+                "PATH": "/tmp/attacker/bin",
+            }
+        )
+        with unittest.mock.patch.dict(os.environ, poison):
+            under_attack = _allowlisted_env()
+        self.assertEqual(
+            under_attack,
+            clean,
+            "a value in the constructed environment came from the caller's",
+        )
+
+    def test_the_environment_neutralises_configuration_by_construction(self) -> None:
+        """The named facts the allowlist is supposed to produce, asserted one by one."""
+        env = _allowlisted_env()
+        self.assertEqual(env["PATH"], TRUSTED_PATH)
+        self.assertEqual(env["GIT_CONFIG_GLOBAL"], os.devnull)
+        self.assertEqual(env["GIT_CONFIG_SYSTEM"], os.devnull)
+        self.assertEqual(env["GIT_CONFIG_NOSYSTEM"], "1")
+        self.assertNotIn("GIT_CONFIG_PARAMETERS", env)
+        self.assertNotIn("GIT_CONFIG_COUNT", env)
+        home = Path(env["HOME"])
+        self.assertTrue(home.is_dir(), "HOME must exist or Git falls back to passwd")
+        self.assertEqual(
+            sorted(entry.name for entry in home.iterdir()),
+            ["xdg"],
+            "the neutral HOME is not empty, so a global config could live in it",
+        )
+        self.assertEqual(list(Path(env["XDG_CONFIG_HOME"]).iterdir()), [])
+        self.assertFalse(
+            home.resolve().is_relative_to(REPOSITORY_ROOT.resolve()),
+            "the neutral HOME is inside the repository under review",
+        )
+
+    def test_every_deliberate_widening_is_named_and_justified_here(self) -> None:
+        """``env_extra``/``env_overrides`` is the one escape hatch, so it is enumerated.
+
+        Documented Gate C reads the repository's object database and a mutable copy has
+        none, so `GIT_DIR` is supplied on purpose. That is a widening at a named call
+        site, visible in the argument list. A silent second one would be the start of
+        the same drift the chokepoint exists to stop, so every site is listed with its
+        reason and this fails on one that is not.
+        """
+        sites = sorted({site for site in _widening_sites(self._own_source())})
+        self.assertEqual(
+            sites,
+            sorted(DELIBERATE_ENV_WIDENINGS),
+            "a call widened the subprocess environment without being justified in "
+            "DELIBERATE_ENV_WIDENINGS",
+        )
+        for function, reason in DELIBERATE_ENV_WIDENINGS.items():
+            with self.subTest(site=function):
+                self.assertGreater(len(reason), 25, f"{function} widens without a reason")
+
+    def test_the_widening_enumeration_reports_a_new_unjustified_site(self) -> None:
+        added = (
+            "def _somebody_elses_helper(root):\n"
+            "    return _git('-C', root, 'status', env_extra={'GIT_DIR': '/tmp/x'})\n"
+        )
+        self.assertEqual(_widening_sites(added), ["_somebody_elses_helper"])
+
+    def test_the_widening_enumeration_ignores_the_parameter_declarations(self) -> None:
+        """Otherwise `_git` and `_run_shell` would report themselves forever and the
+        list would carry two entries that mean nothing."""
+        self.assertNotIn("_git", _widening_sites(self._own_source()))
+        self.assertNotIn("_run_shell", _widening_sites(self._own_source()))
+
+
+class TableExpectationTests(unittest.TestCase):
+    """**Every table in this module carries a literal expectation of its own.**
+
+    The defect class this closes, in one sentence: *a probe that iterates the same
+    constant its guard reads asserts nothing when that constant is empty.* Emptying the
+    table empties the loop, the loop runs zero subtests, and `unittest` reports the
+    result of asserting nothing as ``OK``.
+
+    Round ten met this once — `STATE_DOCUMENT_MUST_STILL_CONTAIN` — and pinned that one
+    literal. It was live in four more places, and two independent reviewers found three
+    of them by hand:
+
+    * `RATIFICATION_REQUIRED_FIELDS = ()` — 244 green, and a `ratification` record
+      carrying **no provenance at all** licensed the full five-path delta, beside a
+      docstring reading "a delta authorised by a bare boolean would be an accident with
+      a flag on it".
+    * `ForbiddenNameSweepControlTests.ROUTES = ()` — 244 green, inside round ten's own
+      repair for the same class of finding.
+    * `SPAWN_APIS` cut from 19 entries to 1 — 244 green, eighteen APIs unexercised.
+
+    Fixing three by hand would leave the fourth for the next reviewer, so the property is
+    made structural instead. :func:`_module_tables` enumerates every table in this file
+    from its own source, :func:`_pinned_tables` finds the literal expectations, and
+    :meth:`test_every_table_this_module_defines_carries_a_literal_expectation` requires
+    the second set to cover the first. A table added tomorrow with no pin fails the suite
+    the day it is written, which is the same move `GitSpawnChokepointTests` makes for
+    spawn sites and it reuses the same AST machinery.
+
+    **What this class does and does not claim.** It proves a literal expectation exists
+    for every table; the expectation itself is what proves the *contents*, and those are
+    written out one table at a time below so a reviewer can read them against the
+    definitions. A pin is deliberately narrow: an equality assertion, with the table (or
+    ``sorted``/``len``/``set``/… of it) on one side and an expression naming nothing on
+    the other. ``assertIn`` is not a pin and neither is comparing a table with itself —
+    both stay true when entries are removed, which is the mutation being caught. Where a
+    table holds values no literal can restate — `WritingCommandGuardTests.CASES` holds
+    lambdas — the pin is on cardinality, which still turns emptying and shrinking red.
+
+    Every table below has been shown red under emptying; §11.17.2 carries the table of
+    24 mutations and the test each one kills.
+    """
+
+    @staticmethod
+    def _own_source() -> str:
+        return Path(__file__).resolve().read_text(encoding="utf-8")
+
+    # ---- the structural property ---------------------------------------------------
+
+    def test_the_scan_is_reading_this_modules_real_source(self) -> None:
+        """Otherwise every assertion below is vacuously true over an empty string."""
+        source = self._own_source()
+        self.assertIn("def _module_tables(", source)
+        self.assertGreaterEqual(len(_module_tables(source)), 25)
+
+    def test_every_table_this_module_defines_carries_a_literal_expectation(self) -> None:
+        self.assertEqual(
+            _unpinned_tables(self._own_source()),
+            [],
+            "a table in this module can be emptied without turning a test red",
+        )
+
+    def test_the_table_census_is_the_one_this_class_reviewed(self) -> None:
+        """Naming them, so adding a table is a decision somebody has to make here.
+
+        Without this the structural test above is satisfiable by deleting a table as
+        well as by pinning it, and a reviewer reading the class has no list to check the
+        pins against.
+        """
+        self.assertEqual(
+            sorted(_module_tables(self._own_source())),
+            [
+                "ACCEPTANCE_DIGEST_FIELDS",
+                "ALIAS_BYPASSES",
+                "CASES",
+                "DELIBERATE_ENV_WIDENINGS",
+                "ENV_WIDENING_KEYWORDS",
+                "FORBIDDEN_AUTHORITY_KEYS",
+                "FORBIDDEN_VERSION_KEYS",
+                "GATE_MARKERS",
+                "GATE_NEEDS_OBJECT_STORE",
+                "GIT_ENV_ALLOWLIST",
+                "GIT_SPAWN_CHOKEPOINTS",
+                "IDENTITY",
+                "IMMUTABLE_REVIEWED_PREFIXES",
+                "NOT_COPIED",
+                "PINNING_ASSERTIONS",
+                "POST_FREEZE_DELTA_CEILING",
+                "PURE_CONSTRUCTORS",
+                "RATIFICATION_DELTA_CEILING",
+                "RATIFICATION_REQUIRED_FIELDS",
+                "RECONCILIATIONS",
+                "REGISTRY_STATE_TOKENS",
+                "REVIEWED_PREFIXES",
+                "ROUTES",
+                "SPAWN_APIS",
+                "STATE_DOCUMENT_MUST_STILL_CONTAIN",
+                "UNPINNED_RUNTIME_CACHES",
+                "UNRESOLVABLE_SPAWN_ROUTES",
+                "_PROGRAM_CACHE",
+                "_TREE_BLOBS",
+            ],
+        )
+
+    def test_the_two_unpinned_names_are_runtime_caches_and_start_empty(self) -> None:
+        """The only exemption, and the reason it is safe.
+
+        A cache is filled while the suite runs, so a pinned value would pin a moment
+        rather than a property. Both are asserted to be exactly that: empty at
+        definition, and mutable mappings rather than tables of expectations.
+        """
+        self.assertEqual(UNPINNED_RUNTIME_CACHES, ("_PROGRAM_CACHE", "_TREE_BLOBS"))
+        source = self._own_source()
+        for name in UNPINNED_RUNTIME_CACHES:
+            with self.subTest(cache=name):
+                self.assertIn(f"{name}: dict[", source)
+                self.assertIn("= {}", source.split(f"{name}: dict[")[1].split("\n")[0])
+
+    # ---- negative controls: the scan has to be able to report something -------------
+
+    def test_the_scan_reports_a_table_added_without_a_pin(self) -> None:
+        """A probe proves only what it mutates. This mutates the thing."""
+        added = (
+            "SOMETHING_NEW = ('a', 'b')\n"
+            "class T:\n"
+            "    def test_x(self):\n"
+            "        for item in SOMETHING_NEW:\n"
+            "            self.assertIn(item, 'ab')\n"
+        )
+        self.assertEqual(_unpinned_tables(added), ["SOMETHING_NEW"])
+
+    def test_a_table_compared_with_itself_is_not_a_pin(self) -> None:
+        """The exact shape that let `GIT_ENV_ALLOWLIST` look measured for two rounds.
+
+        ``assertEqual(sorted(_allowlisted_env()), sorted(GIT_ENV_ALLOWLIST))`` is a real
+        and useful assertion — it is how the constructed environment is held to its
+        justification list — but it is not an expectation *about* the list. Empty the
+        list and `_allowlisted_env` raises instead; empty both and the assertion holds.
+        """
+        self_referential = (
+            "TABLE = ('a', 'b')\n"
+            "class T:\n"
+            "    def test_x(self):\n"
+            "        self.assertEqual(sorted(TABLE), sorted(TABLE))\n"
+            "        self.assertIn('a', TABLE)\n"
+            "        self.assertTrue(TABLE)\n"
+        )
+        self.assertEqual(_unpinned_tables(self_referential), ["TABLE"])
+
+    def test_a_projection_of_a_table_is_not_a_pin(self) -> None:
+        """One column agreeing does not pin the rows.
+
+        This is `RECONCILIATIONS` exactly: every `path` could be right while
+        `sentence_requires` was weakened from three tokens to one, which is the mutation
+        that survived round ten green.
+        """
+        projected = (
+            "TABLE = ({'path': 'a', 'needs': ('x', 'y')},)\n"
+            "class T:\n"
+            "    def test_x(self):\n"
+            "        self.assertEqual([row['path'] for row in TABLE], ['a'])\n"
+        )
+        self.assertEqual(_unpinned_tables(projected), ["TABLE"])
+        # And the whole-value form of the same table is a pin.
+        pinned = projected.replace(
+            "self.assertEqual([row['path'] for row in TABLE], ['a'])",
+            "self.assertEqual(TABLE, ({'path': 'a', 'needs': ('x', 'y')},))",
+        )
+        self.assertEqual(_unpinned_tables(pinned), [])
+
+    def test_both_argument_orders_count_and_a_cardinality_pin_counts(self) -> None:
+        """``assertEqual`` is symmetric, and ``len(TABLE)`` is the weakest pin allowed."""
+        reversed_order = (
+            "TABLE = ('a',)\n"
+            "class T:\n"
+            "    def test_x(self):\n"
+            "        self.assertEqual(('a',), TABLE)\n"
+        )
+        self.assertEqual(_unpinned_tables(reversed_order), [])
+        cardinality = (
+            "TABLE = ('a',)\n"
+            "class T:\n"
+            "    def test_x(self):\n"
+            "        self.assertEqual(len(TABLE), 1)\n"
+        )
+        self.assertEqual(_unpinned_tables(cardinality), [])
+
+    def test_the_pin_scan_finds_a_class_attribute_table(self) -> None:
+        """`ROUTES` and `CASES` live in class bodies; a module-level-only scan would
+        report them pinned by never seeing them at all."""
+        in_a_class = (
+            "class T:\n"
+            "    ROUTES = ('a', 'b')\n"
+            "    def test_x(self):\n"
+            "        for route in self.ROUTES:\n"
+            "            self.assertIn(route, 'ab')\n"
+        )
+        self.assertEqual(_unpinned_tables(in_a_class), ["ROUTES"])
+
+    # ---- the pins themselves, one table at a time -----------------------------------
+    #
+    # Written out rather than derived. A pin that computed its expectation from the
+    # table would be the defect it exists to catch.
+
+    def test_the_reviewed_family_prefixes_are_pinned(self) -> None:
+        self.assertEqual(
+            REVIEWED_PREFIXES,
+            ("contracts/", "fixtures/", "docs/architecture/", "scripts/"),
+        )
+        self.assertEqual(
+            IMMUTABLE_REVIEWED_PREFIXES, ("contracts/", "fixtures/", "scripts/")
+        )
+
+    def test_the_registry_state_vocabulary_is_closed_at_two_tokens(self) -> None:
+        """**A non-blocking survivor from round ten, closed.**
+
+        `REGISTRY_STATE_TOKENS` admitted a third token with the suite green, so the
+        "closed and machine-readable" property its docstring claims was unmeasured. The
+        vocabulary is the whole point of the constant: `_registry_state_problem`
+        compares the registry row against it, and a vocabulary that admits a new word is
+        not closed.
+        """
+        self.assertEqual(
+            sorted(REGISTRY_STATE_TOKENS), ["ratification", "ratification_blocked"]
+        )
+
+    def test_the_two_ratification_ceilings_are_pinned(self) -> None:
+        self.assertEqual(
+            sorted(RATIFICATION_DELTA_CEILING),
+            [
+                "docs/architecture/ADR_INDEX.md",
+                "docs/architecture/ARCHITECTURE_LINT_RULES.md",
+                "docs/architecture/CP00_ARCHITECTURE_REVIEW.json",
+                "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+                "docs/architecture/CP00_OWNER_DECISIONS.md",
+            ],
+        )
+        self.assertEqual(
+            sorted(POST_FREEZE_DELTA_CEILING),
+            [
+                "artifacts/checkpoints/CP-00/manifest.json",
+                "docs/architecture/ADR_INDEX.md",
+                "docs/architecture/ARCHITECTURE_LINT_RULES.md",
+                "docs/architecture/CP00_ARCHITECTURE_REVIEW.json",
+                "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+                "docs/architecture/CP00_OWNER_DECISIONS.md",
+                "docs/program/CHECKPOINT_REGISTRY.md",
+                "docs/program/CURRENT_STATE.md",
+            ],
+        )
+
+    def test_the_acceptance_digest_fields_are_pinned(self) -> None:
+        self.assertEqual(
+            ACCEPTANCE_DIGEST_FIELDS,
+            ("tested_candidate_digest", "evidence_bundle_digest"),
+        )
+
+    def test_the_state_document_deletion_guard_is_pinned(self) -> None:
+        self.assertEqual(
+            STATE_DOCUMENT_MUST_STILL_CONTAIN, ("# Current state", "CP-00")
+        )
+
+    def test_the_ratification_provenance_fields_are_pinned(self) -> None:
+        """`RATIFICATION_REQUIRED_FIELDS = ()` left 244 tests green and licensed a
+        five-path delta from a record carrying nothing but a boolean."""
+        self.assertEqual(
+            RATIFICATION_REQUIRED_FIELDS,
+            ("task", "decided_on", "decided_by", "reason"),
+        )
+
+    def test_the_reconciliation_table_is_pinned_whole(self) -> None:
+        """Whole, not by projection.
+
+        `RECONCILIATIONS[1]["sentence_requires"]` weakened from ``("62", "31",
+        "satisfied")`` to ``("satisfied",)`` left 244 green: the live code names both
+        `PD-02` documents, and the only probe for the evidence sentence drove entry 0.
+        Emptying the field outright *is* caught; the weakening was not, and a pin over
+        `path` alone would not have caught it either.
+        """
+        self.assertEqual(
+            RECONCILIATIONS,
+            (
+                {
+                    "item": "PD-02 acceptance precondition, CP-00 architecture review",
+                    "path": "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
+                    "stale": "so the acceptance precondition is not yet met",
+                    "sentence_requires": ("62", "31", "satisfied"),
+                    "requires_note": (
+                        "a sentence recording the precondition as satisfied, with the "
+                        "62 legacy names and 31 alias-bearing sites that show it"
+                    ),
+                },
+                {
+                    "item": "PD-02 acceptance precondition, owner decision ledger",
+                    "path": "docs/architecture/CP00_OWNER_DECISIONS.md",
+                    "stale": "so the precondition is not yet met",
+                    "sentence_requires": ("62", "31", "satisfied"),
+                    "requires_note": (
+                        "a sentence recording the precondition as satisfied, with the "
+                        "62 legacy names and 31 alias-bearing sites that show it"
+                    ),
+                },
+                {
+                    "item": "stale GATE-E probe prose",
+                    "path": "docs/architecture/ARCHITECTURE_LINT_RULES.md",
+                    "stale": "still untracked",
+                    "removal_only": True,
+                    "must_still_contain": ("GATE-E",),
+                    "requires_note": (
+                        "the GATE-E probe description with the untracked claim "
+                        "removed; the probe itself must still be documented"
+                    ),
+                },
+                {
+                    "item": "owner-decision count in the ADR index",
+                    "path": "docs/architecture/ADR_INDEX.md",
+                    "stale": "`PD-01`\u2013`PD-04`",
+                    "new_text": ("`PD-01`\u2013`PD-05`",),
+                    "requires_note": "the decision range widened to `PD-01`-`PD-05`",
+                },
+            ),
+        )
+
+    def test_the_gate_tables_are_pinned(self) -> None:
+        self.assertEqual(
+            GATE_MARKERS,
+            {
+                "A": "name-map gate PASS",
+                "B": "evidence gate PASS",
+                "C": "reviewer gate PASS",
+                "D": "decision-transfer gate PASS",
+            },
+        )
+        self.assertEqual(sorted(GATE_NEEDS_OBJECT_STORE), ["C"])
+
+    def test_the_environment_allowlist_names_are_pinned(self) -> None:
+        """The names, written out. The reasons are held to a length by
+        :meth:`GitSpawnChokepointTests.test_the_allowlist_justifies_every_variable_it_admits`,
+        and to their effect by the two independence probes beside it."""
+        self.assertEqual(
+            sorted(GIT_ENV_ALLOWLIST),
+            [
+                "GIT_CONFIG_GLOBAL",
+                "GIT_CONFIG_NOSYSTEM",
+                "GIT_CONFIG_SYSTEM",
+                "GIT_TERMINAL_PROMPT",
+                "HOME",
+                "LANG",
+                "LC_ALL",
+                "PATH",
+                "TZ",
+                "XDG_CONFIG_HOME",
+            ],
+        )
+
+    def test_the_spawn_enumeration_tables_are_pinned(self) -> None:
+        """`SPAWN_APIS` cut from 19 entries to one left 244 tests green.
+
+        Nothing iterated it — `_spawn_sites` tests membership — so no subtest count
+        moved; the eighteen missing entries were simply never asked about. This is the
+        same defect shape as an emptied loop table and it is caught the same way.
+        """
+        self.assertEqual(GIT_SPAWN_CHOKEPOINTS, ("_git", "_run_shell"))
+        self.assertEqual(ENV_WIDENING_KEYWORDS, ("env_extra", "env_overrides"))
+        self.assertEqual(
+            sorted(SPAWN_APIS),
+            [
+                "asyncio.create_subprocess_exec",
+                "asyncio.create_subprocess_shell",
+                "asyncio.subprocess.create_subprocess_exec",
+                "asyncio.subprocess.create_subprocess_shell",
+                "concurrent.futures.ProcessPoolExecutor",
+                "multiprocessing.Pool",
+                "multiprocessing.Process",
+                "os.execl",
+                "os.execle",
+                "os.execlp",
+                "os.execlpe",
+                "os.execv",
+                "os.execve",
+                "os.execvp",
+                "os.execvpe",
+                "os.fork",
+                "os.forkpty",
+                "os.popen",
+                "os.posix_spawn",
+                "os.posix_spawnp",
+                "os.spawnl",
+                "os.spawnle",
+                "os.spawnlp",
+                "os.spawnlpe",
+                "os.spawnv",
+                "os.spawnve",
+                "os.spawnvp",
+                "os.spawnvpe",
+                "os.system",
+                "pty.fork",
+                "pty.spawn",
+                "subprocess.Popen",
+                "subprocess.call",
+                "subprocess.check_call",
+                "subprocess.check_output",
+                "subprocess.getoutput",
+                "subprocess.getstatusoutput",
+                "subprocess.run",
+            ],
+        )
+
+    def test_the_deliberate_widenings_are_pinned_by_scope(self) -> None:
+        """The justification list, by qualified scope. Held to the *actual* widening
+        sites by
+        :meth:`GitSpawnChokepointTests.test_every_deliberate_widening_is_named_and_justified_here`
+        — which is the comparison that fails on a new site, and this is the one that
+        fails when both sides are emptied together."""
+        self.assertEqual(
+            sorted(DELIBERATE_ENV_WIDENINGS),
+            [
+                "AmbientGitConfigurationTests._arm",
+                "AmbientGitConfigurationTests."
+                "test_a_global_ignore_file_cannot_change_what_a_read_enumerates",
+                "AmbientGitConfigurationTests."
+                "test_core_hookspath_cannot_make_a_commit_run_an_attackers_hook",
+                "AmbientGitConfigurationTests."
+                "test_no_ambient_form_can_reach_another_repository_through_a_writer",
+                "DocumentedAnalysisGateTests._assert_gate_passes",
+                "ShellChokepointEnvironmentTests."
+                "test_a_gate_run_under_an_ambient_git_dir_does_not_reach_that_repository",
+                "WritingCommandGuardTests."
+                "test_removing_the_environment_sanitiser_lets_the_hostile_git_dir_through"
+                ".unguarded_git_write",
+                "_MutableCopy.run_gate",
+            ],
+        )
+
+    def test_the_scans_own_vocabularies_are_pinned(self) -> None:
+        """The tables the pin scan itself reads. Emptying `PINNING_ASSERTIONS` would
+        make every pin invisible and report every table unpinned — loud, not silent —
+        but emptying `PURE_CONSTRUCTORS` narrows what counts as a literal in the quiet
+        direction, so both are written out."""
+        self.assertEqual(
+            PINNING_ASSERTIONS,
+            (
+                "assertEqual",
+                "assertCountEqual",
+                "assertSetEqual",
+                "assertTupleEqual",
+                "assertListEqual",
+                "assertDictEqual",
+            ),
+        )
+        self.assertEqual(
+            sorted(PURE_CONSTRUCTORS),
+            ["dict", "frozenset", "len", "list", "set", "sorted", "tuple"],
+        )
+
+    def test_the_sandbox_and_probe_fixtures_are_pinned(self) -> None:
+        self.assertEqual(sorted(_CheckpointSandbox.NOT_COPIED), [".git", ".venv"])
+        self.assertEqual(
+            SandboxResetTests.IDENTITY,
+            (
+                "-c",
+                "user.email=w0-qa-01@example.invalid",
+                "-c",
+                "user.name=W0-QA-01 reset probe",
+            ),
+        )
+
+    def test_the_write_refusal_case_table_is_pinned(self) -> None:
+        """Cardinality, because the rows carry lambdas and no literal restates one.
+
+        The reasons themselves are restated, which is the part that can go wrong
+        quietly: a case removed from this table takes its branch's only probe with it,
+        and that is exactly what an independent reviewer of round eight did — removing a
+        branch and staying green because a surviving branch caught the same input with a
+        different message.
+        """
+        self.assertEqual(len(WritingCommandGuardTests.CASES), 4)
+        self.assertEqual(
+            [reason for reason, _factory in WritingCommandGuardTests.CASES],
+            [
+                "it is the repository under review",
+                "it contains the repository under review",
+                "it is inside the repository under review",
+                "it is not a throwaway directory this module created",
+            ],
+        )
+
+    def test_the_forbidden_name_sweep_routes_are_pinned(self) -> None:
+        """`ROUTES = ()` left 244 green — inside round ten's own repair for this class.
+
+        Six routes, and the two the `properties` branch reaches are marked: a name
+        declared as a `properties` member is *also* an object key, so those two rows
+        cannot isolate the branch they name. See
+        :meth:`ForbiddenNameSweepControlTests.test_each_route_helper_reaches_its_own_route`.
+        """
+        self.assertEqual(
+            ForbiddenNameSweepControlTests.ROUTES,
+            (
+                "an object key at depth inside a list",
+                "an object key at depth inside nested objects",
+                "a properties member",
+                "a properties member reached through a list",
+                "a required entry",
+                "a required entry reached through a list",
+            ),
+        )
+
+
+class TrustedProgramResolutionTests(unittest.TestCase):
+    """``$PATH`` shadowing of ``git`` itself, and what this module can and cannot do.
+
+    A reviewer put an executable named ``git`` earlier on the inherited ``PATH`` and
+    routed all 28 of this module's invocations through it with the suite reporting
+    ``OK``. Two independent things close that here: the program is resolved to an
+    absolute path from :data:`TRUSTED_PATH` alone, and the ``PATH`` handed to the child
+    is :data:`TRUSTED_PATH`, so what Git itself spawns is covered too.
+
+    The limitation is recorded in §11.15.4 rather than asserted away: an attacker who
+    can write into ``/usr/bin`` has already won, and nothing a test module does outranks
+    that.
+    """
+
+    def _shadow(self) -> tuple[Path, Path]:
+        shadow = Path(tempfile.mkdtemp(prefix="w0-qa-01-shadow-path-"))
+        self.addCleanup(shutil.rmtree, shadow, True)
+        marker = shadow / "fired"
+        program = shadow / "git"
+        program.write_text(
+            f'#!/bin/sh\nprintf "fired\\n" >> "{marker}"\nexit 0\n', encoding="utf-8"
+        )
+        program.chmod(0o755)
+        return shadow, marker
+
+    def test_a_shadowed_git_on_the_callers_path_is_not_the_git_that_runs(self) -> None:
+        shadow, marker = self._shadow()
+        cached = dict(_PROGRAM_CACHE)
+        self.addCleanup(lambda: (_PROGRAM_CACHE.clear(), _PROGRAM_CACHE.update(cached)))
+        with unittest.mock.patch.dict(
+            os.environ, {"PATH": f"{shadow}{os.pathsep}{os.environ.get('PATH', '')}"}
+        ):
+            # Armed: a naive resolution would take the attacker's program.
+            self.assertEqual(
+                shutil.which("git"),
+                str(shadow / "git"),
+                "the shadow is not first on PATH, so this probe measures nothing",
+            )
+            _PROGRAM_CACHE.clear()
+            resolved = _program("git")
+            version = _git("--version", text=True, check=True).stdout
+        self.assertFalse(
+            marker.exists(), "the module ran the git it was handed by the caller"
+        )
+        self.assertTrue(version.startswith("git version"), version)
+        self.assertTrue(Path(resolved).is_absolute())
+        self.assertIn(str(Path(resolved).parent), TRUSTED_PATH.split(os.pathsep))
+
+    def test_what_git_itself_spawns_gets_the_trusted_path_too(self) -> None:
+        """The half an absolute program name does not cover: hooks, ``git-`` helpers,
+        ``core.fsmonitor`` and clean/smudge filters are resolved by Git, on the ``PATH``
+        Git is given."""
+        shadow, _marker = self._shadow()
+        with unittest.mock.patch.dict(
+            os.environ, {"PATH": f"{shadow}{os.pathsep}{os.environ.get('PATH', '')}"}
+        ):
+            seen = _run_shell('printf "%s" "$PATH"', REPOSITORY_ROOT).stdout
+        self.assertEqual(seen, TRUSTED_PATH)
+
+    def test_both_programs_resolve_and_are_absolute(self) -> None:
+        for name in ("git", "bash"):
+            with self.subTest(program=name):
+                self.assertTrue(Path(_program(name)).is_absolute())
+                self.assertTrue(os.access(_program(name), os.X_OK))
+
+
+class AmbientGitConfigurationTests(unittest.TestCase):
+    """**Round ten's blocking class: Git configuration injection.**
+
+    Round nine removed three repository-*discovery* variables from an inherited
+    environment. An independent reviewer confirmed that list complete for its class and
+    then walked around it: injected Git *configuration* is strictly more powerful,
+    because a configured value such as `core.fsmonitor` is **executed as a command**.
+    With no ``GIT_*`` variable set at all — only a ``HOME`` whose ``.gitconfig`` names
+    `core.fsmonitor` — the reviewer took `contracts/README.md`, `fixtures/f.json` and
+    `scripts/s.py` out of another repository's index, all three
+    `IMMUTABLE_REVIEWED_PREFIXES` families, while this suite reported ``OK``, all 189
+    tests stayed green and `_refuse_to_write_outside` passed cleanly. Against a
+    disposable stand-in for the repository under review the same vector took 214 tracked
+    files to 147 and 67 immutable-family files to 0.
+
+    It is inside the module's own stated threat model, not next to it. §11.15.1 names
+    the motivating scenario as "a post-commit hook, ``git rebase`` or ``git bisect
+    run``", and what a post-commit hook's child actually inherits is::
+
+        GIT_CONFIG_PARAMETERS='core.fsmonitor'='/tmp/evil.sh' 'user.email'='a@b' ...
+        GIT_INDEX_FILE=.git/index
+
+    ``git -c K=V`` propagates to every child as `GIT_CONFIG_PARAMETERS`. Round nine
+    stripped `GIT_INDEX_FILE` from that line and left the other. And `core.fsmonitor` is
+    an ordinary setting real developers configure: under it,
+    :class:`WritingCommandGuardTests` alone executed the ambient hook 16 times per run,
+    including inside the test asserting the victim was intact.
+
+    Every probe below is armed first — the same configuration is shown to fire when it
+    is deliberately let through — and only then asserted absent. An assertion that a
+    marker file does not exist is worth nothing until the marker has been made to
+    exist.
+    """
+
+    def setUp(self) -> None:
+        self.home = Path(tempfile.mkdtemp(prefix="w0-qa-01-hostile-home-"))
+        self.addCleanup(shutil.rmtree, self.home, True)
+        self.marker = self.home / "fired"
+        self.payload = self.home / "payload.sh"
+        self.payload.write_text(
+            f'#!/bin/sh\nprintf "fired\\n" >> "{self.marker}"\nprintf ""\n',
+            encoding="utf-8",
+        )
+        self.payload.chmod(0o755)
+        self.hooks = self.home / "hooks"
+        self.hooks.mkdir()
+        for hook in ("pre-commit", "post-commit"):
+            script = self.hooks / hook
+            script.write_text(
+                f'#!/bin/sh\nprintf "fired\\n" >> "{self.marker}"\n', encoding="utf-8"
+            )
+            script.chmod(0o755)
+        #: A global ignore file can only hide paths that are *untracked* — which is
+        #: exactly the interesting case here, because this task's own report and every
+        #: deliverable in flight are untracked, and `_digest_paths` enumerates them.
+        self.untracked = "w0-qa-01-probe-untracked.json"
+        self.ignore = self.home / "global-ignore"
+        self.ignore.write_text(self.untracked + "\n", encoding="utf-8")
+        self.gitconfig = self.home / ".gitconfig"
+        self.gitconfig.write_text(
+            "[core]\n"
+            f"\tfsmonitor = {self.payload}\n"
+            f"\thooksPath = {self.hooks}\n"
+            f"\texcludesFile = {self.ignore}\n",
+            encoding="utf-8",
+        )
+
+    #: What a caller's environment looks like when the vector is present. No ``GIT_*``
+    #: variable at all in the first form — that is the point of it.
+    def _ambient(self, form: str) -> dict[str, str]:
+        if form == "home":
+            return {"HOME": str(self.home), "XDG_CONFIG_HOME": str(self.home)}
+        if form == "parameters":
+            return {
+                "GIT_CONFIG_PARAMETERS": (
+                    f"'core.fsmonitor'='{self.payload}' "
+                    f"'core.hooksPath'='{self.hooks}' "
+                    f"'core.excludesFile'='{self.ignore}' "
+                    "'user.email'='a@b' 'user.name'='a'"
+                )
+            }
+        if form == "global":
+            # Neither HOME nor GIT_CONFIG_PARAMETERS: the caller simply names the file.
+            # This is the form that the neutral HOME alone does not stop, and the
+            # reason GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM are pinned at os.devnull
+            # rather than left to follow HOME.
+            return {
+                "GIT_CONFIG_GLOBAL": str(self.gitconfig),
+                "GIT_CONFIG_SYSTEM": str(self.gitconfig),
+                "GIT_CONFIG_NOSYSTEM": "0",
+            }
+        if form == "count":
+            return {
+                "GIT_CONFIG_COUNT": "3",
+                "GIT_CONFIG_KEY_0": "core.fsmonitor",
+                "GIT_CONFIG_VALUE_0": str(self.payload),
+                "GIT_CONFIG_KEY_1": "core.hooksPath",
+                "GIT_CONFIG_VALUE_1": str(self.hooks),
+                "GIT_CONFIG_KEY_2": "core.excludesFile",
+                "GIT_CONFIG_VALUE_2": str(self.ignore),
+            }
+        raise AssertionError(form)
+
+    #: The same configuration, deliberately let through :func:`_git`'s named widening,
+    #: to prove the payload is armed before anything asserts it did not fire. ``HOME``
+    #: alone is enough in the wild; here `GIT_CONFIG_GLOBAL` is named too because the
+    #: allowlist pins it at ``os.devnull`` and both names point at the same file.
+    def _let_through(self) -> dict[str, str]:
+        return {"HOME": str(self.home), "GIT_CONFIG_GLOBAL": str(self.gitconfig)}
+
+    def _arm(self, root: Path) -> None:
+        self.marker.unlink(missing_ok=True)
+        _git("-C", str(root), "status", "--porcelain", env_extra=self._let_through())
+        self.assertTrue(
+            self.marker.is_file(),
+            "the hostile configuration did not run even when it was deliberately let "
+            "through, so every assertion below would pass for the wrong reason",
+        )
+        self.marker.unlink()
+
+    def _victim(self) -> Path:
+        victim = Path(tempfile.mkdtemp(prefix="w0-qa-01-victim-"))
+        self.addCleanup(shutil.rmtree, victim, True)
+        for family in ("contracts", "fixtures", "scripts"):
+            (victim / family).mkdir()
+            (victim / family / "seed.txt").write_text("victim\n", encoding="utf-8")
+        identity = ("-c", "user.email=v@example.invalid", "-c", "user.name=v")
+        _git("-C", str(victim), "init", "--quiet", check=True)
+        _git("-C", str(victim), *identity, "add", "-A", check=True)
+        _git("-C", str(victim), *identity, "commit", "--quiet", "-m", "seed", check=True)
+        return victim
+
+    @staticmethod
+    def _tracked(root: Path) -> set[str]:
+        return {
+            line
+            for line in _git("-C", str(root), "ls-files", text=True, check=True)
+            .stdout.split("\n")
+            if line
+        }
+
+    def test_a_global_gitconfig_alone_cannot_make_a_writer_run_anything(self) -> None:
+        """The reviewer's exact vector: a ``HOME``, and no ``GIT_*`` variable at all."""
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+        self._arm(sandbox.root)
+
+        with unittest.mock.patch.dict(os.environ, self._ambient("home")):
+            sandbox._git_write("rm", "--cached", "--", "contracts/README.md")
+
+        self.assertFalse(
+            self.marker.exists(),
+            "an ambient ~/.gitconfig made a writing Git command execute a script",
+        )
+        self.assertNotIn(
+            "contracts/README.md",
+            self._tracked(sandbox.root),
+            "the sandbox's own write did not take effect, so this proves nothing",
+        )
+
+    def test_a_global_gitconfig_alone_cannot_make_a_reader_run_anything(self) -> None:
+        """18 of round nine's 23 call sites were reads, and a read spawns Git too.
+
+        `_present_reviewed_paths` runs ``ls-files --cached --others``, which refreshes
+        the index and therefore consults `core.fsmonitor`. Nine of those eighteen were
+        production helpers; this is the class of them.
+        """
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+        self._arm(sandbox.root)
+
+        with unittest.mock.patch.dict(os.environ, self._ambient("home")):
+            present = _present_reviewed_paths(sandbox.root)
+            digest_paths = _digest_paths(sandbox.root)
+            candidate = _candidate_reviewed_paths(sandbox.root)
+            blobs = _tree_blobs(sandbox.root, REVIEWED_CANDIDATE_COMMIT)
+
+        self.assertFalse(self.marker.exists(), "an ambient ~/.gitconfig ran on a read")
+        self.assertIn("contracts/analysis/v1/README.md", present)
+        self.assertIn("contracts/analysis/v1/README.md", digest_paths)
+        self.assertIn("contracts/analysis/v1/README.md", candidate)
+        self.assertIsNotNone(blobs)
+
+    def test_a_global_ignore_file_cannot_change_what_a_read_enumerates(self) -> None:
+        """Configuration injection corrupts *answers*, not only writes.
+
+        `core.excludesFile` is read by ``--exclude-standard``, which every path-set
+        recipe in this module uses, and it hides *untracked* paths — which is the
+        interesting half, because a deliverable in flight is untracked and
+        `_digest_paths` is what enumerates it. An ambient global ignore naming one makes
+        `_digest_paths` under-report, which makes the recomputed manifest digest wrong,
+        which makes this module certify agreement it never checked. No script runs and
+        nothing is written: a silently wrong ``ACCEPT`` is the whole of the damage, and
+        it is the reason the eighteen unsanitised *reads* mattered as much as the five
+        writes.
+        """
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+        (sandbox.root / self.untracked).write_text("{}\n", encoding="utf-8")
+
+        honest = _digest_paths(sandbox.root)
+        self.assertIn(self.untracked, honest)
+
+        # Armed: let the same ignore file through and the path disappears from the
+        # recipe's own enumeration.
+        excluded = {
+            line
+            for line in _git(
+                "-C",
+                str(sandbox.root),
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                text=True,
+                check=True,
+                env_extra=self._let_through(),
+            ).stdout.split("\n")
+            if line
+        }
+        self.assertNotIn(
+            self.untracked,
+            excluded,
+            "the global ignore file hid nothing, so this probe measures nothing",
+        )
+
+        for form in ("home", "global", "parameters", "count"):
+            with self.subTest(form=form):
+                with unittest.mock.patch.dict(os.environ, self._ambient(form)):
+                    self.assertEqual(
+                        _digest_paths(sandbox.root),
+                        honest,
+                        "an ambient global ignore file changed the path set this "
+                        "module digests",
+                    )
+
+    def test_naming_the_global_config_file_outright_cannot_inject_configuration(
+        self,
+    ) -> None:
+        """`GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` name the file directly.
+
+        An empty ``HOME`` does not stop this one — Git reads the file it is told to
+        read — which is why the allowlist pins both at ``os.devnull`` instead of
+        letting them follow ``HOME``. Without this probe that pinning was decoration:
+        replacing it with ``os.environ.get("GIT_CONFIG_GLOBAL", os.devnull)`` left all
+        215 tests green.
+        """
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+        self._arm(sandbox.root)
+        with unittest.mock.patch.dict(os.environ, self._ambient("global")):
+            sandbox._git_write("rm", "--cached", "--", "contracts/README.md")
+            _present_reviewed_paths(sandbox.root)
+            _digest_paths(sandbox.root)
+        self.assertFalse(
+            self.marker.exists(),
+            "an ambient GIT_CONFIG_GLOBAL made Git execute a configured command",
+        )
+        self.assertNotIn("contracts/README.md", self._tracked(sandbox.root))
+
+    def test_git_config_parameters_cannot_inject_configuration(self) -> None:
+        """The line a post-commit hook's child actually inherits.
+
+        ``git -c K=V`` propagates to every child as `GIT_CONFIG_PARAMETERS`. The same
+        benign invocation §11.15.1 names as the motivating scenario delivers this.
+        """
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+        self._arm(sandbox.root)
+        with unittest.mock.patch.dict(os.environ, self._ambient("parameters")):
+            sandbox._git_write("rm", "--cached", "--", "contracts/README.md")
+            _present_reviewed_paths(sandbox.root)
+        self.assertFalse(self.marker.exists())
+        self.assertNotIn("contracts/README.md", self._tracked(sandbox.root))
+
+    def test_git_config_count_key_and_value_cannot_inject_configuration(self) -> None:
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+        self._arm(sandbox.root)
+        with unittest.mock.patch.dict(os.environ, self._ambient("count")):
+            sandbox._git_write("rm", "--cached", "--", "contracts/README.md")
+            _present_reviewed_paths(sandbox.root)
+        self.assertFalse(self.marker.exists())
+        self.assertNotIn("contracts/README.md", self._tracked(sandbox.root))
+
+    def test_core_hookspath_cannot_make_a_commit_run_an_attackers_hook(self) -> None:
+        """`_ManifestHistory.commit()` runs ``git commit``, which runs ``pre-commit``
+        and ``post-commit`` from `core.hooksPath`. An injected `core.hooksPath` made it
+        run the attacker's copies of both."""
+        history = _ManifestHistory()
+        self.addCleanup(history.close)
+
+        # Armed, against this history's own repository, before anything is asserted.
+        self.marker.unlink(missing_ok=True)
+        _git(
+            "-C",
+            str(history.root),
+            "commit",
+            "--quiet",
+            "--allow-empty",
+            "-m",
+            "arming",
+            env_extra=self._let_through(),
+        )
+        self.assertTrue(
+            self.marker.is_file(),
+            "the injected hooksPath did not run when it was let through, so the "
+            "assertions below would pass for the wrong reason",
+        )
+        self.marker.unlink()
+
+        for form in ("home", "global", "parameters", "count"):
+            with self.subTest(form=form):
+                head_before = history.head()
+                with unittest.mock.patch.dict(os.environ, self._ambient(form)):
+                    # A distinct file per form: `commit` has nothing to do on an
+                    # unchanged tree, and a commit that never ran would run no hook.
+                    history.commit(
+                        f"probe-{form}",
+                        _history_manifest(None),
+                        {f"probe-{form}.txt": form},
+                    )
+                self.assertFalse(
+                    self.marker.exists(),
+                    "an ambient core.hooksPath ran on commit",
+                )
+                self.assertNotEqual(
+                    history.head(),
+                    head_before,
+                    "the commit did not happen, so no hook could have run either and "
+                    "this iteration proves nothing",
+                )
+
+    def test_no_ambient_form_can_reach_another_repository_through_a_writer(
+        self,
+    ) -> None:
+        """The end-to-end shape of the reviewer's finding, asserted on the bytes.
+
+        Three families seeded in a throwaway victim — the `IMMUTABLE_REVIEWED_PREFIXES`
+        families the reviewer emptied — and a payload whose job would be to empty them.
+        The assertion is the victim's index, not a caught exception: round nine's
+        blocker was precisely a guard that raised on the right input while the write
+        went somewhere else.
+        """
+        victim = self._victim()
+        before = self._tracked(victim)
+        self.assertEqual(len(before), 3, before)
+
+        emptier = self.home / "empty-the-victim.sh"
+        emptier.write_text(
+            "#!/bin/sh\n"
+            f'printf "fired\\n" >> "{self.marker}"\n'
+            "env -u HOME -u XDG_CONFIG_HOME -u GIT_CONFIG_GLOBAL "
+            "-u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT -u GIT_DIR -u GIT_WORK_TREE "
+            f'-u GIT_INDEX_FILE "{_program("git")}" -c core.fsmonitor= '
+            f'--git-dir="{victim}/.git" --work-tree="{victim}" '
+            "rm -q --cached -r -- contracts fixtures scripts >/dev/null 2>&1\n"
+            'printf ""\n',
+            encoding="utf-8",
+        )
+        emptier.chmod(0o755)
+        self.gitconfig.write_text(
+            f"[core]\n\tfsmonitor = {emptier}\n\thooksPath = {self.hooks}\n",
+            encoding="utf-8",
+        )
+
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+
+        # Armed: let it through once and watch the victim lose all three families.
+        _git("-C", str(sandbox.root), "status", "--porcelain",
+             env_extra=self._let_through())
+        self.assertEqual(
+            self._tracked(victim),
+            set(),
+            "the payload did not empty the victim when it was let through, so this "
+            "probe is not a reconstruction of the finding",
+        )
+        _git("-C", str(victim), "reset", "--quiet", "--hard", check=True)
+        self.assertEqual(self._tracked(victim), before)
+
+        for form in ("home", "global", "parameters", "count"):
+            with self.subTest(form=form):
+                self.marker.unlink(missing_ok=True)
+                # A distinct path per form, so every iteration is a write that really
+                # changes the sandbox index rather than a no-op that proves nothing.
+                staged = f"probe-{form}.txt"
+                (sandbox.root / staged).write_text(form + "\n", encoding="utf-8")
+                with unittest.mock.patch.dict(os.environ, self._ambient(form)):
+                    sandbox._git_write("add", "--", staged)
+                    _present_reviewed_paths(sandbox.root)
+                    _digest_paths(sandbox.root)
+                self.assertIn(
+                    staged,
+                    self._tracked(sandbox.root),
+                    "the sandbox's own write did not take effect, so this iteration "
+                    "proves nothing about redirection",
+                )
+                self.assertEqual(
+                    self._tracked(victim),
+                    before,
+                    "another repository lost tracked files while this suite was green",
+                )
+                self.assertFalse(self.marker.exists())
+
+
+class ShellChokepointEnvironmentTests(unittest.TestCase):
+    """F2: :func:`_run_shell` sanitised, and nothing measured that it did.
+
+    Replacing `_run_shell`'s ``env = _sanitised_git_env()`` with ``dict(os.environ)``
+    left all 189 tests green — the line was load-bearing and simply untested, which is
+    the same shape of defect as a guarantee written in prose beside a check that cannot
+    fail. A documented gate is a shell script and several of them run ``git``, so an
+    unsanitised gate hands Git the caller's environment one level down, where none of
+    the probes above are looking.
+    """
+
+    def test_a_gate_never_sees_the_callers_git_environment(self) -> None:
+        hostile = {
+            "GIT_DIR": "/tmp/w0-qa-01-not-a-repository/.git",
+            "GIT_WORK_TREE": "/tmp/w0-qa-01-not-a-repository",
+            "GIT_INDEX_FILE": "/tmp/w0-qa-01-not-a-repository/.git/index",
+            "GIT_CONFIG_PARAMETERS": "'core.fsmonitor'='/tmp/evil.sh'",
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.hooksPath",
+            "GIT_CONFIG_VALUE_0": "/tmp/evil-hooks",
+            "HOME": "/tmp/w0-qa-01-attacker-home",
+        }
+        script = "".join(
+            f'printf \'{name}=%s\\n\' "${{{name}-unset}}"\n'
+            for name in (*hostile, "PATH", "GIT_CONFIG_GLOBAL")
+        )
+        with unittest.mock.patch.dict(os.environ, hostile):
+            result = _run_shell(script, REPOSITORY_ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        reported = dict(
+            line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
+        )
+        for name in hostile:
+            if name == "HOME":
+                continue
+            with self.subTest(variable=name):
+                self.assertEqual(
+                    reported[name],
+                    "unset",
+                    f"a documented gate was handed the caller's {name}",
+                )
+        self.assertNotEqual(reported["HOME"], hostile["HOME"])
+        self.assertEqual(reported["HOME"], _allowlisted_env()["HOME"])
+        self.assertEqual(reported["PATH"], TRUSTED_PATH)
+        self.assertEqual(reported["GIT_CONFIG_GLOBAL"], os.devnull)
+
+    def test_a_gate_run_under_an_ambient_git_dir_does_not_reach_that_repository(
+        self,
+    ) -> None:
+        """The behavioural half. A `_MutableCopy` has no repository of its own, so a
+        gate run inside one either finds nothing or finds whatever the environment
+        names — which is the entire question."""
+        victim = Path(tempfile.mkdtemp(prefix="w0-qa-01-gate-victim-"))
+        self.addCleanup(shutil.rmtree, victim, True)
+        _git("-C", str(victim), "init", "--quiet", check=True)
+
+        copy = _MutableCopy()
+        self.addCleanup(copy.close)
+        script = 'git rev-parse --absolute-git-dir 2>&1 || true\n'
+
+        # Armed: named on purpose through the one widening, the gate does reach it.
+        reached = _run_shell(script, copy.root, {"GIT_DIR": str(victim / ".git")})
+        self.assertIn(
+            str(victim.resolve()),
+            reached.stdout,
+            "the ambient GIT_DIR is not reachable from a gate even when it is passed "
+            "deliberately, so the assertion below would pass for the wrong reason",
+        )
+
+        with unittest.mock.patch.dict(os.environ, {"GIT_DIR": str(victim / ".git")}):
+            blocked = _run_shell(script, copy.root)
+        self.assertNotIn(
+            str(victim.resolve()),
+            blocked.stdout,
+            "a documented gate resolved to the repository the caller's environment "
+            "named",
+        )
+
+    def test_the_documented_gate_that_needs_the_object_database_still_gets_it(
+        self,
+    ) -> None:
+        """The positive direction, so the class above is not passing by breaking Gate C.
+
+        `GATE_NEEDS_OBJECT_STORE` exists because Gate C reads the repository's object
+        database and a mutable copy has none. If the widening ever stopped working this
+        class would still be green and the gate silently unrunnable.
+        """
+        self.assertIn("C", GATE_NEEDS_OBJECT_STORE)
+        copy = _MutableCopy()
+        self.addCleanup(copy.close)
+        result = copy.run_gate("C")
+        self.assertEqual(result.returncode, 0, result.stderr.strip())
+        self.assertIn("reviewer gate PASS", result.stdout)
+
+
+class SelfReferentialAnchorTests(unittest.TestCase):
+    """Constants the harness writes and the check then reads, given something to hold on to.
+
+    An independent reviewer found four of these: `UNRATIFIED_REVIEW_STATUS`,
+    `REVIEW_DISCLAIMER`, `RATIFIED_STATE_TOKEN` and `_CheckpointSandbox.PREFIX` can each
+    be set to any value at all and the suite stays green, because the only thing that
+    ever writes the value is the probe that later looks for it. `RECONCILIATIONS`'
+    `stale` field has the anchor-rot guard these lack — it is required to be *present*
+    in the candidate document before it is required to be gone — and that is the pattern
+    applied here wherever there is an external document to anchor to.
+
+    Where there is not, the constant is **pinned to its literal value** instead, so
+    changing it is a decision somebody makes in this file rather than a silent one. That
+    is weaker than an anchor and is not described as anything else.
+
+    **Round twelve: an anchor pinned to the unratified state is an anchor that dies at
+    ratification.** Three of the probes below asserted the *unratified* reading and
+    nothing else — the denial present, the registry citing `ratification_blocked`, the
+    manifest carrying no `ratification` object. Each of those is exactly what
+    ratification is required to change, so on a tree that had been honestly published
+    the anchors and the checks they anchor demanded opposite things and the suite went
+    red: four failures on a clean, correctly ratified tree, reproduced end to end in
+    `docs/program/reviews/W0-QA-01.md` §11.18.
+
+    They are now **two-directional**, the shape :func:`_state_document_problems` already
+    had: each asserts the unratified reading while the manifest says `ratified: false`
+    and the ratified reading once it says `true`. Neither state is exempt and neither
+    branch is a skip, so there is no tree on which one of these probes stops asserting
+    anything — which is the property, not a convenience: a guard switched off on the
+    published tree is the defect class this task has been reopened over, wearing the
+    costume of a fix.
+
+    One constant is better off for it. :data:`RATIFIED_STATE_TOKEN` had nothing to
+    anchor to while CP-00 was unratified and was pinned, with the limitation recorded.
+    On a ratified tree there *is* something — the manifest's `ratification` object and
+    the registry row that cites it — so the ratified half is a real anchor and the pin
+    is kept only for the state in which no anchor can exist.
+    """
+
+    @staticmethod
+    def _live_ratified() -> bool:
+        """Which direction the live external record puts these anchors in.
+
+        Read from the manifest rather than passed in, because the question these probes
+        ask is about *this* repository's documents, and the answer has to move when the
+        repository does.
+        """
+        return _load(CHECKPOINT_MANIFEST).get("ratified") is True
+
+    def test_the_review_disclaimer_is_in_the_candidate_review(self) -> None:
+        """Anchored: the sentence the ratified half requires to be *gone* must be there
+        now, or the check passes forever without proving anything."""
+        blob = _candidate_blob(REPOSITORY_ROOT, REVIEW_MARKDOWN)
+        self.assertIsNotNone(blob, f"{REVIEW_MARKDOWN} is unreadable at the candidate")
+        self.assertIn(
+            REVIEW_DISCLAIMER,
+            _flat(blob.decode("utf-8")),
+            f"anchor rot: {REVIEW_MARKDOWN} no longer carries {REVIEW_DISCLAIMER!r}, so "
+            "requiring a ratification to remove it proves nothing. Re-anchor it here.",
+        )
+
+    def test_the_unratified_review_status_is_the_candidate_status(self) -> None:
+        """Anchored: the pre-ratification status is read out of the candidate, not
+        asserted about a value this module also writes."""
+        blob = _candidate_blob(REPOSITORY_ROOT, REVIEW_JSON)
+        self.assertIsNotNone(blob)
+        self.assertEqual(
+            json.loads(blob.decode("utf-8")).get("review_status"),
+            UNRATIFIED_REVIEW_STATUS,
+            f"anchor rot: {REVIEW_JSON} no longer declares "
+            f"{UNRATIFIED_REVIEW_STATUS!r} at the reviewed candidate",
+        )
+
+    def test_the_live_registry_cites_the_state_token_for_the_live_state(self) -> None:
+        """Anchored in both directions: whichever token names the live state is the one
+        the registry cites, and is a key the manifest actually carries.
+
+        `_registry_state_problem` reads a code span out of the CP-00 registry row, and
+        that row is a document this task does not write — so the anchor is real. What it
+        was not, until round twelve, is *durable*: it asserted `ratification_blocked`
+        unconditionally, and `_registry_state_problem` requires the row to move to
+        `ratification` at the ratification act. The anchor demanded the row stay exactly
+        where the check demanded it move, so the first honest publication turned it red.
+
+        The manifest-key half is the part that keeps this from being a pin. A token is
+        only a state *name* if some record carries it; asserting it against the registry
+        alone would compare two strings this module chose.
+        """
+        ratified = self._live_ratified()
+        token = RATIFIED_STATE_TOKEN if ratified else UNRATIFIED_STATE_TOKEN
+        self.assertIn(
+            f"`{token}`",
+            _read(CHECKPOINT_REGISTRY),
+            f"anchor rot: {CHECKPOINT_REGISTRY} no longer cites `{token}` while "
+            f"{CHECKPOINT_MANIFEST} declares ratified={ratified}. That code span is what "
+            "_registry_state_problem reads; with it gone the comparison has nothing to "
+            "read and this anchor must be re-placed here.",
+        )
+        self.assertIn(
+            token,
+            _load(CHECKPOINT_MANIFEST),
+            f"{token!r} is not a key the manifest carries, so the registry cites a "
+            "state key that does not exist",
+        )
+
+    def test_the_state_document_says_what_the_live_state_requires(self) -> None:
+        """The same two directions :func:`_state_document_problems` reads, asserted here
+        directly so the anchor is visible next to the others.
+
+        Round eleven's form asserted only that the denial was present, which is the
+        unratified reading and nothing else. `_state_document_problems` *requires* that
+        sentence to be gone once `ratified: true`, so this probe and that function asked
+        for opposite things the moment CP-00 was ratified.
+
+        Direct on the document, not delegated to `_state_document_problems`: a probe
+        that calls the function it is supposed to anchor states nothing the function
+        does not already state about itself.
+        """
+        document = _flat(_read(PROGRAM_STATE_DOCUMENT))
+        if not self._live_ratified():
+            self.assertIn(
+                STATE_DOCUMENT_DENIAL,
+                document,
+                f"anchor rot: {PROGRAM_STATE_DOCUMENT} no longer carries "
+                f"{STATE_DOCUMENT_DENIAL!r} while CP-00 is unratified. That sentence is "
+                "what the ratified half requires to be removed; with it already gone, "
+                "the removal proves nothing. Re-anchor it here.",
+            )
+            return
+        self.assertNotIn(
+            STATE_DOCUMENT_DENIAL,
+            document,
+            f"{PROGRAM_STATE_DOCUMENT} still says {STATE_DOCUMENT_DENIAL!r} while "
+            f"{CHECKPOINT_MANIFEST} declares ratified=true",
+        )
+        for needle in STATE_DOCUMENT_MUST_STILL_CONTAIN:
+            with self.subTest(needle=needle):
+                self.assertIn(
+                    needle,
+                    document,
+                    "the denial must be removed by bringing the state document up to "
+                    "date, not by gutting it",
+                )
+
+    def test_the_ratified_state_token_is_pinned_until_the_manifest_carries_it(
+        self,
+    ) -> None:
+        """Pinned while there is nothing to anchor to; anchored the moment there is.
+
+        `ratification` is the manifest key `W0-INT-01` writes and the registry cites *at*
+        ratification. While CP-00 is unratified no document carries it, so there is
+        nothing to anchor to and an anchor asserted against a document this module also
+        writes would be the vacuity it is meant to prevent — the literal pin is the
+        honest answer, and §11.16 records it as weaker than an anchor.
+
+        Round eleven's form stopped there, and its own failure message said what was
+        missing: "the manifest now carries a `ratification` object, so this constant can
+        and should be anchored to it rather than pinned". That message fired as a
+        *failure* on a ratified tree — the probe was written to go red on exactly the
+        tree the checkpoint is published on. It now takes its own advice: on a ratified
+        tree the constant must name a key the manifest really carries, and that key must
+        hold the record `_ratification_record` reads rather than any value at all.
+
+        The unratified branch is not a skip. A manifest declaring `ratified: false`
+        while carrying a `ratification` object is a record contradicting itself, and
+        saying so is the assertion that direction owes.
+        """
+        self.assertEqual(RATIFIED_STATE_TOKEN, "ratification")
+        self.assertEqual(UNRATIFIED_STATE_TOKEN, "ratification_blocked")
+        manifest = _load(CHECKPOINT_MANIFEST)
+        if not self._live_ratified():
+            self.assertNotIn(
+                RATIFIED_STATE_TOKEN,
+                manifest,
+                f"{CHECKPOINT_MANIFEST} declares ratified=false and carries a "
+                f"`{RATIFIED_STATE_TOKEN}` object anyway; a record that pre-authorises "
+                "the act it has not taken is the defect _ratification_record exists for",
+            )
+            return
+        self.assertIn(
+            RATIFIED_STATE_TOKEN,
+            manifest,
+            f"{CHECKPOINT_MANIFEST} declares ratified=true and carries no "
+            f"`{RATIFIED_STATE_TOKEN}` object, so this constant names no key of the "
+            "record it is supposed to name",
+        )
+        record = manifest[RATIFIED_STATE_TOKEN]
+        self.assertIsInstance(
+            record, dict, f"`{RATIFIED_STATE_TOKEN}` is not the ratification record"
+        )
+        for field in RATIFICATION_REQUIRED_FIELDS:
+            with self.subTest(field=field):
+                self.assertIn(
+                    field,
+                    record,
+                    f"the key `{RATIFIED_STATE_TOKEN}` names does not carry {field!r}, "
+                    "so it is some other object that happens to share the name",
+                )
+
+    def test_the_sandbox_prefix_is_self_defined_and_actually_used(self) -> None:
+        """`_CheckpointSandbox.PREFIX` has nothing external to anchor to — it is this
+        module's own `mkdtemp` prefix, invented here and meaningful nowhere else. What
+        *can* be required is that the value the guard checks is the value the sandbox is
+        actually created with, which is what makes `_refuse_to_write_outside`'s prefix
+        branch reachable at all."""
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+        self.assertTrue(sandbox.root.name.startswith(_CheckpointSandbox.PREFIX))
+        self.assertTrue(_ManifestHistory.PREFIX != _CheckpointSandbox.PREFIX)
+        self.assertIsNone(
+            _refuse_to_write_outside(sandbox.root, _CheckpointSandbox.PREFIX)
+        )
+        with self.assertRaises(AssertionError):
+            _refuse_to_write_outside(sandbox.root, _ManifestHistory.PREFIX)
+
+    def test_the_reviewed_artifact_count_is_computed_and_not_a_constant(self) -> None:
+        """`artifact_count` is 100, and so was the mutant.
+
+        `_reviewed_manifest_digest` returning a hardcoded ``100`` instead of
+        ``len(tracked)`` left the suite green, because the only probe compared it with
+        the manifest's own declared value — which is also 100. The count is now checked
+        against an independently produced path set: `_tree_blobs` reads `HEAD` through
+        different Git plumbing (``ls-tree -r -z`` plus ``cat-file --batch``) than the
+        ``ls-tree -r --name-only`` the digest uses, so agreement is a real second
+        opinion rather than the same number twice.
+        """
+        digest, count = _reviewed_manifest_digest(REPOSITORY_ROOT)
+        blobs = _tree_blobs(REPOSITORY_ROOT, "HEAD")
+        self.assertIsNotNone(blobs)
+        independent = sorted(
+            path for path in blobs if path.startswith(REVIEWED_PREFIXES)
+        )
+        self.assertEqual(
+            count,
+            len(independent),
+            "the reviewed-artifact count does not match an independent enumeration of "
+            "the same trees",
+        )
+        self.assertGreater(count, 1, "an empty count would satisfy any comparison")
+        self.assertEqual(_load(CHECKPOINT_MANIFEST)["artifact_count"], count)
+        self.assertRegex(digest, r"^[0-9a-f]{64}$")
+
+        # A second tree, with a *different* number of reviewed files. Without this the
+        # hardcode is an equivalent mutant: `artifact_count` is 100, the independent
+        # enumeration is 100, and `return running.hexdigest(), 100` agrees with both.
+        # One data point cannot distinguish a computation from the constant it happens
+        # to produce, and that is the whole reason this check was decorative.
+        history = _ManifestHistory()
+        self.addCleanup(history.close)
+        planted = {
+            "contracts/planted/one.json": "{}\n",
+            "fixtures/planted/two.json": "{}\n",
+            "docs/architecture/planted-three.md": "three\n",
+            "scripts/planted_four.py": "pass\n",
+            "docs/program/not-a-reviewed-family.md": "ignored\n",
+        }
+        history.commit("a tree with four reviewed files", _history_manifest(None), planted)
+        _elsewhere, elsewhere_count = _reviewed_manifest_digest(history.root)
+        self.assertEqual(
+            elsewhere_count,
+            4,
+            "the reviewed-artifact count is not counting; it reports the same number "
+            "for a tree with four reviewed files as for one with a hundred",
+        )
+        self.assertNotEqual(elsewhere_count, count)
+
+
+class FreezeCommitHistoryTests(unittest.TestCase):
+    """`_freeze_commit` on real commits, where the freeze commit is **not** `HEAD`.
+
+    Round eight's independent review killed 16 of 17 mutations. The survivor was
+    `_freeze_commit`'s ``freeze = commit`` replaced by ``return commit`` — "the newest
+    commit carrying the value" instead of the oldest consecutive one — which left all 159
+    tests green. The property is load-bearing, and nothing tested it: every probe in this
+    module ran where the two answers coincide, because the live repository froze at
+    `HEAD` and the sandboxes never commit.
+
+    Every probe below therefore asserts that the freeze commit is not `HEAD` before it
+    asserts anything else. A history where it is would prove exactly as little as the
+    159 tests that missed this did.
+    """
+
+    def setUp(self) -> None:
+        self.history = _ManifestHistory()
+        self.addCleanup(self.history.close)
+
+    def test_the_walk_is_scoped_to_the_round_the_manifest_names(self) -> None:
+        """Round scoping is only ever exercised at round 5, which is not exercising it.
+
+        The live manifest is round 5 and `_history_manifest` defaults to round 5, so
+        `number = manifest.get("current_round")` replaced by `number = 5` survives every
+        other probe in the module — in `_freeze_commit` and in
+        `_declared_evidence_paths` alike. A history at a different round is the only
+        thing that separates "reads current_round" from "happens to be 5", and this is
+        it: rounds 8 and 9, with a round-5 entry deliberately present in the same
+        manifest so the pinned mutant has something wrong to find.
+        """
+        shape = {"number": 9, "rounds": (5, 8, 9)}
+        self.history.commit("open round 9", _history_manifest(None, **shape))
+        digest = self.history.seal(**shape)
+        freeze = self.history.commit("freeze round 9", _history_manifest(digest, **shape))
+        results = self.history.commit(
+            "record the round-9 acceptance results",
+            _history_manifest(digest, verdict="PASS", **shape),
+            {"artifacts/checkpoints/CP-00/manual-report-round-9.md": "PASS\n"},
+        )
+
+        self.assertNotEqual(freeze, results, "the freeze must not be HEAD here either")
+        self.assertEqual(
+            _freeze_commit(self.history.root),
+            freeze,
+            "the freeze walk did not resolve on a manifest whose current_round is not 5",
+        )
+        self.assertEqual(
+            _acceptance_digest_at(
+                self.history.root, freeze, "tested_candidate_digest"
+            ),
+            digest,
+        )
+        self.assertEqual(_tested_digest_problems(self.history.root), [])
+
+        # The other pinned site: evidence paths are the current round's, not round 5's.
+        manifest = json.loads(
+            (self.history.root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8")
+        )
+        self.assertEqual(manifest["current_round"], 9)
+        five = next(e for e in manifest["acceptance_rounds"] if e["round"] == 5)
+        five["manual_report"] = f"{ACCEPTANCE_EVIDENCE_PREFIX}round-5-only.md"
+        nine = next(e for e in manifest["acceptance_rounds"] if e["round"] == 9)
+        nine["manual_report"] = f"{ACCEPTANCE_EVIDENCE_PREFIX}round-9-only.md"
+        declared = _declared_evidence_paths(manifest)
+        self.assertIn(f"{ACCEPTANCE_EVIDENCE_PREFIX}round-9-only.md", declared)
+        self.assertNotIn(
+            f"{ACCEPTANCE_EVIDENCE_PREFIX}round-5-only.md",
+            declared,
+            "another round's declared evidence was licensed for this round's delta",
+        )
+
+    def test_the_freeze_commit_is_the_freeze_and_not_the_results_commit(self) -> None:
+        """The honest sequence: freeze at `F`, record the streams' results at `G`.
+
+        Both commits carry the value — that is what makes the two implementations
+        indistinguishable on a shape check — but only `F`'s tree digests to it, because
+        `G`'s tree also carries the results. So the difference is not cosmetic: a
+        newest-first `_freeze_commit` returns `G` and the declared digest stops
+        reproducing, which is the whole of half one.
+        """
+        self.history.commit("open round 5", _history_manifest(None))
+        digest = self.history.seal()
+        freeze = self.history.commit("freeze round 5", _history_manifest(digest))
+        results = self.history.commit(
+            "record the round-5 acceptance results",
+            _history_manifest(digest, verdict="PASS"),
+            {"artifacts/checkpoints/CP-00/manual-report-round-5.md": "PASS\n"},
+        )
+
+        self.assertEqual(self.history.head(), results)
+        self.assertNotEqual(
+            freeze, results, "this probe needs the freeze commit not to be HEAD"
+        )
+        self.assertEqual(_freeze_commit(self.history.root), freeze)
+        self.assertEqual(
+            _acceptance_digest_at(self.history.root, freeze, "tested_candidate_digest"),
+            digest,
+            "the sealed value is not the digest of the tree it was sealed into",
+        )
+        self.assertNotEqual(
+            _acceptance_digest_at(self.history.root, results, "tested_candidate_digest"),
+            digest,
+            "the results commit digests to the same value as the freeze, so this "
+            "history cannot tell the two implementations apart and proves nothing",
+        )
+        self.assertEqual(_tested_digest_problems(self.history.root), [])
+
+    def test_a_value_set_changed_and_set_back_resolves_to_the_later_freeze(self) -> None:
+        """The reason the walk stops rather than running to the bottom.
+
+        `V` at `C1`, `W` at `C2`, `V` again at `C3`, results at `C4`. `C1` and `C3` both
+        carry today's value and only `C3` froze it. An implementation that walks past the
+        `C2` terminator returns `C1`; one that takes the newest carrier returns `C4`.
+        """
+        digest = self.history.seal()
+        other = "b" * 64
+        first = self.history.commit("freeze", _history_manifest(digest))
+        self.history.commit("void the round, reseal on another tree", _history_manifest(other))
+        refrozen = self.history.commit("freeze again on the value in force", _history_manifest(digest))
+        results = self.history.commit(
+            "record results", _history_manifest(digest, verdict="PASS")
+        )
+
+        self.assertNotEqual(refrozen, self.history.head())
+        self.assertEqual(_freeze_commit(self.history.root), refrozen)
+        self.assertNotEqual(
+            _freeze_commit(self.history.root),
+            first,
+            "the walk ran past the commit that carried a different value",
+        )
+        self.assertNotEqual(
+            _freeze_commit(self.history.root),
+            results,
+            "the newest carrier was taken instead of the oldest consecutive one",
+        )
+
+    def test_a_revision_carrying_the_round_twice_ends_the_walk(self) -> None:
+        """The disjunct nobody drove: ``len(entries) != 1``.
+
+        Replacing it with ``False`` left all 244 tests green. Every other probe here
+        builds manifests through `_history_manifest`, which emits one entry per round by
+        construction, so the clause was never given a revision it could reject.
+
+        It is not a shape check that belongs somewhere else. `_freeze_commit` reads
+        ``entries[0]`` immediately afterwards, so a revision carrying the current round
+        twice has an arbitrary "the" round entry — and a duplicate is precisely how a
+        hand-edited manifest goes wrong. Here the oldest revision carries two round-5
+        entries that both hold the value: live code stops at it and resolves the commit
+        above, the mutant walks straight through and resolves the older, wrong freeze.
+        """
+        digest = self.history.seal()
+        duplicated = _history_manifest(digest)
+        current = [
+            entry for entry in duplicated["acceptance_rounds"] if entry["round"] == 5
+        ]
+        self.assertEqual(len(current), 1, "the fixture already carries a duplicate")
+        duplicated["acceptance_rounds"].append(dict(current[0]))
+        wrong = self.history.commit("the round recorded twice", duplicated)
+        freeze = self.history.commit("the round recorded once", _history_manifest(digest))
+        results = self.history.commit(
+            "record results", _history_manifest(digest, verdict="PASS")
+        )
+
+        self.assertNotEqual(freeze, results, "this probe needs the freeze not to be HEAD")
+        self.assertEqual(
+            _freeze_commit(self.history.root),
+            freeze,
+            "the walk did not stop at a revision carrying the current round twice",
+        )
+        self.assertNotEqual(
+            _freeze_commit(self.history.root),
+            wrong,
+            "the walk read entries[0] of a revision with two entries for the round and "
+            "took it as the freeze",
+        )
+
+    def test_a_round_entry_that_disagrees_with_the_top_level_ends_the_walk(self) -> None:
+        """Both halves must carry the value; the per-round copy is why a retro-edit
+        cannot hide, so a commit where only the top level agrees is not a freeze."""
+        digest = self.history.seal()
+        half = _history_manifest(digest)
+        half["acceptance_rounds"][-1]["tested_candidate_digest"] = "c" * 64
+        earlier = self.history.commit("top level only", half)
+        freeze = self.history.commit("both halves", _history_manifest(digest))
+        self.history.commit("results", _history_manifest(digest, verdict="PASS"))
+
+        self.assertNotEqual(freeze, self.history.head())
+        self.assertEqual(_freeze_commit(self.history.root), freeze)
+        self.assertNotEqual(_freeze_commit(self.history.root), earlier)
+
+    def test_a_top_level_that_disagrees_with_the_round_entry_ends_the_walk(self) -> None:
+        """The mirror direction, and the clause round nine found removable.
+
+        The test above builds a revision whose *top level* carries the value and whose
+        round entry does not, so it exercises only the entry half of the conjunction.
+        Deleting the top-level clause left the suite green. Here the round entry carries
+        the value and the top level does not: an implementation reading the entry alone
+        walks straight past this revision and answers `earlier` instead of `freeze`.
+
+        Both clauses matter for the same reason the per-round copy exists at all — the
+        two places must agree, and a walk satisfied by either one on its own would accept
+        a manifest whose halves disagree as the tree the streams judged.
+        """
+        digest = self.history.seal()
+        half = _history_manifest(digest)
+        half["tested_candidate_digest"] = "c" * 64
+        earlier = self.history.commit("round entry only", half)
+        freeze = self.history.commit("both halves", _history_manifest(digest))
+        self.history.commit("results", _history_manifest(digest, verdict="PASS"))
+
+        self.assertEqual(
+            half["acceptance_rounds"][-1]["tested_candidate_digest"],
+            digest,
+            "the probe's earlier revision must carry the value in its round entry, or "
+            "it does not isolate the top-level clause",
+        )
+        self.assertNotEqual(freeze, self.history.head())
+        self.assertEqual(_freeze_commit(self.history.root), freeze)
+        self.assertNotEqual(_freeze_commit(self.history.root), earlier)
+
+    def test_a_history_longer_than_the_retired_window_is_walked_to_its_oldest_commit(
+        self,
+    ) -> None:
+        """No commit window, and the reason there is none.
+
+        An earlier form passed ``-n 200`` to `git log`. With more manifest revisions than
+        that the walk ran off the end of its own window and returned the oldest commit
+        *inside* it — a commit that did not freeze the value — which
+        `_tested_digest_problems` then named as the commit that did. Reported red, so
+        never unsafe, but wrong, and §11.12.5 said it failed closed. It did not.
+
+        205 revisions all carrying the value: the freeze is the first of them, and the
+        walk must reach it. Consecutive revisions differ only in a field the walk does
+        not read, so every one of them is a commit that carries the value.
+        """
+        digest = "a" * 64
+        for index in range(205):
+            self.history.commit(f"revision {index}", _history_manifest(digest, note=index))
+        commits = self.history.manifest_commits()
+
+        self.assertEqual(len(commits), 205)
+        self.assertNotEqual(commits[0], self.history.head())
+        self.assertEqual(_freeze_commit(self.history.root), commits[0])
+
+    def _three_commit_history(self) -> str:
+        """`E` without the value, `F` freezing it, `G` recording results. Returns `F`."""
+        digest = "a" * 64
+        self.history.commit("open round 5", _history_manifest(None))
+        freeze = self.history.commit("freeze round 5", _history_manifest(digest))
+        self.history.commit("results", _history_manifest(digest, verdict="PASS"))
+        self.assertEqual(_freeze_commit(self.history.root), freeze)
+        return freeze
+
+    def test_an_unreadable_ancestor_fails_closed(self) -> None:
+        """"I cannot tell" beats a commit that is newer than the truth.
+
+        Breaking the walk on an unreadable ancestor returns whatever was found so far — a
+        commit *newer* than the real freeze, whose tree carries more than the streams
+        judged, and which the digest would then be recomputed against. That is the unsafe
+        direction.
+
+        The failure has to arrive **after** a freeze has been found or the probe proves
+        nothing: with every `show` failing, fail-open and fail-closed both return `None`
+        because there is nothing to keep. Two revisions are read successfully and the
+        third — the one that would end the walk — is the one that breaks.
+        """
+        freeze = self._three_commit_history()
+        with unittest.mock.patch.object(
+            subprocess, "run", _failing_show_after(2, subprocess.run)
+        ):
+            self.assertIsNone(
+                _freeze_commit(self.history.root),
+                f"the walk returned a commit ({freeze[:12]}) on evidence it could not "
+                "read to the end",
+            )
+
+    def test_an_unparseable_ancestor_fails_closed(self) -> None:
+        """The same, for a revision that reads but is not JSON."""
+        self._three_commit_history()
+        with unittest.mock.patch.object(
+            subprocess,
+            "run",
+            _failing_show_after(2, subprocess.run, payload=b"{ not json"),
+        ):
+            self.assertIsNone(_freeze_commit(self.history.root))
+
+    def test_no_digest_recorded_means_no_freeze_commit(self) -> None:
+        """The silent direction, so the check cannot rot into an unconditional answer."""
+        self.history.commit("no round dispatched", _history_manifest(None))
+        self.assertIsNone(_freeze_commit(self.history.root))
+
+    def test_a_real_retro_edit_is_caught_on_real_commits(self) -> None:
+        """`_retro_edited_digests` over history, not over a hand-built pair of dicts.
+
+        The pure comparison is proved by
+        `test_the_retro_edit_rule_is_proved_on_synthetic_history`. The walk that feeds it
+        was not: replacing the whole function body with `return []` stayed green, because
+        this repository carries one per-round value and it has never changed. Real
+        commits are now available here, so the walk is exercised on them.
+        """
+        original = "a" * 64
+        self.history.commit("freeze round 5", _history_manifest(original))
+        self.assertEqual(
+            _retro_edited_digests(self.history.root),
+            [],
+            "a history with one unchanged value must be silent, or the probe below "
+            "proves only that the function is noisy",
+        )
+        self.history.commit("quietly reseal the same round", _history_manifest("b" * 64))
+        problems = _retro_edited_digests(self.history.root)
+        self.assertTrue(
+            any(original in problem and "round 5" in problem for problem in problems),
+            f"a per-round digest changed between commits and nothing said so: {problems}",
+        )
+
+
+def _failing_show_after(successes: int, real, *, payload: bytes | None = None):
+    """A `subprocess.run` whose Git ``show`` calls stop working after ``successes``.
+
+    ``payload`` `None` makes them fail outright; bytes make them succeed and return
+    something that is not a manifest, which is the other way a revision becomes
+    unreadable.
+    """
+    seen = 0
+
+    def stand_in(arguments, *rest, **keywords):
+        nonlocal seen
+        if "show" in arguments:
+            seen += 1
+            if seen > successes:
+                if payload is None:
+                    return subprocess.CompletedProcess(
+                        arguments, 128, b"", b"fatal: bad object"
+                    )
+                return subprocess.CompletedProcess(arguments, 0, payload, b"")
+        return real(arguments, *rest, **keywords)
+
+    return stand_in
+
+
 class WriteBoundaryTests(unittest.TestCase):
     """This task owns two paths. Nothing else under them may appear.
 
     The gate asserts a path set, never a status code, so it holds before integration
     (`??`), while the files are being edited (` M`) and once they are committed and
     clean (no output at all) — the repair `W0-CLN-01` had to make to `GATE-F` after that
-    gate became unsatisfiable by its own integration. `--untracked-files=all` is not
-    decoration: `docs/program/reviews/` is a new directory, and the default
-    `--untracked-files=normal` collapses a wholly untracked directory to a single
-    directory entry, so without the flag the gate reports `docs/program/reviews/` and
-    can never name the file it is about.
+    gate became unsatisfiable by its own integration.
+
+    **`--untracked-files=all`, corrected in round nine.** This docstring used to say
+    `docs/program/reviews/` "is a new directory". It was, at round one; it has been
+    tracked since `854a6820`, and both deliverables are tracked today. So the flag no
+    longer changes this gate's output, and an independent reviewer of round eight's
+    submission removed it and stayed green — correctly. It is kept because the reason it
+    was added is real and returns the moment either deliverable is untracked again,
+    which is the state every fresh task starts in: `--untracked-files=normal` collapses
+    a wholly untracked directory to one directory entry, and the gate could then never
+    name the file it is about.
+    `test_the_untracked_files_flag_is_what_names_a_file_in_a_new_directory` exercises
+    that difference on a sandbox rather than asserting it, since this repository can no
+    longer show it. That the flag is *removable from this gate today* is recorded in
+    `docs/program/reviews/W0-QA-01.md` §11.14.6 rather than papered over.
     """
+
+    def test_the_untracked_files_flag_is_what_names_a_file_in_a_new_directory(self) -> None:
+        """Why the flag is on the gate, shown rather than asserted.
+
+        Run against a sandbox, because the repository can no longer demonstrate it: both
+        deliverables are tracked, so the two forms of the command give identical output
+        here. In a sandbox a wholly untracked directory is created and the difference is
+        the whole point — the default form names the *directory* and the `-uall` form
+        names the *file*.
+        """
+        sandbox = _CheckpointSandbox()
+        self.addCleanup(sandbox.__exit__)
+        directory = "docs/program/probe-a-wholly-untracked-directory"
+        (sandbox.root / directory).mkdir(parents=True)
+        (sandbox.root / directory / "deliverable.md").write_text("x\n", encoding="utf-8")
+
+        def status(*flags: str) -> set[str]:
+            result = _git(
+                "-C", str(sandbox.root), "status", "--porcelain", *flags,
+                "--", directory, text=True, check=True,
+            )
+            return {line[3:] for line in result.stdout.splitlines() if line}
+
+        self.assertEqual(status(), {f"{directory}/"})
+        self.assertEqual(status("--untracked-files=all"), {f"{directory}/deliverable.md"})
 
     def test_only_the_two_owned_paths_are_reported_under_the_owned_trees(self) -> None:
         owned = {
             "tests/contract/test_cp00_candidate.py",
             "docs/program/reviews/W0-QA-01.md",
         }
-        result = subprocess.run(
-            [
-                "git",
-                "-C",
-                str(REPOSITORY_ROOT),
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--",
-                "tests/contract",
-                "docs/program/reviews",
-            ],
-            capture_output=True,
+        result = _git(
+            "-C",
+            str(REPOSITORY_ROOT),
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--",
+            "tests/contract",
+            "docs/program/reviews",
             text=True,
-            check=False,
         )
         self.assertEqual(result.returncode, 0)
         reported = {line[3:] for line in result.stdout.splitlines() if line}
@@ -3521,23 +9472,18 @@ class WriteBoundaryTests(unittest.TestCase):
         path set against the same declared delta the drift check uses, so it holds in
         every phase and still fails on any path nobody declared.
         """
-        result = subprocess.run(
-            [
-                "git",
-                "-C",
-                str(REPOSITORY_ROOT),
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--",
-                "contracts",
-                "fixtures",
-                "docs/architecture",
-                "scripts",
-            ],
-            capture_output=True,
+        result = _git(
+            "-C",
+            str(REPOSITORY_ROOT),
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--",
+            "contracts",
+            "fixtures",
+            "docs/architecture",
+            "scripts",
             text=True,
-            check=False,
         )
         self.assertEqual(result.returncode, 0)
         reported = {line[3:] for line in result.stdout.splitlines() if line}
