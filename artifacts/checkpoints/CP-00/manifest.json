@@ -39,14 +39,14 @@
   ],
   "runtime_fields": "not applicable - architecture-only checkpoint",
   "manual_acceptance": {
-    "status": "owed",
+    "status": "FAIL",
     "round": 8,
-    "report_path": null
+    "report_path": "artifacts/checkpoints/CP-00/manual-report-round-8.md"
   },
   "automated_acceptance": {
-    "status": "owed",
+    "status": "FAIL",
     "round": 8,
-    "report_path": null
+    "report_path": "artifacts/checkpoints/CP-00/automated-report-round-8.md"
   },
   "artifact_manifest_recipe": "git ls-tree -r --name-only <this commit> -- contracts fixtures docs/architecture scripts, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. Git-tracked files only: an earlier form globbed the working tree and hashed a gitignored scripts/__pycache__ .pyc, so the digest was unreproducible on a fresh clone and the drift detector fired on an unmodified checkout.",
   "frozen_inputs_note": "behavioral_oracle and refactoring_architecture_source are commits of the separate legacy repository at /root/projects/PDF-proverka/PDF-proverka, documented in docs/SOURCE_TRACEABILITY.md. They do not resolve in this repository and are not expected to. Every other SHA here is a commit of this repository.",
@@ -215,17 +215,17 @@
     },
     {
       "round": 8,
-      "verdict": null,
-      "status": "frozen",
+      "verdict": "FAIL",
+      "status": "failed",
       "streams": {
-        "automated": null,
-        "manual": null
+        "automated": "FAIL",
+        "manual": "FAIL 5/6 - MT00-01"
       },
       "tested_candidate_digest": "959d5db2551360caf97951f067d551f2d2edb33a76b4ca21e3648f7fb305058f",
       "evidence_bundle_digest": "",
-      "manual_report": null,
-      "automated_report": null,
-      "note": "Frozen after the round-eight state reconciliation. Rounds six and seven each ran in full and failed on integrator-owned state metadata, on two different axes; neither found a contract, schema, fixture, state-machine or identifier defect. The reconciliation was produced by an independent auditor reading every state document end to end, and its completeness is shown by a check that fails on the previous tree rather than asserted in prose. No earlier result carries forward."
+      "manual_report": "artifacts/checkpoints/CP-00/manual-report-round-8.md",
+      "automated_report": "artifacts/checkpoints/CP-00/automated-report-round-8.md",
+      "note": "Both streams confirmed the input over 218 paths and both failed. acceptance.md was named by round seven and left untouched by the round-eight remediation, so it is three rounds stale - and it is the one state document the completeness check was coded to skip. The check itself did not do what the remediation commit claimed: run against the previous tree it exits 0, because its label window is proximity-based and unbound to the occurrence. Every automated gate passed and every count reproduced; no contract, schema, fixture, state-machine, identifier or golden defect in either stream."
     }
   ],
   "current_round": 8,
