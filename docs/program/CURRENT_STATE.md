@@ -246,7 +246,7 @@ first a ratification could be declared with fewer paths than required, then decl
 full and not performed, then performed as a byte change that did not do the
 reconciliation.
 
-Order from here: freeze `tested_candidate_digest` for round eight on the remediated
+Order from here: freeze `tested_candidate_digest` for round nine on the remediated
 tree; run both streams, each producing a primary report file; and only on two `PASS`
 execute the ratification half of `W0-INT-01`.
 Publication is a separate, explicitly authorised step after that.

@@ -1,3 +1,9 @@
+# Historical. This is the tree of the delivered bootstrap package as it stood at
+# the first commit, rooted at auditmanager-greenfield-bootstrap/. It is not an
+# inventory of this repository and is not maintained: `git ls-files` is the
+# authority. Kept as the record of what was delivered, not as a description of
+# what is here.
+
 auditmanager-greenfield-bootstrap/
   .editorconfig
   .gitignore

@@ -2,7 +2,7 @@
   "checkpoint": "CP-00",
   "tag_planned": "v0.0.0-architecture",
   "ratified": false,
-  "status": "acceptance_round_8_pending_freeze",
+  "status": "acceptance_round_9_pending_freeze",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "3da104e5d6fafb2a581bda377a07911183af803f",
   "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash. candidate_digest covers every git-tracked file INCLUDING this manifest, whose contribution is hashed with the candidate_digest field blanked - that is what makes a self-referential identifier possible. An earlier form excluded the manifest entirely and was rejected: two candidates differing only in manifest prose then shared one value.",
@@ -232,7 +232,9 @@
   "recorded_limits": {
     "evidence_report_visibility": "The acceptance digests enumerate git ls-files --exclude-standard, so a report path added to .gitignore leaves the digest and every check silent about its content - an independent reviewer demonstrated a fabricated manual report passing that way. It is a declared scope limit rather than a hidden hole: the attack requires editing .gitignore, which is tracked and inside the digest, so it appears in the diff a reviewer reads. The next task touching the QA module must assert that both report paths are tracked and not ignored; it is not opened as its own round because the current mechanism makes the manoeuvre visible rather than invisible.",
     "prefix_widening_unpinned": "ACCEPTANCE_EVIDENCE_PREFIX and RATIFIABLE_REVIEWED_PREFIX are unpinned in the widening direction only; narrowing is caught, at 38 and 9 failures respectively. Measured, not argued. See W0-QA-01.md section 8 item 18.",
-    "dynamic_dispatch_unenumerable": "eval, importlib and getattr with a computed name cannot be resolved by the module's static spawn enumeration. Recorded rather than chased: a test module does not outrank its own author. See W0-QA-01.md section 8 item 17."
+    "dynamic_dispatch_unenumerable": "eval, importlib and getattr with a computed name cannot be resolved by the module's static spawn enumeration. Recorded rather than chased: a test module does not outrank its own author. See W0-QA-01.md section 8 item 17.",
+    "digest_covers_untracked_files": "candidate_digest_recipe enumerates git ls-files --cached --others --exclude-standard, so the value stops reproducing from the working tree the moment either acceptance stream writes its report. Both streams confirm the digest before writing, and a later reader must re-derive from the freeze commit's objects or a fresh clone. Measured by the round-eight manual stream: 219 paths gave a different value, and removing the one added path restored the frozen one.",
+    "state_record_sweep": "artifacts/checkpoints/CP-00/check_state_records.py is the completeness check for the superseded-evidence axis. It is bound to the structural unit containing an occurrence - the enclosing JSON object, or the enclosing sentence - not to a line window, because a window is proximity rather than attribution and the earlier form exited 0 on the very tree it was written for. It covers one axis; it is not a general staleness check, and the round accounting it says nothing about has failed twice on its own."
   },
   "qa_evidence_history": [
     {

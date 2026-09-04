@@ -4,18 +4,20 @@
 > returned `PASS` on 2026-09-02, then two things moved the tree: `W0-QA-01` was reopened
 > because its suite accepted a ratification that is declared and not performed, and the
 > digest model was corrected. Acceptance certifies a tree; both changes replaced it.
-> Round 4 was prepared and then voided before dispatch for the same reason. Round 5 is
-> owed and neither earlier `PASS` transfers to it.
+> Eight rounds are now in the record and round nine is owed; no earlier result transfers.
 >
-> Primary reports: `manual-report-round-3.md`. No primary automated report exists for
-> round 3 — that stream reported to the integrator only, which round 5 must not repeat.
+> Primary reports: `manual-report-round-3.md`, and both streams' primary reports for
+> rounds six, seven and eight. No primary automated report exists for round 3 — that
+> stream reported to the integrator only, which round six did not repeat: it produced the
+> first primary automated report in this program.
 
-Three rounds ran. Rounds one and two returned `FAIL` from both streams; round three
-returned `PASS` from both. Every blocker across all three sat in integrator-owned
-metadata, gate text or state documents. None was a contract, fixture, schema or test
-defect: both streams confirmed the four reviewed families byte-identical to
-`reviewed_candidate_commit` in every round, which is what carried the `W0-QA-01`
-`ACCEPT` across two rebuilds without re-running QA.
+Eight rounds ran or were opened. Rounds one and two returned `FAIL` from both streams;
+round three returned `PASS` from both and is spent; rounds four and five were voided
+before either stream reported; rounds six, seven and eight each ran in full and failed.
+Every blocker across all eight sat in integrator-owned metadata, gate text or state
+documents. None was a contract, fixture, schema or test defect: both streams confirmed
+the four reviewed families byte-identical to `reviewed_candidate_commit` in every round,
+which is what carried the `W0-QA-01` `ACCEPT` across every rebuild without re-running QA.
 
 ## Rounds
 
@@ -24,6 +26,11 @@ defect: both streams confirmed the four reviewed families byte-identical to
 | 1 | FAIL — 5 blockers | FAIL — MT00-01 | `0d6641718e78afc3` |
 | 2 | FAIL — 4 blockers | FAIL — MT00-01 | `7170ff5bf6734947` |
 | 3 | **PASS** | **PASS** — 6/6 | recorded in the manifest |
+| 4 | — | — | voided before dispatch |
+| 5 | — | — | voided; frozen at `5207fb55` and never reported |
+| 6 | **PASS** | FAIL — MT00-01 | frozen at `5b70ee4e` |
+| 7 | FAIL | FAIL — MT00-01 | frozen at `c1376e1c` |
+| 8 | FAIL | FAIL — MT00-01 | frozen at `b21e7275` |
 
 ## What the failures were about
 
@@ -84,3 +91,33 @@ reading and judgment over documents rather than exercise of a running system, so
 independent agent is the closest available analogue of a human tester — not a
 substitute for one. This is stated so a later reader weighs the evidence for what it
 is.
+
+## Rounds six to eight — what failed, and what did not
+
+None of the three found a contract, schema, fixture, state-machine, identifier or golden
+defect. Every automated gate passed in rounds six and eight, every declared count
+reproduced from the artifact that carries it, and the four reviewed families stayed
+byte-identical to `reviewed_candidate_commit` throughout. What failed each time was this
+programme's record of itself.
+
+Round six: a superseded QA evidence commit was still presented as current in five sites
+while the task and wave layers named it superseded, so a reader following the documented
+route reached a superseded commit with a wrong round count.
+
+Round seven: the remediation for that was declared exhaustive and was not. Two sites
+survived in the file it had itself edited, thirty-six lines from the section it corrected,
+and it introduced two new false statements while fixing one. Separately the round
+accounting in three state documents was two rounds behind, on an axis no sweep had
+searched.
+
+Round eight: the reconciliation for both missed `acceptance.md` — this document — which
+round seven had named explicitly and which stood first in the state audit's list. And the
+check offered as proof that the sweep was complete had not itself been run against the
+tree it was written for; run there, it passed.
+
+The pattern is one defect repeated by the integrator: a completeness claim asserted in
+prose beside no check that could fail on the thing it named. That is the same shape the
+QA suite spent twelve review rounds eliminating from itself.
+`artifacts/checkpoints/CP-00/check_state_records.py` is the replacement, bound to the
+structural unit that contains an occurrence rather than to a line window. It exits 1 on
+`bde3af3`, `a3eaf88` and `5b70ee4`, naming the defect at each — measured, not asserted.
