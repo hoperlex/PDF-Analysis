@@ -43,9 +43,9 @@ Stage two progress:
   anywhere under `contracts/**`;
 - `W0-CLN-01` — notes overtaken by the `ID-01` chain retired, integrated at
   `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368`;
-- `W0-QA-01` — independent cross-family verification, 114 tests after three
-  reopenings, accepted by independent review, evidence at
-  `e7f39890211b52e10d2619c5ddcb85a3d8c7df22`.
+- `W0-QA-01` — independent cross-family verification, 255 module tests after eleven
+  reopenings, accepted by two independent reviewers on the same bytes, evidence at
+  `3da104e5d6fafb2a581bda377a07911183af803f`.
 
 ## CP-00 candidate
 
