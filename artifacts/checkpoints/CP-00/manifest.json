@@ -39,14 +39,14 @@
   ],
   "runtime_fields": "not applicable - architecture-only checkpoint",
   "manual_acceptance": {
-    "status": "FAIL",
-    "round": 6,
-    "report_path": "artifacts/checkpoints/CP-00/manual-report-round-6.md"
+    "status": "owed",
+    "round": 7,
+    "report_path": null
   },
   "automated_acceptance": {
-    "status": "PASS",
-    "round": 6,
-    "report_path": "artifacts/checkpoints/CP-00/automated-report-round-6.md"
+    "status": "owed",
+    "round": 7,
+    "report_path": null
   },
   "artifact_manifest_recipe": "git ls-tree -r --name-only <this commit> -- contracts fixtures docs/architecture scripts, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. Git-tracked files only: an earlier form globbed the working tree and hashed a gitignored scripts/__pycache__ .pyc, so the digest was unreproducible on a fresh clone and the drift detector fired on an unmodified checkout.",
   "frozen_inputs_note": "behavioral_oracle and refactoring_architecture_source are commits of the separate legacy repository at /root/projects/PDF-proverka/PDF-proverka, documented in docs/SOURCE_TRACEABILITY.md. They do not resolve in this repository and are not expected to. Every other SHA here is a commit of this repository.",
@@ -97,7 +97,7 @@
     "artifact_manifest_sha256": "Unrelated to both. It certifies the four reviewed families unchanged and is deliberately invariant across rebuilds that leave the contracts alone.",
     "round_scoped": "Both digests are recorded twice: at the top level for the current round, and inside the matching acceptance_rounds entry as history. Without the per-round copy a retro-edit of the top-level value and a genuine new round would be indistinguishable, so 'frozen and never edited afterwards' would not be checkable. Named by the QA author, who declined to write a test asserting a property the structure could not support."
   },
-  "tested_candidate_digest": "2b3929be6de447bd1c3a92ff1a9a4fe72bc12d4ee919f3d21af2a979e861582c",
+  "tested_candidate_digest": "ad26b42fb99f9ccce7d0bd8ce3b6986e277a29b42d346adc454463aa489092b6",
   "evidence_bundle_digest": null,
   "third_acceptance_round": {
     "verdict": "PASS from both streams on 2026-09-02",
@@ -190,9 +190,23 @@
       "manual_report": "artifacts/checkpoints/CP-00/manual-report-round-6.md",
       "automated_report": "artifacts/checkpoints/CP-00/automated-report-round-6.md",
       "note": "Both streams ran against the tree frozen at 5b70ee4 and both confirmed the tested_candidate_digest by recomputing it from the recipe. The automated stream returned PASS over 281 tests, the documented gates and every recomputed count, and wrote the first primary automated report in this program. The manual stream failed MT00-01: the superseded QA evidence commit e7f3989 is still recorded as current in five sites, two of which lie outside the post-freeze delta ceiling, so correcting them voids this round. No contract, schema, fixture, state-machine or identifier defect was found in any of the six walks."
+    },
+    {
+      "round": 7,
+      "verdict": null,
+      "status": "frozen",
+      "streams": {
+        "automated": null,
+        "manual": null
+      },
+      "tested_candidate_digest": "ad26b42fb99f9ccce7d0bd8ce3b6986e277a29b42d346adc454463aa489092b6",
+      "evidence_bundle_digest": "",
+      "manual_report": null,
+      "automated_report": null,
+      "note": "Frozen after the round-six remediation. Round six failed on integrator-owned metadata: the superseded QA evidence commit was still presented as current in five sites, two outside the post-freeze delta ceiling. Its automated PASS does not carry forward - the corrected tree is a different input. Both halves of the digest binding apply: recomputing over the freeze commit proves the value names a real tree, and bounding the post-freeze delta proves that tree is still the one in front of a ratification."
     }
   ],
-  "current_round": 6,
+  "current_round": 7,
   "recorded_limits": {
     "evidence_report_visibility": "The acceptance digests enumerate git ls-files --exclude-standard, so a report path added to .gitignore leaves the digest and every check silent about its content - an independent reviewer demonstrated a fabricated manual report passing that way. It is a declared scope limit rather than a hidden hole: the attack requires editing .gitignore, which is tracked and inside the digest, so it appears in the diff a reviewer reads. The next task touching the QA module must assert that both report paths are tracked and not ignored; it is not opened as its own round because the current mechanism makes the manoeuvre visible rather than invisible."
   },
