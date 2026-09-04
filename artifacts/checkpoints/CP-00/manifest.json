@@ -40,7 +40,7 @@
   "runtime_fields": "not applicable - architecture-only checkpoint",
   "manual_acceptance": {
     "status": "owed",
-    "round": 5,
+    "round": 6,
     "report_path": null,
     "history": [
       {
@@ -53,7 +53,7 @@
   },
   "automated_acceptance": {
     "status": "owed",
-    "round": 5,
+    "round": 6,
     "report_path": null,
     "history": [
       {
@@ -114,7 +114,7 @@
     "artifact_manifest_sha256": "Unrelated to both. It certifies the four reviewed families unchanged and is deliberately invariant across rebuilds that leave the contracts alone.",
     "round_scoped": "Both digests are recorded twice: at the top level for the current round, and inside the matching acceptance_rounds entry as history. Without the per-round copy a retro-edit of the top-level value and a genuine new round would be indistinguishable, so 'frozen and never edited afterwards' would not be checkable. Named by the QA author, who declined to write a test asserting a property the structure could not support."
   },
-  "tested_candidate_digest": "22e3027b2721d60810ed088911c4cf3ebcfe86a50f6a1fa9e606c2da91177c3a",
+  "tested_candidate_digest": "2b3929be6de447bd1c3a92ff1a9a4fe72bc12d4ee919f3d21af2a979e861582c",
   "evidence_bundle_digest": null,
   "third_acceptance_round": {
     "verdict": "PASS from both streams on 2026-09-02",
@@ -181,7 +181,7 @@
     {
       "round": 5,
       "verdict": null,
-      "status": "dispatched",
+      "status": "void",
       "streams": {
         "automated": null,
         "manual": null
@@ -190,12 +190,26 @@
       "evidence_bundle_digest": "",
       "manual_report": null,
       "automated_report": null,
-      "note": "Frozen after the reopened W0-QA-01 was integrated at e7f39890211b52e10d2619c5ddcb85a3d8c7df22 and the state documents were brought into agreement with it. Both streams must produce a primary report file on disk; round 3 passed while its automated stream produced none, which is why the requirement is now checked rather than assumed.",
+      "note": "Void. Round five was frozen at 5207fb5 and dispatched, but W0-QA-01 was then reopened repeatedly: the suite that judges the candidate was itself part of what changed, so the frozen input is no longer the input under test. Neither stream reported before the round was voided; no result is carried forward.",
       "dispatched_on": "2026-09-03",
       "candidate_frozen_at_commit": "pending: the freeze commit carries this manifest"
+    },
+    {
+      "round": 6,
+      "verdict": null,
+      "status": "frozen",
+      "streams": {
+        "automated": null,
+        "manual": null
+      },
+      "tested_candidate_digest": "2b3929be6de447bd1c3a92ff1a9a4fe72bc12d4ee919f3d21af2a979e861582c",
+      "evidence_bundle_digest": "",
+      "manual_report": null,
+      "automated_report": null,
+      "note": "Frozen after the W0-QA-01 remediation. tested_candidate_digest is bound to the tree of this commit in two halves: half one recomputes it over the frozen commit, so a value naming no real tree fails arithmetic; half two bounds the post-freeze delta, so evidence judged against a different tree is caught."
     }
   ],
-  "current_round": 5,
+  "current_round": 6,
   "recorded_limits": {
     "evidence_report_visibility": "The acceptance digests enumerate git ls-files --exclude-standard, so a report path added to .gitignore leaves the digest and every check silent about its content - an independent reviewer demonstrated a fabricated manual report passing that way. It is a declared scope limit rather than a hidden hole: the attack requires editing .gitignore, which is tracked and inside the digest, so it appears in the diff a reviewer reads. The next task touching the QA module must assert that both report paths are tracked and not ignored; it is not opened as its own round because the current mechanism makes the manoeuvre visible rather than invisible."
   },
