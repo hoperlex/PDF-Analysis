@@ -53,7 +53,7 @@ Three commits, deliberately distinct:
 
 - `reviewed_candidate_commit` `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368` — the
   contracts `W0-QA-01` certified;
-- `qa_evidence_commit` `e7f39890211b52e10d2619c5ddcb85a3d8c7df22` — where its test and
+- `qa_evidence_commit` `3da104e5d6fafb2a581bda377a07911183af803f` — where its test and
   report live; it certifies nothing by itself;
 - the manual candidate — **identified by content, not by commit name.** A commit
   cannot record its own SHA, and two rebuilds were rejected for promising one anyway.
