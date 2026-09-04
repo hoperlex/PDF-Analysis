@@ -2,7 +2,7 @@
   "checkpoint": "CP-00",
   "tag_planned": "v0.0.0-architecture",
   "ratified": false,
-  "status": "acceptance_round_9_frozen",
+  "status": "round_9_void_pending_qa_ceiling_remediation",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "3da104e5d6fafb2a581bda377a07911183af803f",
   "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash. candidate_digest covers every git-tracked file INCLUDING this manifest, whose contribution is hashed with the candidate_digest field blanked - that is what makes a self-referential identifier possible. An earlier form excluded the manifest entirely and was rejected: two candidates differing only in manifest prose then shared one value.",
@@ -230,7 +230,7 @@
     {
       "round": 9,
       "verdict": null,
-      "status": "frozen",
+      "status": "void",
       "streams": {
         "automated": null,
         "manual": null
@@ -239,7 +239,7 @@
       "evidence_bundle_digest": "",
       "manual_report": null,
       "automated_report": null,
-      "note": "Frozen after the round-nine state remediation. Rounds six, seven and eight each ran in full and failed on integrator-owned state records, on three different axes, and none found a contract, schema, fixture, state-machine, identifier or golden defect. The superseded-evidence axis now has a runnable check in the checkpoint package, measured to fail on the three earlier trees. No earlier result carries forward."
+      "note": "Void before dispatch. The checkpoint mechanism has no executable final state: W0-INT-01 must create eight files under artifacts/checkpoints/CP-00/ - checkpoint-report.md, contract-manifest.yaml, automated-summary.txt, manual-test-report.md, migration-head.txt, build-info.json, known-risks.md, restore-or-rollback-note.md, none of which exist - and must reconcile the W0.3 plan, the S00 checklist and the documentation index. POST_FREEZE_DELTA_CEILING licenses the manifest, the registry, the state document and the five architecture files; _declared_evidence_paths licenses only the current round's two acceptance reports. So performing W0-INT-01 honestly voids the round it is ratifying. Dispatching streams against this tree would have spent two full acceptance runs on a candidate that could not be ratified without voiding itself."
     }
   ],
   "current_round": 9,
