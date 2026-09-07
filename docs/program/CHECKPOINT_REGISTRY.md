@@ -2,7 +2,7 @@
 
 | CP | Tag | Entry requirement | Manual runbook | Status |
 |---|---|---|---|---|
-| CP-00 | `v0.0.0-architecture` | S00 complete | `manual-tests/CP-00_architecture.md` | candidate frozen; rounds 1-2 failed, 3 passed and is spent, 4-5 void, 6-7 ran and failed on integrator metadata; round 8 owed; not ratified, not tagged; see `ratification_blocked` |
+| CP-00 | `v0.0.0-architecture` | S00 complete | `manual-tests/CP-00_architecture.md` | candidate assembled; ten rounds in the record — 1-2 failed, 3 passed and is spent, 4-5 and 9 void, 6-8 ran and failed on integrator metadata; round 10 owed and not yet frozen, blocked on the QA post-freeze ceiling remediation; not ratified, not tagged; see `ratification_blocked` |
 | CP-01 | `v0.1.0-foundation` | reproducible toolchain/local services | `manual-tests/CP-01_foundation.md` | planned |
 | CP-02 | `v0.2.0-walking-skeleton` | fake E2E route | `manual-tests/CP-02_walking_skeleton.md` | planned |
 | CP-03 | `v0.3.0-audit-alpha` | real stage/evidence | `manual-tests/CP-03_audit_alpha.md` | planned |

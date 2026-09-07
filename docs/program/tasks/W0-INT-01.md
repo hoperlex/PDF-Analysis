@@ -3,8 +3,9 @@
 > **Status: candidate preparation permitted; ratification and publication blocked.**
 > Every preceding W0.3 task is integrated, `W0-QA-01` included, accepted at
 > `3da104e5d6fafb2a581bda377a07911183af803f` after twelve review rounds. CP-00
-> acceptance rounds one through seven are spent, void or failed; round eight is owed on
-> the remediated tree. Ratification waits on two acceptance-stream `PASS` against that
+> acceptance rounds one through eight are spent, void or failed, and round nine was
+> voided before dispatch because the mechanism had no executable final state; round ten
+> is owed on the remediated tree. Ratification waits on two acceptance-stream `PASS` against that
 > round's frozen candidate. Executing before they land would ratify against evidence
 > that no longer describes the tree.
 

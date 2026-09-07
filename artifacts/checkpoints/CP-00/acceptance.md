@@ -4,20 +4,23 @@
 > returned `PASS` on 2026-09-02, then two things moved the tree: `W0-QA-01` was reopened
 > because its suite accepted a ratification that is declared and not performed, and the
 > digest model was corrected. Acceptance certifies a tree; both changes replaced it.
-> Eight rounds are now in the record and round nine is owed; no earlier result transfers.
+> Ten rounds are now in the record and round ten is owed; no earlier result transfers.
 >
 > Primary reports: `manual-report-round-3.md`, and both streams' primary reports for
 > rounds six, seven and eight. No primary automated report exists for round 3 — that
 > stream reported to the integrator only, which round six did not repeat: it produced the
-> first primary automated report in this program.
+> first primary automated report in this program. Rounds four, five and nine carry no
+> report at all: each was voided before any stream reported.
 
-Eight rounds ran or were opened. Rounds one and two returned `FAIL` from both streams;
-round three returned `PASS` from both and is spent; rounds four and five were voided
-before either stream reported; rounds six, seven and eight each ran in full and failed.
-Every blocker across all eight sat in integrator-owned metadata, gate text or state
-documents. None was a contract, fixture, schema or test defect: both streams confirmed
-the four reviewed families byte-identical to `reviewed_candidate_commit` in every round,
-which is what carried the `W0-QA-01` `ACCEPT` across every rebuild without re-running QA.
+Ten rounds have been opened. Rounds one and two returned `FAIL` from both streams;
+round three returned `PASS` from both and is spent; rounds four, five and nine were
+voided before either stream reported; rounds six, seven and eight each ran in full and
+failed; round ten is owed and has not been frozen.
+Every blocker across all ten rounds sat in integrator-owned metadata, gate text or state
+documents. None was a contract, fixture, schema or test defect: in every round that ran,
+both streams confirmed the four reviewed families byte-identical to
+`reviewed_candidate_commit`, which is what carried the `W0-QA-01` `ACCEPT` across every
+rebuild without re-running QA.
 
 ## Rounds
 
@@ -31,6 +34,8 @@ which is what carried the `W0-QA-01` `ACCEPT` across every rebuild without re-ru
 | 6 | **PASS** | FAIL — MT00-01 | frozen at `5b70ee4e` |
 | 7 | FAIL | FAIL — MT00-01 | frozen at `c1376e1c` |
 | 8 | FAIL | FAIL — MT00-01 | frozen at `b21e7275` |
+| 9 | — | — | void; frozen at `ec63e75`, voided at `4bf2351` before dispatch |
+| 10 | — | — | not frozen; the freeze is the step after the QA ceiling remediation |
 
 ## What the failures were about
 
@@ -121,3 +126,76 @@ QA suite spent twelve review rounds eliminating from itself.
 `artifacts/checkpoints/CP-00/check_state_records.py` is the replacement, bound to the
 structural unit that contains an occurrence rather than to a line window. It exits 1 on
 `bde3af3`, `a3eaf88` and `5b70ee4`, naming the defect at each — measured, not asserted.
+
+## Round nine — frozen, then voided before dispatch
+
+Round nine was frozen at `ec63e75` on the tree that carried the round-eight remediation,
+and voided at `4bf2351` before either stream was sent. Nothing was spent on it and it
+carries no report.
+
+It was voided because the checkpoint mechanism had no executable final state. `W0-INT-01`
+must create eight files under `artifacts/checkpoints/CP-00/` — `checkpoint-report.md`,
+`contract-manifest.yaml`, `automated-summary.txt`, `manual-test-report.md`,
+`migration-head.txt`, `build-info.json`, `known-risks.md` and
+`restore-or-rollback-note.md` — none of which exists; it must reconcile the W0.3 wave
+plan, the S00 stage checklist and `docs/INDEX.md`; and it must close the status banners
+of the seventeen completed task files. The QA suite's post-freeze delta ceiling licensed
+none of that: it honoured the checkpoint manifest, the registry, the state document, the
+five architecture files ratification reconciles, and the current round's two declared
+acceptance reports. Performing the ratification honestly would therefore have put more
+than thirty unlicensed paths into the post-freeze delta and voided the round that
+authorised it — by any sequence, in either order.
+
+Finding it before dispatch is the one thing that went right: two full acceptance runs
+were not spent on a candidate that could not be ratified without voiding itself. Nine
+rounds had by then been opened and none had found a contract, schema, fixture,
+state-machine, identifier or golden defect.
+
+The repair is owned by the QA suite, not by the integrator: align the post-freeze ceiling
+with `W0-INT-01`'s actual deliverables, license exactly the final state and evidence set
+and nothing wider, and check the content of what it licenses rather than merely permitting
+the paths to move. Round ten is owed and must not be frozen until that alignment has been
+independently accepted, because a freeze taken first would be spent again for the same
+reason.
+
+## The record of the rounds is itself checked now
+
+Rounds seven and eight both failed partly on stale round accounting, and the sweep written
+after round eight covered only the superseded-evidence axis — a limit recorded at the time
+rather than closed. It is closed here.
+`artifacts/checkpoints/CP-00/check_state_records.py` now carries a second axis: which
+acceptance round is owed, and how many rounds are in the record. It reads both values out
+of `manifest.json`'s `current_round` and `acceptance_rounds` rather than restating them,
+so the sweep cannot itself go stale; it binds a claim to the structural unit that makes it
+— the enclosing JSON string under its key trail, the enclosing table row, the enclosing
+sentence — so a label excuses only the claim it contains; it skips nothing by path except
+the dated primary acceptance reports and itself; and it requires this document, the
+manifest, `CURRENT_STATE.md` and the checkpoint registry each to *state* both claims, so
+that a record which says nothing cannot pass for the wrong reason.
+
+Measured, in both directions. `--selftest` fires each detector and shows a history label
+excusing only its own unit. Run against the tree as it stood before this reconciliation it
+named seventeen stale sites across six files; run after it, the four records above are
+clean. `--rev` sweeps any commit's objects without a checkout, which is how the
+axis-one measurements at `bde3af3`, `a3eaf88` and `5b70ee4` — 1, 1 and 4 findings — can be
+reproduced by a reader on a dirty working tree.
+
+Its exit code is still non-zero, and deliberately so. It names **nine findings across
+three files**, not the three sites an earlier form of this paragraph claimed: the W0.3 wave
+plan at two lines and the `W0-INT-01` status banner, which are writable only by
+`W0-INT-01`; and six rows of the evidence table in `docs/program/reviews/W0-QA-01.md`
+§11.19.8. Those six are a dated historical measurement — the table is introduced by
+"Measured at `4bf2351`" — and the sweep binds to the table row while the date sits in the
+introducing paragraph, so it cannot see the label. Narrowing the sweep until any of them
+fell outside it would have been the round-eight defect committed a third time.
+
+All nine are owed **before** the round-ten freeze, and it is worth being exact about why,
+because an earlier form of this record gave the wrong reason. The wave plan and the task
+banner are inside `POST_FREEZE_DELTA_CEILING`, so correcting them after a freeze would
+*not* void the round; they are owed early because both acceptance streams read the state
+records, and stale round accounting is what failed rounds six, seven and eight. The six in
+the review report are a different case: that file is inside the candidate digest path set
+and outside the ceiling, so correcting it after a freeze **would** void the round. It is
+inside `W0-QA-01`'s two allowed paths, so it has an owner. The residue is recorded in
+`manifest.json` under
+`known_pre_ratification_items.round_accounting_outside_this_reconciliation`.

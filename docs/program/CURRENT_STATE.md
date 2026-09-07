@@ -11,8 +11,10 @@ W0.3 is on `integration/W0.3`. All six of its contract and QA tasks are integrat
 2026-09-02, on round three, and that `PASS` is **spent**: `W0-QA-01` was reopened
 afterwards and took nine further rounds to accept, and the candidate digest model was
 corrected in the same period. Rounds four and five were voided before either stream
-reported. Rounds six and seven ran in full and failed on integrator-owned state
-metadata, not on any contract. Round eight is owed. No earlier result transfers to it.
+reported. Rounds six, seven and eight each ran in full and failed on integrator-owned
+state metadata, not on any contract. Round nine was frozen and then voided before
+dispatch, because performing `W0-INT-01` would have voided the round authorising it.
+Round ten is owed and is not yet frozen. No earlier result transfers to it.
 
 Nothing is ratified, nothing is tagged, and production implementation remains locked
 until CP-01.
@@ -24,7 +26,7 @@ Target: `CP-00 / v0.0.0-architecture`.
 ## Active wave
 
 `W0.3 — CP-00 ratification and integration` (six tasks accepted; `W0-INT-01` and
-ratification blocked pending acceptance round eight). See
+ratification blocked — round ten is owed). See
 `docs/program/waves/W0.3_ratification_integration.md`.
 
 Stage one integrated:
@@ -47,7 +49,11 @@ Stage two progress:
   `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368`;
 - `W0-QA-01` — independent cross-family verification, 255 module tests after eleven
   reopenings, accepted by two independent reviewers on the same bytes, evidence at
-  `3da104e5d6fafb2a581bda377a07911183af803f`.
+  `3da104e5d6fafb2a581bda377a07911183af803f`. Reopened again after round nine was
+  voided: the post-freeze delta ceiling must be aligned with `W0-INT-01`'s actual
+  deliverables. That remediation is in flight and not yet independently accepted, so
+  `3da104e5d6fafb2a581bda377a07911183af803f` remains the accepted evidence commit and
+  the round-ten freeze waits on the new acceptance.
 
 ## CP-00 candidate
 
@@ -231,22 +237,44 @@ not review lanes it coordinated.
 
 ## Next integration tasks
 
-Seven acceptance rounds are now in the record. Rounds one and two failed; round three
-passed and is **spent**; round four was voided before dispatch; round five was frozen,
-dispatched and voided before either stream reported; rounds six and seven each ran in
-full and failed — six on automated `PASS` with manual `FAIL` 5/6, seven on both streams —
-every time on integrator-owned state metadata. Round eight is owed.
+Ten acceptance rounds are now in the record. Rounds one and two failed; round three
+passed and is **spent**; round four was voided before dispatch; round five was frozen at
+`5207fb55`, dispatched, and voided before either stream reported; rounds six, seven and
+eight each ran in full and failed — six on automated `PASS` with manual `FAIL` 5/6, seven
+and eight on both streams — every time on integrator-owned state metadata; round nine was
+frozen at `ec63e75` and voided at `4bf2351` before either stream was dispatched. Round
+ten is owed and is not yet frozen.
 
-Every blocker across all seven rounds sat in integrator-owned metadata, gate text, state
+Round nine was voided because the checkpoint mechanism had no executable final state.
+`W0-INT-01`'s own required deliverables — the eight-file evidence bundle under
+`artifacts/checkpoints/CP-00/`, the reconciliation of the W0.3 plan, the S00 checklist
+and `docs/INDEX.md`, and the status banners of the seventeen completed task files — were
+not licensed by the QA suite's post-freeze delta ceiling, so performing the ratification
+would have voided the round that authorised it. That is a defect in the checkpoint
+procedure, not in any contract, and the repair is owned by the QA suite.
+
+Every blocker across all ten rounds sat in integrator-owned metadata, gate text, state
 documents or the QA suite. None was a contract, fixture, schema or semantic defect: the
 four reviewed families have stayed byte-identical to `reviewed_candidate_commit`
 throughout, and the contract-level `ACCEPT` still holds. What repeatedly failed is the
 checkpoint *procedure*, in the same shape each time, one layer deeper:
 first a ratification could be declared with fewer paths than required, then declared in
 full and not performed, then performed as a byte change that did not do the
-reconciliation.
+reconciliation, then the programme's record of its own rounds went stale twice over, and
+then the ratification turned out to have no licensed way to be performed at all.
 
-Order from here: freeze `tested_candidate_digest` for round nine on the remediated
-tree; run both streams, each producing a primary report file; and only on two `PASS`
-execute the ratification half of `W0-INT-01`.
+Order from here: freeze `tested_candidate_digest` for round ten only after the QA delta
+ceiling is aligned with `W0-INT-01`'s deliverables and that alignment is independently
+accepted, and after every state record has been reconciled against it — including the
+three the state reconciliation itself could not write: the W0.3 wave plan, the
+`W0-INT-01` status banner, and the six dated rows in `docs/program/reviews/W0-QA-01.md`
+§11.19.8 that the sweep reads as live claims. Then dispatch both streams, each producing a primary report
+file, and only on two `PASS` execute the ratification half of `W0-INT-01`.
 Publication is a separate, explicitly authorised step after that.
+
+`artifacts/checkpoints/CP-00/check_state_records.py` is the runnable completeness check
+for both axes this record has failed on — a superseded evidence commit presented as
+current, and stale round accounting. It derives the round accounting from the checkpoint
+manifest rather than restating it, and its non-zero exit names the sites still owed —
+nine findings across three files, all of which have an owner and must be discharged before
+the freeze.
