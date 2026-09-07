@@ -2,7 +2,7 @@
   "checkpoint": "CP-00",
   "tag_planned": "v0.0.0-architecture",
   "ratified": false,
-  "status": "round_10_owed_blocked_on_qa_ceiling_remediation",
+  "status": "acceptance_round_10_frozen",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "3da104e5d6fafb2a581bda377a07911183af803f",
   "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash. candidate_digest covers every git-tracked file INCLUDING this manifest, whose contribution is hashed with the candidate_digest field blanked - that is what makes a self-referential identifier possible. An earlier form excluded the manifest entirely and was rejected: two candidates differing only in manifest prose then shared one value.",
@@ -103,7 +103,7 @@
     "artifact_manifest_sha256": "Unrelated to both. It certifies the four reviewed families unchanged and is deliberately invariant across rebuilds that leave the contracts alone.",
     "round_scoped": "Both digests are recorded twice: at the top level for the current round, and inside the matching acceptance_rounds entry as history. Without the per-round copy a retro-edit of the top-level value and a genuine new round would be indistinguishable, so 'frozen and never edited afterwards' would not be checkable. Named by the QA author, who declined to write a test asserting a property the structure could not support."
   },
-  "tested_candidate_digest": null,
+  "tested_candidate_digest": "00977a8704cbe381f02eaefccbb50ab5d32ee838f457f6f8873ba1cff6d8b3e5",
   "tested_candidate_digest_note": "null because round 10 has not been frozen. The top level speaks for the current round, and the current round has no input identified yet: freezing is the step after this reconciliation, not part of it. The round-9 value ac3a1220e3b6039919b0758e277a54f6477cc9dd1aef572fdbd34ef1898de24d is kept in that round's own entry as history and is deliberately not carried up here - a top-level value from a voided round would name the previous round's tree as the input the next streams judge, which is the conflation the three-measurement model exists to prevent.",
   "evidence_bundle_digest": null,
   "third_acceptance_round": {
@@ -247,16 +247,16 @@
     {
       "round": 10,
       "verdict": null,
-      "status": "owed",
+      "status": "frozen",
       "streams": {
         "automated": null,
         "manual": null
       },
-      "tested_candidate_digest": "",
+      "tested_candidate_digest": "00977a8704cbe381f02eaefccbb50ab5d32ee838f457f6f8873ba1cff6d8b3e5",
       "evidence_bundle_digest": "",
       "manual_report": null,
       "automated_report": null,
-      "note": "Owed and deliberately not yet frozen. Opened by the state reconciliation that followed the round-nine void, in the recorded order: QA mechanism, independent acceptance of that mechanism, state reconciliation, freeze, dispatch. Its tested_candidate_digest is empty and the top-level field is null because freezing is the next step and a separate one; a value carried over from a voided round would name the wrong tree as the input these streams judge. Blocked until the post-freeze delta ceiling in tests/contract/test_cp00_candidate.py is aligned with W0-INT-01's actual deliverables and that alignment is independently accepted - without it the ratification still voids the round authorising it, which is exactly what voided round nine. No earlier result transfers, including the spent round-three PASS."
+      "note": "The single final owner-authorised closeout round. The QA ceiling remediation was rejected by four independent reviewers with fifteen blockers; the mechanism blockers M1-M5 and the licence blockers L1-L3 are closed in commits 49bdcee and 1ab8bac, each mutation-verified. M1 is why a committed deliverable does not red the suite; M2 is why a committed publication is reachable at all. No round eleven will be opened: by the owner's decision of 2026-09-04 a procedural or documentation defect blocks only when it changes product semantics, security or data integrity."
     }
   ],
   "current_round": 10,
