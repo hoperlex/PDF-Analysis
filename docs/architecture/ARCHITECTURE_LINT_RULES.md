@@ -601,7 +601,7 @@ The probe below is what makes the first command of this gate a claim about the b
 commit rather than about this working tree. It runs that same predicate over the anchor
 set plus one
 added path that exists in the working tree and not at the base commit - this document's
-own JSON, still untracked - and asserts that the gate reports exactly that path as
+own JSON, which the base commit did not carry - and asserts that the gate reports exactly that path as
 missing, while `Path.exists()` would have accepted it. Nothing on disk is modified:
 
 ```bash

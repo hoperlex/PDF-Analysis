@@ -28,17 +28,17 @@ Task `W0-ARC-01` recorded a disposition for every ADR above in
 [CP00_ARCHITECTURE_REVIEW.json](CP00_ARCHITECTURE_REVIEW.json). No status in the
 table above was changed by that review and no ADR was added, rewritten or removed.
 
-State after the repository owner recorded `PD-01`–`PD-04` on 2026-09-01:
+State after the repository owner recorded `PD-01`–`PD-05` on 2026-09-01:
 
 - `adapt` (ratifiable only with the recorded qualification): ADR-0004, ADR-0007,
   ADR-0008, ADR-0012, ADR-0013, ADR-0017.
 - `defer` (not ratifiable at CP-00): ADR-0014 only — the tenant model, identity
   provider, retention TTL matrix and legal-hold authority (`U-04`) remain open.
 - `ratify`: the remaining eleven ADRs.
-- `supersede`: none issued; the owner approved all four decisions, so no baseline ADR
+- `supersede`: none issued; the owner approved all five decisions, so no baseline ADR
   was contradicted and no replacement ADR was created.
 
-Owner decisions `PD-01`–`PD-04` are recorded in
+Owner decisions `PD-01`–`PD-05` are recorded in
 [CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md): `PD-01`, `PD-02` and `PD-03`
 approved with modification, `PD-04` approved. ADR-0012 moved from `defer` to `adapt`
 because `PD-01` was decided. A lane consuming an `adapt` ADR must carry its

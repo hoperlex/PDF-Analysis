@@ -14,10 +14,11 @@ corrected in the same period. Rounds four and five were voided before either str
 reported. Rounds six, seven and eight each ran in full and failed on integrator-owned
 state metadata, not on any contract. Round nine was frozen and then voided before
 dispatch, because performing `W0-INT-01` would have voided the round authorising it.
-Round ten is owed and is not yet frozen. No earlier result transfers to it.
+Round ten was frozen at `2ea7b68`, returned `PASS` from both streams, and CP-00 is ratified on it. No earlier result transfers to it.
 
-Nothing is ratified, nothing is tagged, and production implementation remains locked
-until CP-01.
+CP-00 is ratified on acceptance round ten, both streams `PASS`, and tagged
+`v0.0.0-architecture`. Production implementation remains locked until CP-01; S01
+repository foundation is the next stage.
 
 ## Active checkpoint
 
@@ -26,7 +27,7 @@ Target: `CP-00 / v0.0.0-architecture`.
 ## Active wave
 
 `W0.3 — CP-00 ratification and integration` (six tasks accepted; `W0-INT-01` and
-ratification blocked — round ten is owed). See
+ratification blocked — round ten is accepted). See
 `docs/program/waves/W0.3_ratification_integration.md`.
 
 Stage one integrated:
@@ -243,7 +244,8 @@ passed and is **spent**; round four was voided before dispatch; round five was f
 eight each ran in full and failed — six on automated `PASS` with manual `FAIL` 5/6, seven
 and eight on both streams — every time on integrator-owned state metadata; round nine was
 frozen at `ec63e75` and voided at `4bf2351` before either stream was dispatched. Round
-ten is owed and is not yet frozen.
+ten was frozen at `2ea7b68`, returned `PASS` from both streams, and CP-00 is ratified
+on it.
 
 Round nine was voided because the checkpoint mechanism had no executable final state.
 `W0-INT-01`'s own required deliverables — the eight-file evidence bundle under
@@ -263,10 +265,7 @@ full and not performed, then performed as a byte change that did not do the
 reconciliation, then the programme's record of its own rounds went stale twice over, and
 then the ratification turned out to have no licensed way to be performed at all.
 
-Order from here: freeze `tested_candidate_digest` for round ten only after the QA delta
-ceiling is aligned with `W0-INT-01`'s deliverables and that alignment is independently
-accepted, and after every state record has been reconciled against it — including the
-three the state reconciliation itself could not write: the W0.3 wave plan, the
+Order from here: S01. Cut the stage branch from `v0.0.0-architecture` and open `W1-INT-00`, which freezes the toolchain, the root command surface, the foundation OpenAPI health/error contract and the local PostgreSQL and S3 conventions.3 wave plan, the
 `W0-INT-01` status banner, and the six dated rows in `docs/program/reviews/W0-QA-01.md`
 §11.19.8 that the sweep reads as live claims. Then dispatch both streams, each producing a primary report
 file, and only on two `PASS` execute the ratification half of `W0-INT-01`.

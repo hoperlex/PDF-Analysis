@@ -3,12 +3,12 @@
   "task_id": "W0-ARC-01",
   "wave": "W0.2",
   "checkpoint": "CP-00",
-  "review_status": "owner_decisions_recorded",
+  "review_status": "ratified_at_w0_3",
   "owner_decision_round": 5,
   "owner_decisions_recorded_on": "2026-09-01",
   "owner_decision_authority": "repository owner",
   "owner_decision_channel": "direct instruction to the program integrator session",
-  "ratified": false,
+  "ratified": true,
   "generated_for_base_commit": "6c82004b35f49463c8e7fc8602fbced2f374167e",
   "markdown_review": "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
   "owner_decision_records": "docs/architecture/CP00_OWNER_DECISIONS.md",
@@ -41,7 +41,12 @@
       "subject": "Expert correction/revocation is a new append-only decision event and a projection change, not the legacy overwrite/delete",
       "status": "approved_with_modification",
       "approved": true,
-      "blocks": ["ADR-0012", "P-18", "P-03 decision-event clause", "contracts/domain/v1 decision semantics"],
+      "blocks": [
+        "ADR-0012",
+        "P-18",
+        "P-03 decision-event clause",
+        "contracts/domain/v1 decision semantics"
+      ],
       "evidence": [
         "[B] legacy_capability_inventory 3.3 EX-02 = not observed",
         "[B] legacy_capability_inventory 5 append-only expert decision events = contradicted",
@@ -53,7 +58,9 @@
       "decided_on": "2026-09-01",
       "decision_channel": "direct instruction to the program integrator session",
       "modification": "Decisions stay append-only. A correction and a revocation each create a new decision_id; neither rewrites nor deletes an earlier decision. A revocation moves the current projection to pending and does NOT automatically restore the previously superseded verdict. The decision history is preserved in full.",
-      "closes": ["domain-contract open question OQ-03: on revocation the verdict projection goes to pending, not back to the previous verdict"],
+      "closes": [
+        "domain-contract open question OQ-03: on revocation the verdict projection goes to pending, not back to the previous verdict"
+      ],
       "downstream_obligations": [
         "DOM lane: model decision events, projections and the pending-on-revocation rule; close OQ-03 with this rule in contracts/domain/v1",
         "P-18, P-03 decision-event clause and ADR-0012 are re-dispositioned from defer to adapt with this modification attached"
@@ -64,7 +71,12 @@
       "subject": "One versioned target stage registry is authoritative; conflicting legacy declarations are aliases and evidence",
       "status": "approved_with_modification",
       "approved": true,
-      "blocks": ["ADR-0008 registry clause", "contracts/analysis/v1 stage registry", "FS-04", "FS-08"],
+      "blocks": [
+        "ADR-0008 registry clause",
+        "contracts/analysis/v1 stage registry",
+        "FS-04",
+        "FS-08"
+      ],
       "evidence": [
         "[B] legacy_capability_inventory 2.2 31 declaration sites, conflicting membership and order",
         "[B] legacy_capability_inventory 5 versioned stage registry = partial",
@@ -88,7 +100,12 @@
       "subject": "AuditRun, Job and Attempt are distinct and current-attempt authority/fencing is mandatory",
       "status": "approved_with_modification",
       "approved": true,
-      "blocks": ["ADR-0007 fencing clause", "ADR-0005 AuditRun naming", "contracts/domain/v1 identifiers and state machines", "FS-06"],
+      "blocks": [
+        "ADR-0007 fencing clause",
+        "ADR-0005 AuditRun naming",
+        "contracts/domain/v1 identifiers and state machines",
+        "FS-06"
+      ],
       "evidence": [
         "[B] legacy_capability_inventory 3.6 DW-02 job/attempt durable state and attempt-scoped token",
         "[B] legacy_capability_inventory 3.6 DW-03 = not observed, no distinct Run entity",
@@ -100,7 +117,9 @@
       "decided_on": "2026-09-01",
       "decision_channel": "direct instruction to the program integrator session",
       "modification": "AuditRun, Job and Attempt are distinct entities. A new AuditRun is created when a top-level audit or re-audit command is accepted for a frozen set of inputs and configurations. A repeat with the same idempotency key and payload returns the existing Run. Changed inputs, an explicit re-audit or a repeat of a terminal Run create a new Run. Retry, resume, restart and worker failover create no new Run: the Job stays the same and a new Attempt is created. A terminal Run is never reopened.",
-      "closes": ["the review sub-question \"what creates a new AuditRun\", raised because legacy provides no Run evidence"],
+      "closes": [
+        "the review sub-question \"what creates a new AuditRun\", raised because legacy provides no Run evidence"
+      ],
       "precedence_clarification": {
         "record_kind": "precedence clarification of PD-03",
         "is_new_owner_decision": false,
@@ -151,7 +170,10 @@
       "subject": "Graphic/vector comparison is future target scope, absent from legacy parity and not fabricated in W0 artifacts",
       "status": "approved",
       "approved": true,
-      "blocks": ["ADR-0013 raw graphic evidence clause", "comparison fixtures and contracts"],
+      "blocks": [
+        "ADR-0013 raw graphic evidence clause",
+        "comparison fixtures and contracts"
+      ],
       "evidence": [
         "[B] legacy_capability_inventory 3.4 CP-06 = not observed",
         "[B] legacy_capability_inventory 5 graphic/vector comparison = not observed",
@@ -232,7 +254,11 @@
       "decision": "contract_version is the canonical version key of every machine contract and carries a string semver or draft version. $schema stays the JSON Schema dialect and $id stays the schema identity. A bare version key and schema_version used as a contract-envelope version are removed before freeze.",
       "decided_by": "repository owner",
       "decided_on": "2026-09-01",
-      "applies_to": ["contracts/domain/v1", "contracts/analysis/v1", "every later machine contract family"],
+      "applies_to": [
+        "contracts/domain/v1",
+        "contracts/analysis/v1",
+        "every later machine contract family"
+      ],
       "owner_of_execution": "DOM and ANA lanes under integrator verification; ARC records the decision only"
     },
     {
@@ -241,7 +267,11 @@
       "decision": "execution_token is the canonical token name: an opaque equality-only capability, rotated on every new Attempt and verified inside the publishing transaction. Fencing is a property of the behavior, not the name of a field and not a promise of a monotonically increasing number. authority_token and fencing_token survive only in legacy evidence.",
       "decided_by": "repository owner",
       "decided_on": "2026-09-01",
-      "applies_to": ["contracts/domain/v1 identifiers, state machines and error codes", "contracts/analysis/v1 result package", "ADR-0007 fencing clause"],
+      "applies_to": [
+        "contracts/domain/v1 identifiers, state machines and error codes",
+        "contracts/analysis/v1 result package",
+        "ADR-0007 fencing clause"
+      ],
       "owner_of_execution": "DOM and ANA lanes; ARC records the decision only"
     },
     {
@@ -250,7 +280,11 @@
       "decision": "The distribution of 25 control_plane, 2 sub_pipeline, 3 excluded and 1 stage over the 31 legacy declaration sites is admissible conditionally: an independent reviewer must confirm all nine registry stages against capability evidence and separately check every alias-bearing declaration site.",
       "decided_by": "repository owner",
       "decided_on": "2026-09-01",
-      "applies_to": ["contracts/analysis/v1/legacy-stage-map.json", "contracts/analysis/v1/stage-registry.json", "PD-02 acceptance"],
+      "applies_to": [
+        "contracts/analysis/v1/legacy-stage-map.json",
+        "contracts/analysis/v1/stage-registry.json",
+        "PD-02 acceptance"
+      ],
       "owner_of_execution": "independent reviewer assigned by the integrator"
     }
   ],
@@ -293,7 +327,9 @@
         "[O] PD-01 approved with modification on 2026-09-01"
       ],
       "compatibility_impact": "Ratifiable for versions, runs, manifests and raw comparison evidence; the immutable decision-event clause is ratifiable with the approved PD-01 modification attached: correction and revocation each create a new decision_id, a revocation projects the current verdict to pending and never auto-restores the superseded one.",
-      "owner_decisions": ["PD-01"],
+      "owner_decisions": [
+        "PD-01"
+      ],
       "owner_decision_state": "PD-01 approved with modification (2026-09-01)"
     },
     {
@@ -484,7 +520,9 @@
         "[O] PD-01 approved with modification on 2026-09-01"
       ],
       "compatibility_impact": "The defer basis disappeared when PD-01 was approved. Ratifiable with the approved modification attached: correction and revocation each create a new decision_id, a revocation moves the current projection to pending without restoring the superseded verdict, and history is preserved. Legacy overwrite/delete stays characterized legacy behavior only.",
-      "owner_decisions": ["PD-01"],
+      "owner_decisions": [
+        "PD-01"
+      ],
       "owner_decision_state": "PD-01 approved with modification (2026-09-01)"
     },
     {
@@ -612,7 +650,9 @@
         "[O] PD-03 approved with modification on 2026-09-01"
       ],
       "compatibility_impact": "Storage canonicality is uncontested; the AuditRun state named by this ADR is supported by the approved PD-03 identity separation and its Run-creation rule.",
-      "owner_decisions": ["PD-03"],
+      "owner_decisions": [
+        "PD-03"
+      ],
       "owner_decision_state": "PD-03 approved with modification (2026-09-01)"
     },
     {
@@ -645,7 +685,9 @@
         "[O] PD-03 approved with modification and integration decision ID-02 on 2026-09-01"
       ],
       "compatibility_impact": "Durable job and outbox parts are ratifiable; the fencing clause is ratifiable only with the approved qualification: the capability is named execution_token, is opaque and equality-only, is rotated on every new Attempt and is verified inside the publishing transaction. Fencing is behavior, not a field name and not a monotonic number. Retry, resume, restart and worker failover create a new Attempt, never a new AuditRun.",
-      "owner_decisions": ["PD-03"],
+      "owner_decisions": [
+        "PD-03"
+      ],
       "owner_decision_state": "PD-03 approved with modification (2026-09-01); ID-02 fixes the token name"
     },
     {
@@ -666,7 +708,10 @@
         "[P] contracts/analysis/v1/legacy-stage-name-map.json (62 names) appeared later in the same working tree as an unfrozen ANA-lane candidate; not verified by this lane"
       ],
       "compatibility_impact": "The package boundary is ratifiable; the single versioned stage registry clause is ratifiable only with the approved PD-02 precondition: a name-level alias map giving every legacy name its surface, source_declaration_id, immutable evidence and either a canonical target or an explicit exclusion, with findings_merge -> finding_merge mandatory. Site-level mapping alone does not satisfy it, and ID-03 adds independent confirmation of the nine registry stages and of every alias-bearing declaration site. PD-05 applies that same single-registry authority to a membership question: four legacy optimization names take the explicit-exclusion branch as a separate project-optimization sub-pipeline, which changes no registry stage and creates no second registry.",
-      "owner_decisions": ["PD-02", "PD-05"],
+      "owner_decisions": [
+        "PD-02",
+        "PD-05"
+      ],
       "owner_decision_state": "PD-02 approved with modification (2026-09-01); ANA acceptance still blocked on the alias map. PD-05 approved (2026-09-01) excludes four optimization names from the nine-stage core registry without altering the registry clause"
     },
     {
@@ -730,7 +775,9 @@
         "[O] PD-01 approved with modification on 2026-09-01"
       ],
       "compatibility_impact": "The defer basis disappeared when PD-01 was approved. Ratifiable with the approved modification attached: correction and revocation create new decision_ids, a revocation projects the current verdict to pending with no automatic restore, and the KB projection is rebuilt from preserved history. Legacy overwrite and delete remain characterized legacy behavior and are not the target.",
-      "owner_decisions": ["PD-01"],
+      "owner_decisions": [
+        "PD-01"
+      ],
       "owner_decision_state": "PD-01 approved with modification (2026-09-01)"
     },
     {
@@ -749,7 +796,9 @@
         "[O] PD-04 approved on 2026-09-01"
       ],
       "compatibility_impact": "Text, approved-link and AI layers are ratifiable. The raw graphic evidence layer is approved as future greenfield scope with the recorded qualification: absent from legacy parity and from W0, first contractual inclusion in W7 together with a dedicated golden graphic pair.",
-      "owner_decisions": ["PD-04"],
+      "owner_decisions": [
+        "PD-04"
+      ],
       "owner_decision_state": "PD-04 approved (2026-09-01)"
     },
     {
@@ -767,7 +816,9 @@
         "[B] LO-01 retention and immutability guarantees were not established"
       ],
       "compatibility_impact": "Remains proposed. U-04 stays open: the tenant/identity-provider boundary is required before W2-C-01 and the TTL/legal-hold matrix before W9-C-01. No TTL, tenant model, identity provider or legal-hold value may be encoded. This blocks the production storage and security gate, not CP-00 documentation.",
-      "owner_decisions": ["U-04 tenant model, identity provider, TTL matrix and legal-hold authority"],
+      "owner_decisions": [
+        "U-04 tenant model, identity provider, TTL matrix and legal-hold authority"
+      ],
       "owner_decision_state": "U-04 remains open by explicit owner disposition (2026-09-01)"
     },
     {
@@ -834,30 +885,59 @@
     {
       "id": "FS-01",
       "legacy_behavior": "Portable audit package swallows embedded Excel generation failure and can still produce a ZIP without it",
-      "evidence": ["[B] OUT-02", "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:_download_audit_package_v2@137"],
+      "evidence": [
+        "[B] OUT-02",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/api/routers/export.py:_download_audit_package_v2@137"
+      ],
       "target_policy": "Export manifest declares required members; a missing required member yields a typed partial or failed export with a stable error_code, never a silently incomplete download",
-      "governing": ["P-10", "ADR-0015"]
+      "governing": [
+        "P-10",
+        "ADR-0015"
+      ]
     },
     {
       "id": "FS-02",
       "legacy_behavior": "Decision carryover wrapper is fail-soft and yields needs_manual_review with no verdict",
-      "evidence": ["[B] EX-08", "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:run_decision_carryover@436"],
+      "evidence": [
+        "[B] EX-08",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/findings/decision_carryover_service.py:run_decision_carryover@436"
+      ],
       "target_policy": "The pending user-visible state is preserved as a declared state of a declared state machine with a recorded failure class and provenance, never as an implicit empty verdict",
-      "governing": ["P-09", "P-10", "ADR-0010"]
+      "governing": [
+        "P-09",
+        "P-10",
+        "ADR-0010"
+      ]
     },
     {
       "id": "FS-03",
       "legacy_behavior": "Expert-review shadow-v2 mirror failure is fail-soft",
-      "evidence": ["[B] EX-01", "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:save_expert_review@220"],
+      "evidence": [
+        "[B] EX-01",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/knowledge_base/knowledge_base_service.py:save_expert_review@220"
+      ],
       "target_policy": "No dual write exists in the target; the second view is a rebuildable projection and a build failure is a named observable degraded mode with an owner",
-      "governing": ["P-07", "P-11"]
+      "governing": [
+        "P-07",
+        "P-11"
+      ]
     },
     {
       "id": "FS-04",
       "legacy_behavior": "Norm and optimization branches record degradation and let an audit complete with warning artifacts",
-      "evidence": ["[B] AN-06", "[B] AN-08", "[B] legacy_capability_inventory 6 pipeline topology"],
+      "evidence": [
+        "[B] AN-06",
+        "[B] AN-08",
+        "[B] legacy_capability_inventory 6 pipeline topology"
+      ],
       "target_policy": "Stage terminal semantics belong to the single versioned stage registry of the owning bounded context, with an explicit consumer policy per state; the policy is split into the three owned parts below and no part may resolve a fail-soft branch to a success",
-      "governing": ["P-09", "P-10", "ADR-0008", "PD-02", "PD-05"],
+      "governing": [
+        "P-09",
+        "P-10",
+        "ADR-0008",
+        "PD-02",
+        "PD-05"
+      ],
       "split": true,
       "split_recorded_in_round": 4,
       "split_authority": "repository owner, 2026-09-01, recorded together with the U-06 disposition",
@@ -874,10 +954,18 @@
           "target_contract_family": "contracts/analysis/v1/**",
           "task_id": "W0-ANA-01",
           "target_policy": "Stage terminal semantics (ok, partial, failed, skipped) are declared in the single versioned core audit stage registry with an explicit consumer policy per state; a degraded norm branch resolves to a declared non-success terminal state",
-          "governing": ["P-09", "P-10", "ADR-0008", "PD-02"],
+          "governing": [
+            "P-09",
+            "P-10",
+            "ADR-0008",
+            "PD-02"
+          ],
           "silent_success_allowed": false,
           "status": "assigned",
-          "conditions": ["PD-02 name-level alias map precondition", "ID-03 independent reviewer confirmation"]
+          "conditions": [
+            "PD-02 name-level alias map precondition",
+            "ID-03 independent reviewer confirmation"
+          ]
         },
         {
           "part_id": "FS-04-B",
@@ -887,10 +975,18 @@
           "target_contract_family": "contracts/optimization/v1/**",
           "task_id": "W5-OPT-01",
           "target_policy": "The project-optimization bounded context declares its own stage and result terminal semantics with an explicit consumer policy per state; a degraded optimization branch resolves to a declared non-success terminal state of that family and never to a success",
-          "governing": ["P-09", "P-10", "PD-05", "U-06"],
+          "governing": [
+            "P-09",
+            "P-10",
+            "PD-05",
+            "U-06"
+          ],
           "silent_success_allowed": false,
           "status": "assigned_to_future_task",
-          "conditions": ["U-06-OB-1: the capability is disabled until W5-OPT-01 is accepted, so this part may not be encoded before that task", "U-06-OB-2: CP-00 explicitly excludes project-optimization runtime semantics"]
+          "conditions": [
+            "U-06-OB-1: the capability is disabled until W5-OPT-01 is accepted, so this part may not be encoded before that task",
+            "U-06-OB-2: CP-00 explicitly excludes project-optimization runtime semantics"
+          ]
         },
         {
           "part_id": "FS-04-C",
@@ -909,7 +1005,14 @@
             "encoded_in": "contracts/domain/v1 state machines",
             "encoded_by": "DOM lane"
           },
-          "governing": ["P-09", "P-10", "ADR-0005", "ADR-0007", "PD-03", "PD-05"],
+          "governing": [
+            "P-09",
+            "P-10",
+            "ADR-0005",
+            "ADR-0007",
+            "PD-03",
+            "PD-05"
+          ],
           "silent_success_allowed": false,
           "status": "assigned"
         }
@@ -918,48 +1021,167 @@
     {
       "id": "FS-05",
       "legacy_behavior": "Comparison AI review falls back to a deterministic summary on provider or validation failure",
-      "evidence": ["[B] CP-04", "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_ai_review@1068"],
+      "evidence": [
+        "[B] CP-04",
+        "[L] 32b9d903792b30506048a1d42b0e6b2d07aee403:backend/app/services/stage_comparison/store.py:run_text_ai_review@1068"
+      ],
       "target_policy": "Allowed only as a named, marked and observable degraded artifact that states its own provenance; never presented as completed AI synthesis",
-      "governing": ["P-10", "P-17", "ADR-0013"]
+      "governing": [
+        "P-10",
+        "P-17",
+        "ADR-0013"
+      ]
     },
     {
       "id": "FS-06",
       "legacy_behavior": "Pipeline and job state partly lives in process-local active task handles alongside persisted logs",
-      "evidence": ["[B] legacy_capability_inventory 4 stores row", "[B] AN-02 stale running converted to interrupted at startup"],
+      "evidence": [
+        "[B] legacy_capability_inventory 4 stores row",
+        "[B] AN-02 stale running converted to interrupted at startup"
+      ],
       "target_policy": "Durable job and attempt state is canonical; process memory is never a status source and recovery is a declared transition",
-      "governing": ["P-09", "ADR-0005", "ADR-0007", "PD-03"]
+      "governing": [
+        "P-09",
+        "ADR-0005",
+        "ADR-0007",
+        "PD-03"
+      ]
     },
     {
       "id": "FS-07",
       "legacy_behavior": "Silent identity fallback between an identifier with and without a .pdf suffix during project resolution",
-      "evidence": ["[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0018-domain-contract-v1.md section 1.1 (advisory, verified at 98d075ea)"],
+      "evidence": [
+        "[S] 0b937dc0e24d38fb98485a920152b83d2f19c982:docs/architecture/adr/ADR-0018-domain-contract-v1.md section 1.1 (advisory, verified at 98d075ea)"
+      ],
       "target_policy": "Identity resolution is an explicit typed lookup; an unresolvable identifier is a typed error, never a guessed alternative form",
-      "governing": ["P-01", "P-02", "P-10"]
+      "governing": [
+        "P-01",
+        "P-02",
+        "P-10"
+      ]
     },
     {
       "id": "FS-08",
       "legacy_behavior": "User-visible stage states error, partial, skipped and interrupted plus comparison not_started and stale gates exist without one declared vocabulary",
-      "evidence": ["[B] legacy_capability_inventory 4 user-visible failures row", "[B] legacy_capability_inventory 2.2 alias declarations"],
+      "evidence": [
+        "[B] legacy_capability_inventory 4 user-visible failures row",
+        "[B] legacy_capability_inventory 2.2 alias declarations"
+      ],
       "target_policy": "Each state maps to exactly one declared target state with declared transitions and a declared alias table; aliases are evidence and never parallel sources of truth",
-      "governing": ["P-09", "ADR-0008", "PD-02"]
+      "governing": [
+        "P-09",
+        "ADR-0008",
+        "PD-02"
+      ]
     }
   ],
   "escalations": [
-    {"id": "E-01", "summary": "Append-only expert decisions asserted by Bible section 2, P-18 and ADR-0012 versus contradicted legacy evidence", "escalated_to": "repository owner via PD-01", "status": "resolved_by_owner", "resolution": "PD-01 approved with modification on 2026-09-01; P-18 and ADR-0012 move from defer to adapt"},
-    {"id": "E-02", "summary": "Single versioned stage registry asserted by Bible section 8 and ADR-0008 versus 31 conflicting legacy declarations", "escalated_to": "repository owner via PD-02", "status": "resolved_with_precondition", "resolution": "PD-02 approved with modification on 2026-09-01; ANA acceptance requires the name-level alias map"},
-    {"id": "E-03", "summary": "Distinct Run/Job/Attempt and fencing token asserted by Bible section 8 and ADR-0007 versus missing Run entity and missing fencing-token contract", "escalated_to": "repository owner via PD-03", "status": "resolved_by_owner", "resolution": "PD-03 approved with modification on 2026-09-01, including the rule for what creates a new AuditRun; ID-02 fixes execution_token as the canonical name. Round 5 adds the owner precedence clarification inside PD-03: identical idempotency key and payload always return the original Run, and a repeat of a terminal Run creates a new Run only under a new idempotency key"},
-    {"id": "E-04", "summary": "Raw graphic evidence layer asserted by Bible section 11 and ADR-0013 versus legacy graphics not analyzed", "escalated_to": "repository owner via PD-04", "status": "resolved_by_owner", "resolution": "PD-04 approved on 2026-09-01; first contractual inclusion in W7 with a dedicated golden graphic pair"},
-    {"id": "E-05", "summary": "ADR index labels accepted bootstrap while several decisions derive from refactoring ADRs whose source status is proposed", "escalated_to": "program integrator at W0.3 ratification", "status": "open", "resolution": "still an integrator obligation at W0.3 ratification: owner approval of PD-01 to PD-04 does not convert a proposed source ADR status into an accepted one"},
-    {"id": "E-06", "summary": "S00 requires architecture lint rules to be specified and ADR-0004 mandates architecture lint/test, but no specification exists", "escalated_to": "program integrator, tracked as U-03", "status": "assigned", "resolution": "U-03 assigned: W0-ARC-02 specifies the architecture lint rules before CP-00, W1-ARC-01 implements enforcement; the task file itself is authored by the integrator under docs/program"},
-    {"id": "E-07", "summary": "Contract catalog names the ARC owner for contracts/domain/v1 while the W0.2 wave assigns that path to the DOM lane", "escalated_to": "program integrator; additive catalog note applied", "status": "resolved", "resolution": "additive catalog ownership note applied; per-wave ownership stays a program-governance decision"},
-    {"id": "E-08", "summary": "ADR-0017 default worktree-per-task isolation versus the W0.2 shared-checkout execution model", "escalated_to": "program integrator, tracked as U-02", "status": "resolved_by_owner", "resolution": "U-02 resolved: worktree is the default, shared checkout only with disjoint allowed paths and a single owner per hotspot"}
+    {
+      "id": "E-01",
+      "summary": "Append-only expert decisions asserted by Bible section 2, P-18 and ADR-0012 versus contradicted legacy evidence",
+      "escalated_to": "repository owner via PD-01",
+      "status": "resolved_by_owner",
+      "resolution": "PD-01 approved with modification on 2026-09-01; P-18 and ADR-0012 move from defer to adapt"
+    },
+    {
+      "id": "E-02",
+      "summary": "Single versioned stage registry asserted by Bible section 8 and ADR-0008 versus 31 conflicting legacy declarations",
+      "escalated_to": "repository owner via PD-02",
+      "status": "resolved_with_precondition",
+      "resolution": "PD-02 approved with modification on 2026-09-01; ANA acceptance requires the name-level alias map"
+    },
+    {
+      "id": "E-03",
+      "summary": "Distinct Run/Job/Attempt and fencing token asserted by Bible section 8 and ADR-0007 versus missing Run entity and missing fencing-token contract",
+      "escalated_to": "repository owner via PD-03",
+      "status": "resolved_by_owner",
+      "resolution": "PD-03 approved with modification on 2026-09-01, including the rule for what creates a new AuditRun; ID-02 fixes execution_token as the canonical name. Round 5 adds the owner precedence clarification inside PD-03: identical idempotency key and payload always return the original Run, and a repeat of a terminal Run creates a new Run only under a new idempotency key"
+    },
+    {
+      "id": "E-04",
+      "summary": "Raw graphic evidence layer asserted by Bible section 11 and ADR-0013 versus legacy graphics not analyzed",
+      "escalated_to": "repository owner via PD-04",
+      "status": "resolved_by_owner",
+      "resolution": "PD-04 approved on 2026-09-01; first contractual inclusion in W7 with a dedicated golden graphic pair"
+    },
+    {
+      "id": "E-05",
+      "summary": "ADR index labels accepted bootstrap while several decisions derive from refactoring ADRs whose source status is proposed",
+      "escalated_to": "program integrator at W0.3 ratification",
+      "status": "open",
+      "resolution": "still an integrator obligation at W0.3 ratification: owner approval of PD-01 to PD-04 does not convert a proposed source ADR status into an accepted one"
+    },
+    {
+      "id": "E-06",
+      "summary": "S00 requires architecture lint rules to be specified and ADR-0004 mandates architecture lint/test, but no specification exists",
+      "escalated_to": "program integrator, tracked as U-03",
+      "status": "assigned",
+      "resolution": "U-03 assigned: W0-ARC-02 specifies the architecture lint rules before CP-00, W1-ARC-01 implements enforcement; the task file itself is authored by the integrator under docs/program"
+    },
+    {
+      "id": "E-07",
+      "summary": "Contract catalog names the ARC owner for contracts/domain/v1 while the W0.2 wave assigns that path to the DOM lane",
+      "escalated_to": "program integrator; additive catalog note applied",
+      "status": "resolved",
+      "resolution": "additive catalog ownership note applied; per-wave ownership stays a program-governance decision"
+    },
+    {
+      "id": "E-08",
+      "summary": "ADR-0017 default worktree-per-task isolation versus the W0.2 shared-checkout execution model",
+      "escalated_to": "program integrator, tracked as U-02",
+      "status": "resolved_by_owner",
+      "resolution": "U-02 resolved: worktree is the default, shared checkout only with disjoint allowed paths and a single owner per hotspot"
+    }
   ],
   "unresolved_inputs": [
-    {"id": "U-01", "summary": "Cost and budget values plus release-stopping thresholds behind P-16 and ADR-0011", "owner": "repository owner and operations", "status": "deferred_with_deadline", "owner_disposition": "Numeric cost thresholds are deferred to W3-C-01 and must be defined before the first paid-provider canary. CP-00 fixes the measurement, not the numbers.", "recorded_on": "2026-09-01"},
-    {"id": "U-02", "summary": "Workspace isolation model behind ADR-0017", "owner": "program integrator", "status": "resolved", "owner_disposition": "Worktree is the default isolation; a shared checkout is admissible only with disjoint allowed paths and a single owner per hotspot.", "recorded_on": "2026-09-01"},
-    {"id": "U-03", "summary": "Owning task for the architecture lint-rule specification required by ADR-0004 and S00", "owner": "program integrator", "status": "assigned", "owner_disposition": "A separate task W0-ARC-02 specifies the architectural lint rules before CP-00; W1-ARC-01 implements enforcement. The task file is created by the integrator under docs/program, outside this lane. The task file docs/program/tasks/W0-ARC-02.md is present in the working tree.", "recorded_on": "2026-09-01"},
-    {"id": "U-04", "summary": "Tenant model, identity provider, retention TTL matrix and legal-hold authority behind ADR-0014", "owner": "repository owner with security and legal", "status": "open", "owner_disposition": "Remains open by explicit owner disposition. The tenant/identity-provider boundary is required before W2-C-01 and the TTL/legal-hold authority before W9-C-01. ADR-0014 stays proposed.", "blocks_cp00_freeze": false, "blocks_cp00_freeze_note": "U-04 has its own deadlines, W2-C-01 and W9-C-01; requiring it to close before CP-00 would make those deadlines meaningless. It blocks exactly and only the four items below.", "blocking_scope": ["ADR-0014 remains proposed and is not ratified at CP-00", "the retention and legal-hold clauses of ADR-0015 are not ratified", "the P-13 classification and retention obligations are not ratified", "no tenant, identity-provider, TTL, retention or legal-hold value is encoded in any contract"], "recorded_on": "2026-09-01"},
-    {"id": "U-05", "summary": "Coverage policy for the W0-BHV-02 candidate journeys not selected as golden", "owner": "golden owner and integrator", "status": "conditionally_accepted", "owner_disposition": "Five aggregate journeys are admissible, but acceptance requires a machine-readable mapping of each of the 11 inventory candidates to concrete EO/FC assertion IDs, not only to journey IDs.", "recorded_on": "2026-09-01"},
+    {
+      "id": "U-01",
+      "summary": "Cost and budget values plus release-stopping thresholds behind P-16 and ADR-0011",
+      "owner": "repository owner and operations",
+      "status": "deferred_with_deadline",
+      "owner_disposition": "Numeric cost thresholds are deferred to W3-C-01 and must be defined before the first paid-provider canary. CP-00 fixes the measurement, not the numbers.",
+      "recorded_on": "2026-09-01"
+    },
+    {
+      "id": "U-02",
+      "summary": "Workspace isolation model behind ADR-0017",
+      "owner": "program integrator",
+      "status": "resolved",
+      "owner_disposition": "Worktree is the default isolation; a shared checkout is admissible only with disjoint allowed paths and a single owner per hotspot.",
+      "recorded_on": "2026-09-01"
+    },
+    {
+      "id": "U-03",
+      "summary": "Owning task for the architecture lint-rule specification required by ADR-0004 and S00",
+      "owner": "program integrator",
+      "status": "assigned",
+      "owner_disposition": "A separate task W0-ARC-02 specifies the architectural lint rules before CP-00; W1-ARC-01 implements enforcement. The task file is created by the integrator under docs/program, outside this lane. The task file docs/program/tasks/W0-ARC-02.md is present in the working tree.",
+      "recorded_on": "2026-09-01"
+    },
+    {
+      "id": "U-04",
+      "summary": "Tenant model, identity provider, retention TTL matrix and legal-hold authority behind ADR-0014",
+      "owner": "repository owner with security and legal",
+      "status": "open",
+      "owner_disposition": "Remains open by explicit owner disposition. The tenant/identity-provider boundary is required before W2-C-01 and the TTL/legal-hold authority before W9-C-01. ADR-0014 stays proposed.",
+      "blocks_cp00_freeze": false,
+      "blocks_cp00_freeze_note": "U-04 has its own deadlines, W2-C-01 and W9-C-01; requiring it to close before CP-00 would make those deadlines meaningless. It blocks exactly and only the four items below.",
+      "blocking_scope": [
+        "ADR-0014 remains proposed and is not ratified at CP-00",
+        "the retention and legal-hold clauses of ADR-0015 are not ratified",
+        "the P-13 classification and retention obligations are not ratified",
+        "no tenant, identity-provider, TTL, retention or legal-hold value is encoded in any contract"
+      ],
+      "recorded_on": "2026-09-01"
+    },
+    {
+      "id": "U-05",
+      "summary": "Coverage policy for the W0-BHV-02 candidate journeys not selected as golden",
+      "owner": "golden owner and integrator",
+      "status": "conditionally_accepted",
+      "owner_disposition": "Five aggregate journeys are admissible, but acceptance requires a machine-readable mapping of each of the 11 inventory candidates to concrete EO/FC assertion IDs, not only to journey IDs.",
+      "recorded_on": "2026-09-01"
+    },
     {
       "id": "U-06",
       "summary": "Contract owner, target contract family and task ID for the project-optimization capability retained by PD-05",
@@ -977,13 +1199,32 @@
         "separate_bounded_context": true,
         "target_contract_family": "contracts/optimization/v1/**",
         "contract_owner": "OPT contract owner",
-        "contract_owner_is_not": ["analysis (ANA) lane", "domain (DOM) lane"],
+        "contract_owner_is_not": [
+          "analysis (ANA) lane",
+          "domain (DOM) lane"
+        ],
         "task_id": "W5-OPT-01",
         "sequencing": "after the freeze of the core audit contracts and the decision contracts"
       },
       "obligations": [
-        {"id": "U-06-OB-1", "kind": "prohibition", "binding": true, "obligation": "The project-optimization capability is disabled until W5-OPT-01 is accepted. No lane may enable, model or expose its stage vocabulary, status semantics, packages or endpoints before that acceptance, and contracts/optimization/v1 does not exist as a frozen family until then.", "binding_on": "every lane, the OPT contract owner included", "until": "W5-OPT-01 accepted", "verified_by": "no optimization stage, package, example or fixture in any contract family, and contracts/optimization/v1 absent from the frozen contract set"},
-        {"id": "U-06-OB-2", "kind": "scope_exclusion", "binding": true, "obligation": "CP-00 explicitly excludes project-optimization runtime semantics. The checkpoint ratifies no stage, state, result package, endpoint or degradation rule of the capability, and no CP-00 artifact may be read as covering them.", "binding_on": "CP-00 checkpoint scope and the program integrator at W0.3 ratification", "until": "W5-OPT-01 accepted", "verified_by": "no CP-00 disposition, principle or ADR row in this matrix asserts a project-optimization runtime semantic; FS-04-B is assigned to W5-OPT-01 and to no CP-00 lane"}
+        {
+          "id": "U-06-OB-1",
+          "kind": "prohibition",
+          "binding": true,
+          "obligation": "The project-optimization capability is disabled until W5-OPT-01 is accepted. No lane may enable, model or expose its stage vocabulary, status semantics, packages or endpoints before that acceptance, and contracts/optimization/v1 does not exist as a frozen family until then.",
+          "binding_on": "every lane, the OPT contract owner included",
+          "until": "W5-OPT-01 accepted",
+          "verified_by": "no optimization stage, package, example or fixture in any contract family, and contracts/optimization/v1 absent from the frozen contract set"
+        },
+        {
+          "id": "U-06-OB-2",
+          "kind": "scope_exclusion",
+          "binding": true,
+          "obligation": "CP-00 explicitly excludes project-optimization runtime semantics. The checkpoint ratifies no stage, state, result package, endpoint or degradation rule of the capability, and no CP-00 artifact may be read as covering them.",
+          "binding_on": "CP-00 checkpoint scope and the program integrator at W0.3 ratification",
+          "until": "W5-OPT-01 accepted",
+          "verified_by": "no CP-00 disposition, principle or ADR row in this matrix asserts a project-optimization runtime semantic; FS-04-B is assigned to W5-OPT-01 and to no CP-00 lane"
+        }
       ],
       "consequence_of_the_disposition": "the FS-04 fail-soft policy of the four excluded names is part FS-04-B and now has a named owner, family and task; it may not be encoded before W5-OPT-01 and may not be absorbed by the analysis contract",
       "recorded_on": "2026-09-01",
@@ -991,13 +1232,46 @@
     }
   ],
   "documentation_updates_applied": [
-    {"file": "docs/architecture/ARCHITECTURE_BIBLE.md", "change": "CP-00 review pointer naming qualified principles P-03, P-10, P-16, P-22 and deferred P-18", "round": 1},
-    {"file": "docs/architecture/ADR_INDEX.md", "change": "CP-00 disposition section referencing this review; no new ADR link and no status upgrade", "round": 1},
-    {"file": "docs/architecture/DOMAIN_MODEL.md", "change": "pending owner decision guard note for PD-01 and PD-03 semantics", "round": 1},
-    {"file": "docs/architecture/CONTRACT_CATALOG.md", "change": "per-wave contract ownership note resolving E-07", "round": 1},
-    {"round": 2, "file": "docs/architecture/ARCHITECTURE_BIBLE.md", "change": "CP-00 review pointer rewritten for the recorded owner decisions: P-18 is no longer deferred, the approved PD-01 modification is named and U-04 is named as still open"},
-    {"round": 2, "file": "docs/architecture/ADR_INDEX.md", "change": "CP-00 disposition section updated to the round-2 lists: ADR-0012 moves to adapt, ADR-0014 is the only defer, and the PD-01 to PD-04 dispositions are recorded"},
-    {"round": 2, "file": "docs/architecture/DOMAIN_MODEL.md", "change": "pending-decision guard replaced by the decided PD-01 and PD-03 semantics, including the pending-on-revocation rule, the AuditRun creation rule and the execution_token naming"}, {"round": 5, "file": "docs/architecture/DOMAIN_MODEL.md", "change": "the decided PD-03 semantics carry the owner precedence clarification of 2026-09-01: identical idempotency key and payload always return the original Run and a repeat of a terminal Run creates a new Run only under a new idempotency key; the Run/Job/Attempt narrative line now points at that rule instead of restating the overlap loosely"}
+    {
+      "file": "docs/architecture/ARCHITECTURE_BIBLE.md",
+      "change": "CP-00 review pointer naming qualified principles P-03, P-10, P-16, P-22 and deferred P-18",
+      "round": 1
+    },
+    {
+      "file": "docs/architecture/ADR_INDEX.md",
+      "change": "CP-00 disposition section referencing this review; no new ADR link and no status upgrade",
+      "round": 1
+    },
+    {
+      "file": "docs/architecture/DOMAIN_MODEL.md",
+      "change": "pending owner decision guard note for PD-01 and PD-03 semantics",
+      "round": 1
+    },
+    {
+      "file": "docs/architecture/CONTRACT_CATALOG.md",
+      "change": "per-wave contract ownership note resolving E-07",
+      "round": 1
+    },
+    {
+      "round": 2,
+      "file": "docs/architecture/ARCHITECTURE_BIBLE.md",
+      "change": "CP-00 review pointer rewritten for the recorded owner decisions: P-18 is no longer deferred, the approved PD-01 modification is named and U-04 is named as still open"
+    },
+    {
+      "round": 2,
+      "file": "docs/architecture/ADR_INDEX.md",
+      "change": "CP-00 disposition section updated to the round-2 lists: ADR-0012 moves to adapt, ADR-0014 is the only defer, and the PD-01 to PD-04 dispositions are recorded"
+    },
+    {
+      "round": 2,
+      "file": "docs/architecture/DOMAIN_MODEL.md",
+      "change": "pending-decision guard replaced by the decided PD-01 and PD-03 semantics, including the pending-on-revocation rule, the AuditRun creation rule and the execution_token naming"
+    },
+    {
+      "round": 5,
+      "file": "docs/architecture/DOMAIN_MODEL.md",
+      "change": "the decided PD-03 semantics carry the owner precedence clarification of 2026-09-01: identical idempotency key and payload always return the original Run and a repeat of a terminal Run creates a new Run only under a new idempotency key; the Run/Job/Attempt narrative line now points at that rule instead of restating the overlap loosely"
+    }
   ],
   "coverage": {
     "principles_total": 22,
@@ -1016,12 +1290,16 @@
     "owner_decisions_approved": 2,
     "owner_decisions_approved_with_modification": 3,
     "owner_decision_precedence_clarifications": 1,
-    "owner_decision_precedence_clarification_ids": ["PD-03"],
+    "owner_decision_precedence_clarification_ids": [
+      "PD-03"
+    ],
     "owner_decisions_added_in_round_5": 0,
     "integration_decisions_recorded": 3,
     "unresolved_inputs_total": 6,
     "unresolved_inputs_open": 1,
-    "unresolved_inputs_open_ids": ["U-04"],
+    "unresolved_inputs_open_ids": [
+      "U-04"
+    ],
     "unresolved_inputs_with_owner_disposition": 6,
     "unresolved_inputs_resolved": 2,
     "fail_soft_policy_split_cases": 1,

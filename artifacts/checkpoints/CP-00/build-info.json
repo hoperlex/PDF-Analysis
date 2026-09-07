@@ -1,0 +1,24 @@
+{
+  "checkpoint": "CP-00",
+  "tag_planned": "v0.0.0-architecture",
+  "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
+  "qa_evidence_commit": "3da104e5d6fafb2a581bda377a07911183af803f",
+  "closeout_branch": "closeout/CP-00",
+  "closeout_base_commit": "7a9ddcb7b8e8902d68fddec41baa8b48f417dd5f",
+  "build_kind": "architecture and behaviour freeze; no product code is built at CP-00",
+  "toolchain": {
+    "python": "3.12.3",
+    "python_implementation": "CPython",
+    "interpreter": ".venv/bootstrap/bin/python",
+    "os": "Linux 6.8.0-138-generic",
+    "git": "git version 2.43.0"
+  },
+  "validation_dependencies": {
+    "lockfile": "requirements/validation.lock",
+    "lockfile_sha256": "01c3f241cf9a3f38fed84c1a7d58f23f0cd7d22b842de40ebba4e3b6c7ac40d8",
+    "jsonschema": "4.26.0"
+  },
+  "migration_head": "none",
+  "artifact_manifest_sha256": "39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08",
+  "note": "Recorded by W0-INT-01 at closeout. This file describes how the checkpoint was validated, not how a product was built: at CP-00 there is no product to build. The interpreter is the hash-locked bootstrap environment W0-DEP-01 froze; the lockfile hash above is what pins it."
+}

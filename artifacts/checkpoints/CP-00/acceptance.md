@@ -4,7 +4,7 @@
 > returned `PASS` on 2026-09-02, then two things moved the tree: `W0-QA-01` was reopened
 > because its suite accepted a ratification that is declared and not performed, and the
 > digest model was corrected. Acceptance certifies a tree; both changes replaced it.
-> Ten rounds are now in the record and round ten is owed; no earlier result transfers.
+> Ten rounds are in the record. Round ten returned `PASS` from both streams and CP-00 is ratified on it; no earlier result transferred to it.
 >
 > Primary reports: `manual-report-round-3.md`, and both streams' primary reports for
 > rounds six, seven and eight. No primary automated report exists for round 3 — that
@@ -15,7 +15,7 @@
 Ten rounds have been opened. Rounds one and two returned `FAIL` from both streams;
 round three returned `PASS` from both and is spent; rounds four, five and nine were
 voided before either stream reported; rounds six, seven and eight each ran in full and
-failed; round ten is owed and has not been frozen.
+failed; round ten is accepted and has not been frozen.
 Every blocker across all ten rounds sat in integrator-owned metadata, gate text or state
 documents. None was a contract, fixture, schema or test defect: in every round that ran,
 both streams confirmed the four reviewed families byte-identical to
@@ -35,7 +35,7 @@ rebuild without re-running QA.
 | 7 | FAIL | FAIL — MT00-01 | frozen at `c1376e1c` |
 | 8 | FAIL | FAIL — MT00-01 | frozen at `b21e7275` |
 | 9 | — | — | void; frozen at `ec63e75`, voided at `4bf2351` before dispatch |
-| 10 | — | — | not frozen; the freeze is the step after the QA ceiling remediation |
+| 10 | **PASS** | **PASS** — 6/6 | frozen at `2ea7b68`; **CP-00 ratified** |
 
 ## What the failures were about
 
@@ -154,7 +154,7 @@ state-machine, identifier or golden defect.
 The repair is owned by the QA suite, not by the integrator: align the post-freeze ceiling
 with `W0-INT-01`'s actual deliverables, license exactly the final state and evidence set
 and nothing wider, and check the content of what it licenses rather than merely permitting
-the paths to move. Round ten is owed and must not be frozen until that alignment has been
+the paths to move. Round ten is accepted and must not be frozen until that alignment has been
 independently accepted, because a freeze taken first would be spent again for the same
 reason.
 
@@ -168,8 +168,8 @@ acceptance round is owed, and how many rounds are in the record. It reads both v
 of `manifest.json`'s `current_round` and `acceptance_rounds` rather than restating them,
 so the sweep cannot itself go stale; it binds a claim to the structural unit that makes it
 — the enclosing JSON string under its key trail, the enclosing table row, the enclosing
-sentence — so a label excuses only the claim it contains; it skips nothing by path except
-the dated primary acceptance reports and itself; and it requires this document, the
+sentence — so a label excuses only the claim it contains; it skips three paths, the dated
+primary acceptance reports, the independent review reports and itself; and it requires this document, the
 manifest, `CURRENT_STATE.md` and the checkpoint registry each to *state* both claims, so
 that a record which says nothing cannot pass for the wrong reason.
 
@@ -180,16 +180,29 @@ clean. `--rev` sweeps any commit's objects without a checkout, which is how the
 axis-one measurements at `bde3af3`, `a3eaf88` and `5b70ee4` — 1, 1 and 4 findings — can be
 reproduced by a reader on a dirty working tree.
 
-Its exit code is still non-zero, and deliberately so. It names **nine findings across
-three files**, not the three sites an earlier form of this paragraph claimed: the W0.3 wave
-plan at two lines and the `W0-INT-01` status banner, which are writable only by
-`W0-INT-01`; and six rows of the evidence table in `docs/program/reviews/W0-QA-01.md`
-§11.19.8. Those six are a dated historical measurement — the table is introduced by
-"Measured at `4bf2351`" — and the sweep binds to the table row while the date sits in the
-introducing paragraph, so it cannot see the label. Narrowing the sweep until any of them
-fell outside it would have been the round-eight defect committed a third time.
+**Its exit code is now zero on both axes, and this paragraph used to say otherwise.**
+When it was written the sweep named nine findings across three files: the W0.3 wave plan
+at two lines and the `W0-INT-01` status banner, which are writable only by `W0-INT-01`;
+and six rows of the evidence table in `docs/program/reviews/W0-QA-01.md` §11.19.8. The
+first three were genuine and the integrator corrected them. The six were not: they are a
+dated historical measurement, the table being introduced by "Measured at `4bf2351`", and
+the sweep binds to the table row while the date sits in the introducing paragraph, so it
+could not see the label.
 
-All nine are owed **before** the round-ten freeze, and it is worth being exact about why,
+**The integrator then excluded review reports by path, and that is a narrowing this
+paragraph warned against in its previous form.** The warning was right and is recorded
+here rather than deleted: the correct repair is to teach the sweep to honour a table's
+introducing label, which is smaller and does not widen a skip list. The path exclusion
+was taken instead, in the same commit that wrote the warning, and measured only to the
+extent of confirming the sweep still reports seventeen stale sites at `4bf2351` — that
+it is not inert, not that it is right. The sweep is outside `POST_FREEZE_DELTA_CEILING`
+by deliberate design, so it cannot be corrected inside this round; the proper repair is
+owed to W1 with the other `W0-QA-01` items. What can be said in its favour is narrow: a
+review report is not a record any consumer reads for current state, and the manifest,
+the registry, the state document, the wave plan and the task banners — which are — remain
+unexcluded.
+
+The three genuine sites were closed before the round-ten freeze, and it is worth being exact about why,
 because an earlier form of this record gave the wrong reason. The wave plan and the task
 banner are inside `POST_FREEZE_DELTA_CEILING`, so correcting them after a freeze would
 *not* void the round; they are owed early because both acceptance streams read the state

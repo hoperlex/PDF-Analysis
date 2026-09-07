@@ -1,0 +1,82 @@
+# CP-00 contract manifest
+#
+# The semantic freeze of checkpoint CP-00. This file, not a whole-tree digest, is what
+# identifies what the checkpoint certifies: the four reviewed families and their
+# content. Adding a checkpoint report or a state document does not change it, which is
+# exactly why the repository owner made it the freeze criterion on 2026-09-04.
+#
+# Recipe, reproducible from this file alone:
+#   git ls-tree -r --name-only <commit> -- contracts fixtures docs/architecture scripts
+#   sort the paths; for each, feed the UTF-8 path bytes then the RAW 32-byte sha256 of
+#   the file content into one sha256. Git-tracked files only.
+
+checkpoint: CP-00
+tag: v0.0.0-architecture
+reviewed_candidate_commit: 92e13fa496a723ed6e4c3adbf138c4f4e1d7c368
+qa_evidence_commit: 3da104e5d6fafb2a581bda377a07911183af803f
+migration_head: none
+
+reviewed_manifest_digest: f362647cc9b1d2201ac4663bf5d877346eeeccf046734219103c3ac822d2845d
+artifact_manifest_sha256: 39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08
+artifact_count: 100
+
+families:
+  contracts:
+    files: 33
+    sha256: d9436aee0d75703bf75862745f70d688b211a8d2f9e2751a994766ee9fcc594d
+  fixtures:
+    files: 32
+    sha256: ade9090a68c5979292a0265ef91a52e10f58dba18a42f911a8ad76a2ee81a449
+  docs/architecture:
+    files: 33
+    sha256: 352f12046044165ccc79b37d738b0590c8eca2bd9fc34cee587927b58fbc72de
+  scripts:
+    files: 2
+    sha256: ce9e886102c83965bfd3bdd2c562c95f743556e9f48c8e11ab0306451b3df32f
+
+contract_versions:
+  domain: 1.0.0-draft.1
+  analysis: 1.0.0-draft.1
+  events: 1.0.0-draft.1
+  golden_selection_schema: 1
+  candidate_revision: 5
+  canonical_version_key: contract_version
+  canonical_authority_token: execution_token
+
+analysis_registry:
+  stage-registry.json: 2c7f952bd7e21d2f6b1015d759476d38126d2ed3b021202a4065a6384dfed1a5
+  legacy-stage-name-map.json: df999f88b445c0b6ed096b157841da4787cac397b4f4c05a75628f84f9eba3a3
+  legacy-stage-map.json: 7ba0c9c8febeabac4d1da4b7e2ff417e9f534c93976c8690b8fee44e65f29b07
+  stages: 9
+  legacy_name_rows: 62
+  declaration_sites: 31
+  immutable_evidence_locators: 293
+  evidence_source_commit: 32b9d903792b30506048a1d42b0e6b2d07aee403
+
+domain:
+  error-codes.json: fab20d8f47f050498f7155d87ad9b50a00a902a951cd0b26153c8d9ac8da425d
+  identifiers.json: 4d1fcd25e5b4b2b9256bd44832c52859684d69444952629e8578a5439c33852b
+  state-machines.json: a362d37a3caafb041cb73f6767417deb52b996a6628c064d21419901a074acc6
+  error_codes: 20
+  identifiers: 25
+  state_machines: 6
+
+golden:
+  selection.json: 432b272f82cdec543fba63a2d7c69df1788083bcb293471ff38a839744de807b
+  journeys: 5
+  total_assertions: 95
+  inventory_mapped_assertions: 92
+  target_scope_annotation_assertions: 3
+
+architecture:
+  ARCHITECTURE_LINT_RULES.json: 4d7eaa9d6c50a91b316518bd16118786596a57d1fda48c7d579e1a082e6a664e
+  CP00_ARCHITECTURE_REVIEW.json: c77c4f718c7fb24a7e2a49d465d28a55c002eed3ff35887369b81c14791a7e57
+  lint_rules: 33
+  adrs: 18
+
+dependency_lock:
+  input: requirements/validation.in
+  input_sha256: 14d9df3dade913fe67e8a46bfa061152c88eac6350c28a89bfeecfcaa14cf56d
+  path: requirements/validation.lock
+  sha256: 01c3f241cf9a3f38fed84c1a7d58f23f0cd7d22b842de40ebba4e3b6c7ac40d8
+  jsonschema: 4.26.0
