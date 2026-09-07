@@ -136,6 +136,316 @@ ACCEPTANCE_DIGEST_FIELDS = ("tested_candidate_digest", "evidence_bundle_digest")
 #: declared report path is honoured by the post-freeze delta only inside this prefix.
 ACCEPTANCE_EVIDENCE_PREFIX = "artifacts/checkpoints/CP-00/"
 
+#: **The checkpoint's acceptance record, and why it has to be licensed too.**
+#:
+#: `acceptance.md` is the narrative record of every acceptance round: what each stream
+#: returned, what failed, what carried forward. Its round table can only be written
+#: *after* a round reports, which is necessarily after that round's freeze — and it sits
+#: inside :func:`_digest_paths` and outside every licence this module granted. So
+#: recording a round's verdict voided the round it recorded: the round-nine defect one
+#: file over. It has not bitten only because every round since the ceiling existed has
+#: failed, and a failed round has nothing left to protect.
+#:
+#: The sweep script next to it, `check_state_records.py`, is deliberately **not**
+#: licensed. It is a tool, not evidence: nothing about ratification requires it to
+#: change, and a tool that changes after the freeze changes the tree the acceptance
+#: streams judged, which is exactly what voiding a round is for. The distinction is the
+#: same one :data:`ACCEPTANCE_EVIDENCE_PREFIX` draws — the round's own reports are
+#: licensed, the directory they live in is not.
+ACCEPTANCE_RECORD = ACCEPTANCE_EVIDENCE_PREFIX + "acceptance.md"
+
+#: The heading the round table lives under, so the completeness rule below cannot be
+#: satisfied by deleting the table it is about.
+ACCEPTANCE_RECORD_HEADING = "## Rounds"
+
+#: The tag CP-00 is published under. Pinned here rather than read out of the checkpoint
+#: manifest's `tag_planned`, for the reason every ceiling in this module is pinned: the
+#: integrator writes that manifest, and a value the integrator can change is not a value
+#: a check can hold them to.
+#: :meth:`TableExpectationTests.test_the_checkpoint_tag_and_manual_vocabulary_are_pinned`
+#: compares it with the manifest, so the two disagreeing is a failure rather than a
+#: silent re-tag. (The name is written out because it is checked: an earlier form of
+#: this comment cited a method that does not exist, which is the module's own defect
+#: shape — prose naming a check nobody can run — in a docstring.)
+CHECKPOINT_TAG = "v0.0.0-architecture"
+
+#: The manual runbook. Read-only for every task in this wave, which is what makes the
+#: case list an **anchor** rather than a pin: the manual report's required verdicts are
+#: enumerated out of this document by :func:`_manual_case_ids`, not written down here.
+MANUAL_RUNBOOK = "docs/manual-tests/CP-00_architecture.md"
+
+#: The verdict vocabulary a manual case may carry. `W0-INT-01` deliverable 3 names all
+#: three; only `PASS` may stand on a ratified checkpoint, because the same deliverable
+#: says any failure or unexplained block stops the task.
+MANUAL_VERDICTS = ("PASS", "FAIL", "BLOCKED")
+
+#: **The eight-file evidence bundle, and what each file has to say once it exists.**
+#:
+#: `W0-INT-01` deliverable 1 requires eight files under
+#: :data:`ACCEPTANCE_EVIDENCE_PREFIX`. **None of them exists**, at the reviewed
+#: candidate or today, and until this round nothing licensed them either:
+#: :func:`_declared_evidence_paths` honours the current round's two acceptance *reports*
+#: and nothing else. So writing the bundle put eight unlicensed paths into the
+#: post-freeze delta, :func:`_post_freeze_delta_problems` declared the round void, and
+#: the ratification that was supposed to publish the checkpoint destroyed the round
+#: authorising it. The mechanism had no executable final state, by any sequence.
+#:
+#: Licensing the eight is the repair. The requirements beside each name are what the
+#: licence is paid for, in the shape :func:`_state_document_problems` established: a
+#: path that *may* move proves nothing, so each file is required to carry the content
+#: its own task specification says it carries.
+#:
+#: The fields, all optional and all read by :func:`_deliverable_content_problems`:
+#:
+#: * `requires` — literal needles the text must contain.
+#: * `values` — keys resolved by :func:`_deliverable_value` against **repository data**:
+#:   the reviewed candidate commit, the candidate contract version, the tag, the round,
+#:   and the reviewed-family manifest digest recomputed from the tree itself.
+#: * `hashes` — repository paths whose SHA-256 must appear in the text. Absent files are
+#:   reported rather than skipped, or the requirement would evaporate with its subject.
+#: * `manifest_names` — checkpoint-manifest fields whose every entry or key must be
+#:   named. An empty field is reported: requiring the entries of an empty list is the
+#:   table-emptying defect one level down.
+#: * `exact` — the whole stripped file, not a needle.
+#: * `json_object` — must parse as a non-empty JSON object.
+#: * `manual_cases` — every case ID in :data:`MANUAL_RUNBOOK` must carry a verdict.
+#: * `note` — what the requirement is, and where it is **shape rather than content** it
+#:   says so instead of dressing shape up as verification. §11.19.4 lists those three.
+CHECKPOINT_DELIVERABLES = (
+    {
+        "name": "checkpoint-report.md",
+        "values": ("candidate_commit", "contract_version", "checkpoint_tag"),
+        "requires": (
+            "CP-00",
+            "contract-manifest.yaml",
+            "manual-test-report.md",
+            "known-risks.md",
+            "restore-or-rollback-note.md",
+        ),
+        "manifest_names": ("integrated_w03_tasks",),
+        "note": (
+            "the integration report S00 requires: the frozen contract version and "
+            "candidate commit, the tag, every merged task ID, and references to the "
+            "manual report, the known risks and the rollback note"
+        ),
+    },
+    {
+        "name": "contract-manifest.yaml",
+        "values": ("candidate_commit", "contract_version", "reviewed_manifest_digest"),
+        "requires": ("migration_head: none",),
+        "hashes": (
+            "contracts/analysis/v1/stage-registry.json",
+            "contracts/analysis/v1/legacy-stage-name-map.json",
+            "fixtures/golden/selection.json",
+            "requirements/validation.in",
+            "requirements/validation.lock",
+        ),
+        "note": (
+            "W0-INT-01 deliverable 2 in full: exact file hashes, contract versions, "
+            "candidate commit, dependency-lock hashes, migration_head: none, the golden "
+            "selection hash and the analysis registry/name-map hashes. Every value is "
+            "recomputed from the repository, so a manifest describing another tree is a "
+            "failure and not a difference of opinion"
+        ),
+    },
+    {
+        "name": "automated-summary.txt",
+        "values": ("current_round",),
+        "requires": ("PASS",),
+        "note": (
+            "the automated stream's summary for the round being ratified. Cross-record "
+            "only: the manifest already has to say PASS for that round, so this catches "
+            "a summary from another round or one that contradicts the record it "
+            "summarises, not an independently verified test result"
+        ),
+    },
+    {
+        "name": "manual-test-report.md",
+        "manual_cases": True,
+        "note": (
+            "W0-INT-01 deliverable 3: tester identity, timestamps and a verdict per "
+            "case for every MT00 case the runbook defines. The case list is read out of "
+            "the runbook and the runtime disposition out of the manifest; the tester "
+            "name and the timestamp are shape only, because no repository value can "
+            "say who ran a manual test or when"
+        ),
+    },
+    {
+        "name": "migration-head.txt",
+        "exact": "none",
+        "note": (
+            "the migration head W0-INT-01's frozen inputs record: none. The whole file, "
+            "not a needle in it"
+        ),
+    },
+    {
+        "name": "build-info.json",
+        "json_object": True,
+        "values": ("candidate_commit",),
+        "note": (
+            "a non-empty JSON object naming the commit it describes. Nothing else about "
+            "this file is stated in any repository document, so nothing else is "
+            "required: the object shape is shape, and is recorded as such"
+        ),
+    },
+    {
+        "name": "known-risks.md",
+        "manifest_names": (
+            "architecture_defer",
+            "open_inputs_carried_forward",
+            "open_escalations",
+        ),
+        "note": (
+            "every risk the checkpoint record already carries has to appear in the "
+            "risk note: the deferred ADR, the four carried-forward open inputs and the "
+            "open escalations. A published bundle that silently drops one is the "
+            "failure this catches"
+        ),
+    },
+    {
+        "name": "restore-or-rollback-note.md",
+        "values": ("checkpoint_tag", "candidate_commit"),
+        "note": (
+            "what to roll back and what to roll back to. W0-INT-01's rollback section "
+            "states no further content, and none is invented here"
+        ),
+    },
+)
+
+#: The eight bundle paths, as the post-freeze licence sees them.
+CHECKPOINT_DELIVERABLE_PATHS = frozenset(
+    ACCEPTANCE_EVIDENCE_PREFIX + entry["name"] for entry in CHECKPOINT_DELIVERABLES
+)
+
+#: Every way an entry above can state a content requirement, and the reason the list
+#: exists as a list. :func:`_checkpoint_bundle_problems` requires each entry to carry at
+#: least one of them: an entry with only `name` and `note` licenses a path to move and
+#: asks nothing of it, which is the shape this whole round is a repair for, one level in
+#: from the ceiling. The alternative — trusting the table pin to notice — leaves the
+#: requirement silent on the tree rather than reported, and the module's own rule is
+#: that a requirement over an empty collection is a problem to name, not a loop to skip.
+DELIVERABLE_REQUIREMENT_KEYS = (
+    "requires",
+    "values",
+    "hashes",
+    "manifest_names",
+    "exact",
+    "json_object",
+    "manual_cases",
+)
+
+#: **The three program records ratification reconciles, and the claim each must retract.**
+#:
+#: `W0-INT-01` deliverable 5 requires `CURRENT_STATE`, the checkpoint registry, the W0.3
+#: wave plan and the S00 checklist to agree on the accepted commit, tag, frozen contract
+#: set, exclusions and next unlocked S01 tasks; its allowed paths add `docs/INDEX.md`'s
+#: status column so the index does not contradict the state it indexes. The first two
+#: are licensed already and each has its own check — :func:`_registry_state_problem` and
+#: :func:`_state_document_problems`. These three had neither licence nor check.
+#:
+#: They are **live-anchored**, like the state document and unlike
+#: :data:`RECONCILIATIONS`: the program rewrites all three outside any review, so an
+#: anchor pinned to the reviewed candidate would report rot the moment the integrator
+#: writes an ordinary status update. Both directions are checked for the same reason
+#: §11.12.3 gives: while `ratified: false` the denial must be **present** and the
+#: post-ratification requirement **absent**, so the anchor cannot rot silently and the
+#: requirement cannot be degenerate; once `ratified: true` they swap.
+RATIFICATION_PUBLICATION_RECORDS = (
+    {
+        "item": "W0.3 wave plan",
+        "path": "docs/program/waves/W0.3_ratification_integration.md",
+        "denials": ("`W0-INT-01` is blocked", "| `W0-INT-01` | blocked |"),
+        "requires": ("S01",),
+        "must_still_contain": ("`v0.0.0-architecture`", "`W0-INT-01`"),
+        "requires_note": (
+            "the next unlocked S01 preparation tasks deliverable 5 names, with the "
+            "wave's own status line and task row no longer calling W0-INT-01 blocked"
+        ),
+    },
+    {
+        "item": "S00 stage checklist",
+        "path": "docs/stages/S00_architecture_and_behavior_freeze.md",
+        "denials": (),
+        "checklist": True,
+        "requires": ("S01",),
+        "must_still_contain": ("Automated exit evidence", "Manual local acceptance"),
+        "requires_note": (
+            "the next unlocked S01 preparation tasks, and every automated and manual "
+            "exit-criterion box ticked: a checkpoint cannot be ratified while its own "
+            "stage checklist still says its exit evidence is outstanding"
+        ),
+    },
+    {
+        "item": "documentation index status column",
+        "path": "docs/INDEX.md",
+        "row": "program/tasks/W0-INT-01.md",
+        "denials": ("blocked",),
+        "requires": ("accepted and integrated",),
+        "must_still_contain": ("# Documentation index", "## Architecture", "## Program"),
+        "requires_note": (
+            "the status column this index already uses for every other completed task, "
+            "on the one row that still says the ratifying task is blocked"
+        ),
+    },
+)
+
+#: The three publication documents, as the post-freeze licence sees them.
+PUBLICATION_DOCUMENT_PATHS = frozenset(
+    entry["path"] for entry in RATIFICATION_PUBLICATION_RECORDS
+)
+
+#: **The task files whose status banners ratification may close, and nothing else.**
+#:
+#: `W0-INT-01`'s allowed paths license `docs/program/tasks/W0-*.md` **status banners
+#: only** — "requirements, gates and deliverables of an accepted task are frozen by its
+#: acceptance" — plus its own banner and handoff. The set is written out rather than
+#: globbed from the working tree for the reason the ceilings are: a licence computed
+#: from a directory the integrator can add a file to is a licence the integrator can
+#: widen. :meth:`TableExpectationTests.test_the_completed_task_files_are_pinned_and_are_the_candidate_set`
+#: anchors the list to `git ls-tree` at the immutable reviewed candidate, so it cannot
+#: rot into naming files that never existed.
+#:
+#: **What the licence is paid with, for all seventeen and not only for the ratifying
+#: task.** Round thirteen's first form checked the banner *content* of exactly one file
+#: — `W0-INT-01`'s own — and asked nothing of the other sixteen beyond "the rest of the
+#: file did not move". That is a licence to rewrite sixteen accepted tasks' status text
+#: to say anything at all, under cover of a ratification, which is precisely the "a path
+#: that may move proves nothing" finding that produced :data:`RECONCILIATIONS` one layer
+#: up. :func:`_task_banner_problems` now requires a banner ratification actually rewrote
+#: to name :data:`CHECKPOINT_TAG` — a closure names the checkpoint it closes at — and
+#: the requirement is two-directional: while `ratified: false` **no** licensed banner
+#: may name the tag, which today none does, so it cannot be satisfied by a banner that
+#: already said it. Untouched banners are asked for nothing, because `W0-INT-01`
+#: *permits* the edit and does not require it; what is refused is spending the licence
+#: on something other than the checkpoint.
+COMPLETED_TASK_FILES = frozenset(
+    {
+        "docs/program/tasks/W0-ANA-01.md",
+        "docs/program/tasks/W0-ARC-01.md",
+        "docs/program/tasks/W0-ARC-02.md",
+        "docs/program/tasks/W0-BHV-01.md",
+        "docs/program/tasks/W0-BHV-02.md",
+        "docs/program/tasks/W0-CLN-01.md",
+        "docs/program/tasks/W0-DEP-01.md",
+        "docs/program/tasks/W0-DOM-01.md",
+        "docs/program/tasks/W0-DOM-02.md",
+        "docs/program/tasks/W0-EVD-01.md",
+        "docs/program/tasks/W0-EVT-01.md",
+        "docs/program/tasks/W0-INT-00.md",
+        "docs/program/tasks/W0-INT-01.md",
+        "docs/program/tasks/W0-QA-00.md",
+        "docs/program/tasks/W0-QA-01.md",
+        "docs/program/tasks/W0-QA-02.md",
+        "docs/program/tasks/W0-QA-03.md",
+    }
+)
+
+#: The ratifying task's own file, and the denial its banner carries until CP-00 is
+#: published. No other task file may close this one's banner, and this one may also
+#: rewrite its own handoff — the two exceptions :func:`_task_banner_problems` makes.
+RATIFYING_TASK_FILE = "docs/program/tasks/W0-INT-01.md"
+RATIFYING_TASK_BANNER_DENIAL = "ratification and publication blocked"
+
 #: The program's own state document: the **third** external record.
 #:
 #: It sits in the same structural position as :data:`CHECKPOINT_REGISTRY`. Both are
@@ -182,12 +492,38 @@ STATE_DOCUMENT_MUST_STILL_CONTAIN = ("# Current state", "CP-00")
 #: pass — :func:`_state_document_problems` is what the licence is paid for, and it is
 #: checked in both directions so that the licence cannot be spent silently.
 #:
+#: :data:`CHECKPOINT_DELIVERABLE_PATHS`, :data:`PUBLICATION_DOCUMENT_PATHS` and
+#: :data:`COMPLETED_TASK_FILES` were **not** in this set until round thirteen, and
+#: leaving them out was the same deadlock one size larger. `W0-INT-01` is required to
+#: create eight evidence files, reconcile the wave plan, the S00 checklist and the
+#: documentation index, and close the status banners of the tasks the checkpoint
+#: completes. Every one of those paths is inside :func:`_digest_paths`, so an honest
+#: ratification moved thirty-odd unlicensed paths and voided the round that authorised
+#: it — the checkpoint mechanism had no executable final state at all. Three groups of
+#: checks are what those licences are paid for, each two-directional:
+#: :func:`_checkpoint_bundle_problems`, :func:`_publication_record_problems` and
+#: :func:`_task_banner_problems`.
+#:
 #: Pinned here rather than read out of the record, for the same reason
 #: :data:`RATIFICATION_DELTA_CEILING` is: a ceiling the integrator can widen by editing
-#: the document they also write is not a ceiling.
-POST_FREEZE_DELTA_CEILING = frozenset(
-    {CHECKPOINT_MANIFEST, CHECKPOINT_REGISTRY, PROGRAM_STATE_DOCUMENT}
-) | RATIFICATION_DELTA_CEILING
+#: the document they also write is not a ceiling. That applies to the three new groups
+#: exactly as it does to the five architecture files — the bundle is eight named files,
+#: not "anything under `artifacts/checkpoints/CP-00/`", and the task set is seventeen
+#: named files, not "whatever `docs/program/tasks/` happens to hold".
+POST_FREEZE_DELTA_CEILING = (
+    frozenset(
+        {
+            CHECKPOINT_MANIFEST,
+            CHECKPOINT_REGISTRY,
+            PROGRAM_STATE_DOCUMENT,
+            ACCEPTANCE_RECORD,
+        }
+    )
+    | RATIFICATION_DELTA_CEILING
+    | CHECKPOINT_DELIVERABLE_PATHS
+    | PUBLICATION_DOCUMENT_PATHS
+    | COMPLETED_TASK_FILES
+)
 
 #: The path the post-freeze probes move to prove the delta check fires.
 #:
@@ -1062,13 +1398,30 @@ def _freeze_commit(root: Path) -> str | None:
             for entry in past.get("acceptance_rounds", [])
             if isinstance(entry, dict) and entry.get("round") == number
         ]
-        if (
-            past.get("tested_candidate_digest") != declared
-            or len(entries) != 1
-            or entries[0].get("tested_candidate_digest") != declared
-        ):
-            # The first revision that does not carry the value. Everything older is a
-            # different value or none, so the previous iteration is the freeze.
+        carries = (
+            past.get("tested_candidate_digest") == declared
+            and len(entries) == 1
+            and entries[0].get("tested_candidate_digest") == declared
+        )
+        if not carries:
+            if freeze is None:
+                # **Leading revisions newer than the freeze.** The manifest has moved on
+                # -- to a later round, or to no frozen round at all -- while the value
+                # being resolved is still the one the working tree carries. Breaking here
+                # instead of skipping made a freeze unresolvable the moment the round
+                # after it was opened, and that is not a corner: opening the next round
+                # is the first thing that happens after a round is voided. It is what
+                # made committing the round-ten QA remediation red 129 tests while the
+                # identical uncommitted tree was green -- the suite was resolving the
+                # freeze through an uncommitted HEAD and stopped being able to the moment
+                # the deliverable was delivered. Skipping costs nothing: everything older
+                # than the first carrier is still cut by the break below, so a value set,
+                # changed and set back still resolves to the commit that froze the value
+                # now in force rather than to an older coincidence.
+                continue
+            # The first revision older than the freeze that does not carry the value.
+            # Everything older is a different value or none, so the previous iteration
+            # is the freeze.
             break
         freeze = commit
     return freeze
@@ -1125,6 +1478,37 @@ def _tested_digest_problems(root: Path) -> list[str]:
     return []
 
 
+def _canonical_report_paths(number: object) -> dict[str, str]:
+    """The two report paths a round may license, by stream. Names, not a prefix.
+
+    **The hole this closes.** `_declared_evidence_paths` used to honour *any* path under
+    :data:`ACCEPTANCE_EVIDENCE_PREFIX` that the manifest named in one of its four report
+    fields. The manifest is written by the integrator, so that made the effective licence
+    -- `POST_FREEZE_DELTA_CEILING | _declared_evidence_paths(manifest)` -- widenable by
+    the very task the ceiling exists to constrain, without editing this module at all.
+    An independent reviewer demonstrated it end to end: naming
+    `artifacts/checkpoints/CP-00/check_state_records.py` as a report licensed editing it
+    after the freeze, and every one of the fourteen checkers stayed silent. That file is
+    the one this round *deliberately* excluded from the ceiling, so the module's own
+    stated control -- "the bundle is eight named files, not anything under
+    `artifacts/checkpoints/CP-00/`" -- was prose beside a check that could not fail on
+    the thing the prose named. The signature defect, one function over from where it was
+    being fixed.
+
+    The name is the same one :meth:`_CheckpointSandbox.write_acceptance_reports` builds
+    and the same one the committed reports of rounds three and six to eight carry, so
+    this pins the convention already in force rather than inventing one. A report under
+    any other name is simply not licensed: the round is void, which is the safe
+    direction and the manifest's own rule.
+    """
+    if not isinstance(number, int) or isinstance(number, bool):
+        return {}
+    return {
+        stream: f"{ACCEPTANCE_EVIDENCE_PREFIX}{stream}-report-round-{number}.md"
+        for stream in ("manual", "automated")
+    }
+
+
 def _declared_evidence_paths(manifest: dict) -> set[str]:
     """The current round's acceptance-evidence files, as the manifest declares them.
 
@@ -1133,20 +1517,24 @@ def _declared_evidence_paths(manifest: dict) -> set[str]:
     liked by naming the drifted file as its own report.
     """
     number = manifest.get("current_round")
-    candidates: list[object] = []
+    expected = _canonical_report_paths(number)
+    candidates: list[tuple[str, object]] = []
     for entry in manifest.get("acceptance_rounds", []):
         if isinstance(entry, dict) and entry.get("round") == number:
-            candidates.extend([entry.get("manual_report"), entry.get("automated_report")])
-    for stream in ("manual_acceptance", "automated_acceptance"):
-        record = manifest.get(stream)
+            candidates.append(("manual", entry.get("manual_report")))
+            candidates.append(("automated", entry.get("automated_report")))
+    for stream, key in (("manual", "manual_acceptance"),
+                        ("automated", "automated_acceptance")):
+        record = manifest.get(key)
         if isinstance(record, dict):
-            candidates.append(record.get("report_path"))
+            candidates.append((stream, record.get("report_path")))
     return {
         value
-        for value in candidates
+        for stream, value in candidates
         if isinstance(value, str)
         and value.startswith(ACCEPTANCE_EVIDENCE_PREFIX)
         and ".." not in value.split("/")
+        and value == expected.get(stream)
     }
 
 
@@ -1278,6 +1666,628 @@ def _state_document_problems(root: Path) -> list[str]:
     return problems
 
 
+def _banner_split(text: str) -> tuple[str, str]:
+    """``(the leading status banner, everything else)`` of a task file.
+
+    The banner is the first contiguous run of blockquote lines, which is where every
+    task file in this program carries its status. Nothing but a heading or a blank line
+    may precede it: a blockquote further down is prose, not a banner, and treating it as
+    one would licence a body edit as a banner edit. A file with no banner returns
+    ``("", text)``, so a banner *added* by ratification still leaves the rest to compare.
+    """
+    lines = text.splitlines(keepends=True)
+    start = None
+    for index, line in enumerate(lines):
+        if line.startswith(">"):
+            start = index
+            break
+        if line.strip() and not line.startswith("#"):
+            break
+    if start is None:
+        return "", text
+    end = start
+    while end < len(lines) and lines[end].startswith(">"):
+        end += 1
+    return "".join(lines[start:end]), "".join(lines[:start] + lines[end:])
+
+
+def _strip_handoff(text: str) -> str:
+    """Everything before the handoff section, for the one file that may rewrite one."""
+    head, _, _tail = text.partition("\n## Handoff")
+    return head
+
+
+def _deliverable_value(root: Path, manifest: dict, key: str) -> str:
+    """One expected value of an evidence deliverable, **derived from the repository**.
+
+    Not read out of the bundle, and not read out of the record the integrator writes:
+    the candidate commit and contract version are this module's own pinned constants,
+    the reviewed-family digest is recomputed from the tree, and the round is the one the
+    manifest is currently on — the only value here that a manifest edit can move, and it
+    identifies which round the summary belongs to rather than asserting its result.
+    """
+    if key == "candidate_commit":
+        return REVIEWED_CANDIDATE_COMMIT
+    if key == "contract_version":
+        return CANDIDATE_CONTRACT_VERSION
+    if key == "checkpoint_tag":
+        return CHECKPOINT_TAG
+    if key == "reviewed_manifest_digest":
+        return _reviewed_manifest_digest(root)[0]
+    if key == "current_round":
+        return f"round {manifest.get('current_round')}"
+    raise AssertionError(f"no such deliverable value: {key}")
+
+
+def _manual_case_ids(root: Path) -> list[str]:
+    """The manual case IDs, read out of the runbook this task does not write."""
+    path = root / MANUAL_RUNBOOK
+    if not path.is_file():
+        return []
+    return sorted(set(re.findall(r"MT00-\d{2}", path.read_text(encoding="utf-8"))))
+
+
+def _manual_report_problems(root: Path, manifest: dict, relative: str, text: str,
+                            ratified: bool) -> list[str]:
+    """`W0-INT-01` deliverable 3, checked against the runbook and the record.
+
+    The case list comes from :data:`MANUAL_RUNBOOK` and the runtime disposition from the
+    checkpoint manifest, so neither is a value this module invented. The tester name and
+    the start timestamp are **shape**: a non-empty value, and a date-shaped one. No
+    repository value can say who ran a manual test or when, and §11.19.4 records that
+    rather than presenting the field check as content verification.
+    """
+    problems: list[str] = []
+    cases = _manual_case_ids(root)
+    if not cases:
+        return [
+            f"{MANUAL_RUNBOOK} defines no MT00 case IDs, so requiring {relative} to "
+            "record a verdict for each of them proves nothing"
+        ]
+    lines = text.splitlines()
+    for case in cases:
+        carrying = [line for line in lines if case in line]
+        if not carrying:
+            problems.append(f"{relative} records no result for {case}")
+            continue
+        verdicts = {
+            verdict
+            for line in carrying
+            for verdict in MANUAL_VERDICTS
+            if re.search(rf"\b{verdict}\b", line)
+        }
+        if not verdicts:
+            problems.append(
+                f"{relative} names {case} without any of {list(MANUAL_VERDICTS)}; a "
+                "manual report records a verdict per case, not a mention per case"
+            )
+        elif ratified and verdicts != {"PASS"}:
+            problems.append(
+                f"{relative} records {case} as {sorted(verdicts)} while "
+                f"{CHECKPOINT_MANIFEST} declares ratified=true; any failure or "
+                "unexplained block stops the task"
+            )
+    for field in ("tester", "started_at"):
+        value = ""
+        for line in lines:
+            if field in line and ":" in line:
+                value = line.split(":", 1)[1].strip(" |*`")
+                if value:
+                    break
+        if not value:
+            problems.append(
+                f"{relative} carries no {field} value; the manual report records who "
+                "ran it and when"
+            )
+        elif field == "started_at" and not re.search(r"\d{4}-\d{2}-\d{2}", value):
+            problems.append(
+                f"{relative} records started_at as {value!r}, which carries no date"
+            )
+    disposition = manifest.get("runtime_fields")
+    if not isinstance(disposition, str) or not disposition.strip():
+        problems.append(
+            f"{CHECKPOINT_MANIFEST} records no runtime_fields disposition, so requiring "
+            f"{relative} to carry it proves nothing"
+        )
+    else:
+        for field in ("backend_runtime", "frontend_runtime"):
+            if not any(field in line and disposition in line for line in lines):
+                problems.append(
+                    f"{relative} does not record {field} as {disposition!r}; CP-00 is "
+                    "architecture-only and the disposition is recorded, not skipped"
+                )
+    return problems
+
+
+def _deliverable_content_problems(root: Path, manifest: dict, entry: dict,
+                                  relative: str, text: str, ratified: bool) -> list[str]:
+    """What one evidence deliverable must say, whenever it exists.
+
+    Deliberately **not** gated on ratification. A bundle file naming the wrong candidate
+    commit is wrong from the moment it is written, and gating the content on the flag
+    would leave the whole unratified branch asserting nothing — the guard-that-cannot-
+    fail shape this task has been reopened over. What the flag gates is *existence*:
+    before ratification these files are not required at all.
+    """
+    problems: list[str] = []
+    flat = _flat(text)
+    if entry.get("exact") is not None:
+        if text.strip() != entry["exact"]:
+            problems.append(
+                f"{relative} is {text.strip()!r} and must be exactly "
+                f"{entry['exact']!r}. Expected " + entry["note"]
+            )
+        return problems
+    if entry.get("json_object"):
+        try:
+            document = json.loads(text)
+        except ValueError:
+            problems.append(f"{relative} is not JSON. Expected " + entry["note"])
+            document = None
+        if document is not None and not (isinstance(document, dict) and document):
+            problems.append(
+                f"{relative} is not a non-empty JSON object. Expected " + entry["note"]
+            )
+    if entry.get("manual_cases"):
+        problems.extend(_manual_report_problems(root, manifest, relative, text, ratified))
+    for needle in entry.get("requires", ()):
+        if needle not in flat:
+            problems.append(
+                f"{relative} does not carry {needle!r}. Expected " + entry["note"]
+            )
+    for key in entry.get("values", ()):
+        value = _deliverable_value(root, manifest, key)
+        if value not in flat:
+            problems.append(
+                f"{relative} does not carry the {key} {value!r} this repository "
+                "produces. Expected " + entry["note"]
+            )
+    for path_value in entry.get("hashes", ()):
+        source = root / path_value
+        if not source.is_file():
+            problems.append(
+                f"{path_value} is not in this repository, so requiring {relative} to "
+                "carry its hash proves nothing"
+            )
+            continue
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        if digest not in flat:
+            problems.append(
+                f"{relative} does not carry the SHA-256 of {path_value} ({digest}). "
+                "Expected " + entry["note"]
+            )
+    for field in entry.get("manifest_names", ()):
+        recorded = manifest.get(field)
+        names = (
+            sorted(recorded)
+            if isinstance(recorded, (dict, list, tuple))
+            else []
+        )
+        if not names:
+            problems.append(
+                f"{CHECKPOINT_MANIFEST}.{field} names nothing, so requiring {relative} "
+                "to carry its entries proves nothing"
+            )
+            continue
+        for name in names:
+            if not isinstance(name, str) or name not in flat:
+                problems.append(
+                    f"{relative} does not name {name!r}, which "
+                    f"{CHECKPOINT_MANIFEST}.{field} records. Expected " + entry["note"]
+                )
+    return problems
+
+
+def _checkpoint_bundle_problems(root: Path) -> list[str]:
+    """**The price of licensing the eight evidence deliverables.**
+
+    Two directions, and neither is empty:
+
+    * `ratified: false` — the bundle is not required. What *is* required is that none of
+      the eight already exists at the reviewed candidate, or "ratification must create
+      it" would be satisfied by a file that was there all along; and that any file
+      already written carries its content, so a half-published bundle naming the wrong
+      tree fails now rather than at the tag.
+    * `ratified: true` — all eight exist and every content requirement holds.
+
+    The anti-vacuity anchor is asserted against the candidate commit rather than the
+    working tree on purpose. The integrator legitimately writes this bundle before
+    setting the flag, and a check that made that state red would be round eight's defect
+    again: a suite that cannot survive its own publication.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return [f"{CHECKPOINT_MANIFEST} is missing"]
+    ratified = manifest.get("ratified") is True
+    if not CHECKPOINT_DELIVERABLES:
+        return [
+            "CHECKPOINT_DELIVERABLES is empty, so POST_FREEZE_DELTA_CEILING licenses "
+            "bundle paths that nothing here checks: 'every deliverable' over an empty "
+            "table is no requirement at all"
+        ]
+    problems: list[str] = []
+    for entry in CHECKPOINT_DELIVERABLES:
+        relative = ACCEPTANCE_EVIDENCE_PREFIX + entry["name"]
+        if not any(entry.get(key) for key in DELIVERABLE_REQUIREMENT_KEYS):
+            problems.append(
+                f"{relative} is licensed to move and required to carry nothing: its "
+                f"table entry declares none of {list(DELIVERABLE_REQUIREMENT_KEYS)}, so "
+                "the licence is paid for with an existence check and an empty file "
+                "would satisfy it"
+            )
+        if _candidate_blob(root, relative) is not None:
+            problems.append(
+                f"degenerate requirement: {relative} already exists at the reviewed "
+                "candidate, so requiring ratification to produce it proves nothing"
+            )
+            continue
+        path = root / relative
+        if not path.is_file():
+            if ratified:
+                problems.append(
+                    f"{relative} is missing while {CHECKPOINT_MANIFEST} declares "
+                    "ratified=true. W0-INT-01 deliverable 1 is the evidence bundle; a "
+                    "checkpoint published without it has no reproducible evidence at "
+                    "all. Expected " + entry["note"]
+                )
+            continue
+        problems.extend(
+            _deliverable_content_problems(
+                root, manifest, entry, relative, path.read_text(encoding="utf-8"), ratified
+            )
+        )
+    return problems
+
+
+def _acceptance_record_rows(text: str) -> dict[int, str]:
+    """The round table, by round number. A row is a table line opening with an integer."""
+    rows: dict[int, str] = {}
+    for line in text.splitlines():
+        match = re.match(r"^\|\s*(\d+)\s*\|", line)
+        if match:
+            rows[int(match.group(1))] = line
+    return rows
+
+
+def _acceptance_record_problems(root: Path) -> list[str]:
+    """**The price of licensing the acceptance record.**
+
+    The rule is the one rounds seven and eight actually failed on: *the record of the
+    rounds may not be behind the record it records.* Every round the manifest gives a
+    verdict has to have a row here, and the sweep that was written after round eight
+    covered a different axis and said so — "the round accounting it says nothing about
+    has failed twice on its own".
+
+    Deliberately **not** gated on ratification, and that is what makes it a check rather
+    than a licence. The completeness rule can fail in either state and is the reason the
+    path may move at all: a verdict lands, the record is written, and if the record is
+    three rounds stale — which is what round eight found — the checkpoint is publishing
+    an account of itself that its own manifest contradicts. The ratified half adds the
+    one thing only ratification can require: the round being ratified is recorded, and
+    recorded as passing.
+
+    The anti-vacuity guard is on the manifest side, not the document side. If no round
+    carries a verdict there is nothing to be complete about, and a completeness rule over
+    an empty list is the table-emptying defect one level down, so it is reported.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return [f"{CHECKPOINT_MANIFEST} is missing"]
+    path = root / ACCEPTANCE_RECORD
+    if not path.is_file():
+        return [f"{ACCEPTANCE_RECORD} is missing"]
+    text = path.read_text(encoding="utf-8")
+    problems: list[str] = []
+    if ACCEPTANCE_RECORD_HEADING not in text:
+        problems.append(
+            f"{ACCEPTANCE_RECORD} does not carry {ACCEPTANCE_RECORD_HEADING!r}. The "
+            "record is brought up to date by writing the round into it, not by removing "
+            "the table it belongs in."
+        )
+    rows = _acceptance_record_rows(text)
+    reported = [
+        entry.get("round")
+        for entry in manifest.get("acceptance_rounds", [])
+        if isinstance(entry, dict) and entry.get("verdict")
+    ]
+    if not reported:
+        problems.append(
+            f"{CHECKPOINT_MANIFEST} records no round with a verdict, so requiring "
+            f"{ACCEPTANCE_RECORD} to carry one proves nothing"
+        )
+    for number in reported:
+        if number not in rows:
+            problems.append(
+                f"{ACCEPTANCE_RECORD} carries no row for round {number}, whose verdict "
+                f"{CHECKPOINT_MANIFEST} already records. The acceptance record is what a "
+                "reader is pointed at; a record behind the manifest is the stale round "
+                "accounting rounds seven and eight failed on."
+            )
+    if manifest.get("ratified") is not True:
+        return problems
+    current = manifest.get("current_round")
+    row = rows.get(current)
+    if row is None:
+        problems.append(
+            f"{ACCEPTANCE_RECORD} carries no row for round {current}, the round CP-00 is "
+            "being ratified on"
+        )
+        return problems
+    if "PASS" not in row or "FAIL" in row:
+        problems.append(
+            f"{ACCEPTANCE_RECORD} records round {current} as {row.strip()!r} while "
+            f"{CHECKPOINT_MANIFEST} declares ratified=true. A checkpoint is ratified on a "
+            "round both streams passed, and its own record has to say so."
+        )
+    return problems
+
+
+def _publication_scope(entry: dict, text: str, relative: str) -> tuple[str | None, str | None]:
+    """The text one publication requirement is about: a whole document, or one row."""
+    marker = entry.get("row")
+    if marker is None:
+        return text, None
+    rows = [line for line in text.splitlines() if marker in line]
+    if len(rows) != 1:
+        return None, (
+            f"{relative} carries {len(rows)} rows naming {marker!r}; the status column "
+            "requirement is about exactly one"
+        )
+    return rows[0], None
+
+
+def _publication_record_problems(root: Path) -> list[str]:
+    """**The price of licensing the wave plan, the S00 checklist and the index.**
+
+    The same two-directional shape :func:`_state_document_problems` uses, and for the
+    same reason: these are living program documents, so an anchor pinned to the reviewed
+    candidate would rot on the next ordinary status update, and a one-directional
+    removal check would pass forever the day somebody rewords the sentence.
+
+    * `ratified: false` — every denial must be **present** and every post-ratification
+      requirement **absent**. The first half is anti-vacuity; the second is the
+      degeneracy guard :func:`_reconciliation_problems` already applies at the candidate,
+      applied here to the live document because that is the only anchor these have.
+    * `ratified: true` — the denials are gone, the requirements are there, and the
+      document still carries the structure the requirement was about, so the retraction
+      cannot be made by deleting the section.
+
+    The S00 checklist is checked structurally rather than by phrase: while CP-00 is
+    unratified its exit-criterion boxes are unchecked, once ratified none may remain, and
+    the checklist may not shrink below the candidate's — ticking every box by deleting
+    the list is the gutting move `must_still_contain` exists to refuse.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return [f"{CHECKPOINT_MANIFEST} is missing"]
+    ratified = manifest.get("ratified") is True
+    if not RATIFICATION_PUBLICATION_RECORDS:
+        return [
+            "RATIFICATION_PUBLICATION_RECORDS is empty, so POST_FREEZE_DELTA_CEILING "
+            "licenses publication documents that nothing here checks: 'every record' "
+            "over an empty table is no requirement at all"
+        ]
+    problems: list[str] = []
+    for entry in RATIFICATION_PUBLICATION_RECORDS:
+        relative = entry["path"]
+        if not (entry["denials"] or entry.get("checklist")):
+            problems.append(
+                f"{entry['item']}: the entry names neither a denial nor a checklist, so "
+                "nothing holds its anchor while CP-00 is unratified and the "
+                "post-ratification requirement can rot into a no-op unnoticed"
+            )
+        if not entry["requires"]:
+            problems.append(
+                f"{entry['item']}: the entry names no post-ratification requirement, so "
+                "the licence is paid for with a removal and a published document that "
+                "says nothing about the checkpoint would satisfy it"
+            )
+        path = root / relative
+        if not path.is_file():
+            problems.append(f"{relative} is missing")
+            continue
+        raw = path.read_text(encoding="utf-8")
+        scope, scope_problem = _publication_scope(entry, raw, relative)
+        if scope_problem is not None:
+            problems.append(scope_problem)
+            continue
+        flat = _flat(scope)
+        for denial in entry["denials"]:
+            if ratified and denial in flat:
+                problems.append(
+                    f"{entry['item']}: {relative} still says {denial!r} while "
+                    f"{CHECKPOINT_MANIFEST} declares ratified=true. A published "
+                    "checkpoint may not ship a plan that says its own ratification is "
+                    "blocked."
+                )
+            if not ratified and denial not in flat:
+                problems.append(
+                    f"anchor rot: {relative} no longer carries {denial!r} while CP-00 "
+                    "is unratified. That claim is what the ratified half requires to be "
+                    "gone, so with it already gone the check would pass forever. "
+                    "Re-anchor it in tests/contract/test_cp00_candidate.py."
+                )
+        for needle in entry["requires"]:
+            if ratified and needle not in flat:
+                problems.append(
+                    f"{entry['item']}: {relative} does not carry {needle!r}. Expected "
+                    + entry["requires_note"]
+                )
+            if not ratified and needle in flat:
+                problems.append(
+                    f"degenerate requirement: {relative} already carries {needle!r} "
+                    "while CP-00 is unratified, so requiring it after ratification "
+                    "proves nothing"
+                )
+        # Deliberately against the whole document, not `flat`. `flat` is the *scope* of
+        # the status requirement, which for a row-scoped entry is the single row -- and
+        # checking a document-level anti-gutting guard against one row is what made the
+        # index entry's needle a tautology: the needle it looked for was the marker that
+        # selected the row it looked in, so it could not fail while it was reached.
+        whole = _flat(raw)
+        for needle in entry["must_still_contain"]:
+            if needle not in whole:
+                problems.append(
+                    f"{entry['item']}: {relative} does not carry {needle!r}. The stale "
+                    "claim must be retracted by bringing the document up to date, not "
+                    "by removing what it was about."
+                )
+        if entry.get("checklist"):
+            problems.extend(_checklist_problems(root, relative, raw, ratified))
+    return problems
+
+
+def _checklist_problems(root: Path, relative: str, raw: str, ratified: bool) -> list[str]:
+    """The S00 exit-criterion boxes, in both directions and against the candidate."""
+    unchecked = len(re.findall(r"- \[ \]", raw))
+    total = unchecked + len(re.findall(r"- \[[xX]\]", raw))
+    blob = _candidate_blob(root, relative)
+    if blob is None:
+        return [f"{relative} does not exist at the reviewed candidate"]
+    at_candidate = blob.decode("utf-8")
+    candidate_total = len(re.findall(r"- \[[ xX]\]", at_candidate))
+    if not candidate_total:
+        return [
+            f"anchor rot: {relative} carries no checklist at the reviewed candidate, so "
+            "requiring ratification to complete one proves nothing"
+        ]
+    problems: list[str] = []
+    if total < candidate_total:
+        problems.append(
+            f"{relative} carries {total} exit-criterion boxes and the reviewed candidate "
+            f"carries {candidate_total}. The checklist is completed by ticking it, not "
+            "by shortening it."
+        )
+    if not ratified:
+        if not unchecked:
+            problems.append(
+                f"anchor rot: every exit-criterion box in {relative} is already ticked "
+                "while CP-00 is unratified, so requiring ratification to tick them "
+                "proves nothing"
+            )
+    elif unchecked:
+        problems.append(
+            f"{relative} still leaves {unchecked} exit-criterion boxes unticked while "
+            f"{CHECKPOINT_MANIFEST} declares ratified=true; the stage checklist is the "
+            "checkpoint's own exit evidence"
+        )
+    return problems
+
+
+def _task_banner_problems(root: Path) -> list[str]:
+    """**The price of licensing seventeen task files.**
+
+    `W0-INT-01` licenses their **status banners** and says what that means: "Nothing but
+    the banner may change here: requirements, gates and deliverables of an accepted task
+    are frozen by its acceptance." A licence to move a file is not a licence to rewrite
+    it, so that sentence is enforced rather than quoted — every licensed task file is
+    compared with the tree the round was frozen at, and everything outside the banner
+    must be byte-identical. The ratifying task's own file may also rewrite its handoff,
+    which is the other half of what its allowed paths say, and nothing else may.
+
+    The comparison is against the **frozen tree** rather than the reviewed candidate
+    because that is what the post-freeze licence is about: these files legitimately move
+    between the candidate and the freeze, and it is what happens *after* the freeze that
+    the acceptance streams did not judge.
+
+    Both directions, again. The banner rule holds in either state and can fail in
+    either — it is a constraint, not a state assertion — and on top of it the ratifying
+    task's own banner must carry its denial while CP-00 is unratified and the published
+    tag once it is not.
+    """
+    manifest = _checkpoint_manifest(root)
+    if manifest is None:
+        return [f"{CHECKPOINT_MANIFEST} is missing"]
+    ratified = manifest.get("ratified") is True
+    if not COMPLETED_TASK_FILES:
+        return [
+            "COMPLETED_TASK_FILES is empty, so POST_FREEZE_DELTA_CEILING licenses task "
+            "files that nothing here checks: 'every licensed task file' over an empty "
+            "set is no requirement at all"
+        ]
+    commit = _freeze_commit(root)
+    blobs = _tree_blobs(root, commit) if commit is not None else None
+    problems: list[str] = []
+    for relative in sorted(COMPLETED_TASK_FILES):
+        path = root / relative
+        if not path.is_file():
+            problems.append(f"{relative} is missing")
+            continue
+        text = path.read_text(encoding="utf-8")
+        banner, rest = _banner_split(text)
+        # Whether ratification spent the banner licence on this file. ``None`` when
+        # there is no frozen tree to compare with, which is the pre-dispatch state and
+        # is reported by :func:`_tested_digest_problems` rather than twice here.
+        rewritten: bool | None = None
+        if blobs is not None and relative not in blobs:
+            problems.append(
+                f"{relative} is not in the tree frozen at {commit[:12]}, so nothing "
+                "here can be compared with the tree the acceptance streams judged"
+            )
+        if blobs is not None and relative in blobs:
+            frozen_banner, frozen_rest = _banner_split(blobs[relative].decode("utf-8"))
+            rewritten = banner != frozen_banner
+            if frozen_banner.strip() and not banner.strip():
+                problems.append(
+                    f"{relative}: the status banner is gone. Ratification closes a "
+                    "banner; it does not remove one."
+                )
+            if relative == RATIFYING_TASK_FILE:
+                rest, frozen_rest = _strip_handoff(rest), _strip_handoff(frozen_rest)
+            if rest != frozen_rest:
+                problems.append(
+                    f"{relative} differs from the tree frozen at {commit[:12]} outside "
+                    "its status banner. W0-INT-01 licenses the banner and nothing else: "
+                    "the requirements, gates and deliverables of an accepted task are "
+                    "frozen by its acceptance."
+                )
+        flat_banner = _flat(banner)
+        if not ratified:
+            if CHECKPOINT_TAG in flat_banner:
+                problems.append(
+                    f"degenerate requirement: the {relative} banner already names "
+                    f"{CHECKPOINT_TAG} while CP-00 is unratified, so requiring a banner "
+                    "ratification rewrote to name it would prove nothing"
+                )
+            if relative == RATIFYING_TASK_FILE:
+                if RATIFYING_TASK_BANNER_DENIAL not in flat_banner:
+                    problems.append(
+                        f"anchor rot: the {relative} banner no longer says "
+                        f"{RATIFYING_TASK_BANNER_DENIAL!r} while CP-00 is unratified. "
+                        "That is what the ratified half requires to be gone; re-anchor "
+                        "it in tests/contract/test_cp00_candidate.py."
+                    )
+            elif RATIFYING_TASK_BANNER_DENIAL in flat_banner:
+                problems.append(
+                    f"the {relative} banner says {RATIFYING_TASK_BANNER_DENIAL!r}, "
+                    f"which is {RATIFYING_TASK_FILE}'s statement to make. A completed "
+                    "task's banner may not open a second front on the ratification, "
+                    "because no task is authorised to close one it did not open."
+                )
+            continue
+        if RATIFYING_TASK_BANNER_DENIAL in flat_banner:
+            problems.append(
+                f"the {relative} banner still says {RATIFYING_TASK_BANNER_DENIAL!r} "
+                f"while {CHECKPOINT_MANIFEST} declares ratified=true. No other task may "
+                "close this banner, so nothing else can correct it."
+            )
+        if relative == RATIFYING_TASK_FILE:
+            if CHECKPOINT_TAG not in flat_banner:
+                problems.append(
+                    f"the {relative} banner does not name {CHECKPOINT_TAG}, the tag the "
+                    "ratification it records publishes"
+                )
+        elif rewritten and CHECKPOINT_TAG not in flat_banner:
+            problems.append(
+                f"{relative}: ratification rewrote this status banner and it names no "
+                f"checkpoint. {CHECKPOINT_TAG} is what the act publishes, and a banner "
+                "closed at CP-00 says so — otherwise the licence buys a free rewrite of "
+                "sixteen accepted tasks' status text under cover of a ratification, "
+                "which is a path that may move and is required to carry nothing."
+            )
+    return problems
+
+
 def _verdict_token(value: object) -> str | None:
     """The leading verdict token of a stream result, or ``None`` if there is not one.
 
@@ -1359,6 +2369,15 @@ def _acceptance_problems(root: Path) -> list[str]:
     # this check is the anti-vacuity anchor, and an anchor that is only consulted once
     # somebody ratifies is an anchor nobody can re-place in time.
     problems.extend(_state_document_problems(root))
+
+    # The rest of what ratification has to write, and what each licence is paid for.
+    # Outside the gate for the same reason the state document is: every one of these is
+    # two-directional, and an anchor consulted only once somebody ratifies is an anchor
+    # nobody can re-place in time.
+    problems.extend(_checkpoint_bundle_problems(root))
+    problems.extend(_publication_record_problems(root))
+    problems.extend(_task_banner_problems(root))
+    problems.extend(_acceptance_record_problems(root))
 
     if manifest.get("ratified") is not True:
         return problems
@@ -1627,18 +2646,30 @@ def _review_consistency_problems(root: Path, ratified: bool) -> list[str]:
     status = review.get("review_status")
     if not isinstance(status, str) or not status:
         return [f"{REVIEW_JSON}: review_status must be a non-empty string"]
-    if status not in markdown:
+    # **As a code span, not as a bare substring, and that is what makes the degeneracy
+    # guard below survivable.** `W0-INT-01` requires `review_status == "ratified"`, and
+    # "ratified" is an ordinary English word that occurs seven times in the reviewed
+    # candidate of this very document -- in a table explaining what *may* be ratified. So
+    # the bare-substring form of this check rejected the only value the ratifying task is
+    # allowed to write: required tests 2 and 3 of that task could not both pass, on any
+    # tree, and neither owner could fix it alone. The quotation is what the check is
+    # about, so it asks for a quotation: `ratified` in a code span appears nowhere in the
+    # candidate, while the word does. Round thirteen's harness sidestepped this by
+    # inventing `ratified_at_w0_3`, which no external record asks for -- a ratification
+    # the module could pass and the task would reject.
+    quoted = f"`{status}`"
+    if quoted not in markdown:
         problems.append(
-            f"{REVIEW_MARKDOWN} does not quote the review_status {status!r} that "
+            f"{REVIEW_MARKDOWN} does not quote the review_status {quoted!r} that "
             f"{REVIEW_JSON} declares; the two halves of one review disagree"
         )
     if ratified:
         candidate_markdown = _candidate_blob(root, REVIEW_MARKDOWN)
-        if candidate_markdown is not None and status in _flat(
+        if candidate_markdown is not None and quoted in _flat(
             candidate_markdown.decode("utf-8")
         ):
             problems.append(
-                f"{REVIEW_JSON}: review_status {status!r} already appears in "
+                f"{REVIEW_JSON}: review_status {quoted!r} already appears in "
                 f"{REVIEW_MARKDOWN} at the reviewed candidate, so requiring the "
                 "Markdown to quote it proves nothing about ratification"
             )
@@ -1929,6 +2960,87 @@ class _CheckpointSandbox:
         self.frozen_commit: str | None = None
         self.frozen_digest: str | None = None
         self.unresettable: list[str] = []
+        #: Whether this sandbox had to reach into history for a freeze. Recorded rather
+        #: than hidden: a probe that wants to know which tree it is standing on can ask.
+        self.recovered_freeze = self._ensure_a_frozen_round()
+
+    def _ensure_a_frozen_round(self) -> bool:
+        """Give the sandbox a frozen round to reset to when the live tree has none.
+
+        **The failure this exists to remove.** `tested_candidate_digest: null` is the
+        legitimate state of a round that has not been dispatched — the module says so in
+        :func:`_tested_digest_problems` — and the live repository sits in it for as long
+        as it takes to prepare the next round. Every probe in
+        :class:`RatificationRecordTests` is about what may differ *from a frozen tree*,
+        so on such a tree the family has nothing to measure. It did not go quiet: it went
+        red. `_ratify_for_real` refuses to build a ratification on a digest no commit
+        froze — the right refusal — and 122 tests then failed on a correct, unratified,
+        between-rounds repository. A suite that cannot be green while the next round is
+        being prepared cannot be the evidence for freezing it, which is the same
+        no-executable-sequence shape round nine was voided over, one layer out.
+
+        **Nothing is invented to remove it.** The refusal in `_ratify_for_real` stays
+        exactly as it is; what changes is that the sandbox is given a real freeze to
+        stand on. This repository has frozen nine rounds and Git keeps every one, so the
+        newest manifest revision carrying a self-consistent freeze — the value at the top
+        level and in the entry for that revision's own current round — is written into
+        the sandbox's **private copy**, and the reset then proceeds exactly as it does
+        when the live manifest carries one. The commit is real, the tree is real, and the
+        digest is recomputed by the same recipe over the same paths.
+
+        A recovery that quietly degraded into a fabrication would put every post-freeze
+        probe back where round seven found them, so
+        :meth:`SandboxResetTests.test_a_recovered_freeze_is_a_real_freeze` requires the
+        recovered value to reproduce over the recovered commit's tree, and
+        :meth:`SandboxResetTests.test_a_history_with_no_freeze_at_all_recovers_nothing`
+        requires the recovery to report failure rather than guess when history holds no
+        freeze. The live manifest is never read *through* this: `_tested_digest_problems`
+        and `_post_freeze_delta_problems` still run against `REPOSITORY_ROOT` and still
+        say so when the live value names no tree.
+        """
+        if _freeze_commit(self.root) is not None:
+            return False
+        recovered = self._the_newest_frozen_manifest()
+        if recovered is None:
+            return False
+        (self.root / CHECKPOINT_MANIFEST).write_text(recovered, encoding="utf-8")
+        return _freeze_commit(self.root) is not None
+
+    def _the_newest_frozen_manifest(self) -> str | None:
+        """The newest manifest revision that had a freeze in force, as text.
+
+        Self-consistency is the whole filter: the top-level value, a single entry for
+        that revision's own `current_round`, and the same value inside it. That is the
+        shape :func:`_freeze_commit` walks for, so a revision this returns is one that
+        function can resolve rather than one that merely carries a hex string.
+        """
+        history = _git(
+            "-C", str(self.root), "log", "--format=%H", "--", CHECKPOINT_MANIFEST,
+            text=True,
+        ).stdout
+        for commit in (line for line in history.split("\n") if line):
+            blob = _git(
+                "-C", str(self.root), "--no-replace-objects", "show",
+                f"{commit}:{CHECKPOINT_MANIFEST}",
+            )
+            if blob.returncode != 0:
+                continue
+            text = blob.stdout.decode("utf-8")
+            try:
+                past = json.loads(text)
+            except ValueError:
+                continue
+            digest = past.get("tested_candidate_digest")
+            if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                continue
+            entries = [
+                entry
+                for entry in past.get("acceptance_rounds", [])
+                if isinstance(entry, dict) and entry.get("round") == past.get("current_round")
+            ]
+            if len(entries) == 1 and entries[0].get("tested_candidate_digest") == digest:
+                return text
+        return None
 
     def _git_write(self, *arguments: str) -> None:
         """Run a Git command that writes, having proved it cannot reach the repository.
@@ -2191,6 +3303,252 @@ class _CheckpointSandbox:
         text, count = pattern.subn(replacement, path.read_text(encoding="utf-8"))
         assert count, f"no denial to update in {PROGRAM_STATE_DOCUMENT}"
         path.write_text(text, encoding="utf-8")
+
+    def _retract(self, relative: str, claim: str, replacement: str) -> None:
+        """Replace a claim in place, tolerating a line wrap it may have crossed."""
+        self._remember(relative)
+        path = self.root / relative
+        pattern = re.compile(r"\s+".join(re.escape(word) for word in claim.split()))
+        text, count = pattern.subn(replacement, path.read_text(encoding="utf-8"))
+        assert count, f"no {claim!r} to retract in {relative}"
+        path.write_text(text, encoding="utf-8")
+
+    def _append(self, relative: str, addition: str) -> None:
+        self._remember(relative)
+        path = self.root / relative
+        path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+
+    def write_checkpoint_bundle(self) -> None:
+        """Write the eight evidence deliverables, the way `W0-INT-01` must.
+
+        Called **after** the reconciliations and the document edits, because the contract
+        manifest records the reviewed-family digest of the tree that is actually
+        published: a bundle written first would describe the tree before ratification
+        touched it.
+
+        The bodies are written out here rather than generated from
+        :data:`CHECKPOINT_DELIVERABLES`. A harness that derived its content from the same
+        table the check reads would go green on a requirement deleted from that table,
+        which is the defect class :class:`TableExpectationTests` exists for one level up.
+        """
+        manifest = json.loads(
+            (self.root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8")
+        )
+        number = manifest["current_round"]
+        digest = _reviewed_manifest_digest(self.root)[0]
+        disposition = manifest["runtime_fields"]
+
+        def sha(relative: str) -> str:
+            return hashlib.sha256((self.root / relative).read_bytes()).hexdigest()
+
+        merged = "\n".join(
+            f"- `{task}` at `{commit}`"
+            for task, commit in sorted(manifest["integrated_w03_tasks"].items())
+        )
+        risks = "\n".join(
+            f"- `{name}` carried forward."
+            for name in sorted(manifest["architecture_defer"])
+            + sorted(manifest["open_inputs_carried_forward"])
+            + sorted(manifest["open_escalations"])
+        )
+        cases = "\n".join(
+            f"| {case} | PASS | walked as written; no defect found |"
+            for case in _manual_case_ids(self.root)
+        )
+        bodies = {
+            "checkpoint-report.md": (
+                f"# CP-00 checkpoint report\n\n"
+                f"Tag: `{CHECKPOINT_TAG}`\n"
+                f"Candidate commit: `{REVIEWED_CANDIDATE_COMMIT}`\n"
+                f"Frozen contract versions: `{CANDIDATE_CONTRACT_VERSION}` for the "
+                f"domain, analysis and events families.\n\n"
+                f"## Merged tasks\n\n{merged}\n\n"
+                f"## Evidence\n\n"
+                f"- hashes and lock digests: `contract-manifest.yaml`\n"
+                f"- manual acceptance: `manual-test-report.md`\n"
+                f"- automated acceptance: `automated-summary.txt`\n"
+                f"- deferred scopes and risks: `known-risks.md`\n"
+                f"- rollback: `restore-or-rollback-note.md`\n"
+                f"- migration head: `migration-head.txt`\n"
+                f"- build information: `build-info.json`\n"
+            ),
+            "contract-manifest.yaml": (
+                f"checkpoint: CP-00\n"
+                f"tag: {CHECKPOINT_TAG}\n"
+                f"candidate_commit: {REVIEWED_CANDIDATE_COMMIT}\n"
+                f"migration_head: none\n"
+                f"contract_versions:\n"
+                f"  domain: {CANDIDATE_CONTRACT_VERSION}\n"
+                f"  analysis: {CANDIDATE_CONTRACT_VERSION}\n"
+                f"  events: {CANDIDATE_CONTRACT_VERSION}\n"
+                f"artifact_manifest_sha256: {digest}\n"
+                f"file_hashes:\n"
+                f"  contracts/analysis/v1/stage-registry.json: "
+                f"{sha('contracts/analysis/v1/stage-registry.json')}\n"
+                f"  contracts/analysis/v1/legacy-stage-name-map.json: "
+                f"{sha('contracts/analysis/v1/legacy-stage-name-map.json')}\n"
+                f"  fixtures/golden/selection.json: "
+                f"{sha('fixtures/golden/selection.json')}\n"
+                f"dependency_locks:\n"
+                f"  requirements/validation.in: {sha('requirements/validation.in')}\n"
+                f"  requirements/validation.lock: {sha('requirements/validation.lock')}\n"
+            ),
+            "automated-summary.txt": (
+                f"CP-00 automated acceptance, round {number}: PASS\n"
+                f"Suite: python -m unittest discover -s tests/contract\n"
+            ),
+            "manual-test-report.md": (
+                f"# CP-00 manual acceptance\n\n"
+                f"tester: independent CP-00 manual tester\n"
+                f"started_at: 2026-09-04T09:00:00Z\n"
+                f"finished_at: 2026-09-04T11:20:00Z\n"
+                f"candidate_commit: {REVIEWED_CANDIDATE_COMMIT}\n"
+                f"backend_runtime: {disposition}\n"
+                f"frontend_runtime: {disposition}\n\n"
+                f"| Case | Verdict | Actual result |\n|---|---|---|\n{cases}\n"
+            ),
+            "migration-head.txt": "none\n",
+            "build-info.json": json.dumps(
+                {
+                    "checkpoint": "CP-00",
+                    "candidate_commit": REVIEWED_CANDIDATE_COMMIT,
+                    "interpreter": "python3.12 (.venv/bootstrap)",
+                    "runtime": disposition,
+                },
+                indent=2,
+            )
+            + "\n",
+            "known-risks.md": f"# CP-00 known risks and deferred scopes\n\n{risks}\n",
+            "restore-or-rollback-note.md": (
+                f"# CP-00 restore or rollback\n\n"
+                f"Before the tag: revert the evidence commit and reopen the failed "
+                f"owner task.\n"
+                f"After the tag `{CHECKPOINT_TAG}`: never move it. The accepted "
+                f"candidate to restore to is `{REVIEWED_CANDIDATE_COMMIT}`; a "
+                f"replacement checkpoint needs a new registry version.\n"
+            ),
+        }
+        for name, body in bodies.items():
+            relative = ACCEPTANCE_EVIDENCE_PREFIX + name
+            self._remember(relative)
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(body, encoding="utf-8")
+
+    def recompute_manifest_digest(self) -> None:
+        """Bring `artifact_manifest_sha256` up to the tree ratification just produced.
+
+        Ratification edits five files inside `docs/architecture/**`, one of the four
+        families that digest covers, so the value the record carried before the act
+        describes a tree that no longer exists.
+        :meth:`RatificationRecordTests.test_the_manifest_digest_describes_the_tree_it_manifests`
+        reads it straight off the live repository, so a publication that skipped this
+        step would red the very suite it has to pass — and a harness that skipped it
+        would build a "fully ratified tree" that the real one cannot be, which is how a
+        reachability proof stops proving reachability.
+
+        Ordered the way the digest rule is ordered: structure first, then compute, then
+        write only the value. It is called after the last `docs/architecture/**` write
+        and before the acceptance digests are sealed, so the manifest bytes it changes
+        are inside the tree `evidence_bundle_digest` then covers.
+        """
+        digest, count = _reviewed_manifest_digest(self.root)
+        self.patch_json(
+            CHECKPOINT_MANIFEST, artifact_manifest_sha256=digest, artifact_count=count
+        )
+
+    def publish_program_documents(self) -> None:
+        """Retract the three program claims ratification is required to retract."""
+        wave = "docs/program/waves/W0.3_ratification_integration.md"
+        self._retract(
+            wave, "`W0-INT-01` is blocked", "`W0-INT-01` is accepted and integrated"
+        )
+        self._retract(
+            wave,
+            "| `W0-INT-01` | blocked |",
+            "| `W0-INT-01` | accepted and integrated |",
+        )
+        self._append(
+            wave,
+            "\n## Next unlocked tasks\n\nCP-00 is ratified and tagged; the S01 "
+            "repository-foundation preparation tasks are unlocked.\n",
+        )
+        stage = "docs/stages/S00_architecture_and_behavior_freeze.md"
+        self._remember(stage)
+        path = self.root / stage
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("- [ ]", "- [x]"), encoding="utf-8"
+        )
+        self._append(
+            stage,
+            "\n## Next stage\n\nCP-00 is accepted; the S01 repository-foundation "
+            "preparation tasks are unlocked.\n",
+        )
+        self._retract(
+            "docs/INDEX.md", "specified; blocked on acceptance", "accepted and integrated"
+        )
+
+    def update_acceptance_record(self) -> None:
+        """Write the round's verdict into the acceptance record, as its landing requires.
+
+        The row for *this* round is replaced; every other row is left exactly as it is.
+        The record is a history, and a publication that rewrote it would be erasing the
+        failed rounds that explain why this one is the tenth -- but appending
+        unconditionally is not the way to preserve them. The acceptance record carries a
+        placeholder row for the round about to be frozen ("not frozen; the freeze is the
+        step after ..."), so appending produced *two* rows for the same round, and the
+        probe that removes the round's row with ``count=1`` then deleted the placeholder
+        and left the verdict standing -- so the negative case it needed was never built,
+        and freezing the round by the recorded procedure went red on a tree nobody had
+        done anything wrong to. Round nine escaped it only because its table stopped at
+        round eight.
+        """
+        manifest = json.loads(
+            (self.root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8")
+        )
+        number = manifest["current_round"]
+        self._remember(ACCEPTANCE_RECORD)
+        path = self.root / ACCEPTANCE_RECORD
+        lines = path.read_text(encoding="utf-8").splitlines()
+        rows = [
+            index
+            for index, line in enumerate(lines)
+            if re.match(r"^\|\s*\d+\s*\|", line)
+        ]
+        assert rows, f"{ACCEPTANCE_RECORD} carries no round table to extend"
+        verdict = f"| {number} | **PASS** | **PASS** — 6/6 | recorded in the manifest |"
+        mine = [
+            index
+            for index in rows
+            if re.match(rf"^\|\s*{number}\s*\|", lines[index])
+        ]
+        assert len(mine) <= 1, (
+            f"{ACCEPTANCE_RECORD} already carries {len(mine)} rows for round {number}; "
+            "the record cannot say two things about one round"
+        )
+        if mine:
+            lines[mine[0]] = verdict
+        else:
+            lines.insert(rows[-1] + 1, verdict)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def close_task_banners(self) -> None:
+        """Close the ratifying task's banner, and one other task's, as ratification may."""
+        self._retract(
+            RATIFYING_TASK_FILE,
+            RATIFYING_TASK_BANNER_DENIAL,
+            f"ratified and published as `{CHECKPOINT_TAG}`",
+        )
+        other = "docs/program/tasks/W0-CLN-01.md"
+        self._remember(other)
+        path = self.root / other
+        text = path.read_text(encoding="utf-8")
+        banner, _rest = _banner_split(text)
+        assert banner, f"{other} carries no status banner to close"
+        path.write_text(
+            text.replace(banner, banner + f"> Closed at CP-00 `{CHECKPOINT_TAG}`.\n", 1),
+            encoding="utf-8",
+        )
 
     def touch_without_reconciling(self, entry: dict) -> None:
         """Change the bytes and leave every stale claim exactly where it was."""
@@ -4340,7 +5698,7 @@ class RatificationRecordTests(unittest.TestCase):
         )
         self.sandbox.declare_ratification(self.full_delta)
         self.sandbox.patch_json(
-            self.review, ratified=True, review_status="ratified_at_w0_3"
+            self.review, ratified=True, review_status="ratified"
         )
         for entry in RECONCILIATIONS:
             self.sandbox.reconcile(entry)
@@ -4350,7 +5708,7 @@ class RatificationRecordTests(unittest.TestCase):
         )
         markdown.write_text(
             disclaimer.sub("the ratification act", markdown.read_text(encoding="utf-8"))
-            + "\nStatus: ratified_at_w0_3.\n",
+            + "\nStatus: `ratified`.\n",
             encoding="utf-8",
         )
         self.sandbox.set_registry_state(RATIFIED_STATE_TOKEN, "ratified")
@@ -4358,7 +5716,21 @@ class RatificationRecordTests(unittest.TestCase):
         # to move by _state_document_problems. Before round seven a "ratification that
         # does the work" left this document denying the ratification and nothing minded.
         self.sandbox.update_state_document()
+        # Every `docs/architecture/**` write is done, so the reviewed-family digest the
+        # external record carries can be brought up to the tree that was just produced.
+        # Before this the harness built a tree the real publication cannot be: the
+        # record would still describe the pre-ratification families.
+        self.sandbox.recompute_manifest_digest()
+        # Round thirteen: the rest of what ratification has to write. The bundle comes
+        # after the reconciliations because the contract manifest records the digest of
+        # the reviewed families as published.
+        self.sandbox.publish_program_documents()
+        self.sandbox.close_task_banners()
+        self.sandbox.write_checkpoint_bundle()
         self.sandbox.accept_round(**round_kwargs)
+        # The verdict has landed, so the record of the rounds has to carry it. This is
+        # the write that voided its own round until the acceptance record was licensed.
+        self.sandbox.update_acceptance_record()
         self.sandbox.seal_digests(tested=self.sandbox.frozen_digest)
 
     def test_a_ratification_that_does_the_work_is_accepted(self) -> None:
@@ -4605,48 +5977,116 @@ class RatificationRecordTests(unittest.TestCase):
                     )
                     self.sandbox.restore()
 
-    def test_the_candidate_novelty_check_is_found_across_a_line_wrap(self) -> None:
-        """**The third `_flat` site, and §11.16.7's "both sites" corrected to three.**
+    def test_the_review_status_quotation_is_found_across_a_line_wrap(self) -> None:
+        """**The third `_flat` site**, re-anchored to the side a wrap can be built on.
 
         Round ten found `_flat` unmeasured in two places and gave each a probe. There
-        are three on the ratified path: `_state_document_problems`, the *present*
-        review-Markdown comparison, and this one — the novelty check that reads the
-        review Markdown **at the reviewed candidate** and refuses a `review_status` the
-        candidate already contains. Dropping the flattening here left all 244 tests
-        green.
+        are three on the ratified path: `_state_document_problems`, the candidate-side
+        novelty check, and the *present* review-Markdown comparison. Dropping the
+        flattening left all 244 tests green.
 
-        The candidate blob is immutable, so this probe cannot re-wrap it; it uses a
-        phrase that is *already* wrapped in the candidate document instead, and asserts
-        both halves of that fact before relying on it. Unflattened, the token is not
-        found and a `review_status` the candidate has carried since `W0-ARC-01` passes
-        as novel — which is the whole point of the check: requiring the Markdown to
-        quote a token it already quotes proves nothing about ratification.
+        **Why this probe moved from the candidate side to the live side.** Round
+        thirteen made both halves of the comparison ask for the `review_status` as a
+        **code span** rather than as a bare substring, because "ratified" -- the only
+        value `W0-INT-01` is permitted to write -- occurs seven times in the candidate
+        as ordinary English, so the bare form rejected the one honest ratification. The
+        candidate blob is immutable and contains exactly one code span broken across a
+        line, `approved with modification`, and that same phrase also appears unwrapped
+        twenty-nine times, so it cannot serve as an anchor for a wrap. Rather than let
+        the probe rot into one that passes without measuring a wrap, it is re-pointed at
+        the live document, where the sandbox can construct the wrap and the same `_flat`
+        decides the same question. Recorded rather than quietly dropped: the
+        candidate-side `_flat` now has no wrap case, because this candidate offers none.
+
+        The direction is positive on purpose -- a wrapped quotation must still be
+        **found** -- which is what goes red if the flattening is removed.
         """
         self._ratify_for_real()
         self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
 
+        status = "ratified at CP-00"
         candidate = _candidate_blob(self.sandbox.root, REVIEW_MARKDOWN)
         self.assertIsNotNone(candidate, "the candidate review Markdown is unreadable")
-        text = candidate.decode("utf-8")
-        wrapped = "integration act by the program integrator"
         self.assertNotIn(
-            wrapped,
-            text,
-            "the anchor no longer spans a line wrap in the candidate, so this probe "
-            "measures nothing and must be re-anchored rather than deleted",
+            f"`{status}`",
+            _flat(candidate.decode("utf-8")),
+            "the anchor is already in the candidate, so the novelty half would fire and "
+            "this probe would pass for the wrong reason",
         )
-        self.assertIn(wrapped, _flat(text))
 
-        self.sandbox.patch_json(self.review, review_status=wrapped)
-        problems = _reconciliation_problems(self.sandbox.root)
-        self.assertTrue(
-            any(
-                "already appears in" in problem and "proves nothing" in problem
-                for problem in problems
-            ),
-            f"a review_status the candidate already carries across a line wrap passed "
-            f"as novel: {problems}",
+        self.sandbox.patch_json(self.review, review_status=status)
+        self.sandbox.rewrite(
+            REVIEW_MARKDOWN, "Status: `ratified`.", "Status: `ratified at\nCP-00`."
         )
+        markdown = (self.sandbox.root / REVIEW_MARKDOWN).read_text(encoding="utf-8")
+        self.assertNotIn(
+            f"`{status}`",
+            markdown,
+            "the quotation is not actually wrapped, so nothing here needs flattening",
+        )
+        self.assertIn(f"`{status}`", _flat(markdown))
+
+        problems = _reconciliation_problems(self.sandbox.root)
+        self.assertFalse(
+            any("does not quote the review_status" in problem for problem in problems),
+            "a review_status the document quotes across a line wrap was reported as "
+            f"unquoted, so the comparison is not flattening: {problems}",
+        )
+
+    def test_the_status_the_ratifying_task_requires_is_one_this_module_accepts(
+        self,
+    ) -> None:
+        """`W0-INT-01` required tests 2 and 3, together, on one tree.
+
+        **The deadlock this closes.** Required test 3 of the ratifying task asserts
+        ``r['review_status'] == 'ratified'``; required test 2 runs this suite. While the
+        Markdown quotation was checked as a bare substring, those two could not both
+        pass on any tree: "ratified" is an ordinary English word appearing seven times in
+        the reviewed candidate of `CP00_ARCHITECTURE_REVIEW.md`, so the degeneracy guard
+        rejected the only value the task is permitted to write, and
+        :meth:`_ratify_for_real` had to invent `ratified_at_w0_3` -- a value no external
+        record asks for -- to keep this module green. Neither owner could repair it
+        alone: the task's required-tests section is outside `W0-INT-01`'s allowed paths,
+        and this module is `W0-QA-01`'s.
+
+        The repair is in this module, because the defect was here: a quotation check that
+        cannot tell a quotation from a word. It is probed by executing the *task's own*
+        assertion, verbatim from `docs/program/tasks/W0-INT-01.md`, rather than a
+        paraphrase of it -- a paraphrase would drift from the requirement it stands for,
+        which is the failure shape this checkpoint keeps finding.
+        """
+        self._ratify_for_real()
+
+        review = json.loads(
+            (self.sandbox.root / REVIEW_JSON).read_text(encoding="utf-8")
+        )
+        # Required test 3, verbatim.
+        self.assertIs(review["ratified"], True)
+        self.assertEqual(review["review_status"], "ratified")
+        self.assertEqual(sum(x["disposition"] == "defer" for x in review["adrs"]), 1)
+        self.assertEqual(
+            next(x for x in review["adrs"] if x["adr_id"] == "ADR-0014")["disposition"],
+            "defer",
+        )
+
+        # Required test 2, at the level this probe can reach it: the checks that judge
+        # the same tree must be silent on the value required test 3 just demanded.
+        self.assertEqual(
+            _review_consistency_problems(self.sandbox.root, True),
+            [],
+            "the ratifying task's required review_status is one this module rejects; "
+            "required tests 2 and 3 cannot both pass and the checkpoint has no "
+            "executable final state",
+        )
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+
+        # Anti-vacuity: the bare word really is in the candidate, so the code-span form
+        # is doing work rather than restating the substring test under another name.
+        candidate = _candidate_blob(self.sandbox.root, REVIEW_MARKDOWN)
+        self.assertIsNotNone(candidate)
+        flat_candidate = _flat(candidate.decode("utf-8"))
+        self.assertIn("ratified", flat_candidate)
+        self.assertNotIn("`ratified`", flat_candidate)
 
     def test_a_review_status_already_in_the_candidate_markdown_proves_nothing(
         self,
@@ -4661,7 +6101,11 @@ class RatificationRecordTests(unittest.TestCase):
         """
         self._ratify_for_real()
         self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
-        self.sandbox.patch_json(self.review, review_status="ratification")
+        # A quoted token the candidate already carries. It moved from "ratification"
+        # when the requirement became a code span: the bare word occurs in the candidate
+        # as ordinary prose, which is exactly the ambiguity the quoted form removes, so
+        # the probe now has to name something the candidate quotes.
+        self.sandbox.patch_json(self.review, review_status="AuditRun")
         problems = _reconciliation_problems(self.sandbox.root)
         self.assertTrue(
             any(
@@ -4717,7 +6161,7 @@ class RatificationRecordTests(unittest.TestCase):
         """
         self._ratify_for_real()
         self.assertEqual(_reconciliation_problems(self.sandbox.root), [])
-        self.sandbox.rewrite(REVIEW_MARKDOWN, "Status: ratified_at_w0_3.", "")
+        self.sandbox.rewrite(REVIEW_MARKDOWN, "Status: `ratified`.", "")
         problems = _reconciliation_problems(self.sandbox.root)
         self.assertTrue(
             any("does not quote the review_status" in problem for problem in problems),
@@ -4921,6 +6365,1151 @@ class RatificationRecordTests(unittest.TestCase):
             "the sandbox lost its .venv symlink, so its documented gates cannot run",
         )
         self.assertTrue((self.sandbox.root / ".venv/bootstrap/bin/python").exists())
+
+    # ---- round thirteen: the rest of what ratification writes ---------------------
+    #
+    # `W0-INT-01` must create eight evidence files, reconcile three more program
+    # documents and close the status banners of the tasks CP-00 completes. None of that
+    # was licensed, so an honest ratification voided its own round and the checkpoint
+    # had no reachable published state. The licence is now granted; these are what it
+    # was paid for.
+
+    def _bundle(self, name: str) -> Path:
+        return self.sandbox.root / (ACCEPTANCE_EVIDENCE_PREFIX + name)
+
+    def test_the_published_bundle_is_licensed_and_still_observed(self) -> None:
+        """The positive direction: a complete publication no longer voids its round.
+
+        And the delta is not made invisible to buy that — every path the publication
+        touches is still *observed* moving, exactly as
+        `test_declared_ratification_of_the_whole_ceiling_is_accepted` requires of the
+        architecture five. Licensed is not the same as unseen.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_post_freeze_delta_problems(self.sandbox.root), [])
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+        frozen = _tree_blobs(self.sandbox.root, self.sandbox.frozen_commit)
+        moved = {
+            path
+            for path in _digest_paths(self.sandbox.root)
+            if (self.sandbox.root / path).is_file()
+            and (
+                path not in frozen
+                or (self.sandbox.root / path).read_bytes() != frozen[path]
+            )
+        }
+        for group, label in (
+            (CHECKPOINT_DELIVERABLE_PATHS, "the evidence bundle"),
+            (PUBLICATION_DOCUMENT_PATHS, "the publication documents"),
+            ({RATIFYING_TASK_FILE}, "the ratifying task banner"),
+            ({ACCEPTANCE_RECORD}, "the acceptance record"),
+        ):
+            with self.subTest(group=label):
+                self.assertEqual(
+                    sorted(set(group) - moved),
+                    [],
+                    f"{label} did not move, so this probe proves nothing about the "
+                    "licence",
+                )
+
+    def test_the_acceptance_record_may_not_be_behind_the_manifest(self) -> None:
+        """The axis rounds seven and eight failed on, checked in both states.
+
+        The record of the rounds is the document a reader is pointed at, and it is
+        written after a round reports — which is after that round's freeze. Licensing it
+        is what makes recording a verdict possible at all; this is what the licence is
+        paid for, and it can fail whether or not anything is ratified.
+        """
+        record = self.sandbox.root / ACCEPTANCE_RECORD
+        manifest = _checkpoint_manifest(self.sandbox.root) or {}
+        reported = [
+            entry["round"]
+            for entry in manifest.get("acceptance_rounds", [])
+            if isinstance(entry, dict) and entry.get("verdict")
+        ]
+        self.assertTrue(reported, "no round carries a verdict, so this probe measures nothing")
+
+        # Unratified: the rule is already live.
+        self.assertEqual(_acceptance_record_problems(self.sandbox.root), [])
+        self.sandbox._remember(ACCEPTANCE_RECORD)
+        text = record.read_text(encoding="utf-8")
+        dropped = re.sub(rf"^\|\s*{reported[-1]}\s*\|.*$", "", text, count=1, flags=re.M)
+        self.assertNotEqual(dropped, text, "the probe removed no row")
+        record.write_text(dropped, encoding="utf-8")
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any(f"no row for round {reported[-1]}" in problem for problem in problems),
+            f"the acceptance record lost a reported round and nothing said so: {problems}",
+        )
+        self.sandbox.restore()
+
+        # Ratified: the round being ratified must be in it, and recorded as passing.
+        self._ratify_for_real()
+        self.assertEqual(_acceptance_record_problems(self.sandbox.root), [])
+        number = (_checkpoint_manifest(self.sandbox.root) or {})["current_round"]
+        published = record.read_text(encoding="utf-8")
+        record.write_text(
+            re.sub(rf"^\|\s*{number}\s*\|.*$", "", published, count=1, flags=re.M),
+            encoding="utf-8",
+        )
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any(f"no row for round {number}" in problem for problem in problems),
+            f"CP-00 ratified on a round its own record does not carry: {problems}",
+        )
+        record.write_text(
+            published.replace(f"| {number} | **PASS**", f"| {number} | FAIL"),
+            encoding="utf-8",
+        )
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any("A checkpoint is ratified on a round both streams passed" in problem
+                for problem in problems),
+            f"CP-00 ratified on a round its own record calls failed: {problems}",
+        )
+
+    def test_gutting_the_acceptance_record_is_not_a_way_to_satisfy_it(self) -> None:
+        """Completeness over a deleted table is completeness over nothing."""
+        self._ratify_for_real()
+        record = self.sandbox.root / ACCEPTANCE_RECORD
+        record.write_text("# CP-00 acceptance record\n", encoding="utf-8")
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any(ACCEPTANCE_RECORD_HEADING in problem for problem in problems), problems
+        )
+
+    def test_a_manifest_reporting_no_round_makes_the_record_rule_vacuous(self) -> None:
+        """The anti-vacuity guard is on the manifest side, where the emptying happens."""
+        self.sandbox._remember(CHECKPOINT_MANIFEST)
+        path = self.sandbox.root / CHECKPOINT_MANIFEST
+        document = json.loads(path.read_text(encoding="utf-8"))
+        for entry in document["acceptance_rounds"]:
+            entry["verdict"] = None
+        path.write_text(
+            json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        problems = _acceptance_record_problems(self.sandbox.root)
+        self.assertTrue(
+            any("records no round with a verdict" in problem for problem in problems),
+            problems,
+        )
+
+    def test_a_publication_missing_any_deliverable_is_rejected(self) -> None:
+        """One file at a time, because "the bundle is there" is not eight statements."""
+        for entry in CHECKPOINT_DELIVERABLES:
+            with self.subTest(deliverable=entry["name"]):
+                self._ratify_for_real()
+                relative = ACCEPTANCE_EVIDENCE_PREFIX + entry["name"]
+                self.sandbox.restore_one(relative)
+                self.assertFalse((self.sandbox.root / relative).exists())
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(relative in problem and "is missing" in problem for problem in problems),
+                    f"a checkpoint published without {entry['name']} was accepted: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_every_deliverable_content_requirement_is_load_bearing(self) -> None:
+        """Emptying each file in turn. A path that may move proves nothing.
+
+        This is round four's finding one level out: there, five files were declared and
+        four were edited with a comment. Here the licence is to *create* eight files,
+        and a licence to create a file is satisfied by creating an empty one.
+        """
+        for entry in CHECKPOINT_DELIVERABLES:
+            with self.subTest(deliverable=entry["name"]):
+                self._ratify_for_real()
+                relative = ACCEPTANCE_EVIDENCE_PREFIX + entry["name"]
+                (self.sandbox.root / relative).write_text(
+                    "published\n", encoding="utf-8"
+                )
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(relative in problem for problem in problems),
+                    f"an empty {entry['name']} satisfied its requirement: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_a_contract_manifest_describing_another_tree_is_rejected(self) -> None:
+        """The values are recomputed, so a bundle copied from another checkpoint fails.
+
+        Three separate values, each mutated on its own: the candidate commit, the
+        reviewed-family digest, and one of the five recorded hashes. A single probe over
+        the file would not distinguish them, and `hashes` covering five paths would be
+        satisfied by any one of them being right.
+        """
+        relative = ACCEPTANCE_EVIDENCE_PREFIX + "contract-manifest.yaml"
+        manifest = _checkpoint_manifest(self.sandbox.root) or {}
+        cases = {
+            "candidate commit": (REVIEWED_CANDIDATE_COMMIT, "f" * 40),
+            "reviewed manifest digest": (None, "0" * 64),
+            "lock hash": (None, "1" * 64),
+        }
+        for label in cases:
+            with self.subTest(value=label):
+                self._ratify_for_real()
+                path = self.sandbox.root / relative
+                text = path.read_text(encoding="utf-8")
+                if label == "candidate commit":
+                    old, new = cases[label]
+                elif label == "reviewed manifest digest":
+                    old = _reviewed_manifest_digest(self.sandbox.root)[0]
+                    new = cases[label][1]
+                else:
+                    old = hashlib.sha256(
+                        (self.sandbox.root / "requirements/validation.lock").read_bytes()
+                    ).hexdigest()
+                    new = cases[label][1]
+                self.assertIn(old, text, f"the harness never wrote the {label}")
+                path.write_text(text.replace(old, new), encoding="utf-8")
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(relative in problem for problem in problems),
+                    f"a contract manifest with the wrong {label} was accepted: {problems}",
+                )
+                self.sandbox.restore()
+        self.assertIsInstance(manifest, dict)
+
+    def test_a_manual_report_that_does_not_pass_every_case_cannot_ratify(self) -> None:
+        """Deliverable 3, one failure mode at a time.
+
+        The case list comes from the runbook, so a report that simply omits a case is
+        caught by the same check that catches one recording a `FAIL` — and both are
+        caught while the manifest's own `manual_acceptance` says `PASS`, which is the
+        contradiction a checkpoint may not ship.
+        """
+        relative = ACCEPTANCE_EVIDENCE_PREFIX + "manual-test-report.md"
+        cases = _manual_case_ids(self.sandbox.root)
+        self.assertTrue(cases, "the runbook defines no manual cases")
+        mutations = {
+            "a failed case": lambda text: text.replace(
+                f"| {cases[2]} | PASS |", f"| {cases[2]} | FAIL |"
+            ),
+            "a missing case": lambda text: "\n".join(
+                line for line in text.splitlines() if cases[-1] not in line
+            ),
+            "a case with no verdict": lambda text: text.replace(
+                f"| {cases[0]} | PASS |", f"| {cases[0]} | |"
+            ),
+            "no tester": lambda text: text.replace(
+                "tester: independent CP-00 manual tester", "tester:"
+            ),
+            "no timestamp": lambda text: text.replace(
+                "started_at: 2026-09-04T09:00:00Z", "started_at: whenever"
+            ),
+            "no runtime disposition": lambda text: text.replace(
+                "backend_runtime: not applicable", "backend_runtime: 1.0"
+            ),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(mutation=label):
+                self._ratify_for_real()
+                path = self.sandbox.root / relative
+                before = path.read_text(encoding="utf-8")
+                after = mutate(before)
+                self.assertNotEqual(before, after, "the mutation changed nothing")
+                path.write_text(after, encoding="utf-8")
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(relative in problem for problem in problems),
+                    f"a manual report with {label} was accepted: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_a_runbook_defining_no_cases_is_reported_not_satisfied(self) -> None:
+        """The manual case list is an anchor, so it has to be able to rot loudly.
+
+        Every case in the report is required because the runbook names it. A runbook
+        that named none would make the whole per-case requirement a loop over nothing —
+        the emptying defect again, one document further out — so the empty case list is
+        reported rather than passed.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_checkpoint_bundle_problems(self.sandbox.root), [])
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "MANUAL_RUNBOOK", "docs/INDEX.md"
+        ):
+            self.assertEqual(_manual_case_ids(self.sandbox.root), [])
+            problems = _checkpoint_bundle_problems(self.sandbox.root)
+        self.assertTrue(
+            any("defines no MT00 case IDs" in problem for problem in problems), problems
+        )
+
+    def test_build_information_must_be_an_object_and_not_merely_valid_json(self) -> None:
+        """The one deliverable whose only stated requirement is its shape.
+
+        Emptying the file is caught by the value it has to name, so that mutation does
+        not isolate the shape branch. A JSON *array* carrying the same value does: it
+        parses, it names the commit, and it is not a record of anything.
+        """
+        relative = ACCEPTANCE_EVIDENCE_PREFIX + "build-info.json"
+        for label, body in (
+            ("an array", json.dumps([REVIEWED_CANDIDATE_COMMIT])),
+            ("an empty object", json.dumps({"note": REVIEWED_CANDIDATE_COMMIT}) and "{}"),
+        ):
+            with self.subTest(shape=label):
+                self._ratify_for_real()
+                (self.sandbox.root / relative).write_text(body + "\n", encoding="utf-8")
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(relative in problem for problem in problems),
+                    f"build information recorded as {label} was accepted: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_a_retracted_claim_written_back_is_named(self) -> None:
+        """The denial branch on its own.
+
+        Restoring a whole document removes its new statement as well, so that probe
+        cannot tell which of the two checks fired. Here the reconciliation is left
+        entirely in place and only the retracted claim is put back — which is what a
+        document says when somebody edits it after ratification and forgets what the
+        ratification was for.
+        """
+        for entry in RATIFICATION_PUBLICATION_RECORDS:
+            if not entry["denials"]:
+                continue
+            with self.subTest(item=entry["item"]):
+                self._ratify_for_real()
+                path = self.sandbox.root / entry["path"]
+                text = path.read_text(encoding="utf-8")
+                denial = entry["denials"][0]
+                if entry.get("row"):
+                    lines = text.splitlines()
+                    row = next(line for line in lines if entry["row"] in line)
+                    text = text.replace(row, f"{row} ({denial})")
+                else:
+                    text += f"\n{denial}\n"
+                path.write_text(text, encoding="utf-8")
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(denial in problem and entry["item"] in problem
+                        for problem in problems),
+                    f"{entry['item']} kept saying {denial!r} after ratification: "
+                    f"{problems}",
+                )
+                self.sandbox.restore()
+
+    def test_a_risk_note_that_drops_a_recorded_risk_is_rejected(self) -> None:
+        """The bundle may not be a shorter story than the record it publishes."""
+        relative = ACCEPTANCE_EVIDENCE_PREFIX + "known-risks.md"
+        for dropped in ("ADR-0014", "U-04", "E-06"):
+            with self.subTest(risk=dropped):
+                self._ratify_for_real()
+                path = self.sandbox.root / relative
+                path.write_text(
+                    "\n".join(
+                        line
+                        for line in path.read_text(encoding="utf-8").splitlines()
+                        if dropped not in line
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(dropped in problem and relative in problem for problem in problems),
+                    f"a risk note that dropped {dropped} was accepted: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_a_manifest_field_naming_nothing_is_reported_not_satisfied(self) -> None:
+        """The table-emptying defect one level down, in the data instead of the table.
+
+        `known-risks.md` is required to name every entry of three manifest fields. Empty
+        the field and the loop runs zero times, so the requirement would be satisfied by
+        a risk note that names nothing at all.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+        self.sandbox.patch_json(CHECKPOINT_MANIFEST, architecture_defer=[])
+        problems = _checkpoint_bundle_problems(self.sandbox.root)
+        self.assertTrue(
+            any("architecture_defer names nothing" in problem for problem in problems),
+            problems,
+        )
+
+    def test_a_deliverable_that_already_exists_at_the_candidate_licenses_nothing(self) -> None:
+        """Anti-vacuity: "ratification must create it" needs it not to be there already.
+
+        Nothing under `artifacts/` exists at the reviewed candidate, so the live table
+        cannot demonstrate this. A substituted table naming a document that *is* there
+        can, and the check must refuse it rather than pass forever.
+        """
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "ACCEPTANCE_EVIDENCE_PREFIX", "docs/"
+        ), unittest.mock.patch.object(
+            sys.modules[__name__],
+            "CHECKPOINT_DELIVERABLES",
+            ({"name": "INDEX.md", "requires": ("CP-00",), "note": "a probe"},),
+        ):
+            problems = _checkpoint_bundle_problems(self.sandbox.root)
+        self.assertTrue(
+            any("degenerate requirement" in problem for problem in problems), problems
+        )
+
+    def test_the_bundle_is_checked_before_ratification_as_well(self) -> None:
+        """The unratified branch is not a skip.
+
+        Absence is silent — the integrator has not written the bundle yet, and requiring
+        it before the act would be as wrong as never requiring it. Content is not: a
+        file that exists and describes the wrong tree is wrong the moment it is written,
+        and waiting for the flag to say so is how a check ends up unable to fail.
+        """
+        self.assertEqual(_checkpoint_bundle_problems(self.sandbox.root), [])
+        relative = ACCEPTANCE_EVIDENCE_PREFIX + "migration-head.txt"
+        self.sandbox._remember(relative)
+        (self.sandbox.root / relative).write_text("head-of-the-line\n", encoding="utf-8")
+        problems = _checkpoint_bundle_problems(self.sandbox.root)
+        self.assertTrue(
+            any(relative in problem for problem in problems),
+            f"a wrong deliverable written before ratification passed: {problems}",
+        )
+        self.assertFalse(
+            any("is missing" in problem for problem in problems),
+            "the seven unwritten deliverables were demanded before the ratification "
+            "that is supposed to create them",
+        )
+
+    def test_each_publication_claim_left_standing_is_named(self) -> None:
+        """One document at a time: retract two of three and the third is named."""
+        for entry in RATIFICATION_PUBLICATION_RECORDS:
+            with self.subTest(item=entry["item"]):
+                self._ratify_for_real()
+                self.sandbox.restore_one(entry["path"])
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(entry["item"] in problem for problem in problems),
+                    f"{entry['item']} was left at its pre-ratification state and the "
+                    f"checkpoint ratified anyway: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_the_publication_requirements_are_checked_before_ratification_too(self) -> None:
+        """Both directions on the live documents, the shape §11.12.3 established.
+
+        Reword the claim while CP-00 is unratified and the check fails **now**, saying
+        so, instead of passing forever once the sentence it was waiting to see removed
+        is already gone. Write the post-ratification requirement early and it is
+        reported as degenerate for the same reason.
+        """
+        wave = RATIFICATION_PUBLICATION_RECORDS[0]
+        self.sandbox._retract(
+            wave["path"], wave["denials"][0], "`W0-INT-01` is proceeding"
+        )
+        problems = _publication_record_problems(self.sandbox.root)
+        self.assertTrue(
+            any("anchor rot" in problem and wave["path"] in problem for problem in problems),
+            problems,
+        )
+        self.sandbox.restore()
+
+        self.sandbox._append(wave["path"], "\nS01 preparation may begin.\n")
+        problems = _publication_record_problems(self.sandbox.root)
+        self.assertTrue(
+            any("degenerate requirement" in problem for problem in problems), problems
+        )
+        self.sandbox.restore()
+
+        # The structural half of the same anchor. A checklist already ticked before the
+        # checkpoint is ratified cannot show that ratification ticked it.
+        stage = RATIFICATION_PUBLICATION_RECORDS[1]["path"]
+        self.sandbox._remember(stage)
+        path = self.sandbox.root / stage
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("- [ ]", "- [x]"), encoding="utf-8"
+        )
+        problems = _publication_record_problems(self.sandbox.root)
+        self.assertTrue(
+            any("anchor rot" in problem and "already ticked" in problem
+                for problem in problems),
+            problems,
+        )
+
+    def test_an_automated_summary_that_contradicts_the_record_is_rejected(self) -> None:
+        """The `requires` and `values` branches on one file, isolated from each other.
+
+        Cross-record only, and the note on the table says so: the manifest already has
+        to record `PASS` for the round being ratified, so what this catches is a summary
+        that contradicts the record it summarises or belongs to another round. It is not
+        an independent verification that the suite passed.
+        """
+        relative = ACCEPTANCE_EVIDENCE_PREFIX + "automated-summary.txt"
+        number = (_checkpoint_manifest(self.sandbox.root) or {})["current_round"]
+        for label, old, new in (
+            ("a contradicted verdict", "PASS", "FAIL"),
+            ("another round", f"round {number}", f"round {number + 1}"),
+        ):
+            with self.subTest(mutation=label):
+                self._ratify_for_real()
+                path = self.sandbox.root / relative
+                text = path.read_text(encoding="utf-8")
+                self.assertIn(old, text)
+                path.write_text(text.replace(old, new, 1), encoding="utf-8")
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(relative in problem for problem in problems),
+                    f"an automated summary naming {label} was accepted: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_every_anti_gutting_needle_is_load_bearing_on_its_own(self) -> None:
+        """One probe per needle, because a probe over the loop proves only the loop.
+
+        The probe below drops the whole `must_still_contain` iteration and goes red, and
+        that was taken as evidence the anti-gutting guard was paid for. It is not: with
+        five needles across three documents, a single end-to-end case can be satisfied by
+        *any one* of them, and an independent reviewer measured the consequence -- the
+        S00 entry's two needles could be emptied and the wave entry reduced to one with
+        the whole suite green, and all three publication documents could then be reduced
+        to the strings the check looks for (16031 -> 46, 6179 -> 131, 2519 -> 73 bytes)
+        with nothing reported. "A mutation probe proves only what it mutates" is this
+        module's own rule; here it is applied to its own needles.
+
+        Each needle is removed from its document in turn, on an otherwise complete
+        ratification, and must be named. The `assertIn` before each removal is the
+        anti-vacuity half: a needle that has already drifted out of the document would
+        make its case pass by removing nothing.
+        """
+        # Pinned per entry, and deliberately not derived from the table this probe
+        # iterates. A count computed from that table is satisfied by any table -- the
+        # first form of this probe asserted `checked >= 5` and both surviving mutants
+        # walked through it, because emptying one entry's two needles still left five
+        # across the other two. A licence may be reduced; it may not be reduced silently.
+        expected_needles = {
+            "docs/program/waves/W0.3_ratification_integration.md": 2,
+            "docs/stages/S00_architecture_and_behavior_freeze.md": 2,
+            "docs/INDEX.md": 3,
+        }
+        self._ratify_for_real()
+        self.assertEqual(_publication_record_problems(self.sandbox.root), [])
+        self.assertEqual(
+            {e["path"] for e in RATIFICATION_PUBLICATION_RECORDS},
+            set(expected_needles),
+            "the publication document set moved; re-read why before re-pinning",
+        )
+        checked = 0
+        for entry in RATIFICATION_PUBLICATION_RECORDS:
+            relative = entry["path"]
+            path = self.sandbox.root / relative
+            self.assertEqual(
+                len(entry["must_still_contain"]),
+                expected_needles[relative],
+                f"{relative} carries {len(entry['must_still_contain'])} anti-gutting "
+                f"needles, not {expected_needles[relative]}. Dropping one drops the only "
+                "thing standing between 'this document was updated' and 'this document "
+                "was deleted down to the string the check looks for'.",
+            )
+            for needle in entry["must_still_contain"]:
+                with self.subTest(document=relative, needle=needle):
+                    self.sandbox._remember(relative)
+                    before = path.read_text(encoding="utf-8")
+                    self.assertIn(
+                        needle,
+                        before,
+                        f"{relative} no longer carries {needle!r}, so removing it "
+                        "removes nothing and this case proves nothing. Re-anchor the "
+                        "needle in RATIFICATION_PUBLICATION_RECORDS.",
+                    )
+                    path.write_text(before.replace(needle, ""), encoding="utf-8")
+                    problems = _publication_record_problems(self.sandbox.root)
+                    path.write_text(before, encoding="utf-8")
+                    self.assertTrue(
+                        any(
+                            relative in problem and repr(needle) in problem
+                            for problem in problems
+                        ),
+                        f"{relative} was gutted of {needle!r} and nothing said so: "
+                        f"{problems}",
+                    )
+                    checked += 1
+        self.assertEqual(
+            checked,
+            sum(expected_needles.values()),
+            "a needle was skipped rather than checked",
+        )
+        self.assertEqual(_publication_record_problems(self.sandbox.root), [])
+
+    def test_deleting_a_licensed_path_is_reported_for_every_licensed_group(self) -> None:
+        """Ratification may *move* these paths. Nothing said it may not delete them.
+
+        Each of the three groups this round newly licensed reports a missing file, and
+        until now not one of those branches had ever been executed by a test: an
+        independent reviewer removed all three reports in turn and the whole suite stayed
+        green. That is the difference between a guard that is live and a guard that is
+        merely present -- and it matters most exactly here, because the reason these
+        paths are in :data:`POST_FREEZE_DELTA_CEILING` at all is that ratification writes
+        to them, so "moved" and "deleted at ratification" are one keystroke apart and the
+        delta check cannot tell them apart.
+
+        The eight checkpoint deliverables are not in this probe: their missing-file branch
+        is already exercised by
+        :meth:`test_a_publication_missing_any_deliverable_is_rejected`.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_publication_record_problems(self.sandbox.root), [])
+        self.assertEqual(_acceptance_record_problems(self.sandbox.root), [])
+        self.assertEqual(_task_banner_problems(self.sandbox.root), [])
+
+        groups = (
+            (
+                "a licensed publication document",
+                sorted(PUBLICATION_DOCUMENT_PATHS)[0],
+                _publication_record_problems,
+            ),
+            ("the acceptance record", ACCEPTANCE_RECORD, _acceptance_record_problems),
+            (
+                "a licensed task file",
+                sorted(COMPLETED_TASK_FILES)[0],
+                _task_banner_problems,
+            ),
+        )
+        for label, relative, checker in groups:
+            with self.subTest(group=label, path=relative):
+                self.assertIn(
+                    relative,
+                    POST_FREEZE_DELTA_CEILING,
+                    f"{relative} is not licensed, so this case is not about the "
+                    "deletion of a licensed path any more",
+                )
+                path = self.sandbox.root / relative
+                self.sandbox._remember(relative)
+                kept = path.read_bytes()
+                path.unlink()
+                problems = checker(self.sandbox.root)
+                path.write_bytes(kept)
+                self.assertTrue(
+                    any(
+                        relative in problem and "is missing" in problem
+                        for problem in problems
+                    ),
+                    f"{label} was deleted at ratification and nothing said so: "
+                    f"{problems}",
+                )
+        self.assertEqual(len(groups), 3)
+        self.assertEqual(_publication_record_problems(self.sandbox.root), [])
+        self.assertEqual(_acceptance_record_problems(self.sandbox.root), [])
+        self.assertEqual(_task_banner_problems(self.sandbox.root), [])
+
+    def test_a_publication_document_missing_its_statement_or_its_subject_is_named(self) -> None:
+        """The two remaining branches: the new statement, and what it was about.
+
+        Retracting the stale claim is half the job. A wave plan that says nothing about
+        what CP-00 unlocked has not been reconciled with the checkpoint, and one that
+        satisfies the retraction by deleting the tag it was about has been gutted — the
+        distinction `must_still_contain` exists for and the one round four's probe
+        walked straight through one level up.
+        """
+        wave = RATIFICATION_PUBLICATION_RECORDS[0]
+        for label, old in (
+            ("the new statement", "\n## Next unlocked tasks\n\nCP-00 is ratified and tagged; "
+                                  "the S01 repository-foundation preparation tasks are unlocked.\n"),
+            ("the tag it was about", "`v0.0.0-architecture`"),
+        ):
+            with self.subTest(missing=label):
+                self._ratify_for_real()
+                path = self.sandbox.root / wave["path"]
+                text = path.read_text(encoding="utf-8")
+                self.assertIn(old, text)
+                path.write_text(text.replace(old, ""), encoding="utf-8")
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(wave["item"] in problem for problem in problems),
+                    f"a wave plan without {label} was accepted: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_a_row_scoped_requirement_needs_exactly_one_row(self) -> None:
+        """Two rows for one task is not a status; it is two statuses."""
+        index = RATIFICATION_PUBLICATION_RECORDS[2]
+        self._ratify_for_real()
+        path = self.sandbox.root / index["path"]
+        lines = path.read_text(encoding="utf-8").splitlines()
+        row = next(line for line in lines if index["row"] in line)
+        path.write_text("\n".join(lines + [row]) + "\n", encoding="utf-8")
+        problems = _publication_record_problems(self.sandbox.root)
+        self.assertTrue(
+            any("carries 2 rows" in problem for problem in problems), problems
+        )
+
+    def test_the_stage_checklist_is_completed_and_not_shortened(self) -> None:
+        """A ticked box is content; a deleted checklist is the gutting move."""
+        stage = RATIFICATION_PUBLICATION_RECORDS[1]["path"]
+        self._ratify_for_real()
+        path = self.sandbox.root / stage
+        published = path.read_text(encoding="utf-8")
+        path.write_text(published.replace("- [x]", "- [ ]", 1), encoding="utf-8")
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any("unticked" in problem and stage in problem for problem in problems),
+            f"CP-00 ratified with its own exit evidence outstanding: {problems}",
+        )
+
+        path.write_text(
+            "\n".join(
+                line
+                for line in published.splitlines()
+                if "- [x]" not in line
+            )
+            + "\nS01\n",
+            encoding="utf-8",
+        )
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any("shortening" in problem or "boxes and the reviewed candidate" in problem
+                for problem in problems),
+            f"the checklist was completed by deleting it: {problems}",
+        )
+
+    def test_the_index_requirement_is_scoped_to_the_row(self) -> None:
+        """The index already says "accepted and integrated" six times.
+
+        A document-wide needle would therefore be satisfied by every other task's row,
+        and the one row that still calls the ratifying task blocked would never be read.
+        """
+        index = RATIFICATION_PUBLICATION_RECORDS[2]
+        self._ratify_for_real()
+        self.sandbox.restore_one(index["path"])
+        self.assertIn(
+            "accepted and integrated",
+            (self.sandbox.root / index["path"]).read_text(encoding="utf-8"),
+            "the index no longer carries the phrase elsewhere, so this probe is not "
+            "measuring the scoping",
+        )
+        problems = _publication_record_problems(self.sandbox.root)
+        self.assertTrue(
+            any(index["item"] in problem for problem in problems),
+            f"the unretracted row passed on another row's status: {problems}",
+        )
+
+    def test_a_task_file_changed_outside_its_banner_is_named(self) -> None:
+        """The licence is the status banner. The rest of an accepted task is frozen."""
+        victim = "docs/program/tasks/W0-ARC-01.md"
+        self._ratify_for_real()
+        self.assertEqual(_task_banner_problems(self.sandbox.root), [])
+        self.sandbox.edit(victim, marker="\n## Extra deliverable\n\nAnd one more.\n")
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any(victim in problem and "outside its status banner" in problem
+                for problem in problems),
+            f"an accepted task's deliverables were rewritten at ratification: {problems}",
+        )
+
+    def test_a_banner_edit_is_what_the_licence_permits(self) -> None:
+        """The positive direction, or the check above is satisfied by refusing always."""
+        closed = "docs/program/tasks/W0-CLN-01.md"
+        self._ratify_for_real()
+        frozen = _tree_blobs(self.sandbox.root, self.sandbox.frozen_commit)
+        self.assertNotEqual(
+            (self.sandbox.root / closed).read_bytes(),
+            frozen[closed],
+            "the harness closed no other task's banner, so nothing here is permitted "
+            "that could have been refused",
+        )
+        self.assertEqual(_task_banner_problems(self.sandbox.root), [])
+
+    def test_a_removed_status_banner_is_named(self) -> None:
+        """Closing a banner is not deleting one."""
+        closed = "docs/program/tasks/W0-CLN-01.md"
+        self._ratify_for_real()
+        path = self.sandbox.root / closed
+        banner, rest = _banner_split(path.read_text(encoding="utf-8"))
+        self.assertTrue(banner, "the probe removed nothing")
+        path.write_text(rest, encoding="utf-8")
+        problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any(closed in problem and "banner is gone" in problem for problem in problems),
+            problems,
+        )
+
+    def test_the_ratifying_task_banner_moves_in_both_directions(self) -> None:
+        """The one banner ratification must close, and no other task may."""
+        flat = _flat((self.sandbox.root / RATIFYING_TASK_FILE).read_text(encoding="utf-8"))
+        self.assertIn(RATIFYING_TASK_BANNER_DENIAL, flat)
+        self.assertEqual(_task_banner_problems(self.sandbox.root), [])
+
+        self.sandbox._retract(
+            RATIFYING_TASK_FILE, RATIFYING_TASK_BANNER_DENIAL, "under way"
+        )
+        problems = _task_banner_problems(self.sandbox.root)
+        self.assertTrue(
+            any("anchor rot" in problem for problem in problems),
+            f"the denial was reworded while CP-00 is unratified and nothing said so: "
+            f"{problems}",
+        )
+        self.sandbox.restore()
+
+        # And the other side of the same anchor: a banner that names the published tag
+        # before there is a publication cannot show that ratification named it.
+        self.sandbox._retract(
+            RATIFYING_TASK_FILE,
+            RATIFYING_TASK_BANNER_DENIAL,
+            f"{RATIFYING_TASK_BANNER_DENIAL}; the tag will be `{CHECKPOINT_TAG}`",
+        )
+        problems = _task_banner_problems(self.sandbox.root)
+        self.assertTrue(
+            any("degenerate requirement" in problem for problem in problems), problems
+        )
+        self.sandbox.restore()
+
+        # Each of the ratified branches on its own. Restoring the whole file would
+        # remove the tag as well, so one probe would answer for two checks and neither
+        # would be measured.
+        closed = f"ratified and published as `{CHECKPOINT_TAG}`"
+        for label, mutate in (
+            (
+                "the denial written back beside the tag",
+                lambda text: text.replace(
+                    closed, f"{closed}; {RATIFYING_TASK_BANNER_DENIAL}"
+                ),
+            ),
+            ("the tag not named", lambda text: text.replace(closed, "ratified")),
+        ):
+            with self.subTest(mutation=label):
+                self._ratify_for_real()
+                path = self.sandbox.root / RATIFYING_TASK_FILE
+                text = path.read_text(encoding="utf-8")
+                self.assertIn(closed, text, "the harness closed no banner to mutate")
+                path.write_text(mutate(text), encoding="utf-8")
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(RATIFYING_TASK_FILE in problem for problem in problems),
+                    f"{label}: {problems}",
+                )
+                self.sandbox.restore()
+
+    def test_the_ratifying_task_may_rewrite_its_own_handoff_and_nothing_else(self) -> None:
+        """The second half of `W0-INT-01`'s own allowed path, and only that half."""
+        self._ratify_for_real()
+        path = self.sandbox.root / RATIFYING_TASK_FILE
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("\n## Handoff", text, "the anchor this exception is cut at is gone")
+        path.write_text(text + "\n- pushed main, the branch and the tag.\n", encoding="utf-8")
+        self.assertEqual(
+            _task_banner_problems(self.sandbox.root),
+            [],
+            "the ratifying task may record its own handoff",
+        )
+        path.write_text(
+            text.replace("## Outcome", "## Outcome (revised)"), encoding="utf-8"
+        )
+        problems = _task_banner_problems(self.sandbox.root)
+        self.assertTrue(
+            any(RATIFYING_TASK_FILE in problem and "outside its status banner" in problem
+                for problem in problems),
+            f"the ratifying task rewrote its own outcome and passed: {problems}",
+        )
+
+    def test_the_new_licences_are_named_files_and_not_directories(self) -> None:
+        """A ceiling that is a *prefix* is a ceiling anyone can widen by adding a file.
+
+        Two strangers, one under the evidence prefix and one in the task directory,
+        neither of them a licensed name. Both must void the round, or the licence is on
+        `artifacts/checkpoints/CP-00/**` and `docs/program/tasks/**` rather than on the
+        eight and the seventeen this module names.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_post_freeze_delta_problems(self.sandbox.root), [])
+        for stranger in (
+            ACCEPTANCE_EVIDENCE_PREFIX + "checkpoint-report-draft.md",
+            "docs/program/tasks/W0-INT-02.md",
+        ):
+            with self.subTest(stranger=stranger):
+                self.assertNotIn(stranger, POST_FREEZE_DELTA_CEILING)
+                path = self.sandbox.root / stranger
+                self.addCleanup(path.unlink, True)
+                path.write_text("added after the freeze\n", encoding="utf-8")
+                problems = _post_freeze_delta_problems(self.sandbox.root)
+                self.assertTrue(
+                    any("is void" in problem and stranger in problem for problem in problems),
+                    f"an unnamed path in a licensed directory did not void the round: "
+                    f"{problems}",
+                )
+                path.unlink()
+
+    def test_a_banner_rewritten_without_naming_the_checkpoint_is_named(self) -> None:
+        """**The price of licensing sixteen task files that need not move at all.**
+
+        `_task_banner_problems` proved a licensed task file did not change *outside* its
+        banner, and until now said nothing whatever about the banner of the sixteen that
+        are not the ratifying task. So the licence bought a free rewrite of sixteen
+        accepted tasks' status text under cover of a ratification — a path that may move
+        and is required to carry nothing, which is the finding
+        :data:`RECONCILIATIONS` exists for one layer up.
+
+        What ratification writes into a banner is a closure, and a closure names the
+        checkpoint it closes at. Three directions, because two of them can rot:
+
+        * ratified and rewritten, no tag — the requirement, and it must fire;
+        * unratified and already naming the tag — degenerate, and it must fire, or the
+          requirement above could be satisfied by a banner that always said it;
+        * unratified and carrying the ratifying task's denial — a second front on the
+          ratification in a file no task may close, and it must fire.
+        """
+        closed = "docs/program/tasks/W0-CLN-01.md"
+        self.assertNotEqual(closed, RATIFYING_TASK_FILE)
+        marker = f"> Closed at CP-00 `{CHECKPOINT_TAG}`.\n"
+
+        self._ratify_for_real()
+        path = self.sandbox.root / closed
+        self.assertEqual(_task_banner_problems(self.sandbox.root), [])
+        text = path.read_text(encoding="utf-8")
+        self.assertIn(marker, text, "the harness closed no other banner to strip")
+        path.write_text(text.replace(marker, "> Closed.\n"), encoding="utf-8")
+        problems = _task_banner_problems(self.sandbox.root)
+        self.assertTrue(
+            any(closed in problem and CHECKPOINT_TAG in problem for problem in problems),
+            f"a status banner rewritten at ratification named no checkpoint: {problems}",
+        )
+        self.sandbox.restore()
+
+        # Unratified from here: `restore` puts the manifest back to `ratified: false`.
+        self.assertIsNot(
+            (_checkpoint_manifest(self.sandbox.root) or {}).get("ratified"), True
+        )
+        for label, addition, expected in (
+            ("the tag, before there is a publication", marker, "degenerate requirement"),
+            (
+                "the ratifying task's denial",
+                f"> {RATIFYING_TASK_BANNER_DENIAL}.\n",
+                RATIFYING_TASK_BANNER_DENIAL,
+            ),
+        ):
+            with self.subTest(planted=label):
+                self.sandbox._remember(closed)
+                text = path.read_text(encoding="utf-8")
+                banner, _rest = _banner_split(text)
+                self.assertTrue(banner, f"{closed} carries no banner to plant in")
+                path.write_text(text.replace(banner, banner + addition, 1), encoding="utf-8")
+                problems = _task_banner_problems(self.sandbox.root)
+                self.assertTrue(
+                    any(closed in problem and expected in problem for problem in problems),
+                    f"{label} was planted in a completed task's banner and nothing said "
+                    f"so: {problems}",
+                )
+                self.sandbox.restore_one(closed)
+
+    def test_an_emptied_requirement_table_is_reported_not_satisfied(self) -> None:
+        """The table-emptying defect, in the three tables round thirteen added.
+
+        Each of the three groups loops over a module table, and a loop over an empty
+        table is not a weak requirement — it is no requirement, silently. The pins in
+        :class:`TableExpectationTests` make emptying one *visible* in a diff; these
+        guards make it *reported* on the tree, which is the difference between a reviewer
+        having to notice and a check that fails. Both halves are exercised: the whole
+        table emptied, and — for the deliverables, where an entry can be hollowed out
+        without shortening the table — a single entry left with nothing to say.
+        """
+        for name, empty, checker, needle in (
+            ("CHECKPOINT_DELIVERABLES", (), _checkpoint_bundle_problems,
+             "CHECKPOINT_DELIVERABLES is empty"),
+            ("RATIFICATION_PUBLICATION_RECORDS", (), _publication_record_problems,
+             "RATIFICATION_PUBLICATION_RECORDS is empty"),
+            ("COMPLETED_TASK_FILES", frozenset(), _task_banner_problems,
+             "COMPLETED_TASK_FILES is empty"),
+        ):
+            with self.subTest(table=name):
+                with unittest.mock.patch.object(sys.modules[__name__], name, empty):
+                    problems = checker(self.sandbox.root)
+                self.assertTrue(
+                    any(needle in problem for problem in problems),
+                    f"{name} was emptied and its group reported nothing: {problems}",
+                )
+
+        with unittest.mock.patch.object(
+            sys.modules[__name__],
+            "CHECKPOINT_DELIVERABLES",
+            ({"name": "asks-for-nothing.md", "note": "a probe"},),
+        ):
+            problems = _checkpoint_bundle_problems(self.sandbox.root)
+        self.assertTrue(
+            any("required to carry nothing" in problem for problem in problems),
+            f"a deliverable with no content requirement licensed its path: {problems}",
+        )
+
+        hollow = dict(RATIFICATION_PUBLICATION_RECORDS[0])
+        hollow["denials"] = ()
+        hollow["requires"] = ()
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "RATIFICATION_PUBLICATION_RECORDS", (hollow,)
+        ):
+            problems = _publication_record_problems(self.sandbox.root)
+        self.assertTrue(
+            any("neither a denial nor a checklist" in problem for problem in problems)
+            and any("no post-ratification requirement" in problem for problem in problems),
+            f"a publication record with no anchor and no requirement passed: {problems}",
+        )
+
+    def test_the_checkpoint_mechanism_has_a_reachable_published_state(self) -> None:
+        """**Round nine's void, answered by reaching the state instead of arguing it.**
+
+        Round nine was voided before dispatch because `W0-INT-01` could not do its own
+        job without voiding the round that authorised it: the eight evidence files, the
+        three publication documents and the task banners are all inside
+        :func:`_digest_paths` and were licensed by nothing, so an honest ratification put
+        thirty-odd unlicensed paths into the post-freeze delta. "The mechanism has no
+        executable final state, by any sequence" is a claim about reachability, and the
+        only answer that is not more prose is a tree.
+
+        So this builds the whole published state in a throwaway copy — the eight
+        deliverables carrying what the table demands, the three records reconciled, the
+        banners closed, the registry on the ratified token, the state document brought up
+        to date, the reviewed-family digest recomputed over the tree ratification
+        produced, and both acceptance digests sealed structure-first — and then asks
+        every check in the module. All of them must be silent, and
+        :func:`_post_freeze_delta_problems` above all: *its* silence is the repair, because
+        it is the check that declared the round void.
+
+        Then the other direction four times, because a mechanism that accepts everything
+        has an executable state and no *final* one. Each omission is **re-sealed before
+        it is judged**, so `evidence_bundle_digest` reproduces over the incomplete tree
+        and the digest catch-all cannot answer for the requirement under test — without
+        that, all four probes would pass on one piece of arithmetic and not one of the
+        four requirements would have been measured. The four are then required to report
+        something none of the others does, or they are one check with four names.
+        """
+        self._ratify_for_real()
+        root = self.sandbox.root
+        manifest = _checkpoint_manifest(root) or {}
+
+        # It really is the published state, established before anything is asked of it.
+        self.assertIs(manifest.get("ratified"), True)
+        for relative in sorted(CHECKPOINT_DELIVERABLE_PATHS):
+            self.assertTrue((root / relative).is_file(), f"{relative} was not written")
+        self.assertIn(
+            f"`{RATIFIED_STATE_TOKEN}`", (root / CHECKPOINT_REGISTRY).read_text(encoding="utf-8")
+        )
+        stage = RATIFICATION_PUBLICATION_RECORDS[1]["path"]
+        self.assertNotIn("- [ ]", (root / stage).read_text(encoding="utf-8"))
+        self.assertIn(
+            CHECKPOINT_TAG,
+            _flat(_banner_split((root / RATIFYING_TASK_FILE).read_text(encoding="utf-8"))[0]),
+        )
+        self.assertNotIn(
+            STATE_DOCUMENT_DENIAL,
+            _flat((root / PROGRAM_STATE_DOCUMENT).read_text(encoding="utf-8")),
+        )
+        digest, count = _reviewed_manifest_digest(root)
+        self.assertEqual(
+            manifest.get("artifact_manifest_sha256"),
+            digest,
+            "the external record still describes the reviewed families as they were "
+            "before ratification edited them",
+        )
+        self.assertEqual(manifest.get("artifact_count"), count)
+        self.assertEqual(manifest.get("tested_candidate_digest"), self.sandbox.frozen_digest)
+        self.assertEqual(
+            manifest.get("evidence_bundle_digest"),
+            _acceptance_digest(root),
+            "the evidence digest does not reproduce over the tree it was computed on, "
+            "so the seal was taken before the structure was final",
+        )
+        self.assertNotEqual(
+            manifest.get("evidence_bundle_digest"), manifest.get("tested_candidate_digest")
+        )
+
+        for label, check in (
+            ("acceptance", _acceptance_problems),
+            ("tested digest", _tested_digest_problems),
+            ("post-freeze delta", _post_freeze_delta_problems),
+            ("reconciliations", _reconciliation_problems),
+            ("reviewed-family delta", _ratification_delta_problems),
+            ("undeclared drift", _undeclared_drift),
+            ("unperformed declarations", _unperformed_declarations),
+            ("immutable family drift", _immutable_family_drift),
+            ("retro-edited digests", _retro_edited_digests),
+            ("state document", _state_document_problems),
+            ("evidence bundle", _checkpoint_bundle_problems),
+            ("publication records", _publication_record_problems),
+            ("task banners", _task_banner_problems),
+        ):
+            with self.subTest(check=label):
+                self.assertEqual(
+                    check(root),
+                    [],
+                    f"a complete, honest CP-00 publication is refused by the {label} "
+                    "check, so the checkpoint still has no executable final state",
+                )
+        self.assertIsNone(_registry_state_problem(root))
+
+        # ---- and each single omission, judged on a re-sealed tree -------------------
+        #
+        # Back to the unratified tree first. Every omission below is built by ratifying
+        # from scratch and breaking exactly one thing, and a second ratification laid
+        # over the first would reconcile documents that are already reconciled — the
+        # fixture would fail before the requirement under test was ever reached.
+        self.sandbox.restore()
+        dropped = ACCEPTANCE_EVIDENCE_PREFIX + "known-risks.md"
+        wave = RATIFICATION_PUBLICATION_RECORDS[0]
+        report = ACCEPTANCE_EVIDENCE_PREFIX + "manual-test-report.md"
+        cases = _manual_case_ids(root)
+        self.assertTrue(cases, "the runbook defines no manual case to fail")
+        closed_banner = f"ratified and published as `{CHECKPOINT_TAG}`"
+
+        def omit_a_deliverable() -> None:
+            self.sandbox.restore_one(dropped)
+
+        def leave_a_record_denying() -> None:
+            self.sandbox.restore_one(wave["path"])
+
+        def leave_a_banner_open() -> None:
+            path = self.sandbox.root / RATIFYING_TASK_FILE
+            text = path.read_text(encoding="utf-8")
+            self.assertIn(closed_banner, text, "the harness closed no banner to reopen")
+            path.write_text(
+                text.replace(
+                    closed_banner, f"{closed_banner}; {RATIFYING_TASK_BANNER_DENIAL}"
+                ),
+                encoding="utf-8",
+            )
+
+        def fail_a_manual_case() -> None:
+            path = self.sandbox.root / report
+            text = path.read_text(encoding="utf-8")
+            self.assertIn(f"| {cases[0]} | PASS |", text)
+            path.write_text(
+                text.replace(f"| {cases[0]} | PASS |", f"| {cases[0]} | FAIL |"),
+                encoding="utf-8",
+            )
+
+        reported: dict[str, list[str]] = {}
+        for label, omit, subject in (
+            ("a missing evidence deliverable", omit_a_deliverable, dropped),
+            ("a record still denying the ratification", leave_a_record_denying, wave["item"]),
+            ("a status banner left open", leave_a_banner_open, RATIFYING_TASK_FILE),
+            ("a manual case that did not pass", fail_a_manual_case, cases[0]),
+        ):
+            with self.subTest(omission=label):
+                self._ratify_for_real()
+                omit()
+                self.sandbox.seal_digests(tested=self.sandbox.frozen_digest)
+                problems = _acceptance_problems(self.sandbox.root)
+                self.assertFalse(
+                    any("does not reproduce" in problem for problem in problems),
+                    "the incomplete tree was re-sealed, so the evidence-digest "
+                    "catch-all must be silent and the requirement must answer on its "
+                    f"own: {problems}",
+                )
+                self.assertTrue(
+                    any(subject in problem for problem in problems),
+                    f"{label} was published and the mechanism ratified anyway: {problems}",
+                )
+                reported[label] = problems
+                self.sandbox.restore()
+
+        for label, problems in reported.items():
+            with self.subTest(distinct=label):
+                elsewhere = {
+                    problem
+                    for other, group in reported.items()
+                    if other != label
+                    for problem in group
+                }
+                self.assertTrue(
+                    set(problems) - elsewhere,
+                    f"{label} reports nothing the other omissions do not also report, "
+                    "so these are one check wearing four names",
+                )
 
     # ---- the acceptance gate, one branch at a time (B1) ---------------------------
     #
@@ -5408,16 +7997,35 @@ class RatificationRecordTests(unittest.TestCase):
 
         A value that no commit carries is caught by discovery. A value a commit *does*
         carry but that does not describe that commit's tree can only be built by writing
-        a commit, which this module does not do — so the freeze commit is substituted
-        instead, which mutates exactly the thing under test: which tree the declared
-        value is claimed to be the digest of.
+        a commit, so the freeze commit is substituted instead, which mutates exactly the
+        thing under test: which tree the declared value is claimed to be the digest of.
+
+        **Driven against the sandbox, not `REPOSITORY_ROOT`.** The live manifest carries
+        `tested_candidate_digest: null` between rounds — the legitimate state
+        :func:`_tested_digest_problems` returns `[]` for by design — and this probe then
+        asserted nothing at all while reporting success, which is the shape this task
+        exists to remove. The sandbox always stands on a real freeze, its own or the one
+        recovered from history, so the digest sealed here is a value a commit genuinely
+        carries and the substitution is the only thing that makes it wrong.
         """
+        self.sandbox.seal_digests(tested=self.sandbox.frozen_digest)
+        self.assertRegex(
+            (_checkpoint_manifest(self.sandbox.root) or {}).get("tested_candidate_digest") or "",
+            r"^[0-9a-f]{64}$",
+            "no digest is declared, so the recomputation this probe is about does not run",
+        )
+        self.assertEqual(
+            _tested_digest_problems(self.sandbox.root),
+            [],
+            "the sealed digest does not reproduce at its own freeze commit, so the "
+            "substitution below is not what makes this fail",
+        )
         with unittest.mock.patch.object(
             sys.modules[__name__],
             "_freeze_commit",
             lambda root: REVIEWED_CANDIDATE_COMMIT,
         ):
-            problems = _tested_digest_problems(REPOSITORY_ROOT)
+            problems = _tested_digest_problems(self.sandbox.root)
         self.assertTrue(
             any("does not reproduce over the tree of" in problem for problem in problems),
             problems,
@@ -5559,7 +8167,7 @@ class RatificationRecordTests(unittest.TestCase):
             f"{ACCEPTANCE_EVIDENCE_PREFIX}../manifest.json",
             f"{ACCEPTANCE_EVIDENCE_PREFIX}reports/../../../etc/passwd",
         )
-        inside = f"{ACCEPTANCE_EVIDENCE_PREFIX}reports/round-5-manual.md"
+        inside = f"{ACCEPTANCE_EVIDENCE_PREFIX}manual-report-round-5.md"
         for value in escapes:
             with self.subTest(declared=value):
                 self.assertTrue(
@@ -5585,6 +8193,86 @@ class RatificationRecordTests(unittest.TestCase):
             {inside},
         )
         self.assertEqual(len(escapes), 3)
+
+    def test_a_report_path_under_a_name_of_the_integrators_choosing_licenses_nothing(
+        self,
+    ) -> None:
+        """The manifest may not widen its own licence by renaming a file a report.
+
+        **The hole, as an independent reviewer demonstrated it end to end.** The
+        effective post-freeze licence is
+        ``POST_FREEZE_DELTA_CEILING | _declared_evidence_paths(manifest)``, and the
+        second term used to admit *any* path under
+        :data:`ACCEPTANCE_EVIDENCE_PREFIX`. The manifest is written by the integrator, so
+        naming `check_state_records.py` as this round's report licensed editing it after
+        the freeze and all fourteen checkers stayed silent. That is the one file in that
+        directory this round deliberately kept out of the ceiling -- a tool, not evidence
+        -- so the module's own control, "named files, not anything under
+        `artifacts/checkpoints/CP-00/`", was defeated by the sibling code path that
+        computes the other half of the same union.
+
+        Both directions, because a licence probe that only shows the refusal proves the
+        function is broken rather than that it is right: the canonical name for this
+        round *is* honoured, and every other name is not.
+        """
+        self._ratify_for_real()
+        self.assertEqual(_post_freeze_delta_problems(self.sandbox.root), [])
+
+        tool = f"{ACCEPTANCE_EVIDENCE_PREFIX}check_state_records.py"
+        self.assertNotIn(
+            tool,
+            POST_FREEZE_DELTA_CEILING,
+            "this probe is about a path the ceiling deliberately excludes; the ceiling "
+            "now licenses it, so the probe is measuring nothing and must be re-anchored",
+        )
+        self.sandbox.edit(tool, marker="\n# moved after the freeze\n")
+
+        manifest = json.loads(
+            (self.sandbox.root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8")
+        )
+        number = manifest["current_round"]
+        for entry in manifest["acceptance_rounds"]:
+            if entry.get("round") == number:
+                entry["manual_report"] = tool
+        manifest["manual_acceptance"]["report_path"] = tool
+        (self.sandbox.root / CHECKPOINT_MANIFEST).write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+
+        problems = _post_freeze_delta_problems(self.sandbox.root)
+        self.assertTrue(
+            any("is void" in problem and tool in problem for problem in problems),
+            f"the manifest licensed its own drift by renaming a tool a report: {problems}",
+        )
+
+        # The positive direction, at the level the clause decides: the round's canonical
+        # names are honoured, and only those two.
+        self.assertEqual(
+            _canonical_report_paths(number),
+            {
+                "manual": f"{ACCEPTANCE_EVIDENCE_PREFIX}manual-report-round-{number}.md",
+                "automated":
+                    f"{ACCEPTANCE_EVIDENCE_PREFIX}automated-report-round-{number}.md",
+            },
+        )
+        honoured = _declared_evidence_paths(
+            {
+                "current_round": number,
+                "acceptance_rounds": [
+                    {
+                        "round": number,
+                        "manual_report":
+                            f"{ACCEPTANCE_EVIDENCE_PREFIX}manual-report-round-{number}.md",
+                        "automated_report": tool,
+                    }
+                ],
+            }
+        )
+        self.assertEqual(
+            honoured,
+            {f"{ACCEPTANCE_EVIDENCE_PREFIX}manual-report-round-{number}.md"},
+            "the canonical name must still be licensed, and the renamed one must not",
+        )
 
     def test_a_closed_rounds_report_path_does_not_license_drift(self) -> None:
         """`_declared_evidence_paths`' current-round filter, exercised directly.
@@ -6262,6 +8950,17 @@ class SandboxResetTests(unittest.TestCase):
         acceptance evidence is what :func:`_post_freeze_delta_problems` voids the round
         for, so widening this expectation to "whatever turned up" would launder exactly
         the drift that check exists to refuse.
+
+        **Round thirteen widened it by exactly one term, for the same reason round
+        twelve widened it at all.** A published tree carries the eight evidence
+        deliverables as well, committed after the freeze, so the expectation is the
+        round's declared evidence *plus the post-freeze licence* — filtered, as before,
+        to what is in the index and absent from the frozen tree. On the unratified tree
+        every ceiling path is either already in the frozen tree or not in the index, so
+        the answer is still ``[published]`` and both mutants round twelve added stay
+        dead. It remains an equality against an independently produced set: the licence
+        is a module constant and the index comes from `git ls-files --cached`, neither of
+        which is ``_digest_paths(...) - blobs``.
         """
         published = "artifacts/checkpoints/CP-00/probe-report-unresettable.md"
         (self.sandbox.root / published).write_text("PASS\n", encoding="utf-8")
@@ -6277,11 +8976,10 @@ class SandboxResetTests(unittest.TestCase):
                 "-C", str(self.sandbox.root), "ls-files", "--cached", text=True, check=True
             ).stdout.split("\n")
         )
+        manifest = _checkpoint_manifest(self.sandbox.root) or {}
         evidence = {
             path
-            for path in _declared_evidence_paths(
-                _checkpoint_manifest(self.sandbox.root) or {}
-            )
+            for path in _declared_evidence_paths(manifest) | POST_FREEZE_DELTA_CEILING
             if path not in blobs and path in cached
         }
         expected = sorted({published} | evidence)
@@ -6367,6 +9065,121 @@ class SandboxResetTests(unittest.TestCase):
         self.assertFalse(external)
         self.assertEqual(declared, frozenset())
         self.sandbox._git_write("status", "--porcelain")
+
+    # ---- the freeze the sandbox stands on, when the live tree has none --------------
+
+    def test_a_recovered_freeze_is_a_real_freeze(self) -> None:
+        """**The price of letting the sandbox reach into history for a freeze.**
+
+        A round that has not been dispatched carries `tested_candidate_digest: null`, and
+        the live repository sits there between rounds. Every post-freeze probe then has
+        no frozen tree to measure against and the whole family fails — not skips —
+        because `_ratify_for_real` refuses to build a ratification on a digest no commit
+        froze. :meth:`_CheckpointSandbox._ensure_a_frozen_round` removes that by writing
+        the newest self-consistent frozen manifest out of history into the sandbox's own
+        copy.
+
+        What must not follow is a sandbox standing on a value nothing produced — that is
+        precisely the defect round seven found in the live manifest. So whichever way the
+        sandbox got its freeze, the value has to reproduce over the tree of the commit it
+        names, by the recipe the manifest itself records, and the reset has to land on
+        that tree.
+        """
+        commit = _freeze_commit(self.sandbox.root)
+        self.assertIsNotNone(
+            commit,
+            "the sandbox has no frozen round to stand on, so every post-freeze probe "
+            "in this module is measuring nothing",
+        )
+        declared = (_checkpoint_manifest(self.sandbox.root) or {}).get(
+            "tested_candidate_digest"
+        )
+        self.assertEqual(
+            _acceptance_digest_at(self.sandbox.root, commit, "tested_candidate_digest"),
+            declared,
+            "the freeze the sandbox stands on does not reproduce over the tree of the "
+            "commit that froze it, so the recovery manufactured a value instead of "
+            "finding one",
+        )
+        # Not always on. With a freeze already resolvable the recovery does nothing, so
+        # a live repository that has frozen its own round is measured against *that*
+        # freeze and never against an older one.
+        self.assertFalse(
+            self.sandbox._ensure_a_frozen_round(),
+            "the recovery fired on a sandbox that already resolves a freeze of its own",
+        )
+
+        # And on. Driven into the between-rounds state the live repository holds while a
+        # round is open and not yet frozen — which is where 122 tests failed — the
+        # recovery must reach a real freeze again rather than leave the family dark.
+        # Deliberately not read off the live manifest: that value moves under a
+        # concurrently running integrator, and a probe whose direction depends on it
+        # measures the ambient state rather than the mechanism.
+        path = self.sandbox.root / CHECKPOINT_MANIFEST
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document["tested_candidate_digest"] = None
+        path.write_text(
+            json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        self.assertIsNone(
+            _freeze_commit(self.sandbox.root),
+            "the probe did not reach the between-rounds state it is about",
+        )
+        self.assertTrue(
+            self.sandbox._ensure_a_frozen_round(),
+            "a sandbox with no freeze of its own recovered none from history, so every "
+            "post-freeze probe would fail on a legitimate between-rounds repository",
+        )
+        self.assertEqual(_freeze_commit(self.sandbox.root), commit)
+
+        self.sandbox.normalise_to_candidate()
+        self.assertEqual(self.sandbox.frozen_commit, commit)
+        self.assertEqual(self.sandbox.frozen_digest, declared)
+        self.assertEqual(self.sandbox.unresettable, [])
+        self.assertEqual(
+            _acceptance_digest(self.sandbox.root, "tested_candidate_digest"),
+            declared,
+            "the reset landed somewhere other than the tree that freeze names",
+        )
+
+    def test_a_history_with_no_freeze_at_all_recovers_nothing(self) -> None:
+        """The recovery discriminates; it does not return the newest thing it sees.
+
+        Three revisions in a throwaway repository: one with no digest at all, one with a
+        self-consistent freeze, and a newest one whose top-level value no round entry
+        carries. The first must be refused, the third must be refused, and the second
+        must be the answer — otherwise "the newest manifest revision that carried a
+        freeze" is just "the newest manifest revision", and the sandbox would reset to a
+        tree whose digest cannot reproduce.
+        """
+        history = _ManifestHistory()
+        self.addCleanup(history.close)
+        elsewhere = _CheckpointSandbox.__new__(_CheckpointSandbox)
+        elsewhere.root = history.root
+
+        history.commit("a round nobody froze", _history_manifest(None))
+        self.assertIsNone(
+            _CheckpointSandbox._the_newest_frozen_manifest(elsewhere),
+            "a history whose manifests carry no digest at all produced a freeze",
+        )
+
+        digest = history.seal(number=5, rounds=(4, 5))
+        history.commit("the freeze", _history_manifest(digest, number=5, rounds=(4, 5)))
+        recovered = _CheckpointSandbox._the_newest_frozen_manifest(elsewhere)
+        self.assertIsNotNone(recovered, "a real freeze in history was not found")
+        self.assertEqual(json.loads(recovered).get("current_round"), 5)
+
+        half = _history_manifest(digest, number=7, rounds=(6, 7))
+        half["acceptance_rounds"][-1]["tested_candidate_digest"] = ""
+        history.commit("a top-level value no round entry carries", half)
+        recovered = _CheckpointSandbox._the_newest_frozen_manifest(elsewhere)
+        self.assertIsNotNone(recovered)
+        self.assertEqual(
+            json.loads(recovered).get("current_round"),
+            5,
+            "a revision whose round entry does not carry the top-level value was "
+            "accepted as a freeze; _freeze_commit cannot resolve one of those",
+        )
 
 
 class WritingCommandGuardTests(unittest.TestCase):
@@ -7779,7 +10592,18 @@ class TableExpectationTests(unittest.TestCase):
                 "ACCEPTANCE_DIGEST_FIELDS",
                 "ALIAS_BYPASSES",
                 "CASES",
+                "CHECKPOINT_DELIVERABLES",
+                "CHECKPOINT_DELIVERABLE_PATHS",
+                "COMPLETED_TASK_FILES",
                 "DELIBERATE_ENV_WIDENINGS",
+                # A pinned table, not a cache: it is a fixed list of the keys a
+                # `CHECKPOINT_DELIVERABLES` entry may state a requirement in, read by
+                # `_checkpoint_bundle_problems` and pinned whole beside that table in
+                # `test_the_checkpoint_bundle_table_is_pinned_whole`. The cache
+                # exemption is for names filled while the suite runs, and this one is
+                # never written after definition, so it does not qualify for it and is
+                # not given it.
+                "DELIVERABLE_REQUIREMENT_KEYS",
                 "ENV_WIDENING_KEYWORDS",
                 "FORBIDDEN_AUTHORITY_KEYS",
                 "FORBIDDEN_VERSION_KEYS",
@@ -7789,11 +10613,14 @@ class TableExpectationTests(unittest.TestCase):
                 "GIT_SPAWN_CHOKEPOINTS",
                 "IDENTITY",
                 "IMMUTABLE_REVIEWED_PREFIXES",
+                "MANUAL_VERDICTS",
                 "NOT_COPIED",
                 "PINNING_ASSERTIONS",
                 "POST_FREEZE_DELTA_CEILING",
+                "PUBLICATION_DOCUMENT_PATHS",
                 "PURE_CONSTRUCTORS",
                 "RATIFICATION_DELTA_CEILING",
+                "RATIFICATION_PUBLICATION_RECORDS",
                 "RATIFICATION_REQUIRED_FIELDS",
                 "RECONCILIATIONS",
                 "REGISTRY_STATE_TOKENS",
@@ -7944,7 +10771,17 @@ class TableExpectationTests(unittest.TestCase):
         self.assertEqual(
             sorted(POST_FREEZE_DELTA_CEILING),
             [
+                "artifacts/checkpoints/CP-00/acceptance.md",
+                "artifacts/checkpoints/CP-00/automated-summary.txt",
+                "artifacts/checkpoints/CP-00/build-info.json",
+                "artifacts/checkpoints/CP-00/checkpoint-report.md",
+                "artifacts/checkpoints/CP-00/contract-manifest.yaml",
+                "artifacts/checkpoints/CP-00/known-risks.md",
                 "artifacts/checkpoints/CP-00/manifest.json",
+                "artifacts/checkpoints/CP-00/manual-test-report.md",
+                "artifacts/checkpoints/CP-00/migration-head.txt",
+                "artifacts/checkpoints/CP-00/restore-or-rollback-note.md",
+                "docs/INDEX.md",
                 "docs/architecture/ADR_INDEX.md",
                 "docs/architecture/ARCHITECTURE_LINT_RULES.md",
                 "docs/architecture/CP00_ARCHITECTURE_REVIEW.json",
@@ -7952,7 +10789,27 @@ class TableExpectationTests(unittest.TestCase):
                 "docs/architecture/CP00_OWNER_DECISIONS.md",
                 "docs/program/CHECKPOINT_REGISTRY.md",
                 "docs/program/CURRENT_STATE.md",
+                "docs/program/tasks/W0-ANA-01.md",
+                "docs/program/tasks/W0-ARC-01.md",
+                "docs/program/tasks/W0-ARC-02.md",
+                "docs/program/tasks/W0-BHV-01.md",
+                "docs/program/tasks/W0-BHV-02.md",
+                "docs/program/tasks/W0-CLN-01.md",
+                "docs/program/tasks/W0-DEP-01.md",
+                "docs/program/tasks/W0-DOM-01.md",
+                "docs/program/tasks/W0-DOM-02.md",
+                "docs/program/tasks/W0-EVD-01.md",
+                "docs/program/tasks/W0-EVT-01.md",
+                "docs/program/tasks/W0-INT-00.md",
+                "docs/program/tasks/W0-INT-01.md",
+                "docs/program/tasks/W0-QA-00.md",
+                "docs/program/tasks/W0-QA-01.md",
+                "docs/program/tasks/W0-QA-02.md",
+                "docs/program/tasks/W0-QA-03.md",
+                "docs/program/waves/W0.3_ratification_integration.md",
+                "docs/stages/S00_architecture_and_behavior_freeze.md",
             ],
+            "the post-freeze licence is not the set this class reviewed",
         )
 
     def test_the_acceptance_digest_fields_are_pinned(self) -> None:
@@ -8025,6 +10882,220 @@ class TableExpectationTests(unittest.TestCase):
                     "requires_note": "the decision range widened to `PD-01`-`PD-05`",
                 },
             ),
+        )
+
+    def test_the_checkpoint_tag_and_manual_vocabulary_are_pinned(self) -> None:
+        """Pinned here, anchored where an anchor exists.
+
+        The tag is compared with the checkpoint manifest's own `tag_planned`: the
+        manifest is a document the integrator writes, so it cannot be the *source* of
+        the value, but a disagreement between the two is a re-tag nobody declared and is
+        reported as one. The verdict vocabulary has no external anchor — it is the
+        vocabulary `W0-INT-01` deliverable 3 names — so it is pinned and said to be.
+        """
+        self.assertEqual(CHECKPOINT_TAG, "v0.0.0-architecture")
+        self.assertEqual(MANUAL_VERDICTS, ("PASS", "FAIL", "BLOCKED"))
+        self.assertEqual(MANUAL_RUNBOOK, "docs/manual-tests/CP-00_architecture.md")
+        self.assertEqual(
+            _load(CHECKPOINT_MANIFEST).get("tag_planned"),
+            CHECKPOINT_TAG,
+            "the checkpoint record plans a different tag from the one this module "
+            "requires the evidence bundle to name",
+        )
+        self.assertTrue(
+            (REPOSITORY_ROOT / MANUAL_RUNBOOK).is_file(),
+            "the manual runbook this module reads its case list out of is not there",
+        )
+
+    def test_the_checkpoint_bundle_table_is_pinned_whole(self) -> None:
+        """Whole, not by projection: the names **and** what each one must say.
+
+        A pin over `name` alone would be satisfied by a table whose every content
+        requirement had been deleted, which is the licence granted with nothing paid
+        for it — the exact defect this round exists to repair.
+        """
+        self.assertEqual(
+            CHECKPOINT_DELIVERABLES,
+            ({'name': 'checkpoint-report.md',
+              'values': ('candidate_commit', 'contract_version', 'checkpoint_tag'),
+              'requires': ('CP-00',
+                           'contract-manifest.yaml',
+                           'manual-test-report.md',
+                           'known-risks.md',
+                           'restore-or-rollback-note.md'),
+              'manifest_names': ('integrated_w03_tasks',),
+              'note': 'the integration report S00 requires: the frozen contract '
+                      'version and candidate commit, the tag, every merged task ID, '
+                      'and references to the manual report, the known risks and the '
+                      'rollback note'},
+             {'name': 'contract-manifest.yaml',
+              'values': ('candidate_commit',
+                         'contract_version',
+                         'reviewed_manifest_digest'),
+              'requires': ('migration_head: none',),
+              'hashes': ('contracts/analysis/v1/stage-registry.json',
+                         'contracts/analysis/v1/legacy-stage-name-map.json',
+                         'fixtures/golden/selection.json',
+                         'requirements/validation.in',
+                         'requirements/validation.lock'),
+              'note': 'W0-INT-01 deliverable 2 in full: exact file hashes, contract '
+                      'versions, candidate commit, dependency-lock hashes, '
+                      'migration_head: none, the golden selection hash and the '
+                      'analysis registry/name-map hashes. Every value is recomputed '
+                      'from the repository, so a manifest describing another tree is a '
+                      'failure and not a difference of opinion'},
+             {'name': 'automated-summary.txt',
+              'values': ('current_round',),
+              'requires': ('PASS',),
+              'note': "the automated stream's summary for the round being ratified. "
+                      'Cross-record only: the manifest already has to say PASS for '
+                      'that round, so this catches a summary from another round or one '
+                      'that contradicts the record it summarises, not an independently '
+                      'verified test result'},
+             {'name': 'manual-test-report.md',
+              'manual_cases': True,
+              'note': 'W0-INT-01 deliverable 3: tester identity, timestamps and a '
+                      'verdict per case for every MT00 case the runbook defines. The '
+                      'case list is read out of the runbook and the runtime '
+                      'disposition out of the manifest; the tester name and the '
+                      'timestamp are shape only, because no repository value can say '
+                      'who ran a manual test or when'},
+             {'name': 'migration-head.txt',
+              'exact': 'none',
+              'note': "the migration head W0-INT-01's frozen inputs record: none. The "
+                      'whole file, not a needle in it'},
+             {'name': 'build-info.json',
+              'json_object': True,
+              'values': ('candidate_commit',),
+              'note': 'a non-empty JSON object naming the commit it describes. Nothing '
+                      'else about this file is stated in any repository document, so '
+                      'nothing else is required: the object shape is shape, and is '
+                      'recorded as such'},
+             {'name': 'known-risks.md',
+              'manifest_names': ('architecture_defer',
+                                 'open_inputs_carried_forward',
+                                 'open_escalations'),
+              'note': 'every risk the checkpoint record already carries has to appear '
+                      'in the risk note: the deferred ADR, the four carried-forward '
+                      'open inputs and the open escalations. A published bundle that '
+                      'silently drops one is the failure this catches'},
+             {'name': 'restore-or-rollback-note.md',
+              'values': ('checkpoint_tag', 'candidate_commit'),
+              'note': "what to roll back and what to roll back to. W0-INT-01's "
+                      'rollback section states no further content, and none is '
+                      'invented here'}),
+        )
+        self.assertEqual(
+            sorted(CHECKPOINT_DELIVERABLE_PATHS),
+            ['artifacts/checkpoints/CP-00/automated-summary.txt',
+             'artifacts/checkpoints/CP-00/build-info.json',
+             'artifacts/checkpoints/CP-00/checkpoint-report.md',
+             'artifacts/checkpoints/CP-00/contract-manifest.yaml',
+             'artifacts/checkpoints/CP-00/known-risks.md',
+             'artifacts/checkpoints/CP-00/manual-test-report.md',
+             'artifacts/checkpoints/CP-00/migration-head.txt',
+             'artifacts/checkpoints/CP-00/restore-or-rollback-note.md'],
+        )
+        # The keys an entry may state a requirement in. Emptying this list would make
+        # "declares no content requirement" unsatisfiable and the guard that reports it
+        # unreachable, which is the emptying defect wearing the costume of a guard.
+        self.assertEqual(
+            DELIVERABLE_REQUIREMENT_KEYS,
+            (
+                "requires",
+                "values",
+                "hashes",
+                "manifest_names",
+                "exact",
+                "json_object",
+                "manual_cases",
+            ),
+        )
+
+    def test_the_publication_record_table_is_pinned_whole(self) -> None:
+        self.assertEqual(
+            RATIFICATION_PUBLICATION_RECORDS,
+            ({'item': 'W0.3 wave plan',
+              'path': 'docs/program/waves/W0.3_ratification_integration.md',
+              'denials': ('`W0-INT-01` is blocked', '| `W0-INT-01` | blocked |'),
+              'requires': ('S01',),
+              'must_still_contain': ('`v0.0.0-architecture`', '`W0-INT-01`'),
+              'requires_note': 'the next unlocked S01 preparation tasks deliverable 5 '
+                               "names, with the wave's own status line and task row no "
+                               'longer calling W0-INT-01 blocked'},
+             {'item': 'S00 stage checklist',
+              'path': 'docs/stages/S00_architecture_and_behavior_freeze.md',
+              'denials': (),
+              'checklist': True,
+              'requires': ('S01',),
+              'must_still_contain': ('Automated exit evidence',
+                                     'Manual local acceptance'),
+              'requires_note': 'the next unlocked S01 preparation tasks, and every '
+                               'automated and manual exit-criterion box ticked: a '
+                               'checkpoint cannot be ratified while its own stage '
+                               'checklist still says its exit evidence is outstanding'},
+             {'item': 'documentation index status column',
+              'path': 'docs/INDEX.md',
+              'row': 'program/tasks/W0-INT-01.md',
+              'denials': ('blocked',),
+              'requires': ('accepted and integrated',),
+              'must_still_contain': ('# Documentation index', '## Architecture',
+                                     '## Program'),
+              'requires_note': 'the status column this index already uses for every '
+                               'other completed task, on the one row that still says '
+                               'the ratifying task is blocked'}),
+        )
+        self.assertEqual(
+            sorted(PUBLICATION_DOCUMENT_PATHS),
+            ['docs/INDEX.md',
+             'docs/program/waves/W0.3_ratification_integration.md',
+             'docs/stages/S00_architecture_and_behavior_freeze.md'],
+        )
+
+    def test_the_completed_task_files_are_pinned_and_are_the_candidate_set(self) -> None:
+        """Pinned, and anchored to the immutable candidate rather than to a directory.
+
+        `git ls-tree` at the reviewed candidate is an independent enumeration: the pin
+        below could name a file that never existed, or miss one, and this comparison
+        says so. It is deliberately **not** a listing of `docs/program/tasks/` in the
+        working tree — a licence computed from a directory is a licence anyone who can
+        add a file to that directory can widen, which is the property
+        :data:`RATIFICATION_DELTA_CEILING` is pinned to avoid.
+        """
+        self.assertEqual(
+            sorted(COMPLETED_TASK_FILES),
+            ['docs/program/tasks/W0-ANA-01.md',
+             'docs/program/tasks/W0-ARC-01.md',
+             'docs/program/tasks/W0-ARC-02.md',
+             'docs/program/tasks/W0-BHV-01.md',
+             'docs/program/tasks/W0-BHV-02.md',
+             'docs/program/tasks/W0-CLN-01.md',
+             'docs/program/tasks/W0-DEP-01.md',
+             'docs/program/tasks/W0-DOM-01.md',
+             'docs/program/tasks/W0-DOM-02.md',
+             'docs/program/tasks/W0-EVD-01.md',
+             'docs/program/tasks/W0-EVT-01.md',
+             'docs/program/tasks/W0-INT-00.md',
+             'docs/program/tasks/W0-INT-01.md',
+             'docs/program/tasks/W0-QA-00.md',
+             'docs/program/tasks/W0-QA-01.md',
+             'docs/program/tasks/W0-QA-02.md',
+             'docs/program/tasks/W0-QA-03.md'],
+        )
+        self.assertEqual(RATIFYING_TASK_FILE, "docs/program/tasks/W0-INT-01.md")
+        self.assertEqual(
+            RATIFYING_TASK_BANNER_DENIAL, "ratification and publication blocked"
+        )
+        self.assertIn(RATIFYING_TASK_FILE, COMPLETED_TASK_FILES)
+        listing = _git(
+            "-C", str(REPOSITORY_ROOT), "--no-replace-objects", "ls-tree", "-r",
+            "--name-only", REVIEWED_CANDIDATE_COMMIT, "--", "docs/program/tasks",
+            text=True, check=True,
+        ).stdout
+        self.assertEqual(
+            sorted(COMPLETED_TASK_FILES),
+            sorted(path for path in listing.split("\n") if path),
+            "the licensed task files are not the task files the reviewed candidate has",
         )
 
     def test_the_gate_tables_are_pinned(self) -> None:
@@ -9106,13 +12177,13 @@ class FreezeCommitHistoryTests(unittest.TestCase):
         )
         self.assertEqual(manifest["current_round"], 9)
         five = next(e for e in manifest["acceptance_rounds"] if e["round"] == 5)
-        five["manual_report"] = f"{ACCEPTANCE_EVIDENCE_PREFIX}round-5-only.md"
+        five["manual_report"] = f"{ACCEPTANCE_EVIDENCE_PREFIX}manual-report-round-5.md"
         nine = next(e for e in manifest["acceptance_rounds"] if e["round"] == 9)
-        nine["manual_report"] = f"{ACCEPTANCE_EVIDENCE_PREFIX}round-9-only.md"
+        nine["manual_report"] = f"{ACCEPTANCE_EVIDENCE_PREFIX}manual-report-round-9.md"
         declared = _declared_evidence_paths(manifest)
-        self.assertIn(f"{ACCEPTANCE_EVIDENCE_PREFIX}round-9-only.md", declared)
+        self.assertIn(f"{ACCEPTANCE_EVIDENCE_PREFIX}manual-report-round-9.md", declared)
         self.assertNotIn(
-            f"{ACCEPTANCE_EVIDENCE_PREFIX}round-5-only.md",
+            f"{ACCEPTANCE_EVIDENCE_PREFIX}manual-report-round-5.md",
             declared,
             "another round's declared evidence was licensed for this round's delta",
         )
