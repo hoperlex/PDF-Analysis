@@ -2496,9 +2496,30 @@ def _retro_edited_digests(root: Path) -> list[str]:
     afterwards; if it must change, the round is void and a new one begins. Round scoping
     is what makes that checkable — a legitimate new round adds an entry, while a
     retro-edit changes an existing one.
+
+    **Walked from the freeze commit, not from `HEAD`.** The manifest in front of this
+    function describes a round built on a particular frozen tree, and the revisions that
+    matter are the ones that tree was built on. Walking from `HEAD` instead made the
+    published checkpoint permanently red: once the integrator commits the publication,
+    any later re-derivation of it — which is exactly what every sandbox in this module
+    is — recomputes `evidence_bundle_digest` over its own tree, which can never be
+    byte-identical to the integrator's, and the comparison read a legitimate
+    re-derivation as a retro-edit. `test_the_checkpoint_mechanism_has_a_reachable_
+    published_state`, the probe added to answer round nine's void, then failed on any
+    published tree with the message that the checkpoint has no executable final state.
+    Scoping to the freeze commit loses nothing: a retro-edit still shows up, because the
+    freeze commit itself carries the value that was frozen, and every closed round's
+    sealed digest is an ancestor of it.
+
+    **No commit window.** The window was `-n 60`, which did not bound anything: with
+    more manifest revisions than the window the oldest revisions simply stopped being
+    compared, so a retro-edit *decayed into silence* after sixty further commits. The
+    history of one file is bounded by its own revisions and the comparison is exact, so
+    the window bought nothing and cost the guarantee.
     """
+    start = _freeze_commit(root) or "HEAD"
     history = _git(
-        "-C", str(root), "log", "--format=%H", "-n", "60", "--", CHECKPOINT_MANIFEST,
+        "-C", str(root), "log", "--format=%H", start, "--", CHECKPOINT_MANIFEST,
         text=True,
     ).stdout
     manifest = _checkpoint_manifest(root)
@@ -6569,6 +6590,121 @@ class RatificationRecordTests(unittest.TestCase):
                 )
                 self.sandbox.restore()
         self.assertIsInstance(manifest, dict)
+
+    def test_every_anti_vacuity_guard_in_the_bundle_checks_can_fire(self) -> None:
+        """The guards that say "this requirement proves nothing", each made to say it.
+
+        Four branches whose whole job is to refuse a *vacuous pass* -- a requirement that
+        is satisfied because the thing it measures is absent rather than because it is
+        right. An independent reviewer removed each one and the whole suite stayed green:
+        they were live and untested, which is the same standing as absent, because
+        nothing would notice if a later edit made them unreachable. Each is reached here
+        by creating the condition it exists to name.
+
+        The checklist anchor is reached by call rather than through a sandbox: its
+        condition is "the document carries no checklist **at the reviewed candidate**",
+        and the reviewed candidate is immutable by construction. Passing a document that
+        genuinely has no checklist there is the honest way to reach it; faking a
+        candidate would be measuring the fake.
+        """
+        self._ratify_for_real()
+        root = self.sandbox.root
+        self.assertEqual(_checkpoint_bundle_problems(root), [])
+
+        # 1. The manifest declares no runtime disposition, so requiring the manual report
+        #    to carry it proves nothing.
+        self.sandbox.patch_json(CHECKPOINT_MANIFEST, runtime_fields="   ")
+        self.assertTrue(
+            any(
+                "records no runtime_fields disposition" in problem
+                for problem in _checkpoint_bundle_problems(root)
+            ),
+            "a blank runtime_fields left the manual-report requirement passing on air",
+        )
+        self.sandbox.restore_one(CHECKPOINT_MANIFEST)
+        self.assertEqual(_checkpoint_bundle_problems(root), [])
+
+        # 2. A hashed source that is not in the repository, so requiring the contract
+        #    manifest to carry its hash proves nothing. Reached by entry data rather than
+        #    by deleting the real source: every hashed source is a tracked file inside an
+        #    immutable reviewed family, and removing one from the tree breaks the digest
+        #    recipe that reads it -- the probe would then be measuring its own damage.
+        hashed = sorted(
+            value
+            for entry in CHECKPOINT_DELIVERABLES
+            for value in entry.get("hashes", ())
+        )
+        self.assertTrue(hashed, "no deliverable declares a hashed source any more")
+        for real in hashed:
+            self.assertTrue(
+                (root / real).is_file(),
+                f"{real} is declared as a hashed source and is not in the tree, so the "
+                "guard under test is already firing for real",
+            )
+        absent = "requirements/THIS-LOCK-DOES-NOT-EXIST.lock"
+        self.assertFalse((root / absent).is_file())
+        manifest = _checkpoint_manifest(root) or {}
+        entry = dict(CHECKPOINT_DELIVERABLES[0])
+        entry["hashes"] = (absent,)
+        self.assertTrue(
+            any(
+                absent in problem and "proves nothing" in problem
+                for problem in _deliverable_content_problems(
+                    root,
+                    manifest,
+                    entry,
+                    ACCEPTANCE_EVIDENCE_PREFIX + entry["name"],
+                    "anything at all",
+                    True,
+                )
+            ),
+            "a hashed source that is not in the repository left its requirement passing "
+            "on air",
+        )
+        self.assertEqual(_checkpoint_bundle_problems(root), [])
+
+        # 3. A manual case named with no verdict at all: a report records a verdict per
+        #    case, not a mention per case.
+        report = ACCEPTANCE_EVIDENCE_PREFIX + "manual-test-report.md"
+        self.assertIn(report, CHECKPOINT_DELIVERABLE_PATHS)
+        self.sandbox._remember(report)
+        text = (root / report).read_text(encoding="utf-8")
+        case = _manual_case_ids(root)[0]
+        stripped = "\n".join(
+            line if case not in line else f"| {case} | (no verdict recorded) |"
+            for line in text.splitlines()
+        )
+        (root / report).write_text(stripped + "\n", encoding="utf-8")
+        self.assertTrue(
+            any(
+                case in problem and "verdict per case" in problem
+                for problem in _checkpoint_bundle_problems(root)
+            ),
+            f"{case} was named without a verdict and nothing said so",
+        )
+        (root / report).write_text(text, encoding="utf-8")
+        self.assertEqual(_checkpoint_bundle_problems(root), [])
+
+        # 4. The checklist anchor, reached by call.
+        boxless = "docs/INDEX.md"
+        self.assertIsNotNone(
+            _candidate_blob(root, boxless),
+            f"{boxless} is not at the reviewed candidate, so this case cannot reach the "
+            "anchor-rot branch",
+        )
+        self.assertEqual(
+            re.findall(r"- \[[ xX]\]", _candidate_blob(root, boxless).decode("utf-8")),
+            [],
+            f"{boxless} carries checkbox syntax at the reviewed candidate, so it is no "
+            "longer a document that reaches the anchor-rot branch",
+        )
+        self.assertEqual(
+            _checklist_problems(root, boxless, "- [x] ticked\n", True),
+            [
+                f"anchor rot: {boxless} carries no checklist at the reviewed candidate, "
+                "so requiring ratification to complete one proves nothing"
+            ],
+        )
 
     def test_a_manual_report_that_does_not_pass_every_case_cannot_ratify(self) -> None:
         """Deliverable 3, one failure mode at a time.
@@ -12135,6 +12271,86 @@ class FreezeCommitHistoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.history = _ManifestHistory()
         self.addCleanup(self.history.close)
+
+    def test_a_publication_committed_after_the_freeze_is_not_a_retro_edit(self) -> None:
+        """The published checkpoint must not be permanently red, and still be guarded.
+
+        **The failure.** `_retro_edited_digests` walked from `HEAD`, so once the
+        integrator committed the publication, every later re-derivation of it compared
+        its own freshly computed `evidence_bundle_digest` against the committed one. Those
+        two can never be equal -- the value is computed over the tree that carries the
+        results, and no re-derivation reproduces the integrator's tree byte for byte -- so
+        the comparison read a legitimate re-derivation as a retro-edit. Every sandbox in
+        this module is such a re-derivation, which made
+        `test_the_checkpoint_mechanism_has_a_reachable_published_state` fail on any
+        published tree, with the message that the checkpoint has no executable final
+        state. The probe written to answer round nine's void would have failed the moment
+        the void was answered.
+
+        **Both directions, on real commits.** The publication commit is a *descendant* of
+        the freeze, so scoping the walk to the freeze excludes it -- and excludes nothing
+        else, because every closed round's sealed digest is an ancestor. The control
+        proves that: round nine's digest is sealed at the freeze commit, and editing it
+        is still named.
+        """
+        frozen, published, rederived = "a" * 64, "b" * 64, "c" * 64
+        nine = "e" * 64
+
+        def document(evidence: str, ninth: str = nine) -> dict:
+            return {
+                "checkpoint": "CP-00",
+                "ratified": False,
+                "current_round": 10,
+                "tested_candidate_digest": frozen,
+                "evidence_bundle_digest": evidence,
+                "acceptance_rounds": [
+                    {
+                        "round": 9,
+                        "verdict": "FAIL",
+                        "tested_candidate_digest": ninth,
+                        "evidence_bundle_digest": "",
+                    },
+                    {
+                        "round": 10,
+                        "verdict": None,
+                        "tested_candidate_digest": frozen,
+                        "evidence_bundle_digest": evidence,
+                    },
+                ],
+            }
+
+        freeze = self.history.commit("freeze round ten", document(""))
+        publication = self.history.commit("publish CP-00", document(published))
+        self.assertNotEqual(
+            freeze,
+            publication,
+            "the publication must be a separate, later commit or this probe is not "
+            "about a publication committed after the freeze",
+        )
+        self.assertEqual(
+            _freeze_commit(self.history.root),
+            freeze,
+            "the freeze no longer resolves, so the scoping under test is not reached",
+        )
+
+        # A re-derivation of the same publication, over its own tree.
+        self.history.write(document(rederived))
+        self.assertEqual(
+            _retro_edited_digests(self.history.root),
+            [],
+            "a re-derived evidence digest was read as a retro-edit, so a published "
+            "CP-00 is permanently red and the mechanism has no final state",
+        )
+
+        # The control: a value the freeze commit itself carries, edited. Still named.
+        self.history.write(document(rederived, ninth="f" * 64))
+        problems = _retro_edited_digests(self.history.root)
+        self.assertTrue(
+            any("round 9" in problem and "tested_candidate_digest" in problem
+                for problem in problems),
+            f"scoping the walk to the freeze stopped it catching a real retro-edit of a "
+            f"digest the freeze commit carries: {problems}",
+        )
 
     def test_the_walk_is_scoped_to_the_round_the_manifest_names(self) -> None:
         """Round scoping is only ever exercised at round 5, which is not exercising it.
