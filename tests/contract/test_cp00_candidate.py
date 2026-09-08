@@ -158,16 +158,162 @@ ACCEPTANCE_RECORD = ACCEPTANCE_EVIDENCE_PREFIX + "acceptance.md"
 #: satisfied by deleting the table it is about.
 ACCEPTANCE_RECORD_HEADING = "## Rounds"
 
-#: The tag CP-00 is published under. Pinned here rather than read out of the checkpoint
-#: manifest's `tag_planned`, for the reason every ceiling in this module is pinned: the
-#: integrator writes that manifest, and a value the integrator can change is not a value
-#: a check can hold them to.
-#: :meth:`TableExpectationTests.test_the_checkpoint_tag_and_manual_vocabulary_are_pinned`
-#: compares it with the manifest, so the two disagreeing is a failure rather than a
-#: silent re-tag. (The name is written out because it is checked: an earlier form of
-#: this comment cited a method that does not exist, which is the module's own defect
-#: shape — prose naming a check nobody can run — in a docstring.)
-CHECKPOINT_TAG = "v0.0.0-architecture"
+#: **The checkpoint tag's identity: the series and the rule are pinned, the instance is
+#: resolved.**
+#:
+#: The previous form was ``CHECKPOINT_TAG = "v0.0.0-architecture"``, pinned "for the
+#: reason every ceiling in this module is pinned: the integrator writes that manifest,
+#: and a value the integrator can change is not a value a check can hold them to". The
+#: reason was right and the literal made the recovery **unreachable**. CP-00 is
+#: superseded by a checkpoint tagged `v0.0.1-architecture`; two guards consume this
+#: constant — :func:`_task_banner_problems` and :data:`RATIFICATION_PUBLICATION_RECORDS`
+#: — and no task in the recovery graph except `W0-QA-04` may write this file. So
+#: `W0-INT-03`'s required `discover -s tests/contract` would fail *at the moment of
+#: ratification*: a final state no task is licensed to reach. That is round nine's
+#: defect — "performing the ratification honestly voids the round it is ratifying" —
+#: recurring one file over, and replacing the literal with a second literal only moves
+#: it to `v0.0.2`.
+#:
+#: What is pinned is therefore the **series and the rule**:
+#:
+#: * :data:`CHECKPOINT_TAG_SERIES` — the shape CP-00's published identity must have. A
+#:   rename to anything outside it is refused, which is the half of the pin that was
+#:   load-bearing;
+#: * :data:`CHECKPOINT_TAG_FLOOR` — the **first** tag of the series. An immutable
+#:   historical fact rather than a current value: `v0.0.0-architecture` was published on
+#:   an annotated tag and cannot be un-published, so this line never needs editing again;
+#: * the resolved value must agree across **every** record that names it, must match the
+#:   series, and its revision may only move **forward** from the floor.
+#:
+#: That restores what the pin was actually protecting, structurally instead of by a
+#: literal. One manifest edit no longer moves the value — three claims in two records
+#: have to move together and :func:`_checkpoint_tag_problems` compares them — a rename
+#: outside the series is refused, and a re-tag onto a spent revision is refused.
+#: :meth:`TableExpectationTests.test_the_checkpoint_tag_resolves_and_the_rule_can_fail`
+#: is the anti-vacuity half: it mutates each record and requires the guard to fire.
+#:
+#: What this module does **not** check is whether an existing tag object still points
+#: where it did. A tag is a ref, not a tracked file, so it is outside every anchor here;
+#: `tests/checkpoint/cp00_final_state.py` covers it by recomputing the reviewed-family
+#: digest at the tag's own commit.
+_TAG_SERIES_BODY = r"v0\.0\.(\d+)-architecture"
+CHECKPOINT_TAG_SERIES = re.compile(rf"^{_TAG_SERIES_BODY}$")
+#: **An anti-gutting needle written as a shape rather than a literal.** The prefix is
+#: what keeps :data:`RATIFICATION_PUBLICATION_RECORDS` a table of *literals*: a compiled
+#: pattern is a call to an attribute, :func:`_is_a_literal_expectation` refuses one, and
+#: a table holding a compiled pattern therefore could not be pinned at all — the guard
+#: would go quiet on the whole table to accommodate one entry. A marked string keeps both
+#: properties: the needle is a shape, and the table is still written out in full where a
+#: reviewer reads it. No literal needle in this module begins with the prefix, and
+#: :meth:`TableExpectationTests.test_the_publication_record_table_is_pinned_whole` writes
+#: the marked form out, so the marking cannot be lost silently.
+NEEDLE_PATTERN_PREFIX = "re:"
+#: The series as it appears inside prose: a code span naming any tag of it. This is what
+#: the wave plan is asked for, so that the needle survives a superseding checkpoint
+#: without becoming a second literal to edit at `v0.0.2`.
+CHECKPOINT_TAG_NEEDLE = NEEDLE_PATTERN_PREFIX + rf"`{_TAG_SERIES_BODY}`"
+CHECKPOINT_TAG_FLOOR = "v0.0.0-architecture"
+
+#: The records that name the checkpoint's published tag, as ``(path, how to read it)``.
+#: The contract manifest is read with a line regex rather than a YAML parser: no YAML
+#: library exists in the hash-locked bootstrap environment, and adding one would touch a
+#: frozen lock file.
+CHECKPOINT_CONTRACT_MANIFEST = ACCEPTANCE_EVIDENCE_PREFIX + "contract-manifest.yaml"
+
+
+def _checkpoint_tag_claims(root: Path) -> dict[str, str]:
+    """Every record that names the checkpoint's published tag, and the name it gives.
+
+    Read directly rather than through :func:`_load`, because this runs at import time:
+    the resolved value has to exist before :data:`RATIFICATION_PUBLICATION_RECORDS` and
+    :func:`_task_banner_problems` are defined.
+    """
+    claims: dict[str, str] = {}
+    try:
+        manifest = json.loads((root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        manifest = None
+    if isinstance(manifest, dict):
+        for key in ("tag", "tag_planned"):
+            value = manifest.get(key)
+            if isinstance(value, str) and value:
+                claims[f"{CHECKPOINT_MANIFEST}:{key}"] = value
+    try:
+        text = (root / CHECKPOINT_CONTRACT_MANIFEST).read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    match = re.search(r"^tag:[ \t]*(\S+)[ \t]*$", text, re.MULTILINE)
+    if match:
+        claims[f"{CHECKPOINT_CONTRACT_MANIFEST}:tag"] = match.group(1)
+    return claims
+
+
+def _checkpoint_tag_problems(root: Path) -> list[str]:
+    """What holds the integrator to the resolved tag. Empty means the records agree.
+
+    Three failures, and each one is what the literal used to buy:
+
+    * **no record names a tag** — the resolution would fall back to the floor and the
+      guards that consume it would pass on a checkpoint that publishes nothing;
+    * **the records disagree** — a re-tag declared in one place and not the others;
+    * **a name outside the series, or a revision below the floor** — a rename to an
+      unrelated identity, or a re-tag onto a revision that has already been published.
+    """
+    claims = _checkpoint_tag_claims(root)
+    if not claims:
+        return [
+            "no checkpoint record names a published tag, so CHECKPOINT_TAG resolves to "
+            f"the floor {CHECKPOINT_TAG_FLOOR!r} and every guard that consumes it would "
+            "be asking a published checkpoint to name a tag it does not claim"
+        ]
+    problems: list[str] = []
+    if len(set(claims.values())) > 1:
+        problems.append(
+            "the checkpoint records name more than one published tag, which is a re-tag "
+            "declared in one record and not the others: "
+            + "; ".join(f"{site} = {value!r}" for site, value in sorted(claims.items()))
+        )
+    floor = CHECKPOINT_TAG_SERIES.match(CHECKPOINT_TAG_FLOOR)
+    if floor is None:
+        problems.append(
+            f"CHECKPOINT_TAG_FLOOR {CHECKPOINT_TAG_FLOOR!r} is not itself in "
+            f"CHECKPOINT_TAG_SERIES {CHECKPOINT_TAG_SERIES.pattern!r}; the rule cannot "
+            "hold anything to a floor outside its own series"
+        )
+    for site, value in sorted(claims.items()):
+        match = CHECKPOINT_TAG_SERIES.match(value)
+        if match is None:
+            problems.append(
+                f"{site} names {value!r}, which is not in the checkpoint's tag series "
+                f"{CHECKPOINT_TAG_SERIES.pattern!r}. A checkpoint's published identity "
+                "may be superseded; it may not be renamed to something unrelated."
+            )
+        elif floor is not None and int(match.group(1)) < int(floor.group(1)):
+            problems.append(
+                f"{site} names {value!r}, whose revision is below the published floor "
+                f"{CHECKPOINT_TAG_FLOOR!r}. A checkpoint tag moves forward or not at "
+                "all: a published revision cannot be re-used."
+            )
+    return problems
+
+
+def _resolved_checkpoint_tag(root: Path) -> str:
+    """The tag every record agrees on, or the floor when they do not.
+
+    Falling back rather than raising is deliberate. An import-time exception takes the
+    whole suite down and reports nothing about why; the fallback keeps a broken record a
+    named **test failure** in :func:`_checkpoint_tag_problems`, which is the form a
+    reader can act on.
+    """
+    values = set(_checkpoint_tag_claims(root).values())
+    if len(values) == 1:
+        value = values.pop()
+        if CHECKPOINT_TAG_SERIES.match(value):
+            return value
+    return CHECKPOINT_TAG_FLOOR
+
+
+CHECKPOINT_TAG = _resolved_checkpoint_tag(REPOSITORY_ROOT)
 
 #: The manual runbook. Read-only for every task in this wave, which is what makes the
 #: case list an **anchor** rather than a pin: the manual report's required verdicts are
@@ -356,7 +502,12 @@ RATIFICATION_PUBLICATION_RECORDS = (
         "path": "docs/program/waves/W0.3_ratification_integration.md",
         "denials": ("`W0-INT-01` is blocked", "| `W0-INT-01` | blocked |"),
         "requires": ("S01",),
-        "must_still_contain": ("`v0.0.0-architecture`", "`W0-INT-01`"),
+        # The needle is the **series**, not the instance. Its job is anti-gutting — it
+        # refuses a retraction made by deleting what the stale claim was about — and a
+        # plan that names `v0.0.1-architecture` after a superseding ratification is not
+        # gutted. Pinning the literal `v0.0.0-architecture` here made `W0-INT-03`'s
+        # required suite unreachable at the moment it ratifies; see CHECKPOINT_TAG.
+        "must_still_contain": (CHECKPOINT_TAG_NEEDLE, "`W0-INT-01`"),
         "requires_note": (
             "the next unlocked S01 preparation tasks deliverable 5 names, with the "
             "wave's own status line and task row no longer calling W0-INT-01 blocked"
@@ -2022,6 +2173,110 @@ def _acceptance_record_problems(root: Path) -> list[str]:
     return problems
 
 
+#: A backticked token that is a path or a glob rather than an identifier. The slash is
+#: what makes it a path: `revision_note` and `const` are quoted in these sections too.
+_PATH_GLOB = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_*./-]*/[A-Za-z0-9_*./-]*$")
+
+#: **A licence is a list item.** The line must open a Markdown list; a continuation line
+#: and a paragraph are not licences however they are punctuated.
+_LIST_ITEM = re.compile(r"^\s*[-*+]\s+\S")
+
+
+def _declared_allowed_paths(root: Path) -> dict[str, tuple[str, ...]]:
+    """``task file -> the path globs its "Allowed paths" section declares``.
+
+    The task files are where a licence is written down and where a reviewer looks for
+    one. Reading them is not the weakness the module warns about elsewhere: a directory
+    listing grows when anybody adds a file, whereas this grows only when somebody writes
+    a task that claims the path, in a document that names an owner and goes through the
+    same review as the work it licenses.
+
+    **A glob is taken only from a line that opens a list item.** The first form of this
+    function harvested every path-shaped code span anywhere in the section, and an
+    independent reviewer found that a prose sentence naming a path therefore granted it.
+    That is not hypothetical and it was not only in the sentence that exposed it: on the
+    tree this was written against the prose harvest granted `contracts/**` to `W0-QA-03`,
+    `scripts/**` to `W0-DOM-02` and `docs/architecture/adr/**` to `W0-ARC-02` — reading
+    each of the three sentences that say those families are **not** writable as a licence
+    for them, the exact inversion of what the section states. A guard whose behaviour
+    depends on how a sentence is punctuated is not a guard.
+
+    The rule survives prose because it never reads prose. Two alternatives were measured
+    and rejected: stopping the section at its first non-list paragraph loses the real
+    declarations in `W0-CLN-01`, `W0-DOM-02` and `W0-INT-03`, each of which introduces a
+    list with a sentence; and admitting indented continuation lines re-opens the hole,
+    because every continuation in these files is prose. Every real declaration in all
+    twenty task files sits on a list-item line, which
+    :meth:`WriteBoundaryTests.test_the_licence_harvest_reads_list_items_and_not_prose`
+    measures rather than assumes.
+    """
+    declared: dict[str, tuple[str, ...]] = {}
+    tasks = root / "docs" / "program" / "tasks"
+    if not tasks.is_dir():
+        return declared
+    for path in sorted(tasks.glob("*.md")):
+        globs: list[str] = []
+        inside = False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("#"):
+                inside = line.strip().lower().endswith("allowed paths")
+                continue
+            if not inside or not _LIST_ITEM.match(line):
+                continue
+            globs.extend(
+                token
+                for token in re.findall(r"`([^`]+)`", line)
+                if _PATH_GLOB.match(token)
+            )
+        if globs:
+            declared[str(path.relative_to(root))] = tuple(dict.fromkeys(globs))
+    return declared
+
+
+def _path_is_declared(path: str, globs) -> bool:
+    """Whether ``path`` is covered by any of ``globs``. ``**`` crosses directories."""
+    for glob in globs:
+        pattern = "".join(
+            ".*" if part == "**" else re.escape(part).replace(r"\*", "[^/]*")
+            for part in re.split(r"(\*\*)", glob)
+        )
+        if re.fullmatch(pattern, path):
+            return True
+    return False
+
+
+def _needle_shape(needle: str) -> str | None:
+    """The regular expression a needle carries, or ``None`` when it is a literal."""
+    if needle.startswith(NEEDLE_PATTERN_PREFIX):
+        return needle[len(NEEDLE_PATTERN_PREFIX):]
+    return None
+
+
+def _needle_present(needle: str, text: str) -> bool:
+    """An anti-gutting needle is a literal **or a shape**.
+
+    A shape is what lets a needle outlive the value it names. The wave plan has to go on
+    naming the checkpoint's tag; *which revision* is not the needle's business, and
+    making it so is what pinned `v0.0.0-architecture` into a state no task in the
+    recovery graph could reach. Everything else stays a literal, because everything else
+    is prose that does not move when a checkpoint is superseded.
+    """
+    shape = _needle_shape(needle)
+    return needle in text if shape is None else re.search(shape, text) is not None
+
+
+def _needle_removed(needle: str, text: str) -> str:
+    """``text`` with every occurrence of the needle gone. The gutting mutation."""
+    shape = _needle_shape(needle)
+    return text.replace(needle, "") if shape is None else re.sub(shape, "", text)
+
+
+def _needle_shown(needle: str) -> str:
+    """How a needle is named in a finding, and in the assertion that looks for it."""
+    shape = _needle_shape(needle)
+    return repr(needle) if shape is None else f"a match of {shape!r}"
+
+
 def _publication_scope(entry: dict, text: str, relative: str) -> tuple[str | None, str | None]:
     """The text one publication requirement is about: a whole document, or one row."""
     marker = entry.get("row")
@@ -2126,11 +2381,12 @@ def _publication_record_problems(root: Path) -> list[str]:
         # selected the row it looked in, so it could not fail while it was reached.
         whole = _flat(raw)
         for needle in entry["must_still_contain"]:
-            if needle not in whole:
+            if not _needle_present(needle, whole):
                 problems.append(
-                    f"{entry['item']}: {relative} does not carry {needle!r}. The stale "
-                    "claim must be retracted by bringing the document up to date, not "
-                    "by removing what it was about."
+                    f"{entry['item']}: {relative} does not carry "
+                    f"{_needle_shown(needle)}. The stale claim must be retracted by "
+                    "bringing the document up to date, not by removing what it was "
+                    "about."
                 )
         if entry.get("checklist"):
             problems.extend(_checklist_problems(root, relative, raw, ratified))
@@ -7037,25 +7293,25 @@ class RatificationRecordTests(unittest.TestCase):
                 "was deleted down to the string the check looks for'.",
             )
             for needle in entry["must_still_contain"]:
-                with self.subTest(document=relative, needle=needle):
+                shown = _needle_shown(needle)
+                with self.subTest(document=relative, needle=shown):
                     self.sandbox._remember(relative)
                     before = path.read_text(encoding="utf-8")
-                    self.assertIn(
-                        needle,
-                        before,
-                        f"{relative} no longer carries {needle!r}, so removing it "
+                    self.assertTrue(
+                        _needle_present(needle, before),
+                        f"{relative} no longer carries {shown}, so removing it "
                         "removes nothing and this case proves nothing. Re-anchor the "
                         "needle in RATIFICATION_PUBLICATION_RECORDS.",
                     )
-                    path.write_text(before.replace(needle, ""), encoding="utf-8")
+                    path.write_text(_needle_removed(needle, before), encoding="utf-8")
                     problems = _publication_record_problems(self.sandbox.root)
                     path.write_text(before, encoding="utf-8")
                     self.assertTrue(
                         any(
-                            relative in problem and repr(needle) in problem
+                            relative in problem and shown in problem
                             for problem in problems
                         ),
-                        f"{relative} was gutted of {needle!r} and nothing said so: "
+                        f"{relative} was gutted of {shown} and nothing said so: "
                         f"{problems}",
                     )
                     checked += 1
@@ -11021,17 +11277,30 @@ class TableExpectationTests(unittest.TestCase):
         )
 
     def test_the_checkpoint_tag_and_manual_vocabulary_are_pinned(self) -> None:
-        """Pinned here, anchored where an anchor exists.
+        """The **rule** is pinned; the instance is resolved and then held to the rule.
 
-        The tag is compared with the checkpoint manifest's own `tag_planned`: the
-        manifest is a document the integrator writes, so it cannot be the *source* of
-        the value, but a disagreement between the two is a re-tag nobody declared and is
-        reported as one. The verdict vocabulary has no external anchor — it is the
-        vocabulary `W0-INT-01` deliverable 3 names — so it is pinned and said to be.
+        The tag was pinned to one literal and compared with the manifest's own
+        `tag_planned`, on the reasoning that the integrator writes the manifest so it
+        cannot be the source of the value. The reasoning holds and the literal did not:
+        `v0.0.1-architecture` is the identity the recovery publishes, no task but
+        `W0-QA-04` may edit this file, and so the literal made `W0-INT-03`'s required
+        suite unreachable at the moment of ratification.
+
+        What is pinned now is the series, the floor and the agreement requirement — none
+        of which a superseding checkpoint moves. The verdict vocabulary has no external
+        anchor, so it stays pinned and is said to be.
         """
-        self.assertEqual(CHECKPOINT_TAG, "v0.0.0-architecture")
+        self.assertEqual(CHECKPOINT_TAG_SERIES.pattern, r"^v0\.0\.(\d+)-architecture$")
+        self.assertEqual(CHECKPOINT_TAG_NEEDLE, r"re:`v0\.0\.(\d+)-architecture`")
+        self.assertEqual(CHECKPOINT_TAG_FLOOR, "v0.0.0-architecture")
         self.assertEqual(MANUAL_VERDICTS, ("PASS", "FAIL", "BLOCKED"))
         self.assertEqual(MANUAL_RUNBOOK, "docs/manual-tests/CP-00_architecture.md")
+        self.assertEqual(
+            _checkpoint_tag_problems(REPOSITORY_ROOT),
+            [],
+            "the records that name the checkpoint's published tag do not agree, or name "
+            "one outside the pinned series",
+        )
         self.assertEqual(
             _load(CHECKPOINT_MANIFEST).get("tag_planned"),
             CHECKPOINT_TAG,
@@ -11041,6 +11310,112 @@ class TableExpectationTests(unittest.TestCase):
         self.assertTrue(
             (REPOSITORY_ROOT / MANUAL_RUNBOOK).is_file(),
             "the manual runbook this module reads its case list out of is not there",
+        )
+
+    def test_the_checkpoint_tag_resolves_and_the_rule_can_fail(self) -> None:
+        """**The anti-vacuity half.** A resolvable identity that cannot refuse anything
+        is worse than the literal it replaced: the literal at least failed loudly.
+
+        Four mutations of the records, each on a copy so nothing here writes to the
+        repository, and each must be refused:
+
+        * a record naming a different tag from the others — a re-tag declared once;
+        * a name outside the series — a rename to an unrelated identity;
+        * a revision below the published floor — a spent revision re-used;
+        * no record naming a tag at all — the resolution falling back silently.
+
+        And one that must be **accepted**, because the whole point is that a superseding
+        checkpoint does not need this file edited: every record moved to `v0.0.1`.
+        """
+        original = _checkpoint_tag_claims(REPOSITORY_ROOT)
+        self.assertEqual(
+            sorted(original),
+            [
+                f"{CHECKPOINT_CONTRACT_MANIFEST}:tag",
+                f"{CHECKPOINT_MANIFEST}:tag",
+                f"{CHECKPOINT_MANIFEST}:tag_planned",
+            ],
+            "the tag is resolved from three claims in two records; if one stops being "
+            "read, one edit moves the value again",
+        )
+        self.assertEqual(_checkpoint_tag_problems(REPOSITORY_ROOT), [])
+        self.assertEqual(CHECKPOINT_TAG, "v0.0.0-architecture")
+
+        def _tree(manifest_tag, manifest_planned, contract_tag) -> Path:
+            root = Path(tempfile.mkdtemp(prefix="w0-qa-04-tag-"))
+            self.addCleanup(shutil.rmtree, root, True)
+            (root / ACCEPTANCE_EVIDENCE_PREFIX).mkdir(parents=True)
+            body = {}
+            if manifest_tag is not None:
+                body["tag"] = manifest_tag
+            if manifest_planned is not None:
+                body["tag_planned"] = manifest_planned
+            (root / CHECKPOINT_MANIFEST).write_text(json.dumps(body), encoding="utf-8")
+            lines = ["checkpoint: CP-00"]
+            if contract_tag is not None:
+                lines.append(f"tag: {contract_tag}")
+            (root / CHECKPOINT_CONTRACT_MANIFEST).write_text(
+                "\n".join(lines) + "\n", encoding="utf-8"
+            )
+            return root
+
+        green = _tree("v0.0.1-architecture", "v0.0.1-architecture", "v0.0.1-architecture")
+        self.assertEqual(
+            _checkpoint_tag_problems(green),
+            [],
+            "a superseding checkpoint whose records all moved together must be accepted "
+            "without editing this module; that is the whole reason the literal went",
+        )
+        self.assertEqual(_resolved_checkpoint_tag(green), "v0.0.1-architecture")
+
+        for name, tree, expected in (
+            (
+                "one record left behind",
+                _tree("v0.0.1-architecture", "v0.0.0-architecture", "v0.0.1-architecture"),
+                "name more than one published tag",
+            ),
+            (
+                "renamed outside the series",
+                _tree("v1-final", "v1-final", "v1-final"),
+                "not in the checkpoint's tag series",
+            ),
+            (
+                "a spent revision re-used",
+                _tree("v0.0.0-architecture", "v0.0.0-architecture", "v0.0.0-architecture"),
+                None,  # the floor itself is legal; the case below is the illegal one
+            ),
+            (
+                "no record names a tag",
+                _tree(None, None, None),
+                "no checkpoint record names a published tag",
+            ),
+        ):
+            with self.subTest(mutation=name):
+                problems = _checkpoint_tag_problems(tree)
+                if expected is None:
+                    self.assertEqual(problems, [], f"{name} is legal and was refused")
+                    continue
+                self.assertTrue(
+                    any(expected in problem for problem in problems),
+                    f"{name}: nothing said {expected!r}; got {problems}",
+                )
+                self.assertEqual(
+                    _resolved_checkpoint_tag(tree),
+                    CHECKPOINT_TAG_FLOOR,
+                    f"{name}: the resolution must fall back to the floor rather than "
+                    "adopt a value the rule refuses",
+                )
+
+        # The floor is a floor: below it is refused even when every record agrees.
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "CHECKPOINT_TAG_FLOOR", "v0.0.1-architecture"
+        ):
+            problems = _checkpoint_tag_problems(
+                _tree("v0.0.0-architecture", "v0.0.0-architecture", "v0.0.0-architecture")
+            )
+        self.assertTrue(
+            any("moves forward or not at all" in problem for problem in problems),
+            f"a re-tag onto a spent revision was accepted: {problems}",
         )
 
     def test_the_checkpoint_bundle_table_is_pinned_whole(self) -> None:
@@ -11155,7 +11530,8 @@ class TableExpectationTests(unittest.TestCase):
               'path': 'docs/program/waves/W0.3_ratification_integration.md',
               'denials': ('`W0-INT-01` is blocked', '| `W0-INT-01` | blocked |'),
               'requires': ('S01',),
-              'must_still_contain': ('`v0.0.0-architecture`', '`W0-INT-01`'),
+              'must_still_contain': ('re:`v0\\.0\\.(\\d+)-architecture`',
+                                     '`W0-INT-01`'),
               'requires_note': 'the next unlocked S01 preparation tasks deliverable 5 '
                                "names, with the wave's own status line and task row no "
                                'longer calling W0-INT-01 blocked'},
@@ -12721,11 +13097,54 @@ class WriteBoundaryTests(unittest.TestCase):
         self.assertEqual(status(), {f"{directory}/"})
         self.assertEqual(status("--untracked-files=all"), {f"{directory}/deliverable.md"})
 
-    def test_only_the_two_owned_paths_are_reported_under_the_owned_trees(self) -> None:
-        owned = {
+    def test_no_undeclared_path_is_dirty_under_the_owned_trees(self) -> None:
+        """Containment, against the **declared** licence rather than one task's two files.
+
+        The previous form pinned the owned set to `W0-QA-01`'s two paths and required
+        nothing else under `tests/contract/` or `docs/program/reviews/` to be dirty. That
+        is a task-local containment gate that outlived its task: it was committed into
+        the shared suite, so every later task licensed to write in either tree turns it
+        red the moment it writes its own deliverable. `W0-QA-04`'s allowed paths name
+        `tests/contract/test_cp00_final_state.py` and `docs/program/reviews/W0-QA-04.md`,
+        and with the pin in place performing that task honestly failed the suite that
+        judges it — the same shape as the `CHECKPOINT_TAG` literal, and the same shape as
+        round nine's "performing the ratification voids the round that authorises it".
+
+        What replaces it keeps the property and drops the pin: a dirty path is contained
+        when **some task file's own `Allowed paths` section declares it**. That is read
+        out of `docs/program/tasks/`, so no task needs this module edited to do its work,
+        and an undeclared path is still a failure. Widening the licence now means writing
+        it down in the task that claims it, which is where a reviewer looks for it.
+        """
+        declared = _declared_allowed_paths(REPOSITORY_ROOT)
+        # Anti-vacuity: the scan must really have read the declarations. An empty or
+        # near-empty map would make every path "undeclared" — or, with the comparison
+        # the other way round, every path allowed.
+        self.assertGreaterEqual(
+            len(declared), 15, "the allowed-path scan found almost no task declarations"
+        )
+        self.assertIn(
             "tests/contract/test_cp00_candidate.py",
-            "docs/program/reviews/W0-QA-01.md",
-        }
+            declared.get("docs/program/tasks/W0-QA-01.md", ()),
+            "this module's own path is not declared by the task that owns it; the scan "
+            "is not reading what it thinks it is",
+        )
+        every_glob = {glob for globs in declared.values() for glob in globs}
+        self.assertFalse(
+            _path_is_declared("tests/contract/nobody-declared-this.py", every_glob),
+            "the matcher accepts a path no task declares, so containment proves nothing",
+        )
+        # And the licence is not silently the whole tree. A prose sentence naming a
+        # directory once widened the harvest to it; these are the three sections whose
+        # sentences say a family is *not* writable, and none of them may grant it.
+        for family in ("contracts/**", "scripts/**", "docs/architecture/adr/**"):
+            self.assertNotIn(
+                family,
+                every_glob,
+                f"{family} is declared by no task's list of allowed paths; it is named "
+                "only in sentences that say it is not writable",
+            )
+
         result = _git(
             "-C",
             str(REPOSITORY_ROOT),
@@ -12740,14 +13159,111 @@ class WriteBoundaryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         reported = {line[3:] for line in result.stdout.splitlines() if line}
         self.assertEqual(
-            sorted(reported - owned),
+            sorted(
+                path for path in reported if not _path_is_declared(path, every_glob)
+            ),
             [],
-            "a path outside this task's two allowed paths is dirty",
+            "a dirty path under the owned trees is declared by no task's allowed paths",
         )
         missing = sorted(
-            path for path in owned if not (REPOSITORY_ROOT / path).is_file()
+            path
+            for path in ("tests/contract/test_cp00_candidate.py",
+                         "docs/program/reviews/W0-QA-01.md")
+            if not (REPOSITORY_ROOT / path).is_file()
         )
         self.assertEqual(missing, [], "an owned deliverable is missing")
+
+    def test_the_licence_harvest_reads_list_items_and_not_prose(self) -> None:
+        """**The blocking finding of the first independent review, and its repair.**
+
+        The harvest took every path-shaped code span anywhere in an `Allowed paths`
+        section. A task file is prose, so a sentence naming a path granted it — and the
+        reviewer's instance was mild compared with what was already on this tree: three
+        sections say a reviewed family is **not** writable and named it to say so, and
+        the harvest read each of those three sentences as a licence for the family they
+        deny. A guard whose behaviour depends on how a sentence is punctuated is not a
+        guard, so the repair is not a rewording; it is that the harvest never reads
+        prose.
+
+        Both directions are asserted. The same code span is a licence on a list-item
+        line and is not one in a sentence, which is what makes this a rule rather than a
+        filter that happens to reject things.
+        """
+        root = Path(tempfile.mkdtemp(prefix="w0-qa-04-licence-"))
+        self.addCleanup(shutil.rmtree, root, True)
+        tasks = root / "docs" / "program" / "tasks"
+        tasks.mkdir(parents=True)
+        (tasks / "T-PROSE.md").write_text(
+            "# T-PROSE\n"
+            "\n"
+            "## Allowed paths\n"
+            "\n"
+            "Introduced by a sentence, because three real task files do that:\n"
+            "\n"
+            "- `docs/program/reviews/T-PROSE.md`\n"
+            "- `docs/only/here.md` — a qualifier after an em dash, and a continuation\n"
+            "  line that mentions `tests/checkpoint/**` in passing\n"
+            "- `contracts/domain/v1/x.json` — the `revision_note` field only, advancing\n"
+            "  `candidate_revision` and its `const` pin\n"
+            "- `**` — everything, allegedly\n"
+            "\n"
+            "No other path is writable. In particular `tests/**` is not, and neither is\n"
+            "`contracts/**`.\n"
+            "\n"
+            "## Deliverables\n"
+            "\n"
+            "- `docs/not/in/the/section.md`\n",
+            encoding="utf-8",
+        )
+        harvested = _declared_allowed_paths(root)
+        self.assertEqual(
+            harvested,
+            {
+                "docs/program/tasks/T-PROSE.md": (
+                    "docs/program/reviews/T-PROSE.md",
+                    "docs/only/here.md",
+                    "contracts/domain/v1/x.json",
+                )
+            },
+            "the harvest took something other than the path-shaped spans on the "
+            "section's list items",
+        )
+        globs = harvested["docs/program/tasks/T-PROSE.md"]
+        for denied in (
+            "tests/contract/anything.py",     # from `tests/**` in the closing sentence
+            "contracts/domain/v1/other.json",  # from `contracts/**` in the same sentence.
+                                              # The neighbouring x.json *is* licensed,
+                                              # by a list item, so this pair separates
+                                              # "the family was granted" from "one file
+                                              # in it was".
+            "tests/checkpoint/x.py",          # from a continuation line, which is prose
+            "docs/not/in/the/section.md",     # a list item outside the section
+            # `**` sits on a list item of its own. It is not a path, and _PATH_GLOB is
+            # what refuses it: translated as a glob it becomes `.*` and licenses the
+            # whole repository, so this is the one token whose rejection is not
+            # cosmetic. `revision_note`, `candidate_revision` and `const` are refused by
+            # the same rule and are the shapes W0-CLN-01 and W0-DOM-02 really carry.
+            "any/path/at/all.py",
+        ):
+            with self.subTest(denied=denied):
+                self.assertFalse(
+                    _path_is_declared(denied, globs),
+                    f"{denied} was licensed by prose or by another section",
+                )
+
+        # The other direction: the *same* span, moved onto a list item, is a licence.
+        # Without this the rule could be "reject everything" and still pass above.
+        (tasks / "T-PROSE.md").write_text(
+            "# T-PROSE\n\n## Allowed paths\n\n- `tests/**`\n", encoding="utf-8"
+        )
+        self.assertTrue(
+            _path_is_declared(
+                "tests/contract/anything.py",
+                _declared_allowed_paths(root)["docs/program/tasks/T-PROSE.md"],
+            ),
+            "a path declared as a list item is not licensed, so the rule rejects "
+            "everything rather than reading the list",
+        )
 
     def test_the_reviewed_families_carry_nothing_undeclared(self) -> None:
         """No working-tree change under a reviewed family beyond the declared delta.
