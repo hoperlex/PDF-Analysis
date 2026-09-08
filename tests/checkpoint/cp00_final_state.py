@@ -213,9 +213,26 @@ HEADER_LINES = 26
 #: **A subject declaration.** The shapes an evidence record uses to say, in its own
 #: bytes, which tree its claims are about. This is the structural half of live-vs-
 #: historical: a record that declares a subject is judged against *that* tree.
+#:
+#: **The value stands on the key's own line**, and the reason is
+#: :data:`TESTER_DECLARATION`'s: ``\s`` matches ``\n``, so the ``\s*`` before the quote
+#: markers and the ``\s*[:\s]+`` after the key both walked off the end of an empty line
+#: and read the next one. Measured on the shipped form: ``candidate_commit:\nacceded to
+#: the request`` declared its subject to be ``acceded`` -- seven hex characters, so a
+#: commit-shaped answer taken out of a sentence.
+#:
+#: **It never bit, and it is repaired anyway.** Unlike the tester rule it made no branch
+#: unreachable -- a record with no key still classifies live, and a bogus subject fails
+#: closed against a tree that has no such commit -- and over every tracked file of two
+#: real trees no file's answer changes under the fix: 232 files of a round-eleven-shaped
+#: freeze tree and 239 of this one, seven and nine of them declaring a subject, zero
+#: changing. The defect was in the mechanism rather than in the effect, the claim that
+#: this pattern did not share it was wrong, and after this round no task is licensed to
+#: write this tree, so a known newline-crossing rule left standing beside a corrected
+#: sibling would stand for good.
 SUBJECT_DECLARATION = re.compile(
-    r"^\s*[>|*\s]*`?(?:candidate_commit|subject_commit|frozen_at_commit|"
-    r"candidate[ _]frozen[ _]at|subject[ _]commit)`?\s*[:\s]+`?([0-9a-f]{7,40})`?",
+    r"^[^\S\n]*[>|*\t ]*`?(?:candidate_commit|subject_commit|frozen_at_commit|"
+    r"candidate[ _]frozen[ _]at|subject[ _]commit)`?[^\S\n]*[:\t ]+`?([0-9a-f]{7,40})`?",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -908,7 +925,21 @@ PLACEHOLDER_VALUE = re.compile(
     f"{_COMPOUND_PLACEHOLDER}|{_BARE_PLACEHOLDER}", re.IGNORECASE
 )
 #: How a manual report declares who ran it.
-TESTER_DECLARATION = re.compile(r"^\s*tester\s*:\s*(\S[^\n]*)$", re.MULTILINE)
+#:
+#: **The value may not be read off the next line.** ``\s`` matches ``\n``, so a bare
+#: ``\s*`` after the colon walked past the end of an empty ``tester:`` line and took the
+#: next non-blank line as the value: measured on this module, ``tester:\nstarted_at:
+#: 2026-09-09`` declared its tester to be ``"started_at: 2026-09-09"``, and an empty line
+#: before a closing code fence declared it to be ``"```"``. An *unfilled* report -- the
+#: one thing this rule was added to catch, after a reproduced green chain shipped
+#: ``MANUAL_TESTER_PLACEHOLDER`` -- therefore read as having declared a tester, and the
+#: "declares no tester" branch below could only be reached by deleting the line
+#: altogether, which is what its control mutated and why it was green by construction.
+#: ``[^\S\n]`` is horizontal whitespace only, so the value has to stand on the same line
+#: as the key it answers, and an empty or whitespace-only one is no value at all.
+TESTER_DECLARATION = re.compile(
+    r"^[^\S\n]*tester[^\S\n]*:[^\S\n]*(\S[^\n]*)$", re.MULTILINE
+)
 
 
 def acceptance_evidence_problems(tree: Tree, manifest: object) -> list[Finding]:

@@ -470,6 +470,22 @@ class TerminalStateTests(_ContourCase):
         self.assert_fires(
             contour.run(gone, self.tag), contour.CHECK_TERMINAL, "declares no tester"
         )
+        # The unfilled form, which is the one a real report actually takes: the key is
+        # present, its value is not, and the next field follows it. Deleting the line is
+        # the easy half and was the only half this test had, so the branch it names was
+        # green by construction -- `\s*` after the colon crosses newlines, and the
+        # pattern read `started_at: ...` as the tester. Both halves are kept, because a
+        # rule that catches a deleted key and misses an empty one catches nobody.
+        empty = self.mutate(
+            **{
+                MANUAL_REPORT: self.assert_replaced(
+                    text, TESTER_LINE, "tester:\nstarted_at:                2026-09-09"
+                )
+            }
+        )
+        self.assert_fires(
+            contour.run(empty, self.tag), contour.CHECK_TERMINAL, "declares no tester"
+        )
         planted = self.mutate(
             **{
                 MANUAL_REPORT: self.assert_replaced(
@@ -773,6 +789,29 @@ class LiveVersusHistoricalTests(_ContourCase):
         self.assertIsNone(contour.declared_subject(tree, MANUAL_REPORT))
         self.assertEqual(contour.bound_subject(tree, MANUAL_REPORT), "round-10")
         self.assert_fires(verdict, contour.CHECK_TERMINAL, "declares no subject commit")
+        # The *unfilled* half, which is the tester rule's defect in the key beside it:
+        # `\s*` before the quote markers and `[:\s]+` after the key both crossed
+        # newlines, so an empty `candidate_commit:` took its value off the next line and
+        # `acceded to the request` declared the subject `acceded` -- seven hex
+        # characters. It never bit on a real record: over every tracked file of two real
+        # trees, 232 of a round-eleven-shaped freeze and 239 of this one, the repair
+        # changes no file's answer. So this is the only place it can be caught, and
+        # without it the repair would be the unfalsifiable half of the pair it belongs to.
+        emptied = self.mutate(
+            **{
+                MANUAL_REPORT: self.assert_replaced(
+                    self.files()[MANUAL_REPORT],
+                    f"candidate_commit:  {SUBJECT}",
+                    "candidate_commit:\nacceded to the request",
+                )
+            }
+        )
+        self.assertIsNone(contour.declared_subject(emptied, MANUAL_REPORT))
+        self.assert_fires(
+            contour.run(emptied, self.tag),
+            contour.CHECK_TERMINAL,
+            "declares no subject commit",
+        )
 
     def test_MUTATION_a_subject_commit_this_tree_cannot_resolve(self) -> None:
         tree = contour.MappingTree(self.files(), {TAGGED: self.revisions()[TAGGED],

@@ -2130,6 +2130,121 @@ def _manual_case_ids(root: Path) -> list[str]:
     return sorted(set(re.findall(r"MT00-\d{2}", path.read_text(encoding="utf-8"))))
 
 
+#: A verdict standing **alone** in a table cell, under whatever emphasis the report puts
+#: on it. Bare, bold and backticked all occur across the bundle's manual reports, so the
+#: markup is stripped rather than enumerated. Requiring the whole cell rules out the
+#: evidence cell beside it, which is prose and may say anything.
+_CELL_VERDICT = re.compile(
+    r"^[\s*_`]*(" + "|".join(MANUAL_VERDICTS) + r")[\s*_`.,;:]*$"
+)
+#: A verdict standing as a word, for the heading shape.
+_WORD_VERDICT = re.compile(
+    r"(?<![A-Za-z0-9_])(" + "|".join(MANUAL_VERDICTS) + r")(?![A-Za-z0-9_])"
+)
+#: A line that is a case ID and a verdict **and nothing else**, under the markup a
+#: report may put on either. Opening with the ID is not enough on its own: a sentence
+#: such as "`MT00-01` was reported FAIL in round seven" opens with it too, and reading
+#: that as a declaration reinstates the defect one shape further along. Measured on
+#: the first draft of this repair, which did exactly that.
+#:
+#: **The leading class carries the list markers, and it did not.** ``-`` was in the
+#: *separator* class and not in the *leading* one, so ``* MT00-01 -- FAIL`` and
+#: ``> MT00-01 -- FAIL`` declared and ``- MT00-01 -- FAIL``, ``+ ...``, ``1. ...`` and an
+#: indented ``  - ...`` did not: the commonest Markdown bullet of the four was the
+#: rejected one, while the finding below told the tester who hit it that a line carrying
+#: the case ID and a verdict alone was a declaration. Fail-closed, so it blocked nobody
+#: -- and a message describing what the code does not do is the defect this task has
+#: spent five rounds removing, so the code is moved to the message rather than the other
+#: way round. The ordered marker is matched as a marker rather than by opening the class
+#: to digits: ``2026-09-09 MT00-01 -- FAIL`` is a dated line, not a list item, and the
+#: rule stays a statement about list shapes.
+_BARE_CASE_VERDICT = re.compile(
+    r"^[\s>*+_`-]*(?:\d+[.)][ \t]*)?(MT00-\d{2})[\s*_`:.—–-]*([A-Za-z]+)[\s*_`.]*$"
+)
+
+
+def _declared_case_verdicts(case: str, line: str) -> set[str]:
+    """The verdicts ``line`` **declares** for ``case``, not the ones it mentions near it.
+
+    **A gate that cannot pass on correct output is as bad as one that cannot fail on
+    incorrect output** — §3.6.7, where an acceptance clause required every contour
+    finding to name one task and correct output named two. Harvesting a verdict from
+    *every* line carrying the case ID was the same defect: a sentence recording that a
+    case was ``FAIL`` in an earlier round unioned ``FAIL`` into that case, and with
+    ``ratified: true`` a true report was refused by its own history. The reports really
+    do write those sentences — `manual-report-round-8.md:463` says "It does not lift the
+    `MT00-01` `FAIL`" and `:632` "Overall: FAIL — 5/6, with `MT00-01` failing", and
+    `-round-7.md:563` "FAIL — 5 of 6 cases pass. MT00-01 fails." — so the rule the union
+    implied was *never mention an earlier verdict near a case ID*, which nothing states
+    and no tester could be expected to follow.
+
+    A declaration is one of the three shapes the bundle's reports actually use:
+
+    * a **table row** whose case cell names the case and whose verdict cell is a verdict
+      and nothing else — bare at `manual-report-round-3.md:31`, bold at
+      `-round-10.md:763`;
+    * a **heading** for the case — bold at `-round-7.md:67`, backticked at
+      `-round-6.md:54`;
+    * a **bullet or bare line** that is the case ID and a verdict and nothing else,
+      under any of the list markers Markdown offers -- ``-``, ``+``, ``*``, ``>``, an
+      ordered ``1.`` or ``1)``, indented or not.
+
+    Everything else carrying the ID is prose. Measured over all six manual reports in
+    the bundle: every case in every one of them is declared by a table row, and every
+    report but round three declares it in a heading as well, so scoping to declarations
+    changes no case's verdict anywhere in the corpus. What it drops is exactly the three
+    sentences above.
+
+    **What it admits that the union caught**: a report that states a case's verdict
+    *only* in prose. That is not silently accepted — it lands on the "names the case
+    without declaring a verdict" branch below instead, which names the case and the
+    shapes a declaration may take. A section-body ``**Verdict: `PASS`.**`` line is not
+    read as the heading's, because it carries no case ID; every report that uses that
+    shape also declares the case in its heading and its summary table.
+
+    **Poisoning survives inside a declaring line, narrowed rather than closed.** The
+    heading branch returns *every* word-verdict on the line, so
+    `### MT00-01 — Navigation — PASS (was FAIL in round seven)` still yields
+    `{PASS, FAIL}` and still refuses a true report under `ratified: true`; a table row
+    carrying two verdict cells — a per-round column, say — does the same through the
+    cell branch. What the scoping removed is the *cross-line* union, which is where the
+    bundle's real sentences live; what it leaves is a second verdict written inside the
+    one line that declares. The old union poisoned both of these identically, so nothing
+    regressed here and no claim above rests on their being closed. Closing them means
+    deciding which verdict on a line is the declared one, and a rule that picks — first,
+    last, most emphasised — is a rule a correct report can be written wrongly against:
+    that is the trade this narrowing declines to make on a tree no later task may
+    re-measure.
+
+    **What neither rule reaches**, recorded so it is not read as covered: a section body
+    declaring `FAIL` under a heading declaring `PASS`. The union missed it whenever the
+    body line carried no case ID, and this rule misses it for the same reason — a line
+    without the ID is not that case's line at all. A report that contradicts itself
+    between its heading and its prose is caught by a reader, not by this function.
+    """
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if not any(case in cell for cell in cells):
+            return set()
+        declared = set()
+        for cell in cells:
+            if case in cell:
+                continue
+            match = _CELL_VERDICT.match(cell)
+            if match:
+                declared.add(match.group(1))
+        return declared
+    if case not in stripped:
+        return set()
+    if stripped.startswith("#"):
+        return {match.group(1) for match in _WORD_VERDICT.finditer(stripped)}
+    bare = _BARE_CASE_VERDICT.match(stripped)
+    if bare and bare.group(1) == case and bare.group(2) in MANUAL_VERDICTS:
+        return {bare.group(2)}
+    return set()
+
+
 def _manual_report_problems(root: Path, manifest: dict, relative: str, text: str,
                             ratified: bool) -> list[str]:
     """`W0-INT-01` deliverable 3, checked against the runbook and the record.
@@ -2153,16 +2268,15 @@ def _manual_report_problems(root: Path, manifest: dict, relative: str, text: str
         if not carrying:
             problems.append(f"{relative} records no result for {case}")
             continue
-        verdicts = {
-            verdict
-            for line in carrying
-            for verdict in MANUAL_VERDICTS
-            if re.search(rf"\b{verdict}\b", line)
-        }
+        verdicts: set[str] = set()
+        for line in carrying:
+            verdicts |= _declared_case_verdicts(case, line)
         if not verdicts:
             problems.append(
-                f"{relative} names {case} without any of {list(MANUAL_VERDICTS)}; a "
-                "manual report records a verdict per case, not a mention per case"
+                f"{relative} names {case} without declaring any of "
+                f"{list(MANUAL_VERDICTS)} for it in a table row, a heading, or a bullet "
+                "or bare line carrying the case ID and a verdict alone; a manual report "
+                "records a verdict per case, not a mention per case"
             )
         elif ratified and verdicts != {"PASS"}:
             problems.append(
@@ -7676,6 +7790,128 @@ class RatificationRecordTests(unittest.TestCase):
                 )
                 self.sandbox.restore()
 
+    def test_a_declared_case_failure_is_caught_in_every_shape_the_reports_use(self) -> None:
+        """The direction that must keep firing once the harvest is scoped.
+
+        Narrowing from "every line carrying the ID" to "every line declaring a verdict"
+        is only safe if the declaring shapes are the ones the reports really use, so the
+        shapes are taken from the bundle rather than chosen: a bare table cell
+        (`manual-report-round-3.md:31`), a bold one (`-round-10.md:763`), a bold heading
+        (`-round-7.md:67`), a backticked heading (`-round-6.md:54`), and a line opening
+        with the case ID. Each one alone must stop the ratification.
+
+        **The four list markers are here because three of them were rejected.** The
+        first draft's leading class carried `-` in its *separator* half and not in its
+        *leading* half, so `* ` and `> ` declared and `- `, `+ `, `1. ` and an indented
+        `  - ` did not -- the commonest Markdown bullet among them being the rejected
+        one, and the finding the tester would read promising that a line carrying the
+        case ID and a verdict alone is a declaration. Each marker is a row here so the
+        promise and the rule cannot drift apart again silently.
+        """
+        relative = ACCEPTANCE_EVIDENCE_PREFIX + "manual-test-report.md"
+        cases = _manual_case_ids(self.sandbox.root)
+        self.assertTrue(cases, "the runbook defines no manual cases")
+        case = cases[0]
+        row = f"| {case} | PASS | walked as written; no defect found |"
+        for label, declaration in (
+            ("a bare table cell", f"| {case} | FAIL | walked as written |"),
+            ("a bold table cell", f"| {case} | **FAIL** |"),
+            ("a bold heading", f"### {case} \u2014 Documentation navigation \u2014 **FAIL**"),
+            ("a backticked heading", f"### {case} \u2014 Documentation navigation \u2014 `FAIL`"),
+            ("a bare case-and-verdict line", f"`{case}` \u2014 FAIL"),
+            ("a hyphen bullet", f"- {case} \u2014 FAIL"),
+            ("a plus bullet", f"+ `{case}`: FAIL"),
+            ("an indented hyphen bullet", f"  - **{case}** \u2014 FAIL"),
+            ("an ordered list item", f"1. {case} \u2014 FAIL"),
+            ("an asterisk bullet", f"* {case} \u2014 FAIL"),
+        ):
+            # `restore` in a `finally` rather than after the assertions, which is the
+            # house pattern in this class: with it after them, the first subtest to go
+            # red leaves the sandbox ratified and every later shape fails on
+            # "anchor missing before reconciliation" instead of on its own subject.
+            # Measured under the mutation that narrows the leading class again: one
+            # genuine red and four unreadable ones. The class-level cleanup contained
+            # it either way, so this buys legible mutation evidence, not safety.
+            with self.subTest(shape=label):
+                try:
+                    self._ratify_for_real()
+                    path = self.sandbox.root / relative
+                    text = path.read_text(encoding="utf-8")
+                    self.assertIn(row, text, "the harness wrote no case row to replace")
+                    path.write_text(text.replace(row, declaration), encoding="utf-8")
+                    self.sandbox.seal_digests(tested=self.sandbox.frozen_digest)
+                    problems = _acceptance_problems(self.sandbox.root)
+                    # The needle is the *verdict* branch by name. "records no verdict for
+                    # this case" also names the case and quotes MANUAL_VERDICTS, so a
+                    # looser assertion passes when the shape is not recognised at all --
+                    # measured: narrowing the harvest to table rows left this test green
+                    # on the three non-table shapes it exists to pin.
+                    self.assertTrue(
+                        any(relative in problem and f"records {case} as" in problem
+                            and "FAIL" in problem for problem in problems),
+                        f"a case declared FAIL by {label} ratified anyway: {problems}",
+                    )
+                    self.assertFalse(
+                        any("without declaring any of" in problem
+                            for problem in problems),
+                        f"{label} was not read as a declaration at all, so the finding "
+                        f"above would have been the wrong one: {problems}",
+                    )
+                finally:
+                    self.sandbox.restore()
+
+    def test_a_prior_verdict_mentioned_beside_a_case_id_does_not_poison_it(self) -> None:
+        """**The repair this scoping exists for: a true report that records its history.**
+
+        Harvesting a verdict from every line carrying the case ID meant a sentence
+        saying the case had failed *before* was read as saying it failed *now*, and with
+        `ratified: true` the round was stopped by a report that passed. The sentences
+        below are the shapes the bundle already contains --
+        `manual-report-round-8.md:463` and `:632`, and `-round-7.md:563` -- so the union
+        was demanding that a tester never mention an earlier verdict near a case ID,
+        which nothing states and no tester could follow. A gate that cannot pass on
+        correct output is as bad as one that cannot fail on incorrect output; §3.6.7
+        settled that, and this is the same shape.
+
+        The digests are re-sealed after the edit so the evidence-digest catch-all is
+        silent and the per-case rule has to answer on its own.
+        """
+        relative = ACCEPTANCE_EVIDENCE_PREFIX + "manual-test-report.md"
+        cases = _manual_case_ids(self.sandbox.root)
+        self.assertTrue(cases, "the runbook defines no manual cases")
+        case = cases[0]
+        for label, sentence in (
+            ("round eight's carried finding",
+             f"The checklist passes in all three items. It does not lift the `{case}` "
+             f"`FAIL`, and it stands."),
+            ("round eight's overall line",
+             f"**Overall: FAIL \u2014 5/6, with `{case}` failing.**"),
+            ("round seven's summary line",
+             f"**FAIL \u2014 5 of 6 cases pass. {case} fails.**"),
+            ("a plain retrospective",
+             f"{case} was reported FAIL in round seven; the defect behind it is fixed."),
+        ):
+            with self.subTest(mention=label):
+                try:
+                    self._ratify_for_real()
+                    self.assertEqual(_acceptance_problems(self.sandbox.root), [])
+                    path = self.sandbox.root / relative
+                    path.write_text(
+                        path.read_text(encoding="utf-8") + f"\n{sentence}\n",
+                        encoding="utf-8",
+                    )
+                    self.sandbox.seal_digests(tested=self.sandbox.frozen_digest)
+                    self.assertEqual(
+                        _acceptance_problems(self.sandbox.root),
+                        [],
+                        f"{label} beside {case} was read as that case's verdict, so a "
+                        "true report is refused for recording its own history",
+                    )
+                finally:
+                    # As above: the restore has to happen on the failing path too, or
+                    # the first poisoning sentence to slip through hides the other three.
+                    self.sandbox.restore()
+
     def test_a_runbook_defining_no_cases_is_reported_not_satisfied(self) -> None:
         """The manual case list is an anchor, so it has to be able to rot loudly.
 
@@ -8271,6 +8507,16 @@ class RatificationRecordTests(unittest.TestCase):
             f"the ratifying task rewrote its own outcome and passed: {problems}",
         )
 
+    #: The two names the probe below plants. Held here rather than inline so the
+    #: restoration guard beneath it can point *the same probe* at a path this tree's
+    #: freeze really tracks — on today's tree neither of these two is tracked, and the
+    #: displaced-file case the probe has to survive is therefore unreachable through
+    #: them. See that guard for the measurement.
+    PREFIX_PROBE_STRANGERS = (
+        ACCEPTANCE_EVIDENCE_PREFIX + "checkpoint-report-draft.md",
+        "docs/program/tasks/W0-INT-02.md",
+    )
+
     def test_the_new_licences_are_named_files_and_not_directories(self) -> None:
         """A ceiling that is a *prefix* is a ceiling anyone can widen by adding a file.
 
@@ -8281,22 +8527,105 @@ class RatificationRecordTests(unittest.TestCase):
         """
         self._ratify_for_real()
         self.assertEqual(_post_freeze_delta_problems(self.sandbox.root), [])
-        for stranger in (
-            ACCEPTANCE_EVIDENCE_PREFIX + "checkpoint-report-draft.md",
-            "docs/program/tasks/W0-INT-02.md",
-        ):
+        for stranger in self.PREFIX_PROBE_STRANGERS:
             with self.subTest(stranger=stranger):
                 self.assertNotIn(stranger, POST_FREEZE_DELTA_CEILING)
                 path = self.sandbox.root / stranger
-                self.addCleanup(path.unlink, True)
-                path.write_text("added after the freeze\n", encoding="utf-8")
-                problems = _post_freeze_delta_problems(self.sandbox.root)
-                self.assertTrue(
-                    any("is void" in problem and stranger in problem for problem in problems),
-                    f"an unnamed path in a licensed directory did not void the round: "
-                    f"{problems}",
-                )
-                path.unlink()
+                # Remember before the write and restore after it, because only one of
+                # these two names is always a stranger. `checkpoint-report-draft.md` is
+                # absent from every frozen tree, but `W0-INT-02.md` is a real task file
+                # that is *tracked* in any freeze taken after that task lands. A bare
+                # `unlink` then deletes a tracked path out of the shared class sandbox,
+                # and every later probe dies digesting the missing file instead of
+                # answering on its own subject. `_remember` stores b"" for a name that
+                # is absent, so `restore_one` removes the stranger in that case and
+                # puts the displaced file back in the other.
+                self.sandbox._remember(stranger)
+                try:
+                    path.write_text("added after the freeze\n", encoding="utf-8")
+                    problems = _post_freeze_delta_problems(self.sandbox.root)
+                    self.assertTrue(
+                        any("is void" in problem and stranger in problem
+                            for problem in problems),
+                        f"an unnamed path in a licensed directory did not void the "
+                        f"round: {problems}",
+                    )
+                finally:
+                    self.sandbox.restore_one(stranger)
+
+    def test_the_licence_probe_puts_back_every_path_it_displaces(self) -> None:
+        """**The probe above writes into the shared sandbox; nothing asserted it undid it.**
+
+        The repair it carries — remember the bytes, then `restore_one` instead of a bare
+        `unlink` — is *invisible on today's tree*. The freeze commit here resolves to
+        `2ea7b68`, where `docs/program/tasks/W0-INT-02.md` is untracked, so the probe
+        plants a file that nothing else owns and destroying it destroys only its own
+        stranger. Measured: with the repair reverted, `discover -s tests/contract` on
+        this tree returns the same five failures, by name. The tree that exercises it is
+        the round-eleven freeze the integrator has to build, where that path is one of
+        `W0-INT-02`'s tracked deliverables: there the bare `unlink` took a tracked file
+        out of the class sandbox, `_digest_paths` kept enumerating it out of the index,
+        and eleven later probes died in `_digest_over` on `FileNotFoundError` instead of
+        answering on their own subjects — 16 red before the repair, 4 after.
+
+        So the guard does not wait for that tree. It points the same probe, unmodified,
+        at :data:`POST_FREEZE_STRANGER` — a path this tree's freeze *does* track, and one
+        the module already guarantees can never become licensed — and then asks the one
+        question the suite never asked: **is every path the digest recipe enumerates
+        still on disk?** That is the failure the freeze-shaped tree produces, in the form
+        it produces it, on a tree anyone can run today.
+
+        The stranger is proved tracked at the freeze before the probe runs, so a tree
+        where this path stopped being frozen makes the guard fail loudly rather than
+        pass on an absent file; and the bytes are remembered here as well, so a reverted
+        probe costs exactly this one failure instead of poisoning the rest of the class.
+        """
+        stranger = POST_FREEZE_STRANGER
+        self.assertNotIn(stranger, POST_FREEZE_DELTA_CEILING)
+        root = self.sandbox.root
+        blobs = _tree_blobs(root, self.sandbox.frozen_commit)
+        self.assertIsNotNone(blobs, "the sandbox's frozen tree could not be read")
+        self.assertIn(
+            stranger,
+            blobs,
+            f"{stranger} is not tracked at the freeze this sandbox stands on, so "
+            f"displacing it would not exercise the displaced-file case at all",
+        )
+        path = root / stranger
+        original = path.read_bytes()
+        self.assertEqual(
+            [name for name in _digest_paths(root) if not (root / name).is_file()],
+            [],
+            "the sandbox was already missing an enumerated path before the probe ran",
+        )
+        # Remembered here too: `restore_one` pops the entry, so a probe that restores
+        # leaves nothing behind, and a probe that does not is undone by setUp's cleanup.
+        self.sandbox._remember(stranger)
+        self.PREFIX_PROBE_STRANGERS = (stranger,)
+        try:
+            self.test_the_new_licences_are_named_files_and_not_directories()
+        finally:
+            del self.PREFIX_PROBE_STRANGERS
+        missing = [name for name in _digest_paths(root) if not (root / name).is_file()]
+        if missing:
+            # Put it back before failing: one reverted probe, one red test, no cascade.
+            path.write_bytes(original)
+        self.assertEqual(
+            missing,
+            [],
+            f"the probe left paths the digest recipe enumerates missing from the "
+            f"sandbox: {missing}. Every later probe in this class reads them.",
+        )
+        self.assertEqual(
+            path.read_bytes(),
+            original,
+            f"the probe put {stranger} back with different bytes",
+        )
+        self.assertEqual(
+            _post_freeze_delta_problems(root),
+            [],
+            "the probe left the sandbox differing from the frozen tree",
+        )
 
     def test_a_banner_rewritten_without_naming_the_checkpoint_is_named(self) -> None:
         """**The price of licensing sixteen task files that need not move at all.**
@@ -11808,6 +12137,7 @@ class TableExpectationTests(unittest.TestCase):
                 "NOT_COPIED",
                 "PINNING_ASSERTIONS",
                 "POST_FREEZE_DELTA_CEILING",
+                "PREFIX_PROBE_STRANGERS",
                 "PUBLICATION_DOCUMENT_PATHS",
                 "PURE_CONSTRUCTORS",
                 "RATIFICATION_DELTA_CEILING",
@@ -12587,6 +12917,17 @@ class TableExpectationTests(unittest.TestCase):
 
     def test_the_sandbox_and_probe_fixtures_are_pinned(self) -> None:
         self.assertEqual(sorted(_CheckpointSandbox.NOT_COPIED), [".git", ".venv"])
+        # The two names the prefix probe plants. Pinned as literals because the point of
+        # the probe is *which* names it plants: one absent from every frozen tree and
+        # one that a freeze taken after `W0-INT-02` lands really tracks, which is the
+        # only reason the restoration the probe now does is load-bearing at all.
+        self.assertEqual(
+            RatificationRecordTests.PREFIX_PROBE_STRANGERS,
+            (
+                "artifacts/checkpoints/CP-00/checkpoint-report-draft.md",
+                "docs/program/tasks/W0-INT-02.md",
+            ),
+        )
         self.assertEqual(
             SandboxResetTests.IDENTITY,
             (
