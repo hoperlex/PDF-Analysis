@@ -119,6 +119,26 @@ gates agree — leaving `W0-INT-03` a minimal, explicitly bounded delta and noth
 Measure in a clone or the main checkout, never in a linked worktree, and never while
 anything else clones this repository.
 
+## Acceptance bar, stated because four rounds did not have one
+
+The repository owner narrowed the bar on 2026-09-04: a procedural or documentation
+defect blocks only when it changes product semantics, security, or data integrity.
+Applied to a records-reconciliation task, whose whole product *is* documents, that reads:
+
+- **Blocking** — a statement that would cause an actor to produce a wrong artifact or take
+  a wrong action. An instruction to the primary reviewer that yields a ratification commit
+  failing a guard is the type case.
+- **Correct it, but it does not block** — a false or stale statement that changes nothing
+  anyone does: a moved line number, a figure attributed to the wrong tree, a word stronger
+  than the measurement behind it. These must still be fixed, and a round that leaves them
+  is incomplete; but a reviewer should say `ACCEPT` with corrections listed rather than
+  `REJECT`, and say which category each finding is in.
+
+This is not a licence to ship falsehoods. Every finding of either kind is repaired before
+integration. It is a rule about what stops the checkpoint, so that a task whose product is
+prose does not recur forever on defects that change no one's behaviour — which is the
+recursion the owner ended.
+
 ## Integration contract
 
 The integrator can rely on: every live record agrees with the manifest and with every
