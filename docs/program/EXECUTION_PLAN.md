@@ -982,7 +982,11 @@ no subject commit in its own bytes»; с заголовком — exit 0.
 5. **INT** — **заморозка**. Дерево окончательно, включая все пути вне потолка из §3.8.1;
    посчитать `tested_candidate_digest`, записать на верхний уровень и в запись круга,
    закоммитить. Это `F`. **После этого шага план и файлы задач не правятся.**
-6. **AUTO** — прогнать три гейта на чистом checkout `F`; отчёт с `candidate_commit: <F>`.
+6. **AUTO** — прогнать **четыре** гейта на чистом checkout `F`: `discover -s tests/contract`,
+   `discover -s tests/checkpoint`, `scripts/validate_bootstrap.py` и **отдельно**
+   `tests/checkpoint/cp00_final_state.py` — сюита не исполняет contour (§3.11.1). Отчёт с
+   `candidate_commit: <F>` в первых 26 строках, с настоящим токеном вердикта и без
+   токенов-заглушек: с `29179c6` отчёты читаются, а не только считаются.
 7. **MAN** — ручной прогон; отчёт с тем же subject commit.
 8. ★ **PR** — независимая рецензия на `F`. `REJECT` ⇒ круг израсходован, шаг 3 заново.
 9. ★ **PR** — ратификационный коммит в форсированном порядке (см. §3.8.4 и делегированную
@@ -1336,6 +1340,53 @@ exit 1; contour на реальном дереве — те же тринадц�
 Итог интеграции: contract `Ran 343`, собственные пять базы, exit 1; checkpoint `Ran 59`,
 OK, exit 0; валидатор PASS; contour — те же тринадцать находок, все на `W0-INT-02`; тег не
 двигался. Шаги 1 и 2 §3.8.5 закрыты.
+
+
+### 3.11 Измерение интегратора на `3a2ba49` — база, снятая мной, а не унаследованная
+
+Две интеграции `W0-QA-04` прошли без прогона сюит в основном checkout: каждая цифра в
+обороте была снята автором или рецензентом на копии. Снято на `cp -a` копии `3a2ba49`,
+`.git` — настоящий каталог, интерпретатор `.venv/bootstrap/bin/python` (3.12.3), код
+возврата взят сразу после процесса, без конвейера.
+
+| Команда | Результат |
+|---|---|
+| `discover -s tests/contract` | `Ran 343`, **5 падений**, exit 1, ошибок нет |
+| `discover -s tests/checkpoint` | `Ran 59`, **OK**, exit 0 |
+| `scripts/validate_bootstrap.py` | exit 0, `PASS` отдельной строкой; `markdown_files=165` |
+| `tests/checkpoint/cp00_final_state.py` | `terminal-ratified`, **13 находок**, exit 1, все `owner: W0-INT-02` |
+| `check_state_records.py` | axis one **0**, axis two **15** по восьми файлам, 239 путей, exit 1 |
+| `_post_freeze_delta_problems` | **1** проблема: круг десять void, десять нелицензированных путей |
+
+Пять падений поимённо: `RatificationRecordTests.test_ratification_requires_an_accepted_acceptance_round`,
+`SandboxResetTests.test_unresettable_names_a_reset_that_did_not_finish`,
+`CrossGateAgreementTests.test_the_two_ratification_gates_agree`,
+`FileAndHashAccountingTests.test_every_file_the_checkpoint_claims_exists_and_every_aggregate_is_enumerated`,
+`TagIntegrityTests.test_the_tag_has_not_moved_and_its_message_is_true_of_its_commit`.
+Один тег, аннотированный, `3ec9b90c` → `39a3a643`, не двигался; два worktree.
+`artifacts/checkpoints/CP-00/erratum.md` на этом дереве **отсутствует** — он живёт в
+кандидате `W0-INT-02` и там не отслеживается.
+
+#### 3.11.1 Три расхождения между моими собственными измерениями
+
+Названы, а не согласованы.
+
+1. **Сюита `tests/checkpoint` зелена, а contour, живущий внутри неё, красен.**
+   `discover -s tests/checkpoint` даёт `Ran 59, OK, exit 0`; `cp00_final_state.py`,
+   запущенный напрямую на том же дереве, даёт 13 находок и exit 1. В каталоге два файла,
+   и шаблону `test*.py` соответствует только второй, поэтому зелёная сюита **никогда не
+   исполняет красный contour**. Это не дефект — contour обязан быть красным, пока не сел
+   `W0-INT-02`, — но это значит, что `discover -s tests/checkpoint` exit 0 **не означает**
+   «состояние checkpoint в порядке». **Поправка к §3.8.5 шаг 6: автоматический поток обязан
+   гонять contour отдельной командой**, иначе он сообщит зелёное о дереве, о котором
+   contour говорит тринадцать вещей.
+2. **Contour классифицирует дерево `terminal-ratified` и выходит с 1.** Оба из одного
+   процесса; классификация и находки — разные величины, и обе нужны в отчёте.
+3. **Две функции за одним и тем же вердиктом дают разные счёта.**
+   `_post_freeze_delta_problems` возвращает **1**, а `_acceptance_problems`, на который
+   опирается падающий тест, — **2**: ту же строку про void плюс невоспроизведение
+   `evidence_bundle_digest`. Кто цитирует «счёт проблем post-freeze delta», получит 1 или 2
+   в зависимости от того, что запустил. Ровно класс «цифра без метода».
 
 
 ## 4. Аудит roadmap и подготовленного `prep/W1`
