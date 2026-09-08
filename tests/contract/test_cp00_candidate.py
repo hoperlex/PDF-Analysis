@@ -95,9 +95,10 @@ RATIFIED_STATE_TOKEN = "ratification"
 UNRATIFIED_STATE_TOKEN = "ratification_blocked"
 REGISTRY_STATE_TOKENS = frozenset({RATIFIED_STATE_TOKEN, UNRATIFIED_STATE_TOKEN})
 
-#: Only this task may ratify CP-00. `W0.3_ratification_integration.md` assigns the
-#: ratification act, the CP-00 review and the checkpoint evidence to it alone.
-RATIFYING_TASK = "W0-INT-01"
+#: **Who may ratify CP-00.** The constant is resolved from the records below, next to
+#: :data:`CHECKPOINT_TAG`, because the two have the same shape and the same failure: the
+#: literal `"W0-INT-01"` that used to stand here made the recovery unreachable. See
+#: :data:`RATIFYING_TASK_SERIES`.
 
 #: **The ceiling on any ratification delta, and the reason it cannot be widened
 #: silently.** A ratification record names the files it changes, but a record that could
@@ -208,6 +209,12 @@ CHECKPOINT_TAG_SERIES = re.compile(rf"^{_TAG_SERIES_BODY}$")
 #: :meth:`TableExpectationTests.test_the_publication_record_table_is_pinned_whole` writes
 #: the marked form out, so the marking cannot be lost silently.
 NEEDLE_PATTERN_PREFIX = "re:"
+#: **The other half of the same idea, for the other kind of needle.** A needle that has
+#: to be about *the* ratifying task rather than about the shape of one writes the task
+#: as this placeholder; :func:`_needle_resolved` substitutes :data:`RATIFYING_TASK`
+#: before the needle is used. The table entry stays a literal a reviewer can read and a
+#: pin can hold, and the value matched against the document follows the records.
+NEEDLE_TASK_PLACEHOLDER = "{task}"
 #: The series as it appears inside prose: a code span naming any tag of it. This is what
 #: the wave plan is asked for, so that the needle survives a superseding checkpoint
 #: without becoming a second literal to edit at `v0.0.2`.
@@ -314,6 +321,199 @@ def _resolved_checkpoint_tag(root: Path) -> str:
 
 
 CHECKPOINT_TAG = _resolved_checkpoint_tag(REPOSITORY_ROOT)
+
+#: **Who may ratify CP-00: the series and the rule are pinned, the instance is
+#: resolved.** The same repair as :data:`CHECKPOINT_TAG`, one constant further along,
+#: and it is here rather than beside `RATIFIED_STATE_TOKEN` because it is resolved the
+#: same way and a reader should be able to read the two together.
+#:
+#: The previous form was ``RATIFYING_TASK = "W0-INT-01"``, consumed by
+#: :func:`_ratification_record` to refuse a record naming any other task. The reason was
+#: right — a record whose `task` field nothing checks is a delta authorised by whoever
+#: wrote it — and the literal made the recovery **unreachable**: `W0-INT-03` is the task
+#: the recovery assigns the act to, its ratification delta is required to write
+#: ``ratification.task: W0-INT-03``, and no task in the recovery graph except `W0-QA-04`
+#: may edit this file. So `W0-INT-03`'s required `discover -s tests/contract` would fail
+#: *at the moment of ratification*, which is round nine's defect — a final state no task
+#: is licensed to reach — recurring two constants over from where §11.1 left it.
+#:
+#: What is pinned is the **series and the rule**:
+#:
+#: * :data:`RATIFYING_TASK_SERIES` — CP-00 is ratified by an integration task of wave
+#:   W0. A reassignment to something outside that shape is refused, which is the half of
+#:   the pin that was load-bearing;
+#: * :data:`RATIFYING_TASK_FLOOR` — the **first** task assigned the act. An immutable
+#:   historical fact rather than a current value: `W0-INT-01` did take a ratification act
+#:   on round ten and that cannot be un-taken, so this line never needs editing again;
+#: * the resolved value must agree across **every** record that names it, must match the
+#:   series, may only move **forward** from the floor, and must be a task that has a file.
+#:
+#: One record edit therefore no longer moves the value: the checkpoint manifest's
+#: `ratification.task` and the wave plan's single assignment row have to move together,
+#: and :func:`_ratifying_task_problems` compares them.
+#:
+#: **What this deliberately does not do.** It does not read the value out of the record
+#: it is used to check. :func:`_ratification_record` compares a *candidate tree's*
+#: `ratification.task` against this constant, which is resolved from
+#: :data:`REPOSITORY_ROOT`; a sandbox that rewrites its own manifest is still measured
+#: against the repository's assignment, which is why
+#: `test_a_record_from_the_wrong_task_licenses_nothing` still fires.
+_RATIFYING_TASK_BODY = r"W0-INT-(\d{2})"
+RATIFYING_TASK_SERIES = re.compile(rf"^{_RATIFYING_TASK_BODY}$")
+RATIFYING_TASK_FLOOR = "W0-INT-01"
+#: The series as it appears inside prose: a code span naming any task of it. Used where
+#: a document is asked to still mention the ratifying task, so that the needle survives
+#: a reassignment without becoming a second literal to edit at `W0-INT-04`.
+RATIFYING_TASK_NEEDLE = NEEDLE_PATTERN_PREFIX + rf"`{_RATIFYING_TASK_BODY}`"
+
+#: The wave document that assigns the ratification act, and the row that does it. The
+#: path was a literal in three places before this; it is a constant now so the resolver
+#: and the publication record cannot come to read two different documents.
+W03_WAVE_PLAN = "docs/program/waves/W0.3_ratification_integration.md"
+RATIFICATION_ASSIGNMENT_ROW = "CP-00 review ratification"
+
+
+def _ratification_assignment_rows(root: Path) -> list[str]:
+    """The wave plan's rows that assign the CP-00 ratification act."""
+    try:
+        text = (root / W03_WAVE_PLAN).read_text(encoding="utf-8")
+    except OSError:
+        return []
+    return [
+        line
+        for line in text.split("\n")
+        if RATIFICATION_ASSIGNMENT_ROW in line and line.strip().startswith("|")
+    ]
+
+
+def _ratifying_task_claims(root: Path) -> dict[str, str]:
+    """Every record that names the task authorised to ratify CP-00.
+
+    Read directly rather than through :func:`_load` for the same reason
+    :func:`_checkpoint_tag_claims` is: this runs at import time, before the tables that
+    consume the resolved value exist.
+
+    A wave-plan row that names more than one task contributes **no** claim. That is not
+    leniency: a co-assignment is reported by :func:`_ratifying_task_problems`, and
+    letting it contribute the first id it happened to match is the round-twelve `RL-1`
+    defect — a pattern that saw one of two names and reported agreement.
+    """
+    claims: dict[str, str] = {}
+    try:
+        manifest = json.loads((root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        manifest = None
+    if isinstance(manifest, dict):
+        record = manifest.get("ratification")
+        if isinstance(record, dict):
+            value = record.get("task")
+            if isinstance(value, str) and value:
+                claims[f"{CHECKPOINT_MANIFEST}:ratification.task"] = value
+    rows = _ratification_assignment_rows(root)
+    if len(rows) == 1:
+        names = sorted(set(re.findall(r"W0-[A-Z]{2,4}-\d{2}", rows[0])))
+        if len(names) == 1:
+            claims[f"{W03_WAVE_PLAN}:{RATIFICATION_ASSIGNMENT_ROW}"] = names[0]
+    return claims
+
+
+def _ratifying_task_problems(root: Path) -> list[str]:
+    """What holds the integrator to the resolved ratifying task.
+
+    Five failures, and each one is what the literal used to buy:
+
+    * **the plan assigns the act zero times or twice** — a document that cannot say who
+      may take the act;
+    * **the one row co-assigns it** — satisfies a containment test while meaning the
+      opposite of what the constant claims;
+    * **no record names a task** — the resolution falls back to the floor and
+      :func:`_ratification_record` would be holding a checkpoint to a task no document
+      assigns the act to;
+    * **the records disagree** — a reassignment declared in one place and not the other;
+    * **a name outside the series, below the floor, or with no task file** — a
+      reassignment to something that is not an integration task of this wave, a re-use
+      of a spent instance, or an actor that does not exist.
+    """
+    problems: list[str] = []
+    rows = _ratification_assignment_rows(root)
+    if len(rows) != 1:
+        problems.append(
+            f"{W03_WAVE_PLAN} carries {len(rows)} rows assigning "
+            f"{RATIFICATION_ASSIGNMENT_ROW!r}; the act is assigned by exactly one row, "
+            "and a plan that assigns it twice or not at all cannot say who may take it"
+        )
+    else:
+        names = sorted(set(re.findall(r"W0-[A-Z]{2,4}-\d{2}", rows[0])))
+        if len(names) != 1:
+            problems.append(
+                f"{W03_WAVE_PLAN}: the {RATIFICATION_ASSIGNMENT_ROW!r} row names "
+                f"{names}. The act is assigned to exactly one task: a row that "
+                "co-assigns it satisfies a containment test while meaning the opposite "
+                "of what RATIFYING_TASK claims."
+            )
+    claims = _ratifying_task_claims(root)
+    if not claims:
+        problems.append(
+            "no record names the task authorised to ratify CP-00, so RATIFYING_TASK "
+            f"resolves to the floor {RATIFYING_TASK_FLOOR!r} and every guard that "
+            "consumes it would be holding this checkpoint to a task no document "
+            "assigns the act to"
+        )
+        return problems
+    if len(set(claims.values())) > 1:
+        problems.append(
+            "the records name more than one ratifying task, which is a reassignment "
+            "declared in one record and not the others: "
+            + "; ".join(f"{site} = {value!r}" for site, value in sorted(claims.items()))
+        )
+    floor = RATIFYING_TASK_SERIES.match(RATIFYING_TASK_FLOOR)
+    if floor is None:
+        problems.append(
+            f"RATIFYING_TASK_FLOOR {RATIFYING_TASK_FLOOR!r} is not itself in "
+            f"RATIFYING_TASK_SERIES {RATIFYING_TASK_SERIES.pattern!r}; the rule cannot "
+            "hold anything to a floor outside its own series"
+        )
+    for site, value in sorted(claims.items()):
+        match = RATIFYING_TASK_SERIES.match(value)
+        if match is None:
+            problems.append(
+                f"{site} names {value!r}, which is not in the ratifying-task series "
+                f"{RATIFYING_TASK_SERIES.pattern!r}. The act may be reassigned to a "
+                "later integration task of this wave; it may not be handed to something "
+                "unrelated."
+            )
+            continue
+        if floor is not None and int(match.group(1)) < int(floor.group(1)):
+            problems.append(
+                f"{site} names {value!r}, whose instance is below the floor "
+                f"{RATIFYING_TASK_FLOOR!r}. The act moves forward or not at all: a task "
+                "that has already taken it cannot be assigned it again."
+            )
+        if not (root / f"docs/program/tasks/{value}.md").is_file():
+            problems.append(
+                f"{site} names {value!r}, which is not a task in this program: "
+                f"docs/program/tasks/{value}.md does not exist"
+            )
+    return problems
+
+
+def _resolved_ratifying_task(root: Path) -> str:
+    """The task every record agrees on, or the floor when they do not.
+
+    Falling back rather than raising, for the reason :func:`_resolved_checkpoint_tag`
+    gives: an import-time exception takes the suite down and reports nothing, while the
+    fallback keeps a broken record a named test failure in
+    :func:`_ratifying_task_problems`.
+    """
+    values = set(_ratifying_task_claims(root).values())
+    if len(values) == 1:
+        value = values.pop()
+        if RATIFYING_TASK_SERIES.match(value):
+            return value
+    return RATIFYING_TASK_FLOOR
+
+
+RATIFYING_TASK = _resolved_ratifying_task(REPOSITORY_ROOT)
 
 #: The manual runbook. Read-only for every task in this wave, which is what makes the
 #: case list an **anchor** rather than a pin: the manual report's required verdicts are
@@ -499,15 +699,19 @@ DELIVERABLE_REQUIREMENT_KEYS = (
 RATIFICATION_PUBLICATION_RECORDS = (
     {
         "item": "W0.3 wave plan",
-        "path": "docs/program/waves/W0.3_ratification_integration.md",
-        "denials": ("`W0-INT-01` is blocked", "| `W0-INT-01` | blocked |"),
+        "path": W03_WAVE_PLAN,
+        # The task is the placeholder, not the instance. `W0-INT-01` here was the same
+        # pin as CHECKPOINT_TAG two constants over: the recovery reassigns the act, the
+        # reconciled plan correctly stops calling an accepted task blocked, and the
+        # anchor-rot branch then fired on a document that had been brought up to date.
+        "denials": ("`{task}` is blocked", "| `{task}` | blocked |"),
         "requires": ("S01",),
         # The needle is the **series**, not the instance. Its job is anti-gutting — it
         # refuses a retraction made by deleting what the stale claim was about — and a
         # plan that names `v0.0.1-architecture` after a superseding ratification is not
         # gutted. Pinning the literal `v0.0.0-architecture` here made `W0-INT-03`'s
         # required suite unreachable at the moment it ratifies; see CHECKPOINT_TAG.
-        "must_still_contain": (CHECKPOINT_TAG_NEEDLE, "`W0-INT-01`"),
+        "must_still_contain": (CHECKPOINT_TAG_NEEDLE, "`{task}`"),
         "requires_note": (
             "the next unlocked S01 preparation tasks deliverable 5 names, with the "
             "wave's own status line and task row no longer calling W0-INT-01 blocked"
@@ -529,7 +733,7 @@ RATIFICATION_PUBLICATION_RECORDS = (
     {
         "item": "documentation index status column",
         "path": "docs/INDEX.md",
-        "row": "program/tasks/W0-INT-01.md",
+        "row": "program/tasks/{task}.md",
         "denials": ("blocked",),
         "requires": ("accepted and integrated",),
         "must_still_contain": ("# Documentation index", "## Architecture", "## Program"),
@@ -594,7 +798,25 @@ COMPLETED_TASK_FILES = frozenset(
 #: The ratifying task's own file, and the denial its banner carries until CP-00 is
 #: published. No other task file may close this one's banner, and this one may also
 #: rewrite its own handoff — the two exceptions :func:`_task_banner_problems` makes.
-RATIFYING_TASK_FILE = "docs/program/tasks/W0-INT-01.md"
+#:
+#: **Derived, not written down.** The literal here was
+#: ``"docs/program/tasks/W0-INT-01.md"``, and it is the same fact as
+#: :data:`RATIFYING_TASK` said a second time: a resolver that answers "who ratifies?"
+#: from the records and then opens a file named after the superseded answer resolves
+#: nothing. One resolver, one derivation. The two cannot disagree because there is only
+#: one value.
+#:
+#: The **denial** stays a pinned phrase, and the distinction is worth stating rather
+#: than smoothing. It names no instance: it is the banner's standing claim about the
+#: *state*, in exactly the position :data:`STATE_DOCUMENT_DENIAL` occupies, and it is
+#: checked in both directions so it cannot rot silently. Resolving it would mean reading
+#: the phrase out of the banner it is used to check, which is the vacuity
+#: :func:`_state_document_problems` refuses. What it costs is recorded in
+#: `docs/program/reviews/W0-QA-04.md` §12.4: the ratifying task's banner has to carry
+#: this phrase verbatim while CP-00 is unratified, so a reassignment obliges whoever
+#: writes the new ratifying task's file to use it — which is a requirement that can be
+#: met before the freeze, not a state no task can reach.
+RATIFYING_TASK_FILE = f"docs/program/tasks/{RATIFYING_TASK}.md"
 RATIFYING_TASK_BANNER_DENIAL = "ratification and publication blocked"
 
 #: The program's own state document: the **third** external record.
@@ -1722,7 +1944,22 @@ def _post_freeze_delta_problems(root: Path) -> list[str]:
         for path in set(frozen) | set(present)
         if frozen.get(path) != present.get(path)
     )
-    licensed = set(POST_FREEZE_DELTA_CEILING) | _declared_evidence_paths(manifest)
+    # The ceiling, the round's own declared evidence, and the ratifying task's own file.
+    # The third is resolved rather than pinned and is added **here** rather than in the
+    # ceiling: the ceiling is a table pinned to a literal in
+    # `TableExpectationTests.test_the_two_ratification_ceilings_are_pinned`, and a table
+    # with a resolved member in it could not be pinned at all -- the guard would go quiet
+    # on thirty-seven fixed paths to accommodate one. While the act sits with
+    # `W0-INT-01` this adds nothing, because that file is already one of the seventeen.
+    # It stops adding nothing the moment the act is reassigned, and without it the one
+    # file ratification is *required* to rewrite -- the banner moves in both directions,
+    # `_task_banner_problems` says so -- would be an unlicensed stranger that voids the
+    # round it authorises. Round nine's shape, in the repair for round nine's shape.
+    licensed = (
+        set(POST_FREEZE_DELTA_CEILING)
+        | _declared_evidence_paths(manifest)
+        | {RATIFYING_TASK_FILE}
+    )
     strangers = [path for path in delta if path not in licensed]
     if not strangers:
         return []
@@ -2279,10 +2516,31 @@ def _path_is_declared(path: str, globs) -> bool:
     return False
 
 
+def _needle_resolved(needle: str) -> str:
+    """``needle`` with :data:`NEEDLE_TASK_PLACEHOLDER` replaced by the resolved task.
+
+    **Why a placeholder and not a shape.** :data:`CHECKPOINT_TAG_NEEDLE` answers "which
+    revision?" with a series, because a wave plan that names *any* tag of the series has
+    not been gutted and which one is not the needle's business. A **denial** is the
+    opposite kind of needle: it is the anti-vacuity anchor, the exact claim ratification
+    retracts, so ``re:`W0-INT-(\\d{2})` is blocked`` would be satisfied by a plan that
+    calls some *other* integration task blocked — the anchor would still be there and
+    would no longer be about the checkpoint.
+
+    The placeholder keeps both properties at once. The table entry is still a literal
+    written out in full where a reviewer reads it, so
+    :meth:`TableExpectationTests.test_the_publication_record_table_is_pinned_whole` can
+    pin it and :func:`_is_a_literal_expectation` is satisfied; and what is matched
+    against the document is the instance the records resolve to, so a reassignment moves
+    the needle with the act instead of leaving it pointing at `W0-INT-01` for ever.
+    """
+    return needle.replace(NEEDLE_TASK_PLACEHOLDER, RATIFYING_TASK)
+
+
 def _needle_shape(needle: str) -> str | None:
     """The regular expression a needle carries, or ``None`` when it is a literal."""
     if needle.startswith(NEEDLE_PATTERN_PREFIX):
-        return needle[len(NEEDLE_PATTERN_PREFIX):]
+        return _needle_resolved(needle)[len(NEEDLE_PATTERN_PREFIX):]
     return None
 
 
@@ -2296,19 +2554,25 @@ def _needle_present(needle: str, text: str) -> bool:
     is prose that does not move when a checkpoint is superseded.
     """
     shape = _needle_shape(needle)
-    return needle in text if shape is None else re.search(shape, text) is not None
+    if shape is None:
+        return _needle_resolved(needle) in text
+    return re.search(shape, text) is not None
 
 
 def _needle_removed(needle: str, text: str) -> str:
     """``text`` with every occurrence of the needle gone. The gutting mutation."""
     shape = _needle_shape(needle)
-    return text.replace(needle, "") if shape is None else re.sub(shape, "", text)
+    if shape is None:
+        return text.replace(_needle_resolved(needle), "")
+    return re.sub(shape, "", text)
 
 
 def _needle_shown(needle: str) -> str:
     """How a needle is named in a finding, and in the assertion that looks for it."""
     shape = _needle_shape(needle)
-    return repr(needle) if shape is None else f"a match of {shape!r}"
+    if shape is None:
+        return repr(_needle_resolved(needle))
+    return f"a match of {shape!r}"
 
 
 def _publication_scope(entry: dict, text: str, relative: str) -> tuple[str | None, str | None]:
@@ -2316,11 +2580,11 @@ def _publication_scope(entry: dict, text: str, relative: str) -> tuple[str | Non
     marker = entry.get("row")
     if marker is None:
         return text, None
-    rows = [line for line in text.splitlines() if marker in line]
+    rows = [line for line in text.splitlines() if _needle_present(marker, line)]
     if len(rows) != 1:
         return None, (
-            f"{relative} carries {len(rows)} rows naming {marker!r}; the status column "
-            "requirement is about exactly one"
+            f"{relative} carries {len(rows)} rows naming {_needle_shown(marker)}; the "
+            "status column requirement is about exactly one"
         )
     return rows[0], None
 
@@ -2382,19 +2646,22 @@ def _publication_record_problems(root: Path) -> list[str]:
             continue
         flat = _flat(scope)
         for denial in entry["denials"]:
-            if ratified and denial in flat:
+            present = _needle_present(denial, flat)
+            if ratified and present:
                 problems.append(
-                    f"{entry['item']}: {relative} still says {denial!r} while "
-                    f"{CHECKPOINT_MANIFEST} declares ratified=true. A published "
+                    f"{entry['item']}: {relative} still says {_needle_shown(denial)} "
+                    f"while {CHECKPOINT_MANIFEST} declares ratified=true. A published "
                     "checkpoint may not ship a plan that says its own ratification is "
                     "blocked."
                 )
-            if not ratified and denial not in flat:
+            if not ratified and not present:
                 problems.append(
-                    f"anchor rot: {relative} no longer carries {denial!r} while CP-00 "
-                    "is unratified. That claim is what the ratified half requires to be "
-                    "gone, so with it already gone the check would pass forever. "
-                    "Re-anchor it in tests/contract/test_cp00_candidate.py."
+                    f"anchor rot: {relative} no longer carries {_needle_shown(denial)} "
+                    "while CP-00 is unratified. That claim is what the ratified half "
+                    "requires to be gone, so with it already gone the check would pass "
+                    "forever. Write the claim about the task the records assign the act "
+                    f"to ({RATIFYING_TASK}), or re-anchor it in "
+                    "tests/contract/test_cp00_candidate.py."
                 )
         for needle in entry["requires"]:
             if ratified and needle not in flat:
@@ -2498,7 +2765,12 @@ def _task_banner_problems(root: Path) -> list[str]:
     commit = _freeze_commit(root)
     blobs = _tree_blobs(root, commit) if commit is not None else None
     problems: list[str] = []
-    for relative in sorted(COMPLETED_TASK_FILES):
+    # The seventeen completed files **and** the ratifying task's own, which need not be
+    # one of them: the act is reassignable, and a successor assigned it did not exist at
+    # the reviewed candidate that `COMPLETED_TASK_FILES` is anchored to. Iterating the
+    # seventeen alone would have made the denial anchor disappear the moment the act
+    # moved -- silently, because a branch that is never reached reports nothing.
+    for relative in sorted(COMPLETED_TASK_FILES | {RATIFYING_TASK_FILE}):
         path = root / relative
         if not path.is_file():
             problems.append(f"{relative} is missing")
@@ -2544,8 +2816,9 @@ def _task_banner_problems(root: Path) -> list[str]:
                     problems.append(
                         f"anchor rot: the {relative} banner no longer says "
                         f"{RATIFYING_TASK_BANNER_DENIAL!r} while CP-00 is unratified. "
-                        "That is what the ratified half requires to be gone; re-anchor "
-                        "it in tests/contract/test_cp00_candidate.py."
+                        "That is what the ratified half requires to be gone. Write the "
+                        f"denial into {RATIFYING_TASK}'s banner before the freeze, or "
+                        "re-anchor it in tests/contract/test_cp00_candidate.py."
                     )
             elif RATIFYING_TASK_BANNER_DENIAL in flat_banner:
                 problems.append(
@@ -3388,8 +3661,27 @@ class _CheckpointSandbox:
         `ratified is False` pin a trap. Reviewed files are rewritten from the candidate
         blob, anything added since is removed, and the external record is returned to
         `ratified: false` with no `ratification` object.
+
+        **The baseline is the last unratified tree, not simply the frozen one.** Those
+        are the same commit while the freeze is taken on an unratified checkpoint, which
+        is every freeze this repository has taken so far and every freeze an honest
+        recovery takes. They stop being the same the moment a freeze is taken after a
+        ratification, and then flipping the manifest to `ratified: false` and leaving the
+        documents alone builds a tree that **contradicts itself**: the record denies a
+        ratification that `CURRENT_STATE.md`, the wave plan, the index and the ratifying
+        task's banner all still describe. Measured on this repository, with the freeze
+        pointed at `39a3a64` and nothing else changed: the live tree reports zero
+        acceptance problems and the sandbox reports ten, every one of them an anchor the
+        sandbox had itself destroyed. Those ten cascade to about 135 of the contract
+        suite's failures, including
+        `test_the_checkpoint_mechanism_has_a_reachable_published_state`, which exists so
+        that round nine's defect could not recur.
+
+        See :meth:`_pre_ratification_baseline` for what is resolved instead, and
+        `docs/program/reviews/W0-QA-04.md` §13 for the option that was measured and
+        rejected.
         """
-        self._reset_to_the_frozen_tree()
+        self._reset_to(self._pre_ratification_baseline())
         at_candidate = set(_candidate_reviewed_paths(self.root))
         for relative in sorted(set(_present_reviewed_paths(self.root)) - at_candidate):
             (self.root / relative).unlink(missing_ok=True)
@@ -3453,7 +3745,98 @@ class _CheckpointSandbox:
         is no longer routinely non-empty, but it is the thing that would catch a reset
         this method got wrong.
         """
+        self._reset_to(_freeze_commit(self.root))
+
+    def _pre_ratification_baseline(self) -> str | None:
+        """The newest tree at or before the freeze that CP-00 was **not** ratified in.
+
+        Normally this is the freeze commit itself, and on this repository it is: the
+        round-ten freeze `2ea7b68` carries `ratified: false`, so
+        :meth:`normalise_to_candidate` resets to exactly what it always reset to and
+        nothing about its behaviour changes. The walk only ever runs when the freeze
+        commit is one taken *after* a ratification.
+
+        **Why this and not a fabrication.** The alternative was to normalise the state
+        documents alongside the manifest — write the denial sentence, the two wave-plan
+        rows, the index status, the unticked checklist and the banner denial into the
+        sandbox. That makes every one of those anchors a check on text the sandbox wrote
+        thirty lines earlier; the two-directional anchors, which exist precisely so a
+        reworded claim fails loudly, would then be unable to fail for any repository
+        reason at all. Nothing here invents content: the tree comes out of the
+        program's own history, from a commit at which the records and the documents
+        agreed.
+
+        **Why not :data:`REVIEWED_CANDIDATE_COMMIT`.** Measured, and it is worse than
+        the defect: the reviewed candidate predates this module, the whole CP-00
+        evidence bundle and every acceptance report, so the reset unlinks thirty tracked
+        paths including `tests/contract/test_cp00_candidate.py` itself, and the
+        `git rm --cached` that must accompany the deletions exits 128. It also does not
+        fix the finding it targets — `CURRENT_STATE.md` at the candidate says "Nothing
+        is frozen, nothing is ratified", not the sentence
+        :data:`STATE_DOCUMENT_DENIAL` anchors, so the anchor-rot report fires anyway.
+        Recorded in `docs/program/reviews/W0-QA-04.md` §13.2 with the commands.
+
+        Three conditions, and the third is the one that keeps this from degrading into
+        "any old commit": the revision must say CP-00 was unratified, it must carry a
+        self-consistent freeze of its own, and that freeze must **reproduce** over the
+        commit's own tree. The third is what
+        :meth:`SandboxResetTests.test_a_recovered_freeze_is_a_real_freeze` asks of
+        :meth:`_ensure_a_frozen_round`, asked here for the same reason.
+        """
         commit = _freeze_commit(self.root)
+        if commit is None:
+            return None
+        if not self._was_ratified_at(commit):
+            return commit
+        history = _git(
+            "-C", str(self.root), "log", "--format=%H", commit, "--",
+            CHECKPOINT_MANIFEST, text=True,
+        ).stdout
+        for candidate in (line for line in history.split("\n") if line):
+            past = self._manifest_at(candidate)
+            if past is None or past.get("ratified") is True:
+                continue
+            digest = past.get("tested_candidate_digest")
+            if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                continue
+            entries = [
+                entry
+                for entry in past.get("acceptance_rounds", [])
+                if isinstance(entry, dict)
+                and entry.get("round") == past.get("current_round")
+            ]
+            if len(entries) != 1 or entries[0].get("tested_candidate_digest") != digest:
+                continue
+            if _acceptance_digest_at(
+                self.root, candidate, "tested_candidate_digest"
+            ) != digest:
+                continue
+            return candidate
+        # Nothing in history denies the ratification. Returning the freeze commit is the
+        # honest answer -- it is the tree the streams judged -- and the anchors then
+        # report the contradiction by name rather than this method guessing.
+        return commit
+
+    def _manifest_at(self, commit: str) -> dict | None:
+        """The checkpoint manifest at ``commit``, or ``None`` if it cannot be read."""
+        blob = _git(
+            "-C", str(self.root), "--no-replace-objects", "show",
+            f"{commit}:{CHECKPOINT_MANIFEST}",
+        )
+        if blob.returncode != 0:
+            return None
+        try:
+            document = json.loads(blob.stdout.decode("utf-8"))
+        except ValueError:
+            return None
+        return document if isinstance(document, dict) else None
+
+    def _was_ratified_at(self, commit: str) -> bool:
+        past = self._manifest_at(commit)
+        return past is not None and past.get("ratified") is True
+
+    def _reset_to(self, commit: str | None) -> None:
+        """The reset mechanics, over whichever tree the caller resolved."""
         if commit is None:
             return
         blobs = _tree_blobs(self.root, commit)
@@ -3770,15 +4153,19 @@ class _CheckpointSandbox:
 
     def publish_program_documents(self) -> None:
         """Retract the three program claims ratification is required to retract."""
-        wave = "docs/program/waves/W0.3_ratification_integration.md"
-        self._retract(
-            wave, "`W0-INT-01` is blocked", "`W0-INT-01` is accepted and integrated"
-        )
-        self._retract(
-            wave,
-            "| `W0-INT-01` | blocked |",
-            "| `W0-INT-01` | accepted and integrated |",
-        )
+        # The claims are the table's, resolved to the task the records assign the act
+        # to. Spelling them out again here made this harness able to publish a tree the
+        # check would reject -- or, after a reassignment, a tree it would accept for the
+        # wrong task -- which is the way a reachability proof stops proving reachability.
+        wave = W03_WAVE_PLAN
+        for denial in RATIFICATION_PUBLICATION_RECORDS[0]["denials"]:
+            self._retract(
+                wave,
+                _needle_resolved(denial),
+                _needle_resolved(denial).replace(
+                    "blocked", "accepted and integrated"
+                ),
+            )
         self._append(
             wave,
             "\n## Next unlocked tasks\n\nCP-00 is ratified and tagged; the S01 "
@@ -5856,29 +6243,184 @@ class RatificationRecordTests(unittest.TestCase):
         anyway, because "fails closed for the ids that happen to be three letters" is
         not the property the paragraph above claims. ``{2,4}`` spans every id form this
         program uses.
+
+        **Round three of `W0-QA-04`.** Anchored was not the same as resolved. The
+        anchoring above required the *documents* to name `W0-INT-01`, so a plan
+        reassigning the act to `W0-INT-03` — which is what the recovery does, and what
+        `W0-INT-03`'s own delta is required to record — turned this test red in a file
+        `W0-INT-03` may not write. `assertEqual(RATIFYING_TASK, "W0-INT-01")` was the
+        `:11342` defect two constants over. What is asserted here now is that the
+        constant **is** what the records say, that it is in the series, and that the
+        rule can refuse; *which* task is current is deliberately unstated, because that
+        is what a reassignment changes by design.
         """
-        self.assertEqual(RATIFYING_TASK, "W0-INT-01")
-        wave = _read("docs/program/waves/W0.3_ratification_integration.md")
-        rows = [
-            line
-            for line in wave.split("\n")
-            if "CP-00 review ratification" in line and line.strip().startswith("|")
-        ]
+        self.assertEqual(RATIFYING_TASK_SERIES.pattern, r"^W0-INT-(\d{2})$")
+        self.assertEqual(RATIFYING_TASK_FLOOR, "W0-INT-01")
+        self.assertEqual(RATIFYING_TASK_NEEDLE, r"re:`W0-INT-(\d{2})`")
+        self.assertEqual(RATIFICATION_ASSIGNMENT_ROW, "CP-00 review ratification")
         self.assertEqual(
-            len(rows),
-            1,
-            "the wave document no longer carries exactly one CP-00 ratification "
-            "assignment row; re-anchor this probe rather than deleting it",
+            _ratifying_task_problems(REPOSITORY_ROOT),
+            [],
+            "the records that name the task authorised to ratify CP-00 do not agree, or "
+            "name one outside the pinned series",
+        )
+        claims = _ratifying_task_claims(REPOSITORY_ROOT)
+        plan_claim = f"{W03_WAVE_PLAN}:{RATIFICATION_ASSIGNMENT_ROW}"
+        record_claim = f"{CHECKPOINT_MANIFEST}:ratification.task"
+        self.assertEqual(
+            sorted(claims),
+            sorted(
+                {plan_claim}
+                | ({record_claim} if _load(CHECKPOINT_MANIFEST).get("ratification")
+                   else set())
+            ),
+            "the ratifying task is resolved from the wave plan's assignment row and, "
+            "once the act has been taken, from the record of the act. The assignment is "
+            "always readable; the record exists only after ratification, and requiring "
+            "it unconditionally would make an unratified candidate -- which is what a "
+            "freeze is taken on -- unable to resolve its own ratifier.",
         )
         self.assertEqual(
-            sorted(set(re.findall(r"W0-[A-Z]{2,4}-\d{2}", rows[0]))),
-            [RATIFYING_TASK],
-            "the document that assigns the CP-00 ratification act does not assign it to "
-            f"{RATIFYING_TASK} alone",
+            set(claims.values()),
+            {RATIFYING_TASK},
+            "the module-level RATIFYING_TASK is not the value the records carry, so the "
+            "constant and the records have drifted apart",
         )
+        self.assertRegex(RATIFYING_TASK, RATIFYING_TASK_SERIES)
+        self.assertEqual(RATIFYING_TASK_FILE, f"docs/program/tasks/{RATIFYING_TASK}.md")
         self.assertTrue(
-            (REPOSITORY_ROOT / f"docs/program/tasks/{RATIFYING_TASK}.md").is_file(),
+            (REPOSITORY_ROOT / RATIFYING_TASK_FILE).is_file(),
             f"{RATIFYING_TASK} is not a task in this program",
+        )
+
+    def test_the_ratifying_task_resolves_and_the_rule_can_fail(self) -> None:
+        """**The anti-vacuity half**, on trees this test builds rather than on this one.
+
+        The live assertions above cannot tell a resolver from a constant while the
+        records still say the floor — the row that §11.4 states rather than smooths.
+        These do: every tree here is built in a temporary directory, one names the
+        successor and must be accepted **without editing this module**, and each of the
+        rest must be refused by name.
+        """
+
+        def _tree(manifest_task, row_task, *, rows=1, task_files=("W0-INT-01",)) -> Path:
+            root = Path(tempfile.mkdtemp(prefix="w0-qa-04-ratifier-"))
+            self.addCleanup(shutil.rmtree, root, True)
+            (root / ACCEPTANCE_EVIDENCE_PREFIX).mkdir(parents=True)
+            body: dict = {"checkpoint": "CP-00", "ratified": manifest_task is not None}
+            if manifest_task is not None:
+                body["ratification"] = {
+                    "task": manifest_task,
+                    "decided_on": "2026-09-08",
+                    "decided_by": "the fixture",
+                    "reason": "the fixture",
+                    "allowed_delta_paths": sorted(RATIFICATION_DELTA_CEILING),
+                }
+            (root / CHECKPOINT_MANIFEST).write_text(json.dumps(body), encoding="utf-8")
+            (root / W03_WAVE_PLAN).parent.mkdir(parents=True, exist_ok=True)
+            lines = ["| Act | Owner |", "|---|---|"]
+            for _ in range(rows):
+                assignment = "" if row_task is None else f"`{row_task}`"
+                lines.append(f"| {RATIFICATION_ASSIGNMENT_ROW} | {assignment} |")
+            (root / W03_WAVE_PLAN).write_text("\n".join(lines) + "\n", encoding="utf-8")
+            (root / "docs/program/tasks").mkdir(parents=True, exist_ok=True)
+            for name in task_files:
+                (root / f"docs/program/tasks/{name}.md").write_text("# t\n", "utf-8")
+            return root
+
+        green = _tree("W0-INT-03", "W0-INT-03", task_files=("W0-INT-03",))
+        self.assertEqual(
+            _ratifying_task_problems(green),
+            [],
+            "a recovery that reassigns the act and moves both records together must be "
+            "accepted without editing this module; that is the whole reason the literal "
+            "went",
+        )
+        self.assertEqual(_resolved_ratifying_task(green), "W0-INT-03")
+
+        # **The blocker itself, both ways round.** With the constant resolved from this
+        # tree -- which is what importing this module on the recovery tree does -- a
+        # record naming `W0-INT-03` is accepted. With the constant left at the floor,
+        # the same record is refused with the message the audit measured. One mutation,
+        # two outcomes, on the same bytes: that is what makes the resolver a resolver.
+        refusal = "may ratify CP-00"
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "RATIFYING_TASK", _resolved_ratifying_task(green)
+        ):
+            resolved = [p for p in _ratification_record(green)[2] if refusal in p]
+        self.assertEqual(
+            resolved,
+            [],
+            "the recovery's own ratification record was refused by a module that had "
+            "just resolved the same task out of the same records",
+        )
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "RATIFYING_TASK", RATIFYING_TASK_FLOOR
+        ):
+            pinned = [p for p in _ratification_record(green)[2] if refusal in p]
+        self.assertTrue(
+            pinned,
+            "with the constant pinned to the floor the audit's finding must reappear; "
+            "if it does not, this probe is measuring nothing",
+        )
+        self.assertIn("W0-INT-03", pinned[0])
+
+        for name, tree, expected in (
+            (
+                "one record left behind",
+                _tree("W0-INT-03", "W0-INT-01", task_files=("W0-INT-01", "W0-INT-03")),
+                "name more than one ratifying task",
+            ),
+            (
+                "reassigned outside the series",
+                _tree("W0-QA-04", "W0-QA-04", task_files=("W0-QA-04",)),
+                "not in the ratifying-task series",
+            ),
+            (
+                "no record names a task",
+                _tree(None, None),
+                "no record names the task authorised to ratify CP-00",
+            ),
+            (
+                "the plan assigns the act twice",
+                _tree("W0-INT-01", "W0-INT-01", rows=2),
+                "rows assigning",
+            ),
+            (
+                "the one row co-assigns the act",
+                _tree("W0-INT-01", "W0-INT-01` and `W0-QA-01"),
+                "row names",
+            ),
+            (
+                "the assigned task has no file",
+                _tree("W0-INT-07", "W0-INT-07", task_files=()),
+                "is not a task in this program",
+            ),
+        ):
+            with self.subTest(mutation=name):
+                problems = _ratifying_task_problems(tree)
+                self.assertTrue(
+                    any(expected in problem for problem in problems),
+                    f"{name}: nothing said {expected!r}; got {problems}",
+                )
+                if name != "the assigned task has no file":
+                    self.assertEqual(
+                        _resolved_ratifying_task(tree),
+                        RATIFYING_TASK_FLOOR,
+                        f"{name}: the resolution must fall back to the floor rather "
+                        "than adopt a value the rule refuses",
+                    )
+
+        # The floor is a floor: below it is refused even when both records agree.
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "RATIFYING_TASK_FLOOR", "W0-INT-03"
+        ):
+            problems = _ratifying_task_problems(
+                _tree("W0-INT-01", "W0-INT-01", task_files=("W0-INT-01",))
+            )
+        self.assertTrue(
+            any("moves forward or not at all" in problem for problem in problems),
+            f"the act was reassigned back to a task that has already taken it: {problems}",
         )
 
     def test_a_record_from_the_wrong_task_licenses_nothing(self) -> None:
@@ -7100,18 +7642,27 @@ class RatificationRecordTests(unittest.TestCase):
                 path = self.sandbox.root / entry["path"]
                 text = path.read_text(encoding="utf-8")
                 denial = entry["denials"][0]
+                # Written back in the form the document would carry it -- the needle
+                # with its `{task}` placeholder resolved -- and looked for in the form a
+                # finding names it. Writing the placeholder itself would put a string
+                # into the document that no document ever contains, and the probe would
+                # then pass or fail for a reason unrelated to the claim it is about.
+                written = _needle_resolved(denial)
                 if entry.get("row"):
                     lines = text.splitlines()
-                    row = next(line for line in lines if entry["row"] in line)
-                    text = text.replace(row, f"{row} ({denial})")
+                    row = next(
+                        line for line in lines if _needle_present(entry["row"], line)
+                    )
+                    text = text.replace(row, f"{row} ({written})")
                 else:
-                    text += f"\n{denial}\n"
+                    text += f"\n{written}\n"
                 path.write_text(text, encoding="utf-8")
                 problems = _acceptance_problems(self.sandbox.root)
+                shown = _needle_shown(denial)
                 self.assertTrue(
-                    any(denial in problem and entry["item"] in problem
+                    any(shown in problem and entry["item"] in problem
                         for problem in problems),
-                    f"{entry['item']} kept saying {denial!r} after ratification: "
+                    f"{entry['item']} kept saying {shown} after ratification: "
                     f"{problems}",
                 )
                 self.sandbox.restore()
@@ -7221,7 +7772,9 @@ class RatificationRecordTests(unittest.TestCase):
         """
         wave = RATIFICATION_PUBLICATION_RECORDS[0]
         self.sandbox._retract(
-            wave["path"], wave["denials"][0], "`W0-INT-01` is proceeding"
+            wave["path"],
+            _needle_resolved(wave["denials"][0]),
+            f"`{RATIFYING_TASK}` is proceeding",
         )
         problems = _publication_record_problems(self.sandbox.root)
         self.assertTrue(
@@ -7451,7 +8004,7 @@ class RatificationRecordTests(unittest.TestCase):
         self._ratify_for_real()
         path = self.sandbox.root / index["path"]
         lines = path.read_text(encoding="utf-8").splitlines()
-        row = next(line for line in lines if index["row"] in line)
+        row = next(line for line in lines if _needle_present(index["row"], line))
         path.write_text("\n".join(lines + [row]) + "\n", encoding="utf-8")
         problems = _publication_record_problems(self.sandbox.root)
         self.assertTrue(
@@ -9300,6 +9853,109 @@ class SandboxResetTests(unittest.TestCase):
         self.sandbox = _CheckpointSandbox()
         self.addCleanup(self.sandbox.__exit__)
 
+    #: A commit of this repository at which CP-00 **was** ratified, used to put the
+    #: sandbox's baseline resolver in the state a post-ratification freeze puts it in
+    #: without committing anything. It is history, not a fixture: `39a3a64` is the
+    #: round-ten ratification commit, it is an ancestor of every tree this module can be
+    #: run on, and its own manifest says `ratified: true` -- which is the property under
+    #: test and is asserted rather than assumed.
+    A_RATIFIED_COMMIT = "39a3a6430bd97c38cb20bafc793fc9d077d0df8e"
+
+    def test_the_baseline_is_a_tree_that_denies_the_ratification(self) -> None:
+        """**Blocker B, both ways round, on whatever tree this is run on.**
+
+        `_reset_to_the_frozen_tree` rebuilds the sandbox from the freeze commit, and
+        `normalise_to_candidate` then writes `ratified: false` into the manifest. While
+        the freeze is taken on an unratified checkpoint those two agree. Once a freeze is
+        taken *after* a ratification they do not, and the sandbox builds a tree whose
+        record denies a ratification its documents still describe: every two-directional
+        anchor in the module reports rot, on a repository that is perfectly consistent.
+
+        The probe forces exactly that condition -- the freeze commit resolves to a
+        ratified commit, nothing else changes -- and requires two things: that the
+        resolved baseline is a tree at which CP-00 was **not** ratified and whose state
+        document carries the denial, and that the old behaviour, restored as a mutation,
+        goes red. Both halves run on this repository whatever its records say, because
+        the ratified commit is reached through history rather than through the manifest
+        in front of the test.
+        """
+        self.assertTrue(
+            self.sandbox._was_ratified_at(self.A_RATIFIED_COMMIT),
+            "the commit this probe uses to simulate a post-ratification freeze does not "
+            "declare a ratification; re-anchor it rather than deleting the probe",
+        )
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "_freeze_commit",
+            lambda root: self.A_RATIFIED_COMMIT,
+        ):
+            baseline = self.sandbox._pre_ratification_baseline()
+            self.assertIsNotNone(baseline)
+            self.assertNotEqual(
+                baseline,
+                self.A_RATIFIED_COMMIT,
+                "the baseline stayed on the ratified freeze commit, so the sandbox is "
+                "about to deny a ratification its own documents describe",
+            )
+            self.assertFalse(
+                self.sandbox._was_ratified_at(baseline),
+                "the resolved baseline is itself a ratified tree",
+            )
+            state = _git(
+                "-C", str(self.sandbox.root), "--no-replace-objects", "show",
+                f"{baseline}:{PROGRAM_STATE_DOCUMENT}", check=True,
+            ).stdout.decode("utf-8")
+            self.assertIn(
+                STATE_DOCUMENT_DENIAL,
+                _flat(state),
+                "the resolved baseline's state document does not deny the ratification, "
+                "so normalise_to_candidate would still build a self-contradicting tree",
+            )
+            self.sandbox.normalise_to_candidate()
+            self.assertEqual(
+                _state_document_problems(self.sandbox.root),
+                [],
+                "a sandbox normalised from a post-ratification freeze still denies a "
+                "ratification its own state document describes",
+            )
+            # Deliberately the state-document half rather than the whole of
+            # `_acceptance_problems`. The other anchors also depend on *which* task the
+            # records assign the act to, and the fallback walk can only reach trees this
+            # repository actually produced: on a tree that reassigned the act after its
+            # last unratified commit there is no such tree, and the anchors then report
+            # the reassignment by name. That is a limit of history, not of this resolver,
+            # and it is recorded in `docs/program/reviews/W0-QA-04.md` §13.4 rather than
+            # asserted away here.
+
+    def test_MUTATION_taking_the_baseline_from_the_freeze_commit_goes_red(self) -> None:
+        """The repair above, removed. This is what the audit measured.
+
+        `_pre_ratification_baseline` is replaced by the behaviour it replaced -- return
+        the freeze commit and nothing else -- with the freeze pointed at a ratified
+        commit. The anchors the sandbox has just destroyed must report themselves by
+        name. Without this the fix would be a refactor: a resolver nothing ever exercises
+        on the tree it exists for is the same defect wearing a function call.
+        """
+        with unittest.mock.patch.object(
+            sys.modules[__name__], "_freeze_commit",
+            lambda root: self.A_RATIFIED_COMMIT,
+        ), unittest.mock.patch.object(
+            _CheckpointSandbox, "_pre_ratification_baseline",
+            lambda sandbox: _freeze_commit(sandbox.root),
+        ):
+            self.sandbox.normalise_to_candidate()
+            problems = _acceptance_problems(self.sandbox.root)
+        self.assertTrue(
+            any("anchor rot" in problem and PROGRAM_STATE_DOCUMENT in problem
+                for problem in problems),
+            f"the state document anchor did not report the contradiction: {problems}",
+        )
+        self.assertGreaterEqual(
+            len(problems),
+            5,
+            "the baseline defect cascades; a single finding means this probe is "
+            f"measuring something else: {problems}",
+        )
+
     def test_a_path_committed_after_the_freeze_still_resets(self) -> None:
         published = "artifacts/checkpoints/CP-00/probe-report-after-the-freeze.md"
         frozen = _freeze_commit(self.sandbox.root)
@@ -9558,14 +10214,31 @@ class SandboxResetTests(unittest.TestCase):
         )
         self.assertEqual(_freeze_commit(self.sandbox.root), commit)
 
+        # **Anchored to the baseline, not to the freeze.** The two are the same commit
+        # whenever the freeze was taken on an unratified checkpoint -- which is every
+        # freeze this repository has taken, so on this tree nothing about this assertion
+        # changes. They part company on a freeze taken after a ratification, and there
+        # `commit` names a tree that describes a ratified checkpoint: asserting the
+        # sandbox landed on it would be asserting that `normalise_to_candidate` builds a
+        # tree contradicting itself. What has to hold either way is that the reset landed
+        # on the tree the resolver chose and that the digest reproduces there.
+        baseline = self.sandbox._pre_ratification_baseline()
+        baseline_manifest = self.sandbox._manifest_at(baseline)
+        self.assertIsNotNone(baseline_manifest)
+        baseline_digest = baseline_manifest.get("tested_candidate_digest")
         self.sandbox.normalise_to_candidate()
-        self.assertEqual(self.sandbox.frozen_commit, commit)
-        self.assertEqual(self.sandbox.frozen_digest, declared)
+        self.assertEqual(self.sandbox.frozen_commit, baseline)
+        self.assertEqual(self.sandbox.frozen_digest, baseline_digest)
         self.assertEqual(self.sandbox.unresettable, [])
         self.assertEqual(
             _acceptance_digest(self.sandbox.root, "tested_candidate_digest"),
-            declared,
+            baseline_digest,
             "the reset landed somewhere other than the tree that freeze names",
+        )
+        self.assertFalse(
+            self.sandbox._was_ratified_at(baseline),
+            "the baseline the sandbox normalised from declares a ratification, so the "
+            "`ratified: false` it then writes contradicts the tree it wrote it into",
         )
 
     def test_a_history_with_no_freeze_at_all_recovers_nothing(self) -> None:
@@ -11398,14 +12071,14 @@ class TableExpectationTests(unittest.TestCase):
             CHECKPOINT_TAG_SERIES,
             "the resolved tag is outside the pinned series",
         )
-        resolved_revision = CHECKPOINT_TAG_SERIES.match(CHECKPOINT_TAG)
-        floor_revision = CHECKPOINT_TAG_SERIES.match(CHECKPOINT_TAG_FLOOR)
-        self.assertIsNotNone(floor_revision)
-        self.assertGreaterEqual(
-            int(resolved_revision.group(1)),
-            int(floor_revision.group(1)),
-            "the resolved tag's revision is below the published floor",
-        )
+        # **The floor rule is not restated here, and round two's reviewer is why.**
+        # `assertGreaterEqual(resolved, floor)` on the live tree cannot fail while the
+        # floor is revision 0 and the series body is `(\d+)`: there is no value the
+        # records could carry that would make it false. It read as a third guarantee and
+        # was decoration on two. The rule itself has teeth in `_checkpoint_tag_problems`,
+        # which is asserted clean above, and is exercised by the fixture branch below
+        # with `CHECKPOINT_TAG_FLOOR` patched to `v0.0.1-architecture` -- the only place
+        # a revision *can* be below the floor.
 
         def _tree(manifest_tag, manifest_planned, contract_tag) -> Path:
             root = Path(tempfile.mkdtemp(prefix="w0-qa-04-tag-"))
@@ -11594,10 +12267,10 @@ class TableExpectationTests(unittest.TestCase):
             RATIFICATION_PUBLICATION_RECORDS,
             ({'item': 'W0.3 wave plan',
               'path': 'docs/program/waves/W0.3_ratification_integration.md',
-              'denials': ('`W0-INT-01` is blocked', '| `W0-INT-01` | blocked |'),
+              'denials': ('`{task}` is blocked', '| `{task}` | blocked |'),
               'requires': ('S01',),
               'must_still_contain': ('re:`v0\\.0\\.(\\d+)-architecture`',
-                                     '`W0-INT-01`'),
+                                     '`{task}`'),
               'requires_note': 'the next unlocked S01 preparation tasks deliverable 5 '
                                "names, with the wave's own status line and task row no "
                                'longer calling W0-INT-01 blocked'},
@@ -11614,7 +12287,7 @@ class TableExpectationTests(unittest.TestCase):
                                'checklist still says its exit evidence is outstanding'},
              {'item': 'documentation index status column',
               'path': 'docs/INDEX.md',
-              'row': 'program/tasks/W0-INT-01.md',
+              'row': 'program/tasks/{task}.md',
               'denials': ('blocked',),
               'requires': ('accepted and integrated',),
               'must_still_contain': ('# Documentation index', '## Architecture',
@@ -11660,11 +12333,19 @@ class TableExpectationTests(unittest.TestCase):
              'docs/program/tasks/W0-QA-02.md',
              'docs/program/tasks/W0-QA-03.md'],
         )
-        self.assertEqual(RATIFYING_TASK_FILE, "docs/program/tasks/W0-INT-01.md")
+        # **Not a literal, and not a member of the set above.** `RATIFYING_TASK_FILE`
+        # was pinned to `docs/program/tasks/W0-INT-01.md` and asserted to be one of the
+        # seventeen. Both were the superseded instance: the act is reassignable, and the
+        # task it moves to is by definition not one the reviewed candidate had, so the
+        # membership assertion made a correct reassignment red in a file the reassigned
+        # task may not write. What holds in every future is that the file is a task file
+        # of the series and that it exists.
+        self.assertRegex(RATIFYING_TASK_FILE, r"^docs/program/tasks/W0-INT-\d{2}\.md$")
+        self.assertEqual(RATIFYING_TASK_FILE, f"docs/program/tasks/{RATIFYING_TASK}.md")
+        self.assertTrue((REPOSITORY_ROOT / RATIFYING_TASK_FILE).is_file())
         self.assertEqual(
             RATIFYING_TASK_BANNER_DENIAL, "ratification and publication blocked"
         )
-        self.assertIn(RATIFYING_TASK_FILE, COMPLETED_TASK_FILES)
         listing = _git(
             "-C", str(REPOSITORY_ROOT), "--no-replace-objects", "ls-tree", "-r",
             "--name-only", REVIEWED_CANDIDATE_COMMIT, "--", "docs/program/tasks",
@@ -13214,6 +13895,16 @@ class WriteBoundaryTests(unittest.TestCase):
         # hold in every future is that **nothing reaches the licence from prose**, and
         # that is what is asserted: the spans found only outside list items are computed
         # independently of the harvest and must not intersect it.
+        #
+        # The non-emptiness assertion below is itself a live-tree dependency, and round
+        # two's reviewer named it. It is far weaker than the three literals it replaced
+        # and it is real: it requires *some* task file to carry a path-shaped span in
+        # the prose of an `Allowed paths` section. What makes it hold rather than hope is
+        # that the spans sit in task files that acceptance has frozen outside their
+        # status banners -- `_task_banner_problems` compares every completed task file
+        # with the freeze commit byte for byte away from the banner -- so no single
+        # legitimate act removes all of them, and any act that did would be reported by
+        # this assertion rather than pass silently.
         prose_only = _prose_only_path_spans(REPOSITORY_ROOT)
         self.assertTrue(
             prose_only,

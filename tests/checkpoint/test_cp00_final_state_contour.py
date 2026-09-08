@@ -24,6 +24,7 @@ about a checkpoint rather than about a helper.
 """
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
 import importlib.util
@@ -53,6 +54,16 @@ _spec.loader.exec_module(contour)
 # The fixture: a whole small checkpoint that is green on every check.
 # ---------------------------------------------------------------------------
 
+#: The fixture's accepted round, as a number and as the word its registry row uses.
+#: Written once. The two mutations that edit the registry row used to restate "round
+#: ten" in their own bodies, which is the shape this deliverable spent two rounds
+#: removing: a literal that says again, 230 lines further down, what a single line above
+#: already fixes. The restatement here could only be moved by editing this file, so it
+#: was never the reachability defect `CHECKPOINT_TAG` was -- and it is still one value
+#: said twice, and `assert_replaced` below is what makes the difference measurable.
+ROUND = 10
+ROUND_WORD = "ten"
+
 SUBJECT = "a" * 40
 TAGGED = "b" * 40
 CANDIDATE = "c" * 40
@@ -60,7 +71,7 @@ MOVED = "d" * 40
 REVIEW = "docs/architecture/CP00_ARCHITECTURE_REVIEW.json"
 REGISTRY = "docs/program/CHECKPOINT_REGISTRY.md"
 TASK = "docs/program/tasks/W0-INT-01.md"
-MANUAL_REPORT = contour.BUNDLE + "manual-report-round-10.md"
+MANUAL_REPORT = contour.BUNDLE + f"manual-report-round-{ROUND}.md"
 AUTOMATED_REPORT = contour.BUNDLE + "automated-summary.txt"
 
 #: The reviewed families of the fixture and their bytes at each revision. Two families
@@ -123,11 +134,11 @@ def _manifest() -> dict:
         "artifact_count": 4,
         "tested_candidate_digest": "t" * 64,
         "evidence_bundle_digest": "e" * 64,
-        "current_round": 10,
+        "current_round": ROUND,
         "acceptance_rounds": [
-            {"round": 9, "verdict": None, "status": "void"},
+            {"round": ROUND - 1, "verdict": None, "status": "void"},
             {
-                "round": 10,
+                "round": ROUND,
                 "verdict": "PASS",
                 "status": "accepted",
                 "tested_candidate_digest": "t" * 64,
@@ -161,7 +172,7 @@ def _tree() -> tuple[contour.MappingTree, contour.TagFacts]:
     # stale against itself when a file is added to it.
     SUBJECT_PATHS = sorted({*files, MANUAL_REPORT, AUTOMATED_REPORT})
     files[MANUAL_REPORT] = (
-        "# CP-00 manual acceptance - round 10\n"
+        f"# CP-00 manual acceptance - round {ROUND}\n"
         "\n"
         "```text\n"
         f"candidate_commit:  {SUBJECT}\n"
@@ -171,7 +182,7 @@ def _tree() -> tuple[contour.MappingTree, contour.TagFacts]:
         "commit's own objects.\n"
     )
     files[AUTOMATED_REPORT] = (
-        "CP-00 automated acceptance summary - round 10\n"
+        f"CP-00 automated acceptance summary - round {ROUND}\n"
         "\n"
         f"Candidate frozen at {SUBJECT}.\n"
         "\n"
@@ -182,7 +193,8 @@ def _tree() -> tuple[contour.MappingTree, contour.TagFacts]:
         "\n"
         "| CP | Tag | Status |\n"
         "|---|---|---|\n"
-        "| CP-00 | `v0.0.1-architecture` | **ratified** on acceptance round ten |\n"
+        f"| CP-00 | `v0.0.1-architecture` | **ratified** on acceptance round "
+        f"{ROUND_WORD} |\n"
         "| CP-01 | `v0.1.0-foundation` | planned |\n"
     )
     files[REVIEW] = json.dumps({"ratified": True, "review_status": "ratified"})
@@ -231,6 +243,27 @@ class _ContourCase(unittest.TestCase):
 
     def revisions(self) -> dict:
         return {k: dict(v) for k, v in self.tree._revisions.items()}
+
+    def assert_replaced(self, text: str, old: str, new: str = "") -> str:
+        """``text`` with ``old`` replaced, having proved ``old`` was there to replace.
+
+        **A mutation that mutates nothing is not a negative case.** Every mutation in
+        this module is written as a string replacement against the fixture, and
+        ``str.replace`` is silent when its needle is absent: the "mutated" tree is then
+        the pristine one, and the probe passes or fails for a reason that has nothing to
+        do with the branch it names. Here they all fail closed -- an unmutated tree is
+        green and ``assert_fires`` then reports nothing fired -- but "it fails closed"
+        is a property of today's fixture, not of the method, and it is the difference
+        between a probe that says *the check did not fire* and one that says *the
+        mutation never happened*. This says which.
+        """
+        self.assertIn(
+            old,
+            text,
+            f"the mutation looked for {old!r} and the fixture no longer carries it, so "
+            "the tree under test is the unmutated one",
+        )
+        return text.replace(old, new)
 
     def mutate(self, **replacements) -> contour.MappingTree:
         files = self.files()
@@ -316,9 +349,13 @@ class FixtureTests(_ContourCase):
         manifest["checkpoint_deliverables"].append("artifacts/checkpoints/CP-00/gone.md")
         files = self.files()
         files[contour.MANIFEST] = json.dumps(manifest)
-        files[AUTOMATED_REPORT] = files[AUTOMATED_REPORT].replace(
-            "tracked paths", "hundred tracked paths"
-        ).replace("Candidate frozen at", "tree swept: 9999 tracked paths\nCandidate frozen at")
+        files[AUTOMATED_REPORT] = self.assert_replaced(
+            self.assert_replaced(
+                files[AUTOMATED_REPORT], "tracked paths", "hundred tracked paths"
+            ),
+            "Candidate frozen at",
+            "tree swept: 9999 tracked paths\nCandidate frozen at",
+        )
         files[REVIEW] = json.dumps({"ratified": True, "review_status": "elsewhere"})
         files[contour.CONTRACT_MANIFEST] = "\n".join(
             line
@@ -401,8 +438,8 @@ class TerminalStateTests(_ContourCase):
         """The registry keeps its old round number after a new one is accepted."""
         tree = self.mutate(
             **{
-                REGISTRY: self.files()[REGISTRY].replace(
-                    "round ten", "round nine"
+                REGISTRY: self.assert_replaced(
+                    self.files()[REGISTRY], f"round {ROUND_WORD}", "round nine"
                 )
             }
         )
@@ -415,8 +452,10 @@ class TerminalStateTests(_ContourCase):
     def test_MUTATION_a_status_row_still_calling_the_checkpoint_blocked(self) -> None:
         tree = self.mutate(
             **{
-                REGISTRY: self.files()[REGISTRY].replace(
-                    "**ratified** on acceptance round ten", "blocked; round ten owed"
+                REGISTRY: self.assert_replaced(
+                    self.files()[REGISTRY],
+                    f"**ratified** on acceptance round {ROUND_WORD}",
+                    f"blocked; round {ROUND_WORD} owed",
                 )
             }
         )
@@ -427,8 +466,8 @@ class TerminalStateTests(_ContourCase):
     def test_MUTATION_the_accepted_rounds_two_streams_judged_different_trees(self) -> None:
         tree = self.mutate(
             **{
-                AUTOMATED_REPORT: self.files()[AUTOMATED_REPORT].replace(
-                    SUBJECT, "d" * 40
+                AUTOMATED_REPORT: self.assert_replaced(
+                    self.files()[AUTOMATED_REPORT], SUBJECT, "d" * 40
                 )
             }
         )
@@ -508,7 +547,9 @@ class LiveVersusHistoricalTests(_ContourCase):
         Stripping the declaration makes the record live, so the round's own binding is
         gone and the terminal-state check says the accepted result is bound to nothing.
         """
-        stripped = self.files()[MANUAL_REPORT].replace(f"candidate_commit:  {SUBJECT}", "")
+        stripped = self.assert_replaced(
+            self.files()[MANUAL_REPORT], f"candidate_commit:  {SUBJECT}"
+        )
         tree = self.mutate(**{MANUAL_REPORT: stripped})
         verdict = contour.run(tree, self.tag)
         # The record itself now declares nothing. The manifest still binds it to round
@@ -585,7 +626,7 @@ class TagIntegrityTests(_ContourCase):
     def test_MUTATION_the_tag_message_states_a_digest_that_is_not_its_own(self) -> None:
         tag = contour.TagFacts(
             name=self.tag.name, exists=True, annotated=True, commit=TAGGED,
-            message=self.tag.message.replace(FAMILY_DIGEST, "9" * 64),
+            message=self.assert_replaced(self.tag.message, FAMILY_DIGEST, "9" * 64),
         )
         self.assert_fires(
             contour.run(self.tree, tag),
@@ -694,8 +735,8 @@ class AccountingTests(_ContourCase):
         )
 
     def test_MUTATION_an_aggregate_over_an_unstated_number_of_files(self) -> None:
-        stripped = self.files()[contour.CONTRACT_MANIFEST].replace(
-            "    files: 2\n", "", 1
+        stripped = self.assert_replaced(
+            self.files()[contour.CONTRACT_MANIFEST], "    files: 2\n"
         )
         tree = self.mutate(**{contour.CONTRACT_MANIFEST: stripped})
         self.assert_fires(
@@ -741,7 +782,11 @@ class CrossGateTests(_ContourCase):
         )
 
         task_moved = self.mutate(
-            **{TASK: self.files()[TASK].replace("=='ratified'", "=='ratified_at_w0_3'")}
+            **{
+                TASK: self.assert_replaced(
+                    self.files()[TASK], "=='ratified'", "=='ratified_at_w0_3'"
+                )
+            }
         )
         self.assert_fires(
             contour.run(task_moved, self.tag),
@@ -835,6 +880,50 @@ class SpawnChokepointTests(unittest.TestCase):
             permitted,
             "the contour spawns a process somewhere other than inside _git",
         )
+
+    def test_no_mutation_edits_the_fixture_without_proving_it_edited_something(
+        self,
+    ) -> None:
+        """**A mutation that mutates nothing, made impossible rather than unlikely.**
+
+        ``str.replace`` is silent when its needle is absent, so a mutation written
+        against a fixture that has since moved on quietly tests the *pristine* tree. It
+        fails closed here today, and "fails closed today" is a property of the fixture
+        rather than of the method. Every string replacement in this module now goes
+        through :meth:`_ContourCase.assert_replaced`, which says which of the two
+        happened, and this keeps a bare one from coming back.
+
+        The scan is over the source rather than over behaviour because that is what the
+        property is about: the helper cannot report a needle nobody asked it to look for.
+        """
+        source = Path(__file__).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        helper = "assert_replaced"
+        offenders = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef) or node.name == helper:
+                continue
+            for sub in ast.walk(node):
+                if (
+                    isinstance(sub, ast.Call)
+                    and isinstance(sub.func, ast.Attribute)
+                    and sub.func.attr == "replace"
+                ):
+                    offenders.append(f"{node.name}:{sub.lineno}")
+        self.assertEqual(
+            offenders,
+            [],
+            "a bare str.replace mutation is back; route it through assert_replaced so a "
+            "needle the fixture no longer carries is reported as such",
+        )
+        # And the helper can fail: a needle that is not there is named, rather than
+        # silently producing the unmutated text.
+        # ``run`` is a real attribute of every TestCase, so this constructs the shared
+        # base without binding a probe of its own -- the helper needs no fixture.
+        case = _ContourCase("run")
+        with self.assertRaises(AssertionError):
+            case.assert_replaced("the fixture", "a needle nobody wrote", "x")
+        self.assertEqual(case.assert_replaced("abc", "b", "B"), "aBc")
 
     def test_no_module_of_this_deliverable_spawns_git_directly(self) -> None:
         """**The guard covers the test modules too, not only the module under test.**
