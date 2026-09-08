@@ -61,8 +61,15 @@ gates agree — leaving `W0-INT-03` a minimal, explicitly bounded delta and noth
 
 ## Non-goals
 
-- No ratification. `ratified` stays as it is; this task makes ratification *possible* and
-  bounded, and `W0-INT-03` performs it.
+- No ratification. This task makes ratification *possible* and does not perform it.
+  Read literally, the earlier wording — "`ratified` stays as it is" — is unexecutable: an
+  acceptance round can only be **open** while `ratified` is `false`, and every
+  two-directional anchor requires the denial present in that state, so opening round eleven
+  necessarily sets the field. What the non-goal means, and what is enforced, is that this
+  task writes no `ratification` object, no `PASS` verdict, no tag and no accepted round.
+  The field moves only in the direction that reopens judgement, never in the one that
+  closes it. Measured: the naive opening that leaves the published state in place gives
+  eleven `_acceptance_problems` findings and fails five named tests.
 - No tag, no push, no fast-forward of `main`.
 - No new test or checker: `W0-QA-04` owns the contour and it is frozen.
 - No rewriting of history to make a past claim true.
