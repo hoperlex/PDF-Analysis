@@ -1,0 +1,864 @@
+# Execution plan — orchestration and parallel delivery
+
+> **Canonical planning document.** Все последующие изменения порядка работ,
+> зависимостей, ролей, task graph и промтов вносятся сначала в этот файл.
+> Stage-файлы остаются backlog-картами до тех пор, пока их положения не перенесены в
+> agent-ready task-файлы и не согласованы с этим планом.
+>
+> **Текущий verdict: W0 REJECTED / HOLD (повторная приёмка 2026-09-07).**
+> Не публиковать локальный тег CP-00, не фиксировать новую версию и не запускать
+> production implementation S01, пока не закрыт Gate 0 ниже.
+
+## 1. Назначение и правила ведения
+
+Этот документ объединяет:
+
+1. аудит существующего CP-00 closeout;
+2. проверку долгосрочного roadmap;
+3. план безопасного переноса подготовленного пакета `prep/W1`;
+4. task graph S01 с учётом лимита в четыре одновременно активных agent slot;
+5. готовые промты для program integrator, task owners и independent reviewers.
+
+Правила изменения документа:
+
+- единственный writer этого файла в активной волне — program integrator;
+- изменение графа всегда сопровождается обновлением таблиц dependencies, ownership и
+  integration order в этом же commit;
+- `depends_on` содержит только завершённые task IDs и точные integration commits;
+- stage table не является разрешением на dispatch;
+- перед dispatch должен существовать отдельный task-файл по
+  `docs/templates/TASK_TEMPLATE.md` с frozen inputs, `allowed_paths`,
+  `forbidden_hotspots`, deliverables, точными командами и integration contract;
+- ребёнок orchestrator-agent не получает больше прав, чем task его родителя;
+- checkpoint tag не перемещается; исправление опубликованного checkpoint оформляется
+  через формальный freeze break и новый registry version.
+
+## 2. Проверенный снимок репозитория
+
+Снимок зафиксирован 2026-09-07 после конкурентного closeout:
+
+| Объект | Фактическое состояние |
+|---|---|
+| `HEAD`, local `main`, local `integration/W0.3` | `39a3a6430bd97c38cb20bafc793fc9d077d0df8e` |
+| local `v0.0.0-architecture` | annotated tag на `39a3a64` |
+| `origin/main` | `43a84d93fd544573226b82860ab24f924ed66d83` |
+| `origin/integration/W0.3` | `803d22b87a75ffd7cdf87ec74a6820d3f7e0d26d` |
+| remote `v0.0.0-architecture` | отсутствует |
+| bootstrap validator | `PASS` |
+| stable isolated `tests/contract` run | 324 tests, `OK` |
+| exact ratification assertion из `W0-INT-01` | `FAIL` |
+| `check_state_records.py` на final tree | `FAIL`, 14 findings |
+| `git diff --check` | `PASS` |
+| рабочее дерево перед созданием этого файла | clean |
+
+### 2.1 Протокол повторной приёмки W0 от 2026-09-07
+
+Кандидат `39a3a6430bd97c38cb20bafc793fc9d077d0df8e` проверен в отдельном clean
+detached checkout. Незакоммиченный planning-файл и конкурентные writers в проверке не
+участвовали.
+
+| Обязательный gate | Результат | Решение |
+|---|---|---|
+| `.venv/bootstrap/bin/python scripts/validate_bootstrap.py` | `PASS`, exit `0` | принят |
+| `.venv/bootstrap/bin/python -m unittest discover -s tests/contract` | `324 tests`, `OK` | принят |
+| exact ratification assertion из `W0-INT-01` | `FAIL`, exit `1`: `review_status` равен `ratified_at_w0_3`, а контракт требует `ratified` | блокирует |
+| `artifacts/checkpoints/CP-00/check_state_records.py` | `FAIL`, exit `1`, 14 findings | блокирует |
+| `git diff --check` | `PASS`, exit `0` | принят |
+| `git status --short` в clean checkout | пусто | принят |
+| remote refs | `origin/main=43a84d93`, `origin/integration/W0.3=803d22b8`, remote tag отсутствует | публикация не состоялась |
+
+**Итог приёмки:** W0 не закрыт. Локальный `v0.0.0-architecture` не является
+принимаемой или публикуемой версией: он остаётся неизменным локальным артефактом
+неуспешной попытки closeout. Новый version/tag не создаётся до полного PASS
+повторной independent acceptance. Следующий разрешённый ход — recovery contour
+варианта A из раздела 3.3: `W0-QA-04`, затем `W0-INT-02`, затем повторная приёмка
+одного frozen commit.
+
+Во время аудита другой процесс последовательно изменил manifest, закоммитил closeout,
+fast-forwarded local `main` и создал local tag. Поэтому доказательства, полученные до и
+после `39a3a64`, нельзя смешивать. Все дальнейшие acceptance runs выполняются только в
+отдельном worktree на неизменяемом commit и без параллельного writer/test-runner в том
+же checkout.
+
+После создания этого канонического файла bootstrap validation остаётся зелёной, но
+live CP-00 ratification test закономерно объявляет
+`docs/program/EXECUTION_PLAN.md` unlicensed post-freeze drift. Это прямое
+воспроизведение долга из CP00-B2/`W1-QA-00`: исторический checkpoint test привязан к
+будущему working tree вместо immutable tag. Скрывать файл через `.gitignore` нельзя —
+это замаскировало бы проблему, а не решило её.
+
+## 3. Аудит существующих изменений CP-00
+
+### 3.1 Блокеры публикации
+
+| ID | Блокер | Доказательство | Требуемое действие |
+|---|---|---|---|
+| CP00-B1 | Обязательный ratification gate падает | `docs/program/tasks/W0-INT-01.md` требует `review_status == "ratified"`; `docs/architecture/CP00_ARCHITECTURE_REVIEW.json` содержит `ratified_at_w0_3` | Не push. Исправлять только через выбранную ниже checkpoint-recovery policy и повторный independent acceptance. |
+| CP00-B2 | Final-state checker не моделирует terminal ratified state | `check_state_records.py` возвращает 14 findings; `automated-summary.txt` описывает pre-ratification дерево из 221 path, final tree содержит 230 tracked paths | Создать новый checker/test contour, который различает open round, closed accepted round и terminal checkpoint; повторно проверить final tree. |
+| CP00-B3 | Evidence bundle описывает несуществующий split тестов | `checkpoint-report.md` и `known-risks.md` называют `tests/checkpoint/test_cp00_mechanism.py` и `tests/contract/test_cp00_contracts.py`; в tagged tree их нет | Либо реализовать и проверить split в отдельной QA task, либо выпустить erratum с фактическим contour. Нельзя оставлять заявленные, но отсутствующие артефакты. |
+| CP00-B4 | Manifest/report hashes смешивают pre- и post-ratification bytes | `contract-manifest.yaml` одновременно несёт значения `f362647c…` и `39721aac…`, старые hashes architecture family и CP00 review; per-file hashes всех 100 файлов отсутствуют | Разделить immutable reviewed input manifest и final checkpoint manifest; перечислить exact file hashes и явно назвать назначение каждого aggregate. |
+| CP00-B5 | State documents противоречат друг другу | `CURRENT_STATE.md` одновременно говорит `blocked` и `ratified`; строки 268–272 повреждены склейкой. `acceptance.md` говорит, что round 10 accepted и «has not been frozen» | Один serial governance owner reconciles все live state records; исторические отчёты не переписываются без явного erratum. |
+| CP00-B6 | Публикация не завершена | remote branches отстают, remote tag отсутствует, но документы уже утверждают `tagged` | Не push текущие refs до закрытия B1–B5 и независимой проверки выбранного recovery candidate. |
+| CP00-B7 | Tag message содержит ложные claims | Сообщение утверждает byte identity всех четырёх families, хотя ratification commit меняет пять файлов в `docs/architecture/**`; также говорит, что open items не затрагивают security, при наличии `E-06` | Текущий tag не двигать и не публиковать. Зафиксировать owner disposition: formal superseding checkpoint — рекомендуемый путь. |
+
+### 3.2 Существенные, но неблокирующие для contract semantics находки
+
+- `checkpoint-report.md` и restore note обещают 103 теста, фактический contour — 324;
+- два идентичных manual report создают две потенциально расходящиеся канонические
+  копии;
+- manual tester записан ролью, но без устойчивого person/agent identifier;
+- `known-risks.md` не переносит три manual findings: token naming, comparison freeze
+  boundary и судьбу не найденного при rerun Finding;
+- `ADR_INDEX.md` расширяет диапазон до `PD-05`, но текст результата заканчивается на
+  `PD-04`;
+- ratification JSON был массово переформатирован; смысловой delta при этом состоит в
+  двух полях. Это допустимо по path ownership, но затрудняет независимый review;
+- все 22 пути commit `39a3a64` входят в `W0-INT-01 allowed_paths`; `contracts/**`,
+  `fixtures/**`, `scripts/**`, `tests/**`, locks, migrations, runtime, composition root
+  и global styles этим commit не затронуты.
+
+### 3.3 Gate 0 — решение по CP-00
+
+До любого S01 fan-out repository owner выбирает и письменно фиксирует один вариант.
+
+**Вариант A — formal superseding checkpoint, рекомендуется.**
+
+1. Сохранить local `v0.0.0-architecture` неизменяемым и не публиковать его как
+   принятый checkpoint.
+2. Создать `W0-QA-04` с ownership на final-state checker и live ratification tests.
+3. Создать `W0-INT-02` с ownership на checkpoint erratum, state reconciliation,
+   complete per-file manifest и новый acceptance bundle.
+4. Повторить automated и independent manual streams на одном frozen commit.
+5. Передать frozen candidate primary reviewer. После его повторного symbolic review
+   зарегистрировать новый tag, ожидаемо `v0.0.1-architecture`, только на exact
+   accepted commit; старый локальный tag не передвигать.
+6. Push `main`, integration branch и новый annotated tag одной проверяемой операцией.
+
+**Вариант B — owner-approved erratum carried into W1.**
+
+Этот путь допустим только если repository owner явно признаёт `39a3a64` архитектурным
+freeze несмотря на провал собственного integration gate. Тогда:
+
+1. текущий tag остаётся неизменным и не получает ложной повторной «проверки»;
+2. `W1-GOV-00` публикует post-tag erratum и reconciles live state;
+3. `W1-QA-00` закрывает технический долг checker/test contour;
+4. CP-01 manifest называет и tag CP-00, и corrective baseline commit;
+5. до завершения `W1-GOV-00` и `W1-QA-00` разрешены только docs/validation changes,
+   но не foundation implementation.
+
+По умолчанию действует вариант A. Отсутствие явного решения означает `HOLD`.
+
+### 3.4 Gate 0 — зафиксированное решение и независимая перепроверка снимка
+
+**Решение: вариант A, formal superseding checkpoint.** Зафиксировано владельцем
+репозитория 2026-09-07 в мандате program orchestrator. `HOLD` снят только для recovery
+работ фазы A; публикация, ratification commit, создание tag и push остаются за primary
+reviewer и в объём orchestrator не входят.
+
+Снимок раздела 2 перепроверен orchestrator независимо, в **чистом клоне** на
+`39a3a6430bd97c38cb20bafc793fc9d077d0df8e`, рабочее дерево пустое:
+
+| Проверка | Команда | Результат |
+|---|---|---|
+| contract suite | `python -m unittest discover -s tests/contract` | `Ran 324 tests`, `OK`, exit 0 |
+| bootstrap validator | `python scripts/validate_bootstrap.py` | `PASS`, exit 0 |
+| final-state checker | `python artifacts/checkpoints/CP-00/check_state_records.py` | axis one 0; **axis two 14 findings**; 230 tracked paths |
+| ratification assertion `W0-INT-01:180` | точная строка из task-файла | **`AssertionError`, exit 1** |
+| tag integrity | `git rev-list -n1 v0.0.0-architecture` | `39a3a643…`, annotated, **не двигался** |
+| remote | `origin/main` `43a84d93`, `origin/integration/W0.3` `803d22b8`, CP-00 tag отсутствует | подтверждено |
+
+**Причина `CP00-B1`, установленная точно.** `docs/architecture/CP00_ARCHITECTURE_REVIEW.json`
+несёт `review_status = "ratified_at_w0_3"`; `W0-INT-01` строка 180 требует ровно
+`"ratified"`. Два гейта одного чекпоинта требуют разных значений одного поля, и оба
+записаны как обязательные. Это не опечатка, а несогласованный контракт между двумя
+task-спецификациями, и он лечится единственным решением о каноническом значении с
+последующим приведением обеих сторон.
+
+**Дополнительно установлено, к разделу 3.2.** `docs/program/CURRENT_STATE.md` строки
+268–272 повреждены склейкой посреди предложения: «…PostgreSQL and S3 conventions.3 wave
+plan, the». Повреждение внесено regex-заменой при предыдущем closeout и подтверждает
+`CP00-B5` как дефект файла, а не только как противоречие утверждений.
+
+**Измерительное ограничение, обязательное для всех исполнителей.** `tests/contract`
+нельзя мерить в linked worktree: `.git` там файл, песочничные тесты не могут скопировать
+базу объектов, и прогон даёт 202 теста с 19 ошибками окружения вместо 324 `OK`. Любое
+измерение выполняется в **клоне** либо в основном checkout, и никогда одновременно с
+другим клонированием этого репозитория — песочничные тесты копируют рабочее дерево.
+
+### 3.5 Task graph фазы A
+
+| Task | Owner | Роль | depends_on | Параллельность |
+|---|---|---|---|---|
+| `W0-QA-04` | единственный QA/tooling owner | final-state contour: terminal accepted/ratified state, live-vs-historical, tag integrity, per-file accounting, positive/negative/mutation/anti-vacuity | `W0-QA-01`, `W0-INT-01` | пишет один; параллельно два read-only аудитора |
+| `W0-INT-02` | единственный governance owner | reconcile live state, ratification-ready semantics, erratum, complete per-file manifest, ограниченный post-acceptance delta для `W0-INT-03` | `W0-QA-04` | последовательно после ACCEPT `W0-QA-04` |
+| `W0-INT-03` | **primary reviewer** | symbolic review, ratification commit, tag `v0.0.1-architecture` | `W0-INT-02` | **orchestrator не выполняет** |
+
+Ownership на общих hotspot: `tests/**` — только `W0-QA-04`; `artifacts/checkpoints/CP-00/**`
+и live state records — только `W0-INT-02`; `contracts/**`, `fixtures/**`, `scripts/**`,
+locks, migrations, composition root — не пишет никто в фазе A.
+
+## 4. Аудит roadmap и подготовленного `prep/W1`
+
+### 4.1 Что уже подготовлено хорошо
+
+Ветка `prep/W1` содержит 12 task-файлов и три wave-плана, прошедшие семь циклов
+редакционной проверки:
+
+- `W1.1_toolchain_and_contract_freeze.md`;
+- `W1.2_parallel_foundations.md`;
+- `W1.3_reproducibility_integration.md`;
+- `W1-INT-00`, `W1-ARC-00`, `W1-API-00`, `W1-INT-01`;
+- `W1-OPS-01`, `W1-STO-01`, `W1-ARC-01`, `W1-API-01`, `W1-WEB-01`,
+  `W1-OPS-02`, `W1-QA-01`, `W1-INT-02`.
+
+Сильные стороны пакета:
+
+- API contract owner отделён от provider и WEB consumer;
+- root locks, migration head, composition root, generated client и global styles
+  имеют одного владельца;
+- placeholders разделены по жизненному циклу, а dispatch/acceptance gates не дают
+  передать агенту правдоподобный, но неразрешённый pin;
+- lane tests принадлежат lane owner, cross-lane suites — QA owner;
+- W1.2 начинается только после отдельного freeze record;
+- W1-QA-01 принимает convergence providers, но не сертифицирует собственный commit;
+- CP-01 acceptance вынесен в отдельную integration task.
+
+### 4.2 Почему `prep/W1` нельзя merge/cherry-pick целиком
+
+- ветка ответвилась от `5207fb5`, до acceptance rounds 6–10;
+- W1.3 утверждает, что CP-00 потребовал пять rounds, тогда как фактически открыто десять;
+- ветка содержит старую версию W0 state и `test_cp00_candidate.py`, которые конфликтуют
+  с `39a3a64`;
+- в ней нет remediation для `E-06`, `$schema` classifier и terminal ratified state;
+- stage S01 всё ещё показывает старую восьмизадачную карту и не отражает фактические
+  12 tasks;
+- W1 task files содержат unresolved pins, которые допустимы в prepared package, но
+  запрещены при dispatch.
+
+Безопасный перенос выполняется task `W1-GOV-00`: скопировать только final bytes
+`docs/program/tasks/W1-*.md` и `docs/program/waves/W1.*.md` из `prep/W1`, затем
+пересмотреть их на новом base. Историю W0, tests и checkpoint artifacts из ветки не
+переносить.
+
+### 4.3 Недостающие решения и задачи roadmap
+
+| Deadline | Что должно быть закрыто |
+|---|---|
+| до `W1-INT-00` | CP-00 recovery disposition, реальный validator/checkpoint test contour |
+| до `W2-C-01` | `U-04`: tenant/IdP boundary; без выдумывания retention TTL |
+| до `W3-C-01` | `U-01`: cost/budget policy до paid-provider canary; `OQ-04` либо явная policy «no automatic retry in S03» |
+| до `W4-C-01` | `OQ-02` lease/heartbeat/grace; merge-skippability owner decision |
+| после decision-contract freeze S05 | отдельный `W5-OPT-01`, dedicated OPT owner, feature disabled до runtime task |
+| W6 | только deterministic sheet/text comparison; graphic/vector contract впервые в W7 |
+| до W9 | точные SLO, RPO/RTO, retention/legal-hold и release scope для S08 |
+
+Во всех DB-changing stages нужен отдельный migration owner. Stage-карты, где
+`W*-INT-01` зависит от `all`, должны быть заменены task-файлами с перечисленными
+completed IDs.
+
+## 5. Целевая последовательность программы
+
+```text
+Gate 0: CP-00 recovery / owner disposition
+  -> W1-GOV-00 -> W1-QA-00
+  -> S01 / CP-01
+  -> U-04 tenant/IdP decision
+  -> S02 / CP-02
+  -> U-01 + OQ-04 decision/no-auto-retry policy
+  -> S03 / CP-03
+       + parallel read-only W6-DISC-01
+       + parallel read-only W8-DISC-01
+  -> OQ-02 + merge-skippability decision
+  -> S04 / CP-04
+  -> S05 decision freeze -> W5-OPT-01 -> CP-05
+  -> S06 deterministic comparison / CP-06
+  -> S07 AI + graphic comparison / CP-07
+  -> S08 distributed, если входит в v1; иначе formal scope-out
+  -> W9 owner/security/SLO/RPO/RTO decisions -> CP-09
+  -> S10 release-only freeze and independent acceptance -> CP-10
+```
+
+После CP-04 discovery S05/S06/S08 может идти параллельно в отдельных docs paths.
+Production integration этих stages остаётся последовательной: они пересекаются на API,
+migration head, generated client, composition root и WEB. Нельзя вести три независимых
+checkpoint branches от CP-04 и затем сводить их merge-конфликтами.
+
+## 6. S01 — исправленный task graph
+
+### 6.1 Подготовка и закрытие долга
+
+| Task | Результат | Основной owner | Depends on |
+|---|---|---|---|
+| `W1-GOV-00` | Перенос W1 plan-only файлов с `prep/W1`, post-CP00 erratum/reconciliation, обновлённая S01 task map | program integrator | Gate 0 decision |
+| `W1-QA-00` | Hardened Git subprocess environment, корректный JSON `$schema` classifier, исторический CP-00 suite/checker читает immutable tag и понимает terminal state | independent QA/tooling owner | `W1-GOV-00` |
+| `W1-INT-00` | Toolchain pins, root locks, command surface, partial W1 freeze record | program integrator | `W1-QA-00` |
+
+Предлагаемые `W1-QA-00 allowed_paths`:
+
+- `scripts/validate_bootstrap.py`;
+- `tests/contract/test_validate_bootstrap.py`;
+- новый фактический CP-00 historical/mechanism test path;
+- новый replacement checker вне immutable CP-00 evidence directory;
+- соответствующие `scripts/README.md` и `tests/**/README.md`;
+- task report под `docs/program/reviews/`.
+
+`artifacts/checkpoints/CP-00/**` и local tag не переписываются этой task. Если выбран
+Gate 0/A, их корректировка принадлежит `W0-INT-02`, а не W1.
+
+### 6.2 W1.1 — contract freeze
+
+```text
+W1-INT-00
+  ├─> W1-ARC-00 ─┐
+  └─> W1-API-00 ─┴─> W1-INT-01 -> F1 freeze
+```
+
+| Task | Результат | Hotspots | Параллельность |
+|---|---|---|---|
+| `W1-ARC-00` | ADRs для evidence directories и attempt-fencing name; amendment `ALR-27` | scoped `docs/architecture/**` | параллельно с `W1-API-00` |
+| `W1-API-00` | Frozen foundation OpenAPI: liveness, readiness, error envelope | `contracts/api/v1/**` | параллельно с `W1-ARC-00` |
+| `W1-INT-01` | Complete `W1_FREEZE.json`, exact versions/hashes/commit | freeze/program docs only | строго после двух independent accepts |
+
+### 6.3 W1.2 — implementation lanes
+
+```text
+F1
+  ├─> W1-OPS-01 ─┬─> W1-STO-01 ───────────┐
+  │               └─> W1-API-01 -> W1-OPS-02 ─┤
+  ├─> W1-ARC-01 ─────────────────────────────┤
+  └─> W1-WEB-01 ─────────────────────────────┤
+                                               └─> W1-QA-01
+                                                    -> W1-INT-02
+                                                         -> PRIMARY-CP01-REVIEW
+                                                              -> W1-INT-03 / tag
+```
+
+| Task | Результат | Единоличный hotspot owner |
+|---|---|---|
+| `W1-OPS-01` | local PostgreSQL + private S3-compatible stack | `infra/local/**`, `.env.example` |
+| `W1-STO-01` | migration runner + baseline head | `db/migrations/**`, migration head |
+| `W1-ARC-01` | executable architecture lint для первых 20 rules | checker, fixtures, machine report |
+| `W1-API-01` | FastAPI bootstrap, liveness/readiness/error mapping | `src/auditmanager/bootstrap/**` и API paths |
+| `W1-WEB-01` | Next/FSD shell + reproducible generated client | `web/**`, generated client, global styles |
+| `W1-OPS-02` | correlation, structured logging, redaction | operations/observability и одна объявленная bootstrap registration |
+| `W1-QA-01` | cross-lane harness, CP-01 candidate suite, anti-vacuity tests | cross-lane `tests/**`, не lane-owned tests |
+| `W1-INT-02` | fresh-clone acceptance, CP-01 evidence и immutable handoff candidate | checkpoint/state only |
+| `W1-INT-03` | primary symbolic review, ratification commit и version/tag | минимальный ratification/state delta; только primary reviewer |
+
+Если program integrator решит владеть generated client лично, это оформляется до F1:
+`W1-WEB-01` делится на `W1-WEB-01` shell и `W1-GEN-01` regeneration/binding. Одновременных
+writers в `web/src/shared/api/**` быть не должно.
+
+### 6.4 Расписание при лимите 4 slots
+
+Slot 0 всегда занят program integrator. Остальные три слота используются волнами, а не
+постоянной иерархией с простаивающими orchestrators.
+
+| Batch | Slot 1 | Slot 2 | Slot 3 | Integration barrier |
+|---|---|---|---|---|
+| G0 audit | CP-00 evidence auditor | CP-00 state/checker auditor | independent recovery reviewer | owner disposition |
+| W1.0 | `W1-GOV-00` owner | `W1-QA-00` reviewer/planner | idle/read-only threat review | GOV integrate, затем QA execute/review |
+| W1.1 build | `W1-ARC-00` | `W1-API-00` | QA/mutation planner | оба task independently accepted |
+| W1.1 review | independent ARC reviewer | independent API reviewer | freeze verifier | `W1-INT-01` records F1 |
+| W1.2-A | `W1-OPS-01` | `W1-ARC-01` | `W1-WEB-01` | OPS reviewed/integrated before dependent lanes |
+| W1.2-B | `W1-STO-01` | `W1-API-01` | reviewer completed ARC/WEB work | STO/API independently accepted |
+| W1.2-C | `W1-OPS-02` | convergence reviewer | fault-test planner | all six provider lanes integrated |
+| W1.2-QA | `W1-QA-01` | independent QA reviewer | clean-clone operator | QA accepted, candidate frozen |
+| W1.3 | automated acceptance | independent manual tester | evidence auditor | two PASS, `W1-INT-02`, затем handoff primary reviewer |
+
+Один и тот же агент не принимает собственную remediation. Два test-runner не запускают
+suite, создающий temporary Git histories, одновременно в одном checkout.
+
+## 7. Integration protocol для каждой task
+
+1. Integrator проверяет `CURRENT_STATE`, task file, все `depends_on`, frozen contract set
+   и чистоту base worktree.
+2. Resolve pins выполняется отдельным integrator commit; task author не подставляет SHA
+   самостоятельно.
+3. Task owner ветвится от exact base commit в `agent/<task_id>` и пишет только в
+   fenced `allowed-paths` block.
+4. Reviewer работает на exact candidate commit без author-local state, ничего не
+   исправляет и выдаёт бинарный `ACCEPT`/`REJECT`.
+5. Integrator проверяет diff containment, forbidden hotspots и воспроизводит required
+   commands.
+6. Merge производится в объявленном порядке. Semantic mismatch открывает
+   `W*-C-FIX-*`; consumer contract не меняет.
+7. Migration head, root locks, composition root, generated client и global styles
+   никогда не получают второго writer.
+8. QA запускается на convergence providers; checkpoint acceptance — на следующем
+   frozen commit и в чистом clone/worktree.
+9. Orchestrator не создаёт checkpoint tag. После двух independent PASS он передаёт
+   immutable candidate primary reviewer; tag создаётся только primary review slot после
+   повторной проверки digest/ref/ancestry. Push не подразумевается этим разрешением.
+
+## 8. Копируемые промты
+
+Перед использованием заменить `<...>` точными значениями. Prompt не заменяет task-файл;
+он указывает агенту, какой task-файл является нормативным.
+
+### 8.1 Program integrator / freeze governor
+
+```text
+Ты program integrator задачи <task_id> в /root/projects/PDF-Analysis.
+
+Сначала полностью прочитай AGENTS.md, docs/program/EXECUTION_PLAN.md,
+docs/program/CURRENT_STATE.md, task-файл <task_file>, wave plan и все его depends_on.
+Проверь exact base commit <base_sha>, frozen contract set <contract_versions>, migration
+head <migration_head> и git status. Не начинай работу, если task-файл содержит
+неразрешённый pin в Depends on, Frozen inputs или Command.
+
+Твоя единственная власть: integration order, отдельные commits разрешения pins,
+freeze/checkpoint records и явно назначенные task hotspots. Не исправляй producer code
+в integration task. Не меняй contract semantics, root locks, migration head,
+composition root, generated client или global styles вне принадлежащего тебе slot.
+
+Перед dispatch докажи disjoint allowed_paths. Перед integration потребуй independent
+ACCEPT exact candidate bytes, проверь diff containment и повтори required commands.
+Semantic ambiguity или contract mismatch => STOP и отдельный W*-C-FIX-*.
+
+Верни: integrated task IDs/commits, выполненные gates, frozen versions/hashes,
+migration head, remaining risks, следующий разрешённый batch и доказательство, что
+forbidden hotspots не затронуты. Не push и не создавай tag, если это не явно
+авторизованная W*-INT checkpoint task после двух PASS.
+```
+
+### 8.2 CP-00 recovery auditor
+
+```text
+Проведи read-only аудит CP-00 на exact commit 39a3a6430bd97c38cb20bafc793fc9d077d0df8e.
+Прочитай W0-INT-01, W0-QA-01, W0.3 plan, CURRENT_STATE и весь
+artifacts/checkpoints/CP-00 bundle. Ничего не редактируй, не двигай refs и не запускай
+два acceptance suite одновременно в одном checkout.
+
+Выполни все Required tests W0-INT-01 буквально, check_state_records.py, пересчитай
+per-file hashes и оба aggregate digests, сравни local/remote refs. Проверь каждое
+утверждение checkpoint-report/known-risks/restore note на существование названных
+файлов и реальный test count.
+
+Верни бинарный GO/NO-GO, blockers с path:line, exact command/exit/result, отдельно
+contract-semantic defects и evidence/procedure defects. Любая remediation принадлежит
+другому агенту; сам ничего не исправляй.
+```
+
+### 8.3 `W1-GOV-00` — plan transplant и reconciliation
+
+```text
+Выполни только W1-GOV-00 от owner-approved Gate 0 base <base_sha>.
+
+Прочитай AGENTS.md и docs/program/EXECUTION_PLAN.md. Используй prep/W1 только как
+read-only источник. Перенеси final bytes исключительно из
+docs/program/tasks/W1-*.md и docs/program/waves/W1.*.md; не merge/cherry-pick ветку
+целиком и не переноси из неё W0 state, tests или checkpoint artifacts.
+
+Обнови перенесённый пакет под факты rounds 1-10, Gate 0 disposition, W1-QA-00 и
+актуальный base. Синхронизируй S01 backlog map с фактическими tasks. Оставь будущие
+commit/path/command values явными PENDING tokens по правилам W1.1; не выдумывай SHA.
+
+Allowed paths: docs/program/EXECUTION_PLAN.md, docs/program/tasks/W1-*.md,
+docs/program/waves/W1.*.md, status-only S01/docs index paths, плюс явно разрешённый
+post-tag erratum path. Forbidden: contracts, source, tests, scripts, locks, migrations,
+composition root, generated client, global styles и все CP-00 tag refs.
+
+Верни changed files, consistency/placeholder gates, unresolved owner decisions и
+доказательство, что ни один W0 artifact или forbidden hotspot не изменён.
+```
+
+### 8.4 `W1-QA-00` — validation/checkpoint debt
+
+```text
+Выполни W1-QA-00 на exact integrated W1-GOV-00 commit <base_sha> как единственный
+tooling owner. Сначала прочитай task file, CP-00 known risks E-06, AGENTS.md и
+docs/program/EXECUTION_PLAN.md.
+
+Закрой четыре доказуемые проблемы: Git subprocess получает среду из строгого allowlist;
+bootstrap validator не принимает любой JSON с внешним $schema за Draft 2020-12 schema;
+CP-00 historical integrity читается из immutable tag, а не замораживает будущий working
+tree; replacement state checker моделирует terminal ratified state и корректно отличает
+historical table/report text от live claims.
+
+Добавь positive, negative, mutation и anti-vacuity tests. Обязательно докажи hostile
+HOME/XDG/GIT_CONFIG_* failure, package.json/tsconfig schemastore case, изменение файла
+после tag без изменения tagged bytes и accepted round без owed next round.
+
+Не редактируй CP-00 tag, contracts, root locks, production source, migrations или
+checkpoint evidence. При необходимости erratum остановись и передай его W1-GOV-00.
+
+Верни exact files, commands/results, security impact, remaining limitations и diff
+containment. Собственную remediation не принимай: нужен независимый reviewer.
+```
+
+### 8.5 Contract owner (`W1-ARC-00` или `W1-API-00`)
+
+```text
+Выполни только <task_id> от <base_sha>. Нормативные инструкции находятся в
+<task_file>; прочитай их полностью вместе со всеми frozen inputs.
+
+Ты единственный writer своего contract/ADR family и не являешься implementation
+consumer или reviewer этой task. Пиши только в fenced allowed-paths block. Зафиксируй
+identity/version, failure semantics, security assumptions, compatibility, positive и
+negative examples, provider/consumer gates. Не пиши production code, migration, root
+lock, generated client, composition root или global style.
+
+Не придумывай U-04/U-01/OQ-* values. Если существующего решения недостаточно, STOP и
+верни semantic blocker владельцу. Выполни каждую Required test command буквально и
+проверь anti-vacuity/mutation direction.
+
+Handoff: changed files, commands/results, new/changed contracts, exact version,
+compatibility, known limits, integration notes и forbidden-hotspot proof. Не merge,
+не tag, не push.
+```
+
+### 8.6 Implementation lane owner
+
+```text
+Выполни только <task_id> на ветке agent/<task_id> от frozen commit <freeze_sha> и
+contract set <versions>. Прочитай AGENTS.md, docs/program/EXECUTION_PLAN.md, task file
+<task_file>, wave plan и все depends_on.
+
+Не меняй contracts/**, root locks, migration head, composition root, generated client
+или global styles, если task не является их единственным named owner. Не делай deep
+imports, direct SQL/S3/filesystem из router/UI, in-memory-only jobs, silent fallback,
+path/filename identity или dual-write без outbox/reconciliation.
+
+При contract mismatch не адаптируй schema локально: STOP и запроси W*-C-FIX-*.
+Реализуй все failure/idempotency/security cases и lane-owned tests. Если arch-lint ещё
+не integrated, отметь gate OWED, не SKIPPED; он должен быть закрыт на convergence.
+
+Верни changed files, exact commands/results, contracts changed=none, risks,
+integration notes и доказательство untouched forbidden hotspots. Не merge/tag/push.
+```
+
+### 8.7 Task-specific payloads для W1.2 lanes
+
+Общий prompt из §8.6 дополняется ровно одним блоком ниже.
+
+#### `W1-OPS-01`
+
+```text
+Реализуй pinned local PostgreSQL и S3-compatible stack только в путях W1-OPS-01.
+Bucket private by default: anonymous read/list обязаны завершаться отказом. Не коммить
+production credentials, public policy, canonical data на host filesystem или
+сгенерированный secret-файл. Добавь idempotent init, health checks, start/stop/reset и
+restart recovery. Проверь compose config, authenticated smoke, unauthenticated denial,
+повторный start, stop/start и отсутствие tracked/generated secrets.
+```
+
+#### `W1-STO-01`
+
+```text
+Создай migration runner и baseline head как единственный migration owner W1. Никаких
+domain tables: только journal/settings, если это разрешено frozen task. Fresh apply и
+повторный apply должны приводить к одному head и одной journal row на migration.
+Connection string и credentials читаются из environment и не печатаются. Recovery —
+restore/replay, не down migration. Передай integrator exact migration head; не записывай
+его задним числом в уже sealed W1_FREEZE.json.
+```
+
+#### `W1-ARC-01`
+
+```text
+Реализуй runnable checker для exact rule IDs из frozen handoff W1-ARC-00; саму lint
+specification не меняй. Каждый rule выдаёт stable rule_id/path/reason и outcome pass,
+violation либо no files in scope. Для каждого automated rule нужны positive fixture и
+known-bad fixture с non-zero result. Обязательно проверь backend deep imports, FSD
+upward/deep imports, raw HTTP, forbidden contract-version key, composition wiring и
+disabled optimization vocabulary. No-files-in-scope никогда не называется PASS.
+```
+
+#### `W1-API-01`
+
+```text
+Реализуй FastAPI foundation surface строго по frozen OpenAPI. Liveness не вызывает PG,
+S3 или другой dependency и остаётся healthy при их отказе. Readiness использует
+injected probes и ограниченные timeouts; failure возвращает безопасный 503
+ErrorEnvelope с contract_version, error_code, authoritative retryable и correlation_id,
+без host/port/DSN/bucket/query/path/stack. Router не импортирует DB/S3/filesystem.
+Composition root меняй только если task-файл явно оставляет его единственным owner этой
+task. Проверь provider response против committed OpenAPI и domain schema.
+```
+
+#### `W1-WEB-01`
+
+```text
+Сгенерируй client только pinned generator/config из frozen OpenAPI и докажи regeneration
+во временный каталог byte-for-byte. Создай минимальный Next/FSD shell: app/page только
+связывает route с public entry страницы; transport находится в shared/api; loading,
+success/empty, safe error и retry состояния достижимы. Raw fetch/axios вне generated
+transport запрещён. Не меняй contracts или root locks. Ты единственный writer generated
+client и global styles в W1, если freeze record не назначил отдельный W1-GEN-01.
+```
+
+#### `W1-OPS-02`
+
+```text
+После accepted W1-OPS-01 и W1-API-01 добавь structured correlation, allowlist redaction
+и concrete PG/S3 readiness probes только через declared operations/storage ports.
+По умолчанию запрещены secrets, cookies, auth headers, presigned URLs, object keys,
+paths, queries, payloads, prompts, raw text и stack traces. Метрики используют только
+low-cardinality labels. Adversarial tests внедряют уникальные markers во все входы и
+доказывают их отсутствие во всех emitted logs/metrics/errors при сохранении одного
+correlation_id через request и protected log.
+```
+
+### 8.8 Independent task reviewer
+
+```text
+Независимо проверь <task_id>@<candidate_sha> против base <base_sha> и frozen set
+<versions>. Ты не автор task и не исправляешь её файлы.
+
+Сначала проверь diff subset fenced allowed-paths и отсутствие forbidden hotspots.
+Запусти документированные команды буквально в отдельном clean worktree. Затем добавь
+минимальные negative/mutation probes для identity, state transitions, retries,
+idempotency, stale authority, security/redaction и anti-vacuity — только применимые к
+task.
+
+ACCEPT относится только к exact bytes candidate_sha. На FAIL укажи минимальный
+reproducer, path:line, нарушенный contract и owning task. После remediation требуется
+новый независимый review; прежний verdict не переносится.
+```
+
+### 8.9 `W1-QA-01` — convergence QA
+
+```text
+Проверь convergence commit <lanes_sha> после independent acceptance всех шести W1.2
+provider lanes. Не исправляй provider code и не сертифицируй собственный будущий
+commit.
+
+Прочитай W1-QA-01 task file, W1_FREEZE.json, migration head и exact integration commits.
+Построй cross-lane harness по всем evidence classes. Выполни clean DB migration,
+private S3 checks, API/OpenAPI parity, generated-client regeneration, frontend build,
+architecture negative fixtures, liveness/readiness outage, restart, redaction и E2E.
+Каждый gate должен иметь positive и load-bearing negative direction; empty selection
+или no-files-in-scope не считается PASS.
+
+Сформируй test_cp01_candidate.py и review report только в собственных allowed paths.
+Верни ACCEPT/REJECT для lanes_sha, exact counts/commands, mutation outcomes, hashes,
+known limitations и owner routing каждого blocker.
+```
+
+### 8.10 CP-01 integration and acceptance candidate
+
+```text
+Выполни W1-INT-02 только после accepted W1-QA-01 и resolution всех integration pins.
+Не исправляй lane code.
+
+Создай fresh clone/worktree без author state. Freeze tested_candidate_digest до
+dispatch. Запусти automated stream и independent manual MT01-01..MT01-06, каждый с
+отдельным primary report. Любой FAIL/BLOCKED, untracked delta вне pinned ceiling,
+non-reproducible command или remote divergence => STOP.
+
+На два PASS: вычисли evidence_bundle_digest, запиши exact contract versions, lock hashes,
+migration head, task commits, build/runtime versions, risks и rollback. Проверь clean
+tree, ancestor relation и remote refs. Создай immutable handoff для primary reviewer с
+candidate SHA, hashes всех primary reports и proposed tag `v0.1.0-foundation`.
+
+На этом остановись со статусом `READY_FOR_PRIMARY_REVIEW: CP-01`. Не устанавливай
+ratified status, не fast-forward `main`, не создавай и не публикуй tag. Эти действия
+принадлежат только `W1-INT-03` после повторного symbolic review primary reviewer.
+Force и tag move запрещены.
+```
+
+## 9. Definition of ready / done
+
+Task готова к dispatch, только если:
+
+- все dependencies завершены и pinned точными commits;
+- contract/freeze version существует и читается из frozen commit;
+- fenced allowed-paths block непуст, не содержит bare wildcard и unresolved token;
+- команды копируются и выполняются без ручной интерпретации;
+- hotspots имеют одного owner;
+- reviewer назначен и не является author.
+
+Task завершена, только если handoff содержит:
+
+1. изменённые файлы;
+2. команды и фактические результаты;
+3. новые/изменённые contracts или явное `none`;
+4. risks/known limitations;
+5. integration instruction;
+6. proof, что forbidden hotspots не затронуты;
+7. independent verdict на exact candidate commit.
+
+Checkpoint готов к primary review, только если дополнительно выполнены clean-clone
+automated stream, independent manual stream, reproducible evidence bundle и remote
+ancestry check на exact candidate SHA. Checkpoint завершён только после отдельного
+primary symbolic review, минимального ratification commit и registry-defined immutable
+tag. Публикация refs требует отдельной явной авторизации.
+
+## 10. Master-prompt оркестратору: recovery W0 и выполнение W1 до приёмки
+
+Этот prompt передаётся одному program orchestrator целиком. Он рассчитан на продолжение
+в два запуска одного и того же orchestration context: сначала до primary review CP-00,
+затем — после получения принятого CP-00 tag — до primary review CP-01.
+
+```text
+Ты главный program orchestrator репозитория /root/projects/PDF-Analysis.
+
+Цель: безопасно довести текущий непринятый W0 до immutable CP-00 candidate, передать
+его primary reviewer, а после внешнего подтверждения CP-00 version выполнить весь W1
+до immutable CP-01 acceptance candidate. Финальные symbolic review, ratification commit
+и создание version/tag выполняет primary reviewer, не ты.
+
+Исходные факты, которые нельзя трактовать как PASS:
+- стартовый closeout commit: 39a3a6430bd97c38cb20bafc793fc9d077d0df8e;
+- local v0.0.0-architecture уже существует на этом commit, но не принят, не должен
+  перемещаться и не должен публиковаться;
+- W0 contract suite на clean snapshot: 324 tests, OK;
+- exact W0-INT-01 ratification assertion: FAIL;
+- CP-00 state checker: FAIL, 14 findings;
+- origin/main=43a84d93, origin/integration/W0.3=803d22b8, remote CP-00 tag отсутствует;
+- docs/program/EXECUTION_PLAN.md — канонический план и ожидаемое пользовательское
+  изменение рабочего дерева; не удаляй, не скрывай и не откатывай его;
+- prep/W1 — только read-only источник W1 task/wave docs; ветку целиком не merge и не
+  cherry-pick.
+
+Обязательный порядок начала:
+1. Полностью прочитай AGENTS.md, docs/program/CURRENT_STATE.md,
+   docs/program/EXECUTION_PLAN.md, docs/templates/TASK_TEMPLATE.md, W0-INT-01,
+   W0-QA-01, W0.3 plan и все CP-00 evidence records.
+2. Сними git status, exact refs, worktrees и diff. Сохрани все пользовательские
+   изменения. Не считай противоречивый CURRENT_STATE источником истины без проверки
+   commit/evidence.
+3. Любое изменение graph, ownership, dependencies или acceptance protocol сначала
+   внеси в docs/program/EXECUTION_PLAN.md как единственный program-plan writer.
+4. До dispatch создай полноценные task-файлы по TASK_TEMPLATE: минимум W0-QA-04,
+   W0-INT-02 и зарезервированный для primary reviewer W0-INT-03. depends_on должны
+   ссылаться только на завершённые task IDs; base SHA, frozen inputs, allowed_paths,
+   forbidden_hotspots, exact commands, handoff и rollback должны быть конкретными.
+   W0-INT-03 подготовь, но сам не выполняй.
+
+Режим оркестрации:
+- одновременно доступно четыре slot, включая тебя; запускай не более трёх subagents;
+- ты остаёшься integrator/freeze governor и не принимаешь собственную интеграцию;
+- один shared hotspot — один writer на batch; доказывай disjoint allowed_paths до
+  параллельного dispatch;
+- author не review собственную remediation; reviewer ничего не исправляет;
+- каждый writer работает от exact base в отдельной ветке/worktree;
+- не запускай одновременно два Git-mutating/test suite в одном checkout;
+- contract mismatch открывает отдельный *-C-FIX-* с новым независимым review;
+- FAIL не завершает программу: маршрутизируй blocker владельцу, интегрируй narrow
+  remediation и повторяй review на новых exact bytes;
+- остановка допустима только на hard external blocker: отсутствующее owner decision,
+  credential/permission, недоступный обязательный внешний сервис или конфликт прав,
+  который нельзя безопасно разрешить внутри task scope;
+- subagents не merge, не tag, не push и не меняют общие refs;
+- ты не force-push, не двигаешь существующий tag и вообще не push без отдельной явной
+  авторизации пользователя.
+
+Фаза A — formal superseding recovery CP-00:
+1. W0-QA-04 отдаётся единственному QA/tooling owner. Он создаёт проверяемый final-state
+   contour вне immutable старого evidence bundle: terminal accepted/ratified state,
+   live-vs-historical claims, immutable-tag integrity, complete file/hash accounting,
+   positive/negative/mutation/anti-vacuity cases. Он не меняет contracts/** и не
+   переписывает local tag.
+2. Параллельно используй два read-only slot: evidence/hash auditor и state/procedure
+   auditor. Они возвращают blockers с path:line и не редактируют файлы.
+3. Другой агент независимо проверяет exact W0-QA-04 candidate. На REJECT автор делает
+   narrow remediation, после чего новый independent review начинается с нуля.
+4. После ACCEPT интегрируй W0-QA-04 и только затем dispatch W0-INT-02. Его единственный
+   owner reconciles live state, исправляет ratification-ready semantics, выпускает
+   правдивый evidence erratum/bundle, complete per-file manifest и разрешает строго
+   ограниченный post-acceptance ratification delta для W0-INT-03. Исторические records
+   не переписывай без явного erratum.
+5. На одном frozen W0 candidate запусти automated acceptance и independent manual
+   acceptance в разных clean worktrees. Третий slot проверяет evidence hashes и claims.
+   Каждый stream создаёт отдельный primary report. Любой FAIL/BLOCKED, hash mismatch,
+   unlicensed delta, nonexistent artifact или non-reproducible command открывает новый
+   remediation round; прежний PASS не переносится.
+6. Когда оба stream дали PASS на одних exact bytes, зафиксируй immutable handoff, но
+   не выставляй final ratified fields, не исполняй W0-INT-03, не создавай tag и не
+   fast-forward main.
+
+Барьер A. Верни ровно статус READY_FOR_PRIMARY_REVIEW: CP-00 и приложи:
+- candidate SHA и base SHA;
+- полный diff name-status и proof subset allowed_paths;
+- task IDs, author commits и independent verdict commits/reports;
+- tested_candidate_digest, evidence_bundle_digest, per-file manifest hash и SHA256
+  каждого automated/manual primary report;
+- exact commands, exit codes, counts и ссылки на outputs;
+- contract versions, deferred ADRs/risks и contracts changed либо none;
+- clean-worktree proof, local/remote ancestry/refs и доказательство отсутствия tag move;
+- proposed new tag v0.0.1-architecture;
+- точный минимальный ratification delta, зарезервированный W0-INT-03.
+
+После этого остановись. Продолжай W1 только после внешнего сообщения вида:
+PRIMARY_ACCEPTED CP-00 <accepted_sha> <immutable_tag>
+Проверь, что tag существует, annotated, указывает ровно на accepted_sha, старый
+v0.0.0-architecture не изменён, а working base является descendant принятого commit.
+Несовпадение => STOP, W1 не начинать.
+
+Фаза B — выполнение W1 до CP-01 acceptance boundary:
+1. Выполни W1-GOV-00: перенеси из prep/W1 только final bytes
+   docs/program/tasks/W1-*.md и docs/program/waves/W1.*.md. Не переноси W0 state,
+   tests, artifacts или историю ветки. Reconcile пакет с принятым CP-00 base, фактом
+   десяти rounds, recovery tasks и текущим графом этого плана.
+2. Выполни W1-QA-00 только в его fenced tooling paths и независимо прими его. Не
+   дублируй уже закрытую W0-QA-04 работу: W1-QA-00 оставляет только явно доказанный
+   остаточный W1 scope.
+3. Выполни W1-INT-00 как единственный owner root locks/toolchain/command surface и
+   partial freeze inputs. Все версии и hashes должны быть реальными; unresolved
+   dispatch pins запрещены.
+4. W1.1: параллельно dispatch W1-ARC-00 и W1-API-00 с disjoint hotspots; третий slot
+   готовит mutation review. Затем отдельные reviewers принимают exact candidates.
+   После двух ACCEPT W1-INT-01 формирует F1 freeze с exact commits, contract versions,
+   lock hashes и migration placeholder policy.
+5. W1.2 batch A: параллельно W1-OPS-01, W1-ARC-01, W1-WEB-01. Каждый получает своего
+   независимого reviewer после завершения. Integrate только accepted commits; OPS-01
+   должен быть принят до запуска его consumers.
+6. W1.2 batch B: параллельно W1-STO-01 и W1-API-01; свободный slot завершает reviews
+   ARC/WEB. Migration head принадлежит только W1-STO-01, composition/bootstrap wiring —
+   только назначенному task owner.
+7. W1.2 batch C: после accepted OPS-01 и API-01 выполни W1-OPS-02; параллельно подготовь
+   convergence/fault tests. Интегрируй все шесть provider lanes только после отдельных
+   ACCEPT exact bytes.
+8. W1-QA-01 проверяет convergence commit, а не собственный будущий commit: clean DB
+   migration, private S3 denial, API/OpenAPI parity, reproducible generated client,
+   frontend build, architecture negative fixtures, liveness/readiness outage, restart,
+   redaction, correlation и E2E. Для каждого gate нужен load-bearing negative case;
+   empty selection/no-files-in-scope не является PASS. Его remediation принимает другой
+   reviewer.
+9. W1-INT-02 создаёт CP-01 acceptance candidate и evidence, но не ратифицирует его.
+   На одном frozen candidate выполни automated stream и independent manual
+   MT01-01..MT01-06 в разных clean worktrees; evidence auditor сверяет hashes/claims.
+   При любом FAIL открывай новый owned round и повторяй оба stream на новых bytes.
+10. Подготовь task-файл W1-INT-03 с минимальным primary-only ratification/state delta,
+    required re-review commands и version policy. Сам W1-INT-03 не выполняй.
+
+Финальный барьер. Верни ровно статус READY_FOR_PRIMARY_REVIEW: CP-01 и приложи:
+- CP-01 candidate SHA и accepted CP-00 base/tag;
+- полный ordered ledger W1 task -> base -> author commit -> reviewer verdict ->
+  integration commit;
+- frozen contract versions/hashes, root lock hashes, migration head, generator/runtime
+  versions и generated-client reproducibility hash;
+- tested/evidence digests, per-file manifest hash, automated/manual primary report
+  hashes и exact commands/results;
+- clean-clone status, diff containment, forbidden-hotspot proof, ancestor graph и
+  read-only remote refs;
+- open risks, deferred scope, rollback/feature flags и external dependencies;
+- proposed tag v0.1.0-foundation;
+- exact minimal W1-INT-03 ratification delta.
+
+На финальном барьере не меняй ratification state, main или checkpoint registry на
+accepted, не создавай tag и не push. Не называй W1/CP-01 завершённым: корректный статус
+только READY_FOR_PRIMARY_REVIEW.
+```
+
+### 10.1 Контракт последующего primary symbolic review
+
+Получив handoff, primary reviewer не доверяет итоговой формулировке оркестратора и
+проверяет exact symbols/identities повторно:
+
+1. candidate/tag/base SHA и ancestor graph;
+2. все manifest entries и SHA256 primary reports;
+3. frozen contract versions, lock hashes, migration head и generator/runtime pins;
+4. diff containment и отсутствие author-local/untracked state;
+5. обязательные checkpoint-wide команды в новом clean worktree;
+6. соответствие двух independent PASS одним exact candidate bytes;
+7. отсутствие existing tag collision и запрета на tag move.
+
+На `FAIL` primary reviewer не исправляет всё внутри acceptance slot: он возвращает
+candidate оркестратору с owning task и minimal reproducer. На полном `PASS` он исполняет
+только заранее ограниченный `W0-INT-03` или `W1-INT-03` ratification delta, повторяет
+финальные gates и создаёт annotated version/tag (`v0.0.1-architecture` для recovery W0,
+`v0.1.0-foundation` для W1). Push refs остаётся отдельным действием и не разрешён одной
+лишь фиксацией локальной версии.
