@@ -29,10 +29,16 @@ gates agree — leaving `W0-INT-03` a minimal, explicitly bounded delta and noth
 - `docs/program/CURRENT_STATE.md`
 - `docs/program/CHECKPOINT_REGISTRY.md`
 - `docs/program/waves/W0.3_ratification_integration.md`
-- `docs/program/tasks/W0-INT-01.md`, `docs/program/tasks/W0-INT-03.md` — status and
-  handoff text only
 - `docs/architecture/CP00_ARCHITECTURE_REVIEW.json` — the `review_status` field only, and
   only to make the two gates agree
+- `docs/architecture/CP00_ARCHITECTURE_REVIEW.md` — the three `review_status` quotations
+  at lines 34, 48 and 52 only. `_review_consistency_problems` requires the Markdown to
+  quote the JSON's value verbatim as a code span, so these move with the field or the
+  suite goes red. Without this line the task could not perform its own deliverable 4
+- `docs/program/tasks/W0-*.md` — **status banners only.** Ten of the seventeen completed
+  task files carry no banner at all; the obligation is asserted in three records and
+  required by none, and no task in the recovery graph could discharge it. Requirements,
+  gates and deliverables of an accepted task are frozen by its acceptance
 - `docs/INDEX.md`, `docs/stages/S00_architecture_and_behavior_freeze.md`
 
 ## Forbidden hotspots
@@ -42,6 +48,9 @@ gates agree — leaving `W0-INT-03` a minimal, explicitly bounded delta and noth
 - every `docs/architecture/**` file other than the single field named above
 - the historical round reports: immutable. A superseded statement in them is corrected by
   an **erratum that quotes it**, never by editing the report
+- `docs/program/reviews/W0-QA-01.md` — the same rule, named explicitly because the audit
+  found it unnamed. It is a dated historical measurement inside an accepted, closed
+  task's deliverable; editing it destroys the record that lets this audit be repeated
 - root dependency and lock files, migration head, composition root, global styles
 - the local tag: not moved, not deleted, not re-pointed. No new tag is created by this task
 
