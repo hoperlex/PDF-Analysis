@@ -6,9 +6,10 @@
 > agent-ready task-файлы и не согласованы с этим планом.
 >
 > **Текущий verdict: W0 RECOVERY IN PROGRESS / PRODUCT CODE HOLD
-> (контрольный аудит 2026-09-08).** `W0-QA-04` принят и интегрирован; `W0-INT-02`
-> ещё не dispatch. Не публиковать локальный тег CP-00, не фиксировать новую версию и
-> не запускать production implementation S01 до primary acceptance W0 и freeze W1.1.
+> (часовой срез 2026-09-08).** `W0-QA-04` после второго ACCEPT снова открыт на круг
+> три; candidate `W0-INT-02` получил `REJECT` и находится в remediation. Не публиковать
+> CP-00, не фиксировать новую версию и не запускать production implementation S01 до
+> primary acceptance W0 и freeze W1.1.
 
 ## 1. Назначение и правила ведения
 
@@ -99,9 +100,9 @@ clone. Remote refs перепроверены read-only в тот же день.
 | Gate 0 policy и recovery task graph | завершено | `95f4335`, `ca9ac41` |
 | `W0-QA-04` final-state tooling | **ACCEPTED + integrated** | `6135f17`; independent REJECT, narrow remediation и повторный ACCEPT зафиксированы на exact bytes |
 | анализ переноса `prep/W1` | завершён read-only | `f225006`; wholesale merge отвергнут измерением, W1.2 batches пока не доказаны disjoint |
-| `W0-INT-02` reconciliation | **не начат** | текущие 13 findings являются его входом |
+| `W0-INT-02` reconciliation | **круг три в работе** | круг два получил независимый `REJECT` на закреплённых байтах (§3.6.8); ремедиация исполняется, к ней добавлены шесть правок дельты `W0-INT-03` из §3.7.5 |
 | `W0-INT-03` primary acceptance/version | blocked | ждёт accepted `W0-INT-02` candidate |
-| `W1-GOV-00` | только untracked draft, **не READY и не dispatch** | нет принятого CP-00 base/tag; draft содержит будущие dependencies и утверждение об одиннадцати rounds |
+| `W1-GOV-00` | tracked task specification, **не READY и не dispatch** | добавлен `762af03`; исправлен после аудита переноса — shape/dispatch/acceptance гейты дают exit 0, добавлен fenced `allowed-paths` блок, снято утверждение об одиннадцати rounds. Не dispatch: нет принятого CP-00 base/tag |
 | W1 execution tasks | 0 выполнено | W1 package ещё не перенесён на принятую линию |
 | product implementation | 0 tasks / 0 новых production changes | в `src/`, `web/`, `infra/`, `db/` остаются только исходные README/skeleton и пустой package marker |
 
@@ -159,6 +160,62 @@ Draft `W1-GOV-00.md` не интегрировать и не dispatch до за�
 `PRIMARY_ACCEPTED CP-00 …`. После появления принятого tag draft пересобирается против
 фактического round count и exact base; подготовительный текст не засчитывается как
 прогресс W1.
+
+### 2.3 Часовой срез продвижения после `f225006`, 2026-09-08
+
+За измеренный час в `main` появились два commit:
+
+| Commit | Полезный результат | Состояние |
+|---|---|---|
+| `4e916b0` | второй круг `W0-QA-04`: все потребители tag теперь разрешают имя из checkpoint records, а не старый литерал | independent ACCEPT exact bytes |
+| `762af03` | карта лицензий остаточных findings; `W1-GOV-00.md` добавлен как будущая task specification | открыты два новых blockers и QA-круг три |
+
+Измеримый gate-state на `762af03` не улучшился относительно предыдущего среза:
+
+- bootstrap: `PASS`;
+- `tests/checkpoint`: 46/46, `OK`;
+- final-state contour: 13 findings;
+- `tests/contract`: 340 tests, те же 5 failures;
+- remote refs не изменились, `v0.0.1-architecture` отсутствует;
+- product paths не изменялись.
+
+Параллельно существует substantial dirty candidate `W0-INT-02` в отдельном clone:
+26 изменённых tracked paths плюс новый `erratum.md`, примерно 1067 вставок и 167
+удалений. Он закрывает значительную часть evidence/state reconciliation, но independent
+review вернул `REJECT` из-за самореферентного round-count claim. После этого candidate
+продолжил меняться. Его base остаётся `6135f17`, тогда как `W0-QA-04` снова открыт на
+`main`; поэтому candidate полезен как черновик, но не может быть integrated или frozen
+до нового QA ACCEPT и повторной проверки на обновлённой базе.
+
+Два blockers круга три являются настоящими reachability defects, а не косметикой:
+
+1. `RATIFYING_TASK` пришпилен к `W0-INT-01` и отвергает необходимый
+   `ratification.task = W0-INT-03`.
+2. Sandbox reset берёт baseline из post-ratification freeze commit, где удалены
+   pre-ratification anchors; симуляция финального состояния каскадно красит почти весь
+   suite. Нужен baseline от immutable reviewed candidate либо структурная нормализация.
+
+**Оценка часа.** Оркестратор хорошо уменьшает риск ложной ратификации и действительно
+находит load-bearing defects. Однако процесс остаётся в checkpoint mechanics loop:
+acceptance-distance за час не сократилось, а выросло на один обязательный QA
+remediation/review. Никакая W1 execution task не стартовала; `W1-GOV-00` — только
+подготовленная спецификация.
+
+До первого product-code batch теперь остаются девять последовательных барьеров:
+
+1. реализовать оба исправления `W0-QA-04` round 3;
+2. получить новый independent ACCEPT QA exact bytes;
+3. перенести/rebase `W0-INT-02` на этот accepted base и закрыть self-reference finding;
+4. независимо принять `W0-INT-02`, затем выполнить оба CP-00 streams;
+5. primary `W0-INT-03` и immutable `v0.0.1-architecture`;
+6. `W1-GOV-00` transplant/reconciliation и review;
+7. `W1-QA-00` и review;
+8. `W1-INT-00`, затем parallel `W1-ARC-00`/`W1-API-00` с reviews;
+9. `W1-INT-01` freeze F1.
+
+После F1 можно dispatch первый production batch. До него дальнейший read-only анализ
+W1 не считать продвижением к коду: приоритет — завершить QA round 3, перевести
+`W0-INT-02` на новую базу и выйти на primary CP-00 review.
 
 Во время аудита другой процесс последовательно изменил manifest, закоммитил closeout,
 fast-forwarded local `main` и создал local tag. Поэтому доказательства, полученные до и
@@ -226,7 +283,7 @@ live CP-00 ratification test закономерно объявляет
 freeze несмотря на провал собственного integration gate. Тогда:
 
 1. текущий tag остаётся неизменным и не получает ложной повторной «проверки»;
-2. `W1-GOV-00` публикует post-tag erratum и reconciles live state;
+2. `W1-GOV-00` reconciles live state; post-tag erratum против бандла CP-00 принадлежит владельцу checkpoint, а не переносу — `artifacts/checkpoints/**` этой задаче запрещён;
 3. `W1-QA-00` закрывает технический долг checker/test contour;
 4. CP-01 manifest называет и tag CP-00, и corrective baseline commit;
 5. до завершения `W1-GOV-00` и `W1-QA-00` разрешены только docs/validation changes,
@@ -509,7 +566,7 @@ tests/contract` → exit 0 недостижим.
 Обе правки — не новый круг: это тот же дефект «литерал, пришпиливающий снятый экземпляр»,
 уже принятый дважды (§3.6.4 и круг второй `W0-QA-04`), двумя константами в сторону.
 `RATIFYING_TASK` → резолвер по ратификационной записи и строке назначения плана волны,
-точно как `CHECKPOINT_TAG` на `:170`; базовая линия песочницы — из
+точно как `CHECKPOINT_TAG` на `:316` (литерал стоял на `:170` до круга второго); базовая линия песочницы — из
 `REVIEWED_CANDIDATE_COMMIT`, а не из `_freeze_commit`. Оба — законченный свип, а не новая
 рекурсия.
 
@@ -549,7 +606,7 @@ tests/contract` → exit 0 недостижим.
 
 `docs/program/EXECUTION_PLAN.md` **не входит** в `POST_FREEZE_DELTA_CEILING` и уже назван
 `_post_freeze_delta_problems` нелицензированным чужаком в сравнении круга десять. Любая
-правка плана — или коммит ныне неотслеживаемого `docs/program/tasks/W1-GOV-00.md` — после
+правка плана — или правка `docs/program/tasks/W1-GOV-00.md`, отслеживаемого с `762af03` — после
 заморозки одиннадцатого круга обнуляет круг. Отсюда правило: **коммит плана и всех файлов
 задач — последний коммит перед freeze commit, и после него план не правится до
 ратификации.** Расширять потолок ради плана не следует: это ослабление гейта ради удобства
@@ -606,13 +663,16 @@ tests/contract` → exit 0 недостижим.
 парный анализ воспроизводится.
 
 **Расхождение больше, чем считалось.** `prep/W1` несёт восемь собственных коммитов и
-отстаёт от `main` на двадцать один; база слияния — `5207fb5`, заморозка раунда пять,
+отстаёт от `main` на двадцать один (на `762af03` — на двадцать четыре); база слияния — `5207fb5`, заморозка раунда пять,
 **который впоследствии обнулён**. Раздел 4.2 называл три коммита.
 
 **Цена wholesale-копирования измерена и она категорична.** Копия дерева уничтожила бы
 41 файл: 24 удалила бы — включая сам `EXECUTION_PLAN.md`, все три задачи восстановления,
 `tests/checkpoint/**` и шестнадцать артефактов CP-00 — и 17 откатила бы, включая
-`test_cp00_candidate.py` на 14 695 изменённых строк. Запрет на merge и cherry-pick
+`test_cp00_candidate.py` на 14 695 изменённых строк. **Перемерено на `762af03`**
+(`git diff --name-status prep/W1 main`): 42 файла, 25 удаляемых — двадцать пятый есть сам
+`docs/program/tasks/W1-GOV-00.md` — и те же 17 откатываемых, модуль на 14 788 строк.
+Фигура движется с каждым коммитом базы, поэтому в task-файле она сопровождается командой. Запрет на merge и cherry-pick
 подтверждён числом, а не рассуждением.
 
 **Переносится ровно пятнадцать документов**, 256 370 байт, с посчитанными `sha256`.
@@ -666,9 +726,10 @@ W1.2-B нелегальны как написаны**, оба на одном т
 5. Карта S01: восемь задач против двенадцати, и `W1-INT-01` означает разное в двух
    документах.
 6. `W1-PREP-AUDIT.md`, 47 КБ, неотслеживаемый — единственная запись о том, зачем
-   сделаны четыре правки, и `allowed_paths` задачи `W1-GOV-00` не дают ему места.
+   сделаны четыре правки. **ЗАКРЫТО**: `docs/program/reviews/W1-PREP-AUDIT.md` внесён в
+   fenced `allowed-paths` блок `W1-GOV-00`.
 
-#### 4.5 Верификация исполнением пяти моих починок: одна не закрыта, пять новых дефектов
+### 4.5 Верификация исполнением пяти моих починок: одна не закрыта, пять новых дефектов
 
 Read-only агент прогнал гейты дословно, а не читал диффы. Результат по моим пяти
 блокирующим починкам: две закрыты, одна закрыта частично, одна **не закрыта**, одна
@@ -773,7 +834,7 @@ checkpoint branches от CP-04 и затем сводить их merge-конф�
 
 | Task | Результат | Основной owner | Depends on |
 |---|---|---|---|
-| `W1-GOV-00` | Перенос W1 plan-only файлов с `prep/W1`, post-CP00 erratum/reconciliation, обновлённая S01 task map | program integrator | Gate 0 decision |
+| `W1-GOV-00` | Перенос W1 plan-only файлов с `prep/W1`, reconciliation живого состояния, обновлённая S01 task map (только строки map). Post-CP00 erratum — **не здесь**: `artifacts/checkpoints/**` задаче запрещён | program integrator | Gate 0 decision |
 | `W1-QA-00` | Hardened Git subprocess environment, корректный JSON `$schema` classifier, исторический CP-00 suite/checker читает immutable tag и понимает terminal state | independent QA/tooling owner | `W1-GOV-00` |
 | `W1-INT-00` | Toolchain pins, root locks, command surface, partial W1 freeze record | program integrator | `W1-QA-00` |
 
@@ -938,9 +999,13 @@ docs/program/tasks/W1-*.md и docs/program/waves/W1.*.md; не merge/cherry-pick
 актуальный base. Синхронизируй S01 backlog map с фактическими tasks. Оставь будущие
 commit/path/command values явными PENDING tokens по правилам W1.1; не выдумывай SHA.
 
-Allowed paths: docs/program/EXECUTION_PLAN.md, docs/program/tasks/W1-*.md,
-docs/program/waves/W1.*.md, status-only S01/docs index paths, плюс явно разрешённый
-post-tag erratum path. Forbidden: contracts, source, tests, scripts, locks, migrations,
+Allowed paths: ровно fenced allowed-paths блок в docs/program/tasks/W1-GOV-00.md —
+docs/program/tasks/W1-*.md, docs/program/waves/W1.*.md,
+docs/program/reviews/W1-PREP-AUDIT.md, docs/INDEX.md (только строки W1),
+docs/stages/S01_repository_foundation.md (только строки task map). Forbidden:
+docs/program/EXECUTION_PLAN.md (файл интегратора и вне POST_FREEZE_DELTA_CEILING),
+artifacts/checkpoints/** (evidence CP-00, заморожен приёмкой),
+contracts, source, tests, scripts, locks, migrations,
 composition root, generated client, global styles и все CP-00 tag refs.
 
 Верни changed files, consistency/placeholder gates, unresolved owner decisions и
