@@ -54,11 +54,12 @@ _spec.loader.exec_module(contour)
 #: for the reason `tests/contract/test_cp00_candidate.py` stopped pinning it to one
 #: literal: a superseding checkpoint publishes `v0.0.1-architecture`, and a literal here
 #: would make the recovery's own required suite unreachable at the moment it ratifies.
+#: There is deliberately **no literal fallback**. A default would be a fourth pin, and it
+#: would answer "which tag?" with a guess at the very moment the records stop saying;
+#: the empty name resolves to no tag and the contour reports that the records name none,
+#: which is the truth and has an owner.
 def _tag_name(tree: contour.Tree) -> str:
-    manifest = tree.json(contour.MANIFEST)
-    if isinstance(manifest, dict) and isinstance(manifest.get("tag"), str):
-        return manifest["tag"]
-    return "v0.0.0-architecture"
+    return contour.recorded_tag(tree)
 
 
 class _FinalState(unittest.TestCase):
@@ -167,17 +168,36 @@ class LiveVersusHistoricalTests(_FinalState):
 class TagIntegrityTests(_FinalState):
     """The tag exists, is annotated, has not moved, and says nothing false."""
 
-    def test_the_checkpoint_tag_exists_and_is_annotated(self) -> None:
-        self.assertTrue(self.tag.exists, f"{self.tag.name} does not exist")
-        self.assertTrue(self.tag.annotated, f"{self.tag.name} is not an annotated tag")
-        self.assertRegex(self.tag.commit or "", r"^[0-9a-f]{40}$")
+    def test_the_contour_read_a_tag_identity_out_of_the_records(self) -> None:
+        """Anti-vacuity for the whole check: it must have had a tag to look at.
+
+        What this does **not** do is hard-assert that the tag exists. It did, and that
+        was a fourth instance of the pin defect wearing different clothes: the ratifying
+        delta flips the records to the successor before that tag is created — the
+        manifest is written in the commit that gets tagged, so the records are ahead of
+        the refs by construction — and a bare `assertTrue(exists)` here would fail on
+        `W0-INT-02`'s own output tree, which no task would then be licensed to leave.
+        The verdict on existence, annotation and peeling is carried by
+        :meth:`test_the_tag_has_not_moved_and_its_message_is_true_of_its_commit`, where
+        it arrives as a finding that names `W0-INT-03` — the task that publishes refs.
+        """
+        self.assertTrue(
+            self.tag.name,
+            "no checkpoint record names a tag, so tag-integrity has nothing to verify",
+        )
+        self.assertRegex(
+            self.tag.name,
+            r"^v\d+\.\d+\.\d+-[a-z]+$",
+            "the tag the records name is not shaped like a checkpoint tag",
+        )
 
     def test_the_tag_has_not_moved_and_its_message_is_true_of_its_commit(self) -> None:
         self._assert_check_clean(
             contour.CHECK_TAG,
             "The tag is never moved. A tag message that is false of its own commit is "
             "corrected by a superseding checkpoint, which is W0-INT-03's act on "
-            "W0-INT-02's record.",
+            "W0-INT-02's record; a record naming a tag that does not exist yet is "
+            "W0-INT-03's to close by publishing it.",
         )
 
 
@@ -252,6 +272,20 @@ class ContourHygieneTests(_FinalState):
             [],
             "the contour reports a defect in itself: one of its checks has nothing to "
             "read on this tree and is passing vacuously",
+        )
+        # And every other owner is a task that exists, resolved from the tree rather
+        # than compared with a list of task ids here — a list would be one more literal
+        # to edit the next time the graph changes.
+        unknown = sorted(
+            {
+                finding.owner
+                for finding in self.verdict.findings
+                if not (REPOSITORY_ROOT / "docs" / "program" / "tasks"
+                        / f"{finding.owner}.md").is_file()
+            }
+        )
+        self.assertEqual(
+            unknown, [], "a finding names an owner that is not a task in this programme"
         )
 
     def test_the_limitations_are_recorded_rather_than_asserted_away(self) -> None:

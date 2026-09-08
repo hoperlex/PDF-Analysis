@@ -2233,6 +2233,40 @@ def _declared_allowed_paths(root: Path) -> dict[str, tuple[str, ...]]:
     return declared
 
 
+def _prose_only_path_spans(root: Path) -> dict[str, set[str]]:
+    """``task file -> path-shaped spans that appear in its section but on no list item``.
+
+    The complement of :func:`_declared_allowed_paths`, derived independently of it, so
+    that comparing the two is a cross-check rather than a function agreeing with itself.
+    A span that appears both on a list item and in a sentence of the same section is
+    **not** here: it is declared, and the sentence is commentary on the declaration.
+    """
+    spans: dict[str, set[str]] = {}
+    tasks = root / "docs" / "program" / "tasks"
+    if not tasks.is_dir():
+        return spans
+    for path in sorted(tasks.glob("*.md")):
+        on_items: set[str] = set()
+        elsewhere: set[str] = set()
+        inside = False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("#"):
+                inside = line.strip().lower().endswith("allowed paths")
+                continue
+            if not inside:
+                continue
+            found = {
+                token
+                for token in re.findall(r"`([^`]+)`", line)
+                if _PATH_GLOB.match(token)
+            }
+            (on_items if _LIST_ITEM.match(line) else elsewhere).update(found)
+        only_prose = elsewhere - on_items
+        if only_prose:
+            spans[str(path.relative_to(root))] = only_prose
+    return spans
+
+
 def _path_is_declared(path: str, globs) -> bool:
     """Whether ``path`` is covered by any of ``globs``. ``**`` crosses directories."""
     for glob in globs:
@@ -11339,7 +11373,39 @@ class TableExpectationTests(unittest.TestCase):
             "read, one edit moves the value again",
         )
         self.assertEqual(_checkpoint_tag_problems(REPOSITORY_ROOT), [])
-        self.assertEqual(CHECKPOINT_TAG, "v0.0.0-architecture")
+
+        # **The resolution is anchored to the records, not to a literal.** An earlier
+        # form of this line read `assertEqual(CHECKPOINT_TAG, "v0.0.0-architecture")`,
+        # which is the pin this whole change removed, moved one level down and evaluated
+        # against the live tree: performing the ratification delta that flips the three
+        # claims to the successor turned it red, and `W0-INT-03` may not write this file.
+        # A final state no task is licensed to reach, for the sixth time in this phase.
+        #
+        # What the assertions below keep is everything the literal was for — that the
+        # module-level constant really came out of the records, and that the records
+        # agree — with nothing that says *which* tag is current, because that changes by
+        # design every time a checkpoint supersedes. The proof that resolution is a
+        # resolution and not a constant is the fixture branch further down, which
+        # requires a tree whose records say `v0.0.1` to resolve to `v0.0.1`.
+        self.assertEqual(
+            set(original.values()),
+            {CHECKPOINT_TAG},
+            "the module-level CHECKPOINT_TAG is not the value the records carry, so the "
+            "constant and the records have drifted apart",
+        )
+        self.assertRegex(
+            CHECKPOINT_TAG,
+            CHECKPOINT_TAG_SERIES,
+            "the resolved tag is outside the pinned series",
+        )
+        resolved_revision = CHECKPOINT_TAG_SERIES.match(CHECKPOINT_TAG)
+        floor_revision = CHECKPOINT_TAG_SERIES.match(CHECKPOINT_TAG_FLOOR)
+        self.assertIsNotNone(floor_revision)
+        self.assertGreaterEqual(
+            int(resolved_revision.group(1)),
+            int(floor_revision.group(1)),
+            "the resolved tag's revision is below the published floor",
+        )
 
         def _tree(manifest_tag, manifest_planned, contract_tag) -> Path:
             root = Path(tempfile.mkdtemp(prefix="w0-qa-04-tag-"))
@@ -13123,27 +13189,48 @@ class WriteBoundaryTests(unittest.TestCase):
         self.assertGreaterEqual(
             len(declared), 15, "the allowed-path scan found almost no task declarations"
         )
+        # This module's own path must be declared by *some* task. Both sides are
+        # resolved — the left from `__file__`, the right from the task documents — so
+        # neither names a task id or a filename that a later graph change would strand.
+        own = str(Path(__file__).resolve().relative_to(REPOSITORY_ROOT))
         self.assertIn(
-            "tests/contract/test_cp00_candidate.py",
-            declared.get("docs/program/tasks/W0-QA-01.md", ()),
-            "this module's own path is not declared by the task that owns it; the scan "
-            "is not reading what it thinks it is",
+            own,
+            {glob for globs in declared.values() for glob in globs},
+            f"{own} is declared by no task's allowed paths, so either the scan is not "
+            "reading what it thinks it is or this module is being edited without a "
+            "licence",
         )
         every_glob = {glob for globs in declared.values() for glob in globs}
         self.assertFalse(
             _path_is_declared("tests/contract/nobody-declared-this.py", every_glob),
             "the matcher accepts a path no task declares, so containment proves nothing",
         )
-        # And the licence is not silently the whole tree. A prose sentence naming a
-        # directory once widened the harvest to it; these are the three sections whose
-        # sentences say a family is *not* writable, and none of them may grant it.
-        for family in ("contracts/**", "scripts/**", "docs/architecture/adr/**"):
-            self.assertNotIn(
-                family,
-                every_glob,
-                f"{family} is declared by no task's list of allowed paths; it is named "
-                "only in sentences that say it is not writable",
-            )
+        # And the licence is not silently widened by prose. Stated as the structural
+        # property rather than as three literals: on the tree this was written against,
+        # the offenders were `contracts/**`, `scripts/**` and `docs/architecture/adr/**`,
+        # each harvested from the very sentence that says the family is not writable —
+        # but naming them here would be a pin that a legitimate S01 task file, declaring
+        # `scripts/**` as a list item when the family reopens, would turn red. What must
+        # hold in every future is that **nothing reaches the licence from prose**, and
+        # that is what is asserted: the spans found only outside list items are computed
+        # independently of the harvest and must not intersect it.
+        prose_only = _prose_only_path_spans(REPOSITORY_ROOT)
+        self.assertTrue(
+            prose_only,
+            "no Allowed paths section carries a path-shaped span outside its list items, "
+            "so the intersection below is empty whatever the harvest does and this "
+            "assertion proves nothing",
+        )
+        leaked = {
+            task: sorted(spans & set(declared.get(task, ())))
+            for task, spans in prose_only.items()
+        }
+        self.assertEqual(
+            {task: spans for task, spans in leaked.items() if spans},
+            {},
+            "a path named only in the prose of an Allowed paths section reached the "
+            "licence; the harvest is reading sentences again",
+        )
 
         result = _git(
             "-C",

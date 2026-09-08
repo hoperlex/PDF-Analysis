@@ -922,17 +922,42 @@ class RealRepositoryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.tree = contour.RepositoryTree(REPOSITORY_ROOT)
-        cls.tag = contour.TagFacts.gather(REPOSITORY_ROOT, "v0.0.0-architecture")
+        # The tag name comes out of the records, not out of this line. Written as a
+        # literal it was the fourth instance of the pin defect in this deliverable, and
+        # a quiet one: `v0.0.0-architecture` is never deleted, so after a supersession
+        # this class would have gone on measuring the superseded tag for ever while
+        # every assertion stayed green.
+        cls.tag_name = contour.recorded_tag(cls.tree)
+        cls.tag = contour.TagFacts.gather(REPOSITORY_ROOT, cls.tag_name)
 
     def test_the_tree_view_reads_this_repository(self) -> None:
         self.assertIn(contour.MANIFEST, self.tree.paths())
         self.assertGreater(len(self.tree.paths()), 100)
         self.assertIsNotNone(self.tree.read(contour.CONTRACT_MANIFEST))
 
-    def test_the_checkpoint_tag_is_annotated_and_peels_to_a_commit(self) -> None:
-        self.assertTrue(self.tag.exists, "the checkpoint tag is missing")
-        self.assertTrue(self.tag.annotated, "the checkpoint tag is not annotated")
-        self.assertRegex(self.tag.commit or "", r"^[0-9a-f]{40}$")
+    def test_the_tag_identity_is_read_from_the_records(self) -> None:
+        """The name is resolved and shaped like a tag; **existence is not asserted here**.
+
+        A bare `assertTrue(self.tag.exists)` fails on a tree whose records have been
+        moved to the successor and whose tag has not been created yet — which is the
+        normal, mandated intermediate state between `W0-INT-02` and `W0-INT-03`, because
+        the manifest is written in the commit that gets tagged. Asserting it here would
+        make that state one no task is licensed to leave. The contour reports it as a
+        finding owned by `W0-INT-03` instead, and `TagFacts.gather` is exercised either
+        way: whatever the ref state, the facts must come back consistent.
+        """
+        self.assertTrue(self.tag_name, "no checkpoint record names a tag")
+        self.assertRegex(self.tag_name, r"^v\d+\.\d+\.\d+-[a-z]+$")
+        self.assertEqual(self.tag.name, self.tag_name)
+        if self.tag.exists and self.tag.annotated:
+            self.assertRegex(self.tag.commit or "", r"^[0-9a-f]{40}$")
+        else:
+            self.assertIn(
+                contour.CHECK_TAG,
+                {f.check for f in contour.run(self.tree, self.tag).findings},
+                "the records name a tag this repository does not carry as an annotated "
+                "object and the contour said nothing about it",
+            )
 
     @staticmethod
     def _status() -> str:

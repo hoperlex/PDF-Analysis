@@ -1007,6 +1007,22 @@ TAG_IDENTITY_CLAIM = re.compile(
 )
 
 
+def recorded_tag(tree: Tree) -> str:
+    """The tag name the checkpoint's own records carry, or ``""`` if none do.
+
+    ``tag`` first, then ``tag_planned``: a checkpoint that has been prepared and not yet
+    published names its identity in the second before the first is meaningful.
+    """
+    manifest = tree.json(MANIFEST)
+    if isinstance(manifest, dict):
+        for key in ("tag", "tag_planned"):
+            value = manifest.get(key)
+            if isinstance(value, str) and value:
+                return value
+    contract = parse_block_yaml(tree.read(CONTRACT_MANIFEST) or "")
+    return contract.get("tag", "") if isinstance(contract.get("tag"), str) else ""
+
+
 def tag_integrity_problems(tree: Tree, tag: TagFacts) -> list[Finding]:
     problems: list[Finding] = []
     manifest = tree.json(MANIFEST)
@@ -1020,20 +1036,37 @@ def tag_integrity_problems(tree: Tree, tag: TagFacts) -> list[Finding]:
                 named[f"{MANIFEST}:{key}"] = manifest[key]
     if isinstance(contract.get("tag"), str):
         named[f"{CONTRACT_MANIFEST}:tag"] = contract["tag"]
+    if not named:
+        problems.append(Finding(
+            CHECK_TAG, MANIFEST,
+            "no checkpoint record names a tag, so there is no published identity for "
+            "this checkpoint and nothing for the checks below to verify",
+        ))
+        return problems
     if len(set(named.values())) > 1:
         problems.append(Finding(
             CHECK_TAG, MANIFEST,
             f"the checkpoint records name more than one tag: {named}",
         ))
-    if named and tag.name not in set(named.values()):
+    if tag.name not in set(named.values()):
         problems.append(Finding(
             CHECK_TAG, tag.name,
             f"the tag under test is {tag.name!r} and the records name {sorted(set(named.values()))}",
         ))
 
+    # **Ref-side findings are owned by the task that publishes refs.** A record naming a
+    # tag that does not exist yet is the normal state of a prepared-but-unpublished
+    # checkpoint: the manifest is written in the commit that gets tagged, so between the
+    # record change and the tagging the records are ahead of the refs by construction.
+    # Reporting that as the record-owner's defect would make it a state no task can
+    # leave, which is the shape this phase has now hit six times.
     if not tag.exists:
         problems.append(Finding(
-            CHECK_TAG, tag.name, "the tag the records name does not exist in this repository",
+            CHECK_TAG, tag.name,
+            "the records name this tag and it does not exist in this repository. If the "
+            "checkpoint is prepared and not yet published this is the expected state "
+            "until the tag is created; if it is published, the tag is missing",
+            owner="W0-INT-03",
         ))
         return problems
     if not tag.annotated:
@@ -1041,9 +1074,12 @@ def tag_integrity_problems(tree: Tree, tag: TagFacts) -> list[Finding]:
             CHECK_TAG, tag.name,
             "the tag exists but is not an annotated tag object; a checkpoint tag carries "
             "its own message and tagger, and a lightweight tag carries neither",
+            owner="W0-INT-03",
         ))
     if not tag.commit:
-        problems.append(Finding(CHECK_TAG, tag.name, "the tag does not peel to a commit"))
+        problems.append(Finding(
+            CHECK_TAG, tag.name, "the tag does not peel to a commit", owner="W0-INT-03",
+        ))
         return problems
 
     families = reviewed_families(tree)
@@ -1469,12 +1505,18 @@ def main(argv: list[str] | None = None) -> int:
         "--root", default=".", help="repository root to read (default: the current tree)"
     )
     parser.add_argument(
-        "--tag", default="v0.0.0-architecture", help="the checkpoint tag to verify"
+        "--tag",
+        default=None,
+        help="the checkpoint tag to verify; by default the one the records name",
     )
     arguments = parser.parse_args(argv)
     root = Path(arguments.root).resolve()
     tree = RepositoryTree(root)
-    verdict = run(tree, TagFacts.gather(root, arguments.tag))
+    # Resolved from the records, never defaulted to a literal. A default here was the
+    # fifth instance of one pin: on a tree whose records had moved to the successor it
+    # made the contour verify the *superseded* tag and then report the disagreement it
+    # had itself introduced.
+    verdict = run(tree, TagFacts.gather(root, arguments.tag or recorded_tag(tree)))
 
     print(f"tree: {root}")
     for note in verdict.notes:
