@@ -64,6 +64,13 @@ _spec.loader.exec_module(contour)
 ROUND = 10
 ROUND_WORD = "ten"
 
+#: The two things a primary acceptance report has to carry beyond its subject: who ran
+#: it, and what the result was. Written once here and mutated by name below, because the
+#: defect they close is a report that carried a placeholder where its verdict should be
+#: and a suite that never opened it.
+TESTER_LINE = "tester:                    an independent manual acceptance stream"
+VERDICT_LINE = "PASS"
+
 SUBJECT = "a" * 40
 TAGGED = "b" * 40
 CANDIDATE = "c" * 40
@@ -176,10 +183,13 @@ def _tree() -> tuple[contour.MappingTree, contour.TagFacts]:
         "\n"
         "```text\n"
         f"candidate_commit:  {SUBJECT}\n"
+        f"{TESTER_LINE}\n"
         "```\n"
         "\n"
         f"Recomputed over the {len(SUBJECT_PATHS)} tracked paths of the freeze "
         "commit's own objects.\n"
+        "\n"
+        f"## Overall verdict\n\n{VERDICT_LINE}\n"
     )
     files[AUTOMATED_REPORT] = (
         f"CP-00 automated acceptance summary - round {ROUND}\n"
@@ -187,6 +197,8 @@ def _tree() -> tuple[contour.MappingTree, contour.TagFacts]:
         f"Candidate frozen at {SUBJECT}.\n"
         "\n"
         f"tree swept: the working tree, {len(SUBJECT_PATHS)} tracked paths\n"
+        "\n"
+        f"{VERDICT_LINE}\nexit=0\n"
     )
     files[REGISTRY] = (
         "# Checkpoint registry\n"
@@ -244,7 +256,9 @@ class _ContourCase(unittest.TestCase):
     def revisions(self) -> dict:
         return {k: dict(v) for k, v in self.tree._revisions.items()}
 
-    def assert_replaced(self, text: str, old: str, new: str = "") -> str:
+    def assert_replaced(
+        self, text: str, old: str, new: str = "", *, count: int | None = None
+    ) -> str:
         """``text`` with ``old`` replaced, having proved ``old`` was there to replace.
 
         **A mutation that mutates nothing is not a negative case.** Every mutation in
@@ -256,14 +270,54 @@ class _ContourCase(unittest.TestCase):
         is a property of today's fixture, not of the method, and it is the difference
         between a probe that says *the check did not fire* and one that says *the
         mutation never happened*. This says which.
+
+        ``count`` is how many occurrences the mutation means to change, and **a helper
+        that makes a replacement which did not happen loud while quietly widening the
+        scope of one that did is the same defect inside its own fix.** That was not
+        hypothetical: the site below at ``"    files: 2"`` passed ``count=1`` before it
+        was routed through here, the needle occurs twice, and routing it through widened
+        it to both families with nothing said. The check fired either way -- one finding
+        rather than two -- so nothing was lost *there*, and "nothing was lost there" is a
+        property of that fixture and not of this method.
+
+        So the scope is stated rather than inherited. A needle occurring once needs no
+        ``count``: there is one thing to change and no scope to choose. A needle
+        occurring more than once with no ``count`` is refused by name, because that is
+        the shape the widening had. Given a ``count``, exactly that many change, a
+        fixture carrying fewer is named by number, and a replacement that did not change
+        that many -- ``new`` containing ``old``, say -- is named too.
         """
-        self.assertIn(
-            old,
-            text,
+        present = text.count(old)
+        self.assertGreater(
+            present,
+            0,
             f"the mutation looked for {old!r} and the fixture no longer carries it, so "
             "the tree under test is the unmutated one",
         )
-        return text.replace(old, new)
+        if count is None:
+            self.assertEqual(
+                present,
+                1,
+                f"{old!r} occurs {present} times and the mutation did not say how many "
+                "of them it means; pass count= so the scope of the replacement is "
+                "stated by the call site rather than inherited from str.replace",
+            )
+            return text.replace(old, new)
+        self.assertGreaterEqual(
+            present,
+            count,
+            f"the mutation asked for {count} occurrence(s) of {old!r} and the fixture "
+            f"carries {present}, so it does not change what it says it changes",
+        )
+        replaced = text.replace(old, new, count)
+        self.assertEqual(
+            present - replaced.count(old),
+            count,
+            f"the mutation asked for {count} occurrence(s) of {old!r} and changed "
+            f"{present - replaced.count(old)}; the scope of a replacement is not "
+            "something this helper may widen quietly",
+        )
+        return replaced
 
     def mutate(self, **replacements) -> contour.MappingTree:
         files = self.files()
@@ -378,6 +432,165 @@ class FixtureTests(_ContourCase):
 
 class TerminalStateTests(_ContourCase):
     """Exactly one of three states, and the terminal one keeps its obligations."""
+
+    def test_MUTATION_a_report_whose_verdict_is_a_placeholder(self) -> None:
+        """**The acceptance rested on a document nothing opened.**
+
+        An independent reproduction of the freeze-and-ratify chain built a tree whose
+        automated report carried `RESULT_PLACEHOLDER` where its verdict belongs and whose
+        manual cases carried `MANUAL_TESTER_PLACEHOLDER` and
+        `MANUAL_RESULT_PLACEHOLDER`, and the suite was green: the manifest said
+        `verdict: PASS`, and nothing read the record that word was supposed to summarise.
+        """
+        for path in (AUTOMATED_REPORT, MANUAL_REPORT):
+            with self.subTest(report=path):
+                tree = self.mutate(
+                    **{
+                        path: self.assert_replaced(
+                            self.files()[path], VERDICT_LINE, "RESULT_PLACEHOLDER"
+                        )
+                    }
+                )
+                verdict = contour.run(tree, self.tag)
+                self.assert_fires(
+                    verdict,
+                    contour.CHECK_TERMINAL,
+                    "carries the placeholder token RESULT_PLACEHOLDER",
+                )
+                self.assert_fires(
+                    verdict, contour.CHECK_TERMINAL, "states no verdict"
+                )
+
+    def test_MUTATION_a_manual_report_with_nobody_behind_it(self) -> None:
+        """A manual result is a claim about a procedure somebody walked."""
+        text = self.files()[MANUAL_REPORT]
+        gone = self.mutate(
+            **{MANUAL_REPORT: self.assert_replaced(text, TESTER_LINE + "\n")}
+        )
+        self.assert_fires(
+            contour.run(gone, self.tag), contour.CHECK_TERMINAL, "declares no tester"
+        )
+        planted = self.mutate(
+            **{
+                MANUAL_REPORT: self.assert_replaced(
+                    text, TESTER_LINE, "tester: MANUAL_TESTER_PLACEHOLDER"
+                )
+            }
+        )
+        self.assert_fires(
+            contour.run(planted, self.tag),
+            contour.CHECK_TERMINAL,
+            "its tester is the placeholder",
+        )
+
+    def test_the_word_placeholder_in_prose_is_not_a_placeholder(self) -> None:
+        r"""**The case rule is real; the reason this test used to give for it was false.**
+
+        It said a case-insensitive rule "would have turned two correct reports red",
+        naming the bundle's own `manual-report-round-7.md` and `-round-8.md`. Both say
+        the **plural**, `\bPLACEHOLDER(?:_[A-Z0-9]+)*\b` needs a word boundary
+        immediately after `PLACEHOLDER`, and the "s" defeats it at any case. Measured:
+        adding `re.IGNORECASE` matched nothing in either record and nothing in any of the
+        nine reports the real manifest names, and on round four's module and tests it
+        left this suite at `Ran 54 tests, OK, exit 0` -- so the control pinned nothing,
+        and the sentence justifying it was a claim about a measurement made without the
+        measurement.
+
+        The needle is now the **singular**, which is prose an acceptance report may write
+        and which a blanket `re.IGNORECASE` does match, so this test goes red under that
+        mutation. The plural stays beside it as the record of what the two real reports
+        actually say. The compound form -- a word joined to "placeholder" by an
+        underscore -- is caught at any case by the rule itself, and is what
+        `test_MUTATION_a_lower_case_placeholder_verdict_is_still_a_placeholder` pins.
+        """
+        text = (
+            self.files()[MANUAL_REPORT]
+            + "\nThis case used a placeholder rather than a real path, and illustrative\n"
+            "placeholders in prose are discussed in the round seven and eight reports.\n"
+        )
+        self.assert_silent(
+            contour.run(self.mutate(**{MANUAL_REPORT: text}), self.tag).findings,
+            contour.CHECK_TERMINAL,
+        )
+
+    def test_MUTATION_a_lower_case_placeholder_verdict_is_still_a_placeholder(
+        self,
+    ) -> None:
+        """**The same defect lower-cased used to pass, which is what item 8 existed to stop.**
+
+        Measured on this fixture before the split: `RESULT_PLACEHOLDER` as the verdict
+        gave 2 findings, and `result_placeholder` beside a sentence containing "PASS"
+        gave **0**. A word joined to "placeholder" by an underscore is nobody's prose at
+        any case, so it is now read case-insensitively wherever it stands. The prose
+        sentence is here on purpose: the verdict rule reads presence anywhere, so it is
+        satisfied by that sentence and cannot be what fires.
+        """
+        text = self.assert_replaced(
+            self.files()[MANUAL_REPORT],
+            VERDICT_LINE,
+            "result_placeholder\n\nThe automated stream returned PASS for this round.",
+        )
+        verdict = contour.run(self.mutate(**{MANUAL_REPORT: text}), self.tag)
+        self.assert_fires(
+            verdict,
+            contour.CHECK_TERMINAL,
+            "carries the placeholder token result_placeholder",
+        )
+        for finding in verdict.by_check(contour.CHECK_TERMINAL):
+            self.assertNotIn("states no verdict", finding.message)
+
+    def test_MUTATION_a_tester_declared_as_a_lower_case_non_value(self) -> None:
+        """**A declared value has no prose to protect, so it is read at any case.**
+
+        Measured before the split: `tester: tbd` and `tester: placeholder` were both
+        accepted while `tester: MANUAL_TESTER_PLACEHOLDER` was caught -- the check was
+        reading the shift key rather than the value. The vocabulary is unchanged; only
+        where case matters is. `tester: placeholders`, plural, is still not caught, for
+        the same word-boundary reason the test above measures, and nobody has written it.
+        """
+        for planted in ("tbd", "placeholder", "Placeholder", "<tester>"):
+            with self.subTest(tester=planted):
+                text = self.assert_replaced(
+                    self.files()[MANUAL_REPORT], TESTER_LINE, f"tester: {planted}"
+                )
+                self.assert_fires(
+                    contour.run(self.mutate(**{MANUAL_REPORT: text}), self.tag),
+                    contour.CHECK_TERMINAL,
+                    "its tester is the placeholder",
+                )
+
+    def test_the_verdict_rule_reads_presence_and_not_position(self) -> None:
+        """**The stated limit, pinned, so the description and the guard cannot drift.**
+
+        The module records that the verdict rule is a presence rule: any of
+        `VERDICT_TOKENS` anywhere in the document satisfies it, prose included. That is
+        weaker than "the report states a verdict" sounds, and it is recorded in
+        `LIMITATIONS` and in the report rather than asserted away -- the nine reports the
+        real manifest names declare their verdicts in five different shapes, so a
+        position rule would have to accept all five and would be satisfiable by prose
+        anyway. Here the limit is measured from both sides: a sentence *about* another
+        round's `PASS` satisfies the rule, and only a report carrying no result
+        vocabulary at all is a finding.
+        """
+        prose = self.assert_replaced(
+            self.files()[MANUAL_REPORT],
+            VERDICT_LINE,
+            "Round nine returned PASS, and that result does not carry forward.",
+        )
+        self.assert_silent(
+            contour.run(self.mutate(**{MANUAL_REPORT: prose}), self.tag).findings,
+            contour.CHECK_TERMINAL,
+        )
+        mute = self.assert_replaced(
+            self.files()[MANUAL_REPORT],
+            VERDICT_LINE,
+            "the result of this round is recorded elsewhere",
+        )
+        self.assert_fires(
+            contour.run(self.mutate(**{MANUAL_REPORT: mute}), self.tag),
+            contour.CHECK_TERMINAL,
+            "states no verdict",
+        )
 
     def test_the_three_states_are_derived_and_exactly_one_holds(self) -> None:
         state, reasons = contour.classify(_manifest())
@@ -602,6 +815,73 @@ class LiveVersusHistoricalTests(_ContourCase):
 class TagIntegrityTests(_ContourCase):
     """The tag exists, is annotated, has not moved, and its message is true of it."""
 
+    def test_MUTATION_deleting_the_family_list_does_not_buy_silence(self) -> None:
+        """**Omitting the declaration must not discharge the obligation it creates.**
+
+        `reviewed_families` reads the recipe's subject out of `contract-manifest.yaml`;
+        with no `families:` block it returns `()`, `artifact_manifest_digest` returns
+        `(None, 0)`, and every digest comparison used to sit behind `digest is not
+        None`. A record that simply left the block out therefore bought silence on all
+        of them -- while still publishing the aggregate the block is the recipe for.
+        Here the block is deleted **and** the tag message is given a false digest: the
+        false claim has to be reported as unverifiable rather than passed over.
+        """
+        stripped = "\n".join(
+            line
+            for line in self.files()[contour.CONTRACT_MANIFEST].splitlines()
+            if not re.match(r"^(families:|  [a-z]|    )", line)
+        )
+        tree = self.mutate(**{contour.CONTRACT_MANIFEST: stripped + "\n"})
+        self.assertEqual(contour.reviewed_families(tree), ())
+        lying = contour.TagFacts(
+            name=self.tag.name,
+            exists=True,
+            annotated=True,
+            commit=self.tag.commit,
+            message=self.assert_replaced(self.tag.message, FAMILY_DIGEST, "0" * 64),
+        )
+        verdict = contour.run(tree, lying)
+        self.assert_fires(verdict, contour.CHECK_TAG, "names no reviewed families")
+        self.assert_fires(
+            verdict, contour.CHECK_TAG, "cannot be recomputed over the tag's own commit"
+        )
+        self.assert_fires(
+            verdict, contour.CHECK_TAG, "the claim is over the empty set"
+        )
+        # **The fourth arm of the same repair, which had no mutation at all.** Item 5
+        # closed four branches that a missing `families:` block used to skip; three of
+        # them are named above and the record-side one -- the manifest publishing a
+        # digest this tree cannot recompute -- was asserted nowhere, so deleting it left
+        # the suite green. Measured: `if digest is None and False:` at that branch leaves
+        # `discover -s tests/checkpoint` at `Ran 54 tests, OK, exit 0`. This tree already
+        # triggers it; only the assertion was missing.
+        self.assert_fires(
+            verdict, contour.CHECK_TAG, "The claim stands unverified"
+        )
+
+    def test_the_family_list_is_what_carries_those_three(self) -> None:
+        """The control: the same false digest, with the block present, is caught by value.
+
+        Without this the mutation above would prove only that *something* fires, and a
+        check that reports "unverifiable" for every tree is as useless as one that
+        reports nothing.
+        """
+        lying = contour.TagFacts(
+            name=self.tag.name,
+            exists=True,
+            annotated=True,
+            commit=self.tag.commit,
+            message=self.assert_replaced(self.tag.message, FAMILY_DIGEST, "0" * 64),
+        )
+        verdict = contour.run(self.tree, lying)
+        self.assert_fires(
+            verdict,
+            contour.CHECK_TAG,
+            f"the tag message states artifact_manifest_sha256 {'0' * 64}",
+        )
+        for finding in verdict.by_check(contour.CHECK_TAG):
+            self.assertNotIn("names no reviewed families", finding.message)
+
     def test_MUTATION_the_tag_has_moved(self) -> None:
         """A tag pointing at a tree whose reviewed families are not the published ones.
 
@@ -736,13 +1016,86 @@ class AccountingTests(_ContourCase):
 
     def test_MUTATION_an_aggregate_over_an_unstated_number_of_files(self) -> None:
         stripped = self.assert_replaced(
-            self.files()[contour.CONTRACT_MANIFEST], "    files: 2\n"
+            self.files()[contour.CONTRACT_MANIFEST], "    files: 2\n", count=1
         )
         tree = self.mutate(**{contour.CONTRACT_MANIFEST: stripped})
         self.assert_fires(
             contour.run(tree, self.tag),
             contour.CHECK_ACCOUNTING,
             "over an unstated number of files",
+        )
+
+    def test_MUTATION_the_whole_checkpoint_aggregate_over_an_unstated_count(self) -> None:
+        """**Omitting `artifact_count` used to discharge the obligation entirely.**
+
+        The top-level arm ran only `if isinstance(declared, str) and declared.isdigit()`,
+        so a record that published the checkpoint's own identity digest and stated no
+        count was accounted for by saying less. The per-family arm already reported an
+        absent count; the arm that went quiet is the one over the aggregate the tag
+        message quotes.
+        """
+        stripped = self.assert_replaced(
+            self.files()[contour.CONTRACT_MANIFEST], "artifact_count: 4\n", count=1
+        )
+        self.assert_fires(
+            contour.accounting_problems(
+                self.mutate(**{contour.CONTRACT_MANIFEST: stripped})
+            ),
+            contour.CHECK_ACCOUNTING,
+            "over an unstated number of files: artifact_count is None",
+        )
+
+    def test_members_nested_by_directory_discharge_the_obligation(self) -> None:
+        """**A rule nobody can satisfy is the other half of a rule that discharges itself.**
+
+        `member_hashes` keys members on bare filenames and a mapping cannot carry one key
+        twice. Measured on this repository at the base commit: `contracts` holds 33 files
+        of which 6 are `README.md`, and `fixtures` holds 32 of which 5 are
+        `manifest.json` and 3 are `README.md` -- so no flat per-family enumeration could
+        ever reach the declared count, and the requirement could not be discharged by
+        anyone. The fixture here is that shape in miniature: a family of two files whose
+        basenames collide, listed under the directories that tell them apart.
+        """
+        colliding = "\n".join(
+            [
+                "checkpoint: CP-00",
+                "tag: v0.0.1-architecture",
+                f"artifact_manifest_sha256: {'f' * 64}",
+                "artifact_count: 2",
+                "",
+                "families:",
+                "  contracts:",
+                "    files: 2",
+                f"    sha256: {'a' * 64}",
+                "    members:",
+                "      domain:",
+                f"        README.md: {'1' * 64}",
+                "      analysis:",
+                f"        README.md: {'2' * 64}",
+                "",
+            ]
+        )
+        tree = self.mutate(**{contour.CONTRACT_MANIFEST: colliding})
+        self.assert_silent(
+            contour.aggregate_problems(tree), contour.CHECK_ACCOUNTING
+        )
+        # And the flat reading of the same record is what made it unsatisfiable: with
+        # both members hoisted to one level the mapping keeps one of them.
+        flat = self.assert_replaced(
+            colliding,
+            "      domain:\n"
+            f"        README.md: {'1' * 64}\n"
+            "      analysis:\n"
+            f"        README.md: {'2' * 64}\n",
+            f"      README.md: {'2' * 64}\n",
+            count=1,
+        )
+        self.assert_fires(
+            contour.aggregate_problems(
+                self.mutate(**{contour.CONTRACT_MANIFEST: flat})
+            ),
+            contour.CHECK_ACCOUNTING,
+            "lists 1 member hashes",
         )
 
     def test_a_fully_enumerated_nested_record_is_accepted(self) -> None:
@@ -753,6 +1106,68 @@ class AccountingTests(_ContourCase):
         """
         self.assert_silent(
             contour.accounting_problems(self.tree), contour.CHECK_ACCOUNTING
+        )
+
+    def test_MUTATION_an_artifact_count_of_zero_does_not_discharge_the_aggregate(
+        self,
+    ) -> None:
+        """**A zero that discharges an obligation is an absence one value along.**
+
+        Item 6 made an *absent* `artifact_count` a finding. `artifact_count: 0` was not
+        one: the arm compares the declared count with the number of member hashes the
+        record itself lists, and every record lists at least zero. Measured on the
+        published `contract-manifest.yaml`: `aggregate_problems` returns 5 findings as
+        written, 4 with `artifact_count: 0`, and 0 with every family's `files:` zeroed --
+        understating the count discharges the obligation exactly as omitting it did.
+
+        The number the recipe really rolls over is measured at the tag's own commit,
+        where the recipe is executed, and the declaration is compared with that. On the
+        real bundle the two agree at 100, so this adds no finding to the published tree.
+        """
+        zeroed = self.assert_replaced(
+            self.files()[contour.CONTRACT_MANIFEST],
+            "artifact_count: 4",
+            "artifact_count: 0",
+        )
+        tree = self.mutate(**{contour.CONTRACT_MANIFEST: zeroed})
+        # The arm that used to carry this obligation is silent on this tree. That is the
+        # hole itself, asserted, rather than a second opinion about it.
+        self.assert_silent(contour.aggregate_problems(tree), contour.CHECK_ACCOUNTING)
+        self.assert_fires(
+            contour.run(tree, self.tag),
+            contour.CHECK_ACCOUNTING,
+            "rolls over 4 at the tag's own commit",
+        )
+
+    def test_MUTATION_a_family_that_declares_fewer_files_than_it_holds(self) -> None:
+        """The same understatement one level down, closed the same way.
+
+        With both families' `files:` set to `0` the per-family arm goes silent too, and
+        the record then certifies two aggregates over a set nobody can name while
+        declaring a size nothing contradicts. Each declared size is compared with what
+        the family holds at the tag's own commit, and both families are read: a check
+        that fired for one of the two would be reported here as one finding, not two.
+        """
+        understated = self.assert_replaced(
+            self.files()[contour.CONTRACT_MANIFEST],
+            "    files: 2",
+            "    files: 0",
+            count=2,
+        )
+        tree = self.mutate(**{contour.CONTRACT_MANIFEST: understated})
+        self.assert_silent(contour.aggregate_problems(tree), contour.CHECK_ACCOUNTING)
+        verdict = contour.run(tree, self.tag)
+        self.assert_fires(
+            verdict,
+            contour.CHECK_ACCOUNTING,
+            "declares 0 file(s) and this family holds 2",
+        )
+        self.assertEqual(
+            [f.site for f in verdict.by_check(contour.CHECK_ACCOUNTING)],
+            [
+                f"{contour.CONTRACT_MANIFEST}:families.contracts",
+                f"{contour.CONTRACT_MANIFEST}:families.fixtures",
+            ],
         )
 
 
@@ -895,21 +1310,38 @@ class SpawnChokepointTests(unittest.TestCase):
 
         The scan is over the source rather than over behaviour because that is what the
         property is about: the helper cannot report a needle nobody asked it to look for.
+
+        **It walks every scope, not only function bodies.** The first version collected
+        ``ast.FunctionDef`` nodes and searched inside them, so a ``.replace`` at module
+        level, in a class body, in a default argument, in a comprehension at module
+        scope or in an ``async def`` was outside the guard entirely. There is no such
+        call in this module today, which is exactly why it was worth closing rather than
+        leaving to be discovered: a guard that cannot see a whole class of instance
+        reports "none" for both reasons and does not say which. The recursion below
+        carries the enclosing scope down with it, so an offender is reported with a name
+        a reader can find, and ``<module>`` is one of the names it can report.
         """
         source = Path(__file__).read_text(encoding="utf-8")
         tree = ast.parse(source)
         helper = "assert_replaced"
-        offenders = []
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef) or node.name == helper:
-                continue
-            for sub in ast.walk(node):
+        scoped = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+        def offending(node: ast.AST, scope: str):
+            for child in ast.iter_child_nodes(node):
+                names_a_scope = isinstance(child, scoped)
+                if names_a_scope and child.name == helper:
+                    continue
                 if (
-                    isinstance(sub, ast.Call)
-                    and isinstance(sub.func, ast.Attribute)
-                    and sub.func.attr == "replace"
+                    isinstance(child, ast.Call)
+                    and isinstance(child.func, ast.Attribute)
+                    and child.func.attr == "replace"
                 ):
-                    offenders.append(f"{node.name}:{sub.lineno}")
+                    yield f"{scope}:{child.lineno}"
+                yield from offending(
+                    child, child.name if names_a_scope else scope
+                )
+
+        offenders = list(offending(tree, "<module>"))
         self.assertEqual(
             offenders,
             [],
@@ -924,6 +1356,19 @@ class SpawnChokepointTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             case.assert_replaced("the fixture", "a needle nobody wrote", "x")
         self.assertEqual(case.assert_replaced("abc", "b", "B"), "aBc")
+        # And it replaces the number of occurrences it was asked for, rather than
+        # silently widening to all of them: the second needle is still there.
+        self.assertEqual(case.assert_replaced("aXbXc", "X", "-", count=1), "a-bXc")
+        # A fixture carrying fewer than the mutation asked for is named by number,
+        # and so is a replacement whose scope is not what it claims.
+        with self.assertRaises(AssertionError):
+            case.assert_replaced("aXb", "X", "-", count=2)
+        with self.assertRaises(AssertionError):
+            case.assert_replaced("aXb", "X", "XX", count=1)
+        # And an ambiguous needle with no count is refused rather than widened: this
+        # is the shape the call site above had before `count=1` was restored to it.
+        with self.assertRaises(AssertionError):
+            case.assert_replaced("aXbXc", "X", "-")
 
     def test_no_module_of_this_deliverable_spawns_git_directly(self) -> None:
         """**The guard covers the test modules too, not only the module under test.**
@@ -1080,7 +1525,7 @@ class RealRepositoryTests(unittest.TestCase):
         # with what the code holds is the defect this programme keeps writing down.
         self.assertEqual(
             len(contour.LIMITATIONS),
-            7,
+            8,
             "the recorded limitations changed; docs/program/reviews/W0-QA-04.md §7.3 "
             "enumerates them and must be brought with them",
         )

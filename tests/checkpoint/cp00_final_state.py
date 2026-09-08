@@ -253,11 +253,26 @@ LIMITATIONS = (
     "aggregate whose members cannot be enumerated fails, so the omission cannot pass "
     "silently as coverage.",
     "The mutation evidence proves the check *classes*, not every site inside them. A "
-    "site-level narrowing within a check that is already red is invisible to it: "
-    "measured, dropping one real path from claimed_paths takes the accounting findings "
-    "from nine to seven while both suites keep their exact status, 46 tests and 0 red. "
-    "Reading a narrowing of this contour is a review obligation, not something the "
-    "contour can measure about itself.",
+    "site-level narrowing within a check that is already red is invisible to it. "
+    "Re-measured for round five, with the narrowing named so the figure can be "
+    "reproduced: dropping the one real path tests/checkpoint/test_cp00_mechanism.py "
+    "inside claimed_paths takes the accounting findings from nine to seven, and both "
+    "suites keep their exact status -- discover -s tests/checkpoint Ran 59, OK, exit 0, "
+    "and discover -s tests/contract Ran 343, the base commit's own five failures, exit "
+    "1. Not every site-level narrowing is invisible: dropping the whole "
+    "checkpoint-report.md record instead reaches the same seven and is caught by "
+    "test_MUTATION_a_claimed_test_module_that_is_not_there. Reading a "
+    "narrowing of this contour is a review obligation, not something the contour can "
+    "measure about itself.",
+    "The verdict rule is a presence rule and not a position rule. Any of PASS, FAIL, "
+    "BLOCKED or VOID anywhere in a report satisfies it -- a heading, a table cell, a "
+    "quoted shell command, a sentence about an earlier round -- so what it catches is "
+    "one thing: a report that states no result vocabulary at all. The nine reports this "
+    "bundle names declare their verdicts in at least five distinct shapes, so a "
+    "position rule would have to accept all of them and would then be satisfiable by "
+    "ordinary prose anyway. The placeholder rule beside it is the load-bearing half, and "
+    "it reads a declared value "
+    "at any case and a compound placeholder token at any case anywhere.",
 )
 
 
@@ -848,6 +863,157 @@ def _checkpoint_row_problems(tree: Tree, state: str, manifest: object) -> list[F
     return problems
 
 
+#: The vocabulary an acceptance verdict may use. A report that states none of these
+#: states no result, whatever else it says.
+VERDICT_TOKENS = ("PASS", "FAIL", "BLOCKED", "VOID")
+VERDICT_TOKEN = re.compile(r"\b(?:" + "|".join(VERDICT_TOKENS) + r")\b")
+#: A token standing where a value should be: nobody supplied one and the record was
+#: published anyway.
+#:
+#: **Two rules, because a placeholder standing in a value and the word standing in a
+#: sentence are not the same object.** A word joined to "placeholder" by an underscore is
+#: nobody's prose at any case, so :data:`PLACEHOLDER_TOKEN` reads that shape
+#: case-insensitively wherever it stands. The bare words -- ``PLACEHOLDER``, ``TBD``,
+#: ``FIXME``, ``XXX`` -- stay case-sensitive in a document, because a document is allowed
+#: to say them: `manual-report-round-7.md:84` writes "placeholders in prose" and
+#: `-round-8.md:105` "illustrative placeholders". In a **declared value** there is no
+#: prose to protect, so :data:`PLACEHOLDER_VALUE` reads the same vocabulary at any case.
+#:
+#: **What those two records do not do is justify the case rule, and this comment used to
+#: claim they did.** Both say the plural. ``\bPLACEHOLDER(?:_…)*\b`` needs a word
+#: boundary immediately after ``PLACEHOLDER`` and the "s" defeats it at any case, so a
+#: blanket ``re.IGNORECASE`` would have turned *zero* correct records red rather than
+#: two: measured over all nine reports `manifest.json` names, the case-sensitive and the
+#: case-insensitive forms both match nothing, and adding the flag to the rule as it stood
+#: in round four left `discover -s tests/checkpoint` at ``Ran 54 tests, OK`` -- the
+#: control could not fail. The sensitivity is kept because the *singular* is prose an
+#: acceptance report may write, and the control that pins it now carries the singular, so
+#: the same flag turns that one test red today. A control nothing can break is a
+#: sentence.
+_COMPOUND_PLACEHOLDER = (
+    r"(?i:\b[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*_PLACEHOLDER\b"
+    r"|\bPLACEHOLDER(?:_[A-Za-z0-9]+)+\b)"
+)
+_BARE_PLACEHOLDER = (
+    r"\bPLACEHOLDER\b|\bTBD\b|\bFIXME\b|\bXXX+\b"
+    r"|<(?:tester|verdict|result|name|date|todo)>"
+)
+#: Read over a whole document, where prose lives.
+PLACEHOLDER_TOKEN = re.compile(f"{_COMPOUND_PLACEHOLDER}|{_BARE_PLACEHOLDER}")
+#: Read over one declared value, where it does not. Measured before the split, on this
+#: module's own fixture: ``tester: tbd`` and ``tester: placeholder`` were both accepted,
+#: and a verdict of ``result_placeholder`` beside a sentence containing "PASS" produced
+#: no finding at all -- which is the case item 8 existed to stop, lower-cased.
+PLACEHOLDER_VALUE = re.compile(
+    f"{_COMPOUND_PLACEHOLDER}|{_BARE_PLACEHOLDER}", re.IGNORECASE
+)
+#: How a manual report declares who ran it.
+TESTER_DECLARATION = re.compile(r"^\s*tester\s*:\s*(\S[^\n]*)$", re.MULTILINE)
+
+
+def acceptance_evidence_problems(tree: Tree, manifest: object) -> list[Finding]:
+    """A round's reports must carry a verdict, and a manual one a tester.
+
+    **Nothing read a primary acceptance report except its subject declaration and its
+    tracked-path count.** An independent reproduction of the freeze-and-ratify chain
+    built a green tree whose automated report carried ``RESULT_PLACEHOLDER`` as its
+    verdict and whose six manual cases carried ``MANUAL_TESTER_PLACEHOLDER`` and
+    ``MANUAL_RESULT_PLACEHOLDER``, and the whole suite was green: the manifest said
+    ``verdict: PASS`` and no check ever opened the document that word was supposed to
+    summarise. A checkpoint whose acceptance rests on a record nobody reads has an
+    acceptance record, not an acceptance.
+
+    So: for every report an acceptance round names, the report must exist, must state a
+    verdict in :data:`VERDICT_TOKENS`, and must carry no placeholder token; a manual
+    report must additionally declare a tester, and the declared tester may not be a
+    placeholder either. What this does **not** restate is an obligation another check
+    already carries: a round naming no report at all, and a round naming a report the
+    tree does not track, are both reported today and were measured firing.
+
+    **What this cannot do, stated rather than asserted away.** It cannot tell whether a
+    tester exists or whether a verdict is true; `decided_by: "a cat walking on the
+    keyboard"` is a real name to this check and would pass. Identity is not derivable
+    from the repository, and a check that pretended otherwise would be shape dressed up
+    as verification. What is closed is narrower and is what was measured open: a report
+    that supplies no value at all, and a round that cites no report.
+
+    **And the verdict rule is a presence rule, not a position rule -- which is a weaker
+    thing than "must state a verdict" sounds.** Any of :data:`VERDICT_TOKENS` anywhere in
+    the document satisfies it: in a heading, in a table cell, inside a quoted shell
+    command, or in a sentence about some earlier round's result. That is deliberate and
+    it is a limit rather than a design: the nine reports this bundle names declare their
+    verdicts in at least five distinct shapes -- a table cell, `### … — **FAIL**`,
+    `**Verdict: `FAIL`.**`, a fenced `FAIL — 5 of 6.` and a bare `PASS` line -- so a rule
+    demanding a declaration position would have to accept all of them, and would then be
+    satisfiable by ordinary prose anyway. What it therefore catches is exactly one thing:
+    a document that states no result vocabulary at all.
+
+    The load-bearing half of this pair is the placeholder rule, and *that* one reads
+    values at any case (:data:`PLACEHOLDER_VALUE`) and compound tokens at any case
+    anywhere. Measured on this module's fixture before that split: an uppercase
+    ``RESULT_PLACEHOLDER`` verdict gave 2 findings, the same verdict written
+    ``result_placeholder`` beside a prose sentence containing "PASS" gave **0**, and
+    ``tester: tbd`` and ``tester: placeholder`` each gave 0. A placeholder report that
+    passed by being lower-cased is the case this check exists to stop.
+    """
+    problems: list[Finding] = []
+    if not isinstance(manifest, dict):
+        return problems
+    rounds = manifest.get("acceptance_rounds")
+    if not isinstance(rounds, list):
+        return problems
+
+    for entry in rounds:
+        if not isinstance(entry, dict):
+            continue
+        number = entry.get("round")
+        named = {key: entry.get(key) for key in ("automated_report", "manual_report")}
+
+        # **Two obligations are deliberately not restated here.** A round that names no
+        # report is already reported by `terminal_state_problems` (b), and a round
+        # naming a report the tree does not track is already reported by
+        # `accounting_problems` (a) as a claimed path that does not exist. Both were
+        # measured firing on the contour as it stood; adding a second finding for one
+        # fact makes a reader count two defects where there is one, which is the same
+        # dishonesty as counting none.
+        for key, path in sorted(named.items()):
+            if not isinstance(path, str) or not path:
+                continue
+            text = tree.read(path)
+            if text is None:
+                continue
+            for token in sorted({m.group(0) for m in PLACEHOLDER_TOKEN.finditer(text)}):
+                problems.append(Finding(
+                    CHECK_TERMINAL, path,
+                    f"is the {key} round {number} rests on and carries the placeholder "
+                    f"token {token}: a value nobody supplied, published as evidence",
+                ))
+            if not VERDICT_TOKEN.search(text):
+                problems.append(Finding(
+                    CHECK_TERMINAL, path,
+                    f"is the {key} for round {number} and states no verdict: none of "
+                    f"{list(VERDICT_TOKENS)} appears in it, so the word the manifest "
+                    "carries for this round is not in the record it cites",
+                ))
+            if key != "manual_report":
+                continue
+            declared = TESTER_DECLARATION.search(text)
+            if declared is None:
+                problems.append(Finding(
+                    CHECK_TERMINAL, path,
+                    f"is the manual acceptance for round {number} and declares no "
+                    "tester: a manual result with nobody behind it is an assertion "
+                    "about a procedure nobody is recorded as having run",
+                ))
+            elif PLACEHOLDER_VALUE.search(declared.group(1)):
+                problems.append(Finding(
+                    CHECK_TERMINAL, path,
+                    f"is the manual acceptance for round {number} and its tester is the "
+                    f"placeholder {declared.group(1).strip()!r}",
+                ))
+    return problems
+
+
 # ---------------------------------------------------------------------------
 # Check two: live versus historical, structurally.
 # ---------------------------------------------------------------------------
@@ -1083,6 +1249,23 @@ def tag_integrity_problems(tree: Tree, tag: TagFacts) -> list[Finding]:
         return problems
 
     families = reviewed_families(tree)
+    # **An absent declaration is a finding and never a skip.** `reviewed_families`
+    # returns `()` when the contract manifest carries no `families:` block, and every
+    # digest claim below used to be guarded by `digest is not None` -- so a record that
+    # simply omitted the list bought silence on all of them. That is the strongest form
+    # of the defect this contour exists to catch: the obligation is discharged by
+    # deleting the declaration that creates it. Measured before the repair, on a bundle
+    # shaped like this module's own harness output: a tag message claiming
+    # `artifact_manifest_sha256 000…0` produced zero tag-integrity findings.
+    if not families:
+        problems.append(Finding(
+            CHECK_TAG, CONTRACT_MANIFEST,
+            "names no reviewed families, so the digest recipe this checkpoint publishes "
+            "has no subject and no claim about it can be recomputed. Every "
+            "artifact_manifest_sha256 claim below is therefore reported unverified "
+            "rather than passed over: an obligation an absent declaration discharges is "
+            "not an obligation",
+        ))
     at_tag = tree.paths_at(tag.commit)
     if at_tag is None:
         problems.append(Finding(
@@ -1094,21 +1277,39 @@ def tag_integrity_problems(tree: Tree, tag: TagFacts) -> list[Finding]:
     digest, count = artifact_manifest_digest(
         families, at_tag, lambda path: tree.blob_at(tag.commit, path)
     )
+    if families:
+        problems += _declared_size_problems(contract, at_tag, count, tag)
 
     # "Has not moved" -- against the digest the records publish, because the tag sits on
     # the commit that carries the manifest and a commit cannot name its own hash.
     published = manifest.get("artifact_manifest_sha256") if isinstance(manifest, dict) else None
-    if isinstance(published, str) and digest is not None and published != digest:
-        problems.append(Finding(
-            CHECK_TAG, tag.name,
-            f"{MANIFEST} publishes artifact_manifest_sha256 {published} and the recipe "
-            f"recomputed at the tag's own commit {tag.commit[:12]} gives {digest}: "
-            "either the tag has moved or the reviewed families have",
-        ))
+    if isinstance(published, str):
+        if digest is None:
+            problems.append(Finding(
+                CHECK_TAG, tag.name,
+                f"{MANIFEST} publishes artifact_manifest_sha256 {published} and this "
+                f"tree cannot recompute it at the tag's own commit {tag.commit[:12]}: "
+                "the recipe names no families, or a member's bytes are unreadable "
+                "there. The claim stands unverified, which is reported and not skipped",
+            ))
+        elif published != digest:
+            problems.append(Finding(
+                CHECK_TAG, tag.name,
+                f"{MANIFEST} publishes artifact_manifest_sha256 {published} and the "
+                f"recipe recomputed at the tag's own commit {tag.commit[:12]} gives "
+                f"{digest}: either the tag has moved or the reviewed families have",
+            ))
 
     # The tag message is bound to this commit by construction. Its claims are live.
     for match in TAG_DIGEST_CLAIM.finditer(tag.message):
-        if digest is not None and match.group(1) != digest:
+        if digest is None:
+            problems.append(Finding(
+                CHECK_TAG, f"{tag.name} (message)",
+                f"the tag message states artifact_manifest_sha256 {match.group(1)} and "
+                "the recipe cannot be recomputed over the tag's own commit, so the one "
+                "claim whose subject needs no declaration cannot be checked at all",
+            ))
+        elif match.group(1) != digest:
             problems.append(Finding(
                 CHECK_TAG, f"{tag.name} (message)",
                 f"the tag message states artifact_manifest_sha256 {match.group(1)} and "
@@ -1123,6 +1324,15 @@ def tag_integrity_problems(tree: Tree, tag: TagFacts) -> list[Finding]:
             ))
     for match in TAG_IDENTITY_CLAIM.finditer(tag.message):
         other = match.group(1)
+        if not families:
+            # Over the empty family set this claim is true of any two commits.
+            problems.append(Finding(
+                CHECK_TAG, f"{tag.name} (message)",
+                f"the tag message claims the reviewed families are byte identical to "
+                f"{other} and the recipe names no families, so the claim is over the "
+                "empty set and would hold of any two commits in this repository",
+            ))
+            continue
         drifted = _family_drift(tree, families, tag.commit, other)
         if drifted is None:
             problems.append(Finding(
@@ -1135,6 +1345,68 @@ def tag_integrity_problems(tree: Tree, tag: TagFacts) -> list[Finding]:
                 CHECK_TAG, f"{tag.name} (message)",
                 f"the tag message claims the reviewed families are byte identical to "
                 f"{other}, and {len(drifted)} differ at the tag's own commit: {drifted}",
+            ))
+    return problems
+
+
+def _declared_size_problems(
+    contract: dict, at_tag: tuple[str, ...], count: int, tag: TagFacts
+) -> list[Finding]:
+    """A declared file count must be the recipe's own count, not one the record covers.
+
+    **A zero that discharges an obligation is the same shape as an absence that
+    discharges it.** :func:`aggregate_problems` compares a declared count with the number
+    of member hashes the record itself lists, so any count at or below that number
+    discharges the obligation by understating it -- an absent ``artifact_count`` is a
+    finding and ``artifact_count: 0`` is not, one value along. Measured on the published
+    `contract-manifest.yaml`: ``aggregate_problems`` returns 5 findings as written, 4
+    with ``artifact_count: 0``, 1 with every family's ``files:`` set to ``0``, and **0**
+    with both zeroed -- the whole check bought off by understating two numbers.
+
+    The count the recipe really rolls over is only available where the recipe is
+    executed, which is over the tag's own commit in :func:`tag_integrity_problems`; the
+    same value already checks the tag *message*'s "over N files" claim, and never checked
+    the record that publishes the recipe. Findings are filed under file-and-hash
+    accounting because that is the obligation they belong to, and not under the check
+    whose function happens to hold the number.
+
+    **Not guarded on the digest, deliberately.** ``artifact_manifest_digest`` returns the
+    full member count whether or not the bytes could be hashed, so an unreadable member
+    leaves the count exact and this check keeps working where the digest comparison
+    cannot. The one state in which the count means nothing is an empty family list, which
+    is reported by the caller as a finding of its own -- so the caller runs this on
+    ``if families:`` and never on "the recipe happened to succeed". An obligation guarded
+    by the success of a different check is the shape item 5 closed here last round.
+    """
+    problems: list[Finding] = []
+    declared = contract.get("artifact_count")
+    if isinstance(declared, str) and declared.isdigit() and int(declared) != count:
+        problems.append(Finding(
+            CHECK_ACCOUNTING, f"{CONTRACT_MANIFEST}:artifact_count",
+            f"declares an aggregate over {declared} file(s) and the recipe it publishes "
+            f"rolls over {count} at the tag's own commit {tag.commit[:12]}: a declared "
+            "size that is not the measured one certifies a set that is not the one the "
+            "aggregate covers",
+        ))
+    families = contract.get("families")
+    if not isinstance(families, dict):
+        return problems
+    for name in sorted(families):
+        body = families[name]
+        if not isinstance(body, dict):
+            continue
+        stated = next(
+            (body[k] for k in COUNT_KEYS
+             if isinstance(body.get(k), str) and body[k].isdigit()), None
+        )
+        if stated is None:
+            continue
+        held = sum(1 for path in at_tag if path.startswith(f"{name}/"))
+        if int(stated) != held:
+            problems.append(Finding(
+                CHECK_ACCOUNTING, f"{CONTRACT_MANIFEST}:families.{name}",
+                f"declares {stated} file(s) and this family holds {held} at the tag's "
+                f"own commit {tag.commit[:12]}",
             ))
     return problems
 
@@ -1317,6 +1589,26 @@ def aggregate_problems(tree: Tree) -> list[Finding]:
             and re.fullmatch(r"[A-Za-z0-9_.-]+\.[A-Za-z0-9]+", key)
         )
 
+    def member_hashes_anywhere(block: dict) -> int:
+        """:func:`member_hashes` over ``block`` and every block nested inside it.
+
+        **A flat count made the per-family obligation unsatisfiable on this
+        repository, which is the same defect as an obligation that discharges itself.**
+        Bare filenames are the keys, and a mapping cannot carry one key twice: measured
+        at this commit, `contracts` holds 33 files of which 6 are `README.md`, and
+        `fixtures` holds 32 of which 5 are `manifest.json` and 3 are `README.md`. No
+        flat enumeration of either family can reach its own declared count, so no
+        publication could ever have discharged the requirement -- a rule nobody can
+        satisfy tells a reader nothing about the record that failed it. Members nested
+        by directory *can* be written, so they are counted where they can be written,
+        and the requirement becomes one a bundle can actually meet.
+        """
+        return member_hashes(block) + sum(
+            member_hashes_anywhere(value)
+            for value in block.values()
+            if isinstance(value, dict)
+        )
+
     families = parsed.get("families")
     if isinstance(families, dict):
         for name, body in sorted(families.items()):
@@ -1331,7 +1623,7 @@ def aggregate_problems(tree: Tree) -> list[Finding]:
                 (int(body[k]) for k in COUNT_KEYS
                  if isinstance(body.get(k), str) and body[k].isdigit()), None
             )
-            listed = member_hashes(body)
+            listed = member_hashes_anywhere(body)
             if declared is None:
                 problems.append(Finding(
                     CHECK_ACCOUNTING, f"{CONTRACT_MANIFEST}:families.{name}",
@@ -1348,28 +1640,29 @@ def aggregate_problems(tree: Tree) -> list[Finding]:
 
     aggregate = parsed.get("artifact_manifest_sha256")
     declared = parsed.get("artifact_count")
-    if isinstance(aggregate, str) and isinstance(declared, str) and declared.isdigit():
-        def listed_everywhere(block: dict) -> int:
-            """Every per-file hash anywhere in the record, at any depth.
-
-            One level deep is not enough and the difference is not cosmetic: the family
-            blocks are nested under ``families``, so a manifest that *did* enumerate its
-            members family by family would have read as enumerating none of them, and
-            the check would have gone on reporting a fully accounted record as unlisted.
-            """
-            return member_hashes(block) + sum(
-                listed_everywhere(value)
-                for value in block.values()
-                if isinstance(value, dict)
-            )
-
-        listed = listed_everywhere(parsed)
-        if listed < int(declared):
+    if isinstance(aggregate, str):
+        # **Omitting the count must not discharge the obligation.** This branch used to
+        # require `artifact_count` to be present before it would run, so a record that
+        # published a whole-checkpoint aggregate and stated no count was accounted for
+        # by saying less. The per-family arm above already reported an absent count;
+        # the top-level one is where the checkpoint's own identity digest lives, and it
+        # was the arm that went quiet.
+        if not (isinstance(declared, str) and declared.isdigit()):
             problems.append(Finding(
                 CHECK_ACCOUNTING, f"{CONTRACT_MANIFEST}:artifact_manifest_sha256",
-                f"declares an aggregate over {declared} files and the record lists "
-                f"{max(listed, 0)} per-file hashes across all of its sections",
+                f"declares the aggregate {aggregate[:16]}… over an unstated number of "
+                f"files: artifact_count is {declared!r}. An aggregate whose size is "
+                "undeclared certifies a set nobody can name, and an obligation that an "
+                "absent declaration discharges is not an obligation",
             ))
+        else:
+            listed = member_hashes_anywhere(parsed)
+            if listed < int(declared):
+                problems.append(Finding(
+                    CHECK_ACCOUNTING, f"{CONTRACT_MANIFEST}:artifact_manifest_sha256",
+                    f"declares an aggregate over {declared} files and the record lists "
+                    f"{max(listed, 0)} per-file hashes across all of its sections",
+                ))
     return problems
 
 
@@ -1478,6 +1771,7 @@ def run(tree: Tree, tag: TagFacts) -> Verdict:
     for reason in reasons:
         verdict.findings.append(Finding(CHECK_TERMINAL, MANIFEST, reason))
     verdict.findings += terminal_state_problems(tree, state, manifest)
+    verdict.findings += acceptance_evidence_problems(tree, manifest)
     live_findings, verified = live_vs_historical_report(tree)
     verdict.findings += live_findings
     verdict.findings += tag_integrity_problems(tree, tag)

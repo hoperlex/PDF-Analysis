@@ -557,6 +557,16 @@ MANUAL_VERDICTS = ("PASS", "FAIL", "BLOCKED")
 #: * `manual_cases` — every case ID in :data:`MANUAL_RUNBOOK` must carry a verdict.
 #: * `note` — what the requirement is, and where it is **shape rather than content** it
 #:   says so instead of dressing shape up as verification. §11.19.4 lists those three.
+#:
+#: The `note` and `requires_note` texts name the **role** and not the instance. They
+#: carried `W0-INT-01` after the by-fact sweep of round three moved every constant, and
+#: they were **inert**: a note is concatenated after `"Expected "` when a requirement is
+#: unmet and is matched against nothing, so no check read them and no resolution
+#: depended on them. They are corrected because a reader of a finding on a tree that
+#: reassigned the act should not be sent to a task that never stated the requirement --
+#: not because anything went green or red by it. Interpolating the resolved constant
+#: was tried first and rejected: `_is_a_literal_expectation` requires the whole-table
+#: pins to name nothing, and an f-string in a pin unpins the table it pins.
 CHECKPOINT_DELIVERABLES = (
     {
         "name": "checkpoint-report.md",
@@ -587,7 +597,8 @@ CHECKPOINT_DELIVERABLES = (
             "requirements/validation.lock",
         ),
         "note": (
-            "W0-INT-01 deliverable 2 in full: exact file hashes, contract versions, "
+            "the ratifying task's deliverable 2 in full: exact file hashes, contract "
+            "versions, "
             "candidate commit, dependency-lock hashes, migration_head: none, the golden "
             "selection hash and the analysis registry/name-map hashes. Every value is "
             "recomputed from the repository, so a manifest describing another tree is a "
@@ -609,7 +620,8 @@ CHECKPOINT_DELIVERABLES = (
         "name": "manual-test-report.md",
         "manual_cases": True,
         "note": (
-            "W0-INT-01 deliverable 3: tester identity, timestamps and a verdict per "
+            "the ratifying task's deliverable 3: tester identity, timestamps and a "
+            "verdict per "
             "case for every MT00 case the runbook defines. The case list is read out of "
             "the runbook and the runtime disposition out of the manifest; the tester "
             "name and the timestamp are shape only, because no repository value can "
@@ -620,7 +632,8 @@ CHECKPOINT_DELIVERABLES = (
         "name": "migration-head.txt",
         "exact": "none",
         "note": (
-            "the migration head W0-INT-01's frozen inputs record: none. The whole file, "
+            "the migration head the ratifying task's frozen inputs record: none. The "
+            "whole file, "
             "not a needle in it"
         ),
     },
@@ -652,7 +665,8 @@ CHECKPOINT_DELIVERABLES = (
         "name": "restore-or-rollback-note.md",
         "values": ("checkpoint_tag", "candidate_commit"),
         "note": (
-            "what to roll back and what to roll back to. W0-INT-01's rollback section "
+            "what to roll back and what to roll back to. The ratifying task's "
+            "rollback section "
             "states no further content, and none is invented here"
         ),
     },
@@ -714,7 +728,8 @@ RATIFICATION_PUBLICATION_RECORDS = (
         "must_still_contain": (CHECKPOINT_TAG_NEEDLE, "`{task}`"),
         "requires_note": (
             "the next unlocked S01 preparation tasks deliverable 5 names, with the "
-            "wave's own status line and task row no longer calling W0-INT-01 blocked"
+            "wave's own status line and task row no longer calling the ratifying "
+            "task blocked"
         ),
     },
     {
@@ -3422,6 +3437,81 @@ def _reviewed_manifest_digest(root: Path) -> tuple[str, int]:
     return running.hexdigest(), len(tracked)
 
 
+def _reviewed_family_blocks(root: Path) -> str:
+    """The `families:` block a published contract manifest has to carry, computed.
+
+    **The harness used to publish a bundle its own contour could not judge.** The
+    checkpoint's digest recipe is read out of `contract-manifest.yaml`'s `families:`
+    block; with no such block the contour's `reviewed_families` returns `()`, the
+    recipe has no subject, and every `artifact_manifest_sha256` claim was skipped
+    rather than checked. This method wrote no `families:` block at all — so the module's
+    model of a correct publication was one in which its own guard could not fire, and a
+    tag message claiming a digest of zeros passed. A reachability proof that reaches a
+    state the checks cannot see proves the wrong thing.
+
+    Members are nested by directory segment and not by bare filename. That is not a
+    style choice: `member_hashes` keys on filenames, and at this commit `contracts`
+    holds six `README.md` while `fixtures` holds five `manifest.json` and three
+    `README.md`. A mapping cannot carry one key twice, so a flat enumeration could never
+    reach the family's own declared count and the obligation could not be discharged by
+    anyone.
+
+    The family list is :data:`REVIEWED_PREFIXES` without its trailing separators, not a
+    fifth copy of the same four names: this module already carries that list once, and a
+    new module-level tuple of it would have been one more record to go stale -- and, as
+    `TableExpectationTests` measured the moment it was written, one more table needing
+    a pin of its own.
+    """
+    families = tuple(prefix.rstrip("/") for prefix in REVIEWED_PREFIXES)
+    tracked = [
+        path
+        for path in sorted(
+            _git(
+                "-C", str(root), "ls-tree", "-r", "--name-only", "HEAD", "--",
+                *families,
+                text=True,
+                check=True,
+            ).stdout.split("\n")
+        )
+        if path
+    ]
+    lines = ["families:"]
+    for family in families:
+        members = [p for p in tracked if p.startswith(f"{family}/")]
+        running = hashlib.sha256()
+        for relative in members:
+            running.update(relative.encode("utf-8"))
+            running.update(hashlib.sha256((root / relative).read_bytes()).digest())
+        lines += [
+            f"  {family}:",
+            f"    files: {len(members)}",
+            f"    sha256: {running.hexdigest()}",
+            "    members:",
+        ]
+        nested: dict = {}
+        for relative in members:
+            branch = nested
+            segments = relative[len(family) + 1 :].split("/")
+            for segment in segments[:-1]:
+                branch = branch.setdefault(segment, {})
+            branch[segments[-1]] = hashlib.sha256(
+                (root / relative).read_bytes()
+            ).hexdigest()
+
+        def emit(block: dict, depth: int) -> None:
+            pad = "  " * depth
+            for key in sorted(block):
+                value = block[key]
+                if isinstance(value, dict):
+                    lines.append(f"{pad}{key}:")
+                    emit(value, depth + 1)
+                else:
+                    lines.append(f"{pad}{key}: {value}")
+
+        emit(nested, 3)
+    return "\n".join(lines) + "\n"
+
+
 #: Each way a root can be wrong, and the reason given when it is. Separate messages are
 #: not decoration: a probe that only asserted "something raised" cannot tell one branch
 #: from another, and an independent reviewer of round eight's submission removed a
@@ -4029,7 +4119,7 @@ class _CheckpointSandbox:
             (self.root / CHECKPOINT_MANIFEST).read_text(encoding="utf-8")
         )
         number = manifest["current_round"]
-        digest = _reviewed_manifest_digest(self.root)[0]
+        digest, artifact_count = _reviewed_manifest_digest(self.root)
         disposition = manifest["runtime_fields"]
 
         def sha(relative: str) -> str:
@@ -4076,6 +4166,8 @@ class _CheckpointSandbox:
                 f"  analysis: {CANDIDATE_CONTRACT_VERSION}\n"
                 f"  events: {CANDIDATE_CONTRACT_VERSION}\n"
                 f"artifact_manifest_sha256: {digest}\n"
+                f"artifact_count: {artifact_count}\n"
+                f"{_reviewed_family_blocks(self.root)}"
                 f"file_hashes:\n"
                 f"  contracts/analysis/v1/stage-registry.json: "
                 f"{sha('contracts/analysis/v1/stage-registry.json')}\n"
@@ -12188,7 +12280,8 @@ class TableExpectationTests(unittest.TestCase):
                          'fixtures/golden/selection.json',
                          'requirements/validation.in',
                          'requirements/validation.lock'),
-              'note': 'W0-INT-01 deliverable 2 in full: exact file hashes, contract '
+              'note': "the ratifying task's deliverable 2 in full: exact file "
+                      'hashes, contract '
                       'versions, candidate commit, dependency-lock hashes, '
                       'migration_head: none, the golden selection hash and the '
                       'analysis registry/name-map hashes. Every value is recomputed '
@@ -12204,7 +12297,8 @@ class TableExpectationTests(unittest.TestCase):
                       'verified test result'},
              {'name': 'manual-test-report.md',
               'manual_cases': True,
-              'note': 'W0-INT-01 deliverable 3: tester identity, timestamps and a '
+              'note': "the ratifying task's deliverable 3: tester identity, "
+                      'timestamps and a '
                       'verdict per case for every MT00 case the runbook defines. The '
                       'case list is read out of the runbook and the runtime '
                       'disposition out of the manifest; the tester name and the '
@@ -12212,7 +12306,8 @@ class TableExpectationTests(unittest.TestCase):
                       'who ran a manual test or when'},
              {'name': 'migration-head.txt',
               'exact': 'none',
-              'note': "the migration head W0-INT-01's frozen inputs record: none. The "
+              'note': "the migration head the ratifying task's frozen inputs "
+                      "record: none. The "
                       'whole file, not a needle in it'},
              {'name': 'build-info.json',
               'json_object': True,
@@ -12231,7 +12326,8 @@ class TableExpectationTests(unittest.TestCase):
                       'silently drops one is the failure this catches'},
              {'name': 'restore-or-rollback-note.md',
               'values': ('checkpoint_tag', 'candidate_commit'),
-              'note': "what to roll back and what to roll back to. W0-INT-01's "
+              'note': "what to roll back and what to roll back to. The ratifying "
+                      "task's "
                       'rollback section states no further content, and none is '
                       'invented here'}),
         )
@@ -12273,7 +12369,7 @@ class TableExpectationTests(unittest.TestCase):
                                      '`{task}`'),
               'requires_note': 'the next unlocked S01 preparation tasks deliverable 5 '
                                "names, with the wave's own status line and task row no "
-                               'longer calling W0-INT-01 blocked'},
+                               'longer calling the ratifying task blocked'},
              {'item': 'S00 stage checklist',
               'path': 'docs/stages/S00_architecture_and_behavior_freeze.md',
               'denials': (),
