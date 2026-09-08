@@ -39,6 +39,11 @@ gates agree — leaving `W0-INT-03` a minimal, explicitly bounded delta and noth
   task files carry no banner at all; the obligation is asserted in three records and
   required by none, and no task in the recovery graph could discharge it. Requirements,
   gates and deliverables of an accepted task are frozen by its acceptance
+- `docs/program/tasks/W0-INT-03.md` — **the body, not only the banner.** Deliverable 5
+  writes the ratification delta into that file, and "status banners only" made this task's
+  own deliverable unlicensed: §3.6.2 one file over, found by the licence audit as an
+  unowned state-record finding at `W0-INT-03.md:145` that no remaining task could close.
+  `W0-INT-03` is reserved and unexecuted, so nothing about it is frozen by an acceptance
 - `docs/INDEX.md`, `docs/stages/S00_architecture_and_behavior_freeze.md`
 
 ## Forbidden hotspots
