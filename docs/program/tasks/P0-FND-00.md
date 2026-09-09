@@ -47,6 +47,7 @@ while `P0-PLN-01` completes the detailed P02–P05 roadmap in parallel.
 - `docs/program/CURRENT_STATE.md` — prototype banner and obsolete CP-01 code-hold
   sentence only
 - `docs/program/CHECKPOINT_REGISTRY.md` — prototype checkpoint table only
+- `docs/program/tasks/W1-GOV-00.md` — superseded/non-dispatchable status banner only
 - `README.md` — bootstrap/foundation code-authority paragraph only
 - `docs/INDEX.md`
 

@@ -1,5 +1,7 @@
 # Task W1-GOV-00 — transplant the W1 package onto the accepted CP-00 line and reconcile it
 
+> **Status: superseded; do not dispatch.** Prototype work is governed by `P0-FND-00`/`P0-PLN-01`; the body below is retained as historical input only.
+
 ## Outcome
 
 The fifteen prepared W1 documents live on the accepted line, reconciled with what is

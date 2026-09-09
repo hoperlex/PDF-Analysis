@@ -67,7 +67,8 @@ two sides coherent without treating root MinIO credentials as a production IAM d
 
 The root task runner is `make`. These literal commands are frozen:
 
-- `make bootstrap` — reproduce the locked developer environment;
+- `make bootstrap` — reproduce both ignored locked environments: `.venv/bootstrap` for
+  governance validators and `.venv` for runtime/foundation tests;
 - `make up` — start PostgreSQL and S3-compatible local services;
 - `make down` — stop them without deleting persisted data;
 - `make check-services` — prove PostgreSQL/MinIO health and idempotent private-bucket

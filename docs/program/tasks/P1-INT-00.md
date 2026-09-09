@@ -51,7 +51,8 @@ the three PostgreSQL/S3 provider lanes consume without modifying.
 ## Required tests
 
 - Command: `make bootstrap`
-  Expected: exit `0`; a second run changes no lock or tracked file.
+  Expected: exit `0`; `.venv/bootstrap/bin/python` and `.venv/bin/python` both execute
+  their locked smoke probes, and a second run changes no lock or tracked file.
 - Command: `make -n up down check-services migrate check-db check-storage test-foundation foundation`
   Expected: exit `0`; all required targets exist.
 - Command: `.venv/bootstrap/bin/python scripts/validate_bootstrap.py`
