@@ -1,5 +1,16 @@
 # Current state
 
+> **P0-PLN-01 candidate, 2026-09-09.** On branch `agent/p0-pln-01`, `P0-PLN-01` has
+> produced the detailed P02–P05 plan: `docs/program/PROTOTYPE_EXECUTION_PLAN.md` plus 26
+> agent-ready task files — one navigation gate, ten P02, eight P03, four P04 and three
+> P05. It is a **candidate**: no P02–P05 task is dispatchable until the owner accepts it,
+> and P01 is unaffected. The plan changes no contract, runtime, migration or foundation
+> path, records 22 unresolved owner decisions, and marks its forecast calibration
+> **pending** until measured P01 throughput exists. It also records one assumption the
+> owner must rule on: that accepting this plan, `PF-01` and `P1-NAV-01` is what lifts the
+> production-code hold for the P02 paths, and that CP-00 acceptance round eleven remains
+> an independent obligation of that line rather than a P02 predecessor.
+>
 > **Prototype-planning overlay, 2026-09-09.** On branch
 > `planning/prototype-roadmap`, the repository owner recorded `FF-01 ACCEPTED` without
 > qualification and completed `P0-FND-00`. No product or infrastructure implementation

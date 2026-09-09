@@ -228,7 +228,10 @@ The prototype checkpoint passes only when a reviewer can, from a clean local sta
 3. create a project and upload the bounded synthetic AR PDF, observing an immutable
    version plus verified private S3 object;
 4. execute the deterministic preparation path and one live `text_analysis`, while the
-   UI distinguishes queued/running/succeeded/partial/failed and live/recorded outcomes;
+   UI distinguishes the contract run states `queued`, `running`, `validating`,
+   `published`, `partial` and `failed`, and the live or recorded provider mode. The
+   success terminal of an `AuditRun` is `published`; `succeeded` is a `StageResult`
+   status on a different aggregate and is never used as a run state;
 5. observe at least two seeded issues in the live run and verify that every published
    finding quotation exists on the declared PDF page;
 6. open the page from a finding, view its exact quotation, accept one finding, reject
