@@ -20,6 +20,8 @@ the accepted Foundation Freeze.
 - the candidate PC-01 AR text-consistency target in `PROTOTYPE_PROFILE.md` section 7 and
   `ROADMAP.md` P02/P03; it is not dispatch authority, but changing it in the detailed
   plan requires an explicit owner decision rather than silent scope drift
+- proposed ADR-0019/P-23 decision-to-code navigation; it does not block P01, but its
+  implementation is a required predecessor of P02 fan-out
 - CP-00 contracts, architecture and golden fixtures at the `P0-FND-00` base
 - migration head: produced only by `P1-DB-01`; read-only to this planning task
 - base commit: the accepted `P0-FND-00` integration commit
@@ -27,6 +29,7 @@ the accepted Foundation Freeze.
 ## Allowed paths
 
 - `docs/program/tasks/P0-PLN-01.md`
+- new `docs/program/tasks/P1-NAV-*.md` — navigation implementation before P02 only
 - new `docs/program/tasks/P2-*.md`, `P3-*.md`, `P4-*.md`, `P5-*.md`
 - `docs/program/PROTOTYPE_EXECUTION_PLAN.md`
 - `docs/program/ROADMAP.md` — P02–P05 detail only
@@ -56,6 +59,8 @@ the accepted Foundation Freeze.
 - a P02/P03 graph that implements exactly the bounded AR text-consistency slice, including
   its synthetic PDF, evidence-publication gate, live/recorded provider modes, UI review
   and CSV acceptance path
+- one agent-ready pre-P02 navigation task implementing ADR-0019 with disjoint entry
+  ownership, deterministic generation/validation and accepted-foundation mappings
 - exact provider/consumer seams and disjoint allowed-path blocks
 - user-validation protocol and success/failure metrics
 - P50/P80 estimate recalibrated against actual P01 throughput
@@ -69,7 +74,7 @@ the accepted Foundation Freeze.
   Expected: exit `0`.
 - Manual graph check: P02–P05 tasks may depend on the accepted Foundation Freeze but
   do not modify it; no implementation task depends on an uncompleted planning task at
-  dispatch.
+  dispatch; navigation does not block P01 and is completed before P02 fan-out.
   Expected: pass.
 
 ## Estimate

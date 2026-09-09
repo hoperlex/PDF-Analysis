@@ -3,7 +3,7 @@
 **Статус:** baseline для нового репозитория; утверждается на CP-00.  
 **Область:** backend, frontend, PostgreSQL, S3, analysis pipeline, workers, contracts, security, testing, operations и AI-agent delivery.
 
-**CP-00 review:** a disposition for every principle below is recorded in
+**CP-00 review:** a disposition for every principle in the original P-01–P-22 set is recorded in
 [CP00_ARCHITECTURE_REVIEW.md](CP00_ARCHITECTURE_REVIEW.md). P-03, P-10, P-16, P-18
 and P-22 are ratifiable only together with the qualifications recorded there; no
 principle is deferred any more. The repository owner recorded `PD-01`–`PD-04` on
@@ -12,8 +12,10 @@ principle is deferred any more. The repository owner recorded `PD-01`–`PD-04` 
 or revocation creates a new `decision_id`, a revocation projects the current verdict
 to `pending` and never auto-restores the superseded one, and history is preserved.
 `U-04` (tenant model, IdP, TTL matrix, legal hold) remains open, so §13 retention and
-classification obligations stay non-ratifiable. No principle is ratified until the
-CP-00 integration task records acceptance.
+classification obligations stay non-ratifiable. No principle in the original P-01–P-22
+set is ratified until the CP-00 integration task records acceptance. P-23 is a post-CP-00
+prototype extension proposed on 2026-09-09; it does not rewrite the earlier disposition
+and is accepted or revised with the detailed P02–P05 plan.
 
 ## 1. Архитектурная позиция
 
@@ -137,6 +139,13 @@ Git tag без green gates, manual report и contract manifest не являет
 
 ### P-22 — Agent parallelism follows ownership boundaries
 Количество агентов не определяет параллелизм. Декомпозиция идёт по frozen contracts, file ownership и bounded contexts. Shared hotspots принадлежат интегратору волны.
+
+### P-23 — Decision-to-code navigation is maintained
+Решения, contracts, owning tasks, implementation seams и proving tests связаны через
+машинно-проверяемые task/context-owned navigation fragments и rebuildable aggregate
+index. Индекс помогает человеку и AI-агенту найти действующую authority, но сам не
+становится authority. Shared aggregate имеет одного integration writer; P02+ code change
+без обновления своего navigation fragment или явного reviewed non-applicability неполон.
 
 ## 5. Backend dependency rule
 

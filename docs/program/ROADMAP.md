@@ -31,9 +31,9 @@ P0-FND-00
   -> FF-01 owner approval
        |-> P1-INT-00 -> PostgreSQL/S3 implementation lanes -> PF-01
        |
-       `-> P0-PLN-01 -> detailed P02-P05 plan approval
+       `-> P0-PLN-01 -> detailed P02-P05 plan + navigation task approval
                               |
-                    PF-01 + accepted plan
+                    PF-01 + accepted plan + navigation gate
                               `-> P02 implementation
 ```
 
@@ -54,6 +54,19 @@ allows infrastructure development before the complete prototype plan is ratified
 
 The old S00–S10 documents remain a long-term capability backlog. Their ordering no
 longer grants dispatch authority to prototype tasks.
+
+## Decision-to-code navigation gate
+
+ADR-0019/P-23 introduces a repository navigation layer for human and AI-agent delivery.
+It does not delay FF-01 or P01. `P0-PLN-01` must create its agent-ready implementation
+task, which may prepare the schema and tooling in parallel with P01 but must be accepted
+before any P02 implementation fan-out.
+
+The layer uses task/context-owned machine-readable fragments and a generated aggregate
+index. It maps active decisions and contracts to owning tasks, implementation paths/public
+symbols, runtime entrypoints and proving tests, and supports reverse lookup from a code
+path/context. Canonical authority remains in the linked ADR, contract, task, code or test;
+the navigation index is rebuildable and never silently resolves ambiguity.
 
 ## P00 — direction and early Foundation Freeze
 
@@ -267,3 +280,5 @@ used as an implementation velocity baseline.
    product-blocking, advisory or a plan error.
 6. Every implementation batch ends in a runnable integrated result.
 7. New scope is disabled until a task and acceptance criterion enable it.
+8. P02+ implementation changes update their owned decision-to-code navigation fragment;
+   only the integration owner regenerates the shared index.

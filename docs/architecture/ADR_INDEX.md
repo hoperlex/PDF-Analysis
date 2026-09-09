@@ -20,13 +20,17 @@
 | [ADR-0016-testing-evidence-model](adr/ADR-0016-testing-evidence-model.md) | accepted bootstrap | Testing is an evidence model, not a test pyramid quota |
 | [ADR-0017-contract-waves-and-worktree-ownership](adr/ADR-0017-contract-waves-and-worktree-ownership.md) | accepted bootstrap | Contract waves and worktree-per-task ownership |
 | [ADR-0018-checkpoint-versioning](adr/ADR-0018-checkpoint-versioning.md) | accepted bootstrap | Checkpoint version = tag + frozen contracts + automated + manual evidence |
+| [ADR-0019-decision-code-navigation](adr/ADR-0019-decision-code-navigation.md) | proposed prototype extension | Rebuildable decision ↔ code/contracts/tests navigation for humans and AI agents |
 
 ## CP-00 disposition
 
-Task `W0-ARC-01` recorded a disposition for every ADR above in
+Task `W0-ARC-01` recorded a disposition for ADR-0001 through ADR-0018 in
 [CP00_ARCHITECTURE_REVIEW.md](CP00_ARCHITECTURE_REVIEW.md) and its machine matrix
-[CP00_ARCHITECTURE_REVIEW.json](CP00_ARCHITECTURE_REVIEW.json). No status in the
-table above was changed by that review and no ADR was added, rewritten or removed.
+[CP00_ARCHITECTURE_REVIEW.json](CP00_ARCHITECTURE_REVIEW.json). No status in that
+original set was changed by the review and it added, rewrote or removed no ADR.
+
+ADR-0019 was added afterwards as a post-CP-00 prototype extension. It is not included in
+the earlier CP-00 disposition and is accepted or revised with the detailed P02–P05 plan.
 
 State after the repository owner recorded `PD-01`–`PD-05` on 2026-09-01:
 
@@ -48,3 +52,7 @@ name-level legacy alias map required by the approved `PD-02` exists.
 ## Status semantics
 
 `accepted bootstrap` means this package selects the decision as its baseline, but the program still requires the explicit CP-00 ratification task so a coding agent cannot silently treat a supplied/refactoring proposal as owner-approved production policy.
+
+`proposed prototype extension` means the decision is mandatory input to prototype
+planning but does not claim retroactive CP-00 ratification or authorize implementation by
+itself.

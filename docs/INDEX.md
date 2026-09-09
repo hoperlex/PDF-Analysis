@@ -15,6 +15,7 @@
 - [Domain model](architecture/DOMAIN_MODEL.md)
 - [Contract catalog](architecture/CONTRACT_CATALOG.md)
 - [ADR index](architecture/ADR_INDEX.md)
+- [ADR-0019 decision-to-code navigation](architecture/adr/ADR-0019-decision-code-navigation.md) — proposed prototype extension
 
 ## Program
 - [Roadmap](program/ROADMAP.md)
@@ -22,6 +23,7 @@
 - [FF-01 PostgreSQL/S3 Foundation Freeze](program/PROTOTYPE_FOUNDATION_FREEZE.md) — approval-ready early slice
 - [Task P0-FND-00](program/tasks/P0-FND-00.md) — early foundation-plan approval
 - [Task P0-PLN-01](program/tasks/P0-PLN-01.md) — later prototype plan, parallel with P01
+- [Task P0-NAV-00](program/tasks/P0-NAV-00.md) — AI-agent decision-to-code navigation architecture
 - [Task P1-INT-00](program/tasks/P1-INT-00.md) — toolchain and command pins
 - [Task P1-INF-01](program/tasks/P1-INF-01.md) — local PostgreSQL and MinIO
 - [Task P1-DB-01](program/tasks/P1-DB-01.md) — migration/session foundation
