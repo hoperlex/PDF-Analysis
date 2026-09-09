@@ -1,7 +1,10 @@
 # Task P1-INT-00 — pin the early foundation toolchain and command surface
 
-> **Status: dispatchable.** `FF-01 ACCEPTED` was recorded on 2026-09-09. The
-> orchestrator must pin the literal acceptance-commit SHA before execution.
+> **Status: implemented on branch `agent/p1-int-00`; READY_FOR_PRIMARY_REVIEW.**
+> Executed from the `FF-01 ACCEPTED` commit `0b01a3eefe0e6724f6570ccebb9154daf1fdbaec`.
+> This task is **not accepted**: `P1-INF-01`, `P1-DB-01` and `P1-STO-01` stay blocked
+> until an independent review accepts the pins and the command surface, and until the
+> integrator records the resulting `P1_INT_SHA`.
 
 ## Outcome
 
@@ -80,7 +83,49 @@ Revert before provider integration. A later pin change is a new single-owner tas
 
 ## Handoff
 
-- changed files and hashes of locks/images
-- bootstrap transcript and clean second-run proof
-- known host prerequisites
-- exact commit used by all three provider lanes
+Delivered on `agent/p1-int-00` from base `0b01a3eefe0e6724f6570ccebb9154daf1fdbaec`.
+
+**Changed files.** `.python-version`, `pyproject.toml`, `uv.lock`, `Makefile`,
+`.env.example`, `docs/program/FOUNDATION_LOCK.json`, the foundation command section of
+`README.md`, and this status/handoff. Nothing else is touched.
+
+**Pins.** Python `3.12.3`; `uv 0.12.11` installed from a sha256-verified artifact set;
+`psycopg[binary]==3.3.5`, `SQLAlchemy==2.0.52`, `alembic==1.19.2`, `boto3==1.43.90`,
+`pytest==9.1.1` (group `test`). `uv.lock` holds 23 `[[package]]` entries: 22 third-party
+packages plus the virtual root, of which 20 install on linux/x86_64 (`colorama` and
+`tzdata` are `sys_platform == 'win32'`). Images are pinned by
+tag **and** multi-arch index digest: `postgres:17.11-trixie`,
+`minio/minio:RELEASE.2025-09-07T16-13-09Z`, `minio/mc:RELEASE.2025-08-13T08-35-41Z`.
+No floating tag and no `latest` reference exists. Exact digests, lock hashes and the
+literal invocation of every target are in `docs/program/FOUNDATION_LOCK.json`.
+
+**Bootstrap.** `make bootstrap` builds `.venv/bootstrap` from
+`requirements/validation.lock` with `--require-hashes` and `.venv` from `uv.lock` with
+`uv sync --frozen`, then probes both against their own locks. It never writes a lock: a
+missing `uv.lock` is a hard, explicit failure. A second run installs nothing and leaves
+every tracked file and both locks byte-identical.
+
+**Host prerequisites.** CPython exactly `3.12.3` as a base interpreter (an active
+virtualenv is refused, not silently used); Docker with the `compose` plugin for the
+service targets; network to PyPI and the container registry on first use. Where
+`python3.12` is not on `PATH`, pass `FOUNDATION_PYTHON=<path>`.
+
+**Commit for the provider lanes.** Lanes must not branch from `agent/p1-int-00`. They
+branch from the integrator's P1-INT-00 integration commit (`P1_INT_SHA`), recorded by
+the integrator after this task is accepted, and each lane must first give itself a
+unique `FOUNDATION_INSTANCE`, `POSTGRES_PORT`, `S3_API_PORT`, `S3_CONSOLE_PORT`,
+`POSTGRES_DB` and `S3_BUCKET` in its own `.env`.
+
+**Evidence contract for the provider lanes.** `check-services`, `check-db` and
+`check-storage` must each print `FOUNDATION-CHECK OK <target>` as their last line, after
+their assertions pass. `make` refuses a zero exit status without that line, and refuses a
+reserved path that exists but is zero bytes. This is a P1-INT-00 addition to the command
+contract, not an FF-01 requirement: an exit code alone is not evidence, and without it a
+stub checker would make `make foundation` report success having proved nothing. Reject it
+in review if the program does not want it — it is a deliberate constraint on three lanes.
+
+**Known limitations.** No target beyond `bootstrap` has been executed end-to-end, because
+every one of them forwards to a provider implementation that does not exist yet; each was
+exercised only to the point of its explicit refusal. The full list, including the
+`.venv/bootstrap` nesting that FF-01's literal paths require, is in
+`docs/program/FOUNDATION_LOCK.json` under `known_limitations`.
