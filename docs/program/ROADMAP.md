@@ -289,10 +289,14 @@ slot per acceptance:
 |---|---|---:|---:|
 | FF-01 approval and P1 dispatch | owner response | 0.5–1 day | 2 days |
 | PF-01 accepted foundation after FF-01 | FF-01 §9 wave estimate | **4–7 days** | **11–13 days** |
-| PF-01 → PC-01 | effort and slot contention | **30.0 days** | **60.0 days** |
-| FF-01 → PC-01 | the two rows above | **34–37 days** | **71–73 days** |
+| PF-01 → PC-01 | effort and slot contention, with the frontend overlapping the P02 tail | **25.75 days** | **51.5 days** |
+| FF-01 → PC-01 | the two rows above | **29.75–32.75 days** | **62.5–64.5 days** |
 | PC-01 → PC-02 | expert scheduling, not effort | **11–14 days** | **24–27 days** |
 | PC-02 → PC-03 | effort plus owner-response cycles | **7.25 days** | **13.5 days** |
+
+P02 and P03 are not fully serial: frontend authoring is unblocked by the frozen
+`P2-API-01` contract and runs beside the P02 tail, while `P3-QA-01` waits for the accepted
+`P2-INT-02` so end-to-end evidence judges an accepted backend.
 
 These are the first bottom-up forecast, published by `P0-PLN-01` from the agent-ready
 graph without waiting for P01. The `FF-01`→`PF-01` row is cited from FF-01 §9 as a

@@ -29,6 +29,8 @@ accepted and integrated:
 
 - `docs/program/P02_HANDOFF.md`
 - `docs/navigation/INDEX.md` — regeneration only, as the integration owner of this batch
+- `docs/navigation/incidents/p2-int-02.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-INT-02.md` status/handoff
 - status banners of `docs/program/tasks/P2-*.md`
 
@@ -94,6 +96,9 @@ Effort P50 0.5 person-day, P80 1.0 person-day. Basis: a handoff record and one r
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - the accepted commit per module and the migration head
 - commands and results
 - known limits and the conformance-scope statement handed to P03

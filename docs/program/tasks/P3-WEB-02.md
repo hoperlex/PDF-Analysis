@@ -25,8 +25,10 @@ is accepted and integrated, and it may not be accepted until the last two are:
 ## Frozen inputs
 
 - API contract: the version-content and run-findings operations at the `P3-API-01` snapshot
-- domain contract: observation immutability, and the categories `internal_contradiction`
-  and `explicit_placeholder`
+- domain contract: observation immutability
+- the PC-01 analysis profile from `P2-AI-01`: the finding categories
+  `internal_contradiction` and `explicit_placeholder`. These are new product vocabulary
+  declared by that profile, not domain-contract terms
 - golden assertion `GJ-03-EO-01`
 - migration head: not consumed
 - base commit: the accepted `P3-WEB-01` integration commit, plus the widget props frozen in
@@ -40,6 +42,8 @@ is accepted and integrated, and it may not be accepted until the last two are:
 - `web/src/entities/finding/**`, `web/src/entities/finding-observation/**`
 - `web/tests/unit/review/**`
 - `docs/navigation/entries/p3-web-02.json`
+- `docs/navigation/incidents/p3-web-02.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P3-WEB-02.md`
 
 ## Forbidden hotspots
@@ -115,6 +119,9 @@ Effort P50 2.0 person-days, P80 4.0 person-days. Basis: one bounded PDF island p
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - changed files and containment proof, with commands and results
 - the PDF rendering library and pin actually used, and the measured first-page render time
   on the acceptance fixture with the command that measured it

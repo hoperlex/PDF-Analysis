@@ -36,6 +36,8 @@ is accepted and integrated:
 - `web/scripts/generate-api-client.mjs`
 - `web/tests/contract/**`
 - `docs/navigation/entries/p3-api-01.json`
+- `docs/navigation/incidents/p3-api-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P3-API-01.md`
 
 ## Forbidden hotspots
@@ -108,6 +110,9 @@ Effort P50 0.5 person-day, P80 1.5 person-days. Basis: generation config plus on
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - generated client version, the snapshot commit of the P02 OpenAPI and the generator pin
 - commands/results including the drift probe
 - seam operations actually exercised versus declared

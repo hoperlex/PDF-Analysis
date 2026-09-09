@@ -37,6 +37,8 @@ accepted and integrated:
 - `web/src/entities/expert-decision/**`
 - `web/tests/unit/decisions/**`
 - `docs/navigation/entries/p3-web-03.json`
+- `docs/navigation/incidents/p3-web-03.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P3-WEB-03.md`
 
 ## Forbidden hotspots
@@ -111,6 +113,9 @@ with `P2-FND-01`. Basis: two append actions and a chronological ledger. Calibrat
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - changed files and containment proof, with commands and results
 - the event kinds actually emitted and their payloads
 - known limits: one local reviewer, no carryover

@@ -1,6 +1,6 @@
 # Task P0-PLN-01 — complete the post-foundation prototype roadmap
 
-> **Status: executed, revision 1; candidate on `agent/p0-pln-01`, awaiting primary
+> **Status: executed, revision 2; candidate on `agent/p0-pln-01`, awaiting primary
 > review.** `P0-FND-00` was accepted on 2026-09-09 and this task ran in parallel with P01
 > **dispatch readiness**; no P01 lane had been dispatched at the time of writing, which is
 > why calibration is pending rather than measured. Its deliverables are
@@ -137,8 +137,9 @@ own accepted freeze.
 - **Calibration:** pending. No measured P01 throughput exists, because no P01 task has been
   dispatched. The recalibration trigger is recorded in the execution plan and in
   `ROADMAP.md`: after `PF-01` acceptance and before P02 dispatch.
-- **Unresolved owner decisions:** 23, listed as `OD-01` to `OD-23` in the execution plan.
-  Ids are append-only and are never renumbered.
+- **Unresolved owner decisions:** 24, listed as `OD-01` to `OD-24` in the execution plan.
+  Ids are append-only and are never renumbered. `OD-24` records the PC-01 `AuditRun`
+  conformance subset; `OD-14` is now an explicit dispatch prerequisite of `P2-INT-00`.
   `OD-14` is the one that can move the whole graph: whether accepting this plan lifts the
   production-code hold for the P02 paths, or whether CP-00 acceptance round eleven and
   `W0-INT-03` are additional P02 predecessors.

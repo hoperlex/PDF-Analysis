@@ -38,7 +38,8 @@ acceptance instance:
 - `docs/INDEX.md` — creates and maintains the PC-01 entry
 - `docs/navigation/INDEX.md` — regeneration only
 - `docs/navigation/entries/p3-int-01.json`
-- `docs/navigation/incidents/p3-int-01.jsonl`
+- `docs/navigation/incidents/p3-int-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P3-INT-01.md`
 
 ## Forbidden hotspots
@@ -105,10 +106,13 @@ server state are unaffected.
 
 ## Estimate
 
-Effort P50 1.0 person-day, P80 2.0 person-days. Basis: executing a twenty-step runbook and recording its evidence. Calibration pending.
+Effort P50 1.0 person-day, P80 2.0 person-days. Basis: executing the nineteen-step runbook and recording its evidence. Calibration pending.
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - certified commits, locks and digests
 - runbook results with measured figures and the method that produced them
 - the defect register with gate classification

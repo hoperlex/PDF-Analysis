@@ -31,6 +31,8 @@ is accepted and integrated:
 - `src/auditmanager/documents/**`, `src/auditmanager/ingest/**`
 - `src/auditmanager/storage/**` — blob metadata repository only, as the post-P01 owner
 - `tests/integration/ingest/**`
+- `docs/navigation/incidents/p2-meta-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-META-01.md`
 - `docs/navigation/entries/p2-meta-01.json`
 
@@ -102,6 +104,9 @@ Effort P50 2.5 person-days, P80 4.5 person-days. Basis: one ingest use case with
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - the public application ports and the envelope rules with their error codes
 - the reconciliation entrypoint
 - the object-key privacy proof

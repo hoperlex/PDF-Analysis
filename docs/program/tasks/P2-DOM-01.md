@@ -35,6 +35,8 @@ accepted and integrated:
 - `src/auditmanager/shared/db/**`, `src/auditmanager/shared/identity/**`,
   `src/auditmanager/shared/errors/**`, `src/auditmanager/shared/statemachine/**`
 - `tests/contract/domain_p02/**`, `tests/integration/domain_p02/**`
+- `docs/navigation/incidents/p2-dom-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-DOM-01.md`
 - `docs/navigation/entries/p2-dom-01.json`
 
@@ -60,11 +62,13 @@ accepted and integrated:
   is computed on request rather than stored
 - prefixed identifier types generating exactly the contract prefixes and matching the
   contract identifier pattern
-- a transition guard generated from `state-machines.json` for the audit run, blob, import
-  and command idempotency machines, refusing any undeclared transition with
-  `state_transition_not_allowed`. The `job` and `attempt` machines are not instantiated in
-  PC-01, and the two `audit_run` guards that reference a Job or an Attempt are recorded as
-  deliberately unimplemented rather than silently skipped
+- a transition guard for the audit run, blob, import and command idempotency machines that
+  encodes the **declared state topology** — the initial state, the allowed transitions and
+  the terminal set — and refuses any undeclared transition with
+  `state_transition_not_allowed`. It does **not** claim generated coverage of every
+  predicate in `state-machines.json`: the `job` and `attempt` machines are not instantiated
+  in PC-01 at all, and the `audit_run` guards listed under `OD-24` are recorded as
+  unevaluated in this prototype rather than generated and silently left unreachable
 - the twenty-code error catalog as a closed enum plus the error envelope, with `retryable`
   pinned to the catalog value
 - database-level append-only enforcement on the expert decision and audit event tables
@@ -76,8 +80,12 @@ accepted and integrated:
 - Command: `make up && make migrate && make migrate && make check-db`
   Expected: exit `0`; the second migration is a no-op and the P02 head is reported.
 - Command: `.venv/bin/pytest tests/contract/domain_p02`
-  Expected: exit `0`; every declared transition is accepted and every undeclared one is
-  refused, including moving a `published` run back to `running` or `queued`.
+  Expected: exit `0`. The suite asserts three things and claims no more: the declared
+  topology of each instantiated machine, that every undeclared transition is refused with
+  `state_transition_not_allowed` — including moving a `published` run back to `running` or
+  `queued` — and that each guard **applicable to PC-01** fires on its violation. Guards
+  listed as unevaluated under `OD-24` are asserted absent, not asserted passing, so the
+  suite never reports coverage it does not have.
 - Command: `.venv/bin/pytest tests/integration/domain_p02`
   Expected: exit `0` against PostgreSQL; UPDATE and DELETE on the decision ledger are
   refused by the database itself.
@@ -109,6 +117,9 @@ tables and their guards left PC-01 scope. Basis: one migration head plus typed p
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - the P02 migration head identifier and the table and constraint list
 - the identifier and guard APIs
 - error codes not used by PC-01, naming `execution_token_invalid` and `stale_attempt`

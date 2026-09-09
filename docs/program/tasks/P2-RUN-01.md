@@ -38,6 +38,8 @@ accepted and integrated:
 
 - `src/auditmanager/runs/**`
 - `tests/integration/runs/**`
+- `docs/navigation/incidents/p2-run-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-RUN-01.md` status/handoff
 - `docs/navigation/entries/p2-run-01.json`
 
@@ -73,9 +75,17 @@ accepted and integrated:
 - startup reconciliation turning a leftover `running` run into the explicit terminal fixed
   by `OD-10`, with a typed interrupted reason, and marking an unresolvable in-progress
   `CommandRecord` `abandoned` so a repeat under that key returns `idempotency_key_stale`
-- a recorded scope note: PC-01 implements the `audit_run` guards that do not reference Job
-  or Attempt, and does not implement the two attempt-fencing guards, because the hazard they
-  defend against cannot occur with one execution per run
+- a recorded scope note naming **every** part of the `audit_run` contract PC-01 does not
+  evaluate, not only the attempt-fencing pair. PC-01 uses the contract's state names and
+  transition topology and claims no more. Unevaluated, per `OD-24`:
+  the `NormsSnapshot` clause of the `created -> queued` reference-resolution guard, because
+  PC-01 pins no norms snapshot; the whole `queued -> running` guard, which requires a Job
+  and its current Attempt to hold the execution token; the whole `running -> validating`
+  guard, which requires every delivered result to come from the current Attempt; and the
+  `ResultPackage` clause of the `validating -> published` guard, since PC-01 publishes no
+  result package and validates checksums and artifact roles directly instead. Cancellation
+  and Attempt publication authority are outside PC-01 entirely: no cancel command exists,
+  so `cancelled` is declared and unreachable
 
 ## Required tests
 
@@ -121,6 +131,9 @@ Effort P50 1.5 person-days, P80 3.0 person-days. It is narrower than the withdra
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - the public command and query API and the transition table actually implemented
 - the restart contract and the reconciliation command
 - the scope note naming the two unimplemented guards and the schemas not claimed

@@ -1,6 +1,6 @@
 # Current state
 
-> **P0-PLN-01 candidate, revision 1, 2026-09-09.** On branch `agent/p0-pln-01`,
+> **P0-PLN-01 candidate, revision 2, 2026-09-09.** On branch `agent/p0-pln-01`,
 > `P0-PLN-01` has produced the detailed P02–P05 plan:
 > `docs/program/PROTOTYPE_EXECUTION_PLAN.md` plus **30 agent-ready task files** — two
 > navigation tasks, thirteen P02, eight P03, four P04 and three P05. It is a
@@ -16,10 +16,19 @@
 > owner, splits the navigation and P02 integration lifecycles so no task ID is reopened in
 > two windows, and separates person-effort from calendar duration.
 >
-> One assumption remains for the owner to rule on: that accepting this plan, `PF-01` and
-> the navigation gate is what lifts the production-code hold for the P02 paths, and that
-> CP-00 acceptance round eleven remains an independent obligation of that line rather than
-> a P02 predecessor.
+> Revision 2 is documentation-only and narrow. It makes the task dependency graph the
+> single source of truth — the evidence gate now requires an accepted `P2-AI-01` with no
+> synthetic-observation escape, verification follows wiring, and frontend authoring
+> overlaps the P02 tail against the frozen API contract while end-to-end evidence waits for
+> the accepted backend handoff. It gives every P02–P05 task its own navigation incident
+> file and a mandatory incident status, clears the last export-resource wording, and records
+> the PC-01 `AuditRun` conformance subset as `OD-24`, naming each unevaluated guard instead
+> of implying full coverage. Owner decisions now number 24.
+>
+> One assumption remains for the owner to rule on, and it is now an explicit dispatch
+> prerequisite of `P2-INT-00`: that accepting this plan, `PF-01` and the navigation gate is
+> what lifts the production-code hold for the P02 paths, and that CP-00 acceptance round
+> eleven remains an independent obligation of that line rather than a P02 predecessor.
 >
 > **Prototype-planning overlay, 2026-09-09.** On branch
 > `planning/prototype-roadmap`, the repository owner recorded `FF-01 ACCEPTED` without

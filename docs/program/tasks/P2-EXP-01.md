@@ -33,6 +33,8 @@ accepted and integrated:
 
 - `src/auditmanager/exports/**`
 - `tests/integration/exports/**`
+- `docs/navigation/incidents/p2-exp-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-EXP-01.md` status/handoff
 - `docs/navigation/entries/p2-exp-01.json`
 
@@ -61,8 +63,10 @@ accepted and integrated:
   `current_verdict`, `latest_comment`, `latest_decision_id`, `decision_recorded_at`
 - deterministic row order fixed by a documented sort key, so two exports of an unchanged
   run are byte-identical
-- explicit refusal for a non-terminal run, and a degraded marker carried in `run_state` for
-  a `partial` run rather than a silent empty file
+- the `OD-11` terminal policy, implemented literally: a `partial` run **is** exported, with
+  its degraded state carried explicitly in the `run_state` column rather than as a silent
+  empty file; a non-terminal run is **refused explicitly** with a typed error; and a repeat
+  request returns byte-identical bytes and creates nothing
 
 ## Required tests
 
@@ -101,6 +105,9 @@ Effort P50 0.75 person-day, P80 1.5 person-days. Basis: one synchronous read and
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - the exact column list produced and the documented sort key
 - the encoding decision actually implemented under `OD-11`
 - the refusal behavior for non-terminal and `partial` runs

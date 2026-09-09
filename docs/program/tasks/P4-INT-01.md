@@ -36,7 +36,10 @@ is accepted and integrated:
 - `docs/program/CURRENT_STATE.md` — creates and maintains the PC-02 status line
 - `docs/INDEX.md` — creates and maintains the PC-02 entry
 - `docs/navigation/entries/p4-int-01.json`
-- `docs/navigation/incidents/p4-int-01.jsonl`
+- `docs/navigation/INDEX.md` — regeneration only, as the integration owner of the P04
+  batch and the fifth writer in the sequence
+- `docs/navigation/incidents/p4-int-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P4-INT-01.md`
 
 ## Forbidden hotspots
@@ -44,6 +47,7 @@ is accepted and integrated:
 - `artifacts/validation/PC-02/sessions/**` and `.../ledger/**`: evidence is read, never
   edited
 - `artifacts/checkpoints/CP-00/**` and every Git tag
+- `docs/navigation/entries/**` owned by other tasks, and the navigation schema and tooling
 - `PROTOTYPE_FOUNDATION_FREEZE.md`, profile foundation invariants, `contracts/**`,
   `src/**`, `web/**`
 
@@ -63,6 +67,8 @@ is accepted and integrated:
   documents only**; negative-envelope documents are reported as a separate
   refusal-observation count and never enter a denominator
 - the list, by path, of the evidence inputs `P5-ARC-01` may cite
+- the regenerated `docs/navigation/INDEX.md`, and the navigation incident summary for the
+  P04 batch with its zero-versus-absent determination
 - the owner acceptance record, quoted verbatim
 - registry and state row updates
 - measured P02/P03/P04 throughput handed to `P5-META-01`
@@ -74,6 +80,11 @@ is accepted and integrated:
 - Command: `.venv/bin/python tools/validation/ledger_report.py --validate-sessions
   artifacts/validation/PC-02/sessions`
   Expected: exit `0`; the report never aggregates an incomplete dataset.
+- Command: `.venv/bootstrap/bin/python tools/navigation/validate_navigation.py`
+  Expected: exit `0`; every P04 fragment validates and no `implemented` entry names a path
+  that does not exist.
+- Command: `.venv/bootstrap/bin/python tools/navigation/generate_index.py --check`
+  Expected: exit `0`; the committed index is byte-identical to a fresh generation.
 - Command: `git diff --check`
   Expected: exit `0`.
 - Manual check: every numeric claim names the command and the tree that produced it, and
@@ -105,6 +116,9 @@ dataset plus one owner-response cycle. Calibration pending.
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - changed files and containment proof
 - commands/results
 - criteria outcomes and unresolved owner decisions

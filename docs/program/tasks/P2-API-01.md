@@ -35,12 +35,14 @@ is accepted and integrated:
   `src/auditmanager/api/errors.py`, `src/auditmanager/api/idempotency.py`
 - `src/auditmanager/api/README.md` — the code-adjacent README ADR-0019 item 6 requires
 - `tests/contract/api_v1/**`
+- `docs/navigation/incidents/p2-api-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-API-01.md`
 - `docs/navigation/entries/p2-api-01.json`
 
 ## Forbidden hotspots
 
-- `src/auditmanager/api/app.py` and `api/composition.py`, owned by `P2-INT-00`
+- `src/auditmanager/api/app.py` and `api/composition.py`, owned by `P2-INT-01`
 - `contracts/{domain,analysis,events,comparison}/v1/**`
 - `db/migrations/**`, root locks, the `Makefile`, every bounded-context module and `web/**`
 
@@ -105,6 +107,9 @@ Effort P50 1.5 person-days, P80 3.0 person-days. Basis: one frozen contract docu
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - the endpoint table with codes and the frozen contract version
 - the idempotency header contract
 - the client-generation instruction for `P3-API-01`

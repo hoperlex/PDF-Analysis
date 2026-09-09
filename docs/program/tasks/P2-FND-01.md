@@ -12,13 +12,15 @@ rebuildable projection.
 
 - none complete at plan time
 
-Planned predecessors and dispatch condition — this task is not dispatchable until the
-first two are accepted and integrated; its gate tests run against synthetic observation
-payloads until the third is:
+Planned predecessors and dispatch condition — this task is not dispatchable until **all
+three** are accepted and integrated. There is no synthetic-observation escape: the gate is
+authored and tested against the real `analysis.text_observations` artifact, because
+`P2-RUN-01` will depend on its terminal selection and a gate proved only against invented
+payloads would prove nothing about the run it terminates:
 
   - `P2-DOM-01` — the P02 migration head and the append-only ledger constraints
   - `P2-ENG-01` — the text layer and block index the gate resolves anchors against
-  - `P2-AI-01` — supplies the real text-observations artifact
+  - `P2-AI-01` — the real text-observations artifact the gate judges
 
 ## Frozen inputs
 
@@ -34,6 +36,8 @@ payloads until the third is:
 
 - `src/auditmanager/findings/**`, `src/auditmanager/decisions/**`
 - `tests/integration/findings/**`, `tests/integration/decisions/**`
+- `docs/navigation/incidents/p2-fnd-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-FND-01.md`
 - `docs/navigation/entries/p2-fnd-01.json`
 
@@ -46,7 +50,8 @@ payloads until the third is:
 ## Non-goals
 
 - No cross-run finding matching, decision carryover, knowledge projection or AI re-review.
-- No CSV rendering or export, which belong to P03, and no UI.
+- No CSV rendering or export: that use case belongs to `P2-EXP-01`, which reads this
+  module's public queries. No UI.
 - No repair of an ungrounded item and no model-assisted verdict.
 
 ## Deliverables
@@ -118,6 +123,9 @@ Effort P50 2.5 person-days, P80 4.5 person-days. Basis: one deterministic gate p
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - the normalization rule and why it is the only one
 - grounded versus diagnostic counts on the fixture, with the command that produced them
 - the projection rebuild command and the decision event vocabulary

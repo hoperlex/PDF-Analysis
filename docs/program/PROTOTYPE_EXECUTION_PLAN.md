@@ -14,8 +14,10 @@
 into agent-ready tasks: two navigation tasks, thirteen P02 backend tasks, eight P03
 product tasks, four P04 validation tasks and three P05 analysis tasks — **thirty task
 files**. Every task file **this plan creates** carries the twelve `TASK_TEMPLATE.md`
-sections plus an estimate. Allowed-path blocks are disjoint, or scoped and sequential with
-the scope stated inside the claim; section 3.3 lists every shared file.
+sections plus an estimate, its own navigation entry fragment, its own incident file path
+and a mandatory navigation incident status in its handoff. Allowed-path blocks are
+disjoint, or scoped and sequential with the scope stated inside the claim; section 3.3
+lists every shared file.
 
 The PC-01 slice is fixed and is not widened here:
 
@@ -33,9 +35,11 @@ PDF upload
 
 **What PC-01 deliberately does not contain.** No Job and no Attempt entity, no lease, no
 heartbeat, no execution token, no fencing, no resume, no retry, no outbox, no revocation
-UI, and no export aggregate. Each of those was in the first candidate and each is removed
-here: they are durable-execution and product machinery that the fastest honest route to a
-working prototype does not need, and the profile already defers every one of them.
+UI, and no export resource of any kind — no export aggregate, table, identity, polling or
+idempotency key, because the CSV endpoint is a synchronous read that creates nothing. Each
+of those was in the first candidate and each is removed here: they are durable-execution
+and product machinery that the fastest honest route to a working prototype does not need,
+and the profile already defers every one of them.
 
 ## 2. Task graph and dispatch conditions
 
@@ -54,19 +58,20 @@ FF-01 ACCEPTED
 PF-01 + P1-NAV-01
   -> P1-NAV-02   flip the named foundation entries to implemented, regenerate the index
        |
-       v  (P02 fan-out gate: plan accepted, forecast recalibrated)
+       v  (P02 fan-out gate: plan accepted, forecast recalibrated, OD-14 ruled)
   P2-INT-00   pins, root locks, environment contract, P02_LOCK
-       |-- P2-DOM-01   migration head, identity, state guard, error catalog
+       |-- P2-DOM-01   migration head, identity, state topology, error catalog
        |-- P2-BHV-01   synthetic AR corpus and seeded-issue oracle
                 |
                 |-- P2-META-01   ingest, version, manifest, blob registration
                 |-- P2-ENG-01    stage engine and three deterministic stages
                           |
-                          `-- P2-AI-01    text_analysis, prompt bundle, adapters
+                          `-- P2-AI-01   text_analysis, prompt bundle, adapters
                                    |
                                    v
                           P2-FND-01   evidence gate, findings, decision ledger
-                                   |
+                                   |          (accepted P2-AI-01 required; no
+                                   |           synthetic-observation escape)
                                    v
                           P2-RUN-01   persisted AuditRun, sequential executor, restart
                                    |
@@ -76,36 +81,61 @@ PF-01 + P1-NAV-01
                                    v
                           P2-API-01   frozen OpenAPI v1 surface
                                    |
-                                   v
-                          P2-INT-01   composition root and final wiring
-                                   |
-                                   v
-                          P2-QA-01    independent journey, restart, negative paths
-                                   |
-                                   v
-                          P2-INT-02   P02 handoff and navigation regeneration
-                                   |
-                                   v
-  P3-WEB-00 -> P3-API-01 -+-> P3-WEB-01 -+
-                          |-> P3-WEB-03 -|-> P3-WEB-02 -> P3-QA-01 -> P3-INT-01 / PC-01
-                          `-> P3-WEB-04 -+
-                                   |
-                                   v
+        +--------------------------+--------------------------+
+        |                                                     |
+        v  P02 tail                                           v  P03 authoring
+  P2-INT-01  composition root and final wiring          P3-WEB-00  toolchain, seam
+        |                                                     |
+        v                                                     v
+  P2-QA-01   independent journey on the wired base      P3-API-01  generated client
+        |                                                     |
+        v                                          +----------+----------+
+  P2-INT-02  P02 handoff, navigation regeneration   |          |          |
+        |                                           v          v          v
+        |                                     P3-WEB-01  P3-WEB-03  P3-WEB-04
+        |                                           |          |          |
+        |                                           +----+-----+----------+
+        |                                                v
+        |                                          P3-WEB-02  review page
+        |                                                |
+        +----------------------+-------------------------+
+                               v
+                         P3-QA-01   E2E on the accepted, wired backend
+                               |
+                               v
+                         P3-INT-01 / PC-01
+                               |
+                               v
   (P4-QA-01 || P4-OPS-01) -> P4-BHV-01 -> P4-INT-01 / PC-02
-                                   |
-                                   v
+                               |
+                               v
   P5-ARC-01 -> P5-META-01 -> P5-INT-01 / PC-03
 ```
 
-**The evidence gate precedes the runner on purpose.** `P2-FND-01` is built before
-`P2-RUN-01` so the executor consumes a real gate for terminal selection and is never
-authored against a stub that fakes `published`. For the same reason `P2-FND-01` has no
-synthetic-payload escape hatch: it is authored against the real `analysis.text_observations`
-artifact, which is why `P2-AI-01` precedes it.
+**The task graph is the single source of truth for order.** Where prose and the graph
+disagree, the graph wins; these three rules are what it encodes.
+
+*The evidence gate precedes the runner.* `P2-FND-01` is built before `P2-RUN-01` so the
+executor consumes a real gate for terminal selection and is never authored against a stub
+that fakes `published`. `P2-FND-01` in turn requires an **accepted** `P2-AI-01`: it is
+authored and tested against the real `analysis.text_observations` artifact, and there is no
+synthetic-payload escape, because a gate proved only against invented payloads proves
+nothing about the run it terminates.
+
+*Verification follows wiring.* `P2-QA-01` requires an accepted `P2-INT-01` and runs on the
+composition-integrated base, so a wiring defect fails in QA rather than surfacing for the
+first time during the PC-01 runbook.
+
+*The frontend overlaps the P02 tail, and stops at the handoff.* Frontend authoring is
+unblocked by the **frozen `P2-API-01` contract**, not by the end of P02, so `P3-WEB-00`
+through `P3-WEB-02` run in parallel with `P2-INT-01`, `P2-QA-01` and `P2-INT-02`. The
+overlap ends there: `P3-QA-01` requires an accepted `P2-INT-02`, because an end-to-end
+suite run earlier would be judging a backend nobody had accepted.
 
 **Integration order** follows `INTEGRATION_POLICY.md`: pins and contract first, then
-providers, then application, then the API provider, then the generated client and the
-frontend consumer, then QA evidence, then composition and navigation reconciliation.
+providers, then application, then the API provider, then composition and the backend
+handoff, with the generated client and frontend consumer authored in parallel against the
+frozen contract, then end-to-end evidence, then the product checkpoint.
 
 **Graph honesty rule.** No task file lists an unfinished predecessor under `Depends on`.
 Every future dependency appears under an explicit *planned predecessors and dispatch
@@ -130,7 +160,7 @@ plan time`, which is the literal truth on this branch.
 | Frontend composition root, global styles, web configs | `P3-WEB-00` | including `web/playwright.config.ts`, whose test directory it points at the repository-root e2e suite so `P3-QA-01` never edits a web config |
 | Generated API client and all HTTP in `web/` | `P3-API-01` | `web/src/shared/api/**` |
 | Server-side CSV export | `P2-EXP-01` | `src/auditmanager/exports/**`; `P2-API-01` exposes the route and calls it |
-| Aggregate navigation index | one writer per batch | first generation `P1-NAV-01`; then `P1-NAV-02`, `P2-INT-02`, `P3-INT-01`, `P5-INT-01` |
+| Aggregate navigation index | one writer per batch, in a fixed sequence | `P1-NAV-01` (first generation) → `P1-NAV-02` → `P2-INT-02` → `P3-INT-01` → `P4-INT-01` → `P5-INT-01`. Each regenerates after its own batch and validates before handing on |
 | API contract family `contracts/api/v1/**` | `P2-API-01` | created and frozen there; P03 consumes a snapshot |
 
 ### 3.2 Ownership transfers recorded at `PF-01`
@@ -162,8 +192,15 @@ accepted P01 records this plan may not edit:
 - `P1-NAV-01`'s `docs/navigation/entries/**` is creation-only: a fragment a later task owns
   belongs to that task, and no entry is flipped to `implemented` there.
 
-Per-task navigation incidents are written to `docs/navigation/incidents/<task-id>.jsonl`,
-one file per task, so twenty lanes never append to one shared log.
+Per-task navigation incidents are written to
+`docs/navigation/incidents/<lowercase-task-id>.jsonl`, one file per task and named in that
+task's own allowed paths, so no two lanes ever append to one file. A file is created
+**only** when the task actually records an incident, so its absence is ambiguous on its own;
+every P02–P05 task therefore reports a navigation incident status of `recorded`,
+`none_observed` or `practice_not_exercised` in its handoff, and that status is what
+disambiguates an empty directory. `P4-OPS-01` may report zero incidents only when every
+task that should have reported returned `recorded` or `none_observed`; one
+`practice_not_exercised`, or a missing status, makes the metric `absent`.
 
 ### 3.4 Seam register
 
@@ -240,26 +277,47 @@ totalled independently and a P50 row is never mixed into a P80 total.
 Method, stated so it is reproducible: build the graph from each task's dependency block,
 treating "may not be accepted until X" as an edge into the completion node; take the
 longest weighted path using the effort weights; add one serial integration and review slot
-per acceptance, because a single integrator reviews everything; and never place expert
+per acceptance, because a single integrator reviews everything; check that the ready set
+never exceeds three slots and lengthen the path where it does; and never place expert
 scheduling latency in a work weight. Review latency is priced at 0.25 day P50 and 0.5 day
-P80 per accepted task, which is the plan's answer to its own risk 3 — in the first
-candidate that cost was priced at zero.
+P80 per accepted task, which is this plan's answer to its own risk 3.
 
-| Leg | Composition | P50 | P80 |
+**P02 and P03 are not fully serial.** Frontend authoring is unblocked by the frozen
+`P2-API-01` contract, so the P03 chain runs concurrently with the P02 tail. The elapsed
+path is therefore four segments, and the middle one is a maximum rather than a sum:
+
+| Segment | Composition | P50 | P80 |
 |---|---|---:|---:|
-| P02 critical path | 11 tasks, 17.5 work + 2.75 review | 20.25 | 40.0 |
-| P03 critical path | 6 tasks, 7.5 work + 1.5 review | 9.0 | 18.5 |
 | `P1-NAV-02` before P02 fan-out | 0.5 work + review | 0.75 | 1.5 |
-| **`PF-01` → `PC-01`** | the three legs above | **30.0** | **60.0** |
-| **`FF-01` → `PC-01`** | `FF-01`→`PF-01` from FF-01 §9, plus the above | **34–37** | **71–73** |
-| **`PC-01` → `PC-02`** | corpus ∥ ledger, then sessions, then report and one owner cycle | **11–14** | **24–27** |
-| **`PC-02` → `PC-03`** | three serial P05 tasks plus owner cycles | **7.25** | **13.5** |
+| P02 head, `P2-INT-00` → `P2-API-01` | 8 tasks, 14.0 work + 2.0 review | 16.0 | 31.5 |
+| overlap window | max(backend tail 4.25, frontend chain 6.0) | 6.0 | 12.5 |
+| P03 end, `P3-QA-01` → `P3-INT-01` | 2 tasks, 2.5 work + 0.5 review | 3.0 | 6.0 |
+| **`PF-01` → `PC-01`** | 0.75 + 16.0 + 6.0 + 3.0 | **25.75** | **51.5** |
 
-The P02 critical path is `P2-INT-00` → `P2-DOM-01` → `P2-ENG-01` → `P2-AI-01` →
-`P2-FND-01` → `P2-RUN-01` → `P2-EXP-01` → `P2-API-01` → `P2-INT-01` → `P2-QA-01` →
-`P2-INT-02`. It now includes `P2-AI-01`, which the first candidate's path omitted while
-its own dependency text required it. The P03 path is `P3-WEB-00` → `P3-API-01` →
-`P3-WEB-01` → `P3-WEB-02` → `P3-QA-01` → `P3-INT-01`.
+The backend tail is `P2-INT-01` → `P2-QA-01` → `P2-INT-02`, three serial tasks at 3.5 work
+plus 0.75 review. The frontend chain is `P3-WEB-00` → `P3-API-01` → `P3-WEB-01` →
+`P3-WEB-02`, four tasks at 5.0 work plus 1.0 review. The frontend chain is the longer of
+the two, so it sets the window and the backend tail finishes inside it.
+
+**Slot feasibility inside the window.** The backend tail occupies one slot continuously
+while the frontend fan wants three — `P3-WEB-01`, `P3-WEB-03` and `P3-WEB-04` — for a peak
+demand of four against three slots. The surplus queues rather than extending the window:
+`P3-WEB-03` and `P3-WEB-04` run back to back on one slot in 1.25 days P50 and 2.5 days P80,
+both inside `P3-WEB-01`'s 1.5 and 3.0. The constraint binds and the length is unchanged;
+if any of those three grows, the window grows with it.
+
+| Leg | Bound by | P50 | P80 |
+|---|---|---:|---:|
+| FF-01 approval and P1 dispatch | owner response | 0.5–1 | 2 |
+| `FF-01` → `PF-01` | FF-01 §9 wave estimate | 4–7 | 11–13 |
+| `PF-01` → `PC-01` | effort and slot contention | **25.75** | **51.5** |
+| `FF-01` → `PC-01` | the two rows above | **29.75–32.75** | **62.5–64.5** |
+| `PC-01` → `PC-02` | expert scheduling, not effort | **11–14** | **24–27** |
+| `PC-02` → `PC-03` | effort plus owner-response cycles | **7.25** | **13.5** |
+
+The P02 head is `P2-INT-00` → `P2-DOM-01` → `P2-ENG-01` → `P2-AI-01` → `P2-FND-01` →
+`P2-RUN-01` → `P2-EXP-01` → `P2-API-01`. `P1-NAV-01` contributes nothing to this path: it
+runs beside the P01 provider lanes and is accepted before `PF-01`.
 
 `PC-01` → `PC-02` is **scheduling-bound, not effort-bound**: `P4-BHV-01` contributes 5–8
 days P50 and 12–15 P80 of waiting on three to five external experts, which is why the
@@ -480,6 +538,7 @@ cannot recur.
 | `OD-21` | the stop rule on `FAIL-PRODUCT` | P05 scope, `P4-BHV-01` framing | a pivot budget fixed before the data exists, so it stays a decision rather than a rationalization | before `P4-BHV-01` |
 | `OD-22` | retention and disposal of session evidence | `P4-BHV-01` | pseudonymous identities in committed evidence, the mapping uncommitted, and disposal at PC-02 acceptance. Study governance only; it does not reopen the retention questions FF-01 left unfrozen | `P4-BHV-01` dispatch |
 | `OD-23` | disposition when `P4-OPS-01` finds required telemetry absent | `P4-BHV-01` start | the task halts with `BLOCKED` and its gap register, and the owner rules whether to proceed without the metric, add instrumentation as a new P02 task, or narrow PC-02. `P4-OPS-01` never instruments the runtime itself | at the `P4-OPS-01` precondition |
+| `OD-24` | the PC-01 `AuditRun` conformance subset | `P2-DOM-01` guard scope, `P2-RUN-01` executor, `P2-QA-01` evidence | PC-01 uses the contract's **state names and transition topology** and claims no more. It does not claim conformance to every `audit_run` guard, and the four listed in section 9 are recorded as unevaluated rather than generated and left unreachable. Restoring them is a P05 candidate, not a PC-01 deliverable | `P2-DOM-01` dispatch, because it writes the guard |
 
 ## 9. Conflicts found against the frozen contracts
 
@@ -510,12 +569,24 @@ as a contract is the `StageResult`, whose `required` array is `contract_version`
 `attempt_authority`; PC-01 claims full conformance to that schema and validates every
 emitted result against it. No contract file is edited: both package schemas keep their
 `required` arrays unaltered, and `PROTOTYPE_PROFILE.md` §5 already scopes the claim to
-objects actually published as those contracts. Because PC-01 runs one sequential in-process
-executor with no Job, Attempt, retry, resume or failover, the two `audit_run` guards whose
-predicate names a Job or the current Attempt — `queued -> running` and
-`running -> validating` — are recorded as **unevaluated in PC-01**, with no producer for
-`execution_token_invalid` or `stale_attempt`. Restoring Job, Attempt and package
-conformance is a P05 candidate under the section 7 rule, not a PC-01 deliverable.
+objects actually published as those contracts. PC-01 therefore uses the `audit_run` **state names and transition topology** and claims no
+more than that. Four guard clauses are recorded as **unevaluated**, under `OD-24`, rather
+than generated and left unreachable:
+
+- the `NormsSnapshot` clause of the `created -> queued` reference-resolution guard, because
+  PC-01 pins no norms snapshot; the input-manifest, AnalysisProfile and PromptBundle
+  clauses of that same guard **are** evaluated;
+- the whole `queued -> running` guard, which requires that a Job exist and its current
+  Attempt hold the execution token — no producer for `execution_token_invalid`;
+- the whole `running -> validating` guard, which requires every delivered result to come
+  from the current Attempt — no producer for `stale_attempt`;
+- the `ResultPackage` schema clause of the `validating -> published` guard; PC-01 validates
+  declared checksums and required artifact roles directly and publishes no result package.
+
+Cancellation and Attempt publication authority are outside PC-01 entirely: no cancel
+command exists, so `cancelled` is declared and unreachable. Restoring Job, Attempt,
+NormsSnapshot pinning and package conformance is a P05 candidate under the section 7 rule,
+not a PC-01 deliverable, and none of them returns to prototype scope here.
 
 **C-4 — CP-00 is mid-supersession.** `CURRENT_STATE.md` records that acceptance round
 eleven is owed, that `W0-INT-03` performs the superseding ratification, and that

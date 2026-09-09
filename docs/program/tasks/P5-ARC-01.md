@@ -30,6 +30,8 @@ accepted and integrated:
 
 - `docs/program/P05_EVIDENCE_DISPOSITION.md`
 - new `docs/architecture/adr/ADR-00NN-*.md` files with `Status: proposed` only
+- `docs/navigation/incidents/p5-arc-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P5-ARC-01.md`
 - `docs/navigation/entries/p5-arc-01.json`
 
@@ -91,6 +93,9 @@ and a proposed ADR where adopted. Calibration pending.
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - disposition table and proposed ADR list
 - candidates undecidable from P04 evidence
 - unresolved owner decisions

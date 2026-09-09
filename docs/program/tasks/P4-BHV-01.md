@@ -41,7 +41,8 @@ is accepted and integrated:
 
 - `artifacts/validation/PC-02/sessions/**`
 - `docs/navigation/entries/p4-bhv-01.json`
-- `docs/navigation/incidents/p4-bhv-01.jsonl`
+- `docs/navigation/incidents/p4-bhv-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P4-BHV-01.md`
 
 ## Forbidden hotspots
@@ -129,6 +130,9 @@ experts and committed slots the elapsed P80 falls to 8–9 days. Calibration pen
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - session counts by expert and document, and the coverage matrix
 - defect log
 - spend against the `OD-03` ceiling

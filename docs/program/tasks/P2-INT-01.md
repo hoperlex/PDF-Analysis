@@ -36,6 +36,8 @@ wired application rather than a hand-assembled one:
 - `src/auditmanager/bootstrap/**`
 - `src/auditmanager/api/app.py`, `src/auditmanager/api/composition.py`
 - `tests/integration/composition/**`
+- `docs/navigation/incidents/p2-int-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-INT-01.md` status/handoff
 - `docs/navigation/entries/p2-int-01.json`
 
@@ -100,6 +102,9 @@ Effort P50 1.0 person-day, P80 2.0 person-days. Basis: wiring existing modules f
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - the container construction signature and the two entrypoints
 - commands and results, including the misconfiguration case
 - any provider seam that had to be adapted, named with its owner

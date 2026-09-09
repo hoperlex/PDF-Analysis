@@ -21,6 +21,10 @@ these hold:
   - this plan accepted and its forecast recalibrated against measured P01 throughput
   - owner decisions `OD-01` PDF library, `OD-02` model provider, `OD-03` cost ceiling and
     `OD-06` post-P1 root-lock owner recorded
+  - owner decision `OD-14`: whether accepting this plan lifts the production-code hold for
+    the P02 paths, or whether CP-00 acceptance round eleven and `W0-INT-03` are additional
+    predecessors. This task is the first to write production paths, so it is the first that
+    the hold would block.
 
 ## Frozen inputs
 
@@ -35,6 +39,8 @@ these hold:
 - the root dependency manifests and lock files named in `FOUNDATION_LOCK.json`
 - `.env.example` — additive P02 names only
 - `docs/program/P02_LOCK.json`
+- `docs/navigation/incidents/p2-int-00.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-INT-00.md` status/handoff
 - `docs/navigation/entries/p2-int-00.json`
 
@@ -99,6 +105,9 @@ Effort P50 0.5 person-day, P80 1.5 person-days. Basis: pinning and locking a kno
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - the pin table with licences and the command that resolved it
 - the environment names added
 - containment proof for the `Makefile`, `FOUNDATION_LOCK.json` and `src/auditmanager/**`

@@ -18,7 +18,10 @@ Planned predecessors and dispatch condition — this task is not dispatchable un
 is accepted and integrated:
 
   - `P1-INT-00` — root command surface and environment names accepted
-  - `P2-API-01` — the P02 OpenAPI document created and frozen at a named commit
+  - `P2-API-01` — the P02 OpenAPI document created and frozen at a named commit. That
+    freeze, not the end of P02, is what unblocks frontend authoring: `P3-WEB-00` through
+    `P3-WEB-02` may run **in parallel with the P02 tail** `P2-INT-01`, `P2-QA-01` and
+    `P2-INT-02`, because they consume a frozen contract rather than a running backend.
   - owner decisions `OD-08` frontend package manager and composition owner, and `OD-09`
     the browser PDF rendering approach this task pins for `P3-WEB-02`
 
@@ -42,6 +45,8 @@ is accepted and integrated:
 - `web/tests/guards/**`
 - `web/FRONTEND_LOCK.json`, `web/docs/PC01_UI_SEAM.md`, `web/README.md`
 - `docs/navigation/entries/p3-web-00.json`
+- `docs/navigation/incidents/p3-web-00.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P3-WEB-00.md`
 
 ## Forbidden hotspots
@@ -129,6 +134,9 @@ Effort P50 1.0 person-day, P80 2.0 person-days. Basis: toolchain pinning, four d
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - changed files, containment proof, and the Node/Next/lock pins
 - commands/results including the guard-failure probe output
 - the frozen seam document version and known limits — no authentication, one reviewer

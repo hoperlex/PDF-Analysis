@@ -29,6 +29,8 @@ accepted and integrated:
 - `fixtures/synthetic/ar/**`
 - `tools/fixtures/**`
 - `tests/contract/fixtures_ar/**`
+- `docs/navigation/incidents/p2-bhv-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-BHV-01.md`
 - `docs/navigation/entries/p2-bhv-01.json`
 
@@ -89,6 +91,9 @@ Effort P50 1.0 person-day, P80 2.0 person-days. Basis: authoring one determinist
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - fixture paths with their SHA-256 values and the generator command
 - the seeded-issue manifest and its control statements
 - known limits of the synthetic corpus

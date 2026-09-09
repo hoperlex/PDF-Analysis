@@ -40,6 +40,8 @@ accepted and integrated:
   `web/src/entities/audit-run/**`
 - `web/tests/unit/projects/**`, `web/tests/unit/run/**`
 - `docs/navigation/entries/p3-web-01.json`
+- `docs/navigation/incidents/p3-web-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P3-WEB-01.md`
 
 ## Forbidden hotspots
@@ -113,6 +115,9 @@ Effort P50 1.5 person-days, P80 3.0 person-days. Basis: three slices over an exi
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - changed files and containment proof, with commands and results
 - the exact states and error codes rendered, and any contract state left unrendered
 - known limits: no cancel and no re-run

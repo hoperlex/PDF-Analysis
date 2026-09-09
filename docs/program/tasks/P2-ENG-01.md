@@ -33,6 +33,8 @@ is accepted and integrated, and until owner decision `OD-04` fixes the page-crop
 - `src/auditmanager/analysis/public.py`, `src/auditmanager/analysis/__init__.py`,
   `src/auditmanager/analysis/README.md`
 - `tests/integration/analysis_engine/**`, `tests/contract/analysis_packages/**`
+- `docs/navigation/incidents/p2-eng-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P2-ENG-01.md`
 - `docs/navigation/entries/p2-eng-01.json`
 
@@ -71,9 +73,10 @@ is accepted and integrated, and until owner decision `OD-04` fixes the page-crop
 - Command: `make foundation`
   Expected: exit `0`.
 - Command: `.venv/bin/pytest tests/contract/analysis_packages`
-  Expected: exit `0`; every emitted stage result and result package validates against the
-  frozen schemas, and both a `succeeded` result carrying an error and a `failed` result
-  missing an error are rejected.
+  Expected: exit `0`; every emitted `StageResult` validates against the standalone
+  `stage-result` schema, and both a `succeeded` result carrying an error and a `failed`
+  result missing an error are rejected. No `ResultPackage` and no `JobPackage` is emitted
+  or validated: this task creates neither, so neither appears in its evidence.
 - Command: `.venv/bin/pytest tests/integration/analysis_engine`
   Expected: exit `0` on the baseline fixture. The suite asserts that all three stages report
   `succeeded` with every required output role present as an artifact carrying a blob
@@ -111,6 +114,9 @@ requires rendered crops rather than a declared empty manifest. Basis: three dete
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - the artifact shapes for the text layer, block index and document graph
 - the stage-runner signature
 - the page-crop policy actually implemented and its owner-decision reference

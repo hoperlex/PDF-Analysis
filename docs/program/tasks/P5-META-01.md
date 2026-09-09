@@ -32,6 +32,8 @@ accepted and integrated:
 
 - `docs/program/BETA_ROADMAP.md`
 - `docs/program/ROADMAP.md` — the `## Estimates` section only
+- `docs/navigation/incidents/p5-meta-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P5-META-01.md`
 - `docs/navigation/entries/p5-meta-01.json`
 
@@ -96,6 +98,9 @@ stages of measured data. This is the task that ends the calibration-pending stat
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - changed files and the arithmetic check results
 - calibrated versus uncalibrated rows
 - unresolved owner decisions

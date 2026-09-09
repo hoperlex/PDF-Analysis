@@ -92,12 +92,15 @@ them. Foundation seams are authored here as `planned` and are flipped to `implem
   fragment, and byte-identical regeneration
 - an agent search and rework **incident log**: `incident.schema.json` plus a
   `docs/navigation/incidents/` directory in which **each task writes its own
-  `<task-id>.jsonl`**, never a shared file, so twenty lanes never append to one path. The
-  rule — recorded in the directory README and in each later task's handoff — is that a P02+
-  task appends one record whenever it had to search outside the index or rework because the
-  index was wrong or missing. These files are the only producer of the navigation
-  measurement `P4-OPS-01` reports; if no task wrote one, that metric is **absent**, not
-  zero, because an empty set means the practice was not followed
+  `<lowercase-task-id>.jsonl`**, never a shared file, so no two lanes ever append to one
+  path. The rule, recorded in the directory README and in every later task's handoff, has
+  three parts: a task creates its file **only when it actually records an incident** — it
+  searched outside the index, or reworked because the index was wrong or missing; every
+  task reports a handoff status of `recorded`, `none_observed` or
+  `practice_not_exercised`; and an absent file is therefore ambiguous on its own and is
+  disambiguated only by that status. `P4-OPS-01` may report zero incidents **only** when
+  every task that should have reported returned `recorded` or `none_observed`; a single
+  `practice_not_exercised`, or a missing status, makes the metric `absent`
 - `docs/navigation/README.md`: the agent onboarding order — `CURRENT_STATE.md`, then the
   index, then the entries relevant to the task, then the task and its frozen contracts
 - negative-control fixtures proving the validator fails on a duplicate `entry_id`, a

@@ -32,6 +32,8 @@ is accepted and integrated:
 
 - `tools/validation/ledger_report.py`
 - `artifacts/validation/PC-02/ledger/**`
+- `docs/navigation/incidents/p4-ops-01.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P4-OPS-01.md`
 - `docs/navigation/entries/p4-ops-01.json`
 
@@ -51,18 +53,21 @@ is accepted and integrated:
 
 - `ledger_report.py`, read-only over PostgreSQL and the PC-01 run records, emitting
   per-call latency, tokens, cost and provider status; per-run duration, stage outcomes,
-  terminal state and live/recorded mode; and a failure ledger grouped by the classes
-  `provider_unavailable`, `provider_timeout`, `provider_malformed`,
-  `ungrounded_item_rejected`, `unsupported_input`, `checksum`, `app_or_process_crash`
-  and `other`
+  terminal state and live/recorded mode; and a failure ledger grouped by eight
+  **observation classes** — provider unavailable, provider timeout, malformed provider
+  response, ungrounded item rejected, unsupported input, checksum failure, application or
+  process crash, and other. These are reporting buckets defined by this task, not codes from
+  the domain error catalog, and the ledger records the catalog code separately
 - cost roll-up: per run, per published finding and per accepted finding, plus cumulative
   spend against the `OD-03` ceiling
-- navigation ledger read from the per-task `docs/navigation/incidents/<task-id>.jsonl`
-  files whose schema and directory contract `P1-NAV-01` creates: per P02/P03 task, the
-  agent search and rework incidents those tasks actually recorded, plus orphan and
-  stale-entry counts from the navigation validator. If no task wrote a file, the metric is
-  reported **absent**, never as zero — an empty set means the practice was not followed,
-  not that navigation was frictionless
+- navigation ledger read from the per-task `docs/navigation/incidents/<lowercase-task-id>.jsonl`
+  files whose schema and directory contract `P1-NAV-01` creates, cross-read against the
+  navigation incident status in every P02–P05 task handoff. The rule for reporting is
+  explicit, because an absent file is ambiguous: **zero** is reported only when every task
+  that should have reported returned `recorded` or `none_observed`; if any required task
+  returned `practice_not_exercised`, or gave no status at all, the metric is **absent** and
+  the report names the tasks that did not report. An empty directory is never itself
+  evidence that navigation was frictionless
 - a gap register naming every `PROTOTYPE_PROFILE.md` §9 metric as `persisted`,
   `derivable` or `absent`, with what persisting it would take — raised as a P02 defect
   for owner decision and not fixed here
@@ -111,6 +116,9 @@ precondition fires. Calibration pending.
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - changed files, ledger outputs and the `--self-check` result
 - gap register and any `BLOCKED` precondition
 - observed spend against the `OD-03` ceiling

@@ -38,6 +38,8 @@ accepted and integrated:
 - `web/tests/unit/export/**`, `web/tests/csv/**`
 - `web/scripts/verify-csv.mjs`
 - `docs/navigation/entries/p3-web-04.json`
+- `docs/navigation/incidents/p3-web-04.jsonl` — created only if this task actually records an
+  incident; never a shared append target
 - `docs/program/tasks/P3-WEB-04.md`
 
 ## Forbidden hotspots
@@ -106,8 +108,8 @@ both owners.
 
 ## Rollback / feature flag
 
-Revert the slice; exports already produced remain retrievable server-side by their export
-identity.
+Revert the slice. Nothing was persisted server-side, so there is no export to retrieve or
+orphan; the endpoint recomputes the CSV on the next request.
 
 ## Estimate
 
@@ -116,6 +118,9 @@ moved to its real owner, `P2-EXP-01`. Basis: a download trigger and a determinis
 
 ## Handoff
 
+- navigation incident status, one of `recorded`, `none_observed` or
+  `practice_not_exercised`; `recorded` requires the incident file above, and the other
+  two assert that no incident occurred or that the practice was not followed
 - changed files and containment proof, with commands and results
 - the verification result against the `P2-EXP-01` column contract, and any divergence
   reported to that owner rather than patched here
