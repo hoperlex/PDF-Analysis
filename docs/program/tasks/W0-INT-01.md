@@ -6,7 +6,20 @@
 > acceptance rounds one through eight are spent, void or failed, and round nine was
 > voided before dispatch because the mechanism had no executable final state. Round ten
 > was frozen at `2ea7b68` on the remediated tree and returned `PASS` from both streams,
-> which is what this ratification rests on.
+> which is what this ratification rests on. The ratification commit is
+> `39a3a6430bd97c38cb20bafc793fc9d077d0df8e` and the tag is local and unpublished.
+>
+> **Superseded.** On 2026-09-07 the repository owner decided a formal superseding
+> checkpoint (`docs/program/EXECUTION_PLAN.md` §3.3–§3.4). Round ten's acceptance is bound
+> to the tree it judged; the recovery work committed afterwards lies outside that round's
+> post-freeze delta ceiling. Acceptance round eleven is owed and `W0-INT-03` cuts the
+> successor tag, whose name is recorded in `artifacts/checkpoints/CP-00/manifest.json` under
+> `supersession` and deliberately not written here: the banner guard requires this banner to
+> name the tag the records resolve to, and a banner that already mentions the next one
+> satisfies it by mention. This task is not reopened: its requirements, gates and
+> deliverables are frozen by its acceptance, and the claims in the bundle it produced that
+> were found false or unsupported are corrected in
+> `artifacts/checkpoints/CP-00/erratum.md`, not here.
 
 ## Outcome
 

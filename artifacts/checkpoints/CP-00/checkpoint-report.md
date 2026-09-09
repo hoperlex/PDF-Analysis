@@ -3,8 +3,20 @@
 **Checkpoint:** CP-00 — architecture and behaviour freeze
 **Tag:** `v0.0.0-architecture`
 **Ratifying task:** `W0-INT-01`
-**Closed out:** 2026-09-07, on acceptance round ten — the single final round the
-repository owner authorised. No round eleven was opened.
+**Closed out:** 2026-09-07, on acceptance round ten, at commit
+`39a3a6430bd97c38cb20bafc793fc9d077d0df8e`, which the annotated tag
+`v0.0.0-architecture` points at.
+**Superseded:** on 2026-09-07 the repository owner decided a formal superseding
+checkpoint (`docs/program/EXECUTION_PLAN.md` §3.3–§3.4). Round ten stands for the tree it
+judged and for no other; acceptance round eleven is owed on the recovery candidate, and the
+successor tag is recorded in `manifest.json` under `supersession` and in
+`docs/program/CHECKPOINT_REGISTRY.md`. The successor's name is deliberately not written into
+this report: `tests/contract/test_cp00_candidate.py` requires this file to carry the tag the
+records resolve to, and a report that already mentions the next one satisfies that
+requirement by mention rather than by being brought up to date. The sentence that stood here
+— "No round eleven was opened" — was true when it was written and is not true now.
+**Corrections:** `erratum.md` carries every claim in this bundle that was found false or
+unsupported, with the exact quote, its location, what is true and how it was measured.
 
 ## Verdict
 
@@ -13,8 +25,25 @@ and no contract, schema, fixture, state-machine, identifier or golden defect was
 
 | Stream | Result |
 |---|---|
-| Automated | `PASS` — validator, 324-test contract suite and the state-record sweep, all exit 0; `automated-summary.txt` |
+| Automated | `PASS` — bootstrap validator and the 324-test contract suite, both exit 0 on the candidate frozen at `2ea7b68`; `automated-summary.txt` |
 | Manual, independent | `PASS 6/6` — `manual-test-report.md`, frozen candidate `2ea7b68` |
+
+The state-record sweep also ran clean on that tree — `--rev 2ea7b68`, both axes 0 — and is
+recorded in `automated-summary.txt`. It is **not** a gate of this checkpoint and no verdict
+rests on it: `manifest.json` declares it unusable as one, and this report used to count it as
+one of three grounds for the automated `PASS`. That contradiction is `erratum.md`, E-6. On
+the base tree `6135f17` with this task's paths applied the sweep exits 1: axis one 0, axis two
+16 across nine files uncommitted, 19 across ten files once `erratum.md` is tracked, which the
+integration commit does. On the integration tip `06be04e` with the same paths the same command
+gives 17 across ten files and 20 across eleven files; the difference is one path
+outside this task's licence. Every finding is the shape the manifest already describes — the
+sweep has no model of a ratified checkpoint — and every one is classified by path and anchor in
+`erratum.md`, E-12, which is also where the two figures this paragraph carried in its previous
+form are corrected. The totals are observations with a command and a tree; the claim is the
+classification, and `erratum.md`, `E-13`, states what that classification does and does not
+establish.
+The gate that replaced it is `tests/checkpoint/cp00_final_state.py`, delivered by
+`W0-QA-04`.
 
 ## What is frozen
 
@@ -27,79 +56,140 @@ the acceptance of the contracts.
 |---|---|
 | `reviewed_candidate_commit` | `92e13fa496a723ed6e4c3adbf138c4f4e1d7c368` |
 | `qa_evidence_commit` | `3da104e5d6fafb2a581bda377a07911183af803f` |
-| `artifact_manifest_sha256` | `39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08` |
+| reviewed-input manifest, at `92e13fa4` | `39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08` |
+| checkpoint manifest, at the tagged commit `39a3a643` | `f362647cc9b1d2201ac4663bf5d877346eeeccf046734219103c3ac822d2845d` |
+| `artifact_manifest_sha256`, over the tree this report ships in | `a78572288a28b88be7f5dd58b9e79254a9e4f61cb55838ba4308b3be91109b84` |
 | files certified | 100 — `contracts` 33, `fixtures` 32, `docs/architecture` 33, `scripts` 2 |
 | contract versions | domain, analysis, events `1.0.0-draft.1`; golden selection schema `1`; candidate revision `5` |
 | canonical version key | `contract_version` (`ID-01`) |
 | canonical authority token | `execution_token` (`ID-02`, `ALR-25`) |
 | `migration_head` | `none` |
 
+One recipe, three trees, three values. The recipe was published as "reproducible from
+this file alone" and bound to no commit, so the bundle carried the first two of those
+values under swapped labels for ten acceptance rounds. Every aggregate now names its
+commit; `contract-manifest.yaml` lists all 100 members with their own SHA-256, grouped by
+directory, so no aggregate carries a member it does not list. `scripts/` — the family
+holding open security item `E-06` — is enumerated there for the first time.
+
 The manifest hash was recomputed independently by the integrator and again by the manual
 tester, each from the recipe text rather than by calling the module's helper, and both
 reproduce it over exactly 100 files. The manual tester additionally ran six discrimination
 probes — a byte changed in each of three families, a dropped path, hex text instead of raw
 digest bytes, reversed path order — and every one produces a different value, so the match
-means something. The reviewed families are byte-identical to the candidate commit:
-`git diff` over the four prefixes is empty.
+means something.
+
+**Byte identity, stated exactly.** Three of the four families — `contracts/`, `fixtures/`
+and `scripts/`, the three the mechanism module pins as `IMMUTABLE_REVIEWED_PREFIXES` — are
+byte-identical to `92e13fa4`, and `git diff` over those three prefixes is empty. The
+fourth, `docs/architecture/`, is not and was never meant to be: ratification reconciles
+five files inside it, `manifest.json` declares them in `ratification.allowed_delta_paths`,
+and the `review_status` disposition of `W0-INT-02` moved two of those five again. The
+earlier form of this paragraph said all four were byte-identical, which is false of the
+tree it was written in; `erratum.md`, E-2.
 
 ## What was checked
 
-Run once, from the repository root, each exit code read from the process that produced it:
+**On the frozen round-ten candidate `2ea7b68b4c4455b03ed4f8437d12f5f35f56af58`** — the tree
+both acceptance streams judged, and the tree every figure in this section and the next is a
+figure *of*. Run once, from the repository root of a checkout of that commit, each exit code
+read from the process that produced it. The tree was unnamed here until the third independent
+review of `W0-INT-02` observed that a section headed only "run once, from the repository root"
+reads as a description of whatever tree the reader is holding — and it is not one. On the integration
+tree — the main checkout at `89d2303` with this task's 27 paths applied, which is the tree this
+report ships in — the contract suite collects 343, `git ls-files | grep -c '\.md$'` returns
+165, and the validator, which walks the working tree rather than the index, prints
+`markdown_files=166` because the erratum is present and not yet tracked. All three moved after
+the base did: at `6135f17` and `06be04e` they were 340, 164 and 165.
+
+The attribution was re-measured at `2ea7b68` rather than assumed, in a `cp -a` copy checked
+out at that commit, each exit code taken from the process:
+`.venv/bootstrap/bin/python -m unittest discover -s tests/contract` → `Ran 324 tests`, `OK`,
+exit 0; `.venv/bootstrap/bin/python scripts/validate_bootstrap.py` → `markdown_files=154`,
+`PASS`, exit 0; and the validator's own link rule, applied over those 154 tracked files, finds
+264 link targets of which 252 are relative and 0 broken. The figures of the tree this report
+*ships* in are in `erratum.md`, E-3, E-7 and E-12.
 
 | Check | Result |
 |---|---|
 | bootstrap validator, standalone | `PASS`, exit 0 |
-| bounded contract suite, `discover -s tests/contract` | 103 tests, `OK`, exit 0 |
+| contract suite, `discover -s tests/contract` | 324 tests, `OK`, exit 0 |
 | documented analysis gates A–D, extracted and run verbatim | all exit 0, all four markers printed |
 | schema positive and negative examples, golden checksums and assertions, error-catalog parity, contract-version invariants, referential integrity, ADR and lint coverage, candidate integrity | 45 tests run explicitly, 0 failures |
 | Markdown link sweep | 154 files, 252 relative links, 0 broken |
 | `git diff --check` | exit 0, no output |
 | manual `MT00-01`–`MT00-06`, independent tester | `PASS 6/6`, checklist 3/3 |
 
-Recomputed from repository data rather than read from a report: 9 registry stages, 62
+Recomputed from repository data rather than read from a report, at that same commit
+`2ea7b68`. These eleven read only the reviewed families, and `contracts/`, `fixtures/` and
+`scripts/` are byte-identical between `2ea7b68` and the tree this report ships in — `git diff
+--name-only 2ea7b68 -- contracts fixtures docs/architecture scripts` names five files, all
+under `docs/architecture/`, which are `W0-INT-01`'s ratification delta and `W0-INT-02`'s
+`review_status` disposition. Of the eleven, two were re-taken on both trees and agree: 9
+registry stages (`stages` has length 9 in `contracts/analysis/v1/stage-registry.json`) and 18
+ADRs (`validate_bootstrap.py` prints `adrs=18` at both). The other nine are `W0-INT-01`'s
+closeout measurement at `2ea7b68`, attributed and **not** re-taken here; a reader who needs
+them for this tree runs the recomputation again. The list: 9 registry stages, 62
 legacy name rows, 31 declaration sites, 293 immutable evidence locators, 20 error codes,
 25 identifiers, 6 state machines, 33 lint rules, 18 ADRs, 5 golden journeys, 95 assertions
 as 92 inventory-mapped plus 3 target-scope.
 
-## The blocking test contour was reduced, by owner decision
+## The blocking test contour: what was claimed, and what is there
 
-This is the largest procedural change at closeout and it is stated here because no other
-tracked document carried it when the final acceptance ran.
+This section previously recorded a contour split as an accomplished fact. It did not
+happen, and the paragraphs that described it are the largest single defect in this bundle.
+They are replaced here rather than annotated, because a reader of the checkpoint is
+entitled to a description of the tree in front of them; the exact superseded wording, its
+location and the measurement that refutes it are in `erratum.md`, E-3.
 
-`tests/contract/test_cp00_candidate.py` moved, with its history, to
-`tests/checkpoint/test_cp00_mechanism.py`. `tests/contract/test_cp00_contracts.py`
-re-exports exactly the classes that check **product semantics**. The blocking contour is
-now **103 tests**: 77 semantic plus the 26 validator regressions.
+**What was claimed.** That `tests/contract/test_cp00_candidate.py` had moved, with its
+history, to a mechanism module under `tests/checkpoint/`; that a second module under
+`tests/contract/` re-exported the classes checking product semantics; and that the blocking
+contour was consequently 103 tests, with 255 out of contour and two of those failing.
 
-Blocking: JSON Schema and examples, cross-family references, contract-version invariants,
-identifiers and state machines, error-catalog parity, the stage registry, golden checksums
-and assertions, ADR and lint-rule coverage, the documented analysis and neighbour gates,
-byte identity of the reviewed candidate, and the mutation controls that prove each of
-those can fail.
+**What is true.** Neither of the two named modules exists, at this commit or at any commit
+on any ref in this repository. `git log --all --pretty=format: --name-only` over the whole
+history lists eleven paths under `tests/`, and neither name is among them.
+`tests/contract/test_cp00_candidate.py` has never moved: it has seven revisions, all at
+that path. No split was ever performed, so the 103, 255, 281 and 77 figures all count a
+partition of the suite that does not exist.
 
-Out of the contour, still in the repository, still runnable with
-`unittest discover -s tests/checkpoint`: ratification self-reference, post-freeze delta
-licensing, the mutation census of the module's own tables, Git hook and configuration
-attack simulations, the completeness checks of its own completeness checks, and the
-sandboxed history of acceptance rounds. 255 tests.
+**The contour, measured on the tree this report ships in.** Each figure is the number the
+runner collected, not a count of `def test_`:
 
-**Two of those 255 fail**, both as a direct consequence of this split: the sandbox-reset
-expectation, and an assertion that `W0-QA-01` owns exactly two paths, which a three-file
-layout makes false. Both are the mechanism's bookkeeping about its own location. They are
-named here rather than repaired, because repairing them is the recursion this decision
-ended.
+| Command | Result |
+|---|---|
+| `.venv/bootstrap/bin/python -m unittest discover -s tests/contract` | 343 tests |
+| — of which `tests/contract/test_cp00_candidate.py` | 303 |
+| — of which `tests/contract/test_cp00_final_state.py` | 14 |
+| — of which `tests/contract/test_validate_bootstrap.py` | 26 |
+| `.venv/bootstrap/bin/python -m unittest discover -s tests/checkpoint` | 47 tests |
 
-**Why.** Nine acceptance rounds were opened. Rounds six, seven and eight each ran in full
-with both streams. Not one of the nine found a defect in a contract, a schema, a fixture, a
-state machine, an identifier or a golden expectation. Every blocker any of them raised
-lived in the mechanism that checks the checkpoint — and three of those blockers were
-completeness claims the integrator asserted without measuring. The architecture was sound
-throughout; the procedure had no executable end.
+**Four of the 343 fail on this tree, and not one is a contract, schema, fixture,
+identifier, state-machine or golden defect.** Two are in
+`tests/contract/test_cp00_candidate.py` and follow from the base commit sitting outside
+acceptance round ten's post-freeze delta ceiling — the recovery work is itself the delta —
+and they close when the integrator freezes acceptance round eleven. Two are in
+`tests/contract/test_cp00_final_state.py`, which asserts the final-state contour is empty:
+one is the tag-integrity axis, three findings that only a superseding tag can close, and one
+is the accounting axis, a single finding that closes the moment
+`artifacts/checkpoints/CP-00/erratum.md` is committed. All four are named in `erratum.md`,
+`L-1` and `T`, with their owners.
+
+**Why the claim was made.** Ten acceptance rounds were opened. Rounds six, seven and eight
+each ran in full with both streams. Not one of the ten found a defect in a contract, a
+schema, a fixture, a state machine, an identifier or a golden expectation. Every blocker
+any of them raised lived in the mechanism that checks the checkpoint, and three of those
+blockers were completeness claims the integrator asserted without measuring. This section
+was a fourth: a change described in the past tense in the one document a reader of the
+checkpoint is handed, with no check that could fail on the thing it named. The
+architecture was sound throughout; the procedure had no executable end.
 
 Consequently `docs/program/reviews/W0-QA-01.md` and `docs/program/tasks/W0-QA-01.md` still
-quote the pre-split command and the count 281. `W0-QA-01` is accepted and closed;
-correcting its deliverables would reopen it, which is the recursion that was ended. This
-report is the record a reader of the checkpoint is given.
+quote a suite command and a count of 281 that describe neither the tree they ship in nor
+any other. `W0-QA-01` is accepted and closed, and both files are dated historical records
+whose editing would destroy the evidence this audit rests on, so they are corrected by
+`erratum.md`, E-8, and not by edit.
 
 ## Acceptance history
 
@@ -114,7 +204,7 @@ report is the record a reader of the checkpoint is given.
 | 7 | FAIL | FAIL — MT00-01 | the remediation for round six was declared exhaustive and was not |
 | 8 | FAIL | FAIL — MT00-01 | the acceptance record was three rounds stale; the completeness check had never been run against the tree it was written for |
 | 9 | — | — | void before dispatch: the mechanism had no executable final state |
-| closeout | **PASS** | **PASS** 6/6 | this report |
+| 10 | **PASS** | **PASS** 6/6 | accepted; ratified at `39a3a643`. Superseded for the recovery tree — see the closeout note above |
 
 Round nine was voided before either stream was sent, by the repository owner, on finding
 that `W0-INT-01` must create eight files and reconcile four documents that the post-freeze

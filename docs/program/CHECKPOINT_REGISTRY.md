@@ -14,6 +14,28 @@
 | CP-09 | `v0.9.0-hardening` | production gates | `manual-tests/CP-09_hardening.md` | planned |
 | CP-10 | `v1.0.0` | release acceptance | `manual-tests/CP-10_release.md` | planned |
 
+## CP-00 — round accounting and supersession
+
+Ten acceptance rounds are in `artifacts/checkpoints/CP-00/manifest.json`; the tenth is
+accepted and is the round the status row above cites. **Acceptance round eleven is owed and
+is not yet opened.**
+
+CP-00 was ratified on round ten at `39a3a6430bd97c38cb20bafc793fc9d077d0df8e`, and the
+annotated tag `v0.0.0-architecture` points there. The tag is **local and unpublished**, and
+it is never moved, re-pointed or deleted.
+
+On 2026-09-07 the repository owner decided a formal superseding checkpoint
+(`docs/program/EXECUTION_PLAN.md` §3.3–§3.4). The recovery work committed after the
+ratification lies outside acceptance round ten's post-freeze delta ceiling, so round ten
+authorises the tree it judged and no later one. The successor is tagged
+`v0.0.1-architecture`, cut by `W0-INT-03` on the commit round eleven accepts. Until it
+exists, this row states CP-00's terminal state as ratified on round ten, which is what the
+manifest derives and what is true of `39a3a643`.
+
+Corrections to the CP-00 evidence bundle — every claim found false or unsupported, with the
+quote, the location, what is true and how it was measured — are in
+`artifacts/checkpoints/CP-00/erratum.md`.
+
 ## Evidence folder convention (created during development)
 
 ```text

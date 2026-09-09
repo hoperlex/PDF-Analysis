@@ -1,8 +1,17 @@
 # S00 — Architecture and behavior freeze
 
 **Target checkpoint:** `CP-00 / v0.0.0-architecture` — **ratified and tagged.**
-Acceptance round ten returned `PASS` from both streams; the evidence is
-`artifacts/checkpoints/CP-00/checkpoint-report.md`. The next stage is S01.
+Acceptance round ten returned `PASS` from both streams at commit
+`39a3a6430bd97c38cb20bafc793fc9d077d0df8e`; the evidence is
+`artifacts/checkpoints/CP-00/checkpoint-report.md`, and the corrections to it are
+`artifacts/checkpoints/CP-00/erratum.md`.
+
+**Being superseded.** The tag is local and unpublished. On 2026-09-07 the repository owner
+decided a formal superseding checkpoint (`docs/program/EXECUTION_PLAN.md` §3.3–§3.4):
+acceptance round eleven is owed on the reconciled candidate and `W0-INT-03` cuts
+`v0.0.1-architecture`. Every exit criterion below was met by the tree round ten judged and
+remains met; what is owed is a fresh acceptance of the recovery tree, not a re-doing of the
+stage. The next stage is S01, opened from the superseding tag.
 
 ## Goal
 

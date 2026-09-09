@@ -31,7 +31,7 @@ optimization its own bounded context; and the `FS-04` fail-soft policy is **spli
 into three parts with a named owner each**, machine-readably, because the defect
 round 3 could only report was that half of it had no owner at all. `PD-01`–`PD-04`,
 `ID-01`–`ID-03`, every principle and ADR disposition and the `ADR-0014` defer are
-untouched. The review status is `ratified_at_w0_3`; that ratification is
+untouched. The review status is `ratified`; that ratification is
 the ratification act.
 
 Round 5 records one thing and adds no decision. Independent review found that the
@@ -45,11 +45,11 @@ the overlap between two clauses and changes neither of them. Both consuming fami
 must reflect it (§6.2, §14). Everything else stands: `PD-01`, `PD-02`, `PD-04`,
 `PD-05`, `ID-01`–`ID-03`, every principle and ADR disposition, the `ADR-0014` defer,
 the open `U-04`, the resolved `U-06` and the three-part `FS-04` split. The review
-status is `ratified_at_w0_3`, recorded by the ratification act of `W0-INT-01`.
+status is `ratified`, recorded by the ratification act of `W0-INT-01`.
 
 | Item | Value |
 |---|---|
-| Review status | `ratified_at_w0_3` (round 5) |
+| Review status | `ratified` (round 5) |
 | Owner decisions `PD-01`–`PD-05` | recorded 2026-09-01: `PD-01`, `PD-02`, `PD-03` **approved with modification**, `PD-04` and `PD-05` **approved** (§6, [CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md)) |
 | `PD-03` precedence clarification | recorded 2026-09-01 by the repository owner **inside `PD-03`**, not as a new decision: identical idempotency key and payload always return the original Run; a repeat of a terminal Run creates a new Run only under a new idempotency key (§6.2). The record count stays five and the disposition stays `approved with modification` |
 | `PD-05` identifier provenance | the number was assigned by the **analysis (ANA) lane**, not by the owner, and was **confirmed by the program integrator on 2026-09-01**: it stands, no renumbering follows and the confirmation changed no semantics. The number is a cross-artifact label, not part of the owner's statement |

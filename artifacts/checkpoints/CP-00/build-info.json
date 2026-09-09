@@ -3,8 +3,10 @@
   "tag_planned": "v0.0.0-architecture",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "3da104e5d6fafb2a581bda377a07911183af803f",
-  "closeout_branch": "closeout/CP-00",
-  "closeout_base_commit": "7a9ddcb7b8e8902d68fddec41baa8b48f417dd5f",
+  "closeout_branch": "integration/W0.3, head 39a3a6430bd97c38cb20bafc793fc9d077d0df8e",
+  "closeout_branch_head": "39a3a6430bd97c38cb20bafc793fc9d077d0df8e",
+  "closeout_base_commit": "2ea7b68b4c4455b03ed4f8437d12f5f35f56af58",
+  "closeout_base_note": "2ea7b68 is the commit that froze acceptance round ten's tested_candidate_digest, established by walking the manifest's own history for the oldest consecutive revision carrying the live value at the top level and in the round-ten entry. It is the base the ratification commit 39a3a64 was written on. This field previously read 7a9ddcb7b8e8902d68fddec41baa8b48f417dd5f, and `git cat-file -t 7a9ddcb7b8e8902d68fddec41baa8b48f417dd5f` fails with 'could not get object info': no such object has ever existed in this repository. closeout_branch previously read closeout/CP-00, which is at 4bf2351 - the round-nine void - and does not contain the checkpoint: `git merge-base --is-ancestor 39a3a643 origin/closeout/CP-00` exits 1. Both corrections are recorded in erratum.md, E-4.",
   "build_kind": "architecture and behaviour freeze; no product code is built at CP-00",
   "toolchain": {
     "python": "3.12.3",
@@ -19,6 +21,8 @@
     "jsonschema": "4.26.0"
   },
   "migration_head": "none",
-  "artifact_manifest_sha256": "39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08",
-  "note": "Recorded by W0-INT-01 at closeout. This file describes how the checkpoint was validated, not how a product was built: at CP-00 there is no product to build. The interpreter is the hash-locked bootstrap environment W0-DEP-01 froze; the lockfile hash above is what pins it."
+  "artifact_manifest_sha256": "a78572288a28b88be7f5dd58b9e79254a9e4f61cb55838ba4308b3be91109b84",
+  "artifact_manifest_subject": "the reviewed families in the tree that carries this record, 100 files, by the recipe contract-manifest.yaml publishes. A commit cannot name its own hash, so the subject is stated rather than pinned, which is the device candidate_digest_recipe already uses.",
+  "note": "Recorded by W0-INT-01 at closeout and reconciled by W0-INT-02. This file describes how the checkpoint was validated, not how a product was built: at CP-00 there is no product to build. The interpreter is the hash-locked bootstrap environment W0-DEP-01 froze; the lockfile hash above is what pins it.",
+  "build_info_artifact_manifest_history": "The two other trees this one field has described are named with their commits in contract-manifest.yaml: 39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08 at the reviewed candidate 92e13fa496a723ed6e4c3adbf138c4f4e1d7c368, and f362647cc9b1d2201ac4663bf5d877346eeeccf046734219103c3ac822d2845d at 39a3a6430bd97c38cb20bafc793fc9d077d0df8e, the commit v0.0.0-architecture points at. This field previously carried the reviewed-input value while manifest.json carried the tagged-tree value under the same field name, and neither said which tree it described; erratum.md, E-1."
 }

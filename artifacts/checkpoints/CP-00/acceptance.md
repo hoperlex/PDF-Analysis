@@ -4,7 +4,11 @@
 > returned `PASS` on 2026-09-02, then two things moved the tree: `W0-QA-01` was reopened
 > because its suite accepted a ratification that is declared and not performed, and the
 > digest model was corrected. Acceptance certifies a tree; both changes replaced it.
-> Ten rounds are in the record. Round ten returned `PASS` from both streams and CP-00 is ratified on it; no earlier result transferred to it.
+> Ten rounds are in the record. Round ten returned `PASS` from both streams and CP-00 is
+> ratified on it at commit `39a3a6430bd97c38cb20bafc793fc9d077d0df8e`; no earlier result
+> transferred to it. **Round ten stands for the tree it judged and for no other.** The tree
+> that carries this document is not that tree, so an eleventh round is owed: see "Round
+> eleven" below.
 >
 > Primary reports: `manual-report-round-3.md`, and both streams' primary reports for
 > rounds six, seven and eight. No primary automated report exists for round 3 — that
@@ -15,7 +19,14 @@
 Ten rounds have been opened. Rounds one and two returned `FAIL` from both streams;
 round three returned `PASS` from both and is spent; rounds four, five and nine were
 voided before either stream reported; rounds six, seven and eight each ran in full and
-failed; round ten is accepted and has not been frozen.
+failed; round ten was frozen at `2ea7b68b4c4455b03ed4f8437d12f5f35f56af58`, ran in full,
+and is accepted. An eleventh is owed.
+
+The sentence that stood here — "round ten is accepted and has not been frozen" —
+contradicted this document's own table row for round ten, which records the freeze, and the
+manifest, which carries the frozen digest and the freeze commit. The manual tester of round
+ten raised it as finding `F-1`. It is corrected rather than annotated: this document is a
+live record, not a dated report.
 Every blocker across all ten rounds sat in integrator-owned metadata, gate text or state
 documents. None was a contract, fixture, schema or test defect: in every round that ran,
 both streams confirmed the four reviewed families byte-identical to
@@ -35,7 +46,8 @@ rebuild without re-running QA.
 | 7 | FAIL | FAIL — MT00-01 | frozen at `c1376e1c` |
 | 8 | FAIL | FAIL — MT00-01 | frozen at `b21e7275` |
 | 9 | — | — | void; frozen at `ec63e75`, voided at `4bf2351` before dispatch |
-| 10 | **PASS** | **PASS** — 6/6 | frozen at `2ea7b68`; **CP-00 ratified** |
+| 10 | **PASS** | **PASS** — 6/6 | frozen at `2ea7b68`; **CP-00 ratified** at `39a3a643` |
+| 11 | owed | owed | owed on the recovery candidate; not yet frozen — see "Round eleven" |
 
 ## What the failures were about
 
@@ -154,9 +166,44 @@ state-machine, identifier or golden defect.
 The repair is owned by the QA suite, not by the integrator: align the post-freeze ceiling
 with `W0-INT-01`'s actual deliverables, license exactly the final state and evidence set
 and nothing wider, and check the content of what it licenses rather than merely permitting
-the paths to move. Round ten is accepted and must not be frozen until that alignment has been
-independently accepted, because a freeze taken first would be spent again for the same
-reason.
+the paths to move. That alignment was made and independently accepted, round ten was then
+frozen at `2ea7b68`, both streams ran, and CP-00 was ratified on it. The sentence that stood
+here — "Round ten is accepted and must not be frozen until that alignment has been
+independently accepted" — described a state two commits back and is superseded by the round
+it was written about.
+
+## Round eleven
+
+**Acceptance round eleven is owed and is not opened.**
+
+On 2026-09-07 the repository owner decided a formal superseding checkpoint
+(`docs/program/EXECUTION_PLAN.md` §3.3–§3.4, variant A), whose fourth step is a further
+acceptance round on one frozen commit. Round eleven is that round, and
+`v0.0.1-architecture` is the tag it leads to.
+
+**Why it is owed.** Round ten's acceptance is bound to the tree frozen at `2ea7b68`. Measured
+on the base of this reconciliation, `6135f17fb76758dc1ab3a7c1195f5421814ba2fb`, nine paths
+differ from that tree and nothing licenses them: `docs/program/EXECUTION_PLAN.md`,
+`docs/program/reviews/W0-QA-04.md`, `docs/program/tasks/W0-INT-02.md`,
+`docs/program/tasks/W0-INT-03.md`, `docs/program/tasks/W0-QA-04.md`,
+`tests/checkpoint/cp00_final_state.py`, `tests/checkpoint/test_cp00_final_state_contour.py`,
+`tests/contract/test_cp00_candidate.py` and `tests/contract/test_cp00_final_state.py`. By
+this checkpoint's own recorded rule — if the frozen tree must change, the round is void and a
+new one begins — round ten does not authorise ratifying this tree.
+
+**Why it has no row in the table below and no entry in `acceptance_rounds`.** Not an
+omission, and measured rather than assumed: opening it inside this freeze is unreachable in
+all three available forms, because the mechanism module models three checkpoint states and
+the recovery needs a fourth — ratified, superseded, and a new round judging the successor.
+The three branches and what each produced are recorded in `erratum.md`, `L-2`, and the
+disposition is carried in `manifest.json` under `supersession`, which is data a reviewer can
+act on. **Owner of opening it: the integrator, at the freeze commit.**
+
+**What it must judge.** The tree the integrator freezes after `W0-INT-02` is integrated, with
+both streams reporting to canonical primary reports —
+`artifacts/checkpoints/CP-00/manual-report-round-11.md` and
+`artifacts/checkpoints/CP-00/automated-report-round-11.md`, which are the two names the
+round's own evidence licence recognises.
 
 ## The record of the rounds is itself checked now
 
@@ -173,21 +220,104 @@ primary acceptance reports, the independent review reports and itself; and it re
 manifest, `CURRENT_STATE.md` and the checkpoint registry each to *state* both claims, so
 that a record which says nothing cannot pass for the wrong reason.
 
-Measured, in both directions. `--selftest` fires each detector and shows a history label
-excusing only its own unit. Run against the tree as it stood before this reconciliation it
-named seventeen stale sites across six files; run after it, the four records above are
-clean. `--rev` sweeps any commit's objects without a checkout, which is how the
-axis-one measurements at `bde3af3`, `a3eaf88` and `5b70ee4` — 1, 1 and 4 findings — can be
-reproduced by a reader on a dirty working tree.
+Measured, in both directions, and **each measurement names the tree it was taken on**, which
+the previous form of this paragraph did not do. `--selftest` fires each detector and shows a
+history label excusing only its own unit. `--rev` sweeps any commit's objects without a
+checkout, which is how every figure here can be reproduced by a reader on a dirty working
+tree, and how the axis-one measurements at `bde3af3`, `a3eaf88` and `5b70ee4` — 1, 1 and 4
+findings — were taken.
 
-**Its exit code is now zero on both axes, and this paragraph used to say otherwise.**
-When it was written the sweep named nine findings across three files: the W0.3 wave plan
-at two lines and the `W0-INT-01` status banner, which are writable only by `W0-INT-01`;
-and six rows of the evidence table in `docs/program/reviews/W0-QA-01.md` §11.19.8. The
-first three were genuine and the integrator corrected them. The six were not: they are a
-dated historical measurement, the table being introduced by "Measured at `4bf2351`", and
-the sweep binds to the table row while the date sits in the introducing paragraph, so it
-could not see the label.
+```
+$ .venv/bootstrap/bin/python artifacts/checkpoints/CP-00/check_state_records.py --rev 4bf2351
+axis two - stale round accounting: 17          # across six files: the round-nine void,
+                                               # the tree before the round-ten reconciliation
+$ .venv/bootstrap/bin/python artifacts/checkpoints/CP-00/check_state_records.py --rev 2ea7b68
+axis two - stale round accounting: 0           # the frozen round-ten candidate: both axes
+                                               # clean, which is the state the streams judged
+```
+
+**Neither of those is a figure of the tree this document ships in, and the sentence they
+replace read as though the second one were.** "Run after it, the four records above are
+clean" was true of `2ea7b68` and is false here: on this tree the sweep names all four, for
+the reasons `erratum.md` `E-12` enumerates by class. The defect is the one `E-12` corrects —
+a figure measured but not attributed to a tree — and it was found by sweeping this record for
+the class rather than for the finding.
+
+**Its exit code is 1 on the tree that carries this document, and both of this paragraph's
+earlier forms are superseded.** It once said the exit code was non-zero with nine findings
+across three files; it then said the exit code was zero on both axes. Measured on this tree,
+with the command and the exit code taken from the process that produced it:
+
+```
+$ .venv/bootstrap/bin/python artifacts/checkpoints/CP-00/check_state_records.py
+tree swept: the working tree, 238 tracked paths
+axis one - superseded commits presented as current: 0
+axis two - stale round accounting: 16
+                                                                     # exit 1
+```
+
+That figure is of the base tree `6135f17` with this task's paths applied, uncommitted, and it
+names **nine** files. It becomes **19 across ten files** once
+`artifacts/checkpoints/CP-00/erratum.md` is tracked, which the integration commit does: the
+sweep enumerates with `git ls-files`, an uncommitted file is invisible to it, and the erratum
+carries three owed-round sentences of its own. Both values are stated because stating only the
+first would make this paragraph wrong the moment the work is committed.
+
+**And a third reason to state more than one, learned this round: the total moves with the base
+as well as with the commit.** On the integration tip `06be04e`, which is the tree the primary
+reviewer holds, the same command gives **17 across ten files** uncommitted and
+**20 across eleven files** tracked. The difference is one path this task may not write,
+`docs/program/EXECUTION_PLAN.md`, which the sweep reads as a live record naming the round this
+recovery owes. Four figures, two trees, each with its commit — and the command, not any of
+them, is what a reader re-runs. `erratum.md`, `E-13`.
+
+**Neither number is the claim.** The two figures this paragraph carried in its previous form
+— sixteen across *eight* files, becoming *seventeen* — were both wrong, and they were wrong
+in a way no re-measurement of the tree could have caught, because their value depends on the
+bytes of the sentences that state them. This paragraph *was* one of the findings it counted,
+until the repair moved this record's owed-round claim to where a reader looks for it, § "Round
+eleven" above; that trade changed which finding this file contributes without changing the
+total, and `erratum.md` E-12 records it rather than absorbing it. What is asserted here
+instead is an invariant: **axis one is 0, and every axis-two finding belongs to one of four
+named classes.** The classes, and every site by path and by an anchor that does not move when
+a file reflows, are `erratum.md`, `E-12`. The totals above are observations, carrying the
+command and the tree, and nothing rests on them.
+
+**Two things this paragraph previously claimed for that invariant are withdrawn, and the
+narrower true statements are `erratum.md`, `E-13`.** It said the invariant "survives the next
+edit to any live record": it does not — an edit that adds a countable claim in a unit the
+checker can read raises axis two by one, and the new finding belongs to none of the four
+classes. And it carried a fourth clause, "none of which is a stale record", which was asserted
+and never measured: the `C-2` class is *defined* as a record the checker cannot read, so
+rewriting a `C-2` site to name the wrong round leaves the finding list byte-identical. Both
+were measured on the integration tip, and `E-13` gives the transcripts. What the classification
+establishes is that a stale live record introducing a **new path** shows up as a path not in
+the `E-12` table; what it cannot establish is that a path already in the table is current. The
+two sentences in `docs/program/CURRENT_STATE.md` that state the round this recovery owes are
+`C-2` sites, and a reviewer verifies them by reading them against `manifest.json`'s
+`supersession` object. Owner of a checker that could read them: W1.
+
+**And the sweep is not a gate of this checkpoint.** `manifest.json` says so in
+`known_pre_ratification_items.sweep_has_no_ratified_state`, and no acceptance verdict rests
+on it. Its axis two models the round accounting as "which round is owed", and a ratified
+checkpoint owes none, so it reports a correctly ratified manifest as a defect and instructs
+the reader to open the next round in `acceptance_rounds` — which the mechanism module
+refuses, for the reasons in `erratum.md`, `L-2`. The two checkers give contradictory
+instructions about one field. The gate that replaced it is
+`tests/checkpoint/cp00_final_state.py`, delivered by `W0-QA-04`, which models open,
+closed-accepted and terminal-ratified states explicitly. `checkpoint-report.md` used to count
+the sweep among three grounds for the automated `PASS`; that is corrected, and recorded in
+`erratum.md`, E-6.
+
+The nine findings the earlier form named were the W0.3 wave plan at two lines and the
+`W0-INT-01` status banner, which are writable only by `W0-INT-01` and were corrected before
+the round-ten freeze; and six rows of the evidence table in
+`docs/program/reviews/W0-QA-01.md` §11.19.8, which are not findings at all: they are a dated
+historical measurement, the table being introduced by "Measured at `4bf2351`", and the sweep
+binds to the table row while the date sits in the introducing paragraph, so it cannot see the
+label. Those six were routed in `manifest.json` to `W0-QA-01`, an accepted and closed task —
+the path right and the actor wrong. Re-routed to W1, by erratum rather than by edit:
+`erratum.md`, E-8.
 
 **The integrator then excluded review reports by path, and that is a narrowing this
 paragraph warned against in its previous form.** The warning was right and is recorded

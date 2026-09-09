@@ -3,7 +3,7 @@
   "task_id": "W0-ARC-01",
   "wave": "W0.2",
   "checkpoint": "CP-00",
-  "review_status": "ratified_at_w0_3",
+  "review_status": "ratified",
   "owner_decision_round": 5,
   "owner_decisions_recorded_on": "2026-09-01",
   "owner_decision_authority": "repository owner",

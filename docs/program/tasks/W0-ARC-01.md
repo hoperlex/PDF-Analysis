@@ -1,4 +1,10 @@
 # Task W0-ARC-01 — architecture and ADR evidence reconciliation
+> **Status: completed and closed at CP-00.** Independently accepted and integrated with the W0.2 candidate set at `cf7740474b1786163f54d93b013a0d526ef989e0`.
+> Requirements, gates and deliverables are frozen by that acceptance; only this banner is
+> writable. CP-00 was ratified on acceptance round ten and tagged `v0.0.0-architecture`,
+> and the checkpoint is being superseded — acceptance round eleven is owed and `W0-INT-03`
+> cuts `v0.0.1-architecture`. Corrections to the CP-00 evidence bundle are in
+> `artifacts/checkpoints/CP-00/erratum.md`.
 
 ## Outcome
 

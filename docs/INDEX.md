@@ -38,7 +38,11 @@
 - [Task W0-EVT-01](program/tasks/W0-EVT-01.md) — accepted and integrated
 - [Task W0-CLN-01](program/tasks/W0-CLN-01.md) — accepted and integrated
 - [Task W0-QA-01](program/tasks/W0-QA-01.md) — accepted and integrated
-- [Task W0-INT-01](program/tasks/W0-INT-01.md) — accepted and integrated; CP-00 ratified and tagged
+- [Task W0-INT-01](program/tasks/W0-INT-01.md) — accepted and integrated; CP-00 ratified and tagged `v0.0.0-architecture`, and superseded by the recovery: acceptance round eleven is owed and `W0-INT-03` cuts `v0.0.1-architecture`
+- [Task W0-QA-04](program/tasks/W0-QA-04.md) — accepted and integrated; the CP-00 final-state contour
+- [Task W0-INT-02](program/tasks/W0-INT-02.md) — CP-00 state reconciliation and evidence erratum
+- [Task W0-INT-03](program/tasks/W0-INT-03.md) — superseding ratification and `v0.0.1-architecture`
+- [CP-00 recovery execution plan](program/EXECUTION_PLAN.md)
 - [Checkpoint registry](program/CHECKPOINT_REGISTRY.md)
 - [Version/freeze policy](program/VERSIONING_AND_FREEZE_POLICY.md)
 - [Integration policy](program/INTEGRATION_POLICY.md)
@@ -48,7 +52,7 @@
 See [stage plan index](stages/README.md) — S00 through S10.
 
 ## Checkpoint evidence
-See `artifacts/checkpoints/` — one directory per checkpoint; CP-00 holds its manifest and acceptance records.
+See `artifacts/checkpoints/` — one directory per checkpoint; CP-00 holds its manifest and acceptance records. Read `artifacts/checkpoints/CP-00/erratum.md` beside them: it carries every claim in the CP-00 bundle that was found false or unsupported, with the quote, the location, what is true and how it was measured.
 
 ## Manual acceptance
 See `docs/manual-tests/` — one runbook per checkpoint.

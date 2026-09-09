@@ -6,8 +6,10 @@ produced candidates, the repository owner has recorded an explicit disposition f
 independent review. The accepted W0.2 candidate set is integrated at
 `cf7740474b1786163f54d93b013a0d526ef989e0`.
 
-W0.3 is on `integration/W0.3`. All six of its contract and QA tasks are integrated;
-`W0-INT-01` remains blocked. Both CP-00 acceptance streams returned `PASS` on
+W0.3 is on `integration/W0.3`. All six of its contract and QA tasks are integrated, and
+`W0-INT-01` is executed: CP-00 was ratified on acceptance round ten at
+`39a3a6430bd97c38cb20bafc793fc9d077d0df8e` and tagged `v0.0.0-architecture`, locally and
+unpublished. Both CP-00 acceptance streams returned `PASS` on
 2026-09-02, on round three, and that `PASS` is **spent**: `W0-QA-01` was reopened
 afterwards and took nine further rounds to accept, and the candidate digest model was
 corrected in the same period. Rounds four and five were voided before either stream
@@ -17,8 +19,15 @@ dispatch, because performing `W0-INT-01` would have voided the round authorising
 Round ten was frozen at `2ea7b68`, returned `PASS` from both streams, and CP-00 is ratified on it. No earlier result transfers to it.
 
 CP-00 is ratified on acceptance round ten, both streams `PASS`, and tagged
-`v0.0.0-architecture`. Production implementation remains locked until CP-01; S01
-repository foundation is the next stage.
+`v0.0.0-architecture` — locally, and not published. **That ratification is bound to the
+tree it judged and is being superseded.** On 2026-09-07 the repository owner decided a
+formal superseding checkpoint (`docs/program/EXECUTION_PLAN.md` §3.3–§3.4): the recovery
+work committed after the ratification lies outside acceptance round ten's post-freeze delta
+ceiling, so round ten does not authorise ratifying the current tree. Acceptance round eleven
+is owed, `W0-INT-03` performs the superseding ratification, and `v0.0.1-architecture` is the
+tag it will carry. The old tag is never moved, re-pointed or deleted. Production
+implementation remains locked until CP-01; S01 repository foundation is the next stage after
+the superseding checkpoint is accepted.
 
 ## Active checkpoint
 
@@ -26,9 +35,9 @@ Target: `CP-00 / v0.0.0-architecture`.
 
 ## Active wave
 
-`W0.3 — CP-00 ratification and integration` (six tasks accepted; `W0-INT-01` and
-ratification blocked — round ten is accepted). See
-`docs/program/waves/W0.3_ratification_integration.md`.
+`W0.3 — CP-00 ratification and integration` (six tasks accepted; `W0-INT-01` executed and
+CP-00 ratified on round ten; the checkpoint is being superseded and round eleven is owed).
+See `docs/program/waves/W0.3_ratification_integration.md`.
 
 Stage one integrated:
 
@@ -51,10 +60,14 @@ Stage two progress:
 - `W0-QA-01` — independent cross-family verification, 255 module tests after eleven
   reopenings, accepted by two independent reviewers on the same bytes, evidence at
   `3da104e5d6fafb2a581bda377a07911183af803f`. Reopened again after round nine was
-  voided: the post-freeze delta ceiling must be aligned with `W0-INT-01`'s actual
-  deliverables. That remediation is in flight and not yet independently accepted, so
-  `3da104e5d6fafb2a581bda377a07911183af803f` remains the accepted evidence commit and
-  the round-ten freeze waits on the new acceptance.
+  voided: the post-freeze delta ceiling had to be aligned with `W0-INT-01`'s actual
+  deliverables. That remediation was independently accepted and integrated;
+  `3da104e5d6fafb2a581bda377a07911183af803f` remains the accepted evidence commit, and
+  round ten was frozen at `2ea7b68b4c4455b03ed4f8437d12f5f35f56af58` on the remediated
+  tree. `W0-QA-04` then delivered the final-state contour,
+  `tests/checkpoint/cp00_final_state.py`, integrated at
+  `6135f17fb76758dc1ab3a7c1195f5421814ba2fb`; it is the gate that replaced
+  `artifacts/checkpoints/CP-00/check_state_records.py`.
 
 ## CP-00 candidate
 
@@ -78,9 +91,13 @@ Three measurements with three different jobs, which earlier rebuilds conflated:
   computed, so it depends on `tested_candidate_digest` — that dependency is what stops
   evidence from one tree being presented as another's acceptance. An earlier recipe
   blanked both fields and so provided no such binding while the prose claimed one.
-- `artifact_manifest_sha256` **certifies** the four reviewed families unchanged, which
-  is what carries the `W0-QA-01` `ACCEPT` forward. It is deliberately identical across
-  every rebuild that leaves the contracts alone, and therefore cannot identify anything.
+- `artifact_manifest_sha256` **certifies** the four reviewed families, and it is identical
+  across every rebuild that leaves them alone, which is what carries the `W0-QA-01` `ACCEPT`
+  forward and is also why it cannot identify anything. **It is only meaningful with a commit
+  beside it.** The same recipe over three trees of this repository gives three values:
+  `39721aac…` at the reviewed candidate `92e13fa4`, `f362647c…` at the tagged commit
+  `39a3a643`, and `a7857228…` over the recovery tree. The bundle carried the first two under
+  swapped labels for ten rounds; see `artifacts/checkpoints/CP-00/erratum.md`, E-1.
 
 Completed inputs:
 
@@ -256,24 +273,76 @@ would have voided the round that authorised it. That is a defect in the checkpoi
 procedure, not in any contract, and the repair is owned by the QA suite.
 
 Every blocker across all ten rounds sat in integrator-owned metadata, gate text, state
-documents or the QA suite. None was a contract, fixture, schema or semantic defect: the
-four reviewed families have stayed byte-identical to `reviewed_candidate_commit`
-throughout, and the contract-level `ACCEPT` still holds. What repeatedly failed is the
+documents or the QA suite. None was a contract, fixture, schema or semantic defect: three of
+the four reviewed families — `contracts/`, `fixtures/` and `scripts/` — have stayed
+byte-identical to `reviewed_candidate_commit` throughout, the fourth moved only inside the
+five files ratification declares, and the contract-level `ACCEPT` still holds. What repeatedly failed is the
 checkpoint *procedure*, in the same shape each time, one layer deeper:
 first a ratification could be declared with fewer paths than required, then declared in
 full and not performed, then performed as a byte change that did not do the
 reconciliation, then the programme's record of its own rounds went stale twice over, and
 then the ratification turned out to have no licensed way to be performed at all.
 
-Order from here: S01. Cut the stage branch from `v0.0.0-architecture` and open `W1-INT-00`, which freezes the toolchain, the root command surface, the foundation OpenAPI health/error contract and the local PostgreSQL and S3 conventions.3 wave plan, the
-`W0-INT-01` status banner, and the six dated rows in `docs/program/reviews/W0-QA-01.md`
-§11.19.8 that the sweep reads as live claims. Then dispatch both streams, each producing a primary report
-file, and only on two `PASS` execute the ratification half of `W0-INT-01`.
-Publication is a separate, explicitly authorised step after that.
+**The paragraph that stood here was corrupted by a regex replacement at a previous
+closeout.** It read "… the local PostgreSQL and S3 conventions.3 wave plan, the `W0-INT-01`
+status banner, and the six dated rows …": the tail of a sentence about the S01 stage branch
+spliced onto the middle of a sentence about the state records still owed before a freeze.
+Both halves are restored below, each as its own statement, and the second is brought up to
+date.
 
-`artifacts/checkpoints/CP-00/check_state_records.py` is the runnable completeness check
-for both axes this record has failed on — a superseded evidence commit presented as
-current, and stale round accounting. It derives the round accounting from the checkpoint
-manifest rather than restating it, and its non-zero exit names the sites still owed —
-nine findings across three files, all of which have an owner and must be discharged before
-the freeze.
+**Order from here.** `W0-INT-02` reconciles the live records and issues the checkpoint
+erratum; the integrator freezes acceptance round eleven on the reconciled tree and dispatches
+both streams, each producing a primary report file under
+`artifacts/checkpoints/CP-00/`; and only on two `PASS` does `W0-INT-03` perform the
+superseding ratification and cut `v0.0.1-architecture`. Publication is a separate, explicitly
+authorised step after that. S01 follows: cut the stage branch from the superseding tag and
+open `W1-INT-00`, which freezes the toolchain, the root command surface, the foundation
+OpenAPI health/error contract and the local PostgreSQL and S3 conventions.
+
+**What was owed before the round-ten freeze, and what is owed now.** The W0.3 wave plan at
+two lines and the `W0-INT-01` status banner were corrected before that freeze. The six dated
+rows in `docs/program/reviews/W0-QA-01.md` §11.19.8 that the sweep reads as live claims are
+not owed to anybody in this graph: they are a dated historical measurement inside an accepted
+and closed task's deliverable, and correcting them by edit would destroy the evidence. They
+are corrected by erratum — `artifacts/checkpoints/CP-00/erratum.md`, E-8 — and owned by W1.
+
+`artifacts/checkpoints/CP-00/check_state_records.py` was the runnable completeness check for
+the two axes this record failed on — a superseded evidence commit presented as current, and
+stale round accounting. **It is no longer a gate of this checkpoint**, and the checkpoint
+manifest says so: it has no model of a ratified checkpoint, so it reads one as a defect and
+tells the reader to open a round the mechanism module refuses to let anyone open. Measured on
+this tree, `.venv/bootstrap/bin/python artifacts/checkpoints/CP-00/check_state_records.py`
+exits 1 with axis one 0 and axis two 16 naming nine files — and 19 naming ten files once
+`artifacts/checkpoints/CP-00/erratum.md` is tracked, which the integration commit does, since
+the sweep enumerates with `git ls-files`. Those two figures are of the base tree `6135f17`
+with this task's paths applied. On the integration tip `06be04e` with the same paths the same
+command gives 17 naming ten files and 20 naming eleven files, the difference being
+one path this task may not write. Four observations of two trees, not the claim: **axis one is
+0, and every axis-two finding falls into one of four named classes.** Each site, by path and by
+a stable anchor, is in `artifacts/checkpoints/CP-00/erratum.md`, E-12, which also records that
+the figures this sentence carried in an earlier form — 16 across *eight* files, becoming *17* —
+were wrong, and why a total is the wrong thing for a record to assert about a sweep that reads
+the record asserting it. Run it as a diagnostic.
+
+**What that invariant does not establish, and what in this document a reader must therefore
+check by reading.** It was previously stated with a fourth clause, "none of which is a stale
+record", and that clause is withdrawn: the classification cannot show a record is current,
+because one of its four classes is *defined* as a record the checker cannot read. The two
+sentences in this file that state the round this recovery owes — the paragraph beginning "That
+ratification is bound to the tree it judged" and the **Active wave** entry — are in that class.
+Rewriting them to name the wrong round leaves the sweep's finding list byte-identical and both
+suites **unchanged** — not green: on the integration tree `discover -s tests/contract` is
+`Ran 343 tests`, `FAILED (failures=4)`, exit 1 *before* any perturbation, so no perturbation
+can leave it green, and "unchanged" is the word the sibling records use. Measured, in
+`artifacts/checkpoints/CP-00/erratum.md`, `E-13`. Their truth rests on a reader checking them
+against `manifest.json`'s `supersession` object, not on any gate of this checkpoint. A checker
+that can read a claim carrying the word *superseding* as live rather than as dated history is
+owned by W1.
+
+The gate that replaced it is `tests/checkpoint/cp00_final_state.py`, delivered by `W0-QA-04`
+and integrated at `6135f17fb76758dc1ab3a7c1195f5421814ba2fb`. It distinguishes an open round,
+a closed accepted round and a terminal ratified checkpoint, and it names an owner for every
+finding it reports. On this tree it reports four findings: three against the integrity of the
+`v0.0.0-architecture` tag, which only a superseding checkpoint can close and which
+`W0-INT-03` owns, and one that closes when the integrator commits
+`artifacts/checkpoints/CP-00/erratum.md`.
