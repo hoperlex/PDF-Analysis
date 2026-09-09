@@ -31,7 +31,7 @@ P0-FND-00
   -> FF-01 ACCEPTED
        |-> P1-INT-00 -> PostgreSQL/S3 implementation lanes -> PF-01
        |
-       `-> P0-PLN-01 -> detailed P02-P05 plan + navigation task approval
+       `-> P0-PLN-01 -> detailed P02-P05 plan + two-task navigation gate approval
                               |
                     PF-01 + accepted plan + navigation gate
                     + forecast recalibrated from P01 evidence
@@ -60,8 +60,10 @@ longer grants dispatch authority to prototype tasks.
 
 ADR-0019/P-23 introduces a repository navigation layer for human and AI-agent delivery.
 It does not delay FF-01 or P01. `P0-PLN-01` must create its agent-ready implementation
-task, which may prepare the schema and tooling in parallel with P01 but must be accepted
-before any P02 implementation fan-out.
+tasks — **two** of them: `P1-NAV-01` builds the schema, tooling, index and planned entries
+in parallel with P01, and `P1-NAV-02` flips the named foundation entries to `implemented`
+after `PF-01` and regenerates the index. Both must be accepted before any P02
+implementation fan-out; neither blocks P01.
 
 The layer uses task/context-owned machine-readable fragments and a generated aggregate
 index. It maps active decisions and contracts to owning tasks, implementation paths/public

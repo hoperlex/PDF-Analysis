@@ -19,6 +19,10 @@ accepted and integrated:
   - `P2-INT-00` — pins and the environment contract accepted
   - owner decision `OD-12`, the decision author identity, because this task writes the
     migration head that must carry its column; deciding it later is a schema change
+  - owner decision `OD-24`, the PC-01 `AuditRun` conformance subset, because this task
+    writes the `audit_run` transition guard and the decision fixes which clauses that guard
+    evaluates and which are recorded as unevaluated. Deciding it after the guard exists
+    means rewriting the guard and the migration that carries it
 
 ## Frozen inputs
 
@@ -59,10 +63,14 @@ accepted and integrated:
   blob metadata, audit run, command record, stage result, finding, finding observation,
   finding evidence, model call, expert decision event and audit event tables. There is no
   job, attempt, lease or export table: PC-01 has no Job and no Attempt, and the CSV export
-  is computed on request rather than stored
+  is computed on request rather than stored. There is likewise **no import table**: PC-01
+  ingests one PDF through the direct single-PDF upload command `P2-META-01` owns, so the
+  `Import` aggregate is not instantiated, `import_id` is allocated nowhere, the `import`
+  state machine is not implemented, and PC-01 claims no conformance to it. This removes an
+  aggregate from PC-01's scope; it adds none
 - prefixed identifier types generating exactly the contract prefixes and matching the
   contract identifier pattern
-- a transition guard for the audit run, blob, import and command idempotency machines that
+- a transition guard for the audit run, blob and command idempotency machines that
   encodes the **declared state topology** — the initial state, the allowed transitions and
   the terminal set — and refuses any undeclared transition with
   `state_transition_not_allowed`. It does **not** claim generated coverage of every
@@ -123,7 +131,11 @@ tables and their guards left PC-01 scope. Basis: one migration head plus typed p
 - the P02 migration head identifier and the table and constraint list
 - the identifier and guard APIs
 - error codes not used by PC-01, naming `execution_token_invalid` and `stale_attempt`
-  explicitly, since PC-01 has no Job or Attempt to raise them
+  explicitly, since PC-01 has no Job or Attempt to raise them, and
+  `partial_result_not_publishable`, which stays in the frozen catalog unused: the contract
+  raises it from `terminal_semantics.partial` for "an operation that requires a complete
+  run", `OD-11` settles that the CSV export is not such an operation, and PC-01 defines no
+  other — so the code has no producer in this slice
 - declared identifiers PC-01 does not allocate — `job_id`, `attempt_id`, `lease_id`,
   `worker_id`, `export_id`, `comparison_id`, `sheet_link_id`, `norms_snapshot_id`,
   `erasure_request_id`, `import_id` — recorded so the catalog does not silently promise an

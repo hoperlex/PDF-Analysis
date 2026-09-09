@@ -95,12 +95,20 @@ them. Foundation seams are authored here as `planned` and are flipped to `implem
   `<lowercase-task-id>.jsonl`**, never a shared file, so no two lanes ever append to one
   path. The rule, recorded in the directory README and in every later task's handoff, has
   three parts: a task creates its file **only when it actually records an incident** — it
-  searched outside the index, or reworked because the index was wrong or missing; every
-  task reports a handoff status of `recorded`, `none_observed` or
+  searched outside the index, or reworked because the index was wrong or missing; each of
+  the **28 P02–P05 tasks** reports a handoff status of `recorded`, `none_observed` or
   `practice_not_exercised`; and an absent file is therefore ambiguous on its own and is
-  disambiguated only by that status. `P4-OPS-01` may report zero incidents **only** when
-  every task that should have reported returned `recorded` or `none_observed`; a single
-  `practice_not_exercised`, or a missing status, makes the metric `absent`
+  disambiguated only by that status. The two `P1-NAV` tasks build this contract and are not
+  subject to it: they own no incident file and report no status, so they are never counted
+  as non-reporting. Aggregation is status-aware and scoped, identically for every
+  aggregator: within its own scope, **zero is a legitimate result** when every in-scope
+  task returned `recorded` or `none_observed`, because a complete set of statuses over an
+  empty directory is a real measurement; a single `practice_not_exercised`, or a missing
+  status, makes the metric `absent` and the non-reporting tasks are named. Each aggregator
+  is the last task in the wave it reports — `P2-INT-02` covers P02, `P4-OPS-01` the P02/P03
+  tasks already complete when it runs, `P4-INT-01` covers P04, `P5-INT-01` covers P05 — so
+  none reports on an unfinished wave. The P02 set is deliberately read twice, and where the
+  readings differ `P4-OPS-01`'s later one governs the PC-02 metric
 - `docs/navigation/README.md`: the agent onboarding order — `CURRENT_STATE.md`, then the
   index, then the entries relevant to the task, then the task and its frozen contracts
 - negative-control fixtures proving the validator fails on a duplicate `entry_id`, a

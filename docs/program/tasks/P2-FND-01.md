@@ -27,10 +27,13 @@ payloads would prove nothing about the run it terminates:
 - domain contract: the expert decision as a non-state-machine append-only aggregate, the
   current-verdict projection and its four values, and owner decision PD-01
 - ADR-0010 on finding versus observation identity, and ADR-0012
-- the audit run transition from `validating` to a terminal state, and the
-  `partial_result_not_publishable` error code
+- the audit run transition from `validating` to a terminal state, including `partial` as a
+  terminal outcome that stays exportable under `OD-11`
 - migration head: the P02 head, read only
-- base commit: the accepted `P2-ENG-01` integration commit
+- base commit: the accepted integration commit that carries `P2-AI-01` and its
+  predecessors `P2-DOM-01` and `P2-ENG-01` — the same three this task lists as dispatch
+  predecessors. It is not the `P2-ENG-01` commit: the gate is authored against the real
+  `analysis.text_observations` artifact, which does not exist before `P2-AI-01`
 
 ## Allowed paths
 
@@ -85,9 +88,9 @@ payloads would prove nothing about the run it terminates:
   the expected-issues manifest; that a control statement is not flagged; that an observation
   whose quotation is absent, and one whose quotation exists on a different page, are both
   rejected from the finding list, retained as diagnostics, and reduce the published count;
-  that a `partial` text analysis terminates the run `partial` and never `published`; and that
-  an operation requiring a complete run over a `partial` run returns
-  `partial_result_not_publishable`.
+  and that a `partial` text analysis terminates the run `partial` and never `published`.
+  `partial` is a terminal state, so no PC-01 operation refuses because a run is partial;
+  the export seam distinguishes terminal from non-terminal, not partial from published.
 - Command: `.venv/bin/pytest tests/integration/decisions`
   Expected: exit `0`. The suite asserts that accept, then comment, then reject appends three
   events and updates no row; that the projection equals the last valid event; that the

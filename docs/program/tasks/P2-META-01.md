@@ -20,8 +20,10 @@ is accepted and integrated:
 
 ## Frozen inputs
 
-- domain contract: the import and blob machines and the project, document, version, blob
-  and command identifiers
+- domain contract: the blob machine and the project, document, version, blob and command
+  identifiers. The `import` machine is **not** consumed: PC-01 ingests one PDF through this
+  task's direct single-PDF upload command, so no `Import` aggregate is instantiated, no
+  `import_id` is allocated and PC-01 claims no conformance to that machine
 - migration head: the P02 head, read only
 - storage: the P01 BlobStore port implementing temporary, verify and publish, read only
 - base commit: the accepted `P2-DOM-01` integration commit

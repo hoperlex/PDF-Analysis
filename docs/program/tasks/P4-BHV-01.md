@@ -1,7 +1,7 @@
 # Task P4-BHV-01 — run the moderated expert validation sessions
 
-> **Status: specified; not dispatchable.** Planned for P04, after the corpus and ledger
-> tasks are accepted.
+> **Status: specified; not dispatchable.** Planned for P04, after the corpus and
+> the measurement-tooling tasks are accepted.
 
 ## Outcome
 
@@ -18,8 +18,10 @@ Planned predecessors and dispatch condition — this task is not dispatchable un
 is accepted and integrated:
 
   - `P4-QA-01` — corpus and protocol accepted
-  - `P4-OPS-01` — ledger accepted, or its `BLOCKED` precondition explicitly cleared by
-    the owner
+  - `P4-OPS-01` — measurement **tooling and preflight** accepted, or its `BLOCKED`
+    precondition explicitly cleared by the owner. What is required here is accepted tooling
+    plus a gap register proving the needed telemetry exists; the validation-period ledger
+    does not exist yet and cannot, because these sessions are the period
   - owner decisions `OD-03` live-run cost ceiling, payer and halt behavior; `OD-18` expert
     recruitment and time budget; `OD-19` acceptance authority and reviewer independence;
     `OD-17` document provenance for any anonymized material; `OD-22` retention and
@@ -34,12 +36,19 @@ is accepted and integrated:
   the protocol is not edited mid-study and a change voids the sessions run before it
 - the PC-01 build at the accepted `PC-01` commit, frozen for the whole study: no prompt,
   threshold or UI change between the first and last session
-- `P4-OPS-01` ledger tooling
+- `P4-OPS-01` accepted ledger tooling at its accepted commit, run unmodified: this task
+  invokes it, never edits it
+- the `P4-OPS-01` gap register and pre-session snapshot, read only. The snapshot is the
+  baseline the final ledger is later differenced against; this task neither extends nor
+  rewrites it
 - migration head: not touched
 
 ## Allowed paths
 
-- `artifacts/validation/PC-02/sessions/**`
+- `artifacts/validation/PC-02/sessions/**` — one immutable record per session, written
+  once when that session ends and never edited afterwards. A correction is a new,
+  later-dated record that references the one it corrects; the protocol is not edited
+  mid-study and a session already recorded is never rewritten to match a later one
 - `docs/navigation/entries/p4-bhv-01.json`
 - `docs/navigation/incidents/p4-bhv-01.jsonl` — created only if this task actually records an
   incident; never a shared append target
@@ -47,8 +56,13 @@ is accepted and integrated:
 
 ## Forbidden hotspots
 
-- `src/**`, `web/**`, `fixtures/**`, `contracts/**`, `scripts/**`, `tools/**`, `db/**`
-- `docs/program/validation/**` and `artifacts/validation/PC-02/ledger/**`
+- `src/**`, `web/**`, `fixtures/**`, `contracts/**`, `scripts/**`, `db/**`
+- `docs/program/validation/**`
+- `artifacts/validation/PC-02/ledger/**` — the validation-period ledger, written only by
+  `P4-INT-01` after the last session
+- `artifacts/validation/PC-02/preflight/**` — the accepted `P4-OPS-01` preflight and
+  snapshot, read only
+- `tools/**` — the accepted tooling is invoked, never modified
 - the PC-01 build itself: a mid-study fix is a new study
 
 ## Non-goals

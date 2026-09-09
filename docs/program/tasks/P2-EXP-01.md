@@ -19,12 +19,16 @@ accepted and integrated:
   - `P2-FND-01` — findings, observations, evidence and the current-verdict projection
   - `P2-RUN-01` — the run row whose state and provider mode the CSV records
   - owner decision `OD-11` for the CSV byte details — encoding and byte-order mark,
-    delimiter, line ending and quoting — and for whether a `partial` run may be exported
+    delimiter, line ending and quoting — and for the settled `partial` export policy
 
 ## Frozen inputs
 
 - domain contract: the project, document, version, run, finding, observation and decision
-  identifiers, and the `partial_result_not_publishable` error code
+  identifiers; `terminal_semantics.publishes_result`, which is the discriminator this use
+  case switches on; and the `state_transition_not_allowed` error code it returns for every
+  state that does not publish a result. PC-01 emits no `partial_result_not_publishable`: the
+  contract raises that code for an operation requiring a complete run, and under `OD-11`
+  this export is not one
 - API contract: none; `P2-API-01` exposes this use case
 - migration head: the P02 head, read only; this task creates no table
 - base commit: the accepted `P2-RUN-01` integration commit
@@ -63,10 +67,14 @@ accepted and integrated:
   `current_verdict`, `latest_comment`, `latest_decision_id`, `decision_recorded_at`
 - deterministic row order fixed by a documented sort key, so two exports of an unchanged
   run are byte-identical
-- the `OD-11` terminal policy, implemented literally: a `partial` run **is** exported, with
-  its degraded state carried explicitly in the `run_state` column rather than as a silent
-  empty file; a non-terminal run is **refused explicitly** with a typed error; and a repeat
-  request returns byte-identical bytes and creates nothing
+- the `OD-11` export policy, implemented literally and identically to every consumer of
+  this seam. The discriminator is `terminal_semantics.publishes_result`, not a hand-written
+  state list: a run whose terminal declares `publishes_result: true` — `published` or
+  `partial` — **is** exported, with the degraded or partial state carried explicitly in the
+  `run_state` column rather than as a silent empty file. Every other state is refused with
+  the typed `state_transition_not_allowed`: a non-terminal run, and the terminal `failed`,
+  whose `publishes_result` is `false`. `cancelled` is likewise `false` and is unreachable in
+  PC-01. A repeat request returns byte-identical bytes and creates nothing
 
 ## Required tests
 
@@ -110,4 +118,6 @@ Effort P50 0.75 person-day, P80 1.5 person-days. Basis: one synchronous read and
   two assert that no incident occurred or that the practice was not followed
 - the exact column list produced and the documented sort key
 - the encoding decision actually implemented under `OD-11`
-- the refusal behavior for non-terminal and `partial` runs
+- the refusal behavior, stated by `publishes_result`: which states export, and that the
+  refusal covers non-terminal runs and the terminal `failed`. A `partial` run exports; it is
+  never refused

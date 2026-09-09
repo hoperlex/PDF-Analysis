@@ -1,12 +1,12 @@
 # Current state
 
-> **P0-PLN-01 candidate, revision 2, 2026-09-09.** On branch `agent/p0-pln-01`,
+> **P0-PLN-01 candidate, revision 3, 2026-09-09.** On branch `agent/p0-pln-01`,
 > `P0-PLN-01` has produced the detailed P02–P05 plan:
 > `docs/program/PROTOTYPE_EXECUTION_PLAN.md` plus **30 agent-ready task files** — two
 > navigation tasks, thirteen P02, eight P03, four P04 and three P05. It is a
 > **candidate**: no P02–P05 task is dispatchable until the owner accepts it, and P01 is
 > unaffected. The plan changes no contract, runtime, migration or foundation path, records
-> 23 unresolved owner decisions, and marks its forecast calibration **pending** until
+> 24 unresolved owner decisions, and marks its forecast calibration **pending** until
 > measured P01 throughput exists.
 >
 > Revision 1 restores the fastest-prototype scope: PC-01 has no Job, Attempt, lease,
@@ -24,6 +24,24 @@
 > file and a mandatory incident status, clears the last export-resource wording, and records
 > the PC-01 `AuditRun` conformance subset as `OD-24`, naming each unevaluated guard instead
 > of implying full coverage. Owner decisions now number 24.
+>
+> Revision 3 is documentation-only and narrower still: the accepted PC-01 slice, the 30
+> task files, the DAG and every estimate are unchanged. It settles the CSV export policy as
+> one rule keyed on the contract's own `terminal_semantics.publishes_result` — a
+> `published` or `partial` run exports with its state visible, anything that publishes no
+> result is refused with the typed `state_transition_not_allowed`, and PC-01 raises
+> `partial_result_not_publishable` nowhere. It corrects two frozen bases to the commits
+> their own dependency blocks name, makes `OD-24` a dispatch prerequisite of `P2-DOM-01`
+> and has `P2-RUN-01` enumerate the whole unevaluated guard subset instead of counting it.
+> It records that PC-01 instantiates no `Import` aggregate, table or state machine, since
+> ingest is a direct single-PDF upload. It repairs the P04 lifecycle so the pre-session
+> preflight and the validation-period ledger are different artifacts with one writer each —
+> `P4-OPS-01` builds and gates the tooling and the preflight, `P4-BHV-01` writes immutable
+> sessions, and `P4-INT-01` alone produces the ledger after the sessions close. It makes
+> navigation aggregation status-aware, so a complete set of reporting statuses over an empty
+> incident directory is a measured zero rather than an absent metric, and gives `P5-INT-01`
+> the narrow ADR authority its own deliverable requires: the `Status:` line of the new P05
+> ADRs named in `P5-ARC-01`'s accepted handoff, and their index rows, and nothing else.
 >
 > One assumption remains for the owner to rule on, and it is now an explicit dispatch
 > prerequisite of `P2-INT-00`: that accepting this plan, `PF-01` and the navigation gate is

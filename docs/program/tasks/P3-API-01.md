@@ -60,8 +60,10 @@ is accepted and integrated:
   write, passing the correlation id through, and decoding the envelope into exactly
   `validation_failed`, `not_found`, `conflict`, `state_transition_not_allowed`,
   `idempotency_key_reuse`, `idempotency_key_in_progress`, `idempotency_key_stale`,
-  `dependency_unavailable`, `analysis_failed`, `partial_result_not_publishable` and
-  `internal_error`
+  `dependency_unavailable`, `analysis_failed` and `internal_error` — the union carries no
+  partial-specific refusal, because under `OD-11` a `partial` run is exported, while a run
+  whose terminal does not publish a result returns `state_transition_not_allowed`, already
+  listed above
 - a run-state union taken from the contract, with `published` and never `succeeded`, and a
   verdict union `pending`, `accepted`, `rejected`, `needs_manual_review`
 - one polling helper honoring the frozen interval and backoff and stopping on any terminal

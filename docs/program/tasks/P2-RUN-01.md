@@ -79,11 +79,13 @@ accepted and integrated:
   evaluate, not only the attempt-fencing pair. PC-01 uses the contract's state names and
   transition topology and claims no more. Unevaluated, per `OD-24`:
   the `NormsSnapshot` clause of the `created -> queued` reference-resolution guard, because
-  PC-01 pins no norms snapshot; the whole `queued -> running` guard, which requires a Job
-  and its current Attempt to hold the execution token; the whole `running -> validating`
-  guard, which requires every delivered result to come from the current Attempt; and the
-  `ResultPackage` clause of the `validating -> published` guard, since PC-01 publishes no
-  result package and validates checksums and artifact roles directly instead. Cancellation
+  PC-01 pins no norms snapshot, while the input-manifest, AnalysisProfile and PromptBundle
+  clauses of that same guard **are** evaluated; the whole `queued -> running` guard, which
+  requires a Job and its current Attempt to hold the execution token; the whole
+  `running -> validating` guard, which requires every delivered result to come from the
+  current Attempt; and the `ResultPackage` **schema** clause of the
+  `validating -> published` guard, since PC-01 publishes no result package and validates
+  checksums and artifact roles directly instead. Cancellation
   and Attempt publication authority are outside PC-01 entirely: no cancel command exists,
   so `cancelled` is declared and unreachable
 
@@ -136,4 +138,22 @@ Effort P50 1.5 person-days, P80 3.0 person-days. It is narrower than the withdra
   two assert that no incident occurred or that the practice was not followed
 - the public command and query API and the transition table actually implemented
 - the restart contract and the reconciliation command
-- the scope note naming the two unimplemented guards and the schemas not claimed
+- the `OD-24` scope note, enumerating the **complete** unevaluated subset rather than a
+  count — all four clauses, because a partial list reads as a smaller claim than the one
+  actually made:
+  - the `NormsSnapshot` clause of the `created -> queued` reference-resolution guard, PC-01
+    pinning no norms snapshot; the input-manifest, AnalysisProfile and PromptBundle clauses
+    of that same guard **are** evaluated
+  - the whole `queued -> running` guard, which requires a Job to exist and its current
+    Attempt to hold the execution token; PC-01 has no producer for
+    `execution_token_invalid`
+  - the whole `running -> validating` guard, which requires every delivered result to come
+    from the current Attempt; PC-01 has no producer for `stale_attempt`
+  - the `ResultPackage` schema clause of the `validating -> published` guard; PC-01
+    validates declared checksums and required artifact roles directly and publishes no
+    result package
+- separately, and not as part of that subset: cancellation and Attempt publication
+  authority are outside PC-01 altogether. No cancel command exists, so `cancelled` is
+  declared and unreachable; there is no Job, no Attempt and no execution token to hold
+  authority. These are absent capabilities, not guards left unevaluated
+- the schemas not claimed: `JobPackage` and `ResultPackage`, per C-3

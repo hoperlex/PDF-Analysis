@@ -49,7 +49,7 @@
 - [Task P3-QA-01](program/tasks/P3-QA-01.md) — automated PC-01 journey and restart evidence
 - [Task P3-INT-01](program/tasks/P3-INT-01.md) — PC-01 acceptance runbook and checkpoint
 - [Task P4-QA-01](program/tasks/P4-QA-01.md) — PC-02 validation corpus and session protocol
-- [Task P4-OPS-01](program/tasks/P4-OPS-01.md) — PC-02 measurement ledger
+- [Task P4-OPS-01](program/tasks/P4-OPS-01.md) — PC-02 measurement tooling and pre-session preflight
 - [Task P4-BHV-01](program/tasks/P4-BHV-01.md) — moderated expert validation sessions
 - [Task P4-INT-01](program/tasks/P4-INT-01.md) — PC-02 validation report and acceptance
 - [Task P5-ARC-01](program/tasks/P5-ARC-01.md) — evidence-to-candidate architecture disposition

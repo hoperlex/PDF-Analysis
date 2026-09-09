@@ -93,8 +93,10 @@ contract version rather than an edit. Routers hold no business logic and no tran
 
 - Validation, conflict, not-found, state-transition, idempotency and dependency failures
   each carry a distinct code and a safe message.
-- `partial_result_not_publishable` is surfaced verbatim rather than translated into a
-  generic internal error.
+- An export request against a run whose terminal does not publish a result — a
+  non-terminal run, or the terminal `failed` — returns `state_transition_not_allowed`
+  verbatim rather than a generic internal error. A `partial` run is exported under `OD-11`,
+  so no partial-specific refusal is emitted anywhere in the surface.
 
 ## Rollback / feature flag
 

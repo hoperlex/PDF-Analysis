@@ -1,6 +1,6 @@
 # Task P0-PLN-01 — complete the post-foundation prototype roadmap
 
-> **Status: executed, revision 2; candidate on `agent/p0-pln-01`, awaiting primary
+> **Status: executed, revision 3; candidate on `agent/p0-pln-01`, awaiting primary
 > review.** `P0-FND-00` was accepted on 2026-09-09 and this task ran in parallel with P01
 > **dispatch readiness**; no P01 lane had been dispatched at the time of writing, which is
 > why calibration is pending rather than measured. Its deliverables are
@@ -66,8 +66,11 @@ the accepted Foundation Freeze.
 - a P02/P03 graph that implements exactly the bounded AR text-consistency slice, including
   its synthetic PDF, evidence-publication gate, live/recorded provider modes, UI review
   and CSV acceptance path
-- one agent-ready pre-P02 navigation task implementing ADR-0019 with disjoint entry
-  ownership, deterministic generation/validation and accepted-foundation mappings
+- an agent-ready pre-P02 navigation gate of **two** tasks implementing ADR-0019 with
+  disjoint entry ownership, deterministic generation/validation and accepted-foundation
+  mappings: `P1-NAV-01` creates the schema, tooling, index and planned entries, and
+  `P1-NAV-02` flips the named foundation entries to `implemented` after `PF-01` and
+  regenerates the index. Both are complete before P02 fan-out; neither blocks P01
 - exact provider/consumer seams and disjoint allowed-path blocks
 - user-validation protocol and success/failure metrics
 - bottom-up P50/P80 forecast from the agent-ready graph, with assumptions and arithmetic
@@ -145,3 +148,33 @@ own accepted freeze.
   `W0-INT-03` are additional P02 predecessors.
 - **ADR-0019:** not accepted by this task. `P1-NAV-01` implements it and its dispatch is
   conditioned on the owner accepting the ADR together with this plan.
+
+### Executed handoff, revision 3
+
+- **Base:** `3d4653afa2726d58c6edae36c75ba759148b9c6a` on `agent/p0-pln-01`. Documentation
+  only. The accepted PC-01 slice, the 30 task files, the task graph and every estimate are
+  unchanged; no task ID was added and no estimate figure moved.
+- **Nine corrections.** One export policy under `OD-11`, keyed on the contract's
+  `terminal_semantics.publishes_result` and stated identically in the plan, `P2-EXP-01`,
+  `P2-API-01`, `P3-API-01`, `P3-WEB-04` and the `P3-QA-01` verifier. Two frozen bases
+  corrected to the commits their own dependency blocks name. `OD-24` made a dispatch
+  prerequisite of `P2-DOM-01`. `P2-RUN-01` enumerating the whole unevaluated guard subset,
+  with cancellation and Attempt authority named separately as absent capabilities. The
+  `Import` contradiction removed without adding an aggregate or a table. The P04 lifecycle
+  split so the pre-session preflight and the validation-period ledger are distinct
+  artifacts with one writer each. Navigation aggregation made status-aware and scoped.
+  `P5-INT-01` given exactly the ADR authority its deliverable needs. Stale counts and the
+  two-task navigation gate corrected.
+- **Contracts, runtime, migrations, providers, fixtures, scripts and tests:** unchanged.
+  `partial_result_not_publishable` and the `import` machine remain in the frozen contracts,
+  untouched and now explicitly unused by PC-01. `state_transition_not_allowed` was already
+  in the frozen catalog and was not invented.
+- **Unresolved owner decisions:** still 24, `OD-01` to `OD-24`, ids append-only. `OD-11`
+  and `OD-24` were restated, not renumbered. `OD-14` remains the one that can move the
+  whole graph.
+- **Known limitation.** Two adversarial reviews drove this revision; the second found that
+  my first pass had left `P4-INT-01` invoking tool modes `P4-OPS-01` never defined, and had
+  claimed aggregator scopes were disjoint while the table showed P02 covered twice. Both
+  are fixed here. The ASCII graph in plan section 2 still omits declared edges; rather than
+  redraw it, section 2 now states that the per-task predecessor blocks are jointly
+  authoritative and lists the undrawn edges.

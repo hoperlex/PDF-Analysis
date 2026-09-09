@@ -14,10 +14,15 @@
 into agent-ready tasks: two navigation tasks, thirteen P02 backend tasks, eight P03
 product tasks, four P04 validation tasks and three P05 analysis tasks — **thirty task
 files**. Every task file **this plan creates** carries the twelve `TASK_TEMPLATE.md`
-sections plus an estimate, its own navigation entry fragment, its own incident file path
-and a mandatory navigation incident status in its handoff. Allowed-path blocks are
-disjoint, or scoped and sequential with the scope stated inside the claim; section 3.3
-lists every shared file.
+sections, an estimate and its own navigation entry fragment. The per-task incident
+contract — an own incident file path plus a mandatory navigation incident status in the
+handoff — is carried by the **28 P02–P05 task files**, and by those only. The two
+`P1-NAV` tasks build that contract and are not themselves subject to it: they own no
+incident file and report no incident status, which is why the aggregators below count 28
+reporters rather than 30.
+
+Allowed-path blocks are disjoint, or scoped and sequential with the scope stated inside the
+claim; section 3.3 lists every shared file.
 
 The PC-01 slice is fixed and is not widened here:
 
@@ -112,8 +117,20 @@ PF-01 + P1-NAV-01
   P5-ARC-01 -> P5-META-01 -> P5-INT-01 / PC-03
 ```
 
-**The task graph is the single source of truth for order.** Where prose and the graph
-disagree, the graph wins; these three rules are what it encodes.
+**The graph above and the per-task predecessor blocks are jointly the source of truth for
+order, and where either disagrees with prose, they win.** The drawing shows the critical
+path; it is a summary, not the complete edge set, and a task is dispatchable only when
+**every** predecessor its own file declares is accepted. These declared edges are real but
+not drawn, because drawing them would obscure the path:
+
+- `P2-DOM-01` → `P2-META-01`, `P2-ENG-01`, `P2-FND-01`, `P2-RUN-01`: nothing that touches
+  persistence starts before the migration head is accepted
+- `P2-META-01` → `P2-RUN-01`, `P2-API-01`, `P2-INT-01`: the input-manifest query is a
+  consumed seam, S2 in section 3.4
+- `P1-QA-00` → `P3-QA-01`: the end-to-end suite runs on an accepted foundation
+
+Read the drawing for the shape and the task files for the gate. The three rules below are
+what the shape encodes.
 
 *The evidence gate precedes the runner.* `P2-FND-01` is built before `P2-RUN-01` so the
 executor consumes a real gate for terminal selection and is never authored against a stub
@@ -162,6 +179,10 @@ plan time`, which is the literal truth on this branch.
 | Server-side CSV export | `P2-EXP-01` | `src/auditmanager/exports/**`; `P2-API-01` exposes the route and calls it |
 | Aggregate navigation index | one writer per batch, in a fixed sequence | `P1-NAV-01` (first generation) → `P1-NAV-02` → `P2-INT-02` → `P3-INT-01` → `P4-INT-01` → `P5-INT-01`. Each regenerates after its own batch and validates before handing on |
 | API contract family `contracts/api/v1/**` | `P2-API-01` | created and frozen there; P03 consumes a snapshot |
+| PC-02 measurement tooling `tools/validation/ledger_report.py` | `P4-OPS-01` | later tasks invoke it unmodified; a tool defect returns to `P4-OPS-01` with a reproduction |
+| PC-02 preflight and pre-session snapshot `artifacts/validation/PC-02/preflight/**` | `P4-OPS-01` | written once before the first session, read-only afterwards |
+| PC-02 session records `artifacts/validation/PC-02/sessions/**` | `P4-BHV-01` | one immutable record per session; a correction is a new record, never a rewrite |
+| PC-02 **validation-period** ledger `artifacts/validation/PC-02/ledger/**` | `P4-INT-01` | the period is the sessions, so this cannot exist until they end. One post-session writer, distinct from the preflight snapshot above |
 
 ### 3.2 Ownership transfers recorded at `PF-01`
 
@@ -177,8 +198,8 @@ the P01 record, so it cannot go stale by omission.
 
 ### 3.3 Shared files with sequential writers
 
-Five files are written by more than one task, each in a disjoint scoped section and never
-concurrently: `docs/program/CHECKPOINT_REGISTRY.md`, `docs/program/CURRENT_STATE.md`,
+Seven paths are written by more than one task, each in a disjoint scoped section and never
+concurrently. Five are single files: `docs/program/CHECKPOINT_REGISTRY.md`, `docs/program/CURRENT_STATE.md`,
 `docs/INDEX.md`, `docs/program/ROADMAP.md` and `docs/navigation/INDEX.md`. Each claim names
 its scope. No PC-01, PC-02 or PC-03 row exists in the registry today, so `P3-INT-01`,
 `P4-INT-01` and `P5-INT-01` **create** their row rather than editing one.
@@ -192,15 +213,50 @@ accepted P01 records this plan may not edit:
 - `P1-NAV-01`'s `docs/navigation/entries/**` is creation-only: a fragment a later task owns
   belongs to that task, and no entry is flipped to `implemented` there.
 
+The other two shared paths are scoped writes onto files another task created, both
+sequential because the writer is always a later dependent:
+
+- `docs/program/tasks/P2-*.md` status banners are claimed by `P2-INT-02`, which is the last
+  P02 task; each P02 task owns the rest of its own file. This is the P02 analogue of the
+  `P1-INT-01` glob above and is read the same narrow way.
+- `docs/architecture/adr/ADR-*.md` files created by `P5-ARC-01` with `Status: proposed`:
+  `P5-INT-01` may later change **only** the `Status:` line of the files named by exact path
+  in `P5-ARC-01`'s accepted handoff, one at a time. Every other line of those files, and
+  every pre-existing ADR, stays forbidden to it. `P5-ARC-01` is an accepted predecessor of
+  `P5-INT-01`, so the two writers are never concurrent.
+
 Per-task navigation incidents are written to
 `docs/navigation/incidents/<lowercase-task-id>.jsonl`, one file per task and named in that
 task's own allowed paths, so no two lanes ever append to one file. A file is created
 **only** when the task actually records an incident, so its absence is ambiguous on its own;
 every P02–P05 task therefore reports a navigation incident status of `recorded`,
 `none_observed` or `practice_not_exercised` in its handoff, and that status is what
-disambiguates an empty directory. `P4-OPS-01` may report zero incidents only when every
-task that should have reported returned `recorded` or `none_observed`; one
-`practice_not_exercised`, or a missing status, makes the metric `absent`.
+disambiguates an empty directory.
+
+**One status-aware aggregation rule, used identically by every aggregator.** For its own
+scope: **zero** is a legitimate, reportable result when every in-scope task returned
+`recorded` or `none_observed` — a complete set of reporting statuses over an empty incident
+directory means that scope genuinely hit no friction, and reporting it as `absent` would
+throw away a real measurement. If any in-scope task returned `practice_not_exercised`, or
+gave no status at all, the metric is **absent**, not zero, and the report names the tasks
+that did not report. An empty directory on its own is never evidence either way.
+
+Each aggregator is the **last task in the wave it reports**, so none reports on an
+unfinished wave. The scopes are **not** disjoint, and the overlap is deliberate:","H plan disjointness
+
+| Aggregator | Scope |
+|---|---|
+| `P2-INT-02` | the P02 wave |
+| `P4-OPS-01` | only the P02 and P03 tasks already complete when it runs, through `P3-INT-01` |
+| `P4-INT-01` | the P04 wave |
+| `P5-INT-01` | the P05 wave |
+
+`P4-OPS-01` deliberately re-reads the P02 set `P2-INT-02` already reported, because PC-02
+needs one coherent figure across everything finished before the study rather than two
+wave-local ones. Where the two readings differ — a status amended after the P02 handoff —
+**`P4-OPS-01`'s later reading governs the PC-02 metric**, and its report names the
+difference. P03 has no wave-local aggregator, which is why `P4-OPS-01`'s scope is the
+completed P02 **and** P03 set rather than P03 alone.
 
 ### 3.4 Seam register
 
@@ -503,7 +559,7 @@ and no agent promotes a candidate.
 | deterministic comparison | a majority pick comparison over depth and at least half the corpus exists as revision pairs | experts pick depth, or single-version review dominates |
 | remote or distributed workers | a measured execution constraint actually blocked a session | otherwise; provider latency alone is a provider question |
 | multi-tenant, retention, backup, SLO | never on P04 evidence, which used no production data; only an owner decision to go to external use unlocks it | — |
-| richer navigation graph or semantic search | the self-reported search and rework incidents exceed the owner's tolerance | the validated repository-native index already reduced them, or no task recorded an incident, in which case the metric is absent and the candidate stays deferred |
+| richer navigation graph or semantic search | the self-reported search and rework incidents exceed the owner's tolerance | the validated repository-native index already reduced them — a complete set of reporting statuses over an empty incident directory is a measured **zero** and loses this candidate; the metric is `absent` only when a task failed to report, and an absent metric also leaves the candidate deferred |
 
 ## 8. Unresolved owner decisions
 
@@ -525,7 +581,7 @@ cannot recur.
 | `OD-08` | frontend package manager and composition owner | `P3-WEB-00` | npm with a committed lockfile and a pinned Node version, owned by `P3-WEB-00` | `P3-WEB-00` dispatch |
 | `OD-09` | browser PDF rendering approach | `P3-WEB-00` pins, `P3-WEB-02` | a pinned client-side renderer as a bounded island; server-rendered page rasters only if the pin proves unworkable | `P3-WEB-00` dispatch |
 | `OD-10` | reconciliation vocabulary for a stale `running` run | `P2-RUN-01`, `P3-WEB-01` | `failed` plus an explicit interrupted reason code; the contract has no `interrupted` state and the UI invents none | `P2-RUN-01` dispatch |
-| `OD-11` | CSV byte details — encoding and byte-order mark, delimiter, line ending, quoting — and whether a `partial` run may be exported | `P2-EXP-01`, `P3-WEB-04`, `P3-QA-01` verifier | UTF-8 with BOM, comma delimiter, CRLF, RFC 4180 quoting; a `partial` run is exportable with its state visible, because field validation needs partial runs visible | `P2-EXP-01` dispatch |
+| `OD-11` | CSV byte details — encoding and byte-order mark, delimiter, line ending, quoting — and the export policy across the terminal set | `P2-EXP-01`, `P2-API-01`, `P3-API-01`, `P3-WEB-04`, `P3-QA-01` verifier | UTF-8 with BOM, comma delimiter, CRLF, RFC 4180 quoting. One export policy, stated once and identical everywhere it is consumed. The discriminator is the frozen `terminal_semantics.publishes_result` flag, not a hand-written state list: a run whose terminal declares `publishes_result: true` — `published` or `partial` — **is** exported, and the `run_state` column carries the degraded or partial state explicitly, so a partial export is never a silent empty file. Everything else is refused with the frozen catalog's typed `state_transition_not_allowed`: a non-terminal run, and the terminal `failed`, whose `publishes_result` is `false` and which therefore offers no download. `cancelled` is also `publishes_result: false` and is unreachable in PC-01, since no cancel command exists. A repeat request returns byte-identical bytes and creates nothing. PC-01 therefore never emits `partial_result_not_publishable`. The contract raises that code from `terminal_semantics.partial`, for "an operation that requires a complete run"; the CSV export is explicitly **not** such an operation under this decision, and PC-01 defines no other, so no producer for the code exists. It stays in the frozen catalog, unused, recorded with the other deliberately unallocated entries in the `P2-DOM-01` handoff. This is a scope statement about PC-01's operations, not a claim about the `optional_branch_policy` guard, which selects `published` versus `partial` and raises nothing. | `P2-EXP-01` dispatch |
 | `OD-12` | decision author identity without authentication | `P2-DOM-01` schema, `P2-FND-01`, `P3-WEB-03` | one configured local reviewer label persisted server-side with each event | `P2-DOM-01` dispatch, because it owns the column |
 | `OD-13` | is a live provider call part of automated acceptance | `P3-QA-01` scope, `P3-INT-01` | automated suites are recorded-only and deterministic; the live run is manual runbook steps 11 and 12 | `P3-QA-01` dispatch |
 | `OD-14` | does P02 dispatch require CP-00 acceptance round eleven and `W0-INT-03` first | the whole P02 graph | see section 9; this plan assumes P02 approval lifts the hold for the P02 paths, and the assumption is recorded rather than hidden | before `P2-INT-00` dispatch |
@@ -600,8 +656,14 @@ round-eleven duration and the forecast is restated.
 
 **C-5 — smaller frictions, recorded not resolved.** The run's frozen-at-creation set
 includes a norms snapshot that PC-01 never populates. The `import` machine is designed for
-bundle ingest, and PC-01's single PDF passes through all five of its states rather than
-bypassing them. The finding categories `internal_contradiction` and `explicit_placeholder`
+bundle ingest; PC-01 ingests one PDF through a direct single-PDF upload command, so the
+`Import` aggregate is not instantiated, `import_id` is allocated nowhere, no import table
+exists, the machine is not implemented and PC-01 claims **no** conformance to it. The
+machine stays in the frozen contract untouched, unused by this slice, and `import_id` is
+listed with the other deliberately unallocated identifiers in the `P2-DOM-01` handoff.
+Bundle ingest is a later-stage question, and resolving it this way removes an aggregate
+from PC-01's scope rather than adding one. The finding categories `internal_contradiction`
+and `explicit_placeholder`
 appear nowhere in `contracts/`: they are new product vocabulary declared by the PC-01
 analysis profile, not domain-contract terms, and the plan says so wherever they are used.
 Ten catalogued identifiers, including `export_id`, `job_id` and `attempt_id`, are
@@ -620,5 +682,5 @@ does not silently promise an aggregate nobody builds.
 | 6 | corpus realism versus the no-production-data rule | default to synthetic and put the burden on `OD-17`; have a practising reviewer confirm each seeded contradiction is plausible; if anonymized documents are permitted, commit no bytes and destroy copies at acceptance under `OD-22` |
 | 7 | calibration never happens and assumption-based rows get quoted as commitments | the recalibration is a required deliverable of `P1-INT-01`'s handoff and a dispatch precondition of P02; every row carries its own basis and pending marker; both tables carry the forecast caption |
 | 8 | scope drift under disappointing P04 results | freeze the section 7 rule before `P4-BHV-01` runs; default unbacked candidates to defer with a flip-condition; keep recommendation, record and decision in three different hands |
-| 9 | the navigation layer becomes a shared hotspot or goes stale | one entry fragment and one incident file per owning task, integrator-only regeneration of the aggregate, and deterministic-regeneration validation. The incident metric is self-reported, not instrumented, and an empty set is reported as absent rather than as zero |
+| 9 | the navigation layer becomes a shared hotspot or goes stale | one entry fragment and one incident file per owning task, integrator-only regeneration of the aggregate, and deterministic-regeneration validation. The incident metric is self-reported, not instrumented, and is read with the section 3.3 status-aware rule: an empty incident directory reports **zero** when every in-scope task returned `recorded` or `none_observed`, and **absent** when any returned `practice_not_exercised` or no status at all. An empty directory alone proves nothing either way |
 | 10 | the P02/P03 seam is agreed late — the version-content route, the export endpoint and the CSV column list span both plans | the seam register in section 3.4 freezes them here; the CSV column contract belongs to `P2-EXP-01` and is frozen before `P3-WEB-04` dispatches; the API document is frozen before P03 fan-out |

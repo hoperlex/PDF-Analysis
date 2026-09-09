@@ -25,8 +25,9 @@ accepted and integrated:
 
 - API contract: `GET /runs/{run_id}/export.csv` at the `P3-API-01` snapshot
 - domain contract: the project, document, version, run, finding, observation and decision
-  identifiers, and the `partial_result_not_publishable` error code. No export identifier is
-  used, because PC-01 creates no export resource
+  identifiers, and the `state_transition_not_allowed` error code, which is what a
+  non-terminal export request returns. No export identifier is used, because PC-01 creates
+  no export resource, and no partial-specific refusal exists under `OD-11`
 - golden assertions `GJ-02-EO-08` and `GJ-02-EO-10`
 - migration head: not consumed
 - base commit: the accepted `P3-API-01` integration commit
@@ -98,8 +99,12 @@ both owners.
 
 - Repeating the request returns the same bytes and creates nothing, so no idempotency key
   is needed for a read that has no side effect.
-- `partial_result_not_publishable` renders as an explicit refusal with its reason, never
-  as an empty CSV.
+- A `partial` run downloads normally — its terminal declares `publishes_result: true` —
+  and the UI shows its degraded state from the `run_state` column rather than presenting it
+  as a complete result. A run whose terminal does not publish a result offers no download:
+  the `failed` case, consistent with the run-detail rule above, and a non-terminal run.
+  Both render `state_transition_not_allowed` with its reason; no case ever yields a silent
+  empty CSV.
 - No internal key, bucket, absolute filesystem path or credential appears in any column or
   in the download URL; the verifier rejects a row containing an `s3://` prefix, the
   configured endpoint host or an absolute path.

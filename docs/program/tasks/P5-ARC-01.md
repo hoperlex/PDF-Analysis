@@ -96,6 +96,16 @@ and a proposed ADR where adopted. Calibration pending.
 - navigation incident status, one of `recorded`, `none_observed` or
   `practice_not_exercised`; `recorded` requires the incident file above, and the other
   two assert that no incident occurred or that the practice was not followed
-- disposition table and proposed ADR list
+- disposition table, and the **exact repository paths** of every ADR file this task
+  created, each with `Status: proposed`, listed one per line as
+  `docs/architecture/adr/ADR-00NN-<slug>.md`. That list is the authority for what
+  `P5-INT-01` may later transition: an ADR absent from this list stays untouchable, so the
+  handoff cannot silently widen `P5-INT-01`'s reach over the ADR corpus
+- confirmation that no pre-existing ADR file and no `ADR_INDEX.md` row was modified, and
+  that the path list above is exactly `git diff --name-only <base>..HEAD -- docs/architecture/adr`
+  — the list is checked against what was actually created rather than being self-declared,
+  because `P5-INT-01` derives its write authority from it
+- the index rows the new ADRs still need, which `P5-INT-01` creates: this task delivers ADR
+  files and never an `ADR_INDEX.md` row
 - candidates undecidable from P04 evidence
 - unresolved owner decisions

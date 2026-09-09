@@ -56,8 +56,13 @@ accepted and integrated:
   the frozen schema and publishes no `JobPackage` and no `ResultPackage`, so it claims no
   conformance to those two schemas
 - the regenerated `docs/navigation/INDEX.md` built from the fragments the P02 tasks own
-- the navigation incident summary for the P02 wave, or an explicit statement that no task
-  appended a record and the measurement is therefore absent
+- the navigation incident summary for the P02 wave, computed with the same status-aware
+  rule every aggregator uses: **zero is a legitimate result** when every P02 task returned
+  `recorded` or `none_observed` and the recorded set is complete — an empty incident
+  directory plus a full set of reporting statuses means the wave genuinely hit no friction.
+  If any P02 task returned `practice_not_exercised`, or gave no status at all, the
+  measurement is **absent** rather than zero, and the summary names the tasks that did not
+  report. An empty directory on its own is never evidence either way
 
 ## Required tests
 

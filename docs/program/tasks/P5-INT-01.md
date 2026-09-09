@@ -29,7 +29,15 @@ is accepted and integrated:
 
 - `artifacts/validation/PC-03/checkpoint-report.md`
 - `artifacts/validation/PC-03/known-risks.md`
-- `docs/architecture/ADR_INDEX.md` — status transitions for the P05 ADRs only
+- `docs/architecture/ADR_INDEX.md` — the P05 ADRs only: this task **creates** the index row
+  for each new ADR `P5-ARC-01` delivered and maintains its status. `P5-ARC-01` is forbidden
+  the index entirely, so without this the new ADRs would exist as files with no index row.
+  Rows for pre-existing ADRs are not touched
+- the `Status:` line **only** of the ADR files created by `P5-ARC-01` and listed by exact
+  path in its accepted handoff, changed one file at a time in a fixed sequence after the
+  owner ratifies each. Nothing else in those files may be edited: not the context, the
+  decision, the consequences, the title or the number. An ADR that is not on that accepted
+  list is forbidden here, as is every pre-existing ADR file
 - `docs/program/CHECKPOINT_REGISTRY.md` — creates and maintains the PC-03 row; no such row exists yet
 - `docs/program/CURRENT_STATE.md` — creates and maintains the PC-03 status line
 - `docs/INDEX.md` — creates and maintains the PC-03 entry
@@ -41,7 +49,10 @@ is accepted and integrated:
 
 ## Forbidden hotspots
 
-- ADR bodies, the disposition table, the beta roadmap and all PC-02 evidence
+- every pre-existing ADR file, in full: this task transitions only the new P05 ADRs named
+  in the accepted `P5-ARC-01` handoff
+- the body of those new ADRs — every line except the single `Status:` line — plus the
+  disposition table, the beta roadmap and all PC-02 evidence
 - `artifacts/checkpoints/CP-00/**`, `v0.0.0-architecture` and every existing tag
 - `PROTOTYPE_FOUNDATION_FREEZE.md`, profile foundation invariants, `contracts/**`,
   `src/**`, `web/**`
@@ -60,7 +71,12 @@ is accepted and integrated:
   ratified
 - registry, `CURRENT_STATE.md` and `docs/INDEX.md` reconciliation, including the deferred
   candidates and each one's flip condition
-- the regenerated navigation index
+- the regenerated navigation index, and the navigation incident summary **for the P05
+  wave only**, this task being the last P05 task — `P2-INT-02` reports P02, `P4-OPS-01`
+  the completed P02/P03 set, `P4-INT-01` P04 and this task P05 — computed with the same
+  status-aware rule: zero only
+  when every in-scope task returned `recorded` or `none_observed`, otherwise `absent` with
+  the non-reporting tasks named
 
 ## Required tests
 
