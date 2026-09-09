@@ -104,7 +104,7 @@ involved.
 
 ## Estimate
 
-P50 0.5 day, P80 1.5 days.
+Effort P50 0.5 person-day, P80 1.5 person-days. Basis: generation config plus one transport wrapper and consumer contract tests. Calibration pending.
 
 ## Handoff
 

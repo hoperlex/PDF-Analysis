@@ -38,7 +38,7 @@ is accepted and integrated:
 
 - `db/migrations/**`, root locks, the composition root and the `Makefile`
 - `tests/integration/storage/**` and `tests/integration/db/**`, owned by P01
-- `src/auditmanager/{jobs,analysis,findings,decisions,api}/**`, `contracts/**`, `fixtures/**`
+- `src/auditmanager/{runs,exports,analysis,findings,decisions,api}/**`, `contracts/**`, `fixtures/**`
 
 ## Non-goals
 
@@ -98,7 +98,7 @@ uploaded; test objects are removed only by scoped cleanup.
 
 ## Estimate
 
-P50 2.5 days, P80 4.5 days.
+Effort P50 2.5 person-days, P80 4.5 person-days. Basis: one ingest use case with an admission probe and a reconciliation entrypoint. Calibration pending.
 
 ## Handoff
 

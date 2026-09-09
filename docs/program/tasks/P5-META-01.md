@@ -91,7 +91,7 @@ section is restored intact.
 
 ## Estimate
 
-P50 2–3 days, P80 4 days. Basis: roadmap authoring plus one calibration pass over four
+Effort P50 2.5 person-days, P80 4.0 person-days. Basis: roadmap authoring plus one calibration pass over four
 stages of measured data. This is the task that ends the calibration-pending state.
 
 ## Handoff

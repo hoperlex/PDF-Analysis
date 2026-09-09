@@ -20,8 +20,13 @@ is accepted and integrated:
   - `P4-QA-01` — corpus and protocol accepted
   - `P4-OPS-01` — ledger accepted, or its `BLOCKED` precondition explicitly cleared by
     the owner
-  - owner decisions `OD-01` cost ceiling, `OD-02` expert recruitment and time budget,
-    `OD-04` reviewer independence
+  - owner decisions `OD-03` live-run cost ceiling, payer and halt behavior; `OD-18` expert
+    recruitment and time budget; `OD-19` acceptance authority and reviewer independence;
+    `OD-17` document provenance for any anonymized material; `OD-22` retention and
+    disposal of session evidence; and `OD-21`, the stop rule on a `FAIL-PRODUCT` outcome,
+    which must be fixed before the data exists so it stays a decision rather than a
+    rationalization
+  - `OD-23` if `P4-OPS-01` reported its telemetry gap as `BLOCKED`
 
 ## Frozen inputs
 
@@ -35,6 +40,8 @@ is accepted and integrated:
 ## Allowed paths
 
 - `artifacts/validation/PC-02/sessions/**`
+- `docs/navigation/entries/p4-bhv-01.json`
+- `docs/navigation/incidents/p4-bhv-01.jsonl`
 - `docs/program/tasks/P4-BHV-01.md`
 
 ## Forbidden hotspots
@@ -62,9 +69,11 @@ is accepted and integrated:
 - post-session forced choices: top-three missing capability; audit depth versus document
   comparison with reasoning; and the retry/fencing/remote question answered against the
   moderator's failure ledger rather than from memory
-- at least two documents independently reviewed by two experts
-- a defect log of observed, unfixed defects, and the disposal attestation if `OD-03`
-  applied
+- at least two measurable documents independently reviewed by two experts
+- negative-envelope documents observed for explicit-unsupported behaviour only: they carry
+  no finding labels, produce no session finding records and enter no denominator
+- a defect log of observed, unfixed defects, and the disposal attestation required by
+  `OD-22` if `OD-17` permitted anonymized material
 - expert accept/reject/comment decisions recorded in the product, exercising the
   append-only path
 
@@ -78,7 +87,7 @@ is accepted and integrated:
 - Manual check: the build commit recorded in every session record is identical.
   Expected: exactly one commit across all sessions.
 - Manual check: consent and no-production-data reminder delivered, and every document's
-  provenance is `synthetic` or an `OD-03`-approved `anonymized`. Expected: pass.
+  provenance is `synthetic` or an `OD-17`-approved `anonymized`. Expected: pass.
 
 ## Integration contract
 
@@ -90,7 +99,7 @@ rate cannot be mistaken for an evidence defect.
 
 - A session interrupted mid-document is recorded as partial and its document re-run with
   another expert or dropped; a partial record is never completed from memory.
-- Spend crossing the `OD-01` ceiling halts sessions immediately; completed sessions stay
+- Spend crossing the `OD-03` ceiling halts sessions immediately; completed sessions stay
   valid.
 - A build change mid-study voids every earlier session; the study restarts from the new
   commit.
@@ -105,14 +114,22 @@ corrections are appended as erratum entries.
 
 ## Estimate
 
-P50 5–8 days elapsed, P80 12–15 days. Basis: scheduling latency of three to five external
-experts, not effort — roughly two to three 90-minute blocks per expert plus moderator
-write-up. This is the most sensitive row in the plan and is governed by `OD-02`; with
-named experts and committed slots the P80 falls to 8–9 days. Calibration pending.
+Two different quantities, kept apart on purpose.
+
+**Effort** P50 2.5 person-days, P80 4.0 person-days — the moderator's preparation, session
+facilitation and write-up. Derived from the session shape rather than assumed: three to
+five experts at two to three 90-minute blocks each is 9 to 22.5 hours of facilitation,
+about 1.1 to 2.8 person-days, plus preparation and write-up. This is the number that
+belongs in the effort total.
+
+**Elapsed** P50 5–8 working days, P80 12–15 — dominated by the scheduling latency of three
+to five external experts, not by work. This is the number that belongs in the elapsed
+forecast, and it is never added to person-effort. It is governed by `OD-18`; with named
+experts and committed slots the elapsed P80 falls to 8–9 days. Calibration pending.
 
 ## Handoff
 
 - session counts by expert and document, and the coverage matrix
 - defect log
-- spend against the ceiling
+- spend against the `OD-03` ceiling
 - documents that could not be reviewed and why

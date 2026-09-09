@@ -5,10 +5,9 @@
 
 ## Outcome
 
-An expert records accept or reject with a comment, appends a later comment and revokes a
-verdict; every event is a new decision identity visible in a chronological ledger, no
-earlier value is overwritten or hidden, and revocation shows the projection at `pending`
-with no automatic restoration.
+An expert records accept or reject with a comment and appends a later comment; every event
+is a new decision identity visible in a chronological ledger, and no earlier value is
+overwritten or hidden.
 
 ## Depends on
 
@@ -19,6 +18,7 @@ accepted and integrated:
 
   - `P3-API-01` — generated client and transport seam accepted, with the decision append
     and list operations present and PD-01 semantics implemented server-side
+  - owner decision `OD-12`, the decision author identity this ledger displays
 
 ## Frozen inputs
 
@@ -34,7 +34,6 @@ accepted and integrated:
 
 - `web/src/widgets/decision-panel/**`, `web/src/widgets/decision-history/**`
 - `web/src/features/record-verdict/**`, `web/src/features/append-comment/**`,
-  `web/src/features/revoke-verdict/**`
 - `web/src/entities/expert-decision/**`
 - `web/tests/unit/decisions/**`
 - `docs/navigation/entries/p3-web-03.json`
@@ -59,12 +58,12 @@ accepted and integrated:
 - a decision panel showing the current projection value from the closed enumeration, with
   `pending` explicit and `needs_manual_review` rendered as a first-class value even though
   PC-01 has no producer for it
-- three append actions — record verdict, append comment and revoke — each producing a new
-  event, the comment action carrying the unchanged verdict so history stays complete
+- two append actions — record verdict and append comment — each producing a new event, the
+  comment action carrying the unchanged verdict so history stays complete. Revocation is
+  deferred with `P2-FND-01`: the ledger stays append-only, so adding it later needs no
+  schema or UI rework
 - a chronological ledger listing decision identity, event kind, verdict, comment, author
   label and recorded timestamp, oldest first, with superseded values still readable
-- revocation rendered as a withdrawn verdict with the current value `pending` and an
-  explicit statement that the previous verdict is not restored
 - provenance labels that distinguish expert events from any future recommendation event;
   the model is never shown as the author of a verdict
 
@@ -72,13 +71,12 @@ accepted and integrated:
 
 - Command: `npm --prefix web run test:unit -- decisions`
   Expected: exit `0`. The suite asserts that after a second decision the first remains
-  rendered with its original value and identity; that after revocation the projection
-  reads `pending` and the pre-revocation verdict is not re-selected; and that the UI
-  exposes no mutation path other than the three append actions.
+  rendered with its original value and identity; that the ledger grows rather than changes;
+  and that the UI exposes no mutation path other than the two append actions.
 - Command: `npm --prefix web run test:unit -- --grep "overwrite probe"` against a fixture
   ledger returned in reverse order with a duplicated decision identity
   Expected: non-zero; the history-integrity guard can fail.
-- Command: `rg -n "PATCH|PUT|DELETE" web/src/features/record-verdict web/src/features/append-comment web/src/features/revoke-verdict`
+- Command: `rg -n "PATCH|PUT|DELETE" web/src/features/record-verdict web/src/features/append-comment`
   Expected: no match.
 - Command: `npm --prefix web run lint && npm --prefix web run build`
   Expected: exit `0`.
@@ -108,7 +106,8 @@ rollback deletes history.
 
 ## Estimate
 
-P50 1 day, P80 2 days.
+Effort P50 0.75 person-day, P80 1.5 person-days. It narrowed when revocation was deferred
+with `P2-FND-01`. Basis: two append actions and a chronological ledger. Calibration pending.
 
 ## Handoff
 

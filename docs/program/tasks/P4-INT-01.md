@@ -32,9 +32,11 @@ is accepted and integrated:
 - `docs/program/validation/PC-02_REPORT.md`
 - `artifacts/validation/PC-02/checkpoint-report.md`
 - `artifacts/validation/PC-02/known-risks.md`
-- `docs/program/CHECKPOINT_REGISTRY.md` — the PC-02 status row only
-- `docs/program/CURRENT_STATE.md` — the PC-02 status line only
-- `docs/INDEX.md` — the PC-02 entry only
+- `docs/program/CHECKPOINT_REGISTRY.md` — creates and maintains the PC-02 row; no such row exists yet
+- `docs/program/CURRENT_STATE.md` — creates and maintains the PC-02 status line
+- `docs/INDEX.md` — creates and maintains the PC-02 entry
+- `docs/navigation/entries/p4-int-01.json`
+- `docs/navigation/incidents/p4-int-01.jsonl`
 - `docs/program/tasks/P4-INT-01.md`
 
 ## Forbidden hotspots
@@ -57,6 +59,9 @@ is accepted and integrated:
   produced it, and a verdict of `PASS`, `FAIL`, `FAIL-PRODUCT`, `BLOCKED` or `OBSERVATION`
 - the sample-size statement from the execution plan reproduced verbatim
 - ranked capability-gap and friction findings, each traceable to named session records
+- every rate in the instrument-validity and product-floor gates computed over **measurable
+  documents only**; negative-envelope documents are reported as a separate
+  refusal-observation count and never enter a denominator
 - the list, by path, of the evidence inputs `P5-ARC-01` may cite
 - the owner acceptance record, quoted verbatim
 - registry and state row updates
@@ -95,8 +100,8 @@ own accepted commit.
 
 ## Estimate
 
-P50 2–3 days, P80 5 days. Basis: aggregation over a validated dataset plus one
-owner-response cycle. Calibration pending.
+Effort P50 2.5 person-days, P80 5.0 person-days. Basis: aggregation over a validated
+dataset plus one owner-response cycle. Calibration pending.
 
 ## Handoff
 

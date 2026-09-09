@@ -22,6 +22,7 @@ accepted and integrated:
 - the PC-02 report and its listed evidence inputs, read only
 - the candidate list in `ROADMAP.md` P05 and `PROTOTYPE_PROFILE.md` §9
 - the decision rule in `PROTOTYPE_EXECUTION_PLAN.md`, frozen before analysis begins
+- owner decision `OD-21`, the stop rule, if PC-02 returned `FAIL-PRODUCT`
 - accepted ADRs 0001–0019: read only; an accepted ADR is immutable history per Bible §14
 - migration head: not touched
 
@@ -85,7 +86,7 @@ Documentation only; proposed ADRs are inert until accepted. Revert the integrati
 
 ## Estimate
 
-P50 2–3 days, P80 5 days. Basis: seven or more candidates, each needing an evidence trace
+Effort P50 2.5 person-days, P80 5.0 person-days. Basis: seven or more candidates, each needing an evidence trace
 and a proposed ADR where adopted. Calibration pending.
 
 ## Handoff

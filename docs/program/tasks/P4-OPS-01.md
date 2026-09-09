@@ -26,7 +26,7 @@ is accepted and integrated:
 - ADR-0019 rollout item 4: field validation measures agent search/rework failures before
   any richer graph or semantic search is considered
 - the PC-01 persistence schema at the accepted `PC-01` commit, read only
-- owner decision `OD-01` for the cost ceiling and halt behavior
+- owner decision `OD-03` for the cost ceiling, the payer and the halt behavior
 
 ## Allowed paths
 
@@ -56,9 +56,13 @@ is accepted and integrated:
   `ungrounded_item_rejected`, `unsupported_input`, `checksum`, `app_or_process_crash`
   and `other`
 - cost roll-up: per run, per published finding and per accepted finding, plus cumulative
-  spend against the `OD-01` ceiling
-- navigation ledger: per P02/P03 task, agent search/rework incidents recorded by the
-  navigation layer, with orphan and stale-entry counts from its validator
+  spend against the `OD-03` ceiling
+- navigation ledger read from the per-task `docs/navigation/incidents/<task-id>.jsonl`
+  files whose schema and directory contract `P1-NAV-01` creates: per P02/P03 task, the
+  agent search and rework incidents those tasks actually recorded, plus orphan and
+  stale-entry counts from the navigation validator. If no task wrote a file, the metric is
+  reported **absent**, never as zero — an empty set means the practice was not followed,
+  not that navigation was frictionless
 - a gap register naming every `PROTOTYPE_PROFILE.md` §9 metric as `persisted`,
   `derivable` or `absent`, with what persisting it would take — raised as a P02 defect
   for owner decision and not fixed here
@@ -77,7 +81,7 @@ is accepted and integrated:
   Expected: no metric unclassified.
 - Dispatch precondition: if per-call latency or token/cost is `absent`, this task halts
   with `BLOCKED` and its gap register. It does not instrument the runtime, and
-  `P4-BHV-01` does not start until the owner rules.
+  `P4-BHV-01` does not start until the owner rules under `OD-23`.
 
 ## Integration contract
 
@@ -89,7 +93,7 @@ evidence for the PC-02 observations and for `P5-ARC-01`.
 
 - The report is read-only; a second run over the same tree and database state produces
   the same ledger.
-- Spend crossing the `OD-01` ceiling halts sessions, and the ledger records the halt.
+- Spend crossing the `OD-03` ceiling halts sessions, and the ledger records the halt.
 - No secret, connection string, bucket name or object key enters
   `artifacts/validation/PC-02/**`; blobs are referenced by `blob_id`.
 - Absent telemetry is reported as absent; an estimated cost is labelled estimated and is
@@ -101,12 +105,12 @@ Not applicable: read-only reporting on new paths only.
 
 ## Estimate
 
-P50 1–2 days, P80 3 days. Basis: one read-only extraction over an existing schema plus a
-documentary gap register; excludes remediation if the dispatch precondition fires.
-Calibration pending.
+Effort P50 1.5 person-days, P80 3.0 person-days. Basis: one read-only extraction over an
+existing schema plus a documentary gap register; excludes remediation if the dispatch
+precondition fires. Calibration pending.
 
 ## Handoff
 
 - changed files, ledger outputs and the `--self-check` result
 - gap register and any `BLOCKED` precondition
-- observed spend against the `OD-01` ceiling
+- observed spend against the `OD-03` ceiling

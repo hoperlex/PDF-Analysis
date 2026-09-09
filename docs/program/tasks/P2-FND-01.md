@@ -40,7 +40,7 @@ payloads until the third is:
 ## Forbidden hotspots
 
 - `db/migrations/**`, root locks, the composition root and the `Makefile`
-- `src/auditmanager/{documents,ingest,storage,jobs,analysis,api}/**`, `contracts/**`,
+- `src/auditmanager/{documents,ingest,storage,runs,exports,analysis,api}/**`, `contracts/**`,
   `fixtures/**`
 
 ## Non-goals
@@ -63,10 +63,12 @@ payloads until the third is:
 - terminal selection: all required stages `succeeded` and the gate passed gives `published`;
   a `partial` text analysis gives a `partial` run with the missing set recorded; any
   required stage `failed` gives a `failed` run with nothing published
-- append-only decision events for accept, reject, comment and revoke, each a new identity
-  referencing the finding and the reviewed observation, with the current verdict rebuildable
-  from the event stream alone and revocation moving it to `pending` without restoring a
-  superseded verdict
+- append-only decision events for the PC-01 journey — accept, reject and comment — each a
+  new identity referencing the finding and the reviewed observation, with the current
+  verdict rebuildable from the event stream alone. The ledger is append-only by
+  construction, so the PD-01 revocation semantics remain implementable later without a
+  schema change; PC-01 emits no revocation event and the UI offers none, because the journey
+  under test is accept, reject and comment
 
 ## Required tests
 
@@ -83,8 +85,7 @@ payloads until the third is:
   `partial_result_not_publishable`.
 - Command: `.venv/bin/pytest tests/integration/decisions`
   Expected: exit `0`. The suite asserts that accept, then comment, then reject appends three
-  events and updates no row; that the projection equals the last valid event; that revoke
-  moves the projection to `pending` without restoring the earlier verdict; that the
+  events and updates no row; that the projection equals the last valid event; that the
   projection rebuilt from the ledger equals the stored projection; that a decision on an
   unknown finding returns `not_found`; and that a direct UPDATE or DELETE on the ledger is
   refused by the database.
@@ -93,15 +94,17 @@ payloads until the third is:
 
 ## Integration contract
 
-`P2-JOB-01` calls the gate during `validating` and receives the terminal selection and the
-published set; it never selects the terminal itself. The API exposes findings, evidence and
-the current verdict; P03 renders them and owns the CSV.
+`P2-RUN-01` calls this gate during `validating` and records the terminal it returns; the
+executor never selects a terminal itself. This ordering is deliberate: the gate is built
+before the runner so the runner is never authored against a stub that fakes `published`.
+`P2-API-01` exposes findings, evidence and the current verdict, and `P2-EXP-01` reads them
+for the CSV.
 
 ## Failure/idempotency/security cases
 
-- `GJ-03-EO-09`, `GJ-03-EO-10` and `GJ-03-FC-06`: correction and revocation each create a
-  new decision identity with history preserved, the verdict enumeration is closed, and
-  `pending` is explicit.
+- `GJ-03-EO-09` and `GJ-03-EO-10`: every decision event creates a new identity with history
+  preserved, the verdict enumeration is closed and `pending` is explicit. `GJ-03-FC-06`
+  concerns revocation and is deferred with it.
 - Model output never becomes a verdict; the gate is deterministic and takes no model input.
 - Replaying the same decision command under one idempotency key appends exactly one event.
 
@@ -111,7 +114,7 @@ Not applicable. The gate is unconditional and no flag lets an ungrounded item pu
 
 ## Estimate
 
-P50 2.5 days, P80 4.5 days.
+Effort P50 2.5 person-days, P80 4.5 person-days. Basis: one deterministic gate plus the append-only ledger and its projection. Calibration pending.
 
 ## Handoff
 

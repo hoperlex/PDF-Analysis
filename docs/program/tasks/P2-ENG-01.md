@@ -40,7 +40,7 @@ is accepted and integrated, and until owner decision `OD-04` fixes the page-crop
 
 - `src/auditmanager/analysis/text/**`, owned by `P2-AI-01`
 - `db/migrations/**`, root locks, the composition root and the `Makefile`
-- `src/auditmanager/{documents,ingest,storage,jobs,findings,decisions,api}/**`,
+- `src/auditmanager/{documents,ingest,storage,runs,exports,findings,decisions,api}/**`,
   `contracts/**`, `fixtures/**`
 
 ## Non-goals
@@ -52,8 +52,10 @@ is accepted and integrated, and until owner decision `OD-04` fixes the page-crop
 
 ## Deliverables
 
-- a stage-runner seam consuming and producing the frozen package schemas with the full
-  attempt-authority tuple
+- an in-process stage-runner seam taking the stage inputs by `blob_id` and returning a
+  `StageResult` conformant to `stage-result.schema.json`, which requires no attempt
+  authority. The seam does not construct a `JobPackage` or a `ResultPackage`: those
+  envelopes exist for remote dispatch, which PC-01 does not perform
 - `source_preparation` producing the page inventory and the text layer with stable
   character offsets, both published as blobs
 - `page_geometry_extraction` producing the block index with page, bounding box and
@@ -85,7 +87,7 @@ is accepted and integrated, and until owner decision `OD-04` fixes the page-crop
 
 ## Integration contract
 
-`P2-JOB-01` calls the stage runner and persists the returned stage results without reaching
+`P2-RUN-01` calls the stage runner and persists the returned stage results without reaching
 inside a stage. `P2-AI-01` registers `text_analysis` on the same seam and receives the text
 layer and document graph by blob identity. `P2-FND-01` resolves evidence anchors against the
 text layer and block index only.
@@ -104,7 +106,8 @@ runtime flag.
 
 ## Estimate
 
-P50 3 days, P80 5.5 days. Add 1 day P50 and 2 days P80 if `OD-04` requires rendered crops.
+Effort P50 3.0 person-days, P80 5.5 person-days. Add 1.0 P50 and 2.0 P80 if `OD-04`
+requires rendered crops rather than a declared empty manifest. Basis: three deterministic stages over a pinned extraction library. Calibration pending.
 
 ## Handoff
 

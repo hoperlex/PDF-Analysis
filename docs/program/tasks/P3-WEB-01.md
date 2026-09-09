@@ -16,6 +16,8 @@ Planned predecessors and dispatch condition — this task is not dispatchable un
 accepted and integrated:
 
   - `P3-API-01` — generated client and transport seam accepted
+  - owner decision `OD-10`, the reconciliation vocabulary this view renders for a run
+    that was interrupted
 
 ## Frozen inputs
 
@@ -107,7 +109,7 @@ changes.
 
 ## Estimate
 
-P50 1.5 days, P80 3 days.
+Effort P50 1.5 person-days, P80 3.0 person-days. Basis: three slices over an existing typed client. Calibration pending.
 
 ## Handoff
 

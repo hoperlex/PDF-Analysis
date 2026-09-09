@@ -1,15 +1,25 @@
 # Current state
 
-> **P0-PLN-01 candidate, 2026-09-09.** On branch `agent/p0-pln-01`, `P0-PLN-01` has
-> produced the detailed P02–P05 plan: `docs/program/PROTOTYPE_EXECUTION_PLAN.md` plus 26
-> agent-ready task files — one navigation gate, ten P02, eight P03, four P04 and three
-> P05. It is a **candidate**: no P02–P05 task is dispatchable until the owner accepts it,
-> and P01 is unaffected. The plan changes no contract, runtime, migration or foundation
-> path, records 22 unresolved owner decisions, and marks its forecast calibration
-> **pending** until measured P01 throughput exists. It also records one assumption the
-> owner must rule on: that accepting this plan, `PF-01` and `P1-NAV-01` is what lifts the
-> production-code hold for the P02 paths, and that CP-00 acceptance round eleven remains
-> an independent obligation of that line rather than a P02 predecessor.
+> **P0-PLN-01 candidate, revision 1, 2026-09-09.** On branch `agent/p0-pln-01`,
+> `P0-PLN-01` has produced the detailed P02–P05 plan:
+> `docs/program/PROTOTYPE_EXECUTION_PLAN.md` plus **30 agent-ready task files** — two
+> navigation tasks, thirteen P02, eight P03, four P04 and three P05. It is a
+> **candidate**: no P02–P05 task is dispatchable until the owner accepts it, and P01 is
+> unaffected. The plan changes no contract, runtime, migration or foundation path, records
+> 23 unresolved owner decisions, and marks its forecast calibration **pending** until
+> measured P01 throughput exists.
+>
+> Revision 1 restores the fastest-prototype scope: PC-01 has no Job, Attempt, lease,
+> fencing token, retry, resume, outbox or revocation UI, and the plan records that it
+> therefore publishes no JobPackage or ResultPackage and claims no conformance to those two
+> schemas, without editing any contract. It also gives the server-side CSV export a real
+> owner, splits the navigation and P02 integration lifecycles so no task ID is reopened in
+> two windows, and separates person-effort from calendar duration.
+>
+> One assumption remains for the owner to rule on: that accepting this plan, `PF-01` and
+> the navigation gate is what lifts the production-code hold for the P02 paths, and that
+> CP-00 acceptance round eleven remains an independent obligation of that line rather than
+> a P02 predecessor.
 >
 > **Prototype-planning overlay, 2026-09-09.** On branch
 > `planning/prototype-roadmap`, the repository owner recorded `FF-01 ACCEPTED` without

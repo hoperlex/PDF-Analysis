@@ -1,69 +1,67 @@
-# Task P2-INT-00 — P02 toolchain pins, composition root and wave ownership
+# Task P2-INT-00 — P02 dependency pins and environment contract
 
-> **Status: specified; not dispatchable.** Planned as the first P02 task. Sole P02 writer
-> of the root dependency locks and the backend composition root, across two windows.
+> **Status: specified; not dispatchable.** Planned as the first P02 task. Sole P02 owner
+> of the root dependency locks and the environment contract. It performs no wiring: the
+> composition root belongs to `P2-INT-01`, so no task ID is reopened in a second window.
 
 ## Outcome
 
-One locked P02 dependency set and one composition root that constructs every P02 module
-from configuration, so no lane invents a wiring path or becomes a second lock writer.
+One locked P02 dependency set and one additive environment contract, fixed before any
+provider lane starts, so no lane invents a pin or becomes a second lock writer.
 
 ## Depends on
 
 - none complete at plan time
 
-Planned predecessors and dispatch condition — window 1 is not dispatchable until all of
-these hold, and window 2 not until `P2-QA-01` is accepted:
+Planned predecessors and dispatch conditions — this task is not dispatchable until all of
+these hold:
 
-  - `P1-INT-01` — `PF-01` accepted
-  - `P1-NAV-01` — navigation layer accepted
-  - `P0-PLN-01` — this plan accepted and its forecast recalibrated against measured P01
-    throughput
-  - owner decisions `OD-01` PDF library, `OD-02` model provider, `OD-06` root-lock owner
-    and `OD-07` composition-root owner
+  - `P1-INT-01` accepted, that is `PF-01`
+  - `P1-NAV-02` accepted, so the navigation layer resolves the foundation seams
+  - this plan accepted and its forecast recalibrated against measured P01 throughput
+  - owner decisions `OD-01` PDF library, `OD-02` model provider, `OD-03` cost ceiling and
+    `OD-06` post-P1 root-lock owner recorded
 
 ## Frozen inputs
 
 - domain contract: `contracts/domain/v1/**`, read only
-- API contract: none in window 1; `contracts/api/v1/**` belongs to `P2-API-01`
+- API contract: none; `contracts/api/v1/**` belongs to `P2-API-01`
 - analysis contract: `contracts/analysis/v1/stage-registry.json`, read only
 - migration head: the P01 baseline, read only; extended only by `P2-DOM-01`
-- base commit: the accepted `P1-INT-01` integration commit
+- base commit: the accepted `P1-NAV-02` integration commit
 
 ## Allowed paths
 
 - the root dependency manifests and lock files named in `FOUNDATION_LOCK.json`
 - `.env.example` — additive P02 names only
-- `src/auditmanager/bootstrap/**`
-- `src/auditmanager/api/app.py`, `src/auditmanager/api/composition.py`
 - `docs/program/P02_LOCK.json`
-- `docs/navigation/INDEX.md` — regeneration at wave close only
-- `docs/program/tasks/P2-INT-00.md`
+- `docs/program/tasks/P2-INT-00.md` status/handoff
 - `docs/navigation/entries/p2-int-00.json`
 
 ## Forbidden hotspots
 
-- `Makefile` and `FOUNDATION_LOCK.json`: the nine targets are frozen by FF-01 §3 and this
-  task adds none
-- `infra/local/**`, `db/migrations/**` and every other module under `src/auditmanager/**`
-- `contracts/**`, `fixtures/**`, `scripts/**`, CP-00 evidence and Git tags
+- `src/auditmanager/**` in its entirety, including `bootstrap/**` and `api/**`, which
+  belong to `P2-INT-01`
+- `Makefile` and `FOUNDATION_LOCK.json`: the nine targets are frozen by FF-01 §3
+- `infra/local/**`, `db/migrations/**`, `tests/**`, `web/**`
+- `docs/navigation/INDEX.md`, `contracts/**`, `fixtures/**`, `scripts/**`, CP-00 evidence
+  and Git tags
 
 ## Non-goals
 
-- No domain logic, router, stage, schema or table.
-- No service locator and no generic dependency-injection framework.
+- No wiring, composition root, container, router, domain logic, stage, schema or table.
+- No new `make` target and no private command alias.
+- No dependency needed only by P03 or later.
 
 ## Deliverables
 
-- exact pins for the PDF library, the model SDK and the web framework stack, recorded in
-  `docs/program/P02_LOCK.json` with the command that resolved them
-- additive `.env.example` names: `ANALYSIS_MODE` with values `recorded` and `live`, the
+- exact pins for the PDF text-extraction library, the model SDK and the web framework
+  stack, recorded in `docs/program/P02_LOCK.json` with the command that resolved them and
+  the licence of each library, so `OD-01` is answered with evidence rather than a name
+- additive `.env.example` names: the analysis mode with values `recorded` and `live`, the
   model provider and model id, the provider API key and the per-run cost ceiling
-- a composition root constructing storage, database, ingest, jobs, analysis, findings and
-  API from settings, failing explicitly when a required dependency is unconfigured
 - the ownership record naming this task the sole P02 writer of root locks and the
-  composition root
-- the regenerated navigation index at wave close
+  environment contract, and `P2-INT-01` the sole writer of the composition root
 
 ## Required tests
 
@@ -71,37 +69,36 @@ these hold, and window 2 not until `P2-QA-01` is accepted:
   Expected: exit `0` twice; `git status --porcelain` is empty afterwards.
 - Command: `.venv/bootstrap/bin/python scripts/validate_bootstrap.py`
   Expected: exit `0`, standalone `PASS`.
-- Command: `.venv/bin/pytest tests/integration/composition`
-  Expected: exit `0`, including the unconfigured-dependency failure case.
+- Command: `.venv/bin/python -c "import importlib,json;[importlib.import_module(m) for m in json.load(open('docs/program/P02_LOCK.json'))['import_check']]"`
+  Expected: exit `0`; every pinned runtime dependency imports in the locked environment.
 - Command: `git diff --check`
   Expected: exit `0`.
 
 ## Integration contract
 
-Every lane receives its dependencies by constructor injection from the composition root;
-no module builds an engine, S3 client or model client itself. A new third-party dependency
-is requested from this task and never added by a lane.
+Provider lanes may rely on exact locked dependencies and environment names. They may not
+add or upgrade a root dependency; a new dependency is requested from this task. Nothing in
+this task constructs an object, so no lane can import a container from it.
 
 ## Failure/idempotency/security cases
 
-- A missing or invalid provider key in `live` mode fails at startup with
-  `dependency_unavailable` and never degrades to `recorded`.
+- A missing or invalid provider key in `live` mode is an explicit failure at construction
+  time in `P2-INT-01`, never a silent degrade to `recorded`.
 - Repeated bootstrap changes no tracked file.
-- `.env.example` carries disposable placeholders only, and a credential scan runs on every
-  window.
+- `.env.example` carries disposable placeholders only, and a credential scan runs before
+  hand-off.
 
 ## Rollback / feature flag
 
-`ANALYSIS_MODE` defaults to `recorded`. Rollback is a revert of the wiring commit; no
-product data exists at window 1.
+The analysis mode defaults to `recorded`. Rollback is a revert of the pin commit; no
+product data exists at this point.
 
 ## Estimate
 
-P50 1 day across both windows, P80 2.5 days.
+Effort P50 0.5 person-day, P80 1.5 person-days. Basis: pinning and locking a known dependency set, with no code construction. Calibration pending.
 
 ## Handoff
 
-- the pin table and the command that resolved it
-- the environment names added and the container construction signature
-- the regenerated navigation index and containment proof for the `Makefile` and
-  `FOUNDATION_LOCK.json`
+- the pin table with licences and the command that resolved it
+- the environment names added
+- containment proof for the `Makefile`, `FOUNDATION_LOCK.json` and `src/auditmanager/**`

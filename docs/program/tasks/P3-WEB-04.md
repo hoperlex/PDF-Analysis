@@ -5,10 +5,9 @@
 
 ## Outcome
 
-The reviewer requests one export for the exact run, downloads a UTF-8 CSV whose rows
-resolve back to the same project, version, run, finding, observation and current verdict,
-and sees an explicitly degraded label whenever the run is `partial` or a declared member
-is missing.
+The reviewer downloads the UTF-8 CSV the server produces for the exact run, sees rows that
+resolve back to the same project, version, run, finding and observation, and sees an
+explicitly degraded label whenever the run is `partial`.
 
 ## Depends on
 
@@ -17,15 +16,17 @@ is missing.
 Planned predecessors and dispatch condition — this task is not dispatchable until it is
 accepted and integrated:
 
-  - `P3-API-01` — generated client and transport seam accepted, with the export
-    operations present
+  - `P3-API-01` — generated client and transport seam accepted, with
+    `GET /runs/{run_id}/export.csv` present
+  - `P2-EXP-01` — the server-side export use case that actually produces the CSV this task
+    verifies
 
 ## Frozen inputs
 
-- API contract: the export request and export content operations at the `P3-API-01`
-  snapshot
-- domain contract: the project, document, version, run, finding, observation, decision and
-  export identifiers, and the `partial_result_not_publishable` error code
+- API contract: `GET /runs/{run_id}/export.csv` at the `P3-API-01` snapshot
+- domain contract: the project, document, version, run, finding, observation and decision
+  identifiers, and the `partial_result_not_publishable` error code. No export identifier is
+  used, because PC-01 creates no export resource
 - golden assertions `GJ-02-EO-08` and `GJ-02-EO-10`
 - migration head: not consumed
 - base commit: the accepted `P3-API-01` integration commit
@@ -50,19 +51,19 @@ accepted and integrated:
 
 - No XLSX or PDF report, no column-selection UI, no filtered or partial-selection export,
   no scheduled or emailed export.
-- No client-side CSV generation from cached data.
+- No client-side CSV generation from cached data, and no export polling or export identity:
+  the endpoint is synchronous and creates nothing.
 
 ## Deliverables
 
-- an export panel that requests, polls, downloads and re-downloads the same export
-- the frozen column contract, in order: project, document, version and run identities,
-  `run_state`, `provider_mode`, finding and observation identities, `category`,
-  `finding_text`, `recommendation_text`, `evidence_page`, `evidence_quote`,
-  `current_verdict`, `latest_comment`, the latest decision identity,
-  `decision_recorded_at`, the export identity and `exported_at`
-- degraded rendering: a `partial` run's export is labelled degraded and carries the
-  omission reason; a non-terminal, `failed` or `cancelled` run offers no download and
-  states why
+- an export panel that triggers the download and re-downloads it, with no polling state
+- the consumer-side check of the frozen column contract owned by `P2-EXP-01`, in order:
+  `project_uid`, `document_uid`, `version_uid`, `run_id`, `run_state`, `provider_mode`,
+  `finding_uid`, `finding_observation_id`, `category`, `finding_text`,
+  `recommendation_text`, `evidence_page`, `evidence_quote`, `current_verdict`,
+  `latest_comment`, `latest_decision_id`, `decision_recorded_at`
+- degraded rendering: a `partial` run's download is labelled degraded from the `run_state`
+  column and the run read model; a non-terminal run offers no download and states why
 - `web/scripts/verify-csv.mjs`, a deterministic checker asserting encoding, column order,
   row count against the fixture and identity resolution of every row
 
@@ -71,8 +72,9 @@ accepted and integrated:
 - Command: `npm --prefix web run test:unit -- export`
   Expected: exit `0`.
 - Command: `npm --prefix web run csv:verify -- web/tests/csv/fixtures/pc01-published.csv`
-  Expected: exit `0`; the header equals the frozen column list, the encoding is UTF-8 and
-  every identifier matches its contract pattern.
+  Expected: exit `0`; the header equals the frozen column list in order, the encoding is
+  UTF-8 and every identifier matches its contract pattern. The fixture is a recorded
+  response of the `P2-EXP-01` endpoint, not a hand-written file.
 - Command: `npm --prefix web run csv:verify -- web/tests/csv/fixtures/pc01-missing-column.csv`
   Expected: non-zero, naming the missing column; the verification guard can fail.
 - Command: `npm --prefix web run test:unit -- --grep "degraded"`
@@ -92,8 +94,8 @@ both owners.
 
 ## Failure/idempotency/security cases
 
-- Repeating the export request under one idempotency key returns the same export and
-  creates no second one.
+- Repeating the request returns the same bytes and creates nothing, so no idempotency key
+  is needed for a read that has no side effect.
 - `partial_result_not_publishable` renders as an explicit refusal with its reason, never
   as an empty CSV.
 - No internal key, bucket, absolute filesystem path or credential appears in any column or
@@ -109,10 +111,12 @@ identity.
 
 ## Estimate
 
-P50 0.75 day, P80 1.5 days.
+Effort P50 0.5 person-day, P80 1.0 person-day. It narrowed when server-side CSV generation
+moved to its real owner, `P2-EXP-01`. Basis: a download trigger and a deterministic CSV verifier. Calibration pending.
 
 ## Handoff
 
 - changed files and containment proof, with commands and results
-- the exact column list produced and any column the P02 export omitted
+- the verification result against the `P2-EXP-01` column contract, and any divergence
+  reported to that owner rather than patched here
 - known limits: one CSV form, no filtering

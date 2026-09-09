@@ -33,10 +33,12 @@ acceptance instance:
 
 - `docs/manual-tests/PC-01_prototype.md`
 - `artifacts/checkpoints/PC-01/**`
-- `docs/program/CHECKPOINT_REGISTRY.md` — the PC-01 status row only
-- `docs/program/CURRENT_STATE.md` — the PC-01 status line only
-- `docs/INDEX.md` — the PC-01 entry only
+- `docs/program/CHECKPOINT_REGISTRY.md` — creates and maintains the PC-01 row; no such row exists yet
+- `docs/program/CURRENT_STATE.md` — creates and maintains the PC-01 status line
+- `docs/INDEX.md` — creates and maintains the PC-01 entry
 - `docs/navigation/INDEX.md` — regeneration only
+- `docs/navigation/entries/p3-int-01.json`
+- `docs/navigation/incidents/p3-int-01.jsonl`
 - `docs/program/tasks/P3-INT-01.md`
 
 ## Forbidden hotspots
@@ -58,7 +60,7 @@ acceptance instance:
 - an executed acceptance record: environment, commits, image digests, migration head,
   provider mode per run, and measured elapsed time per step with the method that measured it
 - the produced CSV, the live-run and recorded-run artifacts, and a screenshot set showing
-  the page-beside-quotation view, the decision ledger after revocation and the
+  the page-beside-quotation view, the decision ledger after a later comment and the
   provider-mode badge
 - a defect register separating prototype-blocking from advisory findings under the profile
   gate classes
@@ -103,7 +105,7 @@ server state are unaffected.
 
 ## Estimate
 
-P50 1 day, P80 2 days.
+Effort P50 1.0 person-day, P80 2.0 person-days. Basis: executing a twenty-step runbook and recording its evidence. Calibration pending.
 
 ## Handoff
 

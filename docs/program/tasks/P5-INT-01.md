@@ -30,10 +30,12 @@ is accepted and integrated:
 - `artifacts/validation/PC-03/checkpoint-report.md`
 - `artifacts/validation/PC-03/known-risks.md`
 - `docs/architecture/ADR_INDEX.md` — status transitions for the P05 ADRs only
-- `docs/program/CHECKPOINT_REGISTRY.md` — the PC-03 status row only
-- `docs/program/CURRENT_STATE.md` — the PC-03 status line only
-- `docs/INDEX.md` — the PC-03 entry only
+- `docs/program/CHECKPOINT_REGISTRY.md` — creates and maintains the PC-03 row; no such row exists yet
+- `docs/program/CURRENT_STATE.md` — creates and maintains the PC-03 status line
+- `docs/INDEX.md` — creates and maintains the PC-03 entry
 - `docs/navigation/INDEX.md` — regeneration only
+- `docs/navigation/entries/p5-int-01.json`
+- `docs/navigation/incidents/p5-int-01.jsonl`
 - `docs/program/tasks/P5-INT-01.md`
 
 ## Forbidden hotspots
@@ -93,7 +95,7 @@ stand under their own commits.
 
 ## Estimate
 
-P50 1–2 days, P80 3 days. Basis: reconciliation plus one owner-response cycle.
+Effort P50 1.5 person-days, P80 3.0 person-days. Basis: reconciliation plus one owner-response cycle.
 Calibration pending.
 
 ## Handoff

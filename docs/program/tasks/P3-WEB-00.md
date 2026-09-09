@@ -18,7 +18,9 @@ Planned predecessors and dispatch condition — this task is not dispatchable un
 is accepted and integrated:
 
   - `P1-INT-00` — root command surface and environment names accepted
-  - `P2-INT-00` — the P02 OpenAPI document frozen at a named commit
+  - `P2-API-01` — the P02 OpenAPI document created and frozen at a named commit
+  - owner decisions `OD-08` frontend package manager and composition owner, and `OD-09`
+    the browser PDF rendering approach this task pins for `P3-WEB-02`
 
 ## Frozen inputs
 
@@ -54,7 +56,8 @@ is accepted and integrated:
 - No product page, API call, PDF rendering, authentication or theming system.
 - No root `Makefile` target and no private command alias: the nine targets are frozen by
   FF-01 and `P1-INT-00` excludes a frontend toolchain, so every P03 command is
-  `npm --prefix web run …`.
+  `npm --prefix web run …`. Adding one would be an FF-01 freeze-break and is owner decision
+  `OD-16`, which this task does not take.
 
 ## Deliverables
 
@@ -66,15 +69,20 @@ is accepted and integrated:
   `/projects/[project_uid]/runs/[run_id]` and `.../review`, each a delegation-only file
 - `_app` providers: a server-state query client and no global domain store
 - shared primitives for the five mandatory states — loading, empty, error with retry,
-  unsupported and not-applicable — and a `RunStateBadge` whose value set is exactly
+  unsupported and not-applicable — a `RunStateBadge` whose value set is exactly
   `created`, `queued`, `running`, `validating`, `published`, `partial`, `failed`,
-  `cancelled`
+  `cancelled`, and a separate stage-status element whose value set is exactly `succeeded`,
+  `partial`, `failed`, `skipped`. The seam document states that `succeeded` is legal on a
+  stage row and illegal on a run badge
 - reserved npm-script forwarders `api:generate`, `test:contract`, `test:unit`,
   `e2e:pc01` and `csv:verify` that fail explicitly until their owner lands, mirroring the
-  FF-01 Makefile forwarder pattern
+  FF-01 Makefile forwarder pattern. `web/playwright.config.ts` is delivered here with its
+  test directory already pointing at the repository-root `tests/e2e/pc01`, so `P3-QA-01`
+  can run the suite it owns without editing a web config it is forbidden from
 - `web/docs/PC01_UI_SEAM.md` freezing route URLs, the `EvidenceViewer`, `DecisionPanel`
-  and `ExportPanel` props, query-key namespaces, the polling interval and backoff, and
-  the rule that only contract state names are rendered
+  and `ExportPanel` props, query-key namespaces, the run-progress polling interval and
+  backoff, and the rule that only contract state names are rendered. The export panel has
+  no polling contract, because the export endpoint is synchronous
 
 ## Required tests
 
@@ -86,8 +94,10 @@ is accepted and integrated:
   Expected: exit `0`.
 - Command: `npm --prefix web run lint -- web/tests/guards/deep-import.fixture.ts`
   Expected: non-zero, naming the boundary rule; proves the guard can fail.
-- Command: `rg -n "succeeded" web/src`
-  Expected: no match; the success terminal is `published`.
+- Command: `rg -n "succeeded" web/src/entities/audit-run web/src/widgets/run-progress`
+  Expected: no match. The ban is on the **run** vocabulary only: the `AuditRun` success
+  terminal is `published`. `succeeded` stays the correct `StageResult` status and is
+  rendered on per-stage rows, so a repository-wide ban would fail on correct code.
 - Command: compare the changed path set with `Allowed paths`.
   Expected: every changed path allowed and no forbidden hotspot present.
 - Command: `git diff --check`
@@ -115,7 +125,7 @@ absence of the frontend does not affect P01 or P02 acceptance.
 
 ## Estimate
 
-P50 1 day, P80 2 days.
+Effort P50 1.0 person-day, P80 2.0 person-days. Basis: toolchain pinning, four delegation routes and the state primitives. Calibration pending.
 
 ## Handoff
 

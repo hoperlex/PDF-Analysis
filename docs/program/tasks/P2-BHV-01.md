@@ -85,7 +85,7 @@ Not applicable: test data only.
 
 ## Estimate
 
-P50 1 day, P80 2 days.
+Effort P50 1.0 person-day, P80 2.0 person-days. Basis: authoring one deterministic fixture family and its generator. Calibration pending.
 
 ## Handoff
 

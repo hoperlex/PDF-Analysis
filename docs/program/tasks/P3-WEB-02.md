@@ -20,6 +20,7 @@ is accepted and integrated, and it may not be accepted until the last two are:
   - `P3-WEB-01` — project, upload and run-progress slice accepted
   - `P3-WEB-03` and `P3-WEB-04` — the decision and export widgets this page mounts;
     authoring proceeds against their props frozen in `web/docs/PC01_UI_SEAM.md`
+  - owner decision `OD-09`, the browser PDF rendering approach `P3-WEB-00` pins
 
 ## Frozen inputs
 
@@ -91,7 +92,8 @@ is accepted and integrated, and it may not be accepted until the last two are:
 
 The review page is the single mount point for the decision and export panels; it passes
 the finding, run and version identities plus the current observation, and owns no decision
-or export state.
+or export state. The export panel holds no polling state, because the export endpoint is
+synchronous.
 
 ## Failure/idempotency/security cases
 
@@ -109,7 +111,7 @@ recorded server-side are unaffected.
 
 ## Estimate
 
-P50 2 days, P80 4 days.
+Effort P50 2.0 person-days, P80 4.0 person-days. Basis: one bounded PDF island plus the finding and quotation composition. Calibration pending.
 
 ## Handoff
 

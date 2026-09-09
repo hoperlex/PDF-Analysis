@@ -1,9 +1,11 @@
 # Task P0-PLN-01 — complete the post-foundation prototype roadmap
 
-> **Status: executed; candidate on `agent/p0-pln-01`, awaiting primary review.**
-> `P0-FND-00` was accepted on 2026-09-09 and this task ran in parallel with the P01
-> lanes. Its deliverables are `docs/program/PROTOTYPE_EXECUTION_PLAN.md` and 26
-> agent-ready task files. No P02–P05 task is dispatchable until the owner accepts them.
+> **Status: executed, revision 1; candidate on `agent/p0-pln-01`, awaiting primary
+> review.** `P0-FND-00` was accepted on 2026-09-09 and this task ran in parallel with P01
+> **dispatch readiness**; no P01 lane had been dispatched at the time of writing, which is
+> why calibration is pending rather than measured. Its deliverables are
+> `docs/program/PROTOTYPE_EXECUTION_PLAN.md` and 30 agent-ready task files. No P02–P05 task
+> is dispatchable until the owner accepts them.
 
 ## Outcome
 
@@ -119,22 +121,24 @@ own accepted freeze.
 - changed files and containment proof
 - commands/results
 - unresolved owner decisions
-- measured P01 throughput and revised estimate
+- measured P01 throughput and the revised estimate if a measurement exists at handoff
+  time; otherwise the recorded calibration-pending state and its trigger
 
 ### Executed handoff, 2026-09-09
 
 - **Base:** task-spec commit `1cb86cd2708f11712a0cd2f481862652fac2e377`; accepted
   foundation `0b01a3eefe0e6724f6570ccebb9154daf1fdbaec`, verified an ancestor of it.
-- **Produced:** `PROTOTYPE_EXECUTION_PLAN.md`; `P1-NAV-01`; ten P02, eight P03, four P04
-  and three P05 task files; the P02–P05 detail in `ROADMAP.md`; the run-state vocabulary
-  correction in `PROTOTYPE_PROFILE.md` §8; planning entries in `CURRENT_STATE.md` and
-  `docs/INDEX.md`.
+- **Produced:** `PROTOTYPE_EXECUTION_PLAN.md`; `P1-NAV-01` and `P1-NAV-02`; thirteen P02,
+  eight P03, four P04 and three P05 task files — 30 in all; the P02–P05 detail in
+  `ROADMAP.md`; the run-state vocabulary correction and the corpus restatement in
+  `PROTOTYPE_PROFILE.md` §§8–9; planning entries in `CURRENT_STATE.md` and `docs/INDEX.md`.
 - **Contracts, runtime, migration head, fixtures, scripts and tests:** unchanged. The plan
   specifies who will own those paths later; it writes none of them.
 - **Calibration:** pending. No measured P01 throughput exists, because no P01 task has been
   dispatched. The recalibration trigger is recorded in the execution plan and in
   `ROADMAP.md`: after `PF-01` acceptance and before P02 dispatch.
-- **Unresolved owner decisions:** 22, listed as `OD-01` to `OD-22` in the execution plan.
+- **Unresolved owner decisions:** 23, listed as `OD-01` to `OD-23` in the execution plan.
+  Ids are append-only and are never renumbered.
   `OD-14` is the one that can move the whole graph: whether accepting this plan lifts the
   production-code hold for the P02 paths, or whether CP-00 acceptance round eleven and
   `W0-INT-03` are additional P02 predecessors.

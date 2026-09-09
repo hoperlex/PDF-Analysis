@@ -246,8 +246,10 @@ The prototype checkpoint passes only when a reviewer can, from a clean local sta
 
 ## 9. Learning gate after delivery
 
-The prototype is exercised on 10–20 synthetic or anonymized representative documents
-with domain experts. The validation report measures:
+The prototype is exercised with domain experts on 12–16 measurable synthetic or anonymized
+documents — 5 seeded plus 7–11 controls — together with 2–4 negative-envelope documents
+counted separately and excluded from every finding denominator. The validation report
+measures:
 
 - percentage of findings marked useful, incorrect and unclear;
 - evidence-location correctness;
@@ -255,7 +257,9 @@ with domain experts. The validation report measures:
 - provider latency, cost and failure distribution;
 - which missing stage or capability prevents real use;
 - whether audit depth or document comparison is the next highest-value investment;
-- which failures actually require retry, Attempt fencing or remote execution.
+- which failures actually require retry, Attempt fencing or remote execution;
+- agent navigation friction: the search and rework incidents tasks recorded, reported as
+  absent rather than as zero when no task recorded one.
 
 P05 architecture work starts from this report. It does not defend an earlier solution
 merely because that solution appears in the long-term backlog.

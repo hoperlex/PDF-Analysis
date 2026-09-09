@@ -16,7 +16,9 @@ executable.
 Planned predecessors and dispatch condition — this task is not dispatchable until it is
 accepted and integrated:
 
-  - `P2-INT-00` — window 1 pins and composition root accepted
+  - `P2-INT-00` — pins and the environment contract accepted
+  - owner decision `OD-12`, the decision author identity, because this task writes the
+    migration head that must carry its column; deciding it later is a schema change
 
 ## Frozen inputs
 
@@ -47,18 +49,22 @@ accepted and integrated:
 
 - No repository, use case, router or stage.
 - No generic base repository or ORM framework, and no table for comparison, norms,
-  knowledge base, outbox, lease or export.
+  knowledge base, outbox, lease, export or job/attempt execution.
 
 ## Deliverables
 
 - forward migrations creating the project, document, document version, input manifest,
-  blob metadata, audit run, job, attempt, command record, stage result, finding, finding
-  observation, finding evidence, model call, expert decision event and audit event tables
+  blob metadata, audit run, command record, stage result, finding, finding observation,
+  finding evidence, model call, expert decision event and audit event tables. There is no
+  job, attempt, lease or export table: PC-01 has no Job and no Attempt, and the CSV export
+  is computed on request rather than stored
 - prefixed identifier types generating exactly the contract prefixes and matching the
   contract identifier pattern
-- a transition guard generated from `state-machines.json` for the audit run, job, attempt,
-  blob, import and command idempotency machines, refusing any undeclared transition with
-  `state_transition_not_allowed`
+- a transition guard generated from `state-machines.json` for the audit run, blob, import
+  and command idempotency machines, refusing any undeclared transition with
+  `state_transition_not_allowed`. The `job` and `attempt` machines are not instantiated in
+  PC-01, and the two `audit_run` guards that reference a Job or an Attempt are recorded as
+  deliberately unimplemented rather than silently skipped
 - the twenty-code error catalog as a closed enum plus the error envelope, with `retryable`
   pinned to the catalog value
 - database-level append-only enforcement on the expert decision and audit event tables
@@ -98,10 +104,16 @@ drop of the disposable local database; never automatic on a populated database.
 
 ## Estimate
 
-P50 2 days, P80 4 days.
+Effort P50 1.75 person-days, P80 3.5 person-days. It narrowed when the job and attempt
+tables and their guards left PC-01 scope. Basis: one migration head plus typed primitives generated from the frozen contracts. Calibration pending.
 
 ## Handoff
 
 - the P02 migration head identifier and the table and constraint list
 - the identifier and guard APIs
-- error codes not used by PC-01
+- error codes not used by PC-01, naming `execution_token_invalid` and `stale_attempt`
+  explicitly, since PC-01 has no Job or Attempt to raise them
+- declared identifiers PC-01 does not allocate — `job_id`, `attempt_id`, `lease_id`,
+  `worker_id`, `export_id`, `comparison_id`, `sheet_link_id`, `norms_snapshot_id`,
+  `erasure_request_id`, `import_id` — recorded so the catalog does not silently promise an
+  aggregate nobody builds
