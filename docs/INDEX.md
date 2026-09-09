@@ -41,7 +41,7 @@
 - [Task W0-INT-01](program/tasks/W0-INT-01.md) — accepted and integrated; CP-00 ratified and tagged `v0.0.0-architecture`, and superseded by the recovery: acceptance round eleven is owed and `W0-INT-03` cuts `v0.0.1-architecture`
 - [Task W0-QA-04](program/tasks/W0-QA-04.md) — accepted and integrated; the CP-00 final-state contour
 - [Task W0-INT-02](program/tasks/W0-INT-02.md) — CP-00 state reconciliation and evidence erratum
-- [Task W0-INT-03](program/tasks/W0-INT-03.md) — superseding ratification and `v0.0.1-architecture`
+- [Task W0-INT-03](program/tasks/W0-INT-03.md) — specified; blocked on acceptance
 - [CP-00 recovery execution plan](program/EXECUTION_PLAN.md)
 - [Checkpoint registry](program/CHECKPOINT_REGISTRY.md)
 - [Version/freeze policy](program/VERSIONING_AND_FREEZE_POLICY.md)

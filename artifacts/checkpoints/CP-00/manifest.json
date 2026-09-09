@@ -1,14 +1,14 @@
 {
   "checkpoint": "CP-00",
-  "tag_planned": "v0.0.0-architecture",
-  "ratified": true,
-  "status": "ratified",
+  "tag_planned": "v0.0.1-architecture",
+  "ratified": false,
+  "status": "acceptance_round_11_frozen",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "3da104e5d6fafb2a581bda377a07911183af803f",
   "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash. candidate_digest covers every git-tracked file INCLUDING this manifest, whose contribution is hashed with the candidate_digest field blanked - that is what makes a self-referential identifier possible. An earlier form excluded the manifest entirely and was rejected: two candidates differing only in manifest prose then shared one value.",
   "artifact_count": 100,
-  "artifact_manifest_sha256": "a78572288a28b88be7f5dd58b9e79254a9e4f61cb55838ba4308b3be91109b84",
-  "artifact_manifest_subject": "the reviewed families in the tree that carries this record, 100 files, by the recipe contract-manifest.yaml publishes. A commit cannot name its own hash, so the subject is stated rather than pinned, which is the device candidate_digest_recipe already uses.",
+  "artifact_manifest_sha256": "39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08",
+  "artifact_manifest_subject": "the round-eleven freeze commit's own tree, over the four reviewed families returned to the reviewed candidate 92e13fa4; recomputed by the integrator at the freeze",
   "artifact_manifest_note": "Until W0-INT-02 this field carried f362647cc9b1d2201ac4663bf5d877346eeeccf046734219103c3ac822d2845d here, 39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08 in build-info.json and 39721aac0ebe1aa5c13d0ae3e01ee93380671daddc5d9f3f3b774997d6f75e08 in contract-manifest.yaml under artifact_manifest_sha256 while contract-manifest.yaml's reviewed_manifest_digest carried f362647cc9b1d2201ac4663bf5d877346eeeccf046734219103c3ac822d2845d - the pre- and post-ratification values of one field under swapped labels, and no record said which tree either described. All three records now carry the same value for this field and each names the tree it is of.",
   "frozen_inputs": {
     "behavioral_oracle": "32b9d903792b30506048a1d42b0e6b2d07aee403",
@@ -41,14 +41,14 @@
   ],
   "runtime_fields": "not applicable - architecture-only checkpoint",
   "manual_acceptance": {
-    "status": "PASS",
-    "round": 10,
-    "report_path": "artifacts/checkpoints/CP-00/manual-report-round-10.md"
+    "status": "owed",
+    "round": 11,
+    "report_path": null
   },
   "automated_acceptance": {
-    "status": "PASS",
-    "round": 10,
-    "report_path": "artifacts/checkpoints/CP-00/automated-summary.txt"
+    "status": "owed",
+    "round": 11,
+    "report_path": null
   },
   "artifact_manifest_recipe": "git ls-tree -r --name-only <a named commit> -- contracts fixtures docs/architecture scripts, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. Git-tracked files only: an earlier form globbed the working tree and hashed a gitignored scripts/__pycache__ .pyc, so the digest was unreproducible on a fresh clone and the drift detector fired on an unmodified checkout. THE COMMIT IS PART OF THE RECIPE. contract-manifest.yaml published this recipe as 'reproducible from this file alone' and bound it to no commit; the same recipe over three trees of this repository gives three different values, and the bundle carried two of them under swapped labels for ten acceptance rounds. Every aggregate in this checkpoint now names its commit, or states 'this file's own commit' where a commit cannot name its own hash.",
   "frozen_inputs_note": "behavioral_oracle and refactoring_architecture_source are commits of the separate legacy repository at /root/projects/PDF-proverka/PDF-proverka, documented in docs/SOURCE_TRACEABILITY.md. They do not resolve in this repository and are not expected to. Every other SHA here is a commit of this repository.",
@@ -108,10 +108,10 @@
     "round_scoped": "Both digests are recorded twice: at the top level for the current round, and inside the matching acceptance_rounds entry as history. Without the per-round copy a retro-edit of the top-level value and a genuine new round would be indistinguishable, so 'frozen and never edited afterwards' would not be checkable. Named by the QA author, who declined to write a test asserting a property the structure could not support.",
     "every_aggregate_names_its_commit": "The rule this manifest now keeps, and the one it asserted before it kept it. Every aggregate here names the commit it was computed over, or states 'this file's own commit' where a commit cannot name its own hash. tested_candidate_digest is bound per round by candidate_frozen_at_commit - all six rounds that carry a digest, 5 to 10 - and evidence_bundle_digest by evidence_bundle_commit, which is the RATIFICATION commit and not the freeze commit, because the evidence is written after the freeze by construction. Each recovered value was resolved by running the manifest's own recipe over every revision of this file on any ref and taking the one it reproduces at, never from prose."
   },
-  "tested_candidate_digest": "00977a8704cbe381f02eaefccbb50ab5d32ee838f457f6f8873ba1cff6d8b3e5",
-  "evidence_bundle_digest": "8c368f0d55d1c35abb1b316403b522e2db62cdb54f449dbac1933f46de1fca09",
-  "evidence_bundle_commit": "39a3a6430bd97c38cb20bafc793fc9d077d0df8e",
-  "evidence_bundle_subject": "The tree of 39a3a6430bd97c38cb20bafc793fc9d077d0df8e, 230 tracked paths: the ratification commit, which is where the acceptance evidence was written. NOT the freeze commit. tested_candidate_digest names the tree the streams judged and evidence_bundle_digest names the tree that carries their results, and by construction those are different trees - writing PASS into a tree changes it. Resolved by recomputation rather than recorded from memory: the manifest's own recipe with evidence_bundle_digest blanked, run over each of the 24 revisions this file has on any ref, reproduces this value at exactly one of them. An earlier form of this manifest left this field with no commit at all while artifact_manifest_recipe asserted that every aggregate here names one - a universal falsified by a value in the same file, found by independent review. erratum.md, E-11.",
+  "tested_candidate_digest": "fbc3b911caff7ba0786668a64550552576096071634be0e7aeda32814e21e4a6",
+  "evidence_bundle_digest": null,
+  "evidence_bundle_commit": null,
+  "evidence_bundle_subject": null,
   "third_acceptance_round": {
     "verdict": "PASS from both streams on 2026-09-02",
     "status": "SPENT - does not carry to ratification",
@@ -259,7 +259,7 @@
     {
       "round": 10,
       "verdict": "PASS",
-      "status": "accepted",
+      "status": "void",
       "streams": {
         "automated": "PASS",
         "manual": "PASS 6/6"
@@ -268,12 +268,26 @@
       "evidence_bundle_digest": "8c368f0d55d1c35abb1b316403b522e2db62cdb54f449dbac1933f46de1fca09",
       "manual_report": "artifacts/checkpoints/CP-00/manual-report-round-10.md",
       "automated_report": "artifacts/checkpoints/CP-00/automated-summary.txt",
-      "note": "The single final owner-authorised closeout round. The QA ceiling remediation was rejected by four independent reviewers with fifteen blockers; the mechanism blockers M1-M5 and the licence blockers L1-L3 are closed in commits 49bdcee and 1ab8bac, each mutation-verified. M1 is why a committed deliverable does not red the suite; M2 is why a committed publication is reachable at all. SUPERSEDED IN PART. The sentence that stood here - 'No round eleven will be opened: by the owner's decision of 2026-09-04 a procedural or documentation defect blocks only when it changes product semantics, security or data integrity' - was overtaken by the repository owner's decision of 2026-09-07 recorded in docs/program/EXECUTION_PLAN.md section 3.4: variant A, a formal superseding checkpoint, whose step four is a further acceptance round on one frozen commit. Round eleven is that round. What round ten decided about the tree it judged is untouched; what is withdrawn is its claim about rounds that follow it. See supersession below.",
+      "note": "The single final owner-authorised closeout round. The QA ceiling remediation was rejected by four independent reviewers with fifteen blockers; the mechanism blockers M1-M5 and the licence blockers L1-L3 are closed in commits 49bdcee and 1ab8bac, each mutation-verified. M1 is why a committed deliverable does not red the suite; M2 is why a committed publication is reachable at all. SUPERSEDED IN PART. The sentence that stood here - 'No round eleven will be opened: by the owner's decision of 2026-09-04 a procedural or documentation defect blocks only when it changes product semantics, security or data integrity' - was overtaken by the repository owner's decision of 2026-09-07 recorded in docs/program/EXECUTION_PLAN.md section 3.4: variant A, a formal superseding checkpoint, whose step four is a further acceptance round on one frozen commit. Round eleven is that round. What round ten decided about the tree it judged is untouched; what is withdrawn is its claim about rounds that follow it. See supersession below. VOIDED BY THE SUPERSEDING RECOVERY: four planning files landed after this round's freeze and outside POST_FREEZE_DELTA_CEILING, so the streams judged a tree the record does not describe. Its two digests are sealed and untouched: they remain true of the tree this round actually judged.",
       "candidate_frozen_at_commit": "2ea7b68b4c4455b03ed4f8437d12f5f35f56af58",
       "evidence_bundle_commit": "39a3a6430bd97c38cb20bafc793fc9d077d0df8e"
+    },
+    {
+      "round": 11,
+      "verdict": null,
+      "status": "frozen",
+      "streams": {
+        "automated": "owed",
+        "manual": "owed"
+      },
+      "tested_candidate_digest": "fbc3b911caff7ba0786668a64550552576096071634be0e7aeda32814e21e4a6",
+      "evidence_bundle_digest": null,
+      "manual_report": null,
+      "automated_report": null,
+      "note": "The superseding round. Opened on the reconciled records integrated at 677741c, frozen by the integrator, and judged by two acceptance streams that had not yet run when this entry was written. The freeze commit is expected to be red: the inherent failure set is declared in docs/program/EXECUTION_PLAN.md before this round is frozen, in a path POST_FREEZE_DELTA_CEILING does not license, so it cannot be narrowed afterwards without _post_freeze_delta_problems saying so."
     }
   ],
-  "current_round": 10,
+  "current_round": 11,
   "recorded_limits": {
     "evidence_report_visibility": "The acceptance digests enumerate git ls-files --exclude-standard, so a report path added to .gitignore leaves the digest and every check silent about its content - an independent reviewer demonstrated a fabricated manual report passing that way. It is a declared scope limit rather than a hidden hole: the attack requires editing .gitignore, which is tracked and inside the digest, so it appears in the diff a reviewer reads. The next task touching the QA module must assert that both report paths are tracked and not ignored; it is not opened as its own round because the current mechanism makes the manoeuvre visible rather than invisible.",
     "prefix_widening_unpinned": "ACCEPTANCE_EVIDENCE_PREFIX and RATIFIABLE_REVIEWED_PREFIX are unpinned in the widening direction only; the guarantee is that report paths are confined to some declared prefix, not that the prefix is the narrow one. That property is what was established and it stands. The failure counts this entry used to carry - 'narrowing is caught, at 38 and 9 failures respectively' - are withdrawn, not replaced, for three reasons found in sequence. First, they were written from a measurement of an earlier tree and never re-measured. Second, an independent re-measurement disagreed with both. Third, and worst: the attribution was wrong as well as the number. W0-QA-01.md section 8 describes the 38 as ACCEPTANCE_EVIDENCE_PREFIX 'moved out of artifacts/ altogether', and records that widening it to artifacts/ or artifacts/checkpoints/ leaves the suite green. This entry called that same figure a narrowing, which is a different edit. So the record carried two independent drifts on one number, and replacing the count would have left the false attribution in place. Any restatement must name the tree it was taken on and the exact mutation that produced it: section 8's own figures are against a 281-test suite and the frozen candidate runs 324, so every count differs for that reason alone, before any drift. Owner: W1. See W0-QA-01.md section 8 item 18 and section 11.18.5.",
@@ -294,7 +308,7 @@
       "note": "Second QA evidence, carrying rounds two to six. Superseded by 3da104e5d6fafb2a581bda377a07911183af803f after six further reopenings - rounds seven to twelve - closed, in order: a fabricated tested_candidate_digest sealed in the prescribed order passing in silence; a suite that could not survive its own publication; a writing guard that validated a path while the environment redirected the write; a Git-configuration injection reaching arbitrary command execution past a denylist complete only for the discovery class, with 23 Git call sites and no chokepoint; probes that iterated the constant their own guard read; and four anchors that asserted the unratified state and made the suite red on an honestly ratified tree."
     }
   ],
-  "tag": "v0.0.0-architecture",
+  "tag": "v0.0.1-architecture",
   "migration_head": "none",
   "checkpoint_deliverables": [
     "artifacts/checkpoints/CP-00/checkpoint-report.md",
@@ -306,18 +320,10 @@
     "artifacts/checkpoints/CP-00/known-risks.md",
     "artifacts/checkpoints/CP-00/restore-or-rollback-note.md"
   ],
-  "ratification": {
-    "task": "W0-INT-01",
-    "decided_on": "2026-09-07",
-    "decided_by": "program integrator, on acceptance round ten under the repository owner's authorisation of a single final closeout round",
-    "reason": "Both streams PASS against the candidate frozen at 2ea7b68. Automated: bootstrap validator exit 0, the 324-test contract suite exit 0, the state-record sweep clean on both axes. Independent manual: PASS 6/6 over MT00-01 to MT00-06, with artifact_manifest_sha256 recomputed three ways and six discrimination probes. No contract, schema, fixture, state-machine, identifier, error-contract, evidence-anchor or golden defect was found in this round or in the nine that preceded it.",
-    "allowed_delta_paths": [
-      "docs/architecture/ADR_INDEX.md",
-      "docs/architecture/ARCHITECTURE_LINT_RULES.md",
-      "docs/architecture/CP00_ARCHITECTURE_REVIEW.json",
-      "docs/architecture/CP00_ARCHITECTURE_REVIEW.md",
-      "docs/architecture/CP00_OWNER_DECISIONS.md"
-    ]
+  "ratification_blocked": {
+    "reason": "Acceptance round ten is void: four planning files landed after its freeze and outside POST_FREEZE_DELTA_CEILING, so the streams judged a tree this record does not describe. The records were reconciled by W0-INT-02 and integrated at 677741c; the ratifying act is reassigned to W0-INT-03 and is performed by the primary reviewer, not by the party that built the candidate.",
+    "observed": "Round eleven is open and both streams are owed. The freeze commit cannot be green: five failures are inherent to a freeze, four in the contract suite and one in the checkpoint suite, and they are declared by name in docs/program/EXECUTION_PLAN.md before the freeze.",
+    "unblocks_when": "Both round-eleven primary reports exist under their canonical names, declare this freeze commit within their own first 26 lines, and carry PASS; and W0-INT-03's symbolic review accepts."
   },
   "supersession": {
     "decision": "variant A - formal superseding checkpoint",

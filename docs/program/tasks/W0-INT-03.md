@@ -1,7 +1,8 @@
 # Task W0-INT-03 — primary reviewer: symbolic review, ratification and the superseding tag
 
 > **Reserved for the primary reviewer. The program orchestrator prepares this file and
-> does not execute it.** Nothing in this task may be performed by the agent that produced
+> does not execute it. Acceptance round eleven is open, both streams are owed, and
+> ratification and publication blocked.** Nothing in this task may be performed by the agent that produced
 > the candidate: the whole point of the barrier is that ratification is decided by someone
 > who did not build the thing being ratified.
 

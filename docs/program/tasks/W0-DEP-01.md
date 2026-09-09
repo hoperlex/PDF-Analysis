@@ -3,8 +3,7 @@
 > dependencies, commit `ab1cfdab0ec5c413b188a44ff82a99586ecd7994`.
 > Requirements, gates and deliverables are frozen by that acceptance; only this banner is
 > writable. CP-00 was ratified on acceptance round ten and tagged `v0.0.0-architecture`,
-> and the checkpoint is being superseded — acceptance round eleven is owed and `W0-INT-03`
-> cuts `v0.0.1-architecture`. Corrections to the CP-00 evidence bundle are in
+> and the checkpoint is being superseded — acceptance round eleven is owed. Corrections to the CP-00 evidence bundle are in
 > `artifacts/checkpoints/CP-00/erratum.md`.
 
 ## Outcome

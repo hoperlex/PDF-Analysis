@@ -214,9 +214,8 @@ precondition for the analysis lane:
 
 State at the time of the decision: `contracts/analysis/v1/legacy-stage-map.json`
 contains **31 declaration sites and zero concrete alias values**. Site-level mapping
-was not the required artifact. The accepted analysis candidate carries 62 name-level
-resolutions across all 31 declaration sites, so the precondition is satisfied and
-`PD-02` no longer blocks the analysis contract freeze.
+is not the required artifact, so the precondition is not yet met and `PD-02` alone
+does not unblock the analysis contract freeze.
 
 Integration decision `ID-03` (see the review, §6.3) adds the reviewer condition: an
 independent reviewer must confirm all nine registry stages against capability

@@ -11,7 +11,7 @@ decided a formal superseding checkpoint (`docs/program/EXECUTION_PLAN.md` §3.3�
 acceptance round eleven is owed on the reconciled candidate and `W0-INT-03` cuts
 `v0.0.1-architecture`. Every exit criterion below was met by the tree round ten judged and
 remains met; what is owed is a fresh acceptance of the recovery tree, not a re-doing of the
-stage. The next stage is S01, opened from the superseding tag.
+stage. The next stage is opened from the superseding tag, once it exists.
 
 ## Goal
 
@@ -88,19 +88,19 @@ order shown below.
 
 ## Automated exit evidence
 
-- [x] All JSON schemas/examples parse.
-- [x] Internal documentation links resolve.
-- [x] Domain prefixes/states/errors have no duplicate meaning.
-- [x] Architecture lint rules are specified even if implementation waits for CP-01.
+- [ ] All JSON schemas/examples parse.
+- [ ] Internal documentation links resolve.
+- [ ] Domain prefixes/states/errors have no duplicate meaning.
+- [ ] Architecture lint rules are specified even if implementation waits for CP-01.
 
 ## Manual local acceptance
 
 Full script: `../manual-tests/CP-00_architecture.md`.
 
-- [x] Review 3–5 golden journeys against legacy with domain owner.
-- [x] Walk one legacy finding through rerun identity and expert-decision mapping.
-- [x] Walk one comparison pair and prove approved link/raw evidence ownership rules.
-- [x] Review unresolved decisions; none may be silently defaulted if legal/security/product-owned.
+- [ ] Review 3–5 golden journeys against legacy with domain owner.
+- [ ] Walk one legacy finding through rerun identity and expert-decision mapping.
+- [ ] Walk one comparison pair and prove approved link/raw evidence ownership rules.
+- [ ] Review unresolved decisions; none may be silently defaulted if legal/security/product-owned.
 
 ## Checkpoint exit criterion
 
