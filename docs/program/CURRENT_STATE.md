@@ -1,5 +1,13 @@
 # Current state
 
+> **Prototype-planning overlay, 2026-09-09.** On branch
+> `planning/prototype-roadmap`, `P0-FND-00` has produced an approval-ready early
+> PostgreSQL/S3 Foundation Freeze plus six concise P01 task specifications. No product
+> or infrastructure implementation has been dispatched. `FF-01 ACCEPTED` will unlock
+> P01 immediately; `P0-PLN-01` will complete P02–P05 in parallel and cannot modify the
+> accepted foundation. The CP-00 state below is retained as the factual baseline and
+> historical record rather than rewritten during this planning change.
+
 **Program state:** CP-00 discovery wave W0.1 accepted; all four W0.2 lanes have
 produced candidates, the repository owner has recorded an explicit disposition for
 `PD-01`–`PD-05` plus integration decisions `ID-01`–`ID-03`, and every lane has passed
@@ -26,8 +34,12 @@ work committed after the ratification lies outside acceptance round ten's post-f
 ceiling, so round ten does not authorise ratifying the current tree. Acceptance round eleven
 is owed, `W0-INT-03` performs the superseding ratification, and `v0.0.1-architecture` is the
 tag it will carry. The old tag is never moved, re-pointed or deleted. Production
-implementation remains locked until CP-01; S01 repository foundation is the next stage after
-the superseding checkpoint is accepted.
+implementation outside the explicitly frozen P01 provider paths remains locked. After
+`FF-01 ACCEPTED`, P01 may write only `infra/local/**`, `db/migrations/**`,
+`src/auditmanager/shared/db/**` and `src/auditmanager/storage/**` through their named
+owners; domain product code remains locked until the detailed P02–P05 plan is accepted
+and its dependencies complete. This prototype authority supersedes the former blanket
+CP-01 code hold without rewriting the historical checkpoint record.
 
 ## Active checkpoint
 

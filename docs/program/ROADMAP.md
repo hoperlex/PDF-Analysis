@@ -1,63 +1,241 @@
-# Roadmap — greenfield delivery
+# Roadmap — prototype first, deeper architecture from evidence
+
+> **Planning status, 2026-09-09:** the PostgreSQL/S3 Foundation Freeze `FF-01` is
+> complete as a candidate and may be accepted independently. P02–P05 below are a
+> scope-and-order outline only until `P0-PLN-01` supplies agent-ready tasks and receives
+> separate approval. Existing CP-00 contracts, fixtures, stage files and evidence are
+> preserved and are not rewritten by this roadmap.
 
 ## Program objective
 
-Доставить новый AuditManager как набор доказанных вертикальных capabilities, а не как технические слои, которые интегрируются в конце.
+Deliver a durable working audit prototype as soon as possible, put it in front of domain
+experts, and use measured behavior to decide which production architecture and product
+capabilities deserve further investment.
+
+The first useful result is not a repository skeleton or a fake pipeline. It is this
+complete journey:
+
+```text
+PDF upload
+  -> immutable version in PostgreSQL + private S3
+  -> one real analysis stage
+  -> finding beside page evidence
+  -> expert accept/reject/comment
+  -> export tied to the exact version and Run
+```
+
+## Two approvals, not one long planning barrier
+
+```text
+P0-FND-00
+  -> FF-01 owner approval
+       |-> P1-INT-00 -> PostgreSQL/S3 implementation lanes -> PF-01
+       |
+       `-> P0-PLN-01 -> detailed P02-P05 plan approval
+                              |
+                    PF-01 + accepted plan
+                              `-> P02 implementation
+```
+
+`FF-01` approves only the foundation direction and its P01 tasks. This intentionally
+allows infrastructure development before the complete prototype plan is ratified.
+`P0-PLN-01` runs in parallel and cannot edit the accepted Foundation Freeze.
 
 ## Stage map
 
-| Stage | Checkpoint | Goal | Exit evidence |
+| Stage | Approval/checkpoint | Goal | Current authority |
 |---|---|---|---|
-| S00 Architecture & behavior freeze | CP-00 | определить business oracle, contracts и архитектуру | ratified Bible/ADR + golden plan + draft machine contracts |
-| S01 Repository foundation | CP-01 | воспроизводимый repo/local stack/toolchain | one-command bootstrap, lint/test, health/readiness, generated client path |
-| S02 Walking skeleton | CP-02 | первый E2E data/job path | project→version→upload→fake run→finding→UI |
-| S03 First real audit | CP-03 | реальный analysis stage + evidence | synthetic document → stage → FindingObservation + ledger |
-| S04 Core audit engine | CP-04 | основной audit workflow | stage DAG, norms, retry/resume, export, parity evidence |
-| S05 Expert intelligence | CP-05 | human decision/knowledge workflow | append-only decisions, KB projection, verifier/re-review |
-| S06 Comparison core | CP-06 | deterministic compare | approved sheet links + exclusions/diff + viewer |
-| S07 Comparison advanced | CP-07 | AI/graphic comparison | additive AI synthesis + graphic evidence + repair/undo |
-| S08 Distributed execution | CP-08 | remote engines safely | worker protocol, fencing, offline recovery, validated result publish |
-| S09 Production hardening | CP-09 | operational/security readiness | AuthZ, retention decisions, restore/load/cost/redaction drills |
-| S10 Release acceptance | CP-10 | v1.0 release evidence | full golden journeys + clean deploy/restore + release report |
+| P00 Direction and early freeze | `FF-01` | fix prototype rules and PostgreSQL/S3 boundaries | **approval-ready** in `PROTOTYPE_FOUNDATION_FREEZE.md` |
+| P01 PostgreSQL/S3 foundation | `PF-01` | reproducible DB/object-storage providers and tests | six agent-ready tasks; dispatch after `FF-01 ACCEPTED` |
+| P02 Real audit slice | none | upload/version/run/one real stage/finding/evidence | outline only; not dispatchable |
+| P03 Expert workflow and prototype acceptance | `PC-01` | UI review, append-only decision, export, restart | outline only; not dispatchable |
+| P04 Field validation | `PC-02` | expert evidence on representative documents | outline only; not dispatchable |
+| P05 Deep analysis and next roadmap | `PC-03` | choose next capabilities and production work from measurements | outline only; not dispatchable |
 
-## Dependency spine
+The old S00–S10 documents remain a long-term capability backlog. Their ordering no
+longer grants dispatch authority to prototype tasks.
+
+## P00 — direction and early Foundation Freeze
+
+### Outcome
+
+- The prototype profile separates blocking, advisory and historical gates.
+- PostgreSQL and private S3-compatible storage are fixed from the skeleton.
+- Runtime code is included by explicit use case and composition, not by presence in
+  legacy or in the repository.
+- Non-working and obsolete legacy scripts are not ported or repaired speculatively.
+- P01 can start before P02–P05 planning is complete.
+
+### Exit
+
+The repository owner issues the exact decision `FF-01 ACCEPTED` described in
+`PROTOTYPE_FOUNDATION_FREEZE.md`. That completes `P0-FND-00`. Any qualification is first
+written into the freeze; silence does not unlock work.
+
+## P01 — PostgreSQL/S3 foundation
+
+### Goal
+
+Build only the durable provider skeleton that every plausible prototype path needs:
+
+- reproducible Python lock and nine root commands, including separate service-health and
+  migration-state checks;
+- local PostgreSQL and MinIO/S3 with health checks and persistent volumes;
+- private, idempotently initialized bucket;
+- migration runner, baseline head and typed transaction/session factory;
+- BlobStore port and S3 adapter implementing `temporary -> verify -> publish`;
+- real-service tests for privacy, checksum failure, restart and idempotency.
+
+No Project, Run or Finding schema is created in P01. That prevents the early foundation
+approval from silently approving the full domain design.
+
+### Task graph
 
 ```text
-S00 → S01 → S02 → S03 → S04 → S05
-                       │
-                       └────────────→ S06 → S07
-                              S04 ─────────────→ S08
-S05 + S07 + S08(optional product scope) ──────→ S09 → S10
+P1-INT-00
+  |-> P1-INF-01 --|
+  |-> P1-DB-01 ---|-> P1-QA-00 -> P1-INT-01 / PF-01
+  `-> P1-STO-01 --|
 ```
 
-S06 может начинать contract/design discovery после CP-03, но production integration не должна ломать core audit flow. S08 contract discovery можно вести после стабильного Analysis Package v1; remote runtime интегрируется после CP-04.
+Provider code may be authored in parallel after `P1-INT-00`. Acceptance against the
+real services is ordered: integrate INF, rebase/review DB and STO on that provider, then
+run convergence QA. Parallel authoring uses unique instance names, ports, volumes,
+databases and buckets; convergence/acceptance is serial on a dedicated integration
+instance.
 
-## Parallelism policy
+### Exit evidence
 
-Внутри stage работа организуется waves. Волна не равна stage: один stage может иметь несколько contract freezes. Каждая wave имеет один contract owner и один integration slot.
+- `make foundation` passes from a clean checkout;
+- repeated bootstrap changes no lock or tracked file;
+- migration succeeds from empty state and is safe at current head;
+- anonymous S3 access is denied;
+- correct bytes publish and corrupt bytes do not;
+- restart preserves migrated state and a published test object;
+- public storage values expose `blob_id` and metadata, not bucket/key;
+- a concise PF-01 report records exact commits, locks, image digests and migration head.
 
-```text
-inventory/design
-   ↓
-contract task
-   ↓ FREEZE Cn
-┌───────────── parallel lanes ─────────────┐
-│ backend │ storage │ engine │ web │ QA │ ops │
-└────────────────────┬──────────────────────┘
-                     ↓
-                 integration
-                     ↓
-        automated + manual evidence
-                     ↓
-               checkpoint/tag
-```
+### Explicit exclusions
 
-## Capability ordering rationale
+No API/UI, product tables, audit engine, job framework, outbox, retry/fencing, cloud
+deployment, production IAM, retention or backup work.
 
-1. S02 доказывает architecture plumbing до AI complexity.
-2. S03 вводит только один реальный analysis path, чтобы не маскировать contract bugs множеством stages.
-3. S04 расширяет pipeline после стабильной provenance/identity model.
-4. S05 добавляет expert knowledge только после stable finding identity.
-5. Comparison использует уже зрелые Version/Storage/Viewer primitives.
-6. Remote workers появляются после стабильного package contract; иначе distributed transport замораживает плохой pipeline API.
-7. Security/retention/restore развиваются с начала, но CP-09 является full production gate, а не первым моментом их появления.
+## P02 — one real audit slice — outline
+
+This stage is not dispatchable until `P0-PLN-01` is accepted. Its intended scope is:
+
+- minimal Project, DocumentVersion, Blob metadata, AuditRun, StageResult and
+  FindingObservation schema;
+- direct PDF upload and immutable InputManifest;
+- one local execution process with persisted states;
+- one real text-analysis adapter plus recorded response for tests;
+- evidence locator and provenance;
+- explicit live/recorded/partial/failed outcomes;
+- minimal typed API consumed by the UI.
+
+Deferred from P02: ZIP/companions, full stage DAG, visual/norm/critic stages, automatic
+retry, stable cross-run finding identity and distributed execution.
+
+## P03 — expert loop and working-prototype acceptance — outline
+
+Intended scope:
+
+- minimal Next/React PDF and evidence view;
+- polling-based progress and explicit failure state;
+- append-only accept/reject/comment;
+- simple CSV/XLSX or JSON export tied to the exact Run;
+- duplicate-request and application/execution-process restart tests;
+- clean local runbook exercising the complete first-value journey.
+
+`PC-01` is the first product checkpoint. No earlier stage may claim a working prototype.
+
+## P04 — field validation — outline
+
+Exercise `PC-01` with domain experts on 10–20 synthetic or anonymized representative
+documents. Record:
+
+- useful/incorrect/unclear findings;
+- evidence-location correctness;
+- review time and navigation friction;
+- provider latency, cost and failures;
+- missing capability that most prevents real use;
+- preference for deeper audit stages versus document comparison;
+- actual need for retry, rerun carryover or remote execution.
+
+P04 changes no foundational architecture merely to explain disappointing results. It
+produces measurements and product decisions.
+
+## P05 — deep analysis and next roadmap — outline
+
+Use P04 evidence to choose, reject or simplify the old backlog. Candidate work includes:
+
+- additional deterministic/AI stages;
+- Run/Job/Attempt, retry, outbox and fencing if observed failures justify them;
+- stable finding identity and decision carryover if rerun workflows require them;
+- knowledge projection if expert decisions prove reusable;
+- deterministic comparison if users rank it above deeper audit;
+- remote workers only if measured execution constraints require distribution;
+- multi-tenant AuthZ, retention, backup/restore, SLO and load gates before external
+  production use.
+
+The output is a new beta/v1 roadmap with estimates based on actual P01–P04 throughput.
+
+## Existing work retained
+
+| Existing material | Role in the prototype programme |
+|---|---|
+| CP-00 domain/analysis/event contracts | read-only source of identities, states, package semantics and evidence rules |
+| five golden journeys | GJ-01 and selected GJ-02/GJ-03 assertions feed prototype tests; comparison/distributed journeys remain backlog |
+| Architecture Bible and ADRs | advisory corpus plus the small subset repeated in the accepted Foundation Freeze |
+| CP-00 contract/checkpoint tests | historical verification, run only in a disposable clone until hermetic |
+| checkpoint reports and manifests | immutable audit history, never a prototype dispatch barrier |
+| S01–S10 stage documents | long-term capability inventory; no bulk rewrite |
+| prepared `prep/W1` documents | source of useful commands and ownership ideas, not a wholesale merge candidate |
+
+## Prototype gate policy
+
+Blocking gates protect the complete user journey, migration/startup, PostgreSQL/S3
+canonical ownership, checksums/publication, evidence correctness, human-decision history,
+explicit failure state and secret/key boundaries.
+
+Architecture checks unrelated to the implemented route, complete legacy parity, future
+stage aliases, comparison/distributed failures and production SLOs are advisory or
+historical. A test is blocking only when a dispatched task names the literal command and
+expected result.
+
+## Estimates
+
+Assumptions: one program integrator plus three worker slots, near-continuous orchestration,
+same-day owner/reviewer responses and no production/customer data.
+
+| Milestone/work | Estimate basis | P50 elapsed | P80 elapsed |
+|---|---|---:|---:|
+| FF-01 approval and P1 dispatch | owner-response assumption | 0.5–1 day | 2 days |
+| `P0-PLN-01` detailed P02–P05 plan | task estimate; parallel with P01 | 1–2 days | 3–4 days |
+| first PostgreSQL/MinIO infrastructure commit | P1 task decomposition | 1–2 days | 3 days |
+| PF-01 accepted foundation after FF-01 | arithmetic sum of P1 rows | **4–7 days** | **11–13 days** |
+| PF-01 from the current unaccepted candidate | approval latency plus P1 rows | **4.5–8 days** | **13–15 days** |
+| PC-01 working real-stage prototype | forecast gate | not yet defensible | not yet defensible |
+| PC-02 field-validation evidence | protocol duration after PC-01 | +1–2 weeks | +2–3 weeks |
+
+The previous 10–14/18–24-day PC-01 claim is withdrawn: no agent-ready P02/P03 graph or
+measured implementation throughput supports it. `P0-PLN-01` must publish the first
+bottom-up PC-01 forecast, then recalibrate it from actual P01 elapsed time. Until then,
+**3–6 weeks from FF-01 is a planning envelope, not a P50/P80 commitment**. Internal alpha,
+pilot readiness and the former CP-10 scope are deliberately unestimated until P04 shows
+which capabilities users need; P04 may remove large parts of that scope. The repository's
+pre-pivot activity measures planning/review throughput, not runtime delivery, so it is not
+used as an implementation velocity baseline.
+
+## Operating rules
+
+1. One writer owns the integration branch. Agents work in isolated branches/clones.
+2. No test may commit, switch, reset or stage paths in a shared checkout.
+3. Root locks, migration head, contracts, composition root and global styles have one
+   writer per active batch.
+4. Task specifications stay concise and identify observable results, not an exhaustive
+   narration of the agent's procedure.
+5. After two rejections of the same defect shape, the owner decides whether the issue is
+   product-blocking, advisory or a plan error.
+6. Every implementation batch ends in a runnable integrated result.
+7. New scope is disabled until a task and acceptance criterion enable it.

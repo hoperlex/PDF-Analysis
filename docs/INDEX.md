@@ -18,6 +18,16 @@
 
 ## Program
 - [Roadmap](program/ROADMAP.md)
+- [Prototype profile](program/PROTOTYPE_PROFILE.md) — scope, reuse and gate policy
+- [FF-01 PostgreSQL/S3 Foundation Freeze](program/PROTOTYPE_FOUNDATION_FREEZE.md) — approval-ready early slice
+- [Task P0-FND-00](program/tasks/P0-FND-00.md) — early foundation-plan approval
+- [Task P0-PLN-01](program/tasks/P0-PLN-01.md) — later prototype plan, parallel with P01
+- [Task P1-INT-00](program/tasks/P1-INT-00.md) — toolchain and command pins
+- [Task P1-INF-01](program/tasks/P1-INF-01.md) — local PostgreSQL and MinIO
+- [Task P1-DB-01](program/tasks/P1-DB-01.md) — migration/session foundation
+- [Task P1-STO-01](program/tasks/P1-STO-01.md) — checksum-verified BlobStore
+- [Task P1-QA-00](program/tasks/P1-QA-00.md) — convergence foundation QA
+- [Task P1-INT-01](program/tasks/P1-INT-01.md) — PF-01 acceptance
 - [Wave execution guide](program/WAVE_EXECUTION_GUIDE.md)
 - [Accepted wave W0.1](program/waves/W0.1_behavioral_inventory.md)
 - [Accepted wave W0.2](program/waves/W0.2_architecture_domain_contract.md)

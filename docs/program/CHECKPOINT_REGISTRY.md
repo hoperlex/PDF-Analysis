@@ -1,5 +1,17 @@
 # Checkpoint registry
 
+## Prototype checkpoints
+
+These approval records govern the prototype-first route and do not move or replace any
+CP tag.
+
+| ID | Tag | Entry requirement | Status |
+|---|---|---|---|
+| FF-01 | none | owner accepts `PROTOTYPE_FOUNDATION_FREEZE.md` | **candidate**; no P01 dispatch until the exact `FF-01 ACCEPTED` record exists |
+| PF-01 | none | accepted P1 providers, convergence suite and independent integration review | planned; `P1-INT-01` is the sole status writer |
+
+## Historical CP checkpoints
+
 | CP | Tag | Entry requirement | Manual runbook | Status |
 |---|---|---|---|---|
 | CP-00 | `v0.0.0-architecture` | S00 complete | `manual-tests/CP-00_architecture.md` | **ratified** on acceptance round ten, both streams `PASS`, frozen at `2ea7b68`; see `ratification` and `checkpoint-report.md` |

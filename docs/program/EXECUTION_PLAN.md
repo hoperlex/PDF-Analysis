@@ -1,15 +1,21 @@
-# Execution plan — orchestration and parallel delivery
+# Execution plan — CP-00 recovery and former S01 delivery plan
 
-> **Canonical planning document.** Все последующие изменения порядка работ,
-> зависимостей, ролей, task graph и промтов вносятся сначала в этот файл.
-> Stage-файлы остаются backlog-картами до тех пор, пока их положения не перенесены в
-> agent-ready task-файлы и не согласованы с этим планом.
+> **Authority notice, 2026-09-09.** This document is retained as the detailed record
+> of CP-00 recovery and the former S01 plan; its body is no longer the dispatch
+> authority for prototype work. The repository owner directed a prototype-first pivot
+> with PostgreSQL and private S3-compatible storage in the skeleton, exclusion of
+> non-working/obsolete legacy runtime, and evidence-driven deep analysis after a
+> working user journey exists.
 >
-> **Текущий verdict: W0 RECOVERY IN PROGRESS / PRODUCT CODE HOLD
-> (часовой срез 2026-09-08).** `W0-QA-04` после второго ACCEPT снова открыт на круг
-> три; candidate `W0-INT-02` получил `REJECT` и находится в remediation. Не публиковать
-> CP-00, не фиксировать новую версию и не запускать production implementation S01 до
-> primary acceptance W0 и freeze W1.1.
+> The active candidate authority is split deliberately. `PROTOTYPE_FOUNDATION_FREEZE.md`
+> may receive `FF-01 ACCEPTED` independently and then unlock the six P01 task files.
+> `P0-PLN-01` completes P02–P05 in parallel; those stages remain non-dispatchable until
+> their separate acceptance. Until `FF-01` is accepted, this is planning only and no
+> P01 implementation is authorized.
+>
+> Everything below this notice remains an unedited historical analysis. Its old
+> PRODUCT CODE HOLD and W1 task graph do not override an accepted FF-01, and no CP-00
+> record, contract, fixture or evidence artifact is rewritten by the pivot.
 
 ## 1. Назначение и правила ведения
 

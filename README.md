@@ -25,7 +25,11 @@ README
   → docs/stages/S00_...
 ```
 
-До завершения `S00` production-код предметной области не пишется. До `CP-01` допустим только bootstrap/tooling-код.
+До `FF-01 ACCEPTED` допустим только bootstrap/tooling-код. После принятия FF-01 разрешён
+только foundation provider code из P01 (`infra/local/**`, `db/migrations/**`,
+`src/auditmanager/shared/db/**`, `src/auditmanager/storage/**`) в пределах task-specific
+`allowed_paths`. Production-код предметной области остаётся запрещён до отдельной
+приёмки детального P02–P05 плана и выполнения его зависимостей.
 
 ## Целевой стек
 
