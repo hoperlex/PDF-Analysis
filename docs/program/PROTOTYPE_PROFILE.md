@@ -137,23 +137,80 @@ it exists.
 
 ## 7. Prototype scope
 
+### 7.1 Concrete PC-01 slice: AR text-consistency review
+
+The first working product is one deliberately narrow audit use case:
+
+> A local expert creates a project, uploads one Russian-language Architectural
+> Solutions (`AR`) PDF with an embedded text layer, runs a text-only internal-consistency
+> review, opens each finding beside its source quotations, records an accept/reject
+> decision with a comment, and downloads a CSV for that exact document version and run.
+
+The accepted input envelope is one unencrypted PDF, at most 25 MiB and 30 pages. Every
+page must have extractable embedded text. Scanned/image-only,
+password-protected, mixed-file, ZIP and companion-file inputs fail explicitly as
+unsupported; OCR is not silently substituted.
+
+The only product question answered by PC-01 is:
+
+> Does the text state conflicting values or claims about the same project attribute in
+> different places, or leave an explicit placeholder/incomplete field that requires
+> expert attention?
+
+Examples include two different fire-resistance classes or evacuation-exit counts stated
+on different pages, and literal placeholders such as `TBD`/`уточнить`. The stage does
+not decide compliance with external norms, infer facts from drawings or claim that a
+missing statement was legally required.
+
+One visible AI stage, canonical `text_analysis`, is supported by three deterministic
+preparation stages required for evidence: `source_preparation`,
+`page_geometry_extraction` and `document_context_build`. Geometry is used only to bind
+text spans to pages/blocks; PC-01 implements no visual finding detection.
+
+Every emitted observation contains:
+
+- a fresh `finding_uid` plus immutable `finding_observation_id` and `run_id`;
+- category `internal_contradiction` or `explicit_placeholder`;
+- concise finding and recommendation text;
+- one or more evidence references with page, exact extracted quotation and text/block
+  anchor;
+- stage, prompt/profile and live-or-recorded model-call provenance.
+
+The publication gate verifies that every quotation exists at its declared anchor. An
+ungrounded model item is rejected from the finding list and retained only as diagnostic
+evidence. A new run may allocate new findings; cross-run matching and decision carryover
+are not part of PC-01. Expert decisions target `finding_uid`, reference the reviewed
+observation and are append-only. Model output never becomes an expert verdict.
+
+The deterministic acceptance fixture is a small synthetic AR PDF containing two seeded
+cross-page contradictions, one explicit placeholder and clean control statements. The
+recorded-response adapter drives automated tests. A live-provider manual run must find
+at least two seeded issues, but no test asserts byte-equality of generated wording.
+
+### 7.2 Included implementation surface
+
 Included:
 
-- direct PDF upload;
-- one Project and multiple immutable DocumentVersions;
+- one local reviewer with no authentication or tenant administration;
+- create/list one or more Projects and direct single-PDF upload;
+- one immutable DocumentVersion per accepted upload;
 - private S3 publication with checksum verification;
-- persisted AuditRun and per-stage status;
-- one real text-analysis stage plus a recorded-response adapter;
-- FindingObservation with page/evidence reference and provenance;
-- PDF/evidence view, progress polling and explicit error state;
+- persisted Blob metadata, AuditRun and per-stage status plus a narrow reconciliation
+  path for interrupted DB/S3 publication;
+- the four-stage preparation/text path above with live and recorded-response adapters;
+- Finding plus FindingObservation with validated text/page evidence and provenance;
+- project/upload, run-progress and PDF/finding-review views;
+- polling and explicit unsupported/failed/partial states;
 - append-only accept/reject/comment;
-- one simple CSV/XLSX or JSON export tied to the exact Run;
+- one UTF-8 CSV export tied to the exact Project, DocumentVersion and AuditRun;
 - restart and duplicate-request tests needed by the journey.
 
 Deferred:
 
-- ZIP and every legacy companion format;
-- all nine analysis stages, visual/block/norm/critic/corrector pipelines;
+- OCR, ZIP and every legacy companion format;
+- disciplines other than the single AR validation profile;
+- visual finding detection, block-analysis, finding merge, grounding-review,
+  correction, normative verification and every optimization pipeline;
 - automatic retry/skip/resume policy, Job/Attempt lease, heartbeat, fencing and outbox;
 - stable finding identity and decision carryover across reruns;
 - knowledge-base projection and AI re-review;
@@ -168,15 +225,21 @@ The prototype checkpoint passes only when a reviewer can, from a clean local sta
 
 1. start the app, PostgreSQL and private S3-compatible storage with documented commands;
 2. migrate an empty database;
-3. upload a synthetic PDF and observe an immutable version plus verified S3 object;
-4. execute one real stage and distinguish live, recorded, partial and failed outcomes;
-5. open a finding on the correct PDF page/evidence location;
-6. append an expert decision and see its history;
-7. export reviewed results tied to the exact version and Run;
+3. create a project and upload the bounded synthetic AR PDF, observing an immutable
+   version plus verified private S3 object;
+4. execute the deterministic preparation path and one live `text_analysis`, while the
+   UI distinguishes queued/running/succeeded/partial/failed and live/recorded outcomes;
+5. observe at least two seeded issues in the live run and verify that every published
+   finding quotation exists on the declared PDF page;
+6. open the page from a finding, view its exact quotation, accept one finding, reject
+   another and append a later comment without overwriting history;
+7. export a UTF-8 CSV whose rows resolve to the exact project, version, run, finding,
+   observation and current expert verdict;
 8. restart application and execution process without losing canonical state;
-9. repeat upload/run requests without uncontrolled duplication;
-10. show that corrupt bytes, wrong checksum and provider failure remain explicit and
-    unpublished where publication would be unsafe.
+9. repeat the same upload/run commands under the same idempotency keys without creating
+   duplicate versions, runs, observations or decisions;
+10. show explicit unsupported input, checksum, unavailable-provider and ungrounded-model
+    failures without filesystem fallback or fake success.
 
 ## 9. Learning gate after delivery
 

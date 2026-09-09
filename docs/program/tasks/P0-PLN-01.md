@@ -17,6 +17,9 @@ the accepted Foundation Freeze.
 
 - `docs/program/PROTOTYPE_FOUNDATION_FREEZE.md` at its accepted integration commit
 - `docs/program/PROTOTYPE_PROFILE.md` foundation invariants at the same commit
+- the candidate PC-01 AR text-consistency target in `PROTOTYPE_PROFILE.md` section 7 and
+  `ROADMAP.md` P02/P03; it is not dispatch authority, but changing it in the detailed
+  plan requires an explicit owner decision rather than silent scope drift
 - CP-00 contracts, architecture and golden fixtures at the `P0-FND-00` base
 - migration head: produced only by `P1-DB-01`; read-only to this planning task
 - base commit: the accepted `P0-FND-00` integration commit
@@ -50,6 +53,9 @@ the accepted Foundation Freeze.
 ## Deliverables
 
 - concise P02–P05 task files with completed dependencies only at dispatch time
+- a P02/P03 graph that implements exactly the bounded AR text-consistency slice, including
+  its synthetic PDF, evidence-publication gate, live/recorded provider modes, UI review
+  and CSV acceptance path
 - exact provider/consumer seams and disjoint allowed-path blocks
 - user-validation protocol and success/failure metrics
 - P50/P80 estimate recalibrated against actual P01 throughput

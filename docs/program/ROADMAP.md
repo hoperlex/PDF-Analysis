@@ -47,8 +47,8 @@ allows infrastructure development before the complete prototype plan is ratified
 |---|---|---|---|
 | P00 Direction and early freeze | `FF-01` | fix prototype rules and PostgreSQL/S3 boundaries | **approval-ready** in `PROTOTYPE_FOUNDATION_FREEZE.md` |
 | P01 PostgreSQL/S3 foundation | `PF-01` | reproducible DB/object-storage providers and tests | six agent-ready tasks; dispatch after `FF-01 ACCEPTED` |
-| P02 Real audit slice | none | upload/version/run/one real stage/finding/evidence | outline only; not dispatchable |
-| P03 Expert workflow and prototype acceptance | `PC-01` | UI review, append-only decision, export, restart | outline only; not dispatchable |
+| P02 AR text-consistency backend | none | bounded PDF → grounded contradiction/placeholder findings | outline only; not dispatchable |
+| P03 Expert workflow and prototype acceptance | `PC-01` | page/quote review, append-only decisions, CSV, restart | outline only; not dispatchable |
 | P04 Field validation | `PC-02` | expert evidence on representative documents | outline only; not dispatchable |
 | P05 Deep analysis and next roadmap | `PC-03` | choose next capabilities and production work from measurements | outline only; not dispatchable |
 
@@ -120,34 +120,62 @@ instance.
 No API/UI, product tables, audit engine, job framework, outbox, retry/fencing, cloud
 deployment, production IAM, retention or backup work.
 
-## P02 — one real audit slice — outline
+## P02 — AR text-consistency audit backend — outline
 
-This stage is not dispatchable until `P0-PLN-01` is accepted. Its intended scope is:
+This stage is not dispatchable until `P0-PLN-01` is accepted. It implements one fixed
+product slice, not a generic audit platform: a local expert uploads one Russian-language
+AR PDF with an embedded text layer and receives evidence-backed observations of internal
+cross-page contradictions and explicit placeholders.
 
-- minimal Project, DocumentVersion, Blob metadata, AuditRun, StageResult and
-  FindingObservation schema;
-- direct PDF upload and immutable InputManifest;
-- one local execution process with persisted states;
-- one real text-analysis adapter plus recorded response for tests;
-- evidence locator and provenance;
+Accepted input is one unencrypted PDF up to 25 MiB/30 pages. Scanned PDFs, OCR, ZIP,
+companions and other disciplines are explicit non-goals. The acceptance fixture is a
+small synthetic AR PDF with two seeded contradictions, one placeholder and clean control
+statements.
+
+P02 includes:
+
+- minimal Project, DocumentVersion, Blob, AuditRun, StageResult, Finding,
+  FindingObservation and ExpertDecision-event persistence;
+- direct PDF upload, immutable version/InputManifest and explicit DB/S3 reconciliation;
+- one local execution process with persisted run/stage states;
+- deterministic `source_preparation`, `page_geometry_extraction` and
+  `document_context_build`, followed by the sole visible AI stage `text_analysis`;
+- a fixed AR prompt/profile that checks only internal contradictions and literal
+  placeholders, never external normative compliance; it is a new narrow prompt, not a
+  wholesale port of the legacy AR prompt tree;
+- live model adapter plus recorded response for deterministic tests;
+- publication validation that exact evidence quotations exist at their declared
+  page/text/block anchors;
+- one-to-one fresh Finding allocation for new observations, with no cross-run matcher;
 - explicit live/recorded/partial/failed outcomes;
 - minimal typed API consumed by the UI.
 
-Deferred from P02: ZIP/companions, full stage DAG, visual/norm/critic stages, automatic
-retry, stable cross-run finding identity and distributed execution.
+An ungrounded model item is diagnostic only and never published as a finding. Expert
+decisions target `finding_uid`; the model never writes the verdict. Deferred from P02:
+all other disciplines/stages, OCR, automatic retry, Job/Attempt, cross-run matching and
+distributed execution.
 
-## P03 — expert loop and working-prototype acceptance — outline
+## P03 — expert loop and PC-01 acceptance — outline
 
 Intended scope:
 
-- minimal Next/React PDF and evidence view;
+- minimal project/upload, run-progress and PDF/finding-review views;
+- clicking a finding opens its PDF page and shows the exact extracted quotation beside
+  it; a graphical bounding-box overlay is not required for PC-01;
 - polling-based progress and explicit failure state;
-- append-only accept/reject/comment;
-- simple CSV/XLSX or JSON export tied to the exact Run;
+- append-only accept/reject/comment over `finding_uid` with visible history;
+- one UTF-8 CSV export containing the exact project/version/run/finding/observation
+  identities, category, finding text, evidence page/quote, current expert verdict,
+  comment and decision timestamp;
 - duplicate-request and application/execution-process restart tests;
-- clean local runbook exercising the complete first-value journey.
+- a clean local runbook using the seeded synthetic AR PDF and one live provider call.
 
-`PC-01` is the first product checkpoint. No earlier stage may claim a working prototype.
+`PC-01` passes only when the live run finds at least two seeded issues, every published
+item is grounded in an exact source quotation, an expert accepts one and rejects another,
+the CSV resolves back to the same version/run, and restart preserves all canonical state.
+Recorded replay proves deterministic application behavior; no automated test requires
+identical live-model wording. `PC-01` is the first product checkpoint. No earlier stage
+may claim a working prototype.
 
 ## P04 — field validation — outline
 
