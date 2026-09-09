@@ -82,7 +82,16 @@
       "lock_sha256": "01c3f241cf9a3f38fed84c1a7d58f23f0cd7d22b842de40ebba4e3b6c7ac40d8",
       "build_command": "pip install --require-hashes --requirement requirements/validation.lock",
       "note": "requirements/** predates P1-INT-00 and is NOT owned by it. It is consumed unchanged and is outside this task's allowed paths.",
-      "cache_dir": ".local/pip-cache"
+      "cache_dir": ".local/pip-cache",
+      "exact_synchronisation": {
+        "rule": "The governance environment contains exactly the distributions requirements/validation.lock pins, at the pinned versions, plus the venv-seeded pip. Nothing else.",
+        "why": "pip install --require-hashes only adds and upgrades; it never removes. Without this an extra distribution - a hand-installed plugin, a leftover from an earlier lock - would sit in the validator environment unnoticed.",
+        "mechanism": "bootstrap enumerates installed distributions, removes any the lock does not name (only `pip` is treated as venv seed, because python3.12 seeds pip and nothing else - exempting setuptools would leave a package that ships a .pth, i.e. startup code, in the validator interpreter), and then BOOTSTRAP_PROBE re-checks the whole set: every locked name at its locked version, and no extra. Names are compared PEP 503 normalised. `pip uninstall` can exit 0 having removed nothing when a RECORD is incomplete, so the probe that runs afterwards is what decides.",
+        "verified": "An extra distribution (six 1.17.0) was installed into .venv/bootstrap; the probe refused the environment naming it, and a repeated `make bootstrap` removed it and returned the environment to exactly the 6 locked distributions plus pip."
+      },
+      "seeded_by_venv": [
+        "pip"
+      ]
     }
   },
   "dependencies": {
@@ -122,7 +131,7 @@
     "immutability": {
       "rule": "The three image references cannot be redirected from any call site.",
       "mechanisms": [
-        "The effective reference is read at run time from this repository's Makefile bytes (`awk` over the `override FOUNDATION_*_IMAGE :=` lines), not from a make variable expansion. A make variable can be shadowed by a target-scoped assignment or re-overridden by a second -f makefile; the file's bytes cannot.",
+        "The effective reference is read at run time from the bytes of the makefile make actually parsed, anchored at parse time by $(abspath $(lastword $(MAKEFILE_LIST))), not from a make variable expansion and not from a cwd-relative `Makefile`.",
         "The Makefile still declares them with `override`, which defeats a plain command-line assignment and `make -e`.",
         "Each value is rejected unless it contains `@sha256:`, so an un-digested reference cannot become effective.",
         ".env is parsed as data, and naming any of the three there is refused with an explicit error before any service is touched."
@@ -174,8 +183,11 @@
     ],
     "enforced_before_any_service_command": [
       "a .env file must exist; no default is assumed",
-      "no reserved image variable may appear in .env; the Makefile's pins are re-asserted after sourcing",
+      "every name in .env must be one of the 15 frozen names: a strict allowlist, so an unknown name is refused rather than exported",
+      "no name may be assigned twice; a repeated assignment is refused instead of silently taking one of the two",
+      "the three reserved image names are refused with a dedicated message, and the Makefile's pins are re-asserted from its own bytes after parsing",
       "every frozen name must be set and non-empty",
+      "quotes are accepted only as one matching pair wrapping the whole value; an unmatched or interior quote is refused rather than kept as an ambiguous literal",
       "DATABASE_URL must agree with POSTGRES_USER/PASSWORD/PORT/DB and use the postgresql+psycopg driver",
       "S3_ENDPOINT_URL port must equal S3_API_PORT, and S3_API_PORT must differ from S3_CONSOLE_PORT",
       "MINIO_ROOT_PASSWORD and S3_SECRET_ACCESS_KEY must be at least 8 characters"
@@ -183,18 +195,23 @@
     "reserved_names_rejected_in_env": [
       "FOUNDATION_POSTGRES_IMAGE",
       "FOUNDATION_S3_IMAGE",
-      "FOUNDATION_S3_MC_IMAGE"
+      "FOUNDATION_S3_MC_IMAGE",
+      "and every name outside the frozen 15, by the allowlist rule"
     ],
     "parsing": {
-      "mechanism": "parsed as NAME=VALUE lines; never sourced",
+      "mechanism": "parsed as NAME=VALUE lines; never sourced and never executed",
       "rationale": "Sourcing .env let it redefine shell functions used by the recipe, redirect PATH, or `exit 0` out of a target with status 0.",
+      "name_policy": "strict allowlist of exactly the 15 frozen names. A denylist was replaced by an allowlist because a denylist can only refuse the ambient-behaviour names somebody thought of; PYTEST_ADDOPTS, PYTEST_PLUGINS, PYTHONNOUSERSITE, DOCKER_HOST, AWS_*, SSL_CERT_FILE and every other such name are outside the frozen 15 and are refused by that one rule.",
       "rejected": [
         "any line that is not a NAME=VALUE assignment or a # comment",
         "an invalid shell identifier as the name",
-        "the three reserved image names",
-        "PATH, IFS, ENV, BASH_ENV, SHELL, SHELLOPTS, BASHOPTS, LD_PRELOAD, LD_LIBRARY_PATH, PYTHONPATH, PYTHONHOME, PYTHONSTARTUP, PYTHONUNBUFFERED, UV_CACHE_DIR, PIP_CACHE_DIR, UV_PROJECT_ENVIRONMENT, MAKEFLAGS, GNUMAKEFLAGS, MAKEFILES"
+        "any name outside the 15 frozen names, including the three reserved image names",
+        "a name assigned more than once",
+        "a value with an unmatched quote, a quote that does not wrap the whole value, or a quote of the same kind inside a quoted value",
+        "a frozen name that is present but empty, and a frozen name that is absent"
       ],
-      "value_semantics": "no shell interpolation; one layer of matching single or double quotes is stripped; a trailing CR is removed"
+      "quote_policy": "A value either contains no quote character at all, or is wrapped in exactly one matching pair of single or double quotes whose interior contains no quote of that kind. There is no escaping. The wrapping pair is stripped; nothing else is interpreted.",
+      "value_semantics": "no shell interpolation and no substitution: ${OTHER} stays literal text. A trailing CR is removed. Leading whitespace and one leading `export ` are ignored."
     }
   },
   "commands": {
@@ -254,7 +271,21 @@
         "purpose": "run only the accepted foundation suite",
         "invocation": "PYTHONPATH=src .venv/bin/python -m pytest tests/integration/foundation",
         "implemented_by": "P1-QA-00",
-        "requires_env_file": true
+        "requires_env_file": true,
+        "hermetic_invocation": {
+          "rule": "The suite runs with every PYTEST_* variable scrubbed, plus PYTHONWARNINGS, PYTHONSTARTUP, PYTHONHOME, PYTHONDONTWRITEBYTECODE, PYTHONOPTIMIZE, PYTHONINSPECT, PYTHONPROFILEIMPORTTIME and the loader names LD_AUDIT, LD_PRELOAD, LD_LIBRARY_PATH, OPENSSL_CONF and GLIBC_TUNABLES; with PYTHONNOUSERSITE=1; and with the config file pinned by -c pyproject.toml --rootdir=.",
+          "scrub_mechanism": "unset inside a subshell, not `env`. An exported bash function named `env` shadows the binary, which would otherwise turn every scrubbed command into a silent success.",
+          "shell_channels": "make is prevented from exporting BASH_ENV, ENV, SHELLOPTS and BASHOPTS to the recipe shell. .SHELLFLAGS makes each recipe a non-interactive bash, which sources BASH_ENV; a file containing `trap 'exit 0' EXIT` rewrote a failed recipe's status to 0 before this.",
+          "config_pinning": "Without -c, pytest's locate_config walks up from the suite path, so a pytest.ini, tox.ini or setup.cfg inside the QA lane's directory becomes the configfile, moves rootdir there and silently discards the root pythonpath and --import-mode=importlib while being free to add addopts = --collect-only.",
+          "exit_code_5": "pytest exit status 5 means no tests were collected. It is refused explicitly: an empty or fully deselected run is not a pass.",
+          "make_modes": "`-t` (touch) is refused at parse time, which is the only place a check can still run once make has decided not to execute recipes. The test reads GNU make's short-flag cluster correctly: make places single-letter options, without a leading dash, in the FIRST WORD of MAKEFLAGS and only there, while a long option such as --eval=x:=/tmp/y becomes that first word WITH a leading dash. Matching the letter `t` against the raw first word therefore fired on the `t` inside `/tmp` and rejected a legitimate invocation, so the cluster is extracted with $(filter-out -%,...) first. `-n` (dry run) is not refused, because `make -n` is a required check; under it make executes no recipe at all, and the absence of any recipe output is what makes a dry run unmistakable.",
+          "verified": "With a deliberately failing test in the suite: the raw pre-R2 command exited 0 under PYTEST_ADDOPTS=--collect-only. Through make test-foundation, that attack plus PYTEST_PLUGINS, PYTEST_DISABLE_PLUGIN_AUTOLOAD, -k, --deselect, PYTHONOPTIMIZE=2, BASH_ENV with an exit-0 trap, an exported env() function and an in-suite pytest.ini all left the assertion executing and the target non-zero. A test_*.py defining no test was refused with the exit-5 message.",
+          "not_covered": [
+            "MAKEFLAGS=-n: make runs no recipe, so no in-recipe guard can fire",
+            "a conftest.py inside the suite, or a plugin present in the runtime lock: inside P1-QA-00's deliverable and reviewed there",
+            "a .pth file written into .venv site-packages: it executes during interpreter startup, after the scrub and before pytest reads its environment; .venv is git-ignored and its file-level integrity is not verified"
+          ]
+        }
       },
       "foundation": {
         "purpose": "the full accepted sequence, serial",
@@ -344,8 +375,8 @@
         "notes": "reproducible in a clean checkout"
       },
       {
-        "command": ".local/uv/bin/uv lock --check",
-        "notes": "uv is not on PATH; use the bootstrapped copy. It only verifies and writes nothing."
+        "command": "UV_CACHE_DIR=.local/uv-cache .local/uv/bin/uv lock --check",
+        "notes": "uv is not on PATH; use the bootstrapped copy. UV_CACHE_DIR must be passed explicitly because make exports it and a bare shell does not, and without it uv would write to the user cache the rest of this task is careful not to touch. It only verifies and writes nothing."
       },
       {
         "command": "make -n up --eval='up: FOUNDATION_POSTGRES_IMAGE := other/img:tag'",
@@ -394,7 +425,6 @@
   "known_limitations": [
     "No target other than bootstrap has been executed end-to-end: all seven forward to provider implementations that do not exist yet, so each was exercised only to its explicit refusal.",
     "FF-01 mandates the literal paths .venv and .venv/bootstrap, so the governance environment is nested inside the uv-managed project environment. Anything that recreates .venv outside make (a bare `uv sync`, a manual rm -rf) destroys the validator interpreter; `make bootstrap` restores it, and the recipe order makes it self-healing.",
-    "load_env sources .env with the shell, so a value containing shell metacharacters must be quoted in the file. .env is operator-owned and git-ignored.",
     "Locally the application authenticates with the MinIO root credentials. FF-01 section 4 excludes scoped service credentials and production IAM from this slice; the coherence probe therefore does not require S3_ACCESS_KEY_ID to equal MINIO_ROOT_USER, so a later scoped-credential design is not blocked.",
     "pip index configuration is deliberately not neutralized, so an air-gapped mirror keeps working; only destination-redirecting variables (PIP_TARGET, PIP_PREFIX, PIP_USER, PIP_ROOT, PYTHONUSERBASE) are unset. --require-hashes still blocks substituted content.",
     "3.12.3 is pinned exactly, so later 3.12.x patch releases, including security fixes, require a new single-owner pin task.",
@@ -402,19 +432,54 @@
     "`.env` values are literals: there is no shell interpolation, so a value cannot reference another variable. One layer of matching quotes is stripped.",
     "UV_CACHE_DIR and PIP_CACHE_DIR are exported, not `override`-ed, so an operator may still point a cache elsewhere deliberately. The guarantee covers the bare command, which needs no override; an ambient value without `make -e` is ignored.",
     "require_provider runs before load_env in all seven service targets, so while the provider implementations are absent the missing-.env and coherence guards are shadowed by the provider refusal and are not observable through a public target. They are live code: exercise them by extracting the shipped guards as described in verification.required_commands.",
-    "pyproject.toml is now a pytest configfile, which pins rootdir to the repository root and applies pythonpath and --import-mode=importlib to EVERY pytest run in this repository, including the historical tests/contract and tests/checkpoint suites. Those suites may not be run from this checkout, so the effect on them is unverified; the later task that makes them hermetic must re-check it."
+    "pyproject.toml is now a pytest configfile, which pins rootdir to the repository root and applies pythonpath and --import-mode=importlib to EVERY pytest run in this repository, including the historical tests/contract and tests/checkpoint suites. Those suites may not be run from this checkout, so the effect on them is unverified; the later task that makes them hermetic must re-check it.",
+    "`.env` is parsed, never sourced. Quotes are accepted only as one matching wrapping pair with no escaping, so a value that must contain both quote characters cannot be expressed and a value containing a quote of the wrapping kind is refused rather than guessed at.",
+    "The governance exact-synchronisation check compares distribution names and versions. It does not verify that an installed distribution's files match the artifact its hash pinned; --require-hashes covers the download, not later mutation of site-packages.",
+    "The hermeticity guard covers the recipe shell and the interpreter environment. It does not cover `MAKEFLAGS=-n`, where make executes no recipe at all; a conftest.py or a locked plugin inside the QA suite, which are P1-QA-00's own deliverable; or a .pth file written into the git-ignored .venv, which runs during interpreter startup after the scrub.",
+    "Reserved paths and image pins are anchored on the makefile make parsed. A target-scoped --eval redirecting MAKEFILE_SELF itself, combined with an attacker-supplied decoy makefile, is not closed and is recorded rather than claimed."
   ],
   "remediation": {
-    "revision": "P1-INT-00-R1",
-    "parent_commit": "daa315818bdb31cb3c841e4e49796759693c7af7",
-    "fixed": {
-      "B1": "Image identity is read from the Makefile's own `override FOUNDATION_*_IMAGE :=` lines at run time, so it survives a target-scoped make assignment (--eval, including via MAKEFLAGS/GNUMAKEFLAGS with no visible command change) and a second -f makefile: a make variable can be shadowed per target, the file's bytes cannot. .env is parsed as data and refused outright if it names one of the three.",
-      "B2": "Root-owned [tool.pytest.ini_options] pythonpath = [\"src\"], so a literal `.venv/bin/pytest tests/integration/db` imports foundation code with no PYTHONPATH override and no lane-local sys.path hack.",
-      "B3": "run_checked compares the LAST actual output line with the sentinel, after normalising ANSI colour, CR and surrounding whitespace, and runs the checker with PYTHONUNBUFFERED=1 so the captured order is write order rather than an artefact of stdout buffering.",
-      "B4": "UV_CACHE_DIR is pinned to the git-ignored .local/uv-cache, and PIP_CACHE_DIR to .local/pip-cache, so a bare `make bootstrap` writes no cache under the user's home and needs no override."
+    "revision": "P1-INT-00-R2",
+    "parent_commit": "3e6b1d084d1ae00e4084cf1f146b64744aded085",
+    "previous": {
+      "revision": "P1-INT-00-R1",
+      "parent_commit": "daa315818bdb31cb3c841e4e49796759693c7af7",
+      "fixed": {
+        "B1": "Image identity is read from the Makefile's own `override FOUNDATION_*_IMAGE :=` lines at run time, so it survives a target-scoped make assignment (--eval, including via MAKEFLAGS/GNUMAKEFLAGS with no visible command change) and a second -f makefile: a make variable can be shadowed per target, the file's bytes cannot. .env is parsed as data and refused outright if it names one of the three.",
+        "B2": "Root-owned [tool.pytest.ini_options] pythonpath = [\"src\"], so a literal `.venv/bin/pytest tests/integration/db` imports foundation code with no PYTHONPATH override and no lane-local sys.path hack.",
+        "B3": "run_checked compares the LAST actual output line with the sentinel, after normalising ANSI colour, CR and surrounding whitespace, and runs the checker with PYTHONUNBUFFERED=1 so the captured order is write order rather than an artefact of stdout buffering.",
+        "B4": "UV_CACHE_DIR is pinned to the git-ignored .local/uv-cache, and PIP_CACHE_DIR to .local/pip-cache, so a bare `make bootstrap` writes no cache under the user's home and needs no override."
+      },
+      "also_fixed_in_passing": {
+        "env_is_data": "`.env` is parsed as NAME=VALUE lines instead of being sourced. Sourcing it let a lane's .env redefine compose(), redirect PATH, or `exit 0` out of a target and report success having done nothing. This channel was how the image pin could still be defeated, so closing it is part of B1 rather than new scope."
+      }
     },
-    "also_fixed_in_passing": {
-      "env_is_data": "`.env` is parsed as NAME=VALUE lines instead of being sourced. Sourcing it let a lane's .env redefine compose(), redirect PATH, or `exit 0` out of a target and report success having done nothing. This channel was how the image pin could still be defeated, so closing it is part of B1 rather than new scope."
+    "fixed": {
+      "C1": "The six reserved provider paths, and the two interpreters, are re-read from the Makefile's own bytes at run time, so a command-line assignment, make -e, a target-scoped --eval, the same through MAKEFLAGS/GNUMAKEFLAGS, and a second -f makefile all leave the forwarders addressing the exact frozen paths. The frozen path values themselves are unchanged.",
+      "C2": ".env is a strict allowlist of exactly the 15 frozen names. An unknown name, a repeated name, a missing name and an unmatched or interior quote are each an explicit failure instead of an accepted ambiguity.",
+      "C3": "test-foundation scrubs every PYTEST_* and behaviour-changing PYTHON* variable and refuses pytest exit status 5, so neither the ambient environment nor .env can turn a failing suite green or make an empty run look like a pass.",
+      "C4": "bootstrap removes any distribution the governance lock does not name and then proves exact synchronisation, so a repeated bootstrap converges on exactly requirements/validation.lock.",
+      "C5": "Documentation corrected: .env is never sourced, the real quote policy is recorded, and the uv verification command carries UV_CACHE_DIR=.local/uv-cache.",
+      "C6": "The byte re-read is anchored on the makefile make actually parsed instead of a cwd-relative ./Makefile, closing a decoy-directory attack that defeated both the new reserved-path freeze and the R1 image pins.",
+      "C7": "Recipe-shell startup channels closed: BASH_ENV, ENV, SHELLOPTS and BASHOPTS are no longer exported to the recipe shell, `env` is no longer used for scrubbing (an exported env() function shadowed it), the pytest config file is pinned, and make -t is refused at parse time.",
+      "C8": "The parse-time touch-mode guard reads GNU make's short-flag cluster properly instead of substring-matching the raw first MAKEFLAGS word, which had made any long option containing the letter `t` - including --eval=...=/tmp/... - a false refusal."
     }
+  },
+  "reserved_paths_immutability": {
+    "rule": "The six reserved provider paths cannot be redirected from any call site, and the forwarders always address the exact frozen path.",
+    "mechanism": "Each is declared `override NAME := <literal>` and re-read at run time out of the makefile make actually parsed, resolved at parse time as $(abspath $(lastword $(MAKEFILE_LIST))). `lastword` is what makes a wrapper makefile that includes this one resolve to THIS file, and `abspath` is what closes the decoy-directory attack: an `awk` over a bare `Makefile` reads ./Makefile, so `make -f /real/Makefile` launched from a directory holding an attacker's copy read the attacker's copy. The same anchor now protects the image pins, which had that hole since R1.",
+    "also_protected": "RUNTIME_PY, BOOTSTRAP_PY and VALIDATION_LOCK are frozen the same way. A redirected interpreter is the same class of defeat as a redirected suite path: `make test-foundation RUNTIME_PY=/bin/true` would otherwise run `/bin/true -m pytest` and exit 0 having executed nothing.",
+    "attacks_verified_closed": [
+      "make down INF_COMPOSE=/tmp/evil.yml",
+      "INF_COMPOSE=/tmp/evil.yml make -e down",
+      "make down --eval='down:INF_COMPOSE:=/tmp/evil.yml'",
+      "MAKEFLAGS='--eval=down:INF_COMPOSE:=/tmp/evil.yml' make down, and the same through GNUMAKEFLAGS",
+      "a second -f makefile that re-declares it with override and includes this one",
+      "make test-foundation RUNTIME_PY=/bin/true",
+      ".env cannot reach them at all: they are not frozen environment names, so the allowlist refuses them",
+      "make -f <real Makefile> launched from a directory containing a full copy of it with one override line changed"
+    ],
+    "positive_control": "The same --eval injection was shown to fire on a variable that is still a make expansion (FOUNDATION_PYTHON, 9 occurrences in the recipe text), so a zero result against a frozen path is evidence of the guard rather than of an ineffective probe.",
+    "residual": "A target-scoped --eval could still redirect MAKEFILE_SELF itself. That requires the attacker to supply a decoy makefile AND a visible --eval or a MAKEFLAGS value; it is recorded rather than claimed closed."
   }
 }

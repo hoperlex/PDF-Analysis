@@ -1,10 +1,14 @@
 # Task P1-INT-00 — pin the early foundation toolchain and command surface
 
-> **Status: remediated on branch `agent/p1-int-00` as `P1-INT-00-R1`;
-> READY_FOR_PRIMARY_REVIEW.** R1 closes four blocker classes found in review: image pins
-> were overridable from the call site and from `.env`; literal provider `pytest` commands
-> could not import `src/`; the success sentinel was accepted anywhere in the output
-> instead of last; and a bare `make bootstrap` wrote to the user's uv cache.
+> **Status: remediated on branch `agent/p1-int-00` as `P1-INT-00-R2`;
+> READY_FOR_PRIMARY_REVIEW.** R2 closes the remaining blocker classes: the six reserved
+> provider paths and the interpreters could still be redirected from the call site;
+> `.env` accepted any name, a repeated name and an unmatched quote; `PYTEST_ADDOPTS`
+> could turn a failing foundation suite green; and the governance environment was never
+> checked for a distribution the lock does not name. R1 had closed four earlier classes:
+> image pins overridable from the call site and from `.env`; literal provider `pytest`
+> commands unable to import `src/`; the success sentinel accepted anywhere in the output
+> instead of last; and a bare `make bootstrap` writing to the user's uv cache.
 > Executed from the `FF-01 ACCEPTED` commit `0b01a3eefe0e6724f6570ccebb9154daf1fdbaec`.
 > This task is **not accepted**: `P1-INF-01`, `P1-DB-01` and `P1-STO-01` stay blocked
 > until an independent review accepts the pins and the command surface, and until the
@@ -150,10 +154,55 @@ data and refused outright if it names one of the three.
 
 **`.env` is data, never code.** It is parsed as `NAME=VALUE` lines instead of being
 sourced. Sourcing let a lane's `.env` redefine `compose()`, redirect `PATH`, or `exit 0`
-out of a target and report success having done nothing. Anything that is not an
-assignment or a `#` comment is refused, as is any attempt to set `PATH`, `IFS`,
-`PYTHONPATH`, `LD_*`, `MAKEFLAGS` or a reserved image name. There is no shell
-interpolation inside values; one layer of matching quotes is stripped.
+out of a target and report success having done nothing. Names are a **strict allowlist of
+exactly the 15 names FF-01 section 3 freezes** — a denylist could only refuse the
+ambient-behaviour names somebody had thought of, so `PYTEST_ADDOPTS`, `DOCKER_HOST`,
+`AWS_*` and every other such name are now refused by one rule. Each of the 15 must appear
+exactly once: a missing name and a repeated name are both explicit failures. Quotes are
+accepted only as one matching pair wrapping the whole value with no quote of that kind
+inside it and no escaping; an unmatched quote is refused rather than kept as an ambiguous
+literal. There is no interpolation inside values.
+
+**Reserved paths and interpreters cannot be redirected.** The six FF-01 reserved provider
+paths, `RUNTIME_PY`, `BOOTSTRAP_PY` and `VALIDATION_LOCK` are declared `override` with a
+literal value and re-read at run time out of the Makefile's own bytes, exactly as the
+image pins are. A command-line assignment, `make -e`, a target-scoped `--eval` (including
+one carried in `MAKEFLAGS`/`GNUMAKEFLAGS`) and a second `-f` makefile all leave the
+forwarders addressing the exact frozen paths. The path values themselves are unchanged:
+FF-01 names them, so this task hardened how they are resolved and not what they are. This
+also closes `make test-foundation RUNTIME_PY=/bin/true`, which would otherwise have run
+`/bin/true -m pytest` and exited 0 having executed nothing.
+
+**The foundation suite runs hermetically.** `test-foundation` scrubs every `PYTEST_*`
+variable, the `PYTHON*` names that change interpretation and the loader names
+(`LD_AUDIT`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `OPENSSL_CONF`, `GLIBC_TUNABLES`), sets
+`PYTHONNOUSERSITE=1`, pins the pytest config file with `-c pyproject.toml --rootdir=.`,
+and refuses pytest exit status 5. The scrub is done by unsetting inside a subshell rather
+than through `env`, because an exported bash function named `env` shadows the binary.
+`make` is also stopped from handing `BASH_ENV`, `ENV`, `SHELLOPTS` and `BASHOPTS` to the
+recipe shell, and `-t` (touch) is refused at parse time.
+
+Measured against a deliberately failing test: the raw pre-R2 command exited 0 under
+`PYTEST_ADDOPTS=--collect-only`; through `make test-foundation` that attack and each of
+`PYTEST_PLUGINS`, `PYTEST_DISABLE_PLUGIN_AUTOLOAD`, `-k`, `--deselect`, `PYTHONOPTIMIZE=2`,
+`BASH_ENV` with an exit-0 trap, an exported `env()` function, and a `pytest.ini` dropped
+inside the suite directory all left the assertion executing and the target non-zero.
+
+**What this does not cover, stated rather than implied.** `MAKEFLAGS=-n` is a dry run:
+make executes no recipe, so no in-recipe guard can fire. It is not refused because
+`make -n` is itself a required check; it is also self-evident, since a dry run prints no
+`bootstrap OK` and no pytest summary. A `conftest.py` inside the suite, or a plugin
+present in the runtime lock, can still change outcomes — both are inside `P1-QA-00`'s own
+deliverable and are reviewed there, not neutralised from here. A `.pth` file written into
+`.venv/lib/python3.12/site-packages` executes during interpreter startup, after the scrub
+and before pytest reads its environment; `.venv` is git-ignored and its file-level
+integrity is not verified.
+
+**The governance environment is exactly its lock.** `pip install --require-hashes` only
+adds and upgrades, so `bootstrap` now removes any distribution
+`requirements/validation.lock` does not name and then proves the whole set matches. A
+`six` installed by hand was reported by the probe and removed by the next bootstrap,
+returning the environment to the six locked distributions plus the venv-seeded `pip`.
 
 **Caches.** `UV_CACHE_DIR` is pinned to the git-ignored `.local/uv-cache` and
 `PIP_CACHE_DIR` to `.local/pip-cache`, so a bare `make bootstrap` writes no cache under

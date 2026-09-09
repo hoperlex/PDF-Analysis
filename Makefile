@@ -12,6 +12,15 @@
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
+# `.SHELLFLAGS` makes every recipe a NON-INTERACTIVE bash, and bash sources $BASH_ENV for
+# exactly those. An ambient BASH_ENV pointing at a file containing `trap 'exit 0' EXIT`
+# rewrites a failed recipe's status to 0 after the command has already reported failure.
+# `unexport` stops make handing these to the recipe shell at all; .env cannot carry them
+# either, because it is a strict allowlist of the 15 frozen names.
+unexport BASH_ENV
+unexport ENV
+unexport SHELLOPTS
+unexport BASHOPTS
 .ONESHELL:
 .NOTPARALLEL:
 .DEFAULT_GOAL := bootstrap
@@ -56,8 +65,9 @@ UV_HASHES := \
 # declaring a second, competing source of truth for image identity.
 # `override` is deliberate: it defeats a command-line assignment and `make -e`, so
 # `make up FOUNDATION_POSTGRES_IMAGE=...` cannot swap the image. load_env additionally
-# rejects these names in .env and re-asserts these literals after sourcing it. Image
-# identity has exactly one owner and cannot be redirected from the call site.
+# rejects these names in .env and re-asserts these literals from this file's bytes after
+# parsing it. `.env` is never sourced. Image identity has exactly one owner and cannot be
+# redirected from the call site.
 override FOUNDATION_POSTGRES_IMAGE := postgres:17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
 override FOUNDATION_S3_IMAGE := minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
 override FOUNDATION_S3_MC_IMAGE := minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
@@ -70,31 +80,65 @@ override RESERVED_IMAGE_NAMES := FOUNDATION_POSTGRES_IMAGE FOUNDATION_S3_IMAGE F
 
 # --- owned environment layout ------------------------------------------------------
 # Every environment below is git-ignored and is reproduced only from a committed lock.
-VENV_RUNTIME := .venv
-VENV_BOOTSTRAP := .venv/bootstrap
-UV_HOME := .local/uv
+# Every one of these is declared with `override` AND a literal value, for the same reason
+# the image pins are: `override` defeats a command-line assignment and `make -e`, and the
+# literal spelling is what lets a recipe re-read the value out of this file's own bytes
+# (see frozen_value), which is the only form a target-scoped --eval, a MAKEFLAGS-injected
+# --eval or a second -f makefile cannot shadow. A composed value like
+# $(VENV_RUNTIME)/bin/python could not be read back that way, so nothing here is composed.
+# The file this Makefile's own bytes live in, resolved at parse time. `lastword` is
+# deliberate: when a wrapper makefile `include`s this one, MAKEFILE_LIST is
+# "wrapper.mk thisfile" while this line is being read, so this resolves to THIS file and
+# not to the wrapper. `abspath` is what closes the decoy-directory attack: awk over a
+# bare `Makefile` reads ./Makefile, so `make -f /real/Makefile` launched from a directory
+# holding an attacker's copy read the attacker's copy instead.
+override MAKEFILE_SELF := $(abspath $(lastword $(MAKEFILE_LIST)))
+
+# `-t` (touch) marks targets up to date without running them. It is never a legitimate
+# way to invoke this surface, and unlike a recipe-level guard this fires at parse time,
+# which is the only place a check can still run when make has decided not to execute
+# recipes. `-n` (dry run) is deliberately NOT refused: `make -n` is a documented required
+# check. A caller who sets MAKEFLAGS=-n gets no recipe output at all - no `bootstrap OK`,
+# no pytest summary - so a dry run cannot be mistaken for evidence by anyone reading it.
+# GNU make puts the single-letter options, with no leading dash, in the FIRST WORD of
+# MAKEFLAGS - and only there, and only when such options exist. A long option like
+# `--eval=x:=/tmp/y` becomes the first word instead, with a leading dash. Testing
+# `findstring t` against the raw first word therefore fires on the `t` inside `/tmp`,
+# rejecting a legitimate invocation; the cluster is only a cluster when it has no dash.
+override MAKE_SHORT_FLAGS := $(filter-out -%,$(firstword $(MAKEFLAGS)))
+ifneq (,$(findstring t,$(MAKE_SHORT_FLAGS)))
+$(error P1-INT-00: make -t (touch mode) is refused. It would mark targets up to date \
+without running a single check. Run the target for real.)
+endif
+
+override VENV_RUNTIME := .venv
+override VENV_BOOTSTRAP := .venv/bootstrap
+override UV_HOME := .local/uv
 # Project-local, git-ignored uv cache. Pinned so a bare `make bootstrap` never writes
 # to the user cache (~/.cache/uv) and needs no undocumented UV_CACHE_DIR override.
-UV_CACHE := .local/uv-cache
+override UV_CACHE := .local/uv-cache
 # Same reasoning for pip: the .venv/bootstrap install is hash-checked but still caches
 # wheels, and a bare `make bootstrap` must not write into the user's home either.
-PIP_CACHE := .local/pip-cache
-RUNTIME_PY := $(VENV_RUNTIME)/bin/python
-BOOTSTRAP_PY := $(VENV_BOOTSTRAP)/bin/python
-UV := $(UV_HOME)/bin/uv
+override PIP_CACHE := .local/pip-cache
+override RUNTIME_PY := .venv/bin/python
+override BOOTSTRAP_PY := .venv/bootstrap/bin/python
+override UV := .local/uv/bin/uv
 export UV_CACHE_DIR := $(UV_CACHE)
 export PIP_CACHE_DIR := $(PIP_CACHE)
-VALIDATION_LOCK := requirements/validation.lock
-RUNTIME_LOCK := uv.lock
+override VALIDATION_LOCK := requirements/validation.lock
+override RUNTIME_LOCK := uv.lock
 
 # --- reserved provider paths (FF-01 section 3) --------------------------------------
-# P1-INT-00 reserves these paths and writes none of them.
-INF_COMPOSE := infra/local/docker-compose.yml
-INF_CHECK := infra/local/check_services.py
-DB_ALEMBIC_INI := db/migrations/alembic.ini
-DB_CHECK := src/auditmanager/shared/db/check.py
-STO_CHECK := src/auditmanager/storage/check.py
-QA_SUITE := tests/integration/foundation
+# P1-INT-00 reserves these paths and writes none of them. The values are frozen: FF-01
+# names them, so this task may harden how they are resolved but never change what they
+# are. Each recipe resolves them through frozen_value, out of this file's bytes, so a
+# forwarder always addresses the exact frozen path no matter what the call site says.
+override INF_COMPOSE := infra/local/docker-compose.yml
+override INF_CHECK := infra/local/check_services.py
+override DB_ALEMBIC_INI := db/migrations/alembic.ini
+override DB_CHECK := src/auditmanager/shared/db/check.py
+override STO_CHECK := src/auditmanager/storage/check.py
+override QA_SUITE := tests/integration/foundation
 
 .PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation foundation
 
@@ -104,9 +148,42 @@ QA_SUITE := tests/integration/foundation
 define GUARDS
 fail() { printf '%s\n' "$$@" >&2; exit 1; }
 
+# The single de-shadowing primitive. It reads a value out of THIS FILE'S BYTES rather
+# than taking a make expansion, because every make-level channel that can redirect a
+# variable - a command-line assignment, `make -e`, a target-scoped `--eval` (including
+# one smuggled in through MAKEFLAGS or GNUMAKEFLAGS with no visible command change), and
+# a second `-f` makefile that re-`override`s it - changes only the expansion. None of
+# them can change the bytes of the `override NAME := VALUE` line below.
+frozen_value() {
+  local name="$$1" value
+  value="$$(awk -v n="$$name" '$$1=="override" && $$2==n && $$3==":=" {print $$4; exit}' "$(MAKEFILE_SELF)")"
+  [ -n "$$value" ] || fail \
+    "P1-INT-00: cannot read the frozen value of $$name out of the Makefile." \
+    "The literal \`override $$name := <value>\` line is the single source of truth."
+  printf '%s\n' "$$value"
+}
+
+# Re-asserts the six FF-01 reserved provider paths and the two interpreters from this
+# file's bytes, into shell variables the recipes use instead of make expansions. A
+# forwarder therefore always addresses the exact frozen path. `make up
+# INF_COMPOSE=/tmp/evil.yml`, `make -e`, `--eval='up: INF_COMPOSE := ...'`, the same
+# through MAKEFLAGS/GNUMAKEFLAGS, and a wrapper makefile all leave these unchanged.
+freeze_paths() {
+  local name
+  for name in INF_COMPOSE INF_CHECK DB_ALEMBIC_INI DB_CHECK STO_CHECK QA_SUITE \
+              RUNTIME_PY BOOTSTRAP_PY VALIDATION_LOCK RUNTIME_LOCK; do
+    printf -v "$$name" '%s' "$$(frozen_value "$$name")"
+  done
+  # A redirected interpreter is the same class of defeat as a redirected suite path:
+  # `make test-foundation RUNTIME_PY=/bin/true` would otherwise run `/bin/true -m pytest`
+  # and exit 0 having executed no test at all.
+  case "$$RUNTIME_PY" in .venv/bin/python) ;; *) fail \
+    "P1-INT-00: the frozen runtime interpreter is not .venv/bin/python." ;; esac
+}
+
 require_runtime_env() {
-  [ -x "$(RUNTIME_PY)" ] || fail \
-    "P1-INT-00: the foundation runtime environment $(RUNTIME_PY) is missing." \
+  [ -x "$$RUNTIME_PY" ] || fail \
+    "P1-INT-00: the foundation runtime environment $$RUNTIME_PY is missing." \
     "Run: make bootstrap"
 }
 
@@ -138,7 +215,7 @@ run_checked() {
   # checker a pipe. Without it the merged capture reflects BUFFERING order, not action
   # order: a checker that prints the sentinel and then logs to stderr would have that
   # stderr arrive first and its sentinel still look last.
-  out="$$(env PYTHONUNBUFFERED=1 "$$@" 2>&1)"
+  out="$$(scrubbed_run PYTHONUNBUFFERED=1 -- "$$@" 2>&1)"
   status=$$?
   set -e
   [ -n "$$out" ] && printf '%s\n' "$$out"
@@ -163,6 +240,13 @@ run_checked() {
   fi
 }
 
+# The 15 names FF-01 section 3 freezes. This is a strict ALLOWLIST, not a denylist: a
+# name outside it is refused, so no ambient-behaviour variable can be smuggled in by
+# thinking of one nobody blacklisted. All 15 are required and each may appear once.
+FROZEN_ENV_NAMES="FOUNDATION_INSTANCE POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD \
+POSTGRES_PORT DATABASE_URL MINIO_ROOT_USER MINIO_ROOT_PASSWORD S3_ENDPOINT_URL \
+S3_API_PORT S3_CONSOLE_PORT S3_REGION S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET"
+
 load_env() {
   [ -f .env ] || fail \
     "P1-INT-00: .env is missing and no default is assumed." \
@@ -170,7 +254,7 @@ load_env() {
     "Then give this lane a unique FOUNDATION_INSTANCE, POSTGRES_PORT, S3_API_PORT," \
     "S3_CONSOLE_PORT, POSTGRES_DB and S3_BUCKET. Two lanes sharing one instance is" \
     "forbidden by FF-01 section 5."
-  local line name value lineno=0
+  local line name value lineno=0 seen="" known q body
   while IFS= read -r line || [ -n "$$line" ]; do
     lineno=$$((lineno + 1))
     line="$${line%%$$'\r'}"
@@ -204,24 +288,59 @@ load_env() {
           "docs/program/FOUNDATION_LOCK.json. A lane configures instance, ports, database" \
           "and bucket - never which image runs. Remove that line from .env." \
           "A different image is a pin request back to P1-INT-00." ;;
-      PATH|IFS|ENV|BASH_ENV|SHELL|SHELLOPTS|BASHOPTS|LD_PRELOAD|LD_LIBRARY_PATH|\
-      PYTHONPATH|PYTHONHOME|PYTHONSTARTUP|PYTHONUNBUFFERED|UV_CACHE_DIR|PIP_CACHE_DIR|\
-      UV_PROJECT_ENVIRONMENT|MAKEFLAGS|GNUMAKEFLAGS|MAKEFILES)
-        fail "P1-INT-00: .env line $$lineno sets $$name, which .env may not control." \
-          "That name selects what code runs or where it is installed, not how this lane's" \
-          "services are configured. Remove it from .env." ;;
     esac
+    # Strict allowlist. Anything not frozen by FF-01 section 3 is refused, whether or not
+    # anyone thought to blacklist it: PYTEST_ADDOPTS, PYTHONNOUSERSITE, DOCKER_HOST,
+    # AWS_*, SSL_CERT_FILE, a BASH_FUNC_* export and every other ambient-behaviour name
+    # are all outside the list and therefore all rejected by one rule.
+    known=no
+    for q in $$FROZEN_ENV_NAMES; do
+      [ "$$name" = "$$q" ] && { known=yes; break; }
+    done
+    [ "$$known" = yes ] || fail \
+      "P1-INT-00: .env line $$lineno sets $$name, which is not a frozen environment name." \
+      "FF-01 section 3 freezes exactly 15 names and .env may contain only those:" \
+      "  $$FROZEN_ENV_NAMES" \
+      ".env configures this lane's services. It does not carry tool options, credentials" \
+      "for other systems, or anything that selects what code runs."
+    case " $$seen " in
+      *" $$name "*) fail \
+        "P1-INT-00: .env line $$lineno assigns $$name a second time." \
+        "A repeated name is ambiguous: the reader would silently take one of the two." \
+        "Keep exactly one assignment per frozen name." ;;
+    esac
+    seen="$$seen $$name"
+    # Quotes are allowed only as one matched wrapping pair. An unmatched or interior
+    # quote is REFUSED rather than kept as an ambiguous literal, because `X="abc` would
+    # otherwise export the six characters "abc - a value no operator intended and one
+    # that later re-quoting could turn back into something else.
     case "$$value" in
-      \"*\") value="$${value#\"}"; value="$${value%\"}" ;;
-      \'*\') value="$${value#\'}"; value="$${value%\'}" ;;
+      \"*|\'*)
+        q="$${value%"$${value#?}"}"
+        if [ "$${#value}" -lt 2 ] || [ "$${value#"$${value%?}"}" != "$$q" ]; then
+          fail "P1-INT-00: .env line $$lineno opens a $$q quote it never closes." \
+            "  name: $$name" \
+            "A value either carries no quotes at all or is wrapped in one matching pair."
+        fi
+        body="$${value#?}"; body="$${body%?}"
+        case "$$body" in
+          *"$$q"*) fail \
+            "P1-INT-00: .env line $$lineno has a $$q quote inside a $$q-quoted value." \
+            "  name: $$name" \
+            "There is no escaping in .env. Use the other quote character, or a value" \
+            "that does not contain a quote." ;;
+        esac
+        value="$$body"
+        ;;
+      *\"*|*\'*)
+        fail "P1-INT-00: .env line $$lineno has a quote that does not wrap the value." \
+          "  name: $$name" \
+          "Quotes are accepted only as one matching pair around the whole value." ;;
     esac
     export "$$name=$$value"
   done < .env
   assert_image_pins
-  for name in FOUNDATION_INSTANCE POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD \
-       POSTGRES_PORT DATABASE_URL MINIO_ROOT_USER MINIO_ROOT_PASSWORD \
-       S3_ENDPOINT_URL S3_API_PORT S3_CONSOLE_PORT S3_REGION \
-       S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET; do
+  for name in $$FROZEN_ENV_NAMES; do
     [ -n "$${!name:-}" ] || fail \
       "P1-INT-00: required environment name $$name is unset or empty in .env." \
       "FF-01 section 3 freezes the full name set; .env.example lists every one."
@@ -236,7 +355,7 @@ load_env() {
 assert_image_pins() {
   local name value
   for name in FOUNDATION_POSTGRES_IMAGE FOUNDATION_S3_IMAGE FOUNDATION_S3_MC_IMAGE; do
-    value="$$(awk -v n="$$name" '$$1=="override" && $$2==n {print $$4; exit}' Makefile)"
+    value="$$(awk -v n="$$name" '$$1=="override" && $$2==n {print $$4; exit}' "$(MAKEFILE_SELF)")"
     [ -n "$$value" ] || fail \
       "P1-INT-00: cannot read the pinned $$name out of the Makefile." \
       "The `override $$name := <ref>` line is the single source of image identity."
@@ -253,24 +372,70 @@ assert_image_pins() {
 # Needs the runtime interpreter, so only targets that actually reach a service call it.
 # `down` deliberately does not: stopping containers must keep working after .venv is gone.
 require_env_coherence() {
-  "$(RUNTIME_PY)" -c "$$COHERENCE_PROBE"
+  "$$RUNTIME_PY" -c "$$COHERENCE_PROBE"
 }
 
 compose() {
   command -v docker >/dev/null 2>&1 || fail \
     "P1-INT-00: docker is not on PATH. It is a documented host prerequisite."
-  docker compose --project-name "$$FOUNDATION_INSTANCE" --file "$(INF_COMPOSE)" "$$@"
+  docker compose --project-name "$$FOUNDATION_INSTANCE" --file "$$INF_COMPOSE" "$$@"
+}
+
+# pytest reads options and plugins out of the ambient environment, so a green run is not
+# by itself evidence that the suite ran. PYTEST_ADDOPTS=--collect-only collects and exits
+# 0 without executing a single test; PYTEST_PLUGINS loads an arbitrary module that can
+# force outcomes; PYTEST_DISABLE_PLUGIN_AUTOLOAD changes which plugins participate. .env
+# can no longer carry any of them (the allowlist refuses every name outside the frozen
+# 15), but the ambient environment still can, so every PYTEST_* and the PYTHON* names
+# that change interpretation are scrubbed here rather than trusted.
+# Runs a command with the interpreter-behaviour environment scrubbed. It unsets in the
+# CURRENT shell inside a subshell rather than calling `env`, because an exported bash
+# function named `env` shadows the binary: `env(){ return 0; }; export -f env` would
+# otherwise make every scrubbed command a silent success.
+scrubbed_run() {
+  local assigns=() name
+  while [ "$$1" != "--" ]; do assigns+=("$$1"); shift; done
+  shift
+  (
+    while IFS= read -r name; do
+      unset "$$name" || true
+    done < <(compgen -e | grep -E '^(PYTEST_|PYTHONWARNINGS$$|PYTHONSTARTUP$$|PYTHONHOME$$|PYTHONDONTWRITEBYTECODE$$|PYTHONOPTIMIZE$$|PYTHONINSPECT$$|PYTHONPROFILEIMPORTTIME$$|LD_AUDIT$$|LD_PRELOAD$$|LD_LIBRARY_PATH$$|OPENSSL_CONF$$|GLIBC_TUNABLES$$)' || true)
+    export PYTHONNOUSERSITE=1
+    for name in "$${assigns[@]}"; do export "$$name"; done
+    exec "$$@"
+  )
+}
+
+run_suite() {
+  local suite="$$1" status
+  set +e
+  # `-c pyproject.toml` pins the config file. Without it pytest's locate_config walks up
+  # from the suite directory, so a pytest.ini, tox.ini or setup.cfg dropped inside the QA
+  # lane's own directory would become the configfile, move rootdir into that directory and
+  # silently discard the root `pythonpath = ["src"]` and `--import-mode=importlib` - while
+  # being free to add `addopts = --collect-only`.
+  scrubbed_run PYTHONPATH=src PYTHONUNBUFFERED=1 -- \
+    "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. "$$suite"
+  status=$$?
+  set -e
+  # pytest's own exit codes: 0 all passed, 1 failures, 2 interrupted, 3 internal error,
+  # 4 usage error, 5 NO TESTS COLLECTED. 5 is the one that looks like nothing went wrong
+  # and must never be read as a pass.
+  if [ "$$status" -eq 5 ]; then
+    fail "P1-INT-00: pytest collected no tests from $$suite." \
+      "Exit status 5 means nothing ran. An empty or fully deselected run is not a pass." \
+      "Owning task: P1-QA-00."
+  fi
+  [ "$$status" -eq 0 ] || fail \
+    "P1-INT-00: the foundation suite failed with pytest exit status $$status."
 }
 
 probe_bootstrap_env() {
-  local want
-  want="$$(sed -n 's/^jsonschema==\([^ ]*\).*/\1/p' "$(VALIDATION_LOCK)")"
-  [ -n "$$want" ] || fail "P1-INT-00: cannot read the jsonschema pin from $(VALIDATION_LOCK)."
-  "$(BOOTSTRAP_PY)" -c "$$BOOTSTRAP_PROBE" "$$want"
+  "$$BOOTSTRAP_PY" -c "$$BOOTSTRAP_PROBE" "$$VALIDATION_LOCK"
 }
 
 probe_runtime_env() {
-  "$(RUNTIME_PY)" -c "$$RUNTIME_PROBE"
+  "$$RUNTIME_PY" -c "$$RUNTIME_PROBE"
 }
 endef
 
@@ -279,12 +444,47 @@ endef
 # an environment satisfies its own committed lock; neither prints a pass it did not
 # verify.
 define BOOTSTRAP_PROBE
-import importlib.metadata as md, sys
-want = sys.argv[1]
-have = md.version("jsonschema")
-print(f"    bootstrap: python {sys.version.split()[0]}, jsonschema {have}")
-if have != want:
-    raise SystemExit(f"P1-INT-00: jsonschema {have} does not match the locked {want}")
+# Proves the governance environment is EXACTLY the lock: every pinned distribution at
+# its pinned version, and nothing else installed. `pip install --require-hashes` only
+# adds and upgrades; it never removes, so without this an extra distribution - a
+# hand-installed plugin, a leftover from an earlier lock - would sit in the validator
+# environment unnoticed and could change what the validator does.
+import importlib.metadata as md, re, sys
+lock = sys.argv[1]
+norm = lambda n: re.sub(r"[-_.]+", "-", n).lower()
+# venv seeds pip; it is not in the lock and is not an extra.
+SEEDED = {"pip"}  # python3.12 venv seeds pip only; measured, not assumed
+want = {}
+for raw in open(lock, encoding="utf-8"):
+    line = raw.split("#", 1)[0].strip().rstrip("\\").strip()
+    m = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s;]+)", line)
+    if m:
+        want[norm(m.group(1))] = m.group(2)
+if not want:
+    raise SystemExit(f"P1-INT-00: no pinned distribution found in {lock}")
+have = {}
+for dist in md.distributions():
+    name = dist.metadata["Name"]
+    if name:
+        have[norm(name)] = dist.version
+print(f"    bootstrap: python {sys.version.split()[0]}, {len(want)} locked distributions")
+drift = []
+for name, version in sorted(want.items()):
+    if name not in have:
+        drift.append(f"{name}: locked {version}, not installed")
+    elif have[name] != version:
+        drift.append(f"{name}: locked {version}, installed {have[name]}")
+extra = sorted(set(have) - set(want) - SEEDED)
+for name in extra:
+    drift.append(f"{name} {have[name]}: installed but absent from {lock}")
+if drift:
+    print("P1-INT-00: the governance environment does not match its lock:", file=sys.stderr)
+    for line in drift:
+        print(f"  - {line}", file=sys.stderr)
+    if extra:
+        print("Remove the extra distribution, or re-create the environment:", file=sys.stderr)
+        print("  rm -rf .venv/bootstrap && make bootstrap", file=sys.stderr)
+    raise SystemExit(1)
 endef
 export BOOTSTRAP_PROBE
 
@@ -320,6 +520,26 @@ if drift:
     raise SystemExit(1)
 endef
 export RUNTIME_PROBE
+
+define EXTRA_DISTS
+# Prints the distributions installed in this environment that the lock does not name,
+# one per line, so bootstrap can remove them. pip itself is seeded by venv and is never
+# reported. Nothing is printed when the environment already matches the lock.
+import importlib.metadata as md, re, sys
+norm = lambda n: re.sub(r"[-_.]+", "-", n).lower()
+SEEDED = {"pip"}  # python3.12 venv seeds pip only; measured, not assumed
+want = set()
+for raw in open(sys.argv[1], encoding="utf-8"):
+    line = raw.split("#", 1)[0].strip().rstrip("\\").strip()
+    m = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==", line)
+    if m:
+        want.add(norm(m.group(1)))
+for dist in md.distributions():
+    name = dist.metadata["Name"]
+    if name and norm(name) not in want and norm(name) not in SEEDED:
+        print(name)
+endef
+export EXTRA_DISTS
 
 define COHERENCE_PROBE
 import os, sys, urllib.parse as up
@@ -362,6 +582,7 @@ export COHERENCE_PROBE
 # Reproduce both git-ignored locked environments. Never regenerates or edits a lock.
 bootstrap:
 	@$(GUARDS)
+	freeze_paths
 	want="$$(cat .python-version)"
 	command -v "$(FOUNDATION_PYTHON)" >/dev/null 2>&1 || fail \
 	  "P1-INT-00: host interpreter $(FOUNDATION_PYTHON) was not found on PATH." \
@@ -377,13 +598,13 @@ bootstrap:
 	  "  .python-version      : $$want" \
 	  "  $(FOUNDATION_PYTHON) : $$have" \
 	  "The pin is exact. Install $$want, or pass FOUNDATION_PYTHON=<path to $$want>."
-	[ -f "$(RUNTIME_LOCK)" ] || fail \
+	[ -f "$$RUNTIME_LOCK" ] || fail \
 	  "P1-INT-00: $(RUNTIME_LOCK) is missing, and bootstrap does not create it." \
 	  "A lock is produced only by its owner, deliberately:" \
 	  "  $(UV) lock" \
 	  "and is then reviewed and committed as a P1-INT-00 change."
-	[ -f "$(VALIDATION_LOCK)" ] || fail \
-	  "P1-INT-00: $(VALIDATION_LOCK) is missing, and bootstrap does not create it."
+	[ -f "$$VALIDATION_LOCK" ] || fail \
+	  "P1-INT-00: $$VALIDATION_LOCK is missing, and bootstrap does not create it."
 	if [ ! -x "$(UV)" ] || [ "$$("$(UV)" --version 2>/dev/null | awk '{print $$2}')" != "$(UV_VERSION)" ]; then
 	  [ "$(UV_HOME)" = ".local/uv" ] || fail \
 	    "P1-INT-00: UV_HOME is overridden to '$(UV_HOME)'." \
@@ -403,10 +624,21 @@ bootstrap:
 	UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT="$(VENV_RUNTIME)" \
 	  "$(UV)" sync --frozen --group test --python "$(FOUNDATION_PYTHON)"
 	echo "==> building $(VENV_BOOTSTRAP) from $(VALIDATION_LOCK) (hash-checked)"
-	[ -x "$(BOOTSTRAP_PY)" ] || "$(FOUNDATION_PYTHON)" -m venv "$(VENV_BOOTSTRAP)"
+	[ -x "$$BOOTSTRAP_PY" ] || "$(FOUNDATION_PYTHON)" -m venv "$$(dirname "$$(dirname "$$BOOTSTRAP_PY")")"
 	env -u PIP_TARGET -u PIP_PREFIX -u PIP_USER -u PIP_ROOT -u PYTHONUSERBASE \
-	  "$(BOOTSTRAP_PY)" -m pip install --quiet --disable-pip-version-check \
-	  --require-hashes --requirement "$(VALIDATION_LOCK)"
+	  "$$BOOTSTRAP_PY" -m pip install --quiet --disable-pip-version-check \
+	  --require-hashes --requirement "$$VALIDATION_LOCK"
+	# `pip install` only adds and upgrades. Anything installed here that the lock does
+	# not name is removed now, so a repeated bootstrap converges on exactly the lock
+	# instead of accumulating whatever a previous state left behind.
+	extra="$$("$$BOOTSTRAP_PY" -c "$$EXTRA_DISTS" "$$VALIDATION_LOCK")"
+	if [ -n "$$extra" ]; then
+	  echo "==> removing distributions absent from $$VALIDATION_LOCK: $$extra"
+	  env -u PIP_TARGET -u PIP_PREFIX -u PIP_USER -u PIP_ROOT -u PYTHONUSERBASE \
+	    "$$BOOTSTRAP_PY" -m pip uninstall --quiet --yes $$extra || true
+	  # pip uninstall can exit 0 having removed nothing when a RECORD is incomplete, so
+	  # the probe below is what decides; this line never reports success on its own.
+	fi
 	echo "==> probing both environments against their locks"
 	probe_bootstrap_env
 	probe_runtime_env
@@ -415,8 +647,9 @@ bootstrap:
 # --- 2/9 ---------------------------------------------------------------------------
 up:
 	@$(GUARDS)
+	freeze_paths
 	require_runtime_env
-	require_provider "$(INF_COMPOSE)" "P1-INF-01" \
+	require_provider "$$INF_COMPOSE" "P1-INF-01" \
 	  "pinned PostgreSQL and MinIO services, namespaced volumes and health checks"
 	load_env
 	require_env_coherence
@@ -425,7 +658,8 @@ up:
 # --- 3/9 ---------------------------------------------------------------------------
 down:
 	@$(GUARDS)
-	require_provider "$(INF_COMPOSE)" "P1-INF-01" \
+	freeze_paths
+	require_provider "$$INF_COMPOSE" "P1-INF-01" \
 	  "pinned PostgreSQL and MinIO services, namespaced volumes and health checks"
 	load_env
 	compose down
@@ -433,56 +667,61 @@ down:
 # --- 4/9 ---------------------------------------------------------------------------
 check-services:
 	@$(GUARDS)
+	freeze_paths
 	require_runtime_env
-	require_provider "$(INF_CHECK)" "P1-INF-01" \
+	require_provider "$$INF_CHECK" "P1-INF-01" \
 	  "PostgreSQL/MinIO health proof and idempotent private-bucket initialization"
 	load_env
 	require_env_coherence
-	run_checked check-services env PYTHONPATH=src "$(RUNTIME_PY)" "$(INF_CHECK)"
+	run_checked check-services scrubbed_run PYTHONPATH=src -- "$$RUNTIME_PY" "$$INF_CHECK"
 
 # --- 5/9 ---------------------------------------------------------------------------
 migrate:
 	@$(GUARDS)
+	freeze_paths
 	require_runtime_env
-	require_provider "$(DB_ALEMBIC_INI)" "P1-DB-01" \
+	require_provider "$$DB_ALEMBIC_INI" "P1-DB-01" \
 	  "the migration head and its runner configuration"
 	load_env
 	require_env_coherence
-	PYTHONPATH=src "$(RUNTIME_PY)" -m alembic --config "$(DB_ALEMBIC_INI)" upgrade head
+	PYTHONPATH=src "$$RUNTIME_PY" -m alembic --config "$$DB_ALEMBIC_INI" upgrade head
 
 # --- 6/9 ---------------------------------------------------------------------------
 check-db:
 	@$(GUARDS)
+	freeze_paths
 	require_runtime_env
-	require_provider "$(DB_CHECK)" "P1-DB-01" \
+	require_provider "$$DB_CHECK" "P1-DB-01" \
 	  "application database connectivity and the current migration state"
 	load_env
 	require_env_coherence
-	run_checked check-db env PYTHONPATH=src "$(RUNTIME_PY)" -m auditmanager.shared.db.check
+	run_checked check-db scrubbed_run PYTHONPATH=src -- "$$RUNTIME_PY" -m auditmanager.shared.db.check
 
 # --- 7/9 ---------------------------------------------------------------------------
 check-storage:
 	@$(GUARDS)
+	freeze_paths
 	require_runtime_env
-	require_provider "$(STO_CHECK)" "P1-STO-01" \
+	require_provider "$$STO_CHECK" "P1-STO-01" \
 	  "BlobStore access to the private bucket through application credentials"
 	load_env
 	require_env_coherence
-	run_checked check-storage env PYTHONPATH=src "$(RUNTIME_PY)" -m auditmanager.storage.check
+	run_checked check-storage scrubbed_run PYTHONPATH=src -- "$$RUNTIME_PY" -m auditmanager.storage.check
 
 # --- 8/9 ---------------------------------------------------------------------------
 test-foundation:
 	@$(GUARDS)
+	freeze_paths
 	require_runtime_env
-	require_provider "$(QA_SUITE)" "P1-QA-00" \
+	require_provider "$$QA_SUITE" "P1-QA-00" \
 	  "the cross-provider foundation suite (failure, persistence and privacy evidence)"
-	if [ "$$(find "$(QA_SUITE)" -name 'test_*.py' | wc -l)" -eq 0 ]; then
-	  fail "P1-INT-00: $(QA_SUITE) contains no test_*.py file." \
+	if [ "$$(find "$$QA_SUITE" -name 'test_*.py' | wc -l)" -eq 0 ]; then
+	  fail "P1-INT-00: $$QA_SUITE contains no test_*.py file." \
 	    "An empty suite is not a pass. Owning task: P1-QA-00."
 	fi
 	load_env
 	require_env_coherence
-	PYTHONPATH=src "$(RUNTIME_PY)" -m pytest "$(QA_SUITE)"
+	run_suite "$$QA_SUITE"
 
 # --- 9/9 ---------------------------------------------------------------------------
 # The accepted foundation sequence, serial by .NOTPARALLEL.
