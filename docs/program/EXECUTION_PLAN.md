@@ -1905,6 +1905,15 @@ before reconciliation», потому что `restore()` стоял **после
 зонд: гейт 1 идёт 5 → 7 падений, независимо воспроизводя потерю сайта тега из §3.12.1;
 гейт 3 остаётся `PASS`.
 
+**Перепроверено мной, интегратором, на собственной копии** `49920e0` (`cp -a`, `.git` —
+настоящий каталог, коды возврата сняты с процесса, не с конвейера): до отзыва —
+`Ran 59 tests`, `OK`, **exit 0**; восемь путей сняты с индекса и с диска; после —
+`Ran 59 tests`, `FAILED (failures=1)`, **exit 1**, имя —
+`test_cp00_final_state_contour.RealRepositoryTests.test_the_tree_view_reads_this_repository`,
+строка `self.assertIsNotNone(self.tree.read(contour.CONTRACT_MANIFEST))`,
+`AssertionError: unexpectedly None`. Утверждение, меняющее мою собственную процедуру, принято
+не с отчёта.
+
 **Поправка к §3.8.5 шагу 6: на `F` красны два гейта, а не один.** Присущих падений
 **пять**: четыре в contract-сюите и одно в checkpoint'овой.
 
