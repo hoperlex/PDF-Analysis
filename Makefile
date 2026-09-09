@@ -54,18 +54,36 @@ UV_HASHES := \
 # tag and no `latest` reference exists in the foundation (FF-01 section 2 item 9).
 # They are exported so the P1-INF-01 compose file consumes these pins instead of
 # declaring a second, competing source of truth for image identity.
-export FOUNDATION_POSTGRES_IMAGE := postgres:17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
-export FOUNDATION_S3_IMAGE := minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-export FOUNDATION_S3_MC_IMAGE := minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+# `override` is deliberate: it defeats a command-line assignment and `make -e`, so
+# `make up FOUNDATION_POSTGRES_IMAGE=...` cannot swap the image. load_env additionally
+# rejects these names in .env and re-asserts these literals after sourcing it. Image
+# identity has exactly one owner and cannot be redirected from the call site.
+override FOUNDATION_POSTGRES_IMAGE := postgres:17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+override FOUNDATION_S3_IMAGE := minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+override FOUNDATION_S3_MC_IMAGE := minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+export FOUNDATION_POSTGRES_IMAGE
+export FOUNDATION_S3_IMAGE
+export FOUNDATION_S3_MC_IMAGE
+
+# Names a lane may never set: they carry image identity, not lane configuration.
+override RESERVED_IMAGE_NAMES := FOUNDATION_POSTGRES_IMAGE FOUNDATION_S3_IMAGE FOUNDATION_S3_MC_IMAGE
 
 # --- owned environment layout ------------------------------------------------------
 # Every environment below is git-ignored and is reproduced only from a committed lock.
 VENV_RUNTIME := .venv
 VENV_BOOTSTRAP := .venv/bootstrap
 UV_HOME := .local/uv
+# Project-local, git-ignored uv cache. Pinned so a bare `make bootstrap` never writes
+# to the user cache (~/.cache/uv) and needs no undocumented UV_CACHE_DIR override.
+UV_CACHE := .local/uv-cache
+# Same reasoning for pip: the .venv/bootstrap install is hash-checked but still caches
+# wheels, and a bare `make bootstrap` must not write into the user's home either.
+PIP_CACHE := .local/pip-cache
 RUNTIME_PY := $(VENV_RUNTIME)/bin/python
 BOOTSTRAP_PY := $(VENV_BOOTSTRAP)/bin/python
 UV := $(UV_HOME)/bin/uv
+export UV_CACHE_DIR := $(UV_CACHE)
+export PIP_CACHE_DIR := $(PIP_CACHE)
 VALIDATION_LOCK := requirements/validation.lock
 RUNTIME_LOCK := uv.lock
 
@@ -116,18 +134,33 @@ run_checked() {
   local label="$$1"; shift
   local out status
   set +e
-  out="$$("$$@" 2>&1)"
+  # PYTHONUNBUFFERED makes stdout line-buffered even though command substitution hands the
+  # checker a pipe. Without it the merged capture reflects BUFFERING order, not action
+  # order: a checker that prints the sentinel and then logs to stderr would have that
+  # stderr arrive first and its sentinel still look last.
+  out="$$(env PYTHONUNBUFFERED=1 "$$@" 2>&1)"
   status=$$?
   set -e
   [ -n "$$out" ] && printf '%s\n' "$$out"
   if [ "$$status" -ne 0 ]; then
     fail "P1-INT-00: $$label failed with exit status $$status."
   fi
-  printf '%s\n' "$$out" | grep -qx "FOUNDATION-CHECK OK $$label" || fail \
-    "P1-INT-00: $$label exited 0 but never printed its success sentinel." \
-    "  expected line : FOUNDATION-CHECK OK $$label" \
-    "The owning task must print that line last, after its checks pass. Until it does, a" \
-    "zero exit status proves nothing and is not accepted as evidence."
+  # The sentinel must be the LAST actual line, not merely present somewhere: output after
+  # it means the checker kept working past its own success claim. ANSI colour, CR and
+  # surrounding whitespace are normalised away first so a legitimately colourized or
+  # indented sentinel is not refused; blank lines after it are ignored.
+  local last
+  last="$$(printf '%s\n' "$$out" \
+    | sed -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' -e 's/\r//g' \
+          -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//' -e '/^$$/d' \
+    | tail -n 1)"
+  if [ "$$last" != "FOUNDATION-CHECK OK $$label" ]; then
+    fail "P1-INT-00: $$label did not end with its success sentinel." \
+      "  expected last line : FOUNDATION-CHECK OK $$label" \
+      "  actual last line   : $${last:-<no output>}" \
+      "The owning task must print the sentinel last, after its checks pass. A zero exit" \
+      "status without it, or visible output after it, is not accepted as evidence."
+  fi
 }
 
 load_env() {
@@ -137,9 +170,54 @@ load_env() {
     "Then give this lane a unique FOUNDATION_INSTANCE, POSTGRES_PORT, S3_API_PORT," \
     "S3_CONSOLE_PORT, POSTGRES_DB and S3_BUCKET. Two lanes sharing one instance is" \
     "forbidden by FF-01 section 5."
-  set -a
-  . ./.env
-  set +a
+  local line name value lineno=0
+  while IFS= read -r line || [ -n "$$line" ]; do
+    lineno=$$((lineno + 1))
+    line="$${line%%$$'\r'}"
+    line="$${line#"$${line%%[![:space:]]*}"}"
+    case "$$line" in ''|'#'*) continue ;; esac
+    case "$$line" in
+      export[[:space:]]*)
+        line="$${line#export}"
+        line="$${line#"$${line%%[![:space:]]*}"}"
+        ;;
+    esac
+    case "$$line" in
+      *=*) ;;
+      *) fail "P1-INT-00: .env line $$lineno is not a NAME=VALUE assignment." \
+           "  line: $$line" \
+           ".env is parsed as data, never executed. Remove anything that is not an" \
+           "assignment or a # comment." ;;
+    esac
+    name="$${line%%=*}"
+    value="$${line#*=}"
+    name="$${name%"$${name##*[![:space:]]}"}"
+    if ! [[ "$$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$$ ]]; then
+      fail "P1-INT-00: .env line $$lineno has an invalid variable name." \
+        "  name: $$name" \
+        "Only NAME=VALUE with a plain shell identifier is accepted."
+    fi
+    case "$$name" in
+      FOUNDATION_POSTGRES_IMAGE|FOUNDATION_S3_IMAGE|FOUNDATION_S3_MC_IMAGE)
+        fail "P1-INT-00: .env line $$lineno sets the reserved image variable $$name." \
+          "Container image identity is owned by this Makefile and recorded in" \
+          "docs/program/FOUNDATION_LOCK.json. A lane configures instance, ports, database" \
+          "and bucket - never which image runs. Remove that line from .env." \
+          "A different image is a pin request back to P1-INT-00." ;;
+      PATH|IFS|ENV|BASH_ENV|SHELL|SHELLOPTS|BASHOPTS|LD_PRELOAD|LD_LIBRARY_PATH|\
+      PYTHONPATH|PYTHONHOME|PYTHONSTARTUP|PYTHONUNBUFFERED|UV_CACHE_DIR|PIP_CACHE_DIR|\
+      UV_PROJECT_ENVIRONMENT|MAKEFLAGS|GNUMAKEFLAGS|MAKEFILES)
+        fail "P1-INT-00: .env line $$lineno sets $$name, which .env may not control." \
+          "That name selects what code runs or where it is installed, not how this lane's" \
+          "services are configured. Remove it from .env." ;;
+    esac
+    case "$$value" in
+      \"*\") value="$${value#\"}"; value="$${value%\"}" ;;
+      \'*\') value="$${value#\'}"; value="$${value%\'}" ;;
+    esac
+    export "$$name=$$value"
+  done < .env
+  assert_image_pins
   for name in FOUNDATION_INSTANCE POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD \
        POSTGRES_PORT DATABASE_URL MINIO_ROOT_USER MINIO_ROOT_PASSWORD \
        S3_ENDPOINT_URL S3_API_PORT S3_CONSOLE_PORT S3_REGION \
@@ -147,6 +225,28 @@ load_env() {
     [ -n "$${!name:-}" ] || fail \
       "P1-INT-00: required environment name $$name is unset or empty in .env." \
       "FF-01 section 3 freezes the full name set; .env.example lists every one."
+  done
+}
+
+# Image identity is taken from THIS FILE'S BYTES, not from a make variable expansion.
+# A make variable can be shadowed per target (`make up --eval='up: VAR := evil'`, or the
+# same through MAKEFLAGS/GNUMAKEFLAGS with no visible command change), and a second `-f`
+# makefile can re-`override` it; none of that can alter the bytes of the `override` lines
+# below. The names are spelled literally here for the same reason.
+assert_image_pins() {
+  local name value
+  for name in FOUNDATION_POSTGRES_IMAGE FOUNDATION_S3_IMAGE FOUNDATION_S3_MC_IMAGE; do
+    value="$$(awk -v n="$$name" '$$1=="override" && $$2==n {print $$4; exit}' Makefile)"
+    [ -n "$$value" ] || fail \
+      "P1-INT-00: cannot read the pinned $$name out of the Makefile." \
+      "The `override $$name := <ref>` line is the single source of image identity."
+    case "$$value" in
+      *@sha256:*) ;;
+      *) fail "P1-INT-00: the pinned $$name is not digest-pinned." \
+           "  value: $$value" \
+           "Every foundation image is pinned by tag AND digest (FF-01 section 2 item 9)." ;;
+    esac
+    export "$$name=$$value"
   done
 }
 

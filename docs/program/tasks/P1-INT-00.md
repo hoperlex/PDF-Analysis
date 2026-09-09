@@ -1,6 +1,10 @@
 # Task P1-INT-00 — pin the early foundation toolchain and command surface
 
-> **Status: implemented on branch `agent/p1-int-00`; READY_FOR_PRIMARY_REVIEW.**
+> **Status: remediated on branch `agent/p1-int-00` as `P1-INT-00-R1`;
+> READY_FOR_PRIMARY_REVIEW.** R1 closes four blocker classes found in review: image pins
+> were overridable from the call site and from `.env`; literal provider `pytest` commands
+> could not import `src/`; the success sentinel was accepted anywhere in the output
+> instead of last; and a bare `make bootstrap` wrote to the user's uv cache.
 > Executed from the `FF-01 ACCEPTED` commit `0b01a3eefe0e6724f6570ccebb9154daf1fdbaec`.
 > This task is **not accepted**: `P1-INF-01`, `P1-DB-01` and `P1-STO-01` stay blocked
 > until an independent review accepts the pins and the command surface, and until the
@@ -117,12 +121,43 @@ unique `FOUNDATION_INSTANCE`, `POSTGRES_PORT`, `S3_API_PORT`, `S3_CONSOLE_PORT`,
 `POSTGRES_DB` and `S3_BUCKET` in its own `.env`.
 
 **Evidence contract for the provider lanes.** `check-services`, `check-db` and
-`check-storage` must each print `FOUNDATION-CHECK OK <target>` as their last line, after
-their assertions pass. `make` refuses a zero exit status without that line, and refuses a
-reserved path that exists but is zero bytes. This is a P1-INT-00 addition to the command
-contract, not an FF-01 requirement: an exit code alone is not evidence, and without it a
-stub checker would make `make foundation` report success having proved nothing. Reject it
-in review if the program does not want it — it is a deliberate constraint on three lanes.
+`check-storage` must each print `FOUNDATION-CHECK OK <target>` as their last actual
+output line, after their assertions pass. `make` refuses a zero exit status without that
+line, visible output after it, and a reserved path that exists but is zero bytes. Colour
+codes, CR and surrounding whitespace are normalised; trailing blank lines are ignored.
+The checker runs with `PYTHONUNBUFFERED=1` so the captured order is the order the checker
+actually wrote in, not an artefact of stdout buffering. This is a P1-INT-00 addition to
+the command contract, not an FF-01 requirement: an exit code alone is not evidence, and
+without it a stub checker would make `make foundation` report success having proved
+nothing. Reject it in review if the program does not want it — it is a deliberate
+constraint on three lanes.
+
+**Import contract.** Two root-owned mechanisms, no lane-local `sys.path` work:
+`PYTHONPATH=src` for module invocations, and `pythonpath = ["src"]` under
+`[tool.pytest.ini_options]` so that a literal `.venv/bin/pytest tests/integration/db` (or
+`.../storage`) imports foundation code from `src/` with no environment override. The
+config also sets `--import-mode=importlib`, so two lanes naming a test file identically do
+not collide when their directories are collected together. Because `pyproject.toml` is now
+a pytest configfile, this applies to every `pytest` run in the repository — including the
+historical `tests/contract` and `tests/checkpoint` suites, which may not be run from this
+checkout, so that effect is unverified here.
+
+**Image immutability.** The effective image reference is read from the Makefile's own
+`override FOUNDATION_*_IMAGE :=` lines at run time, so it survives a target-scoped make
+assignment (`--eval`, including via `MAKEFLAGS`/`GNUMAKEFLAGS`) and a second `-f`
+makefile — a make variable can be shadowed, the file's bytes cannot. `.env` is parsed as
+data and refused outright if it names one of the three.
+
+**`.env` is data, never code.** It is parsed as `NAME=VALUE` lines instead of being
+sourced. Sourcing let a lane's `.env` redefine `compose()`, redirect `PATH`, or `exit 0`
+out of a target and report success having done nothing. Anything that is not an
+assignment or a `#` comment is refused, as is any attempt to set `PATH`, `IFS`,
+`PYTHONPATH`, `LD_*`, `MAKEFLAGS` or a reserved image name. There is no shell
+interpolation inside values; one layer of matching quotes is stripped.
+
+**Caches.** `UV_CACHE_DIR` is pinned to the git-ignored `.local/uv-cache` and
+`PIP_CACHE_DIR` to `.local/pip-cache`, so a bare `make bootstrap` writes no cache under
+the user's home and needs no override.
 
 **Known limitations.** No target beyond `bootstrap` has been executed end-to-end, because
 every one of them forwards to a provider implementation that does not exist yet; each was

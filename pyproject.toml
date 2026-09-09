@@ -32,10 +32,28 @@ test = [
     "pytest==9.1.1",
 ]
 
+[tool.pytest.ini_options]
+# Root-owned, so the LITERAL provider commands work with no PYTHONPATH override and no
+# lane-local sys.path hack:
+#     .venv/bin/pytest tests/integration/db
+#     .venv/bin/pytest tests/integration/storage
+# `pythonpath` is relative to rootdir, which is this file's directory. Together with the
+# `PYTHONPATH=src` used by the Makefile's module invocations these are the only two
+# supported import mechanisms for foundation code under src/; a lane that adds sys.path
+# juggling to a conftest is working around that contract, not extending it.
+pythonpath = ["src"]
+# importlib import mode. Test modules are imported by full path instead of by basename
+# with sys.path insertion, so two lanes that both name a file `test_checks.py` do not
+# collide with "import file mismatch" when anything collects their directories in one
+# run. The alternative would be scattered __init__.py files in every lane. There is no
+# dedicated ini key for this, so it goes through addopts.
+addopts = ["--import-mode=importlib"]
+
 [tool.uv]
 # Virtual project: dependencies are locked and installed, but this repository is not
 # built or installed as a distribution. Foundation code under `src/` is reached through
-# the explicit `PYTHONPATH=src` recorded in FOUNDATION_LOCK.json invocations. This keeps
-# `make bootstrap` free of a build backend and of any wheel build when a provider lane
-# adds a module.
+# the two mechanisms above - `PYTHONPATH=src` for the module invocations recorded in
+# FOUNDATION_LOCK.json, and the pytest `pythonpath` setting for literal pytest commands.
+# This keeps `make bootstrap` free of a build backend and of any wheel build when a
+# provider lane adds a module.
 package = false
