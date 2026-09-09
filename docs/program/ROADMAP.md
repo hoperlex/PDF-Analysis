@@ -1,10 +1,10 @@
 # Roadmap — prototype first, deeper architecture from evidence
 
 > **Planning status, 2026-09-09:** the PostgreSQL/S3 Foundation Freeze `FF-01` is
-> complete as a candidate and may be accepted independently. P02–P05 below are a
-> scope-and-order outline only until `P0-PLN-01` supplies agent-ready tasks and receives
-> separate approval. Existing CP-00 contracts, fixtures, stage files and evidence are
-> preserved and are not rewritten by this roadmap.
+> accepted and `P0-FND-00` is complete. `P1-INT-00` and `P0-PLN-01` are dispatchable
+> from the acceptance commit. P02–P05 below remain a scope-and-order outline until the
+> detailed plan receives separate approval. Existing CP-00 contracts, fixtures, stage
+> files and evidence are preserved and are not rewritten by this roadmap.
 
 ## Program objective
 
@@ -28,7 +28,7 @@ PDF upload
 
 ```text
 P0-FND-00
-  -> FF-01 owner approval
+  -> FF-01 ACCEPTED
        |-> P1-INT-00 -> PostgreSQL/S3 implementation lanes -> PF-01
        |
        `-> P0-PLN-01 -> detailed P02-P05 plan + navigation task approval
@@ -45,8 +45,8 @@ allows infrastructure development before the complete prototype plan is ratified
 
 | Stage | Approval/checkpoint | Goal | Current authority |
 |---|---|---|---|
-| P00 Direction and early freeze | `FF-01` | fix prototype rules and PostgreSQL/S3 boundaries | **approval-ready** in `PROTOTYPE_FOUNDATION_FREEZE.md` |
-| P01 PostgreSQL/S3 foundation | `PF-01` | reproducible DB/object-storage providers and tests | six agent-ready tasks; dispatch after `FF-01 ACCEPTED` |
+| P00 Direction and early freeze | `FF-01` | fix prototype rules and PostgreSQL/S3 boundaries | **accepted 2026-09-09**; `P0-FND-00` complete |
+| P01 PostgreSQL/S3 foundation | `PF-01` | reproducible DB/object-storage providers and tests | `P1-INT-00` dispatchable; providers wait for its acceptance |
 | P02 AR text-consistency backend | none | bounded PDF → grounded contradiction/placeholder findings | outline only; not dispatchable |
 | P03 Expert workflow and prototype acceptance | `PC-01` | page/quote review, append-only decisions, CSV, restart | outline only; not dispatchable |
 | P04 Field validation | `PC-02` | expert evidence on representative documents | outline only; not dispatchable |
@@ -81,9 +81,9 @@ the navigation index is rebuildable and never silently resolves ambiguity.
 
 ### Exit
 
-The repository owner issues the exact decision `FF-01 ACCEPTED` described in
-`PROTOTYPE_FOUNDATION_FREEZE.md`. That completes `P0-FND-00`. Any qualification is first
-written into the freeze; silence does not unlock work.
+The repository owner issued the exact `FF-01 ACCEPTED` record in
+`PROTOTYPE_FOUNDATION_FREEZE.md` on 2026-09-09. `P0-FND-00` is complete. This approval
+does not extend to P02–P05.
 
 ## P01 — PostgreSQL/S3 foundation
 

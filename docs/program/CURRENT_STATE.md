@@ -1,11 +1,11 @@
 # Current state
 
 > **Prototype-planning overlay, 2026-09-09.** On branch
-> `planning/prototype-roadmap`, `P0-FND-00` has produced an approval-ready early
-> PostgreSQL/S3 Foundation Freeze plus six concise P01 task specifications. No product
-> or infrastructure implementation has been dispatched. `FF-01 ACCEPTED` will unlock
-> P01 immediately; `P0-PLN-01` will complete P02–P05 in parallel and cannot modify the
-> accepted foundation. The CP-00 state below is retained as the factual baseline and
+> `planning/prototype-roadmap`, the repository owner recorded `FF-01 ACCEPTED` without
+> qualification and completed `P0-FND-00`. No product or infrastructure implementation
+> has yet been dispatched. `P1-INT-00` and `P0-PLN-01` are dispatchable from the
+> acceptance commit; provider tasks still wait for accepted `P1-INT-00`, and P02–P05
+> remain unapproved. The CP-00 state below is retained as the factual baseline and
 > historical record rather than rewritten during this planning change.
 
 **Program state:** CP-00 discovery wave W0.1 accepted; all four W0.2 lanes have

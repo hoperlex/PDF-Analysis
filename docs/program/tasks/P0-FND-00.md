@@ -1,8 +1,7 @@
 # Task P0-FND-00 — approve the early PostgreSQL/S3 Foundation Freeze
 
-> **Status: candidate produced on `planning/prototype-roadmap`; owner acceptance is
-> required before any P01 implementation task is dispatched.** Acceptance of this task
-> approves the Foundation Freeze only, not the whole prototype roadmap.
+> **Status: accepted by the repository owner on 2026-09-09 (`FF-01 ACCEPTED`).** This
+> completes the Foundation Freeze only and does not approve the P02–P05 roadmap.
 
 ## Outcome
 
@@ -133,5 +132,5 @@ or disposal plan for any created local data. No automatic fallback is allowed.
 - changed files: exact allowed-path list above
 - commands/results: every required check and its exit code
 - known limits: P02–P05 remain outline-only and non-dispatchable
-- integration notes: record owner acceptance as `FF-01 ACCEPTED`; only that token
-  completes this task and unlocks `P1-INT-00`
+- integration notes: `FF-01 ACCEPTED` is recorded in the Foundation Freeze; dispatch
+  `P1-INT-00` and `P0-PLN-01` from the acceptance commit, with its literal SHA

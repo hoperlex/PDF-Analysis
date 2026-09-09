@@ -1,7 +1,7 @@
 # Task P0-PLN-01 — complete the post-foundation prototype roadmap
 
-> **Status: specified; not dispatched.** It starts after `P0-FND-00` is accepted and
-> runs in parallel with the P01 PostgreSQL/S3 implementation lanes.
+> **Status: dispatchable.** `P0-FND-00` was accepted on 2026-09-09. This task may run
+> in parallel with the P01 PostgreSQL/S3 implementation lanes.
 
 ## Outcome
 

@@ -20,11 +20,11 @@
 ## Program
 - [Roadmap](program/ROADMAP.md)
 - [Prototype profile](program/PROTOTYPE_PROFILE.md) — scope, reuse and gate policy
-- [FF-01 PostgreSQL/S3 Foundation Freeze](program/PROTOTYPE_FOUNDATION_FREEZE.md) — approval-ready early slice
-- [Task P0-FND-00](program/tasks/P0-FND-00.md) — early foundation-plan approval
-- [Task P0-PLN-01](program/tasks/P0-PLN-01.md) — later prototype plan, parallel with P01
+- [FF-01 PostgreSQL/S3 Foundation Freeze](program/PROTOTYPE_FOUNDATION_FREEZE.md) — accepted 2026-09-09
+- [Task P0-FND-00](program/tasks/P0-FND-00.md) — accepted and complete
+- [Task P0-PLN-01](program/tasks/P0-PLN-01.md) — dispatchable detailed plan, parallel with P01
 - [Task P0-NAV-00](program/tasks/P0-NAV-00.md) — AI-agent decision-to-code navigation architecture
-- [Task P1-INT-00](program/tasks/P1-INT-00.md) — toolchain and command pins
+- [Task P1-INT-00](program/tasks/P1-INT-00.md) — dispatchable toolchain and command pins
 - [Task P1-INF-01](program/tasks/P1-INF-01.md) — local PostgreSQL and MinIO
 - [Task P1-DB-01](program/tasks/P1-DB-01.md) — migration/session foundation
 - [Task P1-STO-01](program/tasks/P1-STO-01.md) — checksum-verified BlobStore

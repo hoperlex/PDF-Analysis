@@ -7,11 +7,11 @@
 > non-working/obsolete legacy runtime, and evidence-driven deep analysis after a
 > working user journey exists.
 >
-> The active candidate authority is split deliberately. `PROTOTYPE_FOUNDATION_FREEZE.md`
-> may receive `FF-01 ACCEPTED` independently and then unlock the six P01 task files.
-> `P0-PLN-01` completes P02–P05 in parallel; those stages remain non-dispatchable until
-> their separate acceptance. Until `FF-01` is accepted, this is planning only and no
-> P01 implementation is authorized.
+> The active authority is split deliberately. `PROTOTYPE_FOUNDATION_FREEZE.md` received
+> `FF-01 ACCEPTED` on 2026-09-09; `P1-INT-00` and `P0-PLN-01` are dispatchable from the
+> acceptance commit. Provider tasks wait for accepted `P1-INT-00`. `P0-PLN-01` completes
+> P02–P05 in parallel; those stages remain non-dispatchable until their separate
+> acceptance.
 >
 > Everything below this notice remains an unedited historical analysis. Its old
 > PRODUCT CODE HOLD and W1 task graph do not override an accepted FF-01, and no CP-00

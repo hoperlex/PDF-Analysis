@@ -1,7 +1,7 @@
 # Prototype profile — working audit before platform completion
 
-> **Status: candidate for repository-owner acceptance.** `FF-01 ACCEPTED` completes
-> `P0-FND-00` and freezes section 3 for P01. The remaining prototype scope guides
+> **Status: foundation section accepted under `FF-01` on 2026-09-09.** `P0-FND-00` is
+> complete and section 3 is frozen for P01. The remaining prototype scope guides
 > `P0-PLN-01` but does not approve P02–P05 implementation by itself. This profile does
 > not rewrite or invalidate CP-00 architecture, contracts, fixtures or historical
 > evidence.

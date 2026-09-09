@@ -1,6 +1,7 @@
 # Task P1-INT-00 — pin the early foundation toolchain and command surface
 
-> **Status: specified; dispatch only after `FF-01 ACCEPTED`.**
+> **Status: dispatchable.** `FF-01 ACCEPTED` was recorded on 2026-09-09. The
+> orchestrator must pin the literal acceptance-commit SHA before execution.
 
 ## Outcome
 

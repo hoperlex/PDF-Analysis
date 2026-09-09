@@ -7,7 +7,7 @@ CP tag.
 
 | ID | Tag | Entry requirement | Status |
 |---|---|---|---|
-| FF-01 | none | owner accepts `PROTOTYPE_FOUNDATION_FREEZE.md` | **candidate**; no P01 dispatch until the exact `FF-01 ACCEPTED` record exists |
+| FF-01 | none | owner accepts `PROTOTYPE_FOUNDATION_FREEZE.md` | **accepted 2026-09-09**; exact `FF-01 ACCEPTED` record in freeze; `P1-INT-00` unlocked |
 | PF-01 | none | accepted P1 providers, convergence suite and independent integration review | planned; `P1-INT-01` is the sole status writer |
 
 ## Historical CP checkpoints

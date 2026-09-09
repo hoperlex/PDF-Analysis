@@ -1,8 +1,8 @@
 # FF-01 — early PostgreSQL/S3 Foundation Freeze
 
-> **Approval state: READY FOR OWNER DECISION.** This is an independently approvable
-> slice of the prototype roadmap. `FF-01 ACCEPTED` completes `P0-FND-00` and unlocks
-> `P1-INT-00`; it does not approve or freeze P02–P05.
+> **Approval state: FF-01 ACCEPTED on 2026-09-09.** The repository owner approved this
+> independently approvable slice without qualification. `P0-FND-00` is complete and
+> `P1-INT-00` is dispatchable; P02–P05 remain unapproved and non-dispatchable.
 
 ## 1. Outcome
 
@@ -211,7 +211,7 @@ infrastructure commit is expected 1–2 days after `FF-01 ACCEPTED` at P50 and w
 
 ## 10. Approval record
 
-The repository owner accepts or rejects exactly this slice. An acceptance record states:
+The repository owner recorded this acceptance without qualification on 2026-09-09:
 
 ```text
 FF-01 ACCEPTED
@@ -219,4 +219,6 @@ PostgreSQL/S3 foundation approved for P01 implementation.
 P02-P05 remain unapproved and non-dispatchable pending P0-PLN-01.
 ```
 
-Any qualification is written as a correction before dispatch; silence is not acceptance.
+This record completes `P0-FND-00` and authorizes dispatch of `P1-INT-00` and
+`P0-PLN-01` from the commit containing this record. It does not authorize a P01 provider
+before `P1-INT-00` is accepted or any P02 implementation before its separate gates.
