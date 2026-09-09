@@ -34,6 +34,7 @@ P0-FND-00
        `-> P0-PLN-01 -> detailed P02-P05 plan + navigation task approval
                               |
                     PF-01 + accepted plan + navigation gate
+                    + forecast recalibrated from P01 evidence
                               `-> P02 implementation
 ```
 
@@ -260,9 +261,11 @@ same-day owner/reviewer responses and no production/customer data.
 | PC-02 field-validation evidence | protocol duration after PC-01 | +1–2 weeks | +2–3 weeks |
 
 The previous 10–14/18–24-day PC-01 claim is withdrawn: no agent-ready P02/P03 graph or
-measured implementation throughput supports it. `P0-PLN-01` must publish the first
-bottom-up PC-01 forecast, then recalibrate it from actual P01 elapsed time. Until then,
-**3–6 weeks from FF-01 is a planning envelope, not a P50/P80 commitment**. Internal alpha,
+measured implementation throughput supports it. `P0-PLN-01` publishes the first
+bottom-up PC-01 forecast without waiting for P01. If no P01 measurement exists then, it
+marks calibration pending; the integrator recalibrates after PF-01 and before P02
+dispatch. Until then, **3–6 weeks from FF-01 is a planning envelope, not a P50/P80
+commitment**. Internal alpha,
 pilot readiness and the former CP-10 scope are deliberately unestimated until P04 shows
 which capabilities users need; P04 may remove large parts of that scope. The repository's
 pre-pivot activity measures planning/review throughput, not runtime delivery, so it is not

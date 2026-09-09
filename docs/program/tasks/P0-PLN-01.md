@@ -15,7 +15,8 @@ the accepted Foundation Freeze.
 
 ## Frozen inputs
 
-- `docs/program/PROTOTYPE_FOUNDATION_FREEZE.md` at its accepted integration commit
+- `docs/program/PROTOTYPE_FOUNDATION_FREEZE.md` at accepted integration commit
+  `0b01a3eefe0e6724f6570ccebb9154daf1fdbaec`
 - `docs/program/PROTOTYPE_PROFILE.md` foundation invariants at the same commit
 - the candidate PC-01 AR text-consistency target in `PROTOTYPE_PROFILE.md` section 7 and
   `ROADMAP.md` P02/P03; it is not dispatch authority, but changing it in the detailed
@@ -24,7 +25,9 @@ the accepted Foundation Freeze.
   implementation is a required predecessor of P02 fan-out
 - CP-00 contracts, architecture and golden fixtures at the `P0-FND-00` base
 - migration head: produced only by `P1-DB-01`; read-only to this planning task
-- base commit: the accepted `P0-FND-00` integration commit
+- foundation base commit: `0b01a3eefe0e6724f6570ccebb9154daf1fdbaec`;
+  the launch prompt must also provide the literal task-spec commit and may not contain
+  an unsubstituted SHA placeholder
 
 ## Allowed paths
 
@@ -63,7 +66,9 @@ the accepted Foundation Freeze.
   ownership, deterministic generation/validation and accepted-foundation mappings
 - exact provider/consumer seams and disjoint allowed-path blocks
 - user-validation protocol and success/failure metrics
-- P50/P80 estimate recalibrated against actual P01 throughput
+- bottom-up P50/P80 forecast from the agent-ready graph, with assumptions and arithmetic
+- P01 calibration state: use measured P01 throughput if it exists; otherwise record it as
+  pending and name the exact PF-01-to-P02 update trigger rather than inventing a value
 - one explicit next-investment decision after P04 evidence
 
 ## Required tests
@@ -76,18 +81,25 @@ the accepted Foundation Freeze.
   do not modify it; no implementation task depends on an uncompleted planning task at
   dispatch; navigation does not block P01 and is completed before P02 fan-out.
   Expected: pass.
+- Manual estimate check: the first forecast is bottom-up from task rows; any unavailable
+  P01 measurement is visibly pending and becomes a required update after PF-01 and before
+  P02 dispatch.
+  Expected: no invented implementation velocity and no planning wait on unfinished P01.
 
 ## Estimate
 
 P50 is 1–2 elapsed days and P80 is 3–4 days after `FF-01 ACCEPTED`. This work runs in
-parallel with P01 and is not added to the foundation critical path. Its PC-01 estimate is
-issued only after an agent-ready P02/P03 graph exists and the first P01 throughput is
-measured.
+parallel with P01 and is not added to the foundation critical path. It issues the first
+PC-01 forecast after an agent-ready P02/P03 graph exists. If P01 has not yet produced a
+usable measurement, the plan is still completable and labels calibration pending; the
+integrator must recalibrate after PF-01 and before P02 dispatch.
 
 ## Integration contract
 
-P02 begins only after both the accepted foundation providers and this plan are present.
-P01 implementation continues independently if this planning task is rejected or revised.
+P02 begins only after the accepted foundation providers and this plan are present, the
+navigation gate is accepted, and the forecast is recalibrated with measured P01
+throughput. P01 implementation continues independently if this planning task is rejected
+or revised.
 
 ## Failure/idempotency/security cases
 
