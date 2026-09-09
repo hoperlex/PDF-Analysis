@@ -2,7 +2,7 @@
   "checkpoint": "CP-00",
   "tag_planned": "v0.0.1-architecture",
   "ratified": false,
-  "status": "acceptance_round_11_frozen",
+  "status": "acceptance_round_12_frozen",
   "reviewed_candidate_commit": "92e13fa496a723ed6e4c3adbf138c4f4e1d7c368",
   "qa_evidence_commit": "3da104e5d6fafb2a581bda377a07911183af803f",
   "manual_candidate_commit": "identified by candidate_digest below, not by a SHA. A commit cannot name its own hash. candidate_digest covers every git-tracked file INCLUDING this manifest, whose contribution is hashed with the candidate_digest field blanked - that is what makes a self-referential identifier possible. An earlier form excluded the manifest entirely and was rejected: two candidates differing only in manifest prose then shared one value.",
@@ -42,12 +42,12 @@
   "runtime_fields": "not applicable - architecture-only checkpoint",
   "manual_acceptance": {
     "status": "owed",
-    "round": 11,
+    "round": 12,
     "report_path": null
   },
   "automated_acceptance": {
     "status": "owed",
-    "round": 11,
+    "round": 12,
     "report_path": null
   },
   "artifact_manifest_recipe": "git ls-tree -r --name-only <a named commit> -- contracts fixtures docs/architecture scripts, sorted; sha256 over, for each path in order, the UTF-8 path bytes followed by the RAW 32-byte sha256 digest (not its hex text) of the file content. Git-tracked files only: an earlier form globbed the working tree and hashed a gitignored scripts/__pycache__ .pyc, so the digest was unreproducible on a fresh clone and the drift detector fired on an unmodified checkout. THE COMMIT IS PART OF THE RECIPE. contract-manifest.yaml published this recipe as 'reproducible from this file alone' and bound it to no commit; the same recipe over three trees of this repository gives three different values, and the bundle carried two of them under swapped labels for ten acceptance rounds. Every aggregate in this checkpoint now names its commit, or states 'this file's own commit' where a commit cannot name its own hash.",
@@ -108,7 +108,7 @@
     "round_scoped": "Both digests are recorded twice: at the top level for the current round, and inside the matching acceptance_rounds entry as history. Without the per-round copy a retro-edit of the top-level value and a genuine new round would be indistinguishable, so 'frozen and never edited afterwards' would not be checkable. Named by the QA author, who declined to write a test asserting a property the structure could not support.",
     "every_aggregate_names_its_commit": "The rule this manifest now keeps, and the one it asserted before it kept it. Every aggregate here names the commit it was computed over, or states 'this file's own commit' where a commit cannot name its own hash. tested_candidate_digest is bound per round by candidate_frozen_at_commit - all six rounds that carry a digest, 5 to 10 - and evidence_bundle_digest by evidence_bundle_commit, which is the RATIFICATION commit and not the freeze commit, because the evidence is written after the freeze by construction. Each recovered value was resolved by running the manifest's own recipe over every revision of this file on any ref and taking the one it reproduces at, never from prose."
   },
-  "tested_candidate_digest": "fbc3b911caff7ba0786668a64550552576096071634be0e7aeda32814e21e4a6",
+  "tested_candidate_digest": "1a8ccd9378dd8043a9bcceb30a90d32d6ec9beb17c22abff9c9c375fa61df5c0",
   "evidence_bundle_digest": null,
   "evidence_bundle_commit": null,
   "evidence_bundle_subject": null,
@@ -275,7 +275,7 @@
     {
       "round": 11,
       "verdict": null,
-      "status": "frozen",
+      "status": "void",
       "streams": {
         "automated": "owed",
         "manual": "owed"
@@ -284,10 +284,25 @@
       "evidence_bundle_digest": null,
       "manual_report": null,
       "automated_report": null,
-      "note": "The superseding round. Opened on the reconciled records integrated at 677741c, frozen by the integrator, and judged by two acceptance streams that had not yet run when this entry was written. The freeze commit is expected to be red: the inherent failure set is declared in docs/program/EXECUTION_PLAN.md before this round is frozen, in a path POST_FREEZE_DELTA_CEILING does not license, so it cannot be narrowed afterwards without _post_freeze_delta_problems saying so."
+      "note": "The superseding round. Opened on the reconciled records integrated at 677741c, frozen by the integrator, and judged by two acceptance streams that had not yet run when this entry was written. The freeze commit is expected to be red: the inherent failure set is declared in docs/program/EXECUTION_PLAN.md before this round is frozen, in a path POST_FREEZE_DELTA_CEILING does not license, so it cannot be narrowed afterwards without _post_freeze_delta_problems saying so. VOID, TWICE OVER AND BOTH THE INTEGRATOR'S: the plan was committed after the freeze and outside POST_FREEZE_DELTA_CEILING, which is how round ten died; and this entry was written in a shape normalise_to_candidate rewrites, so the declared tested_candidate_digest could not survive a sandbox reset. No acceptance stream ever judged it."
+    },
+    {
+      "round": 12,
+      "verdict": null,
+      "status": "frozen",
+      "streams": {
+        "automated": null,
+        "manual": null
+      },
+      "tested_candidate_digest": "1a8ccd9378dd8043a9bcceb30a90d32d6ec9beb17c22abff9c9c375fa61df5c0",
+      "evidence_bundle_digest": "",
+      "manual_report": null,
+      "automated_report": null,
+      "candidate_frozen_at_commit": null,
+      "note": "The superseding round. Round eleven was void before any stream judged it, for two integrator defects recorded in docs/program/EXECUTION_PLAN.md. This entry is written in the shape normalise_to_candidate would write it to, and that fixed point is verified before the commit rather than discovered by the suite afterwards. The expected failure set is declared in the plan, outside POST_FREEZE_DELTA_CEILING, before this round is frozen."
     }
   ],
-  "current_round": 11,
+  "current_round": 12,
   "recorded_limits": {
     "evidence_report_visibility": "The acceptance digests enumerate git ls-files --exclude-standard, so a report path added to .gitignore leaves the digest and every check silent about its content - an independent reviewer demonstrated a fabricated manual report passing that way. It is a declared scope limit rather than a hidden hole: the attack requires editing .gitignore, which is tracked and inside the digest, so it appears in the diff a reviewer reads. The next task touching the QA module must assert that both report paths are tracked and not ignored; it is not opened as its own round because the current mechanism makes the manoeuvre visible rather than invisible.",
     "prefix_widening_unpinned": "ACCEPTANCE_EVIDENCE_PREFIX and RATIFIABLE_REVIEWED_PREFIX are unpinned in the widening direction only; the guarantee is that report paths are confined to some declared prefix, not that the prefix is the narrow one. That property is what was established and it stands. The failure counts this entry used to carry - 'narrowing is caught, at 38 and 9 failures respectively' - are withdrawn, not replaced, for three reasons found in sequence. First, they were written from a measurement of an earlier tree and never re-measured. Second, an independent re-measurement disagreed with both. Third, and worst: the attribution was wrong as well as the number. W0-QA-01.md section 8 describes the 38 as ACCEPTANCE_EVIDENCE_PREFIX 'moved out of artifacts/ altogether', and records that widening it to artifacts/ or artifacts/checkpoints/ leaves the suite green. This entry called that same figure a narrowing, which is a different edit. So the record carried two independent drifts on one number, and replacing the count would have left the false attribution in place. Any restatement must name the tree it was taken on and the exact mutation that produced it: section 8's own figures are against a 281-test suite and the frozen candidate runs 324, so every count differs for that reason alone, before any drift. Owner: W1. See W0-QA-01.md section 8 item 18 and section 11.18.5.",
