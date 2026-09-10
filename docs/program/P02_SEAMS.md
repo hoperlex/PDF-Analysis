@@ -46,9 +46,9 @@ newly explicit.
 | S7 | Synchronous CSV export use case | `B5` | `B6` |
 | S8 | The frozen OpenAPI document, `contracts/api/v1/openapi.json` | `A1` | `A5`, `B6` |
 | S9 | Widget props and route URLs | `A5` | `B7`, `B8` |
-| S10 | The P02 migration head and its constraints, `0002_pc01_schema` | `A1` | every session that writes a row |
-| S11 | Opaque identifier value types, `auditmanager.shared.identity` | `A1` | every session |
-| S12 | Engine, session and transaction construction, `auditmanager.shared.db` | `A1` | every session that touches the database |
+| S10 | The P02 migration head and its constraints, `0002_pc01_schema` | `A1` | `B1`, `B2`, `B3`, `B4`, `B5`, `B6` — every session that writes a row |
+| S11 | Opaque identifier value types, `auditmanager.shared.identity` | `A1` | `A3`, `B1`, `B2`, `B3`, `B4`, `B5`, `B6` |
+| S12 | Engine, session and transaction construction, `auditmanager.shared.db` | `A1` | `B1`, `B2`, `B3`, `B4`, `B5`, `B6` |
 | S13 | The stage-artifact shapes of §4 | `A1` (declared) / `B2`, `B3` (published) | `B3`, `B4`, `B5` |
 
 `B1` is the only Gate B session that writes a Gate A tree: it adds the blob-metadata
