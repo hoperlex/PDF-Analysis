@@ -1,5 +1,61 @@
 # Current state
 
+> **P0-PLN-01 candidate, revision 4, 2026-09-10.** On branch `agent/p0-pln-01`,
+> `P0-PLN-01` has produced the detailed P02–P05 plan:
+> `docs/program/PROTOTYPE_EXECUTION_PLAN.md` plus **30 agent-ready task files** — two
+> navigation tasks, thirteen P02, eight P03, four P04 and three P05. It is a
+> **candidate**: no P02–P05 task is dispatchable until the owner accepts it, and P01 is
+> unaffected. The plan changes no contract, runtime, migration or foundation path, records
+> 24 unresolved owner decisions, and marks its forecast calibration **pending** until
+> measured P01 throughput exists.
+>
+> Revision 1 restores the fastest-prototype scope: PC-01 has no Job, Attempt, lease,
+> fencing token, retry, resume, outbox or revocation UI, and the plan records that it
+> therefore publishes no JobPackage or ResultPackage and claims no conformance to those two
+> schemas, without editing any contract. It also gives the server-side CSV export a real
+> owner, splits the navigation and P02 integration lifecycles so no task ID is reopened in
+> two windows, and separates person-effort from calendar duration.
+>
+> Revision 2 is documentation-only and narrow. It makes the task dependency graph the
+> single source of truth — the evidence gate now requires an accepted `P2-AI-01` with no
+> synthetic-observation escape, verification follows wiring, and frontend authoring
+> overlaps the P02 tail against the frozen API contract while end-to-end evidence waits for
+> the accepted backend handoff. It gives every P02–P05 task its own navigation incident
+> file and a mandatory incident status, clears the last export-resource wording, and records
+> the PC-01 `AuditRun` conformance subset as `OD-24`, naming each unevaluated guard instead
+> of implying full coverage. Owner decisions now number 24.
+>
+> Revision 3 is documentation-only and narrower still: the accepted PC-01 slice, the 30
+> task files, the DAG and every estimate are unchanged. It settles the CSV export policy as
+> one rule keyed on the contract's own `terminal_semantics.publishes_result` — a
+> `published` or `partial` run exports with its state visible, anything that publishes no
+> result is refused with the typed `state_transition_not_allowed`, and PC-01 raises
+> `partial_result_not_publishable` nowhere. It corrects two frozen bases to the commits
+> their own dependency blocks name, makes `OD-24` a dispatch prerequisite of `P2-DOM-01`
+> and has `P2-RUN-01` enumerate the whole unevaluated guard subset instead of counting it.
+> It records that PC-01 instantiates no `Import` aggregate, table or state machine, since
+> ingest is a direct single-PDF upload. It repairs the P04 lifecycle so the pre-session
+> preflight and the validation-period ledger are different artifacts with one writer each —
+> `P4-OPS-01` builds and gates the tooling and the preflight, `P4-BHV-01` writes immutable
+> sessions, and `P4-INT-01` alone produces the ledger after the sessions close. It makes
+> navigation aggregation status-aware, so a complete set of reporting statuses over an empty
+> incident directory is a measured zero rather than an absent metric, and gives `P5-INT-01`
+> the narrow ADR authority its own deliverable requires: the `Status:` line of the new P05
+> ADRs named in `P5-ARC-01`'s accepted handoff, and their index rows, and nothing else.
+>
+> One assumption remains for the owner to rule on, and it is now an explicit dispatch
+> prerequisite of `P2-INT-00`: that accepting this plan, `PF-01` and the navigation gate is
+> what lifts the production-code hold for the P02 paths, and that completing the CP-00
+> supersession remains an independent obligation of that line rather than a P02
+> predecessor. **Rule it against `main`, not against this branch.** This planning line
+> forked at `1220523` and has not taken the four CP-00 commits made on `main` since;
+> `artifacts/checkpoints/CP-00/manifest.json` reads `ratified: false` there, with rounds
+> ten and eleven `void` and round twelve `frozen` without a verdict, while the copy below
+> still reads `ratified: true` on ten rounds. The CP-00 paragraphs below are the CP-00
+> line's record and are deliberately left untouched by this planning change; reconciling
+> them belongs to `W0-INT-03` and the `W0-*` owners, not to `P0-PLN-01`. Section 9 C-4 of
+> `PROTOTYPE_EXECUTION_PLAN.md` carries the comparison and what it does to `OD-14`.
+>
 > **Prototype-planning overlay, 2026-09-09.** On branch
 > `planning/prototype-roadmap`, the repository owner recorded `FF-01 ACCEPTED` without
 > qualification and completed `P0-FND-00`. No product or infrastructure implementation

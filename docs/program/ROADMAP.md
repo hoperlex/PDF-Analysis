@@ -31,7 +31,7 @@ P0-FND-00
   -> FF-01 ACCEPTED
        |-> P1-INT-00 -> PostgreSQL/S3 implementation lanes -> PF-01
        |
-       `-> P0-PLN-01 -> detailed P02-P05 plan + navigation task approval
+       `-> P0-PLN-01 -> detailed P02-P05 plan + two-task navigation gate approval
                               |
                     PF-01 + accepted plan + navigation gate
                     + forecast recalibrated from P01 evidence
@@ -48,10 +48,10 @@ allows infrastructure development before the complete prototype plan is ratified
 |---|---|---|---|
 | P00 Direction and early freeze | `FF-01` | fix prototype rules and PostgreSQL/S3 boundaries | **accepted 2026-09-09**; `P0-FND-00` complete |
 | P01 PostgreSQL/S3 foundation | `PF-01` | reproducible DB/object-storage providers and tests | `P1-INT-00` dispatchable; providers wait for its acceptance |
-| P02 AR text-consistency backend | none | bounded PDF → grounded contradiction/placeholder findings | outline only; not dispatchable |
-| P03 Expert workflow and prototype acceptance | `PC-01` | page/quote review, append-only decisions, CSV, restart | outline only; not dispatchable |
-| P04 Field validation | `PC-02` | expert evidence on representative documents | outline only; not dispatchable |
-| P05 Deep analysis and next roadmap | `PC-03` | choose next capabilities and production work from measurements | outline only; not dispatchable |
+| P02 AR text-consistency backend | none | bounded PDF → grounded contradiction/placeholder findings | thirteen agent-ready tasks in `PROTOTYPE_EXECUTION_PLAN.md`; not dispatchable until that plan is accepted |
+| P03 Expert workflow and prototype acceptance | `PC-01` | page/quote review, append-only decisions, CSV, restart | eight agent-ready tasks; not dispatchable until the plan is accepted and the P02 API is frozen |
+| P04 Field validation | `PC-02` | expert evidence on representative documents | four agent-ready tasks; not dispatchable until `PC-01` |
+| P05 Deep analysis and next roadmap | `PC-03` | choose next capabilities and production work from measurements | three agent-ready tasks; not dispatchable until `PC-02` |
 
 The old S00–S10 documents remain a long-term capability backlog. Their ordering no
 longer grants dispatch authority to prototype tasks.
@@ -60,8 +60,10 @@ longer grants dispatch authority to prototype tasks.
 
 ADR-0019/P-23 introduces a repository navigation layer for human and AI-agent delivery.
 It does not delay FF-01 or P01. `P0-PLN-01` must create its agent-ready implementation
-task, which may prepare the schema and tooling in parallel with P01 but must be accepted
-before any P02 implementation fan-out.
+tasks — **two** of them: `P1-NAV-01` builds the schema, tooling, index and planned entries
+in parallel with P01, and `P1-NAV-02` flips the named foundation entries to `implemented`
+after `PF-01` and regenerates the index. Both must be accepted before any P02
+implementation fan-out; neither blocks P01.
 
 The layer uses task/context-owned machine-readable fragments and a generated aggregate
 index. It maps active decisions and contracts to owning tasks, implementation paths/public
@@ -136,6 +138,13 @@ deployment, production IAM, retention or backup work.
 
 ## P02 — AR text-consistency audit backend — outline
 
+The agent-ready decomposition — thirteen tasks, their allowed-path blocks, the seam
+register and the named owners of the migration head, the root locks, the backend
+composition root and the server-side CSV export — is in `PROTOTYPE_EXECUTION_PLAN.md`. The
+outline below states the scope those tasks implement. PC-01 has no Job, Attempt, lease,
+fencing token, retry, resume or outbox: those are deferred, and the plan records the
+conformance scope that follows.
+
 This stage is not dispatchable until `P0-PLN-01` is accepted. It implements one fixed
 product slice, not a generic audit platform: a local expert uploads one Russian-language
 AR PDF with an embedded text layer and receives evidence-backed observations of internal
@@ -171,6 +180,10 @@ distributed execution.
 
 ## P03 — expert loop and PC-01 acceptance — outline
 
+The agent-ready decomposition is eight tasks in `PROTOTYPE_EXECUTION_PLAN.md`, which also
+carries the numbered PC-01 acceptance runbook and names the single owner of the frontend
+composition root and global styles.
+
 Intended scope:
 
 - minimal project/upload, run-progress and PDF/finding-review views;
@@ -193,8 +206,13 @@ may claim a working prototype.
 
 ## P04 — field validation — outline
 
-Exercise `PC-01` with domain experts on 10–20 synthetic or anonymized representative
-documents. Record:
+The agent-ready decomposition is four tasks in `PROTOTYPE_EXECUTION_PLAN.md`, which carries
+the session protocol, the PC-02 pass/fail gates and the statement of what a 12–16
+measurable document sample can and cannot establish.
+
+Exercise `PC-01` with domain experts on **12–16 measurable** synthetic or anonymized
+documents — 5 seeded plus 7–11 controls — together with **2–4 negative-envelope**
+documents counted separately and excluded from every finding denominator. Record:
 
 - useful/incorrect/unclear findings;
 - evidence-location correctness;
@@ -208,6 +226,10 @@ P04 changes no foundational architecture merely to explain disappointing results
 produces measurements and product decisions.
 
 ## P05 — deep analysis and next roadmap — outline
+
+The agent-ready decomposition is three tasks in `PROTOTYPE_EXECUTION_PLAN.md`, which
+carries the next-investment decision rule and the per-candidate evidence that makes each
+one win or lose.
 
 Use P04 evidence to choose, reject or simplify the old backlog. Candidate work includes:
 
@@ -250,22 +272,42 @@ expected result.
 Assumptions: one program integrator plus three worker slots, near-continuous orchestration,
 same-day owner/reviewer responses and no production/customer data.
 
-| Milestone/work | Estimate basis | P50 elapsed | P80 elapsed |
-|---|---|---:|---:|
-| FF-01 approval and P1 dispatch | owner-response assumption | 0.5–1 day | 2 days |
-| `P0-PLN-01` detailed P02–P05 plan | task estimate; parallel with P01 | 1–2 days | 3–4 days |
-| first PostgreSQL/MinIO infrastructure commit | P1 task decomposition | 1–2 days | 3 days |
-| PF-01 accepted foundation after FF-01 | arithmetic sum of P1 rows | **4–7 days** | **11–13 days** |
-| PF-01 from the current unaccepted candidate | approval latency plus P1 rows | **4.5–8 days** | **13–15 days** |
-| PC-01 working real-stage prototype | forecast gate | not yet defensible | not yet defensible |
-| PC-02 field-validation evidence | protocol duration after PC-01 | +1–2 weeks | +2–3 weeks |
+**Forecast, not a commitment. Calibration PENDING until `PF-01`.** Effort and elapsed are
+separate quantities and are never added together; the full two-table model, its arithmetic
+and its method are in `PROTOTYPE_EXECUTION_PLAN.md` §4.
 
-The previous 10–14/18–24-day PC-01 claim is withdrawn: no agent-ready P02/P03 graph or
-measured implementation throughput supports it. `P0-PLN-01` publishes the first
-bottom-up PC-01 forecast without waiting for P01. If no P01 measurement exists then, it
-marks calibration pending; the integrator recalibrates after PF-01 and before P02
-dispatch. Until then, **3–6 weeks from FF-01 is a planning envelope, not a P50/P80
-commitment**. Internal alpha,
+Effort, in person-days, as the arithmetic sum of the thirty agent-ready task rows:
+
+| Milestone | Basis | P50 effort | P80 effort |
+|---|---|---:|---:|
+| to PC-01 | navigation + P02 + P03 rows | **31.25** | **62.0** |
+| to PC-02 | the above + P04 rows | **40.25** | **79.0** |
+| to PC-03 | the above + P05 rows | **46.75** | **91.0** |
+
+Elapsed, in working days, with one integrator, three worker slots and one serial review
+slot per acceptance:
+
+| Leg | Bound by | P50 elapsed | P80 elapsed |
+|---|---|---:|---:|
+| FF-01 approval and P1 dispatch | owner response | 0.5–1 day | 2 days |
+| PF-01 accepted foundation after FF-01 | FF-01 §9 wave estimate | **4–7 days** | **11–13 days** |
+| PF-01 → PC-01 | effort and slot contention, with the frontend overlapping the P02 tail | **25.75 days** | **51.5 days** |
+| FF-01 → PC-01 | the two rows above | **29.75–32.75 days** | **62.5–64.5 days** |
+| PC-01 → PC-02 | expert scheduling, not effort | **11–14 days** | **24–27 days** |
+| PC-02 → PC-03 | effort plus owner-response cycles | **7.25 days** | **13.5 days** |
+
+P02 and P03 are not fully serial: frontend authoring is unblocked by the frozen
+`P2-API-01` contract and runs beside the P02 tail, while `P3-QA-01` waits for the accepted
+`P2-INT-02` so end-to-end evidence judges an accepted backend.
+
+These are the first bottom-up forecast, published by `P0-PLN-01` from the agent-ready
+graph without waiting for P01. The `FF-01`→`PF-01` row is cited from FF-01 §9 as a
+wave-level estimate, not as a sum of task rows, because the six P01 task files carry no
+per-task estimate. **Calibration is pending**: no measured implementation throughput exists
+for this repository, so no row here may be quoted as a delivery commitment. The integrator
+recalibrates every row after `PF-01` is accepted and before P02 is dispatched, replacing
+each assumption with a measured P01 figure and the command and tree that produced it.
+Internal alpha,
 pilot readiness and the former CP-10 scope are deliberately unestimated until P04 shows
 which capabilities users need; P04 may remove large parts of that scope. The repository's
 pre-pivot activity measures planning/review throughput, not runtime delivery, so it is not

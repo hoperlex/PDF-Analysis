@@ -1,7 +1,11 @@
 # Task P0-PLN-01 — complete the post-foundation prototype roadmap
 
-> **Status: dispatchable.** `P0-FND-00` was accepted on 2026-09-09. This task may run
-> in parallel with the P01 PostgreSQL/S3 implementation lanes.
+> **Status: executed, revision 4; candidate on `agent/p0-pln-01`, awaiting primary
+> review.** `P0-FND-00` was accepted on 2026-09-09 and this task ran in parallel with P01
+> **dispatch readiness**; no P01 lane had been dispatched at the time of writing, which is
+> why calibration is pending rather than measured. Its deliverables are
+> `docs/program/PROTOTYPE_EXECUTION_PLAN.md` and 30 agent-ready task files. No P02–P05 task
+> is dispatchable until the owner accepts them.
 
 ## Outcome
 
@@ -62,8 +66,11 @@ the accepted Foundation Freeze.
 - a P02/P03 graph that implements exactly the bounded AR text-consistency slice, including
   its synthetic PDF, evidence-publication gate, live/recorded provider modes, UI review
   and CSV acceptance path
-- one agent-ready pre-P02 navigation task implementing ADR-0019 with disjoint entry
-  ownership, deterministic generation/validation and accepted-foundation mappings
+- an agent-ready pre-P02 navigation gate of **two** tasks implementing ADR-0019 with
+  disjoint entry ownership, deterministic generation/validation and accepted-foundation
+  mappings: `P1-NAV-01` creates the schema, tooling, index and planned entries, and
+  `P1-NAV-02` flips the named foundation entries to `implemented` after `PF-01` and
+  regenerates the index. Both are complete before P02 fan-out; neither blocks P01
 - exact provider/consumer seams and disjoint allowed-path blocks
 - user-validation protocol and success/failure metrics
 - bottom-up P50/P80 forecast from the agent-ready graph, with assumptions and arithmetic
@@ -117,4 +124,87 @@ own accepted freeze.
 - changed files and containment proof
 - commands/results
 - unresolved owner decisions
-- measured P01 throughput and revised estimate
+- measured P01 throughput and the revised estimate if a measurement exists at handoff
+  time; otherwise the recorded calibration-pending state and its trigger
+
+### Executed handoff, 2026-09-09
+
+- **Base:** task-spec commit `1cb86cd2708f11712a0cd2f481862652fac2e377`; accepted
+  foundation `0b01a3eefe0e6724f6570ccebb9154daf1fdbaec`, verified an ancestor of it.
+- **Produced:** `PROTOTYPE_EXECUTION_PLAN.md`; `P1-NAV-01` and `P1-NAV-02`; thirteen P02,
+  eight P03, four P04 and three P05 task files — 30 in all; the P02–P05 detail in
+  `ROADMAP.md`; the run-state vocabulary correction and the corpus restatement in
+  `PROTOTYPE_PROFILE.md` §§8–9; planning entries in `CURRENT_STATE.md` and `docs/INDEX.md`.
+- **Contracts, runtime, migration head, fixtures, scripts and tests:** unchanged. The plan
+  specifies who will own those paths later; it writes none of them.
+- **Calibration:** pending. No measured P01 throughput exists, because no P01 task has been
+  dispatched. The recalibration trigger is recorded in the execution plan and in
+  `ROADMAP.md`: after `PF-01` acceptance and before P02 dispatch.
+- **Unresolved owner decisions:** 24, listed as `OD-01` to `OD-24` in the execution plan.
+  Ids are append-only and are never renumbered. `OD-24` records the PC-01 `AuditRun`
+  conformance subset; `OD-14` is now an explicit dispatch prerequisite of `P2-INT-00`.
+  `OD-14` is the one that can move the whole graph: whether accepting this plan lifts the
+  production-code hold for the P02 paths, or whether accepting the CP-00 supersession is an
+  additional P02 predecessor. Revision 4 restates it against evidence: `main`'s CP-00
+  manifest reads `ratified: false` with rounds ten and eleven `void` and round twelve
+  `frozen`, while this branch's copy reads `ratified: true` on ten rounds, so the earlier
+  framing — round ten accepted, round eleven owed — was false on `main`.
+- **ADR-0019:** not accepted by this task. `P1-NAV-01` implements it and its dispatch is
+  conditioned on the owner accepting the ADR together with this plan.
+
+### Executed handoff, revision 3
+
+- **Base:** `3d4653afa2726d58c6edae36c75ba759148b9c6a` on `agent/p0-pln-01`. Documentation
+  only. The accepted PC-01 slice, the 30 task files, the task graph and every estimate are
+  unchanged; no task ID was added and no estimate figure moved.
+- **Nine corrections.** One export policy under `OD-11`, keyed on the contract's
+  `terminal_semantics.publishes_result` and stated identically in the plan, `P2-EXP-01`,
+  `P2-API-01`, `P3-API-01`, `P3-WEB-04` and the `P3-QA-01` verifier. Two frozen bases
+  corrected to the commits their own dependency blocks name. `OD-24` made a dispatch
+  prerequisite of `P2-DOM-01`. `P2-RUN-01` enumerating the whole unevaluated guard subset,
+  with cancellation and Attempt authority named separately as absent capabilities. The
+  `Import` contradiction removed without adding an aggregate or a table. The P04 lifecycle
+  split so the pre-session preflight and the validation-period ledger are distinct
+  artifacts with one writer each. Navigation aggregation made status-aware and scoped.
+  `P5-INT-01` given exactly the ADR authority its deliverable needs. Stale counts and the
+  two-task navigation gate corrected.
+- **Contracts, runtime, migrations, providers, fixtures, scripts and tests:** unchanged.
+  `partial_result_not_publishable` and the `import` machine remain in the frozen contracts,
+  untouched and now explicitly unused by PC-01. `state_transition_not_allowed` was already
+  in the frozen catalog and was not invented.
+- **Unresolved owner decisions:** still 24, `OD-01` to `OD-24`, ids append-only. `OD-11`
+  and `OD-24` were restated, not renumbered. `OD-14` remains the one that can move the
+  whole graph.
+- **Known limitation.** Two adversarial reviews drove this revision; the second found that
+  my first pass had left `P4-INT-01` invoking tool modes `P4-OPS-01` never defined, and had
+  claimed aggregator scopes were disjoint while the table showed P02 covered twice. Both
+  are fixed here. The ASCII graph in plan section 2 still omits declared edges; rather than
+  redraw it, section 2 now states that the per-task predecessor blocks are jointly
+  authoritative and lists the undrawn edges.
+
+### Executed handoff, revision 4
+
+- **Base:** `92aeee89e25c290c70a8300421d1a96cf7462bc3` on `agent/p0-pln-01`. Documentation
+  only, and narrow: four files, no task file added or removed, no estimate touched, no
+  change to the PC-01 slice, the DAG or any other owner decision.
+- **What changed and why.** `OD-14` — the one decision that can move the whole P02 graph —
+  rested on a description of CP-00 that is false on `main`. This branch forked at
+  `1220523` and never took the four CP-00 commits made since. The disagreement is in the
+  machine-readable record: `artifacts/checkpoints/CP-00/manifest.json` reads
+  `ratified: false` on `main`, with rounds ten and eleven `void` and round twelve `frozen`
+  without a verdict, while this line still reads `ratified: true` on ten rounds. The
+  earlier framing — round ten accepted, round eleven owed — was therefore wrong in both
+  the ratification status and the ordinal of the open round.
+- **Effect on the decision.** It gets heavier, not lighter. The question is not whether
+  P02 may start while a tidy-up round is outstanding, but whether P02 may write production
+  code and create a contract family while the architecture checkpoint it descends from
+  carries no accepted ratification at all. Section 9 C-4 now states the comparison, and
+  `OD-14`, the `P2-INT-00` dispatch bullet and the planning banner all direct the owner to
+  rule against `main`'s manifest rather than against this branch.
+- **Deliberately not done.** The CP-00 paragraphs in `CURRENT_STATE.md` are the CP-00
+  line's record, not a planning-status entry, so this task did not reconcile them — that
+  belongs to `W0-INT-03` and the `W0-*` owners. `artifacts/**` is a forbidden hotspot here,
+  so neither manifest was touched. Both copies remain as they were; only the planning
+  blockquote, which this task owns, now says which one to trust and why.
+- **Unresolved owner decisions:** still 24. `OD-14` was restated, not renumbered, and no
+  id moved.

@@ -24,6 +24,37 @@
 - [Task P0-FND-00](program/tasks/P0-FND-00.md) — accepted and complete
 - [Task P0-PLN-01](program/tasks/P0-PLN-01.md) — dispatchable detailed plan, parallel with P01
 - [Task P0-NAV-00](program/tasks/P0-NAV-00.md) — AI-agent decision-to-code navigation architecture
+- [Prototype execution plan P02–P05](program/PROTOTYPE_EXECUTION_PLAN.md) — candidate graph, ownership, estimates and owner decisions
+- [Task P1-NAV-01](program/tasks/P1-NAV-01.md) — navigation schema, tooling and planned entries
+- [Task P1-NAV-02](program/tasks/P1-NAV-02.md) — foundation entry reconciliation after PF-01
+- [Task P2-INT-00](program/tasks/P2-INT-00.md) — P02 dependency pins and environment contract
+- [Task P2-DOM-01](program/tasks/P2-DOM-01.md) — P02 migration head and domain primitives
+- [Task P2-BHV-01](program/tasks/P2-BHV-01.md) — synthetic AR corpus and seeded-issue oracle
+- [Task P2-META-01](program/tasks/P2-META-01.md) — ingest, immutable version and blob registration
+- [Task P2-RUN-01](program/tasks/P2-RUN-01.md) — persisted AuditRun and the sequential local executor
+- [Task P2-ENG-01](program/tasks/P2-ENG-01.md) — stage engine and deterministic preparation stages
+- [Task P2-AI-01](program/tasks/P2-AI-01.md) — text_analysis, prompt bundle and provider adapters
+- [Task P2-FND-01](program/tasks/P2-FND-01.md) — evidence gate, findings and decision ledger
+- [Task P2-EXP-01](program/tasks/P2-EXP-01.md) — synchronous server-side CSV export
+- [Task P2-API-01](program/tasks/P2-API-01.md) — frozen OpenAPI v1 surface
+- [Task P2-INT-01](program/tasks/P2-INT-01.md) — backend composition root and final wiring
+- [Task P2-QA-01](program/tasks/P2-QA-01.md) — independent P02 journey and restart evidence
+- [Task P2-INT-02](program/tasks/P2-INT-02.md) — P02 handoff and navigation regeneration
+- [Task P3-WEB-00](program/tasks/P3-WEB-00.md) — frontend toolchain, composition root and UI seam
+- [Task P3-API-01](program/tasks/P3-API-01.md) — generated OpenAPI client and transport seam
+- [Task P3-WEB-01](program/tasks/P3-WEB-01.md) — project, upload and run-progress slice
+- [Task P3-WEB-02](program/tasks/P3-WEB-02.md) — finding list and page-beside-quotation review
+- [Task P3-WEB-03](program/tasks/P3-WEB-03.md) — append-only expert decision UI
+- [Task P3-WEB-04](program/tasks/P3-WEB-04.md) — CSV export and column verification
+- [Task P3-QA-01](program/tasks/P3-QA-01.md) — automated PC-01 journey and restart evidence
+- [Task P3-INT-01](program/tasks/P3-INT-01.md) — PC-01 acceptance runbook and checkpoint
+- [Task P4-QA-01](program/tasks/P4-QA-01.md) — PC-02 validation corpus and session protocol
+- [Task P4-OPS-01](program/tasks/P4-OPS-01.md) — PC-02 measurement tooling and pre-session preflight
+- [Task P4-BHV-01](program/tasks/P4-BHV-01.md) — moderated expert validation sessions
+- [Task P4-INT-01](program/tasks/P4-INT-01.md) — PC-02 validation report and acceptance
+- [Task P5-ARC-01](program/tasks/P5-ARC-01.md) — evidence-to-candidate architecture disposition
+- [Task P5-META-01](program/tasks/P5-META-01.md) — beta/v1 roadmap and recalibrated forecast
+- [Task P5-INT-01](program/tasks/P5-INT-01.md) — PC-03 acceptance and backlog disposition
 - [Task P1-INT-00](program/tasks/P1-INT-00.md) — dispatchable toolchain and command pins
 - [Task P1-INF-01](program/tasks/P1-INF-01.md) — local PostgreSQL and MinIO
 - [Task P1-DB-01](program/tasks/P1-DB-01.md) — migration/session foundation
