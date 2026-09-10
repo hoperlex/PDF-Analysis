@@ -1,7 +1,9 @@
 # Gate A — closure and the first measured throughput
 
-> **Status: the Python foundation is accepted. `A5` (web toolchain and generated client)
-> is in flight.** Accepted on `planning/prototype-roadmap` at the merge of `agent/gate-a6-qa`.
+> **Status: closed.** All seven sessions landed on `planning/prototype-roadmap`. The final
+> tree is green: `make foundation` `0` with three sentinels, `tests/contract/api_v1` 10
+> passed, `tests/contract/domain_p02` 110 passed, `npm ci`/`build`/`test` `0` with 92 tests,
+> validator `PASS`, `git diff --check` `0`.
 
 ## 1. What was accepted
 
@@ -16,7 +18,8 @@ lane's own claim.
 | `A3` storage | `src/auditmanager/storage` | 6 |
 | `A4` corpus | `fixtures/synthetic/ar`, `tools/fixtures` | 10 |
 | `A6-QA` convergence | `tests/integration/foundation` | 7 |
-| `A5` web | `web/**` shell, shared and generated client | in flight |
+| `A5` web | `web/**` shell, shared and generated client | 6 |
+| `A7-FIX` seam repair | `contracts/api/v1`, generated client, `tests/contract/api_v1` | 4 |
 
 ## 2. The closing checks, run by the integrator
 
@@ -98,8 +101,10 @@ against `fixtures/synthetic/ar/expected_issues.json` on whitespace-normalised te
 | `A3` storage | 24.8 min | 111 | **0** |
 | `A4` corpus | 39.5 min | 117 | **0** |
 | `A6-QA` convergence | 48.2 min | 186 | **0** |
+| `A5` web toolchain | 48.8 min | 191 | **0** |
+| `A7-FIX` seam repair | 16.5 min | 100 | **0** |
 
-**Rounds-to-accept is zero across five implementation sessions.** That is the number the
+**Rounds-to-accept is zero across seven implementation sessions.** That is the number the
 programme had never measured and on which the whole forecast rested. `PROTOTYPE_WAVE_PLAN.md`
 §8 assumed one to two rounds per gate, extrapolated from authoring times alone;
 `PROTOTYPE_EXECUTION_PLAN.md` §4 priced a review slot per acceptance; the W0 record was
@@ -111,7 +116,7 @@ The honest reading is that rework moved from the session loop into the integrati
 where it is cheaper, because the gates are executable. A prose gate cannot tell an
 integrator that `exec` will not run a shell function; `exit 127` can.
 
-**Elapsed for Gate A: about 2.5 hours.** Four authoring sessions in parallel bounded by
+**Elapsed for Gate A: about 4 hours.** Four authoring sessions in parallel bounded by
 `A1` at 56 minutes, then integrator merges and the first `Makefile` repair, then `A6-QA`
 serially at 48 minutes, then the merge and the closing run above. Against
 `PROTOTYPE_WAVE_PLAN.md` §8's estimate of **1–2 days**.
