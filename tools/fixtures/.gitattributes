@@ -1,0 +1,4 @@
+# The committed font subset is embedded byte-for-byte into the baseline PDF, so an
+# end-of-line translation on checkout would change the generated corpus. Never treat it
+# as text.
+assets/*.ttf binary
