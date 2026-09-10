@@ -764,10 +764,17 @@ class PublishedRun:
         }[target]
         for step in path:
             terminal = step in {"published", "partial", "failed", "cancelled"}
+            # A terminal state requires `terminal_at`, a `failed` run requires a
+            # `terminal_reason`, and a `published` run requires an empty
+            # `degradation_set`. These are the schema's constraints, not this
+            # fixture's preferences: a silent degradation cannot reach the success
+            # terminal, and a failure with no recorded reason cannot exist.
             self.session.execute(
                 text(
                     "UPDATE audit_run SET state = :s, "
                     "terminal_at = CASE WHEN :t THEN now() ELSE NULL END, "
+                    "terminal_reason = CASE WHEN :s = 'failed' THEN 'analysis_failed' "
+                    "ELSE NULL END, "
                     "degradation_set = CASE WHEN :s = 'published' THEN '[]'::jsonb "
                     "ELSE degradation_set END "
                     "WHERE run_id = :r"
