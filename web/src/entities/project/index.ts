@@ -15,6 +15,9 @@ export {
   validateProjectName,
 } from './model/project';
 
+export type { CreateProjectFailure, CreateProjectFailureKind } from './model/create-failure';
+export { classifyCreateProjectFailure } from './model/create-failure';
+
 export { PROJECT_PAGE_LIMIT, useProjectList } from './api/use-project-list';
 
 export type { ProjectRowProps } from './ui/project-row';
