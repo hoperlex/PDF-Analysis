@@ -1,0 +1,45 @@
+{
+  "finding_uid": "fnd_01M2545JSD15ETSNNV904X991M",
+  "project_uid": "prj_01M2545JSD15ETSNNV904X991F",
+  "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
+  "run_id": "run_01M2545JSD15ETSNNV904X991K",
+  "category": "internal_contradiction",
+  "observation": {
+    "finding_observation_id": "fobs_01M2545JSD15ETSNNV904X991N",
+    "run_id": "run_01M2545JSD15ETSNNV904X991K",
+    "category": "internal_contradiction",
+    "finding_text": "Clause 4.2 caps aggregate liability at 1,000,000 while clause 9.1 caps the same liability at 500,000.",
+    "recommendation_text": "Reconcile the two liability caps and restate the surviving figure in both clauses.",
+    "evidence": [
+      {
+        "evidence_ordinal": 0,
+        "page_number": 4,
+        "quote": "aggregate liability shall not exceed 1,000,000",
+        "char_start": 10432,
+        "char_end": 10477,
+        "block_id": "b_000117"
+      },
+      {
+        "evidence_ordinal": 1,
+        "page_number": 9,
+        "quote": "in no event shall liability exceed 500,000",
+        "char_start": 28104,
+        "char_end": 28145,
+        "block_id": "b_000342"
+      }
+    ],
+    "provenance": {
+      "stage_id": "text_analysis",
+      "analysis_profile_id": "ap_01M2545JSD15ETSNNV904X991Q",
+      "prompt_bundle_id": "pb_01M2545JSD15ETSNNV904X991R",
+      "provider_mode": "recorded",
+      "model_call_id": "mc_01M2545JSD15ETSNNV904X991S",
+      "model_identity": "recorded-fixture-model"
+    }
+  },
+  "current_verdict": "accepted",
+  "latest_decision_id": "dec_01M2545JSD15ETSNNV904X991P",
+  "decision_recorded_at": "2026-09-10T10:00:00Z",
+  "latest_comment": "Confirmed against the signed original; the 500,000 cap is the surviving one.",
+  "decision_event_count": 3
+}
