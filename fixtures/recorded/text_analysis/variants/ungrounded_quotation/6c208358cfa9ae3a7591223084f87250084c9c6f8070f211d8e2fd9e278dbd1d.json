@@ -1,0 +1,13 @@
+{
+  "latency_ms": 10220,
+  "model_id": "claude-opus-5",
+  "note": "Quotations that are not in the text layer. One observation is wholly invented; the other pairs a real quotation with an invented one. Exercises what is emitted and what is dropped.",
+  "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Класс энергетической эффективности здания указан по-разному в двух разделах.\", \"recommendation_text\": \"Согласовать класс энергетической эффективности здания.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Класс энергетической эффективности здания — A.\"}]}, {\"category\": \"internal_contradiction\", \"finding_text\": \"Степень огнестойкости одного и того же здания указана по-разному в разных разделах.\", \"recommendation_text\": \"Согласовать степень огнестойкости здания между разделами.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\"}, {\"page_number\": 6, \"quote\": \"Степень огнестойкости здания — IV.\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "6c208358cfa9ae3a7591223084f87250084c9c6f8070f211d8e2fd9e278dbd1d",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2180,
+    "output_tokens": 610
+  }
+}
