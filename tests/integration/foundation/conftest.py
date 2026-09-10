@@ -584,14 +584,20 @@ def pytest_configure(config: pytest.Config) -> None:
         )
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:
-    """Refuse an empty collection.
+    """Refuse an empty collection, deselection included.
 
     pytest's own exit status for "no tests collected" is 5, which looks like
     nothing went wrong. ``run_suite`` in the Makefile refuses 5 for the ``make``
     path; this refuses it for every other path as well.
+
+    ``trylast`` is load-bearing. ``-k``, ``-m`` and ``--deselect`` do their
+    filtering in this same hook, so a default-ordered implementation would
+    inspect the list *before* deselection and see a full suite that is about to
+    become an empty run.
     """
     if not items:
         raise pytest.UsageError(
