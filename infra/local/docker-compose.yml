@@ -1,0 +1,125 @@
+# P1-INF-01 / Gate A session A2 - disposable local foundation services.
+#
+# Invoked only through the frozen Makefile targets:
+#
+#   make up     -> docker compose --project-name $FOUNDATION_INSTANCE \
+#                    --file infra/local/docker-compose.yml up --detach --wait
+#   make down   -> docker compose --project-name $FOUNDATION_INSTANCE \
+#                    --file infra/local/docker-compose.yml down
+#
+# IMAGE IDENTITY IS NOT CONFIGURABLE HERE. FF-01 section 2 item 9 forbids a floating
+# tag anywhere in the foundation, and P1-INT-00 owns the three pins. The Makefile reads
+# them out of its own bytes and exports FOUNDATION_POSTGRES_IMAGE, FOUNDATION_S3_IMAGE
+# and FOUNDATION_S3_MC_IMAGE, each already carrying `@sha256:`. This file consumes them
+# with `:?` so an unset value is a loud failure, never a silent fall back to a tag.
+# Effective references at authoring time (docs/program/FOUNDATION_LOCK.json):
+#   postgres:17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+#   minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+#   minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+#
+# LANE ISOLATION (FF-01 section 5). The project name, the network name and BOTH volume
+# names derive from FOUNDATION_INSTANCE, so two lanes never share live service state.
+# Published ports are bound to 127.0.0.1 only: these are development services holding
+# disposable credentials and they must not be reachable from the network.
+
+name: ${FOUNDATION_INSTANCE:?FOUNDATION_INSTANCE is unset. Run make up; it loads .env.}
+
+networks:
+  lane:
+    name: ${FOUNDATION_INSTANCE:?FOUNDATION_INSTANCE is unset.}-net
+
+# `down` never removes these - only `down --volumes` would, and no frozen target passes
+# it - so database contents and object storage survive a stop/start cycle.
+volumes:
+  postgres-data:
+    name: ${FOUNDATION_INSTANCE:?FOUNDATION_INSTANCE is unset.}-postgres-data
+  s3-data:
+    name: ${FOUNDATION_INSTANCE:?FOUNDATION_INSTANCE is unset.}-s3-data
+
+services:
+  postgres:
+    image: ${FOUNDATION_POSTGRES_IMAGE:?FOUNDATION_POSTGRES_IMAGE is unset. The Makefile exports the pinned digest; do not run docker compose by hand.}
+    networks: [lane]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is unset.}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is unset.}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is unset.}
+      # Refuse the image's trust-auth escape hatch explicitly: every connection, including
+      # the one the health check makes over TCP, must present the password.
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:?POSTGRES_PORT is unset.}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # `pg_isready` alone is not readiness. During initdb the entrypoint runs a temporary
+    # server that listens on the unix socket only, so a socket probe reports ready while
+    # the database is still being created and the role does not exist yet. This probes
+    # 127.0.0.1 over TCP - which the temporary server does not listen on - and then runs
+    # a real authenticated query as the configured role against the configured database.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready --quiet --host=127.0.0.1 --port=5432
+          --username="$$POSTGRES_USER" --dbname="$$POSTGRES_DB"
+          && PGPASSWORD="$$POSTGRES_PASSWORD" psql --quiet --no-align --tuples-only
+          --host=127.0.0.1 --port=5432 --username="$$POSTGRES_USER" --dbname="$$POSTGRES_DB"
+          --command='SELECT 1' >/dev/null
+      interval: 3s
+      timeout: 10s
+      retries: 40
+      start_period: 5s
+
+  s3:
+    image: ${FOUNDATION_S3_IMAGE:?FOUNDATION_S3_IMAGE is unset. The Makefile exports the pinned digest; do not run docker compose by hand.}
+    networks: [lane]
+    command: ["server", "/data", "--address", ":9000", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is unset.}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is unset.}
+    ports:
+      - "127.0.0.1:${S3_API_PORT:?S3_API_PORT is unset.}:9000"
+      - "127.0.0.1:${S3_CONSOLE_PORT:?S3_CONSOLE_PORT is unset.}:9001"
+    volumes:
+      - s3-data:/data
+    # `mc ready` is MinIO's own readiness probe: it reports ready only once the server
+    # will serve S3 API requests, unlike a bare TCP connect or a liveness ping.
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 10s
+      retries: 40
+      start_period: 5s
+
+  # Idempotent private-bucket initialization. It runs on every `up`; the second and every
+  # later run creates nothing and is not an error (see bucket-init.sh).
+  #
+  # Why it stays alive instead of exiting: `make up` passes `--wait`, which gates on
+  # services reaching running-or-healthy. A container that has already exited gives that
+  # gate nothing to wait for, so `make up` could return before the bucket existed. Holding
+  # the container with a health check that flips only after the initializer succeeded makes
+  # "bucket ready" part of what `--wait` actually waits for, with no manual step. It also
+  # keeps `docker compose exec s3-init` available for re-running the initializer by hand.
+  s3-init:
+    image: ${FOUNDATION_S3_MC_IMAGE:?FOUNDATION_S3_MC_IMAGE is unset. The Makefile exports the pinned digest; do not run docker compose by hand.}
+    networks: [lane]
+    depends_on:
+      s3:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is unset.}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is unset.}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is unset.}
+    volumes:
+      - ./bucket-init.sh:/usr/local/lib/foundation/bucket-init.sh:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - 'set -e; /bin/sh /usr/local/lib/foundation/bucket-init.sh; : > /tmp/bucket-ready; exec tail -f /dev/null'
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /tmp/bucket-ready ]"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 2s
