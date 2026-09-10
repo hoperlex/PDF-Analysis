@@ -142,17 +142,24 @@ def paginate(
     """Cut one page out of an ordered sequence.
 
     ``sort_key`` maps a row to its ordering tuple; the cursor carries the last one
-    emitted, so the next page resumes strictly after it. Ordering is the caller's --
+    emitted, and the next page resumes at the row after it. Ordering is the caller's --
     this function never sorts, because the order is the producing query's contract and
     re-sorting here would hide a query that stopped honouring it.
+
+    Resumption **locates** the cursor's key rather than comparing against it. A
+    comparison would silently assume ascending order and quietly return the wrong page
+    for a descending listing -- and the frozen document orders projects *newest first*,
+    so that assumption would be wrong on the very first operation. Locating the key
+    works for either direction, and a key that is no longer present yields an empty
+    page rather than a page from the wrong end.
     """
     start = 0
     if cursor is not None:
         after = decode_cursor(cursor)
         start = len(rows)
         for index, row in enumerate(rows):
-            if tuple(sort_key(row)) > after:
-                start = index
+            if tuple(sort_key(row)) == after:
+                start = index + 1
                 break
     window = tuple(rows[start : start + limit])
     exhausted = start + limit >= len(rows)
