@@ -508,6 +508,56 @@ def foundation_conftest(pytestconfig: pytest.Config) -> Any:
     )
 
 
+def _tracked_state() -> str:
+    """``git status --porcelain`` for the whole checkout, tracked and untracked.
+
+    Untracked files are included deliberately: a test that dropped a SQLite
+    file, a local blob directory or a stray artifact into the tree would be
+    invisible to a tracked-only comparison, and "no filesystem substitute" is
+    precisely the claim that would hide there.
+    """
+    result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            "P1-QA-00: `git status --porcelain` failed, so this suite cannot prove "
+            "it left the checkout unchanged. That proof is a required outcome, not "
+            "an optional one.\n" + result.stderr
+        )
+    return result.stdout
+
+
+@pytest.fixture(scope="session", autouse=True)
+def checkout_is_unchanged() -> Iterator[None]:
+    """Fail the session if the suite modified the checkout.
+
+    ``P1-QA-00`` requires cleanup scoped to generated resources and a checkout
+    that is unchanged afterwards. Asserting it at session teardown is what turns
+    that requirement into something that can fail: a test that writes into the
+    repository, or a cleanup path that removes a tracked file, breaks the run
+    rather than being noticed later by a reviewer running ``git status``.
+
+    Autouse and session-scoped, so it covers every test including any added
+    later without that test having to remember.
+    """
+    before = _tracked_state()
+    yield
+    after = _tracked_state()
+    if before != after:
+        raise AssertionError(
+            "P1-QA-00: the foundation suite changed the checkout.\n"
+            f"--- before ---\n{before}\n--- after ---\n{after}\n"
+            "Cleanup is scoped to generated resources and the checkout must be "
+            "byte-identical afterwards. A test that writes into the repository "
+            "belongs in a tmp_path."
+        )
+
+
 # --------------------------------------------------------------------------
 # anti-vacuity hooks
 # --------------------------------------------------------------------------
