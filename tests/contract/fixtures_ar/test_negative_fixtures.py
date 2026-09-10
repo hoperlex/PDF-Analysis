@@ -172,6 +172,21 @@ class EnvelopeCheckerCanFailTest(unittest.TestCase):
         report = envelope.check(truncated)
         self.assertFalse(report.accepted)
 
+    def test_a_corrupt_pdf_reports_rather_than_crashes(self) -> None:
+        """`build_ar_corpus.py --check` re-reads the *committed* baseline, which can be
+        corrupt in ways a fresh build never is. It relies on corruption surfacing as
+        `PdfParseError` so it can name the bad artefact instead of dying with a
+        traceback. This pins that contract.
+        """
+        from ar_corpus import pdfextract
+
+        data = bytearray(BASELINE.read_bytes())
+        data[-200] ^= 0x01
+        with self.assertRaises(pdfextract.PdfParseError):
+            pdfextract.extract_pages(bytes(data))
+        # And the envelope checker turns that same corruption into a report, not a raise.
+        self.assertFalse(envelope.check(bytes(data)).accepted)
+
     def test_a_baseline_stripped_of_its_tounicode_map_fails_the_text_rule(self) -> None:
         """The failure mode that would silently contaminate the oracle.
 

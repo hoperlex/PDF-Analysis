@@ -365,14 +365,23 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
         # Re-run the oracle against what is on disk, not only against the fresh build.
+        # A committed file can be corrupt in ways a fresh build never is, so a parse
+        # failure here is a reportable result, not a crash: a gate that dies with a
+        # traceback tells a caller far less than one that says which artefact is wrong.
         baseline_path = OUT_DIR / BASELINE_NAME
         if baseline_path.is_file():
-            committed_pages = pdfextract.extract_pages(baseline_path.read_bytes())
-            failures += [f"committed baseline: {p}" for p in verify_extracted(committed_pages)]
-            failures += [
-                f"committed baseline: {p}"
-                for p in verify_envelope(baseline_path.read_bytes())
-            ]
+            committed = baseline_path.read_bytes()
+            try:
+                committed_pages = pdfextract.extract_pages(committed)
+            except pdfextract.PdfParseError as exc:
+                failures.append(f"committed baseline is not readable: {exc}")
+            else:
+                failures += [
+                    f"committed baseline: {p}" for p in verify_extracted(committed_pages)
+                ]
+                failures += [
+                    f"committed baseline: {p}" for p in verify_envelope(committed)
+                ]
 
         if failures:
             print("FAIL: the committed corpus does not match a fresh build:",
