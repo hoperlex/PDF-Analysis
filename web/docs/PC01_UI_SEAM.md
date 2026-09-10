@@ -361,20 +361,27 @@ Each of these has a guard that has been shown to fail: see `web/tests/guards/**`
 * `needs_manual_review` is in the closed verdict union and has no PC-01 producer.
   `revoke` is in the decision-event union and no PC-01 client offers it.
 
-## 11. One open defect in the contract, reported and not repaired
+## 11. A contract defect that was found here, and is now repaired
 
-`FindingDetail` composes `Finding` — which is `additionalProperties: false` — with a
-branch adding `latest_comment` and `decision_event_count`. Under JSON Schema 2020-12 the
-closed branch rejects both, so `FindingDetail` cannot validate carrying the two fields it
-exists to add. Verified with a Draft 2020-12 validator; the full report is in
+`A5` reported that `FindingDetail` composed `Finding` — which is `additionalProperties:
+false` — with a branch adding `latest_comment` and `decision_event_count`. Under JSON
+Schema 2020-12 the closed branch rejected both, so `FindingDetail` could not validate
+carrying the two fields it exists to add. `A5` verified it with a Draft 2020-12 validator
+and correctly left it unrepaired, because `contracts/api/v1/**` was not its to write.
+
+**It is fixed.** Session `A7-FIX` restated `FindingDetail` as one standalone closed object
+carrying `Finding`'s properties plus the two additions, leaving `Finding` untouched. The
+integrator verified the repaired document independently: the payload carrying both fields
+raises no `additionalProperties` error; an unknown property is still rejected on
+`FindingDetail` and on `Finding`; and `Finding` still refuses the detail-only field, so the
+distinction this endpoint draws survives. No `allOf` remains anywhere in the document. The
+reasoning, including the two shapes that were built and rejected, is in
 `docs/program/tasks/P3-API-01.md`.
 
-**What this means for `B8`.** The generated TypeScript is unaffected and is the shape you
-want: `FindingDetail = Finding & { decision_event_count?: number; latest_comment?: string
-| null }`. Build against it. What you must not do is add a runtime JSON Schema validation
-of the detail response against the contract document — it will reject a correct payload.
-If the contract is repaired, the generated type does not change and neither does your
-slice.
+**What this means for `B8`.** The generated TypeScript did not change — it was always the
+shape you want: `FindingDetail = Finding & { decision_event_count?: number;
+latest_comment?: string | null }`. Build against it. **The earlier warning in this section
+told you not to validate the detail response against the contract document. That warning is
+withdrawn: it was true only of the broken document and would now steer you away from a check
+that works.**
 
-`contracts/api/v1/**` belongs to session `A1`. `A5` reported the defect and left it
-standing: a client and a contract reconciled by the same hand prove nothing.
