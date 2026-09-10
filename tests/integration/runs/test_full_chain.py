@@ -20,7 +20,7 @@ from auditmanager.analysis.stages.extraction import extract_document
 from auditmanager.analysis.text import AR_TEXT_PROFILE, build_request, load_text_layer
 from auditmanager.exports import export_run_csv
 from auditmanager.findings import published_finding_count, published_findings
-from auditmanager.runs import PC01_STAGES, RunRepository, execute_run, start_audit_run
+from auditmanager.runs import PC01_STAGES, execute_run, start_audit_run
 
 RECORDED_MODEL_ID = "claude-opus-5"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
