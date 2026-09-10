@@ -209,13 +209,31 @@ require_provider() {
 # exits 0 and `make foundation` would report success having proved nothing.
 run_checked() {
   local label="$$1"; shift
+  # Leading NAME=VALUE assignments up to `--` are forwarded to the single scrubbed_run
+  # below. They cannot be written into the argv as a nested `scrubbed_run ... --` call:
+  # scrubbed_run ends in `exec "$$@"`, exec cannot run a shell function, and the nested
+  # form therefore exits 127 before the checker is ever reached.
+  local assigns=() a
+  while [ "$$1" != "--" ]; do
+    a="$$1"
+    # Reject anything that is not NAME=VALUE. Without this a malformed call site is
+    # silently exported as a bare variable name and the mistake survives into the next
+    # session: the nested `scrubbed_run` form shipped exactly this way and left
+    # check-services, check-db and check-storage unrunnable for a full cycle.
+    case "$$a" in
+      [A-Za-z_]*=*) ;;
+      *) fail "P1-INT-00: run_checked expects NAME=VALUE before \`--\`, got: $$a" ;;
+    esac
+    assigns+=("$$a"); shift
+  done
+  shift
   local out status
   set +e
   # PYTHONUNBUFFERED makes stdout line-buffered even though command substitution hands the
   # checker a pipe. Without it the merged capture reflects BUFFERING order, not action
   # order: a checker that prints the sentinel and then logs to stderr would have that
   # stderr arrive first and its sentinel still look last.
-  out="$$(scrubbed_run PYTHONUNBUFFERED=1 -- "$$@" 2>&1)"
+  out="$$(scrubbed_run "$${assigns[@]}" PYTHONUNBUFFERED=1 -- "$$@" 2>&1)"
   status=$$?
   set -e
   [ -n "$$out" ] && printf '%s\n' "$$out"
@@ -673,7 +691,7 @@ check-services:
 	  "PostgreSQL/MinIO health proof and idempotent private-bucket initialization"
 	load_env
 	require_env_coherence
-	run_checked check-services scrubbed_run PYTHONPATH=src -- "$$RUNTIME_PY" "$$INF_CHECK"
+	run_checked check-services PYTHONPATH=src -- "$$RUNTIME_PY" "$$INF_CHECK"
 
 # --- 5/9 ---------------------------------------------------------------------------
 migrate:
@@ -695,7 +713,7 @@ check-db:
 	  "application database connectivity and the current migration state"
 	load_env
 	require_env_coherence
-	run_checked check-db scrubbed_run PYTHONPATH=src -- "$$RUNTIME_PY" -m auditmanager.shared.db.check
+	run_checked check-db PYTHONPATH=src -- "$$RUNTIME_PY" -m auditmanager.shared.db.check
 
 # --- 7/9 ---------------------------------------------------------------------------
 check-storage:
@@ -706,7 +724,7 @@ check-storage:
 	  "BlobStore access to the private bucket through application credentials"
 	load_env
 	require_env_coherence
-	run_checked check-storage scrubbed_run PYTHONPATH=src -- "$$RUNTIME_PY" -m auditmanager.storage.check
+	run_checked check-storage PYTHONPATH=src -- "$$RUNTIME_PY" -m auditmanager.storage.check
 
 # --- 8/9 ---------------------------------------------------------------------------
 test-foundation:
