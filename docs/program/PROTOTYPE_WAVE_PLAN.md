@@ -51,8 +51,15 @@ Serial, one writer, ~1 hour:
 5. Snapshot the tip and record the SHA in every session brief. Uncommitted deliverables
    are reverted by writers you did not dispatch.
 
-`OD-14` is the one that can move everything: it rules whether P02 sits behind CP-00
-acceptance round eleven and `W0-INT-03`. This plan assumes it does not.
+`OD-14` is the one that can move everything. **Verified on `main`, not on this branch:**
+`artifacts/checkpoints/CP-00/manifest.json` reads `ratified: false` over twelve rounds, with
+round ten `void` although both streams returned `PASS`, round eleven `void`, and round
+twelve `frozen` with both streams unreported. CP-00 carries no accepted ratification in the
+superseding series, and this planning line's `CURRENT_STATE.md` — which still says CP-00 is
+ratified on round ten — is four commits stale. The ruling is therefore heavier than a
+tidy-up round: it decides whether P02 may create a contract family while the checkpoint it
+descends from has none accepted. This plan assumes it may; the assumption is recorded, not
+hidden.
 
 ## 3. Gate A — seams frozen, foundation running
 
@@ -61,7 +68,7 @@ need nothing from it and start at the same moment as `A1`.
 
 | Session | Owns | Delivers |
 |---|---|---|
-| `A1` **seams** | `db/migrations/**`, `src/auditmanager/shared/**`, `contracts/api/v1/**`, `docs/program/P02_SEAMS.md` | the complete PC-01 schema as **one** migration head; identifier types; session/transaction factory; every stage-artifact shape; the OpenAPI document; the CSV column contract |
+| `A1` **seams** — split into `A1a`/`A1b` by `GATE_A_BRIEFS.md` §0, because FF-01 §4 does not approve product tables | `db/migrations/**`, `src/auditmanager/shared/**`, `contracts/api/v1/**`, `docs/program/P02_SEAMS.md` | the complete PC-01 schema as **one** migration head; identifier types; session/transaction factory; every stage-artifact shape; the OpenAPI document; the CSV column contract |
 | `A2` **infra** | `infra/local/**` | Compose Postgres + MinIO, pinned digests, health checks, volumes derived from `FOUNDATION_INSTANCE`, idempotent private-bucket init, `check_services.py` |
 | `A3` **storage** | `src/auditmanager/storage/**` | BlobStore port, S3 adapter with `temporary -> verify -> publish`, opaque `blob_id`, typed errors, `check.py` |
 | `A4` **corpus** | `fixtures/synthetic/ar/**`, `tools/fixtures/**` | synthetic AR PDF — two cross-page contradictions, one explicit placeholder, clean controls — plus its expected-issues manifest and the negative fixtures (encrypted, image-only, oversize, 31-page) |
