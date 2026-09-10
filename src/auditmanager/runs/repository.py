@@ -1,0 +1,428 @@
+"""The ``audit_run`` and ``stage_result`` rows, and the only writer of either.
+
+Every state move goes through :func:`auditmanager.shared.statemachine.assert_transition`
+against the topology loaded from ``contract_state_transition`` — the same rows the
+``AM001`` trigger consults. The guard refuses an undeclared edge *early*, with the typed
+catalog code already attached; the trigger refuses it regardless. There are deliberately
+two, and they cannot drift, because neither holds its own copy of the topology.
+
+A refusal that does reach Python from the database is mapped on **SQLSTATE** through the
+shared kernel's ``SQLSTATE_TO_CATALOG_CODE``. This module defines no error type of its
+own and parses no message text: a message is a diagnostic string a server upgrade or a
+locale may reword, and the SQLSTATE is the contract.
+
+What is not here
+----------------
+No ``Job``, no ``Attempt``, no lease, no heartbeat, no fencing token and no outbox.
+Those tables do not exist (P02 §3.1) and PC-01 instantiates none of those aggregates.
+There is also no ``succeeded`` run state: the success terminal is ``published``, and
+``succeeded`` is a *stage* status. The two vocabularies are separate and this module
+keeps them separate.
+
+The ``UPDATE ... WHERE state = :from_state`` pattern is compare-and-set, and every
+caller asserts the row actually moved. A zero-row update means somebody else moved the
+run first; reporting that as success would be the quiet half of a lost update.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Final, Mapping, Sequence
+
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm import Session
+
+from auditmanager.shared.db import SQLSTATE_TO_CATALOG_CODE
+from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.shared.statemachine import Topology, assert_initial, assert_transition
+from auditmanager.shared.statemachine import load as load_topology
+
+#: The machine name as ``contract_state_transition`` spells it. It matches the table
+#: name here, unlike ``command_idempotency``.
+RUN_MACHINE: Final[str] = "audit_run"
+
+#: The one state an ``audit_run`` INSERT may create (P02 §3.3).
+INITIAL_STATE: Final[str] = "created"
+
+#: The four stages PC-01 drives, in the order the registry's ``depends_on`` declares.
+#: Read by the executor and by terminal selection; not a second registry, just the
+#: PC-01 subset of one.
+PC01_STAGES: Final[tuple[str, ...]] = (
+    "source_preparation",
+    "page_geometry_extraction",
+    "document_context_build",
+    "text_analysis",
+)
+
+_RUN_COLUMNS = (
+    "run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id, "
+    "norms_snapshot_id, provider_mode, frozen_input_digest, command_id, terminal_reason, "
+    "interrupted_reason, degradation_set, terminal_at"
+)
+
+_INSERT_RUN = text(
+    """
+    INSERT INTO audit_run (
+        run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id,
+        norms_snapshot_id, provider_mode, frozen_input_digest, command_id
+    ) VALUES (
+        :run_id, :project_uid, :version_uid, :state, :analysis_profile_id,
+        :prompt_bundle_id, NULL, :provider_mode, :frozen_input_digest, :command_id
+    )
+    """
+)
+
+_SELECT_RUN = text(f"SELECT {_RUN_COLUMNS} FROM audit_run WHERE run_id = :run_id")
+
+_ADVANCE = text(
+    """
+    UPDATE audit_run SET state = :to_state, updated_at = now()
+    WHERE run_id = :run_id AND state = :from_state
+    """
+)
+
+_TERMINATE = text(
+    """
+    UPDATE audit_run
+       SET state = :to_state,
+           terminal_at = now(),
+           updated_at = now(),
+           terminal_reason = :terminal_reason,
+           interrupted_reason = :interrupted_reason,
+           degradation_set = CAST(:degradation_set AS jsonb)
+     WHERE run_id = :run_id AND state = :from_state
+    """
+)
+
+_STALE_RUNNING = text(
+    f"SELECT {_RUN_COLUMNS} FROM audit_run "
+    "WHERE state = :state AND updated_at < now() - CAST(:age AS interval) "
+    "ORDER BY updated_at"
+)
+
+_UPSERT_STAGE_RESULT = text(
+    """
+    INSERT INTO stage_result (
+        run_id, stage_id, stage_version, status, artifacts, metrics, error,
+        started_at, finished_at
+    ) VALUES (
+        :run_id, :stage_id, :stage_version, :status,
+        CAST(:artifacts AS jsonb), CAST(:metrics AS jsonb), CAST(:error AS jsonb),
+        :started_at, :finished_at
+    )
+    ON CONFLICT (run_id, stage_id) DO UPDATE SET
+        stage_version = EXCLUDED.stage_version,
+        status        = EXCLUDED.status,
+        artifacts     = EXCLUDED.artifacts,
+        metrics       = EXCLUDED.metrics,
+        error         = EXCLUDED.error,
+        started_at    = EXCLUDED.started_at,
+        finished_at   = EXCLUDED.finished_at
+    """
+)
+
+_SELECT_STAGE_RESULTS = text(
+    "SELECT stage_id, stage_version, status, artifacts, metrics, error "
+    "FROM stage_result WHERE run_id = :run_id ORDER BY stage_id"
+)
+
+
+def translate_refusal(exc: DBAPIError) -> DomainError:
+    """Map a database refusal on SQLSTATE, never on message text (P02 §3.2)."""
+    sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None) or getattr(
+        exc, "code", None
+    )
+    mapped = SQLSTATE_TO_CATALOG_CODE.get(str(sqlstate)) if sqlstate else None
+    if mapped is not None:
+        return DomainError(
+            ErrorCode(mapped),
+            message=f"the database refused the write ({sqlstate})",
+        )
+    return DomainError(
+        ErrorCode.INTERNAL_ERROR, message="the database refused the write"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RunRow:
+    """One ``audit_run`` row, in the shape a caller asserts on."""
+
+    run_id: str
+    project_uid: str
+    version_uid: str
+    state: str
+    analysis_profile_id: str
+    prompt_bundle_id: str
+    norms_snapshot_id: str | None
+    provider_mode: str
+    frozen_input_digest: str
+    command_id: str | None
+    terminal_reason: str | None
+    interrupted_reason: str | None
+    degradation_set: tuple[str, ...]
+    terminal_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class StageResultRow:
+    """One persisted ``stage_result`` row."""
+
+    stage_id: str
+    stage_version: str
+    status: str
+    artifacts: tuple[Mapping[str, Any], ...]
+    metrics: Mapping[str, Any]
+    error: Mapping[str, Any] | None
+
+
+def _run_row(row: Any) -> RunRow:
+    (
+        run_id,
+        project_uid,
+        version_uid,
+        state,
+        analysis_profile_id,
+        prompt_bundle_id,
+        norms_snapshot_id,
+        provider_mode,
+        frozen_input_digest,
+        command_id,
+        terminal_reason,
+        interrupted_reason,
+        degradation_set,
+        terminal_at,
+    ) = tuple(row)
+    return RunRow(
+        run_id=run_id,
+        project_uid=project_uid,
+        version_uid=version_uid,
+        state=state,
+        analysis_profile_id=analysis_profile_id,
+        prompt_bundle_id=prompt_bundle_id,
+        norms_snapshot_id=norms_snapshot_id,
+        provider_mode=provider_mode,
+        frozen_input_digest=frozen_input_digest,
+        command_id=command_id,
+        terminal_reason=terminal_reason,
+        interrupted_reason=interrupted_reason,
+        degradation_set=tuple(degradation_set or ()),
+        terminal_at=terminal_at,
+    )
+
+
+class RunRepository:
+    """Claim, advance and terminate ``audit_run`` rows, and persist stage results."""
+
+    __slots__ = ("_topology",)
+
+    def __init__(self) -> None:
+        self._topology: Topology | None = None
+
+    def topology(self, session: Session) -> Topology:
+        """The declared topology, read once from the rows the trigger reads."""
+        if self._topology is None:
+            self._topology = load_topology(session)
+        return self._topology
+
+    # -- creation ------------------------------------------------------------
+
+    def create(
+        self,
+        session: Session,
+        *,
+        run_id: str,
+        project_uid: str,
+        version_uid: str,
+        analysis_profile_id: str,
+        prompt_bundle_id: str,
+        provider_mode: str,
+        frozen_input_digest: str,
+        command_id: str | None,
+    ) -> RunRow:
+        """Insert the run in ``created``. The frozen set is written once, here.
+
+        ``norms_snapshot_id`` is written NULL and is read by no PC-01 path: PC-01 pins
+        no norms snapshot, which is why the ``NormsSnapshot`` clause of the
+        ``created -> queued`` reference-resolution guard is recorded unevaluated under
+        ``OD-24``. See :mod:`auditmanager.runs.scope`.
+        """
+        assert_initial(self.topology(session), RUN_MACHINE, INITIAL_STATE)
+        try:
+            session.execute(
+                _INSERT_RUN,
+                {
+                    "run_id": run_id,
+                    "project_uid": project_uid,
+                    "version_uid": version_uid,
+                    "state": INITIAL_STATE,
+                    "analysis_profile_id": analysis_profile_id,
+                    "prompt_bundle_id": prompt_bundle_id,
+                    "provider_mode": provider_mode,
+                    "frozen_input_digest": frozen_input_digest,
+                    "command_id": command_id,
+                },
+            )
+        except DBAPIError as exc:
+            raise translate_refusal(exc) from exc
+        return self.get(session, run_id)
+
+    # -- reads ---------------------------------------------------------------
+
+    def get(self, session: Session, run_id: str) -> RunRow:
+        row = session.execute(_SELECT_RUN, {"run_id": run_id}).first()
+        if row is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
+        return _run_row(row)
+
+    def find(self, session: Session, run_id: str) -> RunRow | None:
+        row = session.execute(_SELECT_RUN, {"run_id": run_id}).first()
+        return None if row is None else _run_row(row)
+
+    def stage_results(self, session: Session, run_id: str) -> tuple[StageResultRow, ...]:
+        rows = session.execute(_SELECT_STAGE_RESULTS, {"run_id": run_id}).mappings().all()
+        return tuple(
+            StageResultRow(
+                stage_id=row["stage_id"],
+                stage_version=row["stage_version"],
+                status=row["status"],
+                artifacts=tuple(row["artifacts"] or ()),
+                metrics=dict(row["metrics"] or {}),
+                error=row["error"],
+            )
+            for row in rows
+        )
+
+    def stage_statuses(self, session: Session, run_id: str) -> dict[str, str]:
+        """The map terminal selection consumes. Read back from the persisted rows.
+
+        Deliberately re-read rather than accumulated in memory: the terminal is chosen
+        from what was actually persisted, so a stage result that failed to write cannot
+        be counted as a success by an in-process tally that never noticed.
+        """
+        return {
+            row.stage_id: row.status for row in self.stage_results(session, run_id)
+        }
+
+    def stale_running(
+        self, session: Session, *, older_than: str = "1 hour"
+    ) -> tuple[RunRow, ...]:
+        """Runs still ``running`` after their executor should have finished.
+
+        PC-01 runs one execution in one process, so a ``running`` row older than the
+        threshold means that process is gone. There is no lease and no heartbeat to
+        consult: age is the only evidence available, and ``OD-10`` says what to do
+        about it rather than inventing an ``interrupted`` state to park it in.
+        """
+        rows = session.execute(
+            _STALE_RUNNING, {"state": "running", "age": older_than}
+        ).all()
+        return tuple(_run_row(row) for row in rows)
+
+    # -- transitions ---------------------------------------------------------
+
+    def advance(
+        self, session: Session, *, run_id: str, from_state: str, to_state: str
+    ) -> None:
+        """Move a run along a declared non-terminal edge."""
+        assert_transition(self.topology(session), RUN_MACHINE, from_state, to_state)
+        try:
+            result = session.execute(
+                _ADVANCE,
+                {"run_id": run_id, "from_state": from_state, "to_state": to_state},
+            )
+        except DBAPIError as exc:
+            raise translate_refusal(exc) from exc
+        self._require_moved(result.rowcount, from_state, to_state)
+
+    def terminate(
+        self,
+        session: Session,
+        *,
+        run_id: str,
+        from_state: str,
+        to_state: str,
+        degradation_set: Sequence[str] = (),
+        terminal_reason: str | None = None,
+        interrupted_reason: str | None = None,
+    ) -> None:
+        """Move a run to a terminal state, recording everything that terminal requires.
+
+        The coupling between ``partial`` and a non-empty ``degradation_set``, and
+        between ``published`` and an empty one, is a CHECK constraint in the migration
+        and is **not** re-asserted here. A silent degradation cannot reach the success
+        terminal because the database refuses it, not because this method remembers to.
+        """
+        assert_transition(self.topology(session), RUN_MACHINE, from_state, to_state)
+        try:
+            result = session.execute(
+                _TERMINATE,
+                {
+                    "run_id": run_id,
+                    "from_state": from_state,
+                    "to_state": to_state,
+                    "terminal_reason": terminal_reason,
+                    "interrupted_reason": interrupted_reason,
+                    "degradation_set": json.dumps(list(degradation_set)),
+                },
+            )
+        except DBAPIError as exc:
+            raise translate_refusal(exc) from exc
+        self._require_moved(result.rowcount, from_state, to_state)
+
+    # -- stage results -------------------------------------------------------
+
+    def record_stage_result(
+        self, session: Session, *, run_id: str, document: Mapping[str, Any]
+    ) -> None:
+        """Persist one ``StageResult`` document, keyed ``(run_id, stage_id)``.
+
+        ``document`` is ``StageResult.to_document()`` from the analysis seam. Nothing
+        is reshaped here beyond the column split, so what is stored is what the stage
+        contract declares — including ``error`` being *absent* on success rather than
+        ``null``, which the schema distinguishes and the CHECK constraint enforces.
+        """
+        error = document.get("error")
+        try:
+            session.execute(
+                _UPSERT_STAGE_RESULT,
+                {
+                    "run_id": run_id,
+                    "stage_id": document["stage_id"],
+                    "stage_version": document["stage_version"],
+                    "status": document["status"],
+                    "artifacts": json.dumps(document.get("artifacts", [])),
+                    "metrics": json.dumps(document.get("metrics", {})),
+                    "error": None if error is None else json.dumps(error),
+                    "started_at": document.get("started_at"),
+                    "finished_at": document.get("finished_at"),
+                },
+            )
+        except DBAPIError as exc:
+            raise translate_refusal(exc) from exc
+
+    # -- internals -----------------------------------------------------------
+
+    @staticmethod
+    def _require_moved(rowcount: int, from_state: str, to_state: str) -> None:
+        """A compare-and-set that matched no row moved nothing."""
+        if rowcount != 1:
+            raise DomainError(
+                ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
+                machine=RUN_MACHINE,
+                current_state=from_state,
+                requested_state=to_state,
+            )
+
+
+__all__ = [
+    "INITIAL_STATE",
+    "PC01_STAGES",
+    "RUN_MACHINE",
+    "RunRepository",
+    "RunRow",
+    "StageResultRow",
+    "translate_refusal",
+]
