@@ -164,24 +164,19 @@ in this repository is a broad bucket deletion.
 | `.venv/bin/pytest tests/integration/storage` | Exit `0` against a real S3-compatible service; leaves the bucket exactly as it found it. |
 
 The first row is the invocation `FOUNDATION_LOCK.json` records for
-`make check-storage`, run directly. **`make check-storage` itself does not
-currently reach it**, and the cause is in the frozen `Makefile`, not in this
-package:
+`make check-storage`, run directly.
 
-```
-$ make check-storage
-environment: line 196: exec: scrubbed_run: not found
-P1-INT-00: check-storage failed with exit status 127.
-```
-
-`run_checked` already wraps its arguments in `scrubbed_run`
-(`Makefile:218`, `out="$(scrubbed_run PYTHONUNBUFFERED=1 -- "$@" 2>&1)"`), while
-each check target passes `scrubbed_run ...` in as those arguments
-(`Makefile:676`, `:698`, `:709`). The inner `exec "$@"` then tries to `exec` a
-shell function and exits 127 before any provider code runs. All three
-`check-*` targets have the identical shape; `check-storage` is simply the first
-one whose provider exists, so it is the first to reach the defect. The fix
-belongs to `P1-INT-00`, the sole owner of the command surface.
+**Historical note, resolved.** When this lane ran, `make check-storage` could not
+reach that invocation: it exited 127 with `exec: scrubbed_run: not found`.
+`run_checked` already wrapped its arguments in `scrubbed_run`, while each
+`check-*` target passed `scrubbed_run ...` in as those arguments, so the inner
+`exec "$@"` tried to `exec` a shell function before any provider code ran. All
+three `check-*` targets carried the identical shape. The integrator repaired it
+in `P1-INT-00`'s deliverable at commit `e0ba71f`: `run_checked` now takes
+`NAME=VALUE` assignments up to `--` and forwards them to its single
+`scrubbed_run` call, and rejects a non-assignment rather than exporting it as a
+bare variable name. This paragraph is kept because the lane's report and commit
+`5528cb6` refer to the defect; it is not a live limitation.
 
 `check.py` proves, in order: the frozen `S3_*` names are present; the configured
 application credentials reach the bucket; an **unsigned** request to the same
