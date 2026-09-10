@@ -216,9 +216,15 @@ def connect_psycopg(url: URL) -> psycopg.Connection:
     )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def independent_db(database_url: URL) -> Iterator[psycopg.Connection]:
-    """A raw psycopg connection, separate from the engine's pool."""
+    """A raw psycopg connection, separate from the engine's pool.
+
+    Function-scoped on purpose. The restart test stops PostgreSQL, which kills
+    every open connection; a session-scoped one would come back dead and every
+    later test would fail for a reason that has nothing to do with what it
+    asserts. Reconnecting costs one local TCP handshake.
+    """
     connection = connect_psycopg(database_url)
     try:
         yield connection
