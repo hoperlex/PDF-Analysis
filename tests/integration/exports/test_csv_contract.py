@@ -52,10 +52,17 @@ def _run_and_export(session, seeded, blob_store, adapter, provider_config, key):
     return started, result, export_run_csv(session, started.run_id)
 
 
+#: The byte-order mark written out as a literal, deliberately **not** imported from the
+#: module under test. ``content.startswith(BOM)`` is vacuously true when ``BOM`` is
+#: empty, so an assertion phrased against the module's own constant would survive the
+#: BOM being deleted. This caught exactly that in mutation M1.
+BOM_BYTES = b"\xef\xbb\xbf"
+
+
 def _parse(content: bytes) -> tuple[list[str], list[dict[str, str]]]:
     """Decode and parse exactly as a conforming RFC 4180 reader would."""
-    assert content.startswith(BOM)
-    body = content[len(BOM) :].decode("utf-8")
+    assert content[:3] == BOM_BYTES
+    body = content[3:].decode("utf-8")
     reader = csv.reader(io.StringIO(body, newline=""), delimiter=",", quotechar='"')
     rows = list(reader)
     header, data = rows[0], rows[1:]
@@ -85,8 +92,10 @@ def test_the_bytes_are_utf8_with_a_bom_and_crlf_endings(
     )
     content = export.content
 
-    assert content.startswith(BOM), "no byte-order mark: Excel will mis-decode Cyrillic"
-    body = content[len(BOM) :]
+    # The literal, not the module constant: see BOM_BYTES above.
+    assert content[:3] == BOM_BYTES, "no byte-order mark: Excel will mis-decode Cyrillic"
+    assert BOM == BOM_BYTES, "the module's BOM constant is no longer the UTF-8 BOM"
+    body = content[3:]
     body.decode("utf-8")  # raises if the payload is not UTF-8
 
     assert body.endswith(b"\r\n"), "the final record is not CRLF-terminated"

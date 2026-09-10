@@ -16,6 +16,15 @@ construction.
 ``findings.queries.published_finding_count`` for the same run, so a future edit that
 loosened the join would redden rather than quietly widen the export.
 
+**The exclusion is over-determined, and that was measured.** Mutating ``JOIN finding``
+to ``LEFT JOIN`` alone changes nothing: ``JOIN document_version dv ON dv.version_uid =
+f.version_uid`` is also an inner join through ``f``, so an ungrounded row whose
+``finding_uid`` is NULL is dropped there instead. Only loosening *both* lets one
+through, and the suite reddens when both are loosened. Two independent joins therefore
+have to be wrong before an ungrounded observation could reach a CSV row. That is a
+property worth knowing rather than a redundancy worth removing — but it also means a
+reviewer should not read the ``finding`` join as the single point of enforcement.
+
 Why this module contains SQL at all
 -----------------------------------
 Seven of the seventeen frozen columns are not projected by any existing public query.

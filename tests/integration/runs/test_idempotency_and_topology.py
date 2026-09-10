@@ -296,3 +296,60 @@ def test_pc01_instantiates_none_of_the_durable_execution_aggregates(session: Ses
         is not None
     ]
     assert present == [], f"PC-01 declares no such aggregate, but these tables exist: {present}"
+
+
+# --- isolating the two guards the database would otherwise mask ---------------
+
+
+def test_the_application_guard_refuses_before_any_sql_is_issued(session: Session, seeded):
+    """``assert_transition`` must refuse an undeclared edge *without* asking the database.
+
+    The trigger would refuse it too, and ``translate_refusal`` maps that back to the same
+    typed code — which is why the terminal-reopening tests above pass whether or not the
+    application guard is there at all. Mutation M11 removed the guard and those tests
+    stayed green, so this exists to isolate it: the session is replaced with one that
+    fails loudly if ``execute`` is reached, making "refused early" the only way to pass.
+    """
+
+    class RefusingSession:
+        def execute(self, *args, **kwargs):  # noqa: ANN002, ANN003
+            raise AssertionError(
+                "the guard issued SQL instead of refusing an undeclared edge itself"
+            )
+
+    runs = RunRepository()
+    # Prime the cached topology from the real session, so the refusal below cannot be a
+    # side effect of the topology being unavailable.
+    runs.topology(session)
+
+    with pytest.raises(DomainError) as raised:
+        runs.advance(
+            RefusingSession(),  # type: ignore[arg-type]
+            run_id="run_01M2545JSD15ETSNNV904X991J",
+            from_state="created",
+            to_state="validating",  # created -> validating is not a declared edge
+        )
+    assert raised.value.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED
+
+
+def test_a_compare_and_set_that_moved_no_row_is_a_refusal(
+    session: Session, seeded, new_key, helpers
+):
+    """A zero-row UPDATE moved nothing, and reporting it as success is a lost update.
+
+    The edge requested here *is* declared, so the application guard permits it; what
+    fails is the ``WHERE state = :from_state`` predicate, because the run is still
+    ``created``. Only the rowcount assertion stands between that and a silent no-op.
+    """
+    started = _start(session, seeded, new_key("compare-and-set"))
+    assert helpers.run_state_of(session, started.run_id) == "created"
+
+    with pytest.raises(DomainError) as raised:
+        # queued -> running is declared, but this run is not in `queued`.
+        RunRepository().advance(
+            session, run_id=started.run_id, from_state="queued", to_state="running"
+        )
+    assert raised.value.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED
+    assert helpers.run_state_of(session, started.run_id) == "created", (
+        "the run moved despite the refusal"
+    )
