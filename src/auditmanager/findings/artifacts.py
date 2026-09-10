@@ -49,6 +49,10 @@ def _require(
     if kind is int and isinstance(value, bool):
         # bool is a subclass of int; a boolean offset is a type error, not an offset.
         raise _invalid(f"{where}.{key} is a boolean where an integer was declared")
+    if kind is Sequence and isinstance(value, (str, bytes)):
+        # str satisfies Sequence, so a string where a list of pages was declared would
+        # otherwise be iterated one character at a time and fail somewhere less useful.
+        raise _invalid(f"{where}.{key} is a string where a list was declared")
     if not isinstance(value, kind):
         raise _invalid(f"{where}.{key} has the wrong type")
     return value

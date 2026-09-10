@@ -572,6 +572,51 @@ class TestIdempotency:
                     },
                 )
 
+    def test_a_lost_race_returns_the_other_writers_event(
+        self, session: Session, published, command, monkeypatch
+    ) -> None:
+        """The recovery branch, made reachable.
+
+        In production the pre-check misses only when another writer appended between
+        the check and the insert. That window cannot be opened from inside one
+        transaction, so the pre-check is suppressed for one call — which is precisely
+        what losing the race looks like from in here. Everything else is real: the real
+        INSERT, the real unique index, the real violation, the real re-read.
+        """
+        from auditmanager.decisions import ledger as ledger_module
+
+        command_id = command("expert-accept-004")
+        first = record_decision(
+            session,
+            finding_uid=published.finding_uid,
+            finding_observation_id=published.finding_observation_id,
+            event_type="accept",
+            command_id=command_id,
+        )
+
+        real = ledger_module._existing_event
+        calls = {"n": 0}
+
+        def blind_once(session_arg, key):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return None  # the pre-check misses, as it does in a race
+            return real(session_arg, key)
+
+        monkeypatch.setattr(ledger_module, "_existing_event", blind_once)
+
+        second = record_decision(
+            session,
+            finding_uid=published.finding_uid,
+            finding_observation_id=published.finding_observation_id,
+            event_type="reject",
+            command_id=command_id,
+        )
+        assert calls["n"] == 2, "the insert must have been attempted and refused"
+        assert second.decision_id == first.decision_id
+        assert second.event_type == "accept", "the other writer's event is the answer"
+        assert current_verdict(session, published.finding_uid).decision_event_count == 1
+
     def test_two_different_commands_append_two_events(
         self, session: Session, published, command
     ) -> None:

@@ -124,6 +124,18 @@ def _translate(exc: DBAPIError) -> DomainError:
     return DomainError(ErrorCode.INTERNAL_ERROR, message="the ledger refused the write")
 
 
+def _existing_event(session: Session, command_id: str) -> "DecisionEvent | None":
+    """The event already appended under this command key, if any.
+
+    Called twice on purpose. Once before doing any work, so a replay is answered from
+    the ledger rather than re-decided; and once after a unique-index violation, because
+    between those two moments another writer may have appended. The index is the
+    enforcement — this lookup only decides what the caller is told.
+    """
+    row = session.execute(_EVENT_BY_COMMAND, {"command_id": command_id}).mappings().first()
+    return None if row is None else _row_to_event(row)
+
+
 def _row_to_event(row) -> DecisionEvent:  # noqa: ANN001 - a SQLAlchemy RowMapping
     return DecisionEvent(
         decision_id=row["decision_id"],
@@ -185,9 +197,9 @@ def record_decision(
     # An idempotent replay is answered from the ledger before anything is validated
     # again: the first attempt already decided, and re-deciding could disagree.
     if command_id is not None:
-        existing = session.execute(_EVENT_BY_COMMAND, {"command_id": command_id}).mappings().first()
+        existing = _existing_event(session, command_id)
         if existing is not None:
-            return _row_to_event(existing)
+            return existing
 
     if not finding_exists(session, finding_uid):
         # Reached for an unknown finding and for an *ungrounded* observation alike: an
@@ -222,14 +234,13 @@ def record_decision(
         with nested_transaction(session):
             row = session.execute(_INSERT_EVENT, parameters).mappings().one()
     except IntegrityError:
+        # Lost the race on the command_id index: the other writer's event is the answer,
+        # not a conflict the caller has to interpret. Exactly one event exists either
+        # way, which is what the idempotency guarantee actually says.
         if command_id is not None:
-            existing = (
-                session.execute(_EVENT_BY_COMMAND, {"command_id": command_id})
-                .mappings()
-                .first()
-            )
+            existing = _existing_event(session, command_id)
             if existing is not None:
-                return _row_to_event(existing)
+                return existing
         raise DomainError(
             ErrorCode.CONFLICT, message="the ledger refused the appended event"
         ) from None
