@@ -96,9 +96,11 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
     },
   },
-  // Every layer: no deep imports, no HTTP library.
+  // Every layer: no deep imports, no HTTP library. The guard fixtures are listed
+  // alongside `src` so the boundary guard can lint them with `--no-ignore` and watch
+  // ESLint go red on the exact rules this config claims to enforce.
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'tests/guards/fixtures/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -109,7 +111,7 @@ export default tseslint.config(
   },
   // Per-layer upward bans, layered on top of the shared pattern list.
   ...Object.keys(LAYER_BELOW).map((layer) => ({
-    files: [`src/${layer}/**/*.{ts,tsx}`],
+    files: [`src/${layer}/**/*.{ts,tsx}`, `tests/guards/fixtures/${layer}/**/*.{ts,tsx}`],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -122,9 +124,11 @@ export default tseslint.config(
     files: ['src/shared/api/**/*.ts'],
     rules: { 'no-restricted-globals': 'off' },
   },
-  // Node-side tooling and tests.
+  // Node-side tooling and tests. The guard fixtures are excluded: they must keep the
+  // strict rules so the boundary guard has something real to fail on.
   {
     files: ['scripts/**/*.mjs', 'tests/**/*.ts', '*.config.{ts,mjs}'],
+    ignores: ['tests/guards/fixtures/**'],
     languageOptions: { globals: { ...globals.node } },
     rules: {
       'no-console': 'off',
