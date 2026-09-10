@@ -48,7 +48,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
-from auditmanager.shared.db.session import create_session_factory
+from auditmanager.shared.db.session import create_session_factory, session_scope
 from auditmanager.storage import BlobId, S3BlobStore, S3StorageSettings
 
 #: ``tests/integration/foundation/conftest.py`` is three levels below the root.
@@ -327,6 +327,57 @@ def recorded_blob_rows(session_factory: sessionmaker[Session]) -> Iterator[list[
                     {"blob_id": blob_id},
                 )
             session.commit()
+
+
+@pytest.fixture
+def record_available_blob(
+    session_factory: sessionmaker[Session], recorded_blob_rows: list[str]
+) -> Any:
+    """Record a published blob's metadata **through the DB session boundary**.
+
+    This is the cross-provider join: the ``blob_id`` the S3 adapter derived from
+    ``(sha256, size)`` becomes the primary key of a ``blob`` row, and the four
+    facts ``FF-01`` section 2 item 5 requires travel with it. Nothing about a
+    bucket or a key crosses over -- the table deliberately has no column for
+    either.
+
+    The walk ``temporary -> verifying -> available`` is not decoration: the
+    ``trg_blob_state_guard`` trigger only admits a row in the declared initial
+    state and only moves it along a declared edge, so this is the sole legal way
+    to reach ``available``. Writing the row in one INSERT would be refused.
+
+    The row is registered for scoped deletion *before* the write, so a failure
+    part-way through still leaves nothing behind.
+    """
+
+    def _record(published: Any) -> str:
+        blob_id = str(published.blob_id)
+        recorded_blob_rows.append(blob_id)
+        with session_scope(session_factory) as session:
+            session.execute(
+                text("INSERT INTO blob (blob_id, state) VALUES (:blob_id, 'temporary')"),
+                {"blob_id": blob_id},
+            )
+            session.execute(
+                text("UPDATE blob SET state = 'verifying' WHERE blob_id = :blob_id"),
+                {"blob_id": blob_id},
+            )
+            session.execute(
+                text(
+                    "UPDATE blob SET state = 'available', sha256 = :sha256, "
+                    "size_bytes = :size, media_type = :media_type "
+                    "WHERE blob_id = :blob_id"
+                ),
+                {
+                    "blob_id": blob_id,
+                    "sha256": published.sha256,
+                    "size": published.size,
+                    "media_type": published.media_type,
+                },
+            )
+        return blob_id
+
+    return _record
 
 
 # --------------------------------------------------------------------------
