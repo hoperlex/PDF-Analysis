@@ -1,0 +1,289 @@
+{
+  "schema": "ar-expected-issues/1",
+  "synthetic": true,
+  "notice": "Synthetic corpus. No customer, production or real project bytes, and no real organisation, address or person. Owner decision OD-17 rules the PC-01 corpus synthetic-only.",
+  "generated_by": "tools/fixtures/build_ar_corpus.py",
+  "regenerate": "python3 tools/fixtures/build_ar_corpus.py",
+  "verify": "python3 tools/fixtures/build_ar_corpus.py --check",
+  "text_extraction": "Quotation offsets are into the text of a single page as produced by tools/fixtures/ar_corpus/pdfextract.py: runs grouped into lines by baseline, lines top to bottom, joined by a single newline. Every quotation lies wholly within one line, so any extractor that preserves line content resolves it identically.",
+  "envelope": {
+    "max_bytes": 26214400,
+    "max_pages": 30,
+    "rules": {
+      "ENV-PDF": "the input is a PDF file",
+      "ENV-ENCRYPTED": "the PDF is not encrypted or password-protected",
+      "ENV-SIZE": "the file is at most 26214400 bytes (25 MiB)",
+      "ENV-PAGES": "the document has at most 30 pages",
+      "ENV-TEXT": "every page carries extractable embedded text"
+    }
+  },
+  "baseline": {
+    "path": "fixtures/synthetic/ar/ar_baseline.pdf",
+    "sha256": "6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f",
+    "bytes": 58978,
+    "pages": 8,
+    "language": "ru",
+    "discipline": "AR",
+    "page_text_sha256": [
+      "faa7ca45a5ea5a3f46e1fb5bc312714c9bf8d072aecf4a3f3e2dd2b1014b5917",
+      "6b4a7fad670b22d849fc9c8b4783266d992ae8e46c51002ffa32fa3271cd3bc9",
+      "a0a33fa64ca9727f0b69f25ed7a7239faf8bbb9cf2866ba9e62b7da4eacddc1d",
+      "00702a74b032075f1badeaba66476eb61d9ac56868a130f63c608809cdffc2ff",
+      "51d3844b2fcec355ccfb85e9b0fc1d575a71dcd5854b8fd2e84b920b18929173",
+      "276b264f3876917596b8585e3cbc4884423015a42d8f40f6318b34002c4ee083",
+      "d862851cd636f03dd94cf5938be039447e794d93a78fc5eec52a0960114e7eb6",
+      "3b3118ff0666d58e4c80f1b19cbde3fce742437d9b917c1dc81d91bef78375f7"
+    ]
+  },
+  "categories": [
+    "internal_contradiction",
+    "explicit_placeholder"
+  ],
+  "seeded_issue_count": 3,
+  "seeded_issues": [
+    {
+      "id": "SI-01",
+      "category": "internal_contradiction",
+      "attribute": "степень огнестойкости здания",
+      "pages": [
+        2,
+        6
+      ],
+      "summary_ru": "Степень огнестойкости одного и того же здания указана как II в разделе общих данных и как III в разделе противопожарных мероприятий.",
+      "evidence": [
+        {
+          "page": 2,
+          "quotation": "Степень огнестойкости здания — II.",
+          "char_offset_in_page_text": 203,
+          "line_index_in_page_text": 4,
+          "line_text": "1.3. Степень огнестойкости здания — II."
+        },
+        {
+          "page": 6,
+          "quotation": "Степень огнестойкости здания — III.",
+          "char_offset_in_page_text": 183,
+          "line_index_in_page_text": 3,
+          "line_text": "5.2. Степень огнестойкости здания — III."
+        }
+      ]
+    },
+    {
+      "id": "SI-02",
+      "category": "internal_contradiction",
+      "attribute": "количество эвакуационных выходов из надземной части",
+      "pages": [
+        3,
+        7
+      ],
+      "summary_ru": "Количество эвакуационных выходов из надземной части здания указано как два в объёмно-планировочных решениях и как три в разделе эвакуации.",
+      "evidence": [
+        {
+          "page": 3,
+          "quotation": "Из надземной части здания предусмотрено два эвакуационных выхода.",
+          "char_offset_in_page_text": 239,
+          "line_index_in_page_text": 5,
+          "line_text": "2.4. Из надземной части здания предусмотрено два эвакуационных выхода."
+        },
+        {
+          "page": 7,
+          "quotation": "Из надземной части здания предусмотрено три эвакуационных выхода.",
+          "char_offset_in_page_text": 117,
+          "line_index_in_page_text": 3,
+          "line_text": "6.2. Из надземной части здания предусмотрено три эвакуационных выхода."
+        }
+      ]
+    },
+    {
+      "id": "SI-03",
+      "category": "explicit_placeholder",
+      "attribute": "тип заполнения оконных проёмов",
+      "pages": [
+        8
+      ],
+      "summary_ru": "Тип заполнения оконных проёмов не определён: вместо решения оставлено буквальное указание «уточнить».",
+      "evidence": [
+        {
+          "page": 8,
+          "quotation": "Тип заполнения оконных проёмов — уточнить.",
+          "char_offset_in_page_text": 134,
+          "line_index_in_page_text": 3,
+          "line_text": "7.2. Тип заполнения оконных проёмов — уточнить."
+        }
+      ]
+    }
+  ],
+  "controls": [
+    {
+      "id": "CTL-01",
+      "pages": [
+        5
+      ],
+      "quotation": "Степень огнестойкости здания КПП — IV.",
+      "would_be_false_positive_as": "internal_contradiction",
+      "why_not_an_issue_ru": "Третье значение той же характеристики, но у другого объекта: отдельно стоящего здания КПП, а не жилого дома. Раздел 4 прямо указывает, что КПП рассматривается как самостоятельный объект.",
+      "anchors": [
+        {
+          "page": 5,
+          "quotation": "Степень огнестойкости здания КПП — IV.",
+          "char_offset_in_page_text": 171,
+          "line_index_in_page_text": 3,
+          "line_text": "4.2. Степень огнестойкости здания КПП — IV."
+        }
+      ]
+    },
+    {
+      "id": "CTL-02",
+      "pages": [
+        4
+      ],
+      "quotation": "Уточнённые отметки чистого пола приведены в таблице 4.2.",
+      "would_be_false_positive_as": "explicit_placeholder",
+      "why_not_an_issue_ru": "Содержит основу «уточн», но описывает уже принятое решение со ссылкой на таблицу, а не пропуск. Поиск по подстроке даст здесь ложное срабатывание.",
+      "anchors": [
+        {
+          "page": 4,
+          "quotation": "Уточнённые отметки чистого пола приведены в таблице 4.2.",
+          "char_offset_in_page_text": 311,
+          "line_index_in_page_text": 6,
+          "line_text": "3.5. Уточнённые отметки чистого пола приведены в таблице 4.2."
+        }
+      ]
+    },
+    {
+      "id": "CTL-03",
+      "pages": [
+        3
+      ],
+      "quotation": "Высота этажа в чистоте на первом этаже — 3,3 м.",
+      "would_be_false_positive_as": "internal_contradiction",
+      "why_not_an_issue_ru": "Значение относится к первому этажу и согласовано с CTL-04, который относится к типовым этажам. Разные объекты описания, а не противоречие.",
+      "anchors": [
+        {
+          "page": 3,
+          "quotation": "Высота этажа в чистоте на первом этаже — 3,3 м.",
+          "char_offset_in_page_text": 129,
+          "line_index_in_page_text": 3,
+          "line_text": "2.2. Высота этажа в чистоте на первом этаже — 3,3 м."
+        }
+      ]
+    },
+    {
+      "id": "CTL-04",
+      "pages": [
+        4
+      ],
+      "quotation": "Высота этажа в чистоте на типовых этажах — 3,0 м.",
+      "would_be_false_positive_as": "internal_contradiction",
+      "why_not_an_issue_ru": "Парная к CTL-03. Различие значений объясняется различием этажей, прямо названным в обеих формулировках.",
+      "anchors": [
+        {
+          "page": 4,
+          "quotation": "Высота этажа в чистоте на типовых этажах — 3,0 м.",
+          "char_offset_in_page_text": 256,
+          "line_index_in_page_text": 5,
+          "line_text": "3.4. Высота этажа в чистоте на типовых этажах — 3,0 м."
+        }
+      ]
+    },
+    {
+      "id": "CTL-05",
+      "pages": [
+        2,
+        6
+      ],
+      "quotation": "Класс конструктивной пожарной опасности здания — С0.",
+      "would_be_false_positive_as": "internal_contradiction",
+      "why_not_an_issue_ru": "Одна и та же характеристика с одним и тем же значением на двух страницах: повтор, а не расхождение. Это другая характеристика, чем степень огнестойкости из SI-01, и смешивать их нельзя.",
+      "anchors": [
+        {
+          "page": 2,
+          "quotation": "Класс конструктивной пожарной опасности здания — С0.",
+          "char_offset_in_page_text": 243,
+          "line_index_in_page_text": 5,
+          "line_text": "1.4. Класс конструктивной пожарной опасности здания — С0."
+        },
+        {
+          "page": 6,
+          "quotation": "Класс конструктивной пожарной опасности здания — С0.",
+          "char_offset_in_page_text": 224,
+          "line_index_in_page_text": 4,
+          "line_text": "5.3. Класс конструктивной пожарной опасности здания — С0."
+        }
+      ]
+    },
+    {
+      "id": "CTL-06",
+      "pages": [
+        7
+      ],
+      "quotation": "Из подвала предусмотрен один обособленный эвакуационный выход.",
+      "would_be_false_positive_as": "internal_contradiction",
+      "why_not_an_issue_ru": "Относится к подвалу, а не к надземной части, и следующая строка прямо исключает этот выход из их числа. С SI-02 не связано.",
+      "anchors": [
+        {
+          "page": 7,
+          "quotation": "Из подвала предусмотрен один обособленный эвакуационный выход.",
+          "char_offset_in_page_text": 188,
+          "line_index_in_page_text": 4,
+          "line_text": "6.3. Из подвала предусмотрен один обособленный эвакуационный выход."
+        }
+      ]
+    }
+  ],
+  "negative_fixtures": [
+    {
+      "name": "encrypted",
+      "path": "fixtures/synthetic/ar/negative/encrypted.pdf",
+      "violates_rule": "ENV-ENCRYPTED",
+      "rule_description": "the PDF is not encrypted or password-protected",
+      "sha256": "9513362c5d85dec1438406ffd4e77fef6d08bb18f104a5b107afc610dde8faba",
+      "bytes": 40514,
+      "description": "Password-protected PDF (standard security handler, revision 2). User password 'synthetic-user-pw', owner password 'synthetic-owner-pw'. Two pages, well inside the size and page limits."
+    },
+    {
+      "name": "image_only",
+      "path": "fixtures/synthetic/ar/negative/image_only.pdf",
+      "violates_rule": "ENV-TEXT",
+      "rule_description": "every page carries extractable embedded text",
+      "sha256": "8917d48af68cffac071fdf75040d181a548d27d952baa05defbca48a2ca94325",
+      "bytes": 246242,
+      "description": "Scanned-looking PDF: two pages, each a single 1-bit image XObject and no text operator anywhere. OCR must not be silently substituted."
+    },
+    {
+      "name": "oversize",
+      "path": "fixtures/synthetic/ar/negative/oversize.pdf",
+      "violates_rule": "ENV-SIZE",
+      "rule_description": "the file is at most 26214400 bytes (25 MiB)",
+      "sha256": "623bf92bbbf989c1d350f9c8038f9dd6379ee1538100374fd230a81812a665ef",
+      "bytes": 27303204,
+      "description": "Valid two-page PDF with a real text layer, carried past 25 MiB by one unreferenced uncompressed padding stream."
+    },
+    {
+      "name": "too_many_pages",
+      "path": "fixtures/synthetic/ar/negative/too_many_pages.pdf",
+      "violates_rule": "ENV-PAGES",
+      "rule_description": "the document has at most 30 pages",
+      "sha256": "acb3c347dbfe4b38efbc7e56f4389e97725b529966defa2a39c21e34f74da12a",
+      "bytes": 66487,
+      "description": "31-page PDF, one page over the limit. Every page carries real extractable text."
+    },
+    {
+      "name": "not_a_pdf",
+      "path": "fixtures/synthetic/ar/negative/not_a_pdf.txt",
+      "violates_rule": "ENV-PDF",
+      "rule_description": "the input is a PDF file",
+      "sha256": "ef968094226cd1559df9e2169eac549a8160ded5787fac492900fa899da5187d",
+      "bytes": 489,
+      "description": "A UTF-8 text file presented as the source document."
+    },
+    {
+      "name": "companion_archive",
+      "path": "fixtures/synthetic/ar/negative/companion_archive.zip",
+      "violates_rule": "ENV-PDF",
+      "rule_description": "the input is a PDF file",
+      "sha256": "05a5bb6305d56ed44a3f64769fecaa339529adaa28fa51b693147b76d60139cb",
+      "bytes": 779,
+      "description": "A ZIP archive holding a PDF plus companion files. ZIP and companion inputs are outside the PC-01 envelope."
+    }
+  ]
+}
