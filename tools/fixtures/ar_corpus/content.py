@@ -369,8 +369,25 @@ def all_quotations() -> list[tuple[str, int, str]]:
     return out
 
 
-def character_set() -> str:
-    """Every character the baseline document draws, so the font subset covers it."""
+# The font subset covers a declared repertoire rather than only the characters the
+# baseline happens to use today. Two reasons: the negative fixtures carry ASCII rule ids
+# and passwords, and a one-word edit to the document should not silently need a font
+# rebuild. `character_set` asserts the document stays inside the repertoire, so a
+# genuinely new character is still a loud failure rather than a dropped glyph.
+REPERTOIRE = "".join(sorted(set(
+    # Printable ASCII.
+    "".join(chr(c) for c in range(0x20, 0x7F))
+    # Russian alphabet, both cases, including Ё/ё.
+    + "".join(chr(c) for c in range(0x0410, 0x0450))
+    + "\u0401\u0451"
+    # Typography the document uses: guillemets, en/em dash, numero, non-breaking hyphen
+    # substitutes, ellipsis, curly quotes.
+    + "\u00ab\u00bb\u2013\u2014\u2018\u2019\u201c\u201d\u201e\u2026\u2116\u00a0\u00b0\u00b2\u00b3\u00d7\u2212"
+)))
+
+
+def document_characters() -> str:
+    """Every character the baseline document actually draws."""
     chars: set[str] = set()
     for page in PAGES:
         for line in page.lines:
@@ -378,3 +395,18 @@ def character_set() -> str:
         chars.update(FOOTER_TEMPLATE.format(page=page.number))
     chars.discard("\n")
     return "".join(sorted(chars))
+
+
+def character_set() -> str:
+    """The repertoire the font subset must cover.
+
+    Raises if the document has drifted outside the declared repertoire, which is the
+    case where a font rebuild is genuinely required.
+    """
+    outside = sorted(set(document_characters()) - set(REPERTOIRE))
+    if outside:
+        raise ValueError(
+            "the baseline text uses characters outside REPERTOIRE: "
+            + " ".join(f"U+{ord(c):04X} {c!r}" for c in outside)
+        )
+    return REPERTOIRE

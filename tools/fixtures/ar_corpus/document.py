@@ -32,6 +32,11 @@ LINE_HEIGHT_FACTOR = 1.35
 
 FONT_RESOURCE = "F1"
 
+# Envelope limits restated here so the negative builders overshoot the real numbers.
+# `envelope.py` owns the rules; these are the targets the fixtures aim past.
+MAX_PAGES_LIMIT = 30
+MAX_OVERSIZE_TARGET_BYTES = 26 * 1024 * 1024
+
 # Fixed metadata. No clock, no PRNG: these are the values that make the output stable.
 CREATION_DATE = "D:20260101000000Z"
 DOC_ID = bytes.fromhex("50432d3031204152206261736520646f63")[:16].ljust(16, b"\x00")
