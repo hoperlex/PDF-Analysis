@@ -71,7 +71,11 @@ def parse_database_url(raw_url: str) -> URL:
         )
     try:
         url = make_url(raw_url.strip())
-    except ArgumentError as exc:
+    except (ArgumentError, ValueError) as exc:
+        # ArgumentError covers a malformed scheme; a bare ValueError comes out of
+        # SQLAlchemy's own parser for things like a non-numeric port. Both are the
+        # same fault to a caller, and neither may be allowed to propagate with the
+        # raw value in its message.
         # The message from make_url can echo the raw value, which carries a
         # password. Report the fault without the value.
         raise DatabaseConfigurationError(

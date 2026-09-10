@@ -779,7 +779,7 @@ def _create_runs_and_commands() -> None:
             CONSTRAINT ck_stage_result_skipped_is_empty_and_final CHECK (
                 status <> 'skipped'
                 OR (jsonb_array_length(artifacts) = 0
-                    AND error ->> 'retryable' = 'false')
+                    AND error ->> 'retryable' IS NOT DISTINCT FROM 'false')
             ),
             CONSTRAINT ck_stage_result_artifacts_is_array
                 CHECK (jsonb_typeof(artifacts) = 'array'),
@@ -1079,10 +1079,13 @@ def _create_ledgers() -> None:
                 CHECK (char_length(author_label) BETWEEN 1 AND 128),
             CONSTRAINT ck_expert_decision_event_comment_length
                 CHECK (comment IS NULL OR char_length(comment) BETWEEN 1 AND 4000),
+            -- IS NOT DISTINCT FROM, not =. A CHECK that evaluates to NULL is
+            -- SATISFIED in PostgreSQL, so `verdict = 'accepted'` with a NULL verdict
+            -- would have let an accept event through carrying no verdict at all.
             CONSTRAINT ck_expert_decision_event_type_verdict_agree CHECK (
-                (event_type = 'accept'  AND verdict = 'accepted')
-                OR (event_type = 'reject'  AND verdict = 'rejected')
-                OR (event_type = 'revoke'  AND verdict = 'pending')
+                (event_type = 'accept'  AND verdict IS NOT DISTINCT FROM 'accepted')
+                OR (event_type = 'reject'  AND verdict IS NOT DISTINCT FROM 'rejected')
+                OR (event_type = 'revoke'  AND verdict IS NOT DISTINCT FROM 'pending')
                 OR (event_type = 'comment' AND verdict IS NULL AND comment IS NOT NULL)
             )
         );
