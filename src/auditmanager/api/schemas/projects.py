@@ -48,12 +48,16 @@ def parse_create_project_request(payload: Mapping[str, Any]) -> str:
     refused here rather than dropped: a client that sent ``{"nmae": ...}`` has a bug,
     and silently creating a project called something else hides it.
     """
-    unknown = sorted(set(payload) - {"name"})
-    if unknown:
+    if set(payload) - {"name"}:
+        # The offending property name is **not** echoed. It is caller-controlled text,
+        # and `details` values are not screened the way `message` is, so echoing one
+        # would reflect whatever the caller sent -- a path, a URL -- straight back out
+        # inside the envelope. `tests/integration/api/test_no_internal_identifiers.py`
+        # found exactly that here.
         raise DomainError(
             ErrorCode.VALIDATION_FAILED,
             message="The request body carries a property the schema does not declare.",
-            field=unknown[0],
+            field="body",
             constraint="additionalProperties",
         )
     name = payload.get("name")

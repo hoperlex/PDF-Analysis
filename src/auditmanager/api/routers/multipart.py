@@ -92,8 +92,11 @@ def parse_multipart_upload(body: bytes, content_type: str | None) -> MultipartUp
                 constraint="part_name",
             )
         if name in seen:
+            # The part name is caller-controlled and is not echoed: `details` values
+            # are not screened the way `message` is, so echoing one would reflect
+            # whatever the caller sent back out inside the envelope.
             raise _refuse(
-                "A multipart part is repeated.", field=name, constraint="unique_part"
+                "A multipart part is repeated.", field="body", constraint="unique_part"
             )
         seen.add(name)
 
@@ -127,9 +130,10 @@ def parse_multipart_upload(body: bytes, content_type: str | None) -> MultipartUp
         else:
             # `UploadDocumentRequest` is closed. An unknown part is refused rather than
             # ignored, for the same reason an unknown JSON property is.
+            # Not echoed, for the same reason as above.
             raise _refuse(
                 "The upload carries a part the schema does not declare.",
-                field=name,
+                field="body",
                 constraint="additionalProperties",
             )
 

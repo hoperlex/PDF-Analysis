@@ -145,12 +145,12 @@ def parse_start_run_request(payload: Mapping[str, Any]) -> StartRunCommand:
     inputs* are what is wrong. A malformed body is ``validation_failed``: the frozen
     ``RunInputInvalid`` response describes exactly that split.
     """
-    unknown = sorted(set(payload) - {"version_uid", "provider_mode"})
-    if unknown:
+    if set(payload) - {"version_uid", "provider_mode"}:
+        # The property name is not echoed; see the note in `schemas/projects.py`.
         raise DomainError(
             ErrorCode.VALIDATION_FAILED,
             message="The request body carries a property the schema does not declare.",
-            field=unknown[0],
+            field="body",
             constraint="additionalProperties",
         )
     version_uid = payload.get("version_uid")

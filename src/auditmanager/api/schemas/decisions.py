@@ -88,12 +88,12 @@ class AppendDecisionCommand:
 
 def parse_append_decision_request(payload: Mapping[str, Any]) -> AppendDecisionCommand:
     """Validate ``AppendDecisionRequest``."""
-    unknown = sorted(set(payload) - {"event_type", "finding_observation_id", "comment"})
-    if unknown:
+    if set(payload) - {"event_type", "finding_observation_id", "comment"}:
+        # The property name is not echoed; see the note in `schemas/projects.py`.
         raise DomainError(
             ErrorCode.VALIDATION_FAILED,
             message="The request body carries a property the schema does not declare.",
-            field=unknown[0],
+            field="body",
             constraint="additionalProperties",
         )
 
