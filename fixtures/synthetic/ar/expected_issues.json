@@ -19,8 +19,8 @@
   },
   "baseline": {
     "path": "fixtures/synthetic/ar/ar_baseline.pdf",
-    "sha256": "52dc430415d862909337ca9240102e2b9ba939e63d3057744e12fccd18d1283e",
-    "bytes": 58941,
+    "sha256": "6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f",
+    "bytes": 58978,
     "pages": 8,
     "language": "ru",
     "discipline": "AR",

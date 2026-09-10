@@ -85,24 +85,30 @@ SMALL = 9.0
 # --------------------------------------------------------------------------------------
 # Page 1 - title
 # --------------------------------------------------------------------------------------
-_PAGE_1 = _p(1, [  # every line centred; see _centre_title_page below
-    Line("ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ «СИНТЕТИКПРОЕКТ»", H2),
-    Line("вымышленная организация; реальному юридическому лицу не соответствует", SMALL),
+# Centred, as a Russian title sheet is. Centring only moves the x origin of a line; each
+# line is still one text-showing operator, so it changes nothing about extraction. No
+# quotation lives on this page in any case.
+_PAGE_1 = _p(1, [
+    Line("ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ «СИНТЕТИКПРОЕКТ»", H2, center=True),
+    Line("вымышленная организация; реальному юридическому лицу не соответствует",
+         SMALL, center=True),
     Line("", BODY, space_before=48.0),
-    Line("Объект: многоквартирный жилой дом на 64 квартиры", BODY),
-    Line("Условная площадка № 1, квартал СП-7", BODY),
+    Line("Объект: многоквартирный жилой дом на 64 квартиры", BODY, center=True),
+    Line("Условная площадка № 1, квартал СП-7", BODY, center=True),
     Line("", BODY, space_before=40.0),
-    Line("ПРОЕКТНАЯ ДОКУМЕНТАЦИЯ", H1),
-    Line("Раздел 3. Архитектурные решения", H2, space_before=8.0),
-    Line("Шифр СП-7-АР", BODY, space_before=8.0),
+    Line("ПРОЕКТНАЯ ДОКУМЕНТАЦИЯ", H1, center=True),
+    Line("Раздел 3. Архитектурные решения", H2, space_before=8.0, center=True),
+    Line("Шифр СП-7-АР", BODY, space_before=8.0, center=True),
     Line("", BODY, space_before=40.0),
-    Line("Стадия: П", BODY),
-    Line("Том 3", BODY),
+    Line("Стадия: П", BODY, center=True),
+    Line("Том 3", BODY, center=True),
     Line("", BODY, space_before=60.0),
-    Line("СИНТЕТИЧЕСКИЙ ДОКУМЕНТ.", SMALL),
-    Line("Создан генератором tools/fixtures/build_ar_corpus.py для приёмочных", SMALL),
-    Line("испытаний. Проектной документацией не является и для строительства", SMALL),
-    Line("не применяется.", SMALL),
+    Line("СИНТЕТИЧЕСКИЙ ДОКУМЕНТ.", SMALL, center=True),
+    Line("Создан генератором tools/fixtures/build_ar_corpus.py для приёмочных",
+         SMALL, center=True),
+    Line("испытаний. Проектной документацией не является и для строительства",
+         SMALL, center=True),
+    Line("не применяется.", SMALL, center=True),
 ])
 
 # --------------------------------------------------------------------------------------
