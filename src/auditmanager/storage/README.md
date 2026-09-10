@@ -160,8 +160,28 @@ in this repository is a broad bucket deletion.
 
 | Command | Result |
 |---|---|
-| `make check-storage` | Exit `0`; prints `FOUNDATION-CHECK OK check-storage` last. |
-| `.venv/bin/pytest tests/integration/storage` | Exit `0` against a real S3-compatible service. |
+| `PYTHONPATH=src .venv/bin/python -m auditmanager.storage.check` | Exit `0`; prints `FOUNDATION-CHECK OK check-storage` as its last line. |
+| `.venv/bin/pytest tests/integration/storage` | Exit `0` against a real S3-compatible service; leaves the bucket exactly as it found it. |
+
+The first row is the invocation `FOUNDATION_LOCK.json` records for
+`make check-storage`, run directly. **`make check-storage` itself does not
+currently reach it**, and the cause is in the frozen `Makefile`, not in this
+package:
+
+```
+$ make check-storage
+environment: line 196: exec: scrubbed_run: not found
+P1-INT-00: check-storage failed with exit status 127.
+```
+
+`run_checked` already wraps its arguments in `scrubbed_run`
+(`Makefile:218`, `out="$(scrubbed_run PYTHONUNBUFFERED=1 -- "$@" 2>&1)"`), while
+each check target passes `scrubbed_run ...` in as those arguments
+(`Makefile:676`, `:698`, `:709`). The inner `exec "$@"` then tries to `exec` a
+shell function and exits 127 before any provider code runs. All three
+`check-*` targets have the identical shape; `check-storage` is simply the first
+one whose provider exists, so it is the first to reach the defect. The fix
+belongs to `P1-INT-00`, the sole owner of the command surface.
 
 `check.py` proves, in order: the frozen `S3_*` names are present; the configured
 application credentials reach the bucket; an **unsigned** request to the same
