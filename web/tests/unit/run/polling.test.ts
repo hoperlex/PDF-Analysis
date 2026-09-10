@@ -225,7 +225,25 @@ describe('this slice adds no second polling loop', () => {
     expect(pollers.map((p) => p.path)).toHaveLength(1);
     expect(pollers[0]?.path).toContain(join('entities', 'audit-run'));
 
+    // A one-shot read of the run is not a second loop. The review screen needs the run's
+    // provider_mode and state once, to show whether the findings beside it came from a
+    // live call or a recording, and it schedules nothing - the sibling assertion above
+    // already forbids setInterval and refetchInterval across these same files.
+    //
+    // So a direct call site is allowed only when it is named here. Naming them keeps the
+    // guard real: a new screen reaching the run endpoint is a visible decision rather
+    // than silent drift, and a named site that starts scheduling still reddens above.
+    const ALLOWED_ONE_SHOT = [join('_pages', 'review', 'ui', 'review-page.tsx')];
+
     const direct = sources.filter((file) => /\bgetRunStatus\s*\(/.test(code(file)));
-    expect(direct.map((d) => d.path)).toEqual([]);
+    const unexpected = direct.filter(
+      (file) => !ALLOWED_ONE_SHOT.some((allowed) => file.path.includes(allowed)),
+    );
+    expect(unexpected.map((d) => d.path)).toEqual([]);
+
+    // The allowlist must not rot into a list of files that no longer exist.
+    for (const allowed of ALLOWED_ONE_SHOT) {
+      expect(direct.some((file) => file.path.includes(allowed))).toBe(true);
+    }
   });
 });
