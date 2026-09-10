@@ -10,3 +10,53 @@ Minimum conventions:
 - cursor pagination for growing lists;
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
+
+## The frozen PC-01 surface
+
+`openapi.json` is the frozen document for the PC-01 slice, created by session `A1`
+under owner decision `OD-14` and released at Gate A. It is seam `S8` of
+`docs/program/P02_SEAMS.md`.
+
+**Twelve operations, and no thirteenth.** Exactly the eleven capabilities
+`docs/program/tasks/P2-API-01.md` enumerates. Adding an endpoint is a contract change,
+not an implementation detail.
+
+| Consumer | What it does with this file |
+|---|---|
+| `A5` | generates `web/src/shared/api/generated/**` from it, deterministically |
+| `B6` | implements `src/auditmanager/api/routers/**` against it |
+| `B7`, `B8` | use `A5`'s generated client and never call `fetch` directly |
+
+### Why JSON rather than YAML
+
+The runtime lock carries no YAML parser and adding a root dependency is a
+single-owner task under FF-01 §2.8, not a lane decision. JSON is parseable by the
+standard library, by the governance environment's `jsonschema`, and by every
+TypeScript generator. A YAML document would have needed a dependency to validate its
+own gate.
+
+### Validating it
+
+```sh
+.venv/bin/pytest tests/contract/domain_p02/test_openapi_document.py
+.venv/bootstrap/bin/python tests/contract/domain_p02/openapi_metaschema_check.py
+```
+
+The first runs in the runtime environment with the standard library alone, and never
+skips. It checks the document's structure, that every `$ref` resolves, that no
+component is unreachable, that every enum drawn from a frozen contract equals that
+contract, that every identity carries its contract pattern, and that nothing in the
+surface leaks an address, a credential or a model payload.
+
+The second runs under the governance interpreter, which is the only one carrying
+`jsonschema`, and validates every schema object against JSON Schema 2020-12 —
+meaningful because OpenAPI 3.1 aligned its Schema Object with that dialect.
+
+### Changing it
+
+A breaking change is a new contract version — `contracts/api/v2/**` — never an edit
+here. The frozen document stays as the record of what was promised.
+
+A non-breaking addition is still a change to a file every Gate B and Gate C session
+consumes: it goes to the integrator with the failing test that motivates it, per
+`docs/program/P02_SEAMS.md` §10.
