@@ -85,11 +85,12 @@ def run(context: StageContext) -> StageProduction:
         context.blob(ROLE_BLOCK_INDEX),
         expected_role=ROLE_BLOCK_INDEX,
     )
-    text_layer, _ = read_artifact(
+    text_layer, text_layer_sha256 = read_artifact(
         context.blob_store,
         context.blob(ROLE_TEXT_LAYER),
         expected_role=ROLE_TEXT_LAYER,
     )
+    _refuse_unbound_text_layer(block_index, text_layer_sha256)
 
     blocks = _resolve_blocks(block_index, text_layer)
     sections, section_of = _build_sections(blocks)
@@ -116,6 +117,31 @@ def run(context: StageContext) -> StageProduction:
             "block_count": len(blocks),
         },
     )
+
+
+def _refuse_unbound_text_layer(
+    block_index: dict[str, Any], text_layer_sha256: str
+) -> None:
+    """Section 4.4: a consumer holding a different text layer fails closed.
+
+    ``text_layer_sha256`` binds the block index to the exact text layer its spans were
+    computed against, and this is the check that makes the binding mean something. It
+    is not redundant with resolving the spans: a longer document's text layer can hold
+    every one of those offsets and still be entirely different text, so a span that
+    resolves is not evidence that it resolves to the *right* characters.
+    """
+    declared = block_index.get("text_layer_sha256")
+    if declared != text_layer_sha256:
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message=(
+                "the block index is bound to a different text layer than the one "
+                "supplied; the stage fails closed rather than resolving anchors "
+                "against text they were not computed from"
+            ),
+            stage_id=STAGE_ID,
+            reason="text_layer_binding_mismatch",
+        )
 
 
 def _resolve_blocks(
