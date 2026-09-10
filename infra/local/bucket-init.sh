@@ -63,8 +63,14 @@ fi
 
 # --- privacy -----------------------------------------------------------------------
 # Unconditional and idempotent: setting `none` when the policy is already `none` is a
-# no-op. Doing it every run means a bucket that was made public by hand is closed again
-# on the next `make up` instead of quietly staying open.
+# no-op. Because it is unconditional, a bucket that was opened by hand is closed again the
+# next time this script RUNS.
+#
+# It runs when the s3-init container starts - so on the first `make up`, and on every
+# `make up` after a `make down`. Compose does not restart a container that is already
+# running, so `make up` against an already-running stack does NOT re-run it. This script
+# therefore establishes privacy; it does not continuously enforce it. Detecting a bucket
+# that was opened after initialization is check_services.py's job, and it fails loudly.
 mc --quiet anonymous set none "$ALIAS/$BUCKET" >/dev/null \
     || fail "could not remove the anonymous policy from $BUCKET."
 
