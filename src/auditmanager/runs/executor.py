@@ -128,21 +128,37 @@ def _utc_now() -> datetime:
 
 @dataclass(frozen=True, slots=True)
 class ExecutionResult:
-    """Everything one execution established, in terms a caller can assert on."""
+    """Everything one execution established, in terms a caller can assert on.
+
+    It carries the gate's :class:`TerminalSelection` rather than a copy of its fields.
+    That is not tidiness: re-deriving "which terminals publish" here would put a second
+    definition of it in the tree, and the first place a definition drifts is its second
+    copy. Every terminal fact below is delegated to the object the gate returned.
+    """
 
     run_id: str
-    terminal_state: str
-    degradation_set: tuple[str, ...]
-    terminal_reason: str | None
+    selection: TerminalSelection
     stage_statuses: Mapping[str, str]
     published_finding_count: int
     diagnostic_count: int
     gate_ran: bool
 
     @property
+    def terminal_state(self) -> str:
+        return self.selection.state
+
+    @property
+    def degradation_set(self) -> tuple[str, ...]:
+        return tuple(self.selection.degradation_set)
+
+    @property
+    def terminal_reason(self) -> str | None:
+        return self.selection.terminal_reason
+
+    @property
     def is_publishable(self) -> bool:
-        """``published`` and ``partial`` publish findings; ``failed`` publishes nothing."""
-        return self.terminal_state in {"published", "partial"}
+        """Delegated to the gate's own definition; this module has no opinion."""
+        return self.selection.is_publishable
 
 
 @dataclass
@@ -496,9 +512,7 @@ def execute_run(
 
     return ExecutionResult(
         run_id=run_id,
-        terminal_state=selection.state,
-        degradation_set=tuple(selection.degradation_set),
-        terminal_reason=selection.terminal_reason,
+        selection=selection,
         stage_statuses=dict(statuses),
         published_finding_count=(
             0 if publication is None else publication.published_count

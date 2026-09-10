@@ -22,6 +22,7 @@ from auditmanager.runs.commands import (
     frozen_input_digest,
     run_of_command,
     start_audit_run,
+    start_run_fingerprint,
 )
 from auditmanager.runs.executor import ExecutionResult, execute_run
 from auditmanager.runs.reconciliation import (
@@ -77,4 +78,5 @@ __all__ = [
     "reconcile_interrupted_runs",
     "run_of_command",
     "start_audit_run",
+    "start_run_fingerprint",
 ]

@@ -57,6 +57,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     AnalysisProfileId,
     IdempotencyKey,
+    PayloadFingerprint,
     PromptBundleId,
     RunId,
     VersionUid,
@@ -105,6 +106,32 @@ def frozen_input_digest(
         document, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def start_run_fingerprint(
+    *,
+    version_uid: str,
+    analysis_profile_id: str,
+    prompt_bundle_id: str,
+    provider_mode: str,
+    frozen_input_digest_value: str,
+) -> PayloadFingerprint:
+    """The comparison value that distinguishes a repeat from a same-key conflict.
+
+    Public because it is the *rule*, not an implementation detail: a caller that needs
+    to know whether two requests are the same payload must ask the same question this
+    command asks, and a second derivation of it elsewhere would be a second place to be
+    wrong. It covers everything that would change what the run analyses or how.
+    """
+    return payload_fingerprint(
+        {
+            "analysis_profile_id": analysis_profile_id,
+            "frozen_input_digest": frozen_input_digest_value,
+            "prompt_bundle_id": prompt_bundle_id,
+            "provider_mode": provider_mode,
+            "version_uid": version_uid,
+        }
+    )
 
 
 def _resolve_references(
@@ -196,18 +223,15 @@ def start_audit_run(
         prompt_bundle_id=prompt_bundle_id,
     )
 
-    # The fingerprint covers everything that would change what the run analyses or how.
     # Two requests differing in any of it are different payloads, so a client that
     # reuses a key after changing the profile learns about it rather than silently
     # receiving the first run back.
-    fingerprint = payload_fingerprint(
-        {
-            "analysis_profile_id": analysis_profile_id,
-            "frozen_input_digest": digest,
-            "prompt_bundle_id": prompt_bundle_id,
-            "provider_mode": provider_mode,
-            "version_uid": str(resolved_version),
-        }
+    fingerprint = start_run_fingerprint(
+        version_uid=str(resolved_version),
+        analysis_profile_id=analysis_profile_id,
+        prompt_bundle_id=prompt_bundle_id,
+        provider_mode=provider_mode,
+        frozen_input_digest_value=digest,
     )
 
     claimed = command_repo.begin(
@@ -282,4 +306,5 @@ __all__ = [
     "frozen_input_digest",
     "run_of_command",
     "start_audit_run",
+    "start_run_fingerprint",
 ]
