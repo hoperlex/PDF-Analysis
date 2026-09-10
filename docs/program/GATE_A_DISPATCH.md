@@ -1,6 +1,14 @@
 # Gate A — dispatch record
 
-**Dispatched 2026-09-10 from `d68c297792e6dc0153878c4b0256c9e933eb452c`** on
+> **Re-dispatched 2026-09-10 from `1995505`.** The first dispatch was killed by a session
+> restart. In-process sessions do not survive one; their worktrees did, but all four sat at
+> the base commit holding nothing, because each was still working uncommitted. Zero output
+> was recovered. The orphaned worktrees and their branches were removed and all four
+> sessions relaunched with one added instruction: **commit to your own branch after every
+> meaningful step**, so the next interruption costs minutes rather than everything. The
+> original dispatch record follows, unchanged except for this note and the base commit.
+
+**Dispatched 2026-09-10 from `d68c297792e6dc0153878c4b0256c9e933eb452c`, re-dispatched from `1995505`** on
 `planning/prototype-roadmap`. Structure: `PROTOTYPE_WAVE_PLAN.md` §3. Briefs:
 `GATE_A_BRIEFS.md`. `OD-14` was ruled by the repository owner the same day, releasing
 `A1b` and `A5`.
