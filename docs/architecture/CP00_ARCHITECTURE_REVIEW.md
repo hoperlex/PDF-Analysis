@@ -22,7 +22,7 @@ An owner decision recorded in a single contract family is exactly the split sour
 truth this program exists to prevent, so round 3 reconciles it into
 [CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md) and into the machine matrix. No
 principle disposition, ADR disposition, integration decision or earlier owner record
-was changed, and round 3 was not itself the ratification act.
+was changed, and the review is still not the ratification act.
 
 Round 4 records the owner's answers to the three questions this review raised about
 records it already carried, and opens no new one. The `PD-05` identifier is
@@ -31,7 +31,7 @@ optimization its own bounded context; and the `FS-04` fail-soft policy is **spli
 into three parts with a named owner each**, machine-readably, because the defect
 round 3 could only report was that half of it had no owner at all. `PD-01`–`PD-04`,
 `ID-01`–`ID-03`, every principle and ADR disposition and the `ADR-0014` defer are
-untouched. The review status is `ratified`; that ratification is
+untouched. The review status stays `owner_decisions_recorded` and this is still not
 the ratification act.
 
 Round 5 records one thing and adds no decision. Independent review found that the
@@ -45,11 +45,11 @@ the overlap between two clauses and changes neither of them. Both consuming fami
 must reflect it (§6.2, §14). Everything else stands: `PD-01`, `PD-02`, `PD-04`,
 `PD-05`, `ID-01`–`ID-03`, every principle and ADR disposition, the `ADR-0014` defer,
 the open `U-04`, the resolved `U-06` and the three-part `FS-04` split. The review
-status is `ratified`, recorded by the ratification act of `W0-INT-01`.
+status stays `owner_decisions_recorded` and this is still not the ratification act.
 
 | Item | Value |
 |---|---|
-| Review status | `ratified` (round 5) |
+| Review status | `owner_decisions_recorded` (round 5) |
 | Owner decisions `PD-01`–`PD-05` | recorded 2026-09-01: `PD-01`, `PD-02`, `PD-03` **approved with modification**, `PD-04` and `PD-05` **approved** (§6, [CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md)) |
 | `PD-03` precedence clarification | recorded 2026-09-01 by the repository owner **inside `PD-03`**, not as a new decision: identical idempotency key and payload always return the original Run; a repeat of a terminal Run creates a new Run only under a new idempotency key (§6.2). The record count stays five and the disposition stays `approved with modification` |
 | `PD-05` identifier provenance | the number was assigned by the **analysis (ANA) lane**, not by the owner, and was **confirmed by the program integrator on 2026-09-01**: it stands, no renumbering follows and the confirmation changed no semantics. The number is a cross-artifact label, not part of the owner's statement |
@@ -260,9 +260,8 @@ stage name the map must carry: the surface on which the name appears, its
 `source_declaration_id`, immutable evidence, and either a canonical target stage or
 an explicit exclusion. `findings_merge` → `finding_merge` is a mandatory example. At
 the time of the decision `contracts/analysis/v1/legacy-stage-map.json` carries 31
-declaration sites and **zero** concrete alias values. The accepted analysis candidate
-resolves 62 legacy names across all 31 alias-bearing declaration sites, so the
-acceptance precondition is satisfied.
+declaration sites and **zero** concrete alias values, so the acceptance precondition
+is not yet met.
 
 **PD-03 — approved with modification.** `AuditRun`, `Job` and `Attempt` are distinct
 entities. A new `AuditRun` is created when a top-level audit or re-audit command is
@@ -356,9 +355,7 @@ the ARC lane only records them.
   (`contracts/analysis/v1/legacy-stage-name-map.json`, 62 names) in the shared
   working tree. That is another lane's unfrozen draft: whether it satisfies the
   precondition is decided by the integrator and the `ID-03` reviewer, not by this
-  lane. The `ID-03` reviewer confirmed all nine registry stages, all 31 alias-bearing
-  sites and all 293 immutable evidence locators, and the integrator accepted the map on
-  that confirmation, so this item is closed.
+  lane, and the analysis contract family cannot be accepted on `PD-02` alone.
 - `ID-03`'s independent confirmation of the nine registry stages and of every
   alias-bearing declaration site.
 - `U-04` (§11), precisely and only: `ADR-0014` stays `proposed`, the retention and

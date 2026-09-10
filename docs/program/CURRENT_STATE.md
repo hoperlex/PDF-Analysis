@@ -80,7 +80,7 @@ corrected in the same period. Rounds four and five were voided before either str
 reported. Rounds six, seven and eight each ran in full and failed on integrator-owned
 state metadata, not on any contract. Round nine was frozen and then voided before
 dispatch, because performing `W0-INT-01` would have voided the round authorising it.
-Round ten was frozen at `2ea7b68`, returned `PASS` from both streams, and CP-00 is ratified on it. No earlier result transfers to it.
+Round ten was frozen at `2ea7b68` and returned `PASS` from both streams; that round is now void and acceptance round eleven is open. Nothing is ratified, nothing is tagged in the superseding series: `v0.0.1-architecture` does not exist and no round has been accepted for it. The superseded tag `v0.0.0-architecture` remains published and immutable, and is not this checkpoint's current identity. No earlier result transfers to round eleven.
 
 CP-00 is ratified on acceptance round ten, both streams `PASS`, and tagged
 `v0.0.0-architecture` — locally, and not published. **That ratification is bound to the
