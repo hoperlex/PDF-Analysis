@@ -1,0 +1,89 @@
+{
+  "$comment": "P02 dependency and provider pins. Owned by B-0, the sole writer of the root lock for Gate B. Sibling of docs/program/FOUNDATION_LOCK.json, which owns P01.",
+  "owner_task": "B-0",
+  "base_commit": "3cf98c251171d1d243da279df3e347385d6a41b2",
+  "decisions_applied": {
+    "OD-01": "PDF text extraction: a permissively licensed extractor giving per-character boxes, plus a separate page-count and encryption probe. Copyleft blocked.",
+    "OD-02": "Model provider: Anthropic first-party API."
+  },
+  "pins": {
+    "pdfplumber": {
+      "version": "0.11.10",
+      "licence": "MIT",
+      "purpose": "text extraction with per-character geometry; x0/x1/top/bottom, fontname and size per character, runs grouped into lines",
+      "consumed_by": [
+        "B2"
+      ]
+    },
+    "pypdf": {
+      "version": "6.18.0",
+      "licence": "BSD-3-Clause",
+      "purpose": "the separate envelope probe OD-01 requires: page count and encryption, answered without parsing content",
+      "consumed_by": [
+        "B1",
+        "B2"
+      ]
+    },
+    "anthropic": {
+      "version": "1.4.0",
+      "licence": "MIT",
+      "purpose": "model provider SDK",
+      "consumed_by": [
+        "B3"
+      ]
+    }
+  },
+  "rejected_candidates": {
+    "PyMuPDF/fitz": "AGPL. OD-01 blocks a copyleft library until the owner rules otherwise. Not evaluated further.",
+    "pypdfium2 as the direct extractor": "Scored 12/12 on the corpus oracle and offers per-character boxes, so it was a genuine alternative. Rejected on API fit: pdfplumber's per-character dicts and line grouping map directly onto B2's block index with page, bounding box and text-span anchors, whereas pypdfium2 is lower level. It enters the lock anyway as a pdfplumber dependency, BSD-3-Clause and Apache-2.0."
+  },
+  "models": {
+    "$comment": "Recorded here so B3's cost ceiling and P4-OPS-01's cost measurement read one source. Rates are the 2026-06-24 cached rate table, per USD per million tokens.",
+    "primary": {
+      "model_id": "claude-opus-5",
+      "context": "1M",
+      "input_per_mtok_usd": 5.0,
+      "output_per_mtok_usd": 25.0
+    },
+    "cheaper_tier": {
+      "model_id": "claude-sonnet-5",
+      "input_per_mtok_usd": 2.0,
+      "output_per_mtok_usd": 10.0
+    }
+  },
+  "provider_configuration": {
+    "$comment": "READ THIS BEFORE ADDING A NAME TO .env. Provider configuration is deliberately NOT in the lane .env, and B-0 did not add one.",
+    "finding": "The B-0 brief asked for additive .env.example names for provider credentials, provider mode and the cost ceiling. The Makefile refuses them. load_env enforces a strict allowlist of exactly the fifteen names FF-01 section 3 freezes, and its comment states the intent: .env configures this lane's services and 'does not carry tool options, credentials for other systems, or anything that selects what code runs'. PROVIDER_MODE is precisely something that selects what code runs, which is the case the guard exists to refuse.",
+    "resolution": "Provider configuration is application-layer, read by the application from its own process environment at runtime, never from the lane .env and never through make. The credential is an injected secret per FF-01 section 2.9 and is never committed.",
+    "names_the_application_reads": {
+      "ANTHROPIC_API_KEY": "injected secret; never written to a file in this repository",
+      "AUDITMANAGER_PROVIDER_MODE": "live | recorded. Recorded is the default for automated suites under OD-13.",
+      "AUDITMANAGER_MODEL_ID": "defaults to models.primary.model_id",
+      "AUDITMANAGER_RUN_COST_CEILING_USD": "per-run ceiling; exceeding it raises cost_budget_exceeded (OD-03)"
+    },
+    "owner_action_if_this_is_wrong": "Putting provider configuration into .env means extending FROZEN_ENV_NAMES, which is an FF-01 section 3 freeze-break and needs an explicit break record. It is not something a pin session may do, and B-0 did not do it."
+  },
+  "acceptance_evidence": {
+    "corpus_oracle": "The pinned extractor recovers 12 of 12 manifest quotations from fixtures/synthetic/ar/ar_baseline.pdf at their declared pages, all 12 wholly within a single line, which is the resolution contract expected_issues.json declares. Run with .venv/bin/python on the widened lock.",
+    "per_character_geometry": "535 characters on page 2, each with x0, x1, top and bottom.",
+    "negative_fixtures": {
+      "encrypted.pdf": "probe reports ENCRYPTED; extraction raises rather than returning empty text",
+      "image_only.pdf": "probe reads 2 pages; extraction yields 0 characters, distinguishable from a parse failure",
+      "too_many_pages.pdf": "probe reports 31 pages, refused before extraction",
+      "oversize.pdf": "26.0 MiB, refused on size before parsing",
+      "not_a_pdf.txt": "probe rejects with PdfStreamError",
+      "companion_archive.zip": "probe rejects with PdfReadError"
+    },
+    "copyleft_audit": "44 installed distributions inspected across the full closure; zero copyleft-suspect licences.",
+    "gate": {
+      "make bootstrap x2": 0,
+      "tracked_state_between_runs": "unchanged",
+      "make foundation": 0,
+      "sentinels": 3,
+      "foundation_tests": "35 passed",
+      "validate_bootstrap": 0,
+      "git diff --check": 0
+    }
+  },
+  "contract_to_gate_b": "Every Gate B session consumes these pins and may not add or upgrade a root dependency. A session needing one stops and reports it."
+}

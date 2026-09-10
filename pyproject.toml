@@ -23,6 +23,20 @@ dependencies = [
     # S3 API client for the BlobStore adapter (P1-STO-01) and private-bucket
     # initialization plus the service health check (P1-INF-01).
     "boto3==1.43.90",
+    # --- P02 pins, owned by B-0. See docs/program/P02_LOCK.json. ---
+    # PDF text extraction with per-character geometry (OD-01). pdfplumber exposes
+    # x0/x1/top/bottom, fontname and size per character and groups runs into lines, which
+    # is what B2 needs for stable character offsets and for the block index's page,
+    # bounding box and text-span anchors. MIT, over MIT pdfminer.six. PyMuPDF/fitz is
+    # excluded: it is AGPL, and OD-01 blocks a copyleft library until the owner rules
+    # otherwise.
+    "pdfplumber==0.11.10",
+    # The separate page-count and encryption probe OD-01 requires. It answers "is this
+    # inside the envelope" without parsing content, so a 31-page or encrypted input is
+    # refused before any extraction runs. BSD-3.
+    "pypdf==6.18.0",
+    # Model provider SDK (OD-02). Anthropic first-party API. MIT.
+    "anthropic==1.4.0",
 ]
 
 [dependency-groups]
