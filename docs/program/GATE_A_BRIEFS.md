@@ -1,6 +1,7 @@
 # Gate A — session briefs
 
-> **Status: A2, A3, A4 dispatchable now. A1-schema and A5 blocked on one owner ruling.**
+> **Status: all six sessions dispatchable. `OD-14` ruled by the repository owner on
+> 2026-09-10 — `A1b` and `A5` released.**
 > Base commit: the `planning/prototype-roadmap` tip carrying both merged candidates.
 > Structure: `PROTOTYPE_WAVE_PLAN.md` §3. Specification content: the named task files.
 
@@ -112,16 +113,50 @@ proceed regardless of the ruling.
   negative fixtures are each rejected by the envelope rule they violate;
   `git diff --check` exits `0`.
 
-## 6. `A1b` and `A5` — held
+## 6. `A1b` — the PC-01 seams
 
-`A1b` owns `db/migrations/**` (product tables, extending `A1a`'s head),
-`contracts/api/v1/**` and `docs/program/P02_SEAMS.md`. `A5` owns the `web/` toolchain,
-`web/src/app/**` and `web/src/shared/**`, and generates the typed client from `A1b`'s
-OpenAPI document.
+**Released.** `OD-14` was ruled on 2026-09-10: P02 may create its product tables and its
+contract family while the CP-00 supersession completes on its own line.
 
-Both are ready to brief and neither is dispatched until the owner rules `OD-14`. If the
-ruling is that the CP-00 supersession must complete first, Gate A still delivers a running
-foundation and Gate B is what waits.
+- **Owns:** `db/migrations/**` (product tables only, extending `A1a`'s head),
+  `contracts/api/v1/**`, `docs/program/P02_SEAMS.md`
+- **Spec:** `docs/program/tasks/P2-DOM-01.md`, `P2-API-01.md`, and the seam register in
+  `PROTOTYPE_EXECUTION_PLAN.md` §3.4
+- **Delivers:** Project, DocumentVersion, Blob metadata, AuditRun, StageResult, Finding,
+  FindingObservation and the append-only ExpertDecision ledger as **one** migration head;
+  every stage-artifact shape `B2`/`B3` publish and `B4` resolves anchors against; the
+  OpenAPI document for every endpoint `B6` implements and `A5` generates a client from;
+  the CSV column contract per `OD-11`; `P02_SEAMS.md` naming each seam and its owner
+- **This is the session that must not be hurried.** Every Gate B session is a consumer of
+  it. A seam error found at the Gate B convergence is the expensive failure of this whole
+  structure — that is the trade the three-gate collapse makes, and this session is where
+  it is paid for or lost.
+- **Ten identifiers stay deliberately unallocated** — `import_id`, `export_id`, `job_id`,
+  `attempt_id` among them. List them in the handoff rather than promising an aggregate
+  nobody builds.
+- **Read-only:** `contracts/domain|analysis|events/v1/**`. Take identifiers, states and
+  evidence rules from them; do not edit them.
+- **Gate:** `make migrate` exits `0` from an empty database and is safe re-run at head;
+  the OpenAPI document validates; a test asserts every declared stage-artifact shape has a
+  named producer and consumer; `git diff --check` exits `0`.
+
+## 6a. `A5` — web toolchain and generated client
+
+**Released** with `A1b`, whose OpenAPI document it consumes. Start when `A1b` commits that
+document; it need not wait for the rest of `A1b`.
+
+- **Owns:** `web/package.json`, `web/package-lock.json`, `web/.nvmrc`, `web/tsconfig.json`,
+  `web/src/app/**`, `web/src/_app/**`, `web/src/shared/**`, `web/openapi/**`,
+  `web/scripts/generate-api-client.mjs`, `web/tests/guards/**`, `web/FRONTEND_LOCK.json`
+- **Spec:** `docs/program/tasks/P3-WEB-00.md`, `P3-API-01.md`
+- **Delivers:** pinned Node and npm with a committed lockfile; the app shell and shared UI
+  primitives; the typed API client generated deterministically from `A1b`'s OpenAPI
+  document; the transport seam `B7` and `B8` both import
+- **`B7` and `B8` build on this in Gate B and never edit it.** Shape `web/src/shared/**`
+  so their slices are additions.
+- **No product screen.** Projects, run, review, decisions and export belong to `B7`/`B8`.
+- **Gate:** `npm --prefix web ci && npm --prefix web run build` exits `0`; regenerating the
+  client from the same OpenAPI document produces no diff; `git diff --check` exits `0`.
 
 ## 7. Gate A closes when
 
@@ -136,8 +171,9 @@ On one clean, dedicated integration instance that no authoring session is using:
 6. `.venv/bootstrap/bin/python scripts/validate_bootstrap.py` — exit `0`, `PASS`;
 7. `git diff --check` — exit `0`.
 
-With `A1b` and `A5` released, add: the seam document frozen at a named commit, the OpenAPI
-document validating, and `npm --prefix web ci && npm --prefix web run build` exiting `0`.
+8. `docs/program/P02_SEAMS.md` frozen at a named commit and the OpenAPI document validating;
+9. `npm --prefix web ci && npm --prefix web run build` — exit `0`, and regenerating the
+   client produces no diff.
 
 **Do not measure during the fan-out.** These suites copy the working tree and will report
 another session's state. Acceptance runs serially, after the authoring sessions are done.

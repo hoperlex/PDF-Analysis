@@ -58,8 +58,10 @@ twelve `frozen` with both streams unreported. CP-00 carries no accepted ratifica
 superseding series, and this planning line's `CURRENT_STATE.md` — which still says CP-00 is
 ratified on round ten — is four commits stale. The ruling is therefore heavier than a
 tidy-up round: it decides whether P02 may create a contract family while the checkpoint it
-descends from has none accepted. This plan assumes it may; the assumption is recorded, not
-hidden.
+descends from has none accepted. **Ruled by the repository owner on 2026-09-10: it may.**
+`A1b` and `A5` are released; completing the supersession stays an obligation of the CP-00
+line. The four CP-00 commits were merged into this line the same day, so records here are
+`main`'s.
 
 ## 3. Gate A — seams frozen, foundation running
 

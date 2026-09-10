@@ -47,14 +47,24 @@
 > prerequisite of `P2-INT-00`: that accepting this plan, `PF-01` and the navigation gate is
 > what lifts the production-code hold for the P02 paths, and that completing the CP-00
 > supersession remains an independent obligation of that line rather than a P02
-> predecessor. **Rule it against `main`, not against this branch.** This planning line
-> forked at `1220523` and has not taken the four CP-00 commits made on `main` since;
-> `artifacts/checkpoints/CP-00/manifest.json` reads `ratified: false` there, with rounds
-> ten and eleven `void` and round twelve `frozen` without a verdict, while the copy below
-> still reads `ratified: true` on ten rounds. The CP-00 paragraphs below are the CP-00
-> line's record and are deliberately left untouched by this planning change; reconciling
-> them belongs to `W0-INT-03` and the `W0-*` owners, not to `P0-PLN-01`. Section 9 C-4 of
-> `PROTOTYPE_EXECUTION_PLAN.md` carries the comparison and what it does to `OD-14`.
+> predecessor. **The repository owner ruled it on 2026-09-10: `A1b` and `A5` are released,
+> and completing the CP-00 supersession stays an independent obligation of that line.**
+>
+> **The four CP-00 commits have now been taken.** This planning line forked at `1220523`;
+> `main` was merged into it on 2026-09-10, so `artifacts/checkpoints/CP-00/**` here is
+> `main`'s record and no longer a stale copy.
+> **`artifacts/checkpoints/CP-00/manifest.json` is the authority on checkpoint status, not
+> the prose below it:** it reads `ratified: false` over twelve rounds, with round ten
+> `void` although both its streams returned `PASS`, round eleven `void`, and round twelve
+> `frozen` with neither stream reported.
+>
+> The CP-00 paragraphs below contradict that manifest — they still say CP-00 is ratified on
+> round ten and that round eleven is owed. **That contradiction is inherited from `main`,
+> where both readings sit in this same file, and this merge does not resolve it.**
+> Reconciling them belongs to `W0-INT-03` and the `W0-*` owners, not to `P0-PLN-01` or to
+> this merge, and another session is active on that line. Read the manifest, not the
+> paragraphs. Section 9 C-4 of `PROTOTYPE_EXECUTION_PLAN.md` carries the comparison and
+> what it does to `OD-14`.
 >
 > **Prototype-planning overlay, 2026-09-09.** On branch
 > `planning/prototype-roadmap`, the repository owner recorded `FF-01 ACCEPTED` without
