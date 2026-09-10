@@ -16,6 +16,8 @@ export {
   reconcile,
 } from './model/ledger';
 
+export { decisionCacheKeys } from './model/cache';
+
 export type { IntentRecord } from './model/intent';
 export { intentSignature, resolveIntentKey } from './model/intent';
 
