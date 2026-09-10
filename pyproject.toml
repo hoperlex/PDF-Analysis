@@ -1,0 +1,59 @@
+# P1-INT-00 owns this file. It is the single declaration of the foundation Python
+# toolchain and its exact dependency pins for the P01 PostgreSQL/S3 slice.
+#
+# Provider lanes (P1-INF-01, P1-DB-01, P1-STO-01, P1-QA-00) consume these pins and
+# must not add, remove or upgrade a dependency here. A pin change is a new
+# single-owner task, per FF-01 section 2 item 8.
+
+[project]
+name = "auditmanager-foundation"
+version = "0.0.0"
+description = "AuditManager P01 foundation runtime: PostgreSQL and private S3-compatible storage providers."
+requires-python = "==3.12.*"
+
+# Runtime dependencies. Each entry names the FF-01 capability that requires it;
+# nothing needed only by a later stage is present (P1-INT-00 non-goals).
+dependencies = [
+    # PostgreSQL driver for the session/transaction adapter and the DB/service checks.
+    "psycopg[binary]==3.3.5",
+    # Session and transaction foundation (P1-DB-01).
+    "SQLAlchemy==2.0.52",
+    # Migration runner and baseline migration infrastructure (P1-DB-01).
+    "alembic==1.19.2",
+    # S3 API client for the BlobStore adapter (P1-STO-01) and private-bucket
+    # initialization plus the service health check (P1-INF-01).
+    "boto3==1.43.90",
+]
+
+[dependency-groups]
+# Foundation test runner. Synced explicitly by `make bootstrap` with `--group test`;
+# it is not a default group, so no lane can pull it in implicitly.
+test = [
+    "pytest==9.1.1",
+]
+
+[tool.pytest.ini_options]
+# Root-owned, so the LITERAL provider commands work with no PYTHONPATH override and no
+# lane-local sys.path hack:
+#     .venv/bin/pytest tests/integration/db
+#     .venv/bin/pytest tests/integration/storage
+# `pythonpath` is relative to rootdir, which is this file's directory. Together with the
+# `PYTHONPATH=src` used by the Makefile's module invocations these are the only two
+# supported import mechanisms for foundation code under src/; a lane that adds sys.path
+# juggling to a conftest is working around that contract, not extending it.
+pythonpath = ["src"]
+# importlib import mode. Test modules are imported by full path instead of by basename
+# with sys.path insertion, so two lanes that both name a file `test_checks.py` do not
+# collide with "import file mismatch" when anything collects their directories in one
+# run. The alternative would be scattered __init__.py files in every lane. There is no
+# dedicated ini key for this, so it goes through addopts.
+addopts = ["--import-mode=importlib"]
+
+[tool.uv]
+# Virtual project: dependencies are locked and installed, but this repository is not
+# built or installed as a distribution. Foundation code under `src/` is reached through
+# the two mechanisms above - `PYTHONPATH=src` for the module invocations recorded in
+# FOUNDATION_LOCK.json, and the pytest `pythonpath` setting for literal pytest commands.
+# This keeps `make bootstrap` free of a build backend and of any wheel build when a
+# provider lane adds a module.
+package = false
