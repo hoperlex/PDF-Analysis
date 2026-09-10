@@ -64,19 +64,24 @@ from auditmanager.findings import (
     publish_gate_result,
     run_grounding_gate,
 )
-from auditmanager.ingest import IngestService
+from auditmanager.ingest import (
+    CommandRepository,
+    CommandStarted,
+    IngestService,
+    payload_fingerprint,
+)
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     AnalysisProfileId,
-    CommandId,
     DocumentUid,
     ProjectUid,
     PromptBundleId,
     RunId,
     VersionUid,
 )
+from auditmanager.shared.identity.non_identity import IdempotencyKey
 from auditmanager.storage import S3BlobStore, S3StorageSettings, StorageError
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -197,8 +202,21 @@ def session_factory(connection: Any) -> sessionmaker[Session]:
     ``IngestService`` opens its own units of work and commits them. Bound to this
     connection, each of those commits releases a savepoint inside the enclosing
     transaction, and the fixture's rollback still undoes everything.
+
+    ``join_transaction_mode="create_savepoint"`` is load-bearing rather than decorative.
+    Several tests here drive a handler that *fails*, and a failing ``session_scope``
+    calls ``session.rollback()``. Under the default mode that rollback reaches the
+    fixture's own outer transaction and deassociates it, so the next fixture in the same
+    test works against a dead connection -- which shows up as an unrelated test failing
+    depending on execution order. A savepoint keeps each unit of work's rollback to
+    itself.
     """
-    return sessionmaker(bind=connection, expire_on_commit=False, future=True)
+    return sessionmaker(
+        bind=connection,
+        expire_on_commit=False,
+        future=True,
+        join_transaction_mode="create_savepoint",
+    )
 
 
 @pytest.fixture
@@ -360,8 +378,9 @@ class DatabaseFindingAdapter:
                o.prompt_bundle_id, o.model_call_id, o.provider_mode
         FROM finding f
         JOIN finding_observation o ON o.finding_uid = f.finding_uid
-        WHERE (:run_id IS NULL OR o.run_id = :run_id)
-          AND (:finding_uid IS NULL OR f.finding_uid = :finding_uid)
+        WHERE (CAST(:run_id AS text) IS NULL OR o.run_id = CAST(:run_id AS text))
+          AND (CAST(:finding_uid AS text) IS NULL
+               OR f.finding_uid = CAST(:finding_uid AS text))
         ORDER BY f.finding_uid, o.finding_observation_id
         """
     )
@@ -473,16 +492,15 @@ class LedgerDecisionAdapter:
     boundary where the two meet. Reported.
     """
 
+    #: `expert_decision_event.command_id` is a foreign key into `command_record`, so a
+    #: key must be *claimed* rather than hashed into an identifier. That claim is the
+    #: command handler section 7 says the router passes the key through to -- and it is
+    #: `B1`'s `CommandRepository`, because `auditmanager.decisions` publishes none.
+    COMMAND_TYPE = "append_expert_decision"
+
     def __init__(self, session: Session) -> None:
         self._session = session
-        self._keys: dict[str, str] = {}
-
-    def _command_id(self, key: str) -> str:
-        allocated = self._keys.get(key)
-        if allocated is None:
-            allocated = str(CommandId.new())
-            self._keys[key] = allocated
-        return allocated
+        self._commands = CommandRepository()
 
     @staticmethod
     def _view(event: Any) -> DecisionEventView:
@@ -506,14 +524,31 @@ class LedgerDecisionAdapter:
         comment: str | None,
         idempotency_key: str,
     ) -> _Appended:
+        claim = self._commands.begin(
+            self._session,
+            command_type=self.COMMAND_TYPE,
+            idempotency_key=IdempotencyKey(idempotency_key),
+            fingerprint=payload_fingerprint(
+                {
+                    "finding_uid": finding_uid,
+                    "finding_observation_id": finding_observation_id,
+                    "event_type": event_type,
+                    "comment": comment,
+                }
+            ),
+        )
         event = record_decision(
             self._session,
             finding_uid=finding_uid,
             finding_observation_id=finding_observation_id,
             event_type=event_type,
             comment=comment,
-            command_id=self._command_id(idempotency_key),
+            command_id=str(claim.command_id),
         )
+        if isinstance(claim, CommandStarted):
+            self._commands.succeed(
+                self._session, claim.command_id, {"decision_id": event.decision_id}
+            )
         projection = current_verdict(self._session, finding_uid)
         return _Appended(
             event=self._view(event),
