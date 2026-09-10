@@ -1,0 +1,213 @@
+"""The narrow ports the twelve routers depend on.
+
+A router in this package holds **no business logic and no transaction**. It parses a
+request, calls one port method, renders the frozen shape, and lets the error middleware
+classify anything that goes wrong. Everything behind these protocols is chosen by the
+composition root (``api/composition.py``, owned by the integrator in Gate C), which is
+why this module declares protocols and constructs nothing.
+
+Why ports at all, rather than importing the modules directly:
+
+* **``auditmanager.runs`` and ``auditmanager.exports`` do not exist in this tree.**
+  Session ``B5`` is building them in parallel with this one. :class:`RunPort` and
+  :class:`CsvExportPort` are written against ``contracts/api/v1/openapi.json`` and
+  ``docs/program/P02_SEAMS.md`` section 6 -- the same frozen declarations ``B5``'s
+  public surface is being built against -- so if both sides hold to them the wiring is
+  a Gate C formality.
+* **Three shapes the frozen document requires have no producer today.** They are listed
+  in ``src/auditmanager/api/README.md`` and reported to the integrator. Declaring them
+  on a port states the requirement precisely without widening another module's
+  projection, which is not this session's to widen.
+
+Every method takes and returns plain values or the view types of
+:mod:`auditmanager.api.schemas`. A port never takes a ``Session``: whether a call is
+one transaction or several is the implementation's business, and a router that opened
+one would have taken that decision away from it.
+"""
+
+from __future__ import annotations
+
+from typing import Protocol, Sequence, runtime_checkable
+
+from auditmanager.api.schemas.decisions import DecisionEventView
+from auditmanager.api.schemas.documents import DocumentVersionView
+from auditmanager.api.schemas.findings import FindingDetailView, FindingView
+from auditmanager.api.schemas.projects import ProjectView
+from auditmanager.api.schemas.runs import RunStatusView
+
+__all__ = [
+    "AppendedDecision",
+    "CsvExportPort",
+    "DecisionPort",
+    "DocumentPort",
+    "FindingPort",
+    "ProjectPort",
+    "RunPort",
+    "UploadedDocument",
+]
+
+
+class UploadedDocument(Protocol):
+    """What an upload produced, and whether it created anything.
+
+    ``replayed`` lets the router tell "created" from "already done" without comparing
+    timestamps. Both answers are ``201`` -- the frozen document says the status covers
+    "the project was created, **or** the recorded outcome of an identical earlier
+    request was replayed" -- so this exists for diagnostics, not for the status line.
+    """
+
+    @property
+    def version(self) -> DocumentVersionView: ...
+
+    @property
+    def replayed(self) -> bool: ...
+
+
+class AppendedDecision(Protocol):
+    """One appended event and the projection that now follows from the stream."""
+
+    @property
+    def event(self) -> DecisionEventView: ...
+
+    @property
+    def current_verdict(self) -> str: ...
+
+
+@runtime_checkable
+class ProjectPort(Protocol):
+    """``createProject`` and ``listProjects``."""
+
+    def create_project(self, *, name: str, idempotency_key: str) -> ProjectView:
+        """Create a project, or replay the recorded outcome of an identical request."""
+
+    def list_projects(self) -> Sequence[ProjectView]:
+        """Every project, newest first.
+
+        The router pages this. See the pagination note in
+        ``src/auditmanager/api/README.md``: no query surface in this tree accepts a
+        cursor, so the edge cuts pages out of an ordered sequence.
+        """
+
+
+@runtime_checkable
+class DocumentPort(Protocol):
+    """``uploadDocument``, ``getDocumentVersion`` and ``streamDocumentVersionContent``."""
+
+    def upload_document(
+        self,
+        *,
+        project_uid: str,
+        content: bytes,
+        source_filename: str,
+        display_title: str | None,
+        idempotency_key: str,
+    ) -> UploadedDocument:
+        """Publish one PDF as one immutable version, or explain why not."""
+
+    def get_version(self, *, version_uid: str) -> DocumentVersionView:
+        """One published version and its input manifest."""
+
+    def read_content(self, *, version_uid: str) -> bytes:
+        """The source bytes of one published version.
+
+        Returns **bytes**, never a URL. The frozen document is explicit: the server
+        streams the bytes itself, because a presigned link is the internal address the
+        contract forbids in a response and would outlive the request that authorised
+        it. A ranged request is served by slicing what this returns, so the object key
+        stays inside ``auditmanager.storage``'s adapter where ``A3`` put it.
+        """
+
+
+@runtime_checkable
+class RunPort(Protocol):
+    """``startRun`` and ``getRunStatus``. Produced by ``B5``.
+
+    The success terminal is ``published``; an implementation that reported
+    ``succeeded`` would be reporting a ``StageResult`` status on the wrong aggregate.
+    """
+
+    def start_run(
+        self,
+        *,
+        version_uid: str,
+        provider_mode: str | None,
+        idempotency_key: str,
+    ) -> RunStatusView:
+        """Start a run, or return the existing one for this key and payload.
+
+        A new key over a terminal run creates a new run and leaves the terminal one
+        exactly as it was: a terminal run is never reopened. The same key with a
+        different payload is ``idempotency_key_reuse`` and creates nothing.
+        """
+
+    def get_run_status(self, *, run_id: str) -> RunStatusView:
+        """Current run state and per-stage state."""
+
+
+@runtime_checkable
+class FindingPort(Protocol):
+    """``listRunFindings`` and ``getFinding``.
+
+    Every finding these return is grounded. An ungrounded model item is not a finding,
+    carries no ``finding_uid`` and must not appear here.
+    """
+
+    def list_run_findings(
+        self,
+        *,
+        run_id: str,
+        category: str | None,
+        verdict: str | None,
+    ) -> Sequence[FindingView]:
+        """The published findings of one run, in a stable total order."""
+
+    def get_finding(self, *, finding_uid: str) -> FindingDetailView:
+        """One finding with its observation, evidence, provenance and projection."""
+
+
+@runtime_checkable
+class DecisionPort(Protocol):
+    """``appendDecision`` and ``listDecisionHistory``."""
+
+    def append_decision(
+        self,
+        *,
+        finding_uid: str,
+        finding_observation_id: str,
+        event_type: str,
+        comment: str | None,
+        idempotency_key: str,
+    ) -> AppendedDecision:
+        """Append exactly one event, whatever a replay under one key does.
+
+        The database enforces the "exactly one" rather than the handler promising it:
+        ``expert_decision_event`` carries at most one event per ``command_id``.
+        """
+
+    def decision_history(self, *, finding_uid: str) -> Sequence[DecisionEventView]:
+        """The whole ledger for one finding, oldest first.
+
+        Ordered by ``(recorded_at, decision_id)`` -- a total order, stable across
+        pages. The server's ``sequence_no`` is never exposed, in a field or in a cursor.
+        """
+
+
+@runtime_checkable
+class CsvExportPort(Protocol):
+    """``exportRunCsv``. Produced by ``B5``.
+
+    The router adds nothing to what this returns: no rendering, no column list, no
+    policy. ``P02_SEAMS.md`` section 6 freezes the seventeen columns, the byte
+    conventions and the export policy, and the discriminator is the frozen
+    ``terminal_semantics.publishes_result`` flag rather than a hand-written state list.
+    """
+
+    def export_run_csv(self, *, run_id: str) -> bytes:
+        """The CSV bytes for one run.
+
+        Raises ``state_transition_not_allowed`` when the run's terminal does not
+        publish a result -- a non-terminal run, or the terminal ``failed``. A
+        ``partial`` run **is** exported, with the degraded state carried explicitly in
+        the ``run_state`` column. ``partial_result_not_publishable`` is never emitted.
+        Nothing is created, so a repeat returns byte-identical bytes.
+        """
