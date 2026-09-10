@@ -311,6 +311,13 @@ def test_publishing_identical_content_twice_does_not_rewrite_the_object(
         "rather than recognised as already available"
     )
 
+    # Corroborating only, and deliberately labelled as such. MinIO records
+    # LastModified to one-second resolution, so two publications in the same
+    # second carry the same timestamp whether or not the object was rewritten:
+    # measured against an adapter mutated to copy unconditionally, this pair of
+    # assertions PASSED while copy_object had run twice. They are kept because
+    # a moved timestamp would still be a real signal, but the copy_object count
+    # above is the assertion that can actually fail.
     head_after_second = independent_s3.head_object(
         Bucket=storage_settings.bucket, Key=key
     )
