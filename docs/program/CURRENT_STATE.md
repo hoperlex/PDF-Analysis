@@ -1,6 +1,6 @@
 # Current state
 
-> **P0-PLN-01 candidate, revision 3, 2026-09-09.** On branch `agent/p0-pln-01`,
+> **P0-PLN-01 candidate, revision 4, 2026-09-10.** On branch `agent/p0-pln-01`,
 > `P0-PLN-01` has produced the detailed P02–P05 plan:
 > `docs/program/PROTOTYPE_EXECUTION_PLAN.md` plus **30 agent-ready task files** — two
 > navigation tasks, thirteen P02, eight P03, four P04 and three P05. It is a
@@ -45,8 +45,16 @@
 >
 > One assumption remains for the owner to rule on, and it is now an explicit dispatch
 > prerequisite of `P2-INT-00`: that accepting this plan, `PF-01` and the navigation gate is
-> what lifts the production-code hold for the P02 paths, and that CP-00 acceptance round
-> eleven remains an independent obligation of that line rather than a P02 predecessor.
+> what lifts the production-code hold for the P02 paths, and that completing the CP-00
+> supersession remains an independent obligation of that line rather than a P02
+> predecessor. **Rule it against `main`, not against this branch.** This planning line
+> forked at `1220523` and has not taken the four CP-00 commits made on `main` since;
+> `artifacts/checkpoints/CP-00/manifest.json` reads `ratified: false` there, with rounds
+> ten and eleven `void` and round twelve `frozen` without a verdict, while the copy below
+> still reads `ratified: true` on ten rounds. The CP-00 paragraphs below are the CP-00
+> line's record and are deliberately left untouched by this planning change; reconciling
+> them belongs to `W0-INT-03` and the `W0-*` owners, not to `P0-PLN-01`. Section 9 C-4 of
+> `PROTOTYPE_EXECUTION_PLAN.md` carries the comparison and what it does to `OD-14`.
 >
 > **Prototype-planning overlay, 2026-09-09.** On branch
 > `planning/prototype-roadmap`, the repository owner recorded `FF-01 ACCEPTED` without

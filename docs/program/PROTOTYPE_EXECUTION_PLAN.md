@@ -584,7 +584,7 @@ cannot recur.
 | `OD-11` | CSV byte details — encoding and byte-order mark, delimiter, line ending, quoting — and the export policy across the terminal set | `P2-EXP-01`, `P2-API-01`, `P3-API-01`, `P3-WEB-04`, `P3-QA-01` verifier | UTF-8 with BOM, comma delimiter, CRLF, RFC 4180 quoting. One export policy, stated once and identical everywhere it is consumed. The discriminator is the frozen `terminal_semantics.publishes_result` flag, not a hand-written state list: a run whose terminal declares `publishes_result: true` — `published` or `partial` — **is** exported, and the `run_state` column carries the degraded or partial state explicitly, so a partial export is never a silent empty file. Everything else is refused with the frozen catalog's typed `state_transition_not_allowed`: a non-terminal run, and the terminal `failed`, whose `publishes_result` is `false` and which therefore offers no download. `cancelled` is also `publishes_result: false` and is unreachable in PC-01, since no cancel command exists. A repeat request returns byte-identical bytes and creates nothing. PC-01 therefore never emits `partial_result_not_publishable`. The contract raises that code from `terminal_semantics.partial`, for "an operation that requires a complete run"; the CSV export is explicitly **not** such an operation under this decision, and PC-01 defines no other, so no producer for the code exists. It stays in the frozen catalog, unused, recorded with the other deliberately unallocated entries in the `P2-DOM-01` handoff. This is a scope statement about PC-01's operations, not a claim about the `optional_branch_policy` guard, which selects `published` versus `partial` and raises nothing. | `P2-EXP-01` dispatch |
 | `OD-12` | decision author identity without authentication | `P2-DOM-01` schema, `P2-FND-01`, `P3-WEB-03` | one configured local reviewer label persisted server-side with each event | `P2-DOM-01` dispatch, because it owns the column |
 | `OD-13` | is a live provider call part of automated acceptance | `P3-QA-01` scope, `P3-INT-01` | automated suites are recorded-only and deterministic; the live run is manual runbook steps 11 and 12 | `P3-QA-01` dispatch |
-| `OD-14` | does P02 dispatch require CP-00 acceptance round eleven and `W0-INT-03` first | the whole P02 graph | see section 9; this plan assumes P02 approval lifts the hold for the P02 paths, and the assumption is recorded rather than hidden | before `P2-INT-00` dispatch |
+| `OD-14` | may P02 dispatch before the CP-00 supersession is accepted, or is that acceptance a P02 predecessor | the whole P02 graph | see section 9 C-4; this plan assumes P02 approval lifts the hold for the P02 paths and that the supersession is an independent obligation of the CP-00 line, and the assumption is recorded rather than hidden. **Rule against `main`'s manifest, not this branch's:** on `main`, `artifacts/checkpoints/CP-00/manifest.json` reads `ratified: false` with rounds ten and eleven `void` and round twelve `frozen` without a verdict, while this branch still carries `ratified: true` on ten rounds. The earlier framing of this decision — round ten accepted, round eleven owed — is false on `main` | before `P2-INT-00` dispatch |
 | `OD-15` | ADR-0019 acceptance, and who records the status transition | `P1-NAV-01` dispatch | accept ADR-0019 together with this plan. No task may edit the ADR or its index row, so the owner records the transition, as with `FF-01` | with this plan |
 | `OD-16` | command-surface extension for app startup | P03 developer experience | no `Makefile` edit; the nine targets stay frozen. A new target is an FF-01 freeze-break needing an explicit break record | before P03 |
 | `OD-17` | may P04 use anonymized real documents | `P4-QA-01` corpus, `P4-BHV-01` provenance | synthetic only, which tightens the generalization limits in 6.5 | `P4-QA-01` dispatch |
@@ -644,15 +644,48 @@ command exists, so `cancelled` is declared and unreachable. Restoring Job, Attem
 NormsSnapshot pinning and package conformance is a P05 candidate under the section 7 rule,
 not a PC-01 deliverable, and none of them returns to prototype scope here.
 
-**C-4 — CP-00 is mid-supersession.** `CURRENT_STATE.md` records that acceptance round
-eleven is owed, that `W0-INT-03` performs the superseding ratification, and that
-implementation outside the frozen P01 provider paths remains locked until the detailed
+**C-4 — CP-00 is mid-supersession, and this branch's copy of its status is stale.**
+Implementation outside the frozen P01 provider paths remains locked until the detailed
 P02–P05 plan is accepted and its dependencies complete. P02 writes production code and
-creates a new contract family. This plan assumes that accepting it, together with `PF-01`
-and the navigation gate, is what lifts the hold for the P02 paths, and that round eleven is
-an independent obligation of the CP-00 line rather than a P02 predecessor. That assumption
-is `OD-14`; if the owner rules the other way, the whole P02 graph shifts by the
-round-eleven duration and the forecast is restated.
+creates a new contract family, so something has to lift that hold. This plan assumes that
+accepting it, together with `PF-01` and the navigation gate, is what lifts it for the P02
+paths, and that finishing the CP-00 supersession is an independent obligation of the CP-00
+line rather than a P02 predecessor. That assumption is `OD-14`.
+
+**The owner must rule on it against `main`, not against this branch.** The planning line
+forked from `main` at `1220523` and has never taken the four CP-00 commits made since.
+The two lines now disagree on the checkpoint's status, and the disagreement is in the
+machine-readable record, not only in prose. From
+`artifacts/checkpoints/CP-00/manifest.json` on each side:
+
+| | this planning line | `main` |
+|---|---|---|
+| `ratified` | `true` | **`false`** |
+| rounds recorded | 10 | 12 |
+| round ten | the accepted round | **`void`**, though its verdict was `PASS` |
+| round eleven | owed, not yet opened | **`void`** |
+| round twelve | does not exist | `frozen`, no verdict yet |
+
+So the sentence this plan previously built `OD-14` on — CP-00 ratified on round ten with
+round eleven owed — is false on `main`: CP-00 currently carries **no** valid ratification
+in the superseding series, round eleven has itself been voided, and the open candidate is
+round twelve. `v0.0.1-architecture` does not exist. `main`'s own `CURRENT_STATE.md` also
+lags its own commits — it still says round eleven is open and never mentions round twelve —
+so the manifest, not either prose copy, is the thing to read.
+
+This makes `OD-14` heavier rather than lighter. The question is not whether P02 may start
+while a tidy-up round is outstanding; it is whether P02 may write production code and
+create a contract family while the architecture checkpoint it descends from has no accepted
+ratification at all. The plan records the assumption rather than hiding it, and does not
+assert a CP-00 status it cannot verify from this branch.
+
+Two consequences follow, and neither is this task's to discharge. Reconciling the CP-00
+record on the planning line belongs to the CP-00 line and its integrator — `W0-INT-03` and
+the `W0-*` owners — not to `P0-PLN-01`, whose `CURRENT_STATE.md` claim is scoped to
+planning-status entries and which therefore leaves the checkpoint paragraphs untouched. And
+if the owner rules that the supersession is a P02 predecessor, the whole P02 graph shifts
+by however long the open round takes to accept, and the forecast is restated against a
+round-twelve schedule rather than the round-eleven one this plan first assumed.
 
 **C-5 — smaller frictions, recorded not resolved.** The run's frozen-at-creation set
 includes a norms snapshot that PC-01 never populates. The `import` machine is designed for

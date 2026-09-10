@@ -22,9 +22,12 @@ these hold:
   - owner decisions `OD-01` PDF library, `OD-02` model provider, `OD-03` cost ceiling and
     `OD-06` post-P1 root-lock owner recorded
   - owner decision `OD-14`: whether accepting this plan lifts the production-code hold for
-    the P02 paths, or whether CP-00 acceptance round eleven and `W0-INT-03` are additional
-    predecessors. This task is the first to write production paths, so it is the first that
-    the hold would block.
+    the P02 paths, or whether accepting the CP-00 supersession — `W0-INT-03` and the open
+    round it ratifies — is an additional predecessor. This task is the first to write
+    production paths, so it is the first that the hold would block. The decision must be
+    ruled against `main`'s `artifacts/checkpoints/CP-00/manifest.json`, which reads
+    `ratified: false`; the planning line's copy still reads `ratified: true` and is stale.
+    See `PROTOTYPE_EXECUTION_PLAN.md` section 9 C-4.
 
 ## Frozen inputs
 

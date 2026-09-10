@@ -1,6 +1,6 @@
 # Task P0-PLN-01 — complete the post-foundation prototype roadmap
 
-> **Status: executed, revision 3; candidate on `agent/p0-pln-01`, awaiting primary
+> **Status: executed, revision 4; candidate on `agent/p0-pln-01`, awaiting primary
 > review.** `P0-FND-00` was accepted on 2026-09-09 and this task ran in parallel with P01
 > **dispatch readiness**; no P01 lane had been dispatched at the time of writing, which is
 > why calibration is pending rather than measured. Its deliverables are
@@ -144,8 +144,11 @@ own accepted freeze.
   Ids are append-only and are never renumbered. `OD-24` records the PC-01 `AuditRun`
   conformance subset; `OD-14` is now an explicit dispatch prerequisite of `P2-INT-00`.
   `OD-14` is the one that can move the whole graph: whether accepting this plan lifts the
-  production-code hold for the P02 paths, or whether CP-00 acceptance round eleven and
-  `W0-INT-03` are additional P02 predecessors.
+  production-code hold for the P02 paths, or whether accepting the CP-00 supersession is an
+  additional P02 predecessor. Revision 4 restates it against evidence: `main`'s CP-00
+  manifest reads `ratified: false` with rounds ten and eleven `void` and round twelve
+  `frozen`, while this branch's copy reads `ratified: true` on ten rounds, so the earlier
+  framing — round ten accepted, round eleven owed — was false on `main`.
 - **ADR-0019:** not accepted by this task. `P1-NAV-01` implements it and its dispatch is
   conditioned on the owner accepting the ADR together with this plan.
 
@@ -178,3 +181,30 @@ own accepted freeze.
   are fixed here. The ASCII graph in plan section 2 still omits declared edges; rather than
   redraw it, section 2 now states that the per-task predecessor blocks are jointly
   authoritative and lists the undrawn edges.
+
+### Executed handoff, revision 4
+
+- **Base:** `92aeee89e25c290c70a8300421d1a96cf7462bc3` on `agent/p0-pln-01`. Documentation
+  only, and narrow: four files, no task file added or removed, no estimate touched, no
+  change to the PC-01 slice, the DAG or any other owner decision.
+- **What changed and why.** `OD-14` — the one decision that can move the whole P02 graph —
+  rested on a description of CP-00 that is false on `main`. This branch forked at
+  `1220523` and never took the four CP-00 commits made since. The disagreement is in the
+  machine-readable record: `artifacts/checkpoints/CP-00/manifest.json` reads
+  `ratified: false` on `main`, with rounds ten and eleven `void` and round twelve `frozen`
+  without a verdict, while this line still reads `ratified: true` on ten rounds. The
+  earlier framing — round ten accepted, round eleven owed — was therefore wrong in both
+  the ratification status and the ordinal of the open round.
+- **Effect on the decision.** It gets heavier, not lighter. The question is not whether
+  P02 may start while a tidy-up round is outstanding, but whether P02 may write production
+  code and create a contract family while the architecture checkpoint it descends from
+  carries no accepted ratification at all. Section 9 C-4 now states the comparison, and
+  `OD-14`, the `P2-INT-00` dispatch bullet and the planning banner all direct the owner to
+  rule against `main`'s manifest rather than against this branch.
+- **Deliberately not done.** The CP-00 paragraphs in `CURRENT_STATE.md` are the CP-00
+  line's record, not a planning-status entry, so this task did not reconcile them — that
+  belongs to `W0-INT-03` and the `W0-*` owners. `artifacts/**` is a forbidden hotspot here,
+  so neither manifest was touched. Both copies remain as they were; only the planning
+  blockquote, which this task owns, now says which one to trust and why.
+- **Unresolved owner decisions:** still 24. `OD-14` was restated, not renumbered, and no
+  id moved.
