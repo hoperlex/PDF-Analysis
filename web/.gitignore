@@ -1,0 +1,9 @@
+# Build and tool output produced inside web/. The repository root .gitignore already
+# covers node_modules/ and .next/; these are the web-specific additions, and they exist
+# so that `npm ci` and `npm run build` leave `git status --porcelain web` empty.
+next-env.d.ts
+*.tsbuildinfo
+.eslintcache
+coverage/
+playwright-report/
+test-results/
