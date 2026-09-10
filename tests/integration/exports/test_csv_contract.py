@@ -200,17 +200,23 @@ def test_rows_are_sorted_by_the_frozen_sort_key(
     keys = [(row["finding_uid"], row["finding_observation_id"]) for row in rows]
     assert keys == sorted(keys), "rows are not in ascending identifier order"
 
-    # And the evidence of one observation is contiguous and in stored ordinal order.
+    # The full three-part key, ordered exactly as P02 §6 states it. This query must use
+    # the *contract's* key and not a convenient subset: an earlier version of this test
+    # ordered by finding_observation_id alone and so compared the export against a
+    # different order, passing only when the two ULID sequences happened to coincide.
     stored = (
         session.execute(
             text(
-                "SELECT o.finding_observation_id, e.evidence_ordinal, e.quote "
+                "SELECT f.finding_uid, o.finding_observation_id, e.evidence_ordinal, "
+                "       e.quote "
                 "FROM finding_evidence e "
                 "JOIN finding_observation o "
                 "  ON o.finding_observation_id = e.finding_observation_id "
                 "JOIN finding f ON f.finding_uid = o.finding_uid "
                 "WHERE o.run_id = :run_id "
-                'ORDER BY o.finding_observation_id COLLATE "C", e.evidence_ordinal'
+                'ORDER BY f.finding_uid COLLATE "C", '
+                '         o.finding_observation_id COLLATE "C", '
+                "         e.evidence_ordinal"
             ),
             {"run_id": started.run_id},
         )
@@ -218,6 +224,9 @@ def test_rows_are_sorted_by_the_frozen_sort_key(
         .all()
     )
     assert [row["quote"] for row in stored] == [row["evidence_quote"] for row in rows]
+    assert [
+        (row["finding_uid"], row["finding_observation_id"]) for row in stored
+    ] == keys
 
 
 def test_a_finding_with_several_quotations_produces_one_row_per_quotation(
