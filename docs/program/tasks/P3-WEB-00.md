@@ -1,7 +1,14 @@
 # Task P3-WEB-00 — frontend toolchain, composition root and UI seam contract
 
-> **Status: specified; not dispatchable.** Planned for P03. Sole writer of the frontend
-> composition root, global styles and the web lock.
+> **Status: delivered by Gate A session `A5`, on branch `agent/gate-a5` from base
+> `5f360d8`.** Subsumed by `PROTOTYPE_WAVE_PLAN.md` §3 — this task ran inside `A5`
+> together with `P3-API-01`, not as its own P03 dispatch. Sole writer of the frontend
+> composition root, global styles and the web lock; that ownership now sits with `A5`
+> and is frozen at the Gate A commit.
+>
+> Delivered in full except the Playwright configuration and the ESLint-fixture probe
+> command, both recorded under Handoff. See `web/docs/PC01_UI_SEAM.md` for the frozen
+> seam `B7` and `B8` consume.
 
 ## Outcome
 
@@ -140,3 +147,51 @@ Effort P50 1.0 person-day, P80 2.0 person-days. Basis: toolchain pinning, four d
 - changed files, containment proof, and the Node/Next/lock pins
 - commands/results including the guard-failure probe output
 - the frozen seam document version and known limits — no authentication, one reviewer
+
+### Delivered by `A5`
+
+**Pins.** Node `22.23.1` (`web/.nvmrc`, `engines.node`), npm `10.9.8`
+(`engines.npm`, `packageManager`), Next `15.5.25`, React `19.3.0`, TypeScript `5.9.3`,
+lockfileVersion 3. Every dependency and devDependency is an exact version; `.npmrc`
+carries `save-exact=true` and `engine-strict=true` so a later `npm install` cannot
+reintroduce a range. Recorded in `web/FRONTEND_LOCK.json`.
+
+**Commands and results.** `npm --prefix web ci` exit `0`; `npm --prefix web run build`
+exit `0` with all four routes compiled under `strict: true`,
+`exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; `npm --prefix web run lint`
+exit `0`; `npm --prefix web run test` exit `0`, 92 assertions; `git diff --check` exit
+`0`. Guard-failure probes ran against a throwaway copy of the tree, never against a
+tracked file — see `web/tests/guards/**`, where every detector is also exercised against
+the defect it exists to catch.
+
+**Seam document.** `web/docs/PC01_UI_SEAM.md`, frozen at the `A5` commit. It fixes the
+four route URLs, the five mandatory states, the two badges and the `succeeded` split, the
+transport surface, the query-key namespaces, the polling interval and backoff, and the
+`B7`/`B8` ownership line.
+
+**Not delivered, and why.**
+
+- `web/playwright.config.ts` and the `@playwright/test` dependency. The package's
+  install downloads browsers, which would make `npm --prefix web ci` non-hermetic and
+  put the acceptance gate at the mercy of a browser CDN. `e2e:pc01` is reserved and
+  fails explicitly naming `P3-QA-01`, which adds the dependency with the suite it owns.
+  The intended test directory is still the repository-root `tests/e2e/pc01`.
+- The literal probe command `npm --prefix web run lint -- web/tests/guards/deep-import.fixture.ts`.
+  `npm --prefix web run lint` runs ESLint with `cwd=web`, so a repo-relative path does
+  not resolve. The equivalent, which does: `npm --prefix web run lint -- --no-ignore
+  tests/guards/fixtures/features/deep-import.fixture.ts`, exit `1`, naming
+  `no-restricted-imports`. `web/tests/guards/eslint-boundary.guard.test.ts` runs it, and
+  the two other violating fixtures, on every test run, with a legal fixture in the same
+  directory as the control.
+- The `rg` check over `web/src/entities/audit-run` and `web/src/widgets/run-progress`.
+  Those trees belong to `B7` and do not exist yet. The rule they encode is carried
+  instead by the type system: `RunStateBadge` takes the generated `RunState`, so
+  `succeeded` does not compile onto a run badge, and a contract test asserts the run
+  enum contains `published` and not `succeeded`.
+- `docs/navigation/entries/p3-web-00.json`. Outside the paths `A5` was given.
+  Navigation incident status: `none_observed`.
+
+**Deferred decisions.** `OD-09`, the browser PDF rendering approach, is untaken and is
+not pinned here; `B8` takes it with the evidence viewer. The transport side is settled:
+`streamDocumentVersionContent` returns a `Blob` and accepts a `Range` header, with no
+presigned link and no redirect.

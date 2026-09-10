@@ -1,0 +1,66 @@
+{
+  "lock_version": 1,
+  "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
+  "owner": "Gate A session A5 (P3-WEB-00 + P3-API-01)",
+  "toolchain": {
+    "node": "22.23.1",
+    "npm": "10.9.8",
+    "packageManager": "npm@10.9.8",
+    "nvmrc": "web/.nvmrc",
+    "manifest": "web/package.json",
+    "lockfile": "web/package-lock.json",
+    "lockfileVersion": 3,
+    "lockfile_sha256": "98691bc83549225d6d94ec53c1fc810a58b12cf74487786638fd007d57fd3b77",
+    "install_command": "npm --prefix web ci",
+    "no_floating_versions": "Every dependency, devDependency, engines entry and packageManager value is an exact version. `save-exact=true` and `engine-strict=true` in web/.npmrc keep a later `npm install` from reintroducing a range. Enforced by web/tests/guards/pinned-versions.guard.test.ts."
+  },
+  "openapi": {
+    "path": "contracts/api/v1/openapi.json",
+    "sha256": "c97890c5f51c2a27adaaa7307fe65506a91fc9a884480cc54821aca8e30ecb12",
+    "content_commit": "c704458",
+    "content_commit_subject": "feat(seams): freeze the OpenAPI document and the P02 seam register",
+    "dispatch_named_commit": "9924d32",
+    "commit_note": "The dispatch brief named 9924d32 as the freeze commit. That commit does not touch contracts/api/v1/**; the document's content was introduced by c704458 and is byte-identical at both commits (sha256 above). The digest, not either commit name, is the anchor.",
+    "openapi_version": "3.1.0",
+    "info_version": "1.0.0-draft.1",
+    "paths": 10,
+    "operations": 12,
+    "component_schemas": 43,
+    "snapshot": "web/openapi/openapi.json",
+    "snapshot_sha256": "c97890c5f51c2a27adaaa7307fe65506a91fc9a884480cc54821aca8e30ecb12",
+    "read_only": "contracts/api/v1/** belongs to session A1. A5 generates from it and never edits it: a client and a contract reconciled by the same hand prove nothing."
+  },
+  "generator": {
+    "script": "web/scripts/generate-api-client.mjs",
+    "script_sha256": "787c744d0c97420b0c1c1bd33bcc530d7ce803a21db07a5ef9557de4a02ee123",
+    "generator_version": "1.0.0",
+    "generate_command": "npm --prefix web run api:generate",
+    "verify_command": "npm --prefix web run api:verify",
+    "runtime": "node 22.23.1, no dependencies",
+    "determinism": "Output is a pure function of the input bytes. No timestamp, hostname, absolute path or environment value is emitted; every iteration order is an explicit locale-independent sort, because localeCompare is locale-dependent. Two runs on the same document produce byte-identical files."
+  },
+  "generated": {
+    "directory": "web/src/shared/api/generated",
+    "files": {
+      "client.gen.ts": "566cded39694afcea84f37fcf35e306cfc43fdd821aa2f4760aa2711c452680a",
+      "index.ts": "f9b53f83ffb829097c26fcdd2c7b80fc442ba2795101c026f11853a524cd1125",
+      "operations.gen.ts": "c9f25f5016e78516a5bc0673978471382c88f05759dac490a1bfd3bd4c2ea618",
+      "types.gen.ts": "298016b6e7408341c1ac7a4f0d615330aeee66cf3d7a01c2619117bdab3a8dd0"
+    },
+    "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
+  },
+  "commands": {
+    "install": "npm --prefix web ci",
+    "build": "npm --prefix web run build",
+    "typecheck": "npm --prefix web run typecheck",
+    "lint": "npm --prefix web run lint",
+    "guards": "npm --prefix web run test:guards",
+    "contract": "npm --prefix web run test:contract",
+    "makefile": "none. OD-16 forbids adding a Makefile target for the frontend, so every command is `npm --prefix web run ...`."
+  },
+  "reserved_scripts": {
+    "test:unit": "Gate B sessions B7 and B8",
+    "e2e:pc01": "the P3-QA-01 lane",
+    "csv:verify": "the CSV export lane"
+  }
+}

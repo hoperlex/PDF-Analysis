@@ -1,0 +1,235 @@
+/*
+ * The one global stylesheet. `web/src/app/**` has a single writer, and that includes this
+ * file: a slice styles itself with a colocated CSS module and consumes the tokens below.
+ *
+ * There is no theming system and no dark mode. PC-01 is a local single-reviewer tool and
+ * a theme toggle is a decision nobody has taken.
+ */
+
+:root {
+  --am-font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --am-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  --am-ink: #16191d;
+  --am-ink-muted: #5b6470;
+  --am-paper: #ffffff;
+  --am-surface: #f5f6f8;
+  --am-line: #d9dde3;
+
+  --am-accent: #1f4f8b;
+  --am-ok: #1c6b45;
+  --am-degraded: #8a5b00;
+  --am-failed: #a02020;
+  --am-inert: #6b7280;
+
+  --am-radius: 6px;
+  --am-gap: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--am-font);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--am-ink);
+  background: var(--am-surface);
+}
+
+code {
+  font-family: var(--am-font-mono);
+  font-size: 0.9em;
+}
+
+/* ---- application frame ---------------------------------------------------------- */
+
+.am-app {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+.am-app__bar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--am-line);
+  background: var(--am-paper);
+}
+
+.am-app__brand {
+  font-weight: 600;
+  color: var(--am-accent);
+  text-decoration: none;
+}
+
+.am-app__context,
+.am-app__instance {
+  font-size: 12px;
+  color: var(--am-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.am-app__main {
+  flex: 1;
+  padding: 24px;
+}
+
+.am-app__footer {
+  padding: 12px 24px;
+  border-top: 1px solid var(--am-line);
+  color: var(--am-ink-muted);
+  font-size: 12px;
+}
+
+/* ---- page shell ------------------------------------------------------------------ */
+
+.am-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.am-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--am-gap);
+  margin-bottom: var(--am-gap);
+}
+
+.am-page__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.am-page__subtitle {
+  margin: 4px 0 0;
+  color: var(--am-ink-muted);
+  font-size: 13px;
+}
+
+.am-page__body {
+  background: var(--am-paper);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  padding: var(--am-gap);
+}
+
+/* ---- the five mandatory states --------------------------------------------------- */
+
+.am-state {
+  border: 1px dashed var(--am-line);
+  border-radius: var(--am-radius);
+  padding: var(--am-gap);
+  background: var(--am-paper);
+}
+
+.am-state--error {
+  border-color: var(--am-failed);
+  border-style: solid;
+}
+
+.am-state--warning {
+  border-color: var(--am-degraded);
+  border-style: solid;
+}
+
+.am-state__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.am-state__detail {
+  margin-top: 8px;
+  color: var(--am-ink-muted);
+  font-size: 14px;
+}
+
+.am-state__detail p {
+  margin: 0 0 8px;
+}
+
+.am-state__correlation {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--am-ink-muted);
+}
+
+.am-state__action {
+  margin-top: 12px;
+}
+
+/* ---- badges ---------------------------------------------------------------------- */
+
+.am-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 12px;
+  font-family: var(--am-font-mono);
+  line-height: 1.6;
+}
+
+.am-badge--pending,
+.am-badge--inert {
+  color: var(--am-inert);
+}
+
+.am-badge--active {
+  color: var(--am-accent);
+}
+
+.am-badge--ok {
+  color: var(--am-ok);
+}
+
+.am-badge--degraded {
+  color: var(--am-degraded);
+}
+
+.am-badge--failed {
+  color: var(--am-failed);
+}
+
+.am-badge__qualifier {
+  opacity: 0.75;
+}
+
+.am-badge__qualifier::before {
+  content: '· ';
+}
+
+/* ---- controls -------------------------------------------------------------------- */
+
+.am-button {
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: var(--am-radius);
+  border: 1px solid var(--am-accent);
+  background: var(--am-accent);
+  color: var(--am-paper);
+  cursor: pointer;
+}
+
+.am-button:hover {
+  filter: brightness(1.1);
+}
+
+.am-button:focus-visible {
+  outline: 2px solid var(--am-ink);
+  outline-offset: 2px;
+}
