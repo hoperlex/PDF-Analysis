@@ -27,7 +27,6 @@ from __future__ import annotations
 from typing import Any, Final
 
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -40,7 +39,6 @@ from .models import (
     ManifestEntry,
     ProjectRecord,
 )
-from .refusals import UNIQUE_VIOLATION, constraint_name_of, sqlstate_of
 
 __all__ = [
     "MAX_DISPLAY_TITLE",
@@ -337,11 +335,3 @@ def _require_text(value: str, *, field: str, maximum: int) -> str:
             constraint=f"char_length <= {maximum}",
         )
     return cleaned
-
-
-def is_unique_violation(exc: DBAPIError | BaseException, constraint: str) -> bool:
-    """True when a driver error is a unique violation on one named constraint."""
-    return (
-        sqlstate_of(exc) == UNIQUE_VIOLATION
-        and constraint_name_of(exc) == constraint
-    )

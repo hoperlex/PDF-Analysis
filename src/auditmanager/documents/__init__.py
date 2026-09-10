@@ -31,12 +31,7 @@ from .refusals import (
     sqlstate_of,
     translate_database_refusal,
 )
-from .repository import (
-    MAX_DISPLAY_TITLE,
-    MAX_PROJECT_NAME,
-    DocumentRepository,
-    is_unique_violation,
-)
+from .repository import MAX_DISPLAY_TITLE, MAX_PROJECT_NAME, DocumentRepository
 
 __all__ = [
     "MAX_DISPLAY_TITLE",
@@ -53,7 +48,6 @@ __all__ = [
     "UploadOutcome",
     "constraint_name_of",
     "domain_error_for",
-    "is_unique_violation",
     "sqlstate_of",
     "translate_database_refusal",
 ]

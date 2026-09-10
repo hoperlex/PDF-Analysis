@@ -19,6 +19,8 @@ from sqlalchemy.exc import DBAPIError
 from auditmanager.documents import (
     SQLSTATE_IMMUTABLE_ROW_VIOLATION,
     SQLSTATE_UNDECLARED_TRANSITION,
+    UNIQUE_VIOLATION,
+    constraint_name_of,
     sqlstate_of,
     translate_database_refusal,
 )
@@ -156,5 +158,10 @@ def test_a_refusal_is_not_translated_from_its_message(engine, published) -> None
         },
     )
     # A primary-key collision: real, but not one of the immutability guards.
-    assert sqlstate_of(exc) == "23505"
+    assert sqlstate_of(exc) == UNIQUE_VIOLATION
     assert translate_database_refusal(exc) is None
+
+    # The constraint is named by the driver's structured diagnostics, which is what
+    # lets a caller branch on *which* uniqueness invariant fired without reading prose.
+    # The name is deterministic because the shared kernel pins a naming convention.
+    assert constraint_name_of(exc) == "pk_input_manifest_entry"
