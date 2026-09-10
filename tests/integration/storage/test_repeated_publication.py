@@ -9,8 +9,8 @@ canonical object already present and returns it without rewriting anything.
 Documented consequences, each asserted below:
 
 * identical bytes published twice produce one object and one ``blob_id``;
-* the second publication does not touch the stored bytes -- the recorded
-  publication time is unchanged;
+* the second publication does not touch the stored object at all, proved with
+  an out-of-band witness rather than with a one-second-resolution timestamp;
 * the temporary object of the second attempt is still cleaned up;
 * re-publishing identical bytes under a *different* role or media type is a
   typed conflict, not a silent reinterpretation of an immutable blob.
@@ -31,6 +31,11 @@ from auditmanager.storage import (
     parse_blob_role,
     sha256_of,
 )
+
+# Reaching into the adapter's private layout is deliberate and confined to this
+# one assertion: it is the only way to stamp the canonical object out-of-band,
+# and importing the module beats copying the layout into a test.
+from auditmanager.storage._object_layout import canonical_key
 
 REPEATED = b"%PDF-1.7\nidentical verified content, published more than once\n"
 
@@ -62,9 +67,16 @@ def test_identical_content_publishes_once(
 
 
 def test_the_second_publication_does_not_rewrite_available_bytes(
-    store: S3BlobStore, blobs: list
+    store: S3BlobStore, blobs: list, raw_s3: Any, settings: Any
 ) -> None:
-    """Available bytes are immutable. Re-publishing must not touch them."""
+    """Available bytes are immutable. Re-publishing must not touch them.
+
+    Proved with a witness rather than with a timestamp. ``LastModified`` has
+    one-second resolution, so two publications inside the same second look
+    identical even when the second one really did rewrite the object. Instead
+    the canonical object is stamped out-of-band with a marker the adapter never
+    writes; if the second publication rewrites the object, the marker is gone.
+    """
     payload = REPEATED + b"immutability\n"
     first = store.put_blob(
         payload,
@@ -75,6 +87,19 @@ def test_the_second_publication_does_not_rewrite_available_bytes(
     )
     blobs.append(first.blob_id)
 
+    canonical = canonical_key(first.blob_id)
+    head = raw_s3.head_object(Bucket=settings.bucket, Key=canonical)
+    witness = dict(head["Metadata"])
+    witness["a3-witness"] = "not-written-by-the-adapter"
+    raw_s3.copy_object(
+        Bucket=settings.bucket,
+        Key=canonical,
+        CopySource={"Bucket": settings.bucket, "Key": canonical},
+        MetadataDirective="REPLACE",
+        ContentType=head["ContentType"],
+        Metadata=witness,
+    )
+
     second = store.put_blob(
         payload,
         declared_sha256=sha256_of(payload),
@@ -83,7 +108,11 @@ def test_the_second_publication_does_not_rewrite_available_bytes(
         media_type="application/pdf",
     )
 
-    assert second.published_at == first.published_at
+    after = raw_s3.head_object(Bucket=settings.bucket, Key=canonical)
+    assert after["Metadata"].get("a3-witness") == "not-written-by-the-adapter", (
+        "the second publication rewrote an available object"
+    )
+    assert second.blob_id == first.blob_id
     assert store.read(first.blob_id) == payload
     assert store.inspect(first.blob_id).state is BlobState.AVAILABLE
 
