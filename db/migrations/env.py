@@ -11,25 +11,23 @@ immutable published rows, declared state topology — are triggers and CHECK
 constraints that autogenerate neither produces nor notices going missing. A model
 tree that only existed to feed autogenerate would be a second description of the
 schema for nobody to use.
+
+This module adds **no** ``sys.path`` entry. ``FOUNDATION_LOCK.json``'s import
+contract declares exactly two supported mechanisms — ``PYTHONPATH=src`` for module
+invocations, and ``pythonpath = ["src"]`` for pytest — and says a lane adding
+``sys.path`` juggling is working around that contract rather than extending it. So
+``import auditmanager`` failing here is the correct, explicit failure for someone
+running Alembic by hand without ``PYTHONPATH=src``, and ``make migrate`` sets it.
 """
 
 from __future__ import annotations
 
-import sys
 from logging.config import fileConfig
-from pathlib import Path
 
 from alembic import context
 
-# When Alembic is driven through its Python API the ini's prepend_sys_path has
-# already run; when this file is imported some other way it may not have. Both paths
-# end at the same repository ``src``.
-_SRC = Path(__file__).resolve().parents[2] / "src"
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
-
-from auditmanager.shared.db.config import load_settings  # noqa: E402
-from auditmanager.shared.db.engine import create_database_engine  # noqa: E402
+from auditmanager.shared.db.config import load_settings
+from auditmanager.shared.db.engine import create_database_engine
 
 config = context.config
 
