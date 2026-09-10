@@ -60,8 +60,6 @@ export function render(element: ReactElement): string {
 }
 
 const ULID_A = '01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
-const ULID_B = '01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
-const ULID_C = '01J9ZQ8K7NHVXW3T2R5M6P4Q8D';
 
 export const PROJECT_UID = `proj_${ULID_A}`;
 export const VERSION_UID = `ver_${ULID_A}`;
@@ -163,6 +161,7 @@ export function runStatus(overrides: Partial<RunStatus> = {}): RunStatus {
   return {
     run_id: RUN_ID,
     project_uid: PROJECT_UID,
+    version_uid: VERSION_UID,
     state: 'published' as RunState,
     provider_mode: 'recorded' as ProviderMode,
     created_at: '2026-09-10T08:00:00.000Z',
