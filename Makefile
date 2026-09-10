@@ -639,7 +639,18 @@ bootstrap:
 	[ "$$uv_have" = "$(UV_VERSION)" ] || fail \
 	  "P1-INT-00: uv resolved to $$uv_have, not the pinned $(UV_VERSION)."
 	echo "==> syncing $(VENV_RUNTIME) from $(RUNTIME_LOCK) (frozen, no resolution)"
-	UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT="$(VENV_RUNTIME)" \
+	# uv refuses a project environment directory that exists but holds no interpreter, and
+	# it will not build one over the top. That is exactly the shape of a checkout whose
+	# governance environment was created first: $(VENV_BOOTSTRAP) nests inside
+	# $(VENV_RUNTIME), so `.venv` exists containing only `bootstrap/` and no `bin/python`,
+	# and bootstrap fails with "not a valid Python environment". A fresh clone never shows
+	# it, because there uv creates `.venv` before anything nests inside it - which is why
+	# every authoring lane passed and only convergence on the main checkout hit it.
+	# Seed the interpreter first, exactly as the bootstrap environment is seeded below:
+	# `python -m venv` adds bin/, lib/ and pyvenv.cfg beside an existing subdirectory and
+	# leaves $(VENV_BOOTSTRAP) untouched.
+	[ -x "$(VENV_RUNTIME)/bin/python" ] || "$(FOUNDATION_PYTHON)" -m venv "$(VENV_RUNTIME)"
+	env -u VIRTUAL_ENV UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT="$(VENV_RUNTIME)" \
 	  "$(UV)" sync --frozen --group test --python "$(FOUNDATION_PYTHON)"
 	echo "==> building $(VENV_BOOTSTRAP) from $(VALIDATION_LOCK) (hash-checked)"
 	[ -x "$$BOOTSTRAP_PY" ] || "$(FOUNDATION_PYTHON)" -m venv "$$(dirname "$$(dirname "$$BOOTSTRAP_PY")")"
