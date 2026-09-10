@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 c97890c5f51c2a27adaaa7307fe65506a91fc9a884480cc54821aca8e30ecb12
+ *   sha256 678a8bf72104f7927c3c0d7d3fec09e1f6337fcb816329ad950e4a509eadd6a5
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'c97890c5f51c2a27adaaa7307fe65506a91fc9a884480cc54821aca8e30ecb12';
+export const CONTRACT_DIGEST = '678a8bf72104f7927c3c0d7d3fec09e1f6337fcb816329ad950e4a509eadd6a5';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -230,10 +230,20 @@ export const FINDING_CATEGORY_VALUES = [
 /** FindingCategory - the closed value set above. */
 export type FindingCategory = (typeof FINDING_CATEGORY_VALUES)[number];
 
-export type FindingDetail = Finding & {
+/** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. */
+export type FindingDetail = {
+  category: FindingCategory;
+  current_verdict: Verdict;
   decision_event_count?: number;
+  decision_recorded_at?: string | null;
+  finding_uid: FindingUid;
   /** The comment of the most recent event carrying one, whatever its type. */
   latest_comment?: string | null;
+  latest_decision_id?: DecisionId | null;
+  observation: FindingObservation;
+  project_uid: ProjectUid;
+  run_id: RunId;
+  version_uid: VersionUid;
 };
 
 export type FindingObservation = {

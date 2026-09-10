@@ -16,19 +16,19 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "c97890c5f51c2a27adaaa7307fe65506a91fc9a884480cc54821aca8e30ecb12",
-    "content_commit": "c704458",
-    "content_commit_subject": "feat(seams): freeze the OpenAPI document and the P02 seam register",
+    "sha256": "678a8bf72104f7927c3c0d7d3fec09e1f6337fcb816329ad950e4a509eadd6a5",
+    "content_commit": "2662ec2",
+    "content_commit_subject": "fix(api-v1): restate FindingDetail as a closed object, not an allOf",
     "dispatch_named_commit": "9924d32",
-    "commit_note": "The dispatch brief named 9924d32 as the freeze commit. That commit does not touch contracts/api/v1/**; the document's content was introduced by c704458 and is byte-identical at both commits (sha256 above). The digest, not either commit name, is the anchor.",
+    "commit_note": "The digest, not any commit name, is the anchor. A5 generated from c97890c5f51c2a27adaaa7307fe65506a91fc9a884480cc54821aca8e30ecb12, the content frozen by c704458 (the A5 dispatch brief named 9924d32, which does not touch contracts/api/v1/** and at which the bytes were identical). Session A7-FIX then repaired the FindingDetail composition defect A5 reported, moving the document to the sha256 above; this client is regenerated from that document and never hand-edited.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
     "paths": 10,
     "operations": 12,
     "component_schemas": 43,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "c97890c5f51c2a27adaaa7307fe65506a91fc9a884480cc54821aca8e30ecb12",
-    "read_only": "contracts/api/v1/** belongs to session A1. A5 generates from it and never edits it: a client and a contract reconciled by the same hand prove nothing."
+    "snapshot_sha256": "678a8bf72104f7927c3c0d7d3fec09e1f6337fcb816329ad950e4a509eadd6a5",
+    "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
     "script": "web/scripts/generate-api-client.mjs",
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "566cded39694afcea84f37fcf35e306cfc43fdd821aa2f4760aa2711c452680a",
-      "index.ts": "f9b53f83ffb829097c26fcdd2c7b80fc442ba2795101c026f11853a524cd1125",
-      "operations.gen.ts": "c9f25f5016e78516a5bc0673978471382c88f05759dac490a1bfd3bd4c2ea618",
-      "types.gen.ts": "298016b6e7408341c1ac7a4f0d615330aeee66cf3d7a01c2619117bdab3a8dd0"
+      "client.gen.ts": "77d7041d538e61a003f079681a05fc588780060a4f5e12ad5162a2b988d79dbf",
+      "index.ts": "59151133b252f022a39e3cc24b7c65a42ac5d47b5b7d41e5c13124dde13b5b3a",
+      "operations.gen.ts": "5354ee0c3cd1b5ef1e3363d3909e1b2bb7064752cf006bd4c0b23d16cd82e370",
+      "types.gen.ts": "2035eab8dbbe206c2620b619bb5c8059fc19265a49fe05bc6e4e60eb3b702825"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
