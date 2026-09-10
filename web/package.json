@@ -19,8 +19,8 @@
     "api:generate": "node scripts/generate-api-client.mjs",
     "api:verify": "node scripts/generate-api-client.mjs --check",
     "test": "vitest run",
-    "test:guards": "vitest run --dir tests/guards",
-    "test:contract": "vitest run --dir tests/contract",
+    "test:guards": "vitest run tests/guards",
+    "test:contract": "vitest run tests/contract",
     "test:unit": "node scripts/reserved-forwarder.mjs test:unit",
     "e2e:pc01": "node scripts/reserved-forwarder.mjs e2e:pc01",
     "csv:verify": "node scripts/reserved-forwarder.mjs csv:verify"
