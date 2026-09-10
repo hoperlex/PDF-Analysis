@@ -1,0 +1,13 @@
+{
+  "latency_ms": 42310,
+  "model_id": "claude-opus-5",
+  "note": "The same reply cut off at the output ceiling inside the third observation. Exercises the partial mapping: usable observations over a strict subset of pages, never succeeded.",
+  "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Степень огнестойкости одного и того же здания указана по-разному: II в разделе общих данных и III в разделе противопожарных мероприятий.\", \"recommendation_text\": \"Согласовать степень огнестойкости здания между разделом общих данных и разделом противопожарных мероприятий, оставив одно значение.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\"}, {\"page_number\": 6, \"quote\": \"Степень огнестойкости здания — III.\"}]}, {\"category\": \"internal_contradiction\", \"finding_text\": \"Количество эвакуационных выходов из надземной части здания указано как два в объёмно-планировочных решениях и как три в разделе эвакуационных путей и выходов.\", \"recommendation_text\": \"Привести количество эвакуационных выходов из надземной части здания к одному значению в обоих разделах.\", \"evidence\": [{\"page_number\": 3, \"quote\": \"Из надземной части здания предусмотрено два эвакуационных выхода.\"}, {\"page_number\": 7, \"quote\": \"Из надземной части здания предусмотрено три эвакуационных выхода.\"}]}, {\"category\": \"explicit_placeholder\", \"finding_text\": \"Тип заполнения оконных проёмов не определён: вместо проектного реш",
+  "recording_version": "1.0.0",
+  "request_sha256": "6c208358cfa9ae3a7591223084f87250084c9c6f8070f211d8e2fd9e278dbd1d",
+  "stop_reason": "max_tokens",
+  "usage": {
+    "input_tokens": 2180,
+    "output_tokens": 16000
+  }
+}
