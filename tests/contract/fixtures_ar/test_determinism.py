@@ -99,6 +99,11 @@ class SubprocessCheckTest(unittest.TestCase):
 
 class ChecksumFileTest(unittest.TestCase):
     def test_sha256sums_covers_every_generated_artefact(self) -> None:
+        """Every generated file is digested, and nothing undigested has crept in.
+
+        The second half is the one that matters: an artefact nobody records is an
+        artefact nobody notices changing.
+        """
         recorded: dict[str, str] = {}
         for line in CHECKSUMS.read_text(encoding="utf-8").splitlines():
             if not line.strip():
@@ -106,12 +111,19 @@ class ChecksumFileTest(unittest.TestCase):
             digest, name = line.split("  ", 1)
             recorded[name] = digest
 
+        # Hand-maintained files, deliberately not generator output and so deliberately
+        # not in SHA256SUMS. Listed explicitly so adding one is a conscious act.
+        HAND_WRITTEN = {"README.md", ".gitattributes", "SHA256SUMS"}
+
         on_disk = {
             str(path.relative_to(CORPUS_DIR))
             for path in CORPUS_DIR.rglob("*")
-            if path.is_file() and path.name not in {"SHA256SUMS", "README.md"}
+            if path.is_file() and str(path.relative_to(CORPUS_DIR)) not in HAND_WRITTEN
         }
-        self.assertEqual(set(recorded) - {"SHA256SUMS"}, on_disk)
+        self.assertEqual(
+            set(recorded) - {"SHA256SUMS"}, on_disk,
+            "SHA256SUMS and the corpus directory disagree about what exists",
+        )
 
     def test_every_recorded_digest_is_correct(self) -> None:
         for line in CHECKSUMS.read_text(encoding="utf-8").splitlines():
