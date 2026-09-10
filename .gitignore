@@ -25,3 +25,6 @@ fixtures/private/
 # git ls-files --others --exclude-standard.
 .vscode/
 .idea/
+
+# Ephemeral subagent worktrees; never tracked.
+.claude/worktrees/
