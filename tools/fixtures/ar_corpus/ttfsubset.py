@@ -374,3 +374,40 @@ def subset(source: bytes, characters: str, *, font_name: str, notice: str) -> Su
         cap_height=int(round(0.73 * units_per_em)),
         bbox=(x_min, y_min, x_max, y_max),
     )
+
+
+def read(font_bytes: bytes) -> SubsetResult:
+    """Read metrics and the character-to-glyph map back out of a built font.
+
+    The corpus generator uses this on the *committed* subset, so everything it embeds is
+    derived from the bytes in the repository and nothing depends on a font installed on
+    the build machine.
+    """
+    tables = _read_tables(font_bytes)
+
+    head = _table(font_bytes, tables, "head")
+    units_per_em = struct.unpack_from(">H", head, 18)[0]
+    x_min, y_min, x_max, y_max = struct.unpack_from(">hhhh", head, 36)
+
+    hhea = _table(font_bytes, tables, "hhea")
+    ascent, descent = struct.unpack_from(">hh", hhea, 4)
+    num_h_metrics = struct.unpack_from(">H", hhea, 34)[0]
+
+    hmtx = _table(font_bytes, tables, "hmtx")
+    num_glyphs = struct.unpack_from(">H", _table(font_bytes, tables, "maxp"), 4)[0]
+    cmap = _parse_cmap4(font_bytes, tables)
+
+    gid_advance = {
+        gid: struct.unpack_from(">H", hmtx, min(gid, num_h_metrics - 1) * 4)[0]
+        for gid in range(num_glyphs)
+    }
+    return SubsetResult(
+        font_bytes=font_bytes,
+        units_per_em=units_per_em,
+        char_to_gid={chr(code): gid for code, gid in cmap.items()},
+        gid_advance=gid_advance,
+        ascent=ascent,
+        descent=descent,
+        cap_height=int(round(0.73 * units_per_em)),
+        bbox=(x_min, y_min, x_max, y_max),
+    )

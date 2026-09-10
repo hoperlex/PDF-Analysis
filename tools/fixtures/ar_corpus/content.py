@@ -34,6 +34,7 @@ class Line:
     size: float = 10.5
     indent: float = 0.0
     space_before: float = 0.0
+    center: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,7 +85,7 @@ SMALL = 9.0
 # --------------------------------------------------------------------------------------
 # Page 1 - title
 # --------------------------------------------------------------------------------------
-_PAGE_1 = _p(1, [
+_PAGE_1 = _p(1, [  # every line centred; see _centre_title_page below
     Line("ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ «СИНТЕТИКПРОЕКТ»", H2),
     Line("вымышленная организация; реальному юридическому лицу не соответствует", SMALL),
     Line("", BODY, space_before=48.0),
