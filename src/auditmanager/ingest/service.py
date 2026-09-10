@@ -62,6 +62,7 @@ from auditmanager.shared.identity import (
     VersionUid,
 )
 from auditmanager.storage import (
+    BlobNotFoundError,
     BlobStore,
     StorageError,
     TemporaryBlob,
@@ -144,6 +145,16 @@ class IngestService:
         entry = self.require_source_entry(version_uid)
         try:
             return self._store.read(entry.blob_id)
+        except BlobNotFoundError:
+            # Not ``not_found``: the version exists and its manifest promised these
+            # bytes. Bytes a published manifest names and the store does not hold are
+            # an integrity failure, and it is the same answer reconciliation gives.
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=str(entry.blob_id),
+                role=entry.role,
+                expected_sha256=entry.sha256,
+            ) from None
         except StorageError as exc:
             raise domain_error_from_storage(exc, role=entry.role) from None
 
