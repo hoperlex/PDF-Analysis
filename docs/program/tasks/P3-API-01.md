@@ -211,3 +211,84 @@ cosmetic improvement, not a correction.
 
 **Navigation incident status:** `none_observed`. `docs/navigation/entries/p3-api-01.json`
 was not written — outside the paths `A5` was given.
+
+### Defect resolved by `A7-FIX`
+
+Session `A7-FIX`, branch `agent/gate-a7-fix` from base `d05aefa`, repaired the defect
+above in `contracts/api/v1/openapi.json`. It is closed; `A5`'s report needed no
+correction, and the repair is regenerated into `A5`'s client rather than worked around
+in it.
+
+**The shape chosen.** `FindingDetail` restates `Finding`'s full property set on one
+closed object and adds the two properties, instead of composing with `allOf`:
+
+```json
+"FindingDetail": {
+  "type": "object",
+  "additionalProperties": false,
+  "required": [ ...Finding's seven... ],
+  "properties": { ...Finding's nine..., "latest_comment": {...},
+                  "decision_event_count": { "type": "integer", "minimum": 0 } }
+}
+```
+
+`Finding` is untouched. Both schemas declare `additionalProperties: false`, so an
+unknown property is still rejected on each — the closure this repository keeps is not
+traded away for validity.
+
+**The three candidates `A5` listed, and why two were rejected.**
+
+| Candidate | Verdict |
+|---|---|
+| restate `FindingDetail` as one closed object | **chosen** — both shapes stay closed, `Finding` unchanged |
+| drop `additionalProperties: false` from `Finding` | rejected — loses closure everywhere `Finding` is used, `FindingPage.items` included; also fails `test_response_shapes_are_closed` |
+| give `Finding` the two properties, alias `FindingDetail` | rejected — `FindingPage.items` is a `$ref` to `Finding`, so a list response could carry the detail projection and still validate |
+
+A fourth was weighed and rejected on evidence rather than taste: an open `FindingBase`
+with `Finding` and `FindingDetail` each composing it under
+`unevaluatedProperties: false`. That is the idiomatic 2020-12 answer and it does
+validate correctly — `jsonschema` 4.26.0 was exercised on the shape directly rather
+than assumed. It was rejected because it requires `Finding` to stop carrying
+`additionalProperties: false` as its own key, which fails
+`test_response_shapes_are_closed` in `tests/contract/domain_p02` — a directory
+`A7-FIX` does not own. A repair that cannot be completed inside its own path set is
+not a repair.
+
+**Cost, and how it is paid.** Restating duplicates nine properties, and the two schemas
+can now drift. `tests/contract/api_v1/test_finding_detail_composition.py` makes drift a
+failure: it asserts `FindingDetail`'s property set is `Finding`'s plus exactly the two
+additions, compares the shared entries by value, and asserts the `required` sets are
+equal.
+
+**Evidence.** `.venv/bin/pytest tests/contract/api_v1` exits `1` before the repair —
+5 failed, 5 passed, reproducing `A5`'s message verbatim, `Additional properties are not
+allowed ('decision_event_count', 'latest_comment' were unexpected)` — and exits `0`
+after, 10 passed. The suite runs under the runtime interpreter and drives a real Draft
+2020-12 validator through `.venv/bootstrap/bin/python`, the way
+`openapi_metaschema_check.py` already does, and fails closed where that interpreter is
+absent rather than skipping. `document_with_the_pre_fix_shape` rebuilds the original
+composition in memory and re-evaluates it, so the guard is shown to fail on every run.
+
+**Audit, widened.** `A5` reported `FindingDetail` as the only `allOf` in the document;
+confirmed, and after the repair the document contains **no `allOf` at all**, so there is
+no second instance of this shape. The audit was extended past `allOf` to the rest of the
+family, all clean: no `$ref` anywhere carries a constraint-bearing sibling (only
+`description`, which is an annotation); no `anyOf`; and none of the 19 `oneOf` uses
+mixes a `$ref` branch with a property-bearing branch — every one is a nullable union,
+whose branches are independent alternatives and leak no evaluation scope. A test now
+searches the whole document for the shape on every run.
+
+**Regenerated, not hand-edited.** The document moved from sha256 `c97890c5…0ecb12` to
+`678a8bf7…add6a5`. `npm --prefix web run api:generate` was run twice and the two outputs
+compared byte-for-byte with `diff -r`, identical; `web/FRONTEND_LOCK.json` carries the
+recomputed digests. `A5`'s drift guard was left armed and went red against the
+regenerated client before the lock was resealed — six stale entries named — which is the
+guard working, not an obstacle to route around.
+
+**`docs/program/P02_SEAMS.md` §5.4 needed no change.** The repair changes how the schema
+is expressed, not which fields exist; the `finding_current_verdict` projection it lists
+is unchanged.
+
+**Left for the integrator.** `web/docs/PC01_UI_SEAM.md` still describes this defect as
+open. That file belongs to `A5` and is outside the paths `A7-FIX` was given, so it was
+not edited; it is now stale and wants a pointer to this section.

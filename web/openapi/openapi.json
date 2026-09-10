@@ -993,19 +993,38 @@
         }
       },
       "FindingDetail": {
-        "allOf": [
-          { "$ref": "#/components/schemas/Finding" },
-          {
-            "type": "object",
-            "properties": {
-              "latest_comment": {
-                "description": "The comment of the most recent event carrying one, whatever its type.",
-                "oneOf": [{ "type": "string" }, { "type": "null" }]
-              },
-              "decision_event_count": { "type": "integer", "minimum": 0 }
-            }
-          }
-        ]
+        "type": "object",
+        "description": "One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`.",
+        "additionalProperties": false,
+        "required": [
+          "finding_uid",
+          "project_uid",
+          "version_uid",
+          "run_id",
+          "category",
+          "observation",
+          "current_verdict"
+        ],
+        "properties": {
+          "finding_uid": { "$ref": "#/components/schemas/FindingUid" },
+          "project_uid": { "$ref": "#/components/schemas/ProjectUid" },
+          "version_uid": { "$ref": "#/components/schemas/VersionUid" },
+          "run_id": { "$ref": "#/components/schemas/RunId" },
+          "category": { "$ref": "#/components/schemas/FindingCategory" },
+          "observation": { "$ref": "#/components/schemas/FindingObservation" },
+          "current_verdict": { "$ref": "#/components/schemas/Verdict" },
+          "latest_decision_id": {
+            "oneOf": [{ "$ref": "#/components/schemas/DecisionId" }, { "type": "null" }]
+          },
+          "decision_recorded_at": {
+            "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+          },
+          "latest_comment": {
+            "description": "The comment of the most recent event carrying one, whatever its type.",
+            "oneOf": [{ "type": "string" }, { "type": "null" }]
+          },
+          "decision_event_count": { "type": "integer", "minimum": 0 }
+        }
       },
       "FindingPage": {
         "type": "object",

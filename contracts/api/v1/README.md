@@ -39,6 +39,7 @@ own gate.
 
 ```sh
 .venv/bin/pytest tests/contract/domain_p02/test_openapi_document.py
+.venv/bin/pytest tests/contract/api_v1
 .venv/bootstrap/bin/python tests/contract/domain_p02/openapi_metaschema_check.py
 ```
 
@@ -51,6 +52,32 @@ surface leaks an address, a credential or a model payload.
 The second runs under the governance interpreter, which is the only one carrying
 `jsonschema`, and validates every schema object against JSON Schema 2020-12 —
 meaningful because OpenAPI 3.1 aligned its Schema Object with that dialect.
+
+### Closed shapes, and why nothing here uses `allOf`
+
+Response shapes are `additionalProperties: false`, because this repository refuses
+silent extra fields: a field added without a contract change must fail, not pass.
+
+That closure does not survive composition. Under JSON Schema 2020-12 — the dialect
+OpenAPI 3.1 adopts — `additionalProperties` is evaluated against the property
+annotations of **its own** schema object, and sibling `allOf` branches contribute
+nothing to it. So `allOf: [{$ref: <a closed schema>}, {properties: {...}}]` rejects
+the very properties the second branch adds. `FindingDetail` was written that way and
+could never validate the body `GET /findings/{finding_uid}` returns; session `A5`
+found it, `A7-FIX` repaired it by restating `FindingDetail` as one closed object.
+
+**So: a schema that extends another restates it, and stays closed.** The document
+contains no `allOf` at all. The alternative that is idiomatic in plain JSON Schema —
+an open base plus `unevaluatedProperties: false` on each composed schema — is
+correct, and was rejected here because it requires the base to stop declaring
+`additionalProperties: false` itself, which is the property
+`tests/contract/domain_p02/test_openapi_document.py` asserts directly.
+
+Restating costs duplication, and `tests/contract/api_v1` pays it down: it asserts
+`FindingDetail` is `Finding`'s property set plus exactly `latest_comment` and
+`decision_event_count`, compares the shared entries by value, and searches the whole
+document for any `allOf` composing a `$ref` to a closed schema. Drift is a test
+failure rather than a silent divergence.
 
 ### Changing it
 
