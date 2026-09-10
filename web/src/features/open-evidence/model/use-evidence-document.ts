@@ -4,7 +4,7 @@
  * Fetch the version's PDF bytes and hold an object URL for as long as the viewer is open.
  *
  * The bytes come from `streamDocumentVersionContent` and from nothing else. There is no
- * presigned link and no redirect in this contract — deliberately, per the seam §10: a URL
+ * pre-signed link and no redirect in this contract — deliberately, per the seam §10: a URL
  * into object storage is the internal address the contract forbids in a response and would
  * outlive the request that authorized it. So the browser never learns a bucket name, an
  * object key or a storage host; it learns a `blob:` URL scoped to this document.
