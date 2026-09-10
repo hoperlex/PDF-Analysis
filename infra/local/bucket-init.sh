@@ -72,10 +72,14 @@ mc --quiet anonymous set none "$ALIAS/$BUCKET" >/dev/null \
 mc --quiet stat "$ALIAS/$BUCKET" >/dev/null \
     || fail "bucket $BUCKET is not present after initialization."
 
+# `mc anonymous get` reports the effective permission as a word, and this mc release
+# spells "no anonymous policy" as `private` even though `set` spells it `none`. Both are
+# accepted; every other value - download, upload, public, custom - is a bucket somebody
+# has opened, and is refused here rather than reported as success.
 policy=$(mc --quiet anonymous get "$ALIAS/$BUCKET" 2>/dev/null || true)
 case "$policy" in
-    *none*) ;;
-    *) fail "bucket $BUCKET still carries an anonymous policy after initialization." \
+    *'is `none`'*|*'is `private`'*) ;;
+    *) fail "bucket $BUCKET carries an anonymous policy after initialization." \
             "  reported: ${policy:-<no output>}" \
             "A public bucket is refused: the foundation bucket is private." ;;
 esac
@@ -85,5 +89,5 @@ if [ "$created" = yes ]; then
 else
     printf 'bucket-init: bucket %s already present at %s - no-op\n' "$BUCKET" "$ENDPOINT"
 fi
-printf 'bucket-init: anonymous policy for %s is none (private)\n' "$BUCKET"
+printf 'bucket-init: %s\n' "$policy"
 printf 'bucket-init: OK\n'
