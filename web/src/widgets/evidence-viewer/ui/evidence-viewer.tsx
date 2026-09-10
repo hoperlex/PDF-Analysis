@@ -56,10 +56,15 @@ function QuotationCard({ item }: { item: Evidence }) {
       <blockquote className="am-quotation__text" data-evidence-quote={item.quote}>
         {item.quote}
       </blockquote>
-      <p className="am-quotation__anchor">
-        {anchorLabel(item)}
-        {item.block_id !== null && item.block_id !== undefined ? ` · block ${item.block_id}` : ''}
-      </p>
+      {/*
+        `block_id` is deliberately not rendered. The contract calls it "a secondary anchor
+        into this version's block index. Not a contract identifier" — it is an internal
+        index handle that tells the reviewer nothing the page number and character range do
+        not, and printing an internal handle is how an object key reaches a screen when
+        something upstream puts one in the wrong field. The leakage check in
+        tests/unit/review/key-leakage.test.ts caught exactly that and this is the repair.
+      */}
+      <p className="am-quotation__anchor">{anchorLabel(item)}</p>
       {consistent ? null : (
         <p className="am-quotation__inconsistent" role="alert">
           The declared span length does not match this quotation. The anchor is shown as the
