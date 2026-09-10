@@ -41,15 +41,36 @@ VERSION_UID = "ver_01M2545JSD15ETSNNV904X991J"
 
 
 @pytest.fixture(scope="session")
-def prepared(store: Any, source_blob: Any) -> dict[str, Any]:
-    """Run all three stages in dependency order and return every result and document."""
-    first = run_stage(
+def prepared_source(store: Any, source_blob: Any) -> dict[str, Any]:
+    """Run ``source_preparation`` alone and return its result and both documents.
+
+    The offset evidence hangs off this fixture rather than off the full pipeline on
+    purpose. A defect in the offset rule makes the later stages refuse - they check
+    the text layer they are handed - so a suite whose offset assertions ran only after
+    all three stages succeeded would report a fixture error instead of the assertion
+    that names the bug. Here the quotation and code-point tests fail on their own
+    assertions.
+    """
+    result = run_stage(
         "source_preparation",
         version_uid=VERSION_UID,
         inputs={ROLE_SOURCE_DOCUMENT: source_blob},
         blob_store=store,
     )
-    assert first.status is StageStatus.SUCCEEDED, first.error
+    assert result.status is StageStatus.SUCCEEDED, result.error
+    return {
+        "result": result,
+        "page_inventory": json.loads(
+            store.read(result.artifact(ROLE_PAGE_INVENTORY).blob_id)
+        ),
+        "text_layer": json.loads(store.read(result.artifact(ROLE_TEXT_LAYER).blob_id)),
+    }
+
+
+@pytest.fixture(scope="session")
+def prepared(store: Any, prepared_source: dict[str, Any]) -> dict[str, Any]:
+    """Run all three stages in dependency order and return every result and document."""
+    first = prepared_source["result"]
 
     second = run_stage(
         "page_geometry_extraction",
@@ -87,16 +108,16 @@ def prepared(store: Any, source_blob: Any) -> dict[str, Any]:
 
 
 @pytest.fixture(scope="session")
-def whole_text(prepared: dict[str, Any]) -> str:
+def whole_text(prepared_source: dict[str, Any]) -> str:
     """The one document-global character sequence every offset indexes."""
-    return document_text(prepared["text_layer"])
+    return document_text(prepared_source["text_layer"])
 
 
 # --- THE offset evidence -----------------------------------------------------
 
 
 def test_manifest_quotations_resolve_at_their_declared_pages(
-    prepared: dict[str, Any], whole_text: str, manifest_anchors: tuple[dict[str, Any], ...]
+    prepared_source: dict[str, Any], whole_text: str, manifest_anchors: tuple[dict[str, Any], ...]
 ) -> None:
     """All twelve manifest quotations resolve through the published text layer.
 
@@ -117,7 +138,7 @@ def test_manifest_quotations_resolve_at_their_declared_pages(
         f"found {len(manifest_anchors)}"
     )
     starts = {
-        page["page_number"]: page["char_start"] for page in prepared["text_layer"]["pages"]
+        page["page_number"]: page["char_start"] for page in prepared_source["text_layer"]["pages"]
     }
 
     resolved = 0
@@ -138,7 +159,7 @@ def test_manifest_quotations_resolve_at_their_declared_pages(
 
 
 def test_offsets_are_code_points_and_not_bytes(
-    prepared: dict[str, Any], whole_text: str
+    prepared_source: dict[str, Any], whole_text: str
 ) -> None:
     """``total_char_count`` counts code points. On this corpus that is provable.
 
@@ -148,7 +169,7 @@ def test_offsets_are_code_points_and_not_bytes(
     it exists to construct the wrong answer and show the implementation did not give
     it.
     """
-    text_layer = prepared["text_layer"]
+    text_layer = prepared_source["text_layer"]
     byte_length = len(whole_text.encode("utf-8"))
 
     assert text_layer["total_char_count"] == len(whole_text)
@@ -163,10 +184,10 @@ def test_offsets_are_code_points_and_not_bytes(
 
 
 def test_quotations_land_wholly_within_their_declared_line(
-    prepared: dict[str, Any], manifest_anchors: tuple[dict[str, Any], ...]
+    prepared_source: dict[str, Any], manifest_anchors: tuple[dict[str, Any], ...]
 ) -> None:
     """The resolution contract ``expected_issues.json`` declares, preserved."""
-    pages = {page["page_number"]: page["text"] for page in prepared["text_layer"]["pages"]}
+    pages = {page["page_number"]: page["text"] for page in prepared_source["text_layer"]["pages"]}
     for anchor in manifest_anchors:
         line_index = anchor.get("line_index_in_page_text")
         if line_index is None:
@@ -179,17 +200,17 @@ def test_quotations_land_wholly_within_their_declared_line(
 # --- prepared.text_layer, section 4.3 ----------------------------------------
 
 
-def test_text_layer_pages_are_contiguous_and_gapless(prepared: dict[str, Any]) -> None:
-    pages = prepared["text_layer"]["pages"]
+def test_text_layer_pages_are_contiguous_and_gapless(prepared_source: dict[str, Any]) -> None:
+    pages = prepared_source["text_layer"]["pages"]
     assert [page["page_number"] for page in pages] == list(range(1, len(pages) + 1))
     assert pages[0]["char_start"] == 0
     for previous, current in zip(pages, pages[1:]):
         assert current["char_start"] == previous["char_end"]
-    assert pages[-1]["char_end"] == prepared["text_layer"]["total_char_count"]
+    assert pages[-1]["char_end"] == prepared_source["text_layer"]["total_char_count"]
 
 
 def test_pages_are_concatenated_with_no_separator(
-    prepared: dict[str, Any], whole_text: str
+    prepared_source: dict[str, Any], whole_text: str
 ) -> None:
     """Section 4.1: no separator is inserted between pages.
 
@@ -197,17 +218,17 @@ def test_pages_are_concatenated_with_no_separator(
     interval is exactly that page's text, which cannot hold if anything - a newline,
     a form feed, a space - were inserted between them.
     """
-    for page in prepared["text_layer"]["pages"]:
+    for page in prepared_source["text_layer"]["pages"]:
         assert whole_text[page["char_start"] : page["char_end"]] == page["text"]
     assert len(whole_text) == sum(
-        len(page["text"]) for page in prepared["text_layer"]["pages"]
+        len(page["text"]) for page in prepared_source["text_layer"]["pages"]
     )
 
 
 def test_text_layer_declares_its_extractor_and_normalization(
-    prepared: dict[str, Any],
+    prepared_source: dict[str, Any],
 ) -> None:
-    text_layer = prepared["text_layer"]
+    text_layer = prepared_source["text_layer"]
     assert text_layer["artifact_role"] == ROLE_TEXT_LAYER
     assert text_layer["artifact_version"] == ARTIFACT_VERSION
     assert text_layer["version_uid"] == VERSION_UID
@@ -230,8 +251,8 @@ def test_the_published_text_is_already_normalized(whole_text: str) -> None:
 # --- prepared.page_inventory, section 4.2 ------------------------------------
 
 
-def test_page_inventory_shape(prepared: dict[str, Any], source_blob: Any, baseline_pdf: bytes) -> None:
-    inventory = prepared["page_inventory"]
+def test_page_inventory_shape(prepared_source: dict[str, Any], source_blob: Any, baseline_pdf: bytes) -> None:
+    inventory = prepared_source["page_inventory"]
     assert inventory["artifact_role"] == ROLE_PAGE_INVENTORY
     assert inventory["artifact_version"] == ARTIFACT_VERSION
     assert inventory["source_blob_id"] == str(source_blob)
@@ -247,10 +268,10 @@ def test_page_inventory_shape(prepared: dict[str, Any], source_blob: Any, baseli
 
 
 def test_page_inventory_char_counts_match_the_text_layer(
-    prepared: dict[str, Any],
+    prepared_source: dict[str, Any],
 ) -> None:
-    layer = {page["page_number"]: page for page in prepared["text_layer"]["pages"]}
-    for page in prepared["page_inventory"]["pages"]:
+    layer = {page["page_number"]: page for page in prepared_source["text_layer"]["pages"]}
+    for page in prepared_source["page_inventory"]["pages"]:
         span = layer[page["page_number"]]
         assert page["char_count"] == span["char_end"] - span["char_start"]
 

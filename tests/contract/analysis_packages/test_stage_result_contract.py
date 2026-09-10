@@ -354,3 +354,44 @@ def test_retryable_is_read_from_the_catalog_not_chosen() -> None:
     error = DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, message="refused")
     carried = StageError.from_domain_error(error)
     assert carried.retryable is ErrorCode.ANALYSIS_INPUT_INVALID.retryable
+
+
+# --- the declared normalization actually normalizes ---------------------------
+
+
+def test_the_declared_normalization_composes_decomposed_text() -> None:
+    """``nfc_v1`` is applied, not merely declared.
+
+    The corpus is already NFC, so no assertion over its published text can tell an
+    applied normalization from an identity function. This one can: it feeds
+    decomposed Cyrillic - ``и`` followed by a combining breve, which is how ``й`` can
+    be spelled - through the same function ``source_preparation`` uses, and requires
+    it to come back composed.
+
+    It matters because ``B4``'s grounding gate compares exactly, after this one
+    normalization and nothing else. If the text layer kept a decomposed spelling, a
+    model quoting the composed one would be judged ungrounded on a difference no
+    reader can see.
+    """
+    from auditmanager.analysis.stages.extraction import NORMALIZATION_ID, normalize
+
+    decomposed = "й"  # и + combining breve
+    composed = "й"  # й
+
+    assert decomposed != composed
+    assert normalize(decomposed) == composed
+    assert normalize(composed) == composed
+    assert NORMALIZATION_ID == "nfc_v1"
+
+
+def test_normalization_does_not_case_fold_or_collapse_whitespace() -> None:
+    """The declared description promises exactly NFC and nothing else."""
+    from auditmanager.analysis.stages.extraction import (
+        NORMALIZATION_DESCRIPTION,
+        normalize,
+    )
+
+    sample = "СТЕПЕНЬ  огнестойкости\tзданий — II.\n"
+    assert normalize(sample) == sample
+    assert "No case folding" in NORMALIZATION_DESCRIPTION
+    assert "no whitespace collapsing" in NORMALIZATION_DESCRIPTION
