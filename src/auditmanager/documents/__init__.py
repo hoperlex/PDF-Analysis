@@ -15,6 +15,7 @@ filesystem path, an uploaded file name or a display ordinal.
 from __future__ import annotations
 
 from .models import (
+    MANIFEST_ROLE_SOURCE_DOCUMENT,
     ROLE_SOURCE_DOCUMENT,
     DocumentVersionRecord,
     ManifestEntry,
@@ -36,6 +37,7 @@ from .repository import MAX_DISPLAY_TITLE, MAX_PROJECT_NAME, DocumentRepository
 __all__ = [
     "MAX_DISPLAY_TITLE",
     "MAX_PROJECT_NAME",
+    "MANIFEST_ROLE_SOURCE_DOCUMENT",
     "ROLE_SOURCE_DOCUMENT",
     "SQLSTATE_APPEND_ONLY_VIOLATION",
     "SQLSTATE_IMMUTABLE_ROW_VIOLATION",

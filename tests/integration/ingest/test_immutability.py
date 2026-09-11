@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
+from auditmanager.documents.models import MANIFEST_ROLE_SOURCE_DOCUMENT
 from auditmanager.documents import (
     SQLSTATE_IMMUTABLE_ROW_VIOLATION,
     SQLSTATE_UNDECLARED_TRANSITION,
@@ -150,9 +151,13 @@ def test_a_refusal_is_not_translated_from_its_message(engine, published) -> None
         engine,
         "INSERT INTO input_manifest_entry "
         "(version_uid, role, blob_id, sha256, size_bytes, media_type) "
-        "VALUES (:v, 'source_document', :b, :s, 1, 'application/pdf')",
+        "VALUES (:v, :role, :b, :s, 1, 'application/pdf')",
         {
             "v": str(published.version_uid),
+            # Read from the production constant, never spelled out. A test that restates
+            # the role is exactly how the blob spelling and the contract spelling diverged
+            # unnoticed across three trees.
+            "role": MANIFEST_ROLE_SOURCE_DOCUMENT,
             "b": str(published.source.blob_id),
             "s": published.sha256,
         },

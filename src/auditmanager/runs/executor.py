@@ -418,6 +418,34 @@ def execute_run(
     document_repo = documents or DocumentRepository()
 
     run = run_repo.get(session, run_id)
+
+    # The run declares a provider mode; the adapter *is* one. Nothing compared them, so a
+    # run started with provider_mode="live" and executed entirely by the recorded adapter
+    # reached `published` and exported a CSV reading `live` on every row - while the
+    # adapter, model_call.provider_mode and finding_observation.provider_mode all said
+    # `recorded`. The export is correct: seam section 6 column 6 takes its value from
+    # audit_run.provider_mode, which is precisely the field nobody had checked.
+    #
+    # `assert_consistent_mode` in analysis.text.provenance already guards the stage's own
+    # provenance and its docstring names this exact failure - "a recorded run published
+    # with provider_mode: live, and nothing downstream could detect that afterwards". It
+    # holds where it stands. The refusal it names happens one level above it, which is
+    # here, and this is the only place that holds both the run row and the adapter.
+    #
+    # PROTOTYPE_PROFILE section 8 criterion 4 requires live and recorded outcomes to be
+    # distinguishable, and section 4 forbids presenting a recorded result as a live one.
+    # Refusing before any stage runs means nothing is written under a false mode.
+    actual_mode = getattr(adapter, "provider_mode", None)
+    actual = getattr(actual_mode, "value", actual_mode)
+    if actual is not None and str(actual) != str(run.provider_mode):
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message=(
+                "the run declares a provider mode the supplied adapter does not "
+                "provide; a recorded run is never presented as a live one"
+            ),
+        )
+
     version = document_repo.get_version(session, VersionUid.parse(run.version_uid))
     source_entry = version.entry(ROLE_SOURCE_DOCUMENT)
 

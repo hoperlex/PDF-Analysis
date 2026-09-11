@@ -13,6 +13,7 @@ import hashlib
 import pytest
 from sqlalchemy import text
 
+from auditmanager.documents.models import MANIFEST_ROLE_SOURCE_DOCUMENT
 from auditmanager.documents import ROLE_SOURCE_DOCUMENT
 from auditmanager.ingest import ACCEPTED_MEDIA_TYPE, IngestService
 from auditmanager.shared.errors import DomainError, ErrorCode, screen_message
@@ -63,7 +64,7 @@ def test_baseline_publishes_one_version_and_one_available_blob(
     # Exactly one manifest row, and it addresses the bytes by derived identity.
     assert len(version.manifest) == 1
     entry = version.source
-    assert entry.role == ROLE_SOURCE_DOCUMENT
+    assert entry.role == MANIFEST_ROLE_SOURCE_DOCUMENT
     assert entry.sha256 == expected_sha
     assert entry.size_bytes == len(baseline_pdf)
     assert entry.media_type == ACCEPTED_MEDIA_TYPE
@@ -100,7 +101,7 @@ def test_manifest_query_is_the_seam_b5_consumes(
     manifest = service.manifest_for(outcome.version.version_uid)
 
     assert manifest == outcome.version.manifest
-    assert [entry.role for entry in manifest] == [ROLE_SOURCE_DOCUMENT]
+    assert [entry.role for entry in manifest] == [MANIFEST_ROLE_SOURCE_DOCUMENT]
 
 
 def test_return_value_carries_no_filename_ordinal_key_or_path(

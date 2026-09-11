@@ -65,7 +65,12 @@ RECORDINGS = REPOSITORY_ROOT / "fixtures" / "recorded" / "text_analysis"
 VARIANTS = RECORDINGS / "variants"
 
 #: The contract role of the bytes ``source_preparation`` reads.
-MANIFEST_ROLE_SOURCE: str = "source.document"
+# Imported, never restated. This constant used to be spelled out here with the contract's
+# role while production ingest wrote the blob spelling, so the executor was only ever shown
+# the role its own code expected and the real upload path could not start a run at all.
+from auditmanager.documents.models import MANIFEST_ROLE_SOURCE_DOCUMENT
+
+MANIFEST_ROLE_SOURCE: str = MANIFEST_ROLE_SOURCE_DOCUMENT
 
 #: The model the recordings were made against. Pinned here so the suite does not depend
 #: on an environment variable being exported.
