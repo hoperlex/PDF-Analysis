@@ -1,8 +1,19 @@
-"""The PC-01 journey, end to end, against real PostgreSQL and real MinIO.
+"""The PC-01 journey, end to end, through the REAL public surfaces.
 
 Eight sessions built this backend in parallel and each verified its own segment. This
-module is the first thing to drive all of them in one sequence and assert on what came
-out the far end.
+module drives all of them in one sequence, starting where a product starts: a project
+and an upload through ``IngestService``.
+
+**This suite is red at base 92bece8, and that is its finding.** ``IngestService`` writes
+the manifest role ``source_document`` where the frozen stage registry declares
+``source.document``, so no version it produces can start a run. The defect is owned by
+the ingest/documents tree and is stated precisely in
+``tests/integration/p02_journey/test_manifest_role_seam.py``.
+
+It is deliberately not worked around here. The sibling integration suite seeds a
+contract-correct manifest and measures everything after the seam, so the journey figures
+exist; this suite is what says whether a product could actually reach them. It goes green
+with no edit once the owning tree is corrected.
 """
 
 from __future__ import annotations
@@ -22,20 +33,30 @@ def corpus_journey(journey_harness, session_factory, blob_store, recorded_adapte
     would say nothing extra -- each test asserts a different property of one composition.
     """
     from auditmanager.ingest import IngestService
+    from auditmanager.shared.errors import DomainError
 
     h = journey_harness
     with session_factory() as session:
         service = IngestService(blob_store, session_factory=session_factory)
-        record = h.drive_journey(
-            session,
-            ingest=service,
-            blob_store=blob_store,
-            adapter=recorded_adapter,
-            provider_config=provider_config,
-            project_name=f"B-III convergence {h.new_key('proj')}",
-            upload_key=h.new_key("upload"),
-            run_key=h.new_key("run"),
-        )
+        try:
+            record = h.drive_journey(
+                session,
+                ingest=service,
+                blob_store=blob_store,
+                adapter=recorded_adapter,
+                provider_config=provider_config,
+                project_name=f"B-III convergence {h.new_key('proj')}",
+                upload_key=h.new_key("upload"),
+                run_key=h.new_key("run"),
+            )
+        except DomainError as refusal:
+            pytest.fail(
+                "the real upload path cannot start a run, so the journey never begins: "
+                f"{refusal}. IngestService writes the manifest role 'source_document'; "
+                "contracts/analysis/v1/stage-registry.json declares 'source.document'. "
+                "Owned by the ingest/documents tree; see "
+                "tests/integration/p02_journey/test_manifest_role_seam.py."
+            )
         yield record
 
 
