@@ -46,6 +46,7 @@ from typing import Any, Final, Mapping
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.documents import (
+    MANIFEST_ROLE_SOURCE_DOCUMENT,
     ROLE_SOURCE_DOCUMENT,
     DocumentRepository,
     DocumentVersionRecord,
@@ -304,7 +305,7 @@ class IngestService:
                 session, project_uid, display_title
             )
         entry = ManifestEntry(
-            role=ROLE_SOURCE_DOCUMENT,
+            role=MANIFEST_ROLE_SOURCE_DOCUMENT,
             blob_id=verified.blob_id,
             sha256=verified.sha256,
             size_bytes=verified.size,

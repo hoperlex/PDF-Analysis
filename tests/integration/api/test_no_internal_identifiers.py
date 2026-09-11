@@ -404,7 +404,7 @@ def test_the_walk_can_fail(forbidden_values: tuple[str, ...]) -> None:
         {
             "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
             "input_manifest": [
-                {"role": "source_document", "sha256": "a" * 64, "size_bytes": 1},
+                {"role": MANIFEST_ROLE_SOURCE_DOCUMENT, "sha256": "a" * 64, "size_bytes": 1},
             ],
         },
         forbidden_values,

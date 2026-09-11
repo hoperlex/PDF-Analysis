@@ -67,7 +67,13 @@ from auditmanager.shared.identity import (
 COMMAND_TYPE_START_RUN: Final[str] = "start_audit_run"
 
 #: The manifest role whose bytes ``source_preparation`` consumes.
-ROLE_SOURCE_DOCUMENT: Final[str] = "source.document"
+# Imported, not restated. This was the third spelling of one concept in three trees: the
+# storage blob role `source_document`, this module's own copy of the contract's
+# `source.document`, and what ingest actually wrote into the manifest - which was the blob
+# spelling, so the real upload path could not start a run while every fixture could.
+from auditmanager.documents import MANIFEST_ROLE_SOURCE_DOCUMENT
+
+ROLE_SOURCE_DOCUMENT: Final[str] = MANIFEST_ROLE_SOURCE_DOCUMENT
 
 
 @dataclass(frozen=True, slots=True)

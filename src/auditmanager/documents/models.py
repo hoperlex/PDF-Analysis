@@ -23,10 +23,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Final
 
+import json
+from pathlib import Path
+
 from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
 from auditmanager.storage import BlobId
 
 __all__ = [
+    "MANIFEST_ROLE_SOURCE_DOCUMENT",
     "ROLE_SOURCE_DOCUMENT",
     "DocumentVersionRecord",
     "ManifestEntry",
@@ -34,9 +38,49 @@ __all__ = [
     "UploadOutcome",
 ]
 
-#: The one manifest role PC-01 publishes. Matches ``auditmanager.storage``'s blob role
-#: of the same name and the schema's ``ck_input_manifest_entry_role`` pattern.
+#: The blob role, in ``auditmanager.storage``'s namespace. Validated by
+#: ``parse_blob_role`` and written on the object, not on the manifest entry.
 ROLE_SOURCE_DOCUMENT: Final[str] = "source_document"
+
+
+def _required_source_role() -> str:
+    """The manifest-entry role ``source_preparation`` requires, read from the contract.
+
+    **These are two different namespaces and they were conflated.** The blob role above is
+    ``source_document``; the manifest-entry role the analysis stage registry requires is
+    ``source.document``. Writing the blob spelling into the manifest made every version
+    produced by the real upload path unable to start a run - ``start_audit_run`` refused
+    with ``analysis_input_invalid`` before any stage - while
+    ``ck_input_manifest_entry_role`` accepted both, because it is a shape pattern rather
+    than a vocabulary.
+
+    It survived eight test suites because the run harness defined its own manifest role
+    constant with the contract's spelling and seeded fixtures with that, so the executor
+    was only ever shown the role its own code expected.
+
+    Reading it from the frozen registry rather than restating it means a rename in the
+    contract cannot silently diverge again: this raises at import instead.
+    """
+    registry = json.loads(_STAGE_REGISTRY.read_text(encoding="utf-8"))
+    stages = registry.get("stages") or registry.get("registry") or []
+    for stage in stages:
+        if stage.get("stage_id") != "source_preparation":
+            continue
+        for declared in stage.get("required_inputs") or stage.get("inputs") or []:
+            if declared.get("required") and declared.get("media_type") == "application/pdf":
+                return str(declared["role"])
+    raise RuntimeError(
+        "contracts/analysis/v1/stage-registry.json declares no required PDF input for "
+        "source_preparation; the manifest role cannot be derived"
+    )
+
+
+_STAGE_REGISTRY = (
+    Path(__file__).resolve().parents[3] / "contracts" / "analysis" / "v1" / "stage-registry.json"
+)
+
+#: The manifest-entry role PC-01 publishes, derived from the stage registry.
+MANIFEST_ROLE_SOURCE_DOCUMENT: Final[str] = _required_source_role()
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,7 +152,7 @@ class DocumentVersionRecord:
     @property
     def source(self) -> ManifestEntry:
         """The ``source_document`` entry every PC-01 version carries."""
-        return self.entry(ROLE_SOURCE_DOCUMENT)
+        return self.entry(MANIFEST_ROLE_SOURCE_DOCUMENT)
 
 
 @dataclass(frozen=True, slots=True)

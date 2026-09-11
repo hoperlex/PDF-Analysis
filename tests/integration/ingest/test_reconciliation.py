@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 from auditmanager.ingest import IngestService, Reconciler
 from auditmanager.shared.errors import DomainError, ErrorCode, screen_message
+from auditmanager.documents import MANIFEST_ROLE_SOURCE_DOCUMENT
 from auditmanager.storage import (
     BlobNotFoundError,
     StorageUnavailableError,
@@ -251,7 +252,10 @@ def test_a_version_whose_blob_is_missing_fails_with_storage_integrity_error(
     envelope = failure.envelope("corr_missing")
     assert failure.code is ErrorCode.STORAGE_INTEGRITY_ERROR
     assert envelope.details["blob_id"] == str(blob_id)
-    assert envelope.details["role"] == "source_document"
+    # The reconciler walks manifest entries, so the role it reports is the manifest-entry
+    # role, not the blob role. That is the useful one: it tells an operator which manifest
+    # role is broken. The two spellings are deliberately different namespaces.
+    assert envelope.details["role"] == MANIFEST_ROLE_SOURCE_DOCUMENT
     assert envelope.retryable is False
     screen_message(envelope.message)
 
