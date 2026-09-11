@@ -28,6 +28,7 @@ from typing import Any, Iterator
 import pytest
 from sqlalchemy.orm import Session
 
+from auditmanager.documents import MANIFEST_ROLE_SOURCE_DOCUMENT
 from auditmanager.api.routers import Router, dispatch
 from auditmanager.api.routers.http import Request, Response
 from auditmanager.storage import S3StorageSettings
@@ -107,6 +108,19 @@ _FORBIDDEN_KEYS = frozenset(
 )
 
 
+#: Fields whose value the *caller* supplied, so their content cannot be a leak of internal
+#: state: the client already knows it, having sent it. The shape scan skips these and the
+#: forbidden-value and forbidden-key scans still apply to them, because a caller-supplied
+#: label must still never be a bucket or an object key.
+#:
+#: This exists because the guard fired on `Project.name`. The frozen contract calls it a
+#: "Display label. Not unique and not an identity", a journey fixture named a project
+#: "B-III negative encrypted.pdf", and the PDF-filename shape matched - reporting a leak
+#: where the only thing that had crossed the boundary was the client's own text coming
+#: back. A user may legitimately name a project after a document.
+_CALLER_SUPPLIED_FIELDS = frozenset({"name", "comment", "display_title"})
+
+
 def assert_clean(body: Any, forbidden_values: tuple[str, ...], where: str) -> None:
     for path, value in walk(body):
         if isinstance(value, str):
@@ -114,6 +128,8 @@ def assert_clean(body: Any, forbidden_values: tuple[str, ...], where: str) -> No
                 assert forbidden not in value, (
                     f"{where}: {path} carries {forbidden!r}, which is an internal address"
                 )
+            if path.rsplit(".", 1)[-1] in _CALLER_SUPPLIED_FIELDS:
+                continue
             for what, pattern in _FORBIDDEN_SHAPES:
                 assert not pattern.search(value), (
                     f"{where}: {path} carries {what}: {value!r}"
@@ -410,3 +426,32 @@ def test_the_walk_can_fail(forbidden_values: tuple[str, ...]) -> None:
         forbidden_values,
         "clean",
     )
+
+
+def test_the_caller_supplied_exemption_is_narrow() -> None:
+    """Exempting a display label from the *shape* scan must not exempt it from the rest.
+
+    The exemption exists because a user may legitimately name a project after a document,
+    and the client already knows the text it sent. It would be worthless if it also let an
+    object key ride back inside that field, so the forbidden-value and forbidden-key scans
+    still apply there. Three cases, because an exemption nobody has probed is indistinguishable
+    from a hole.
+    """
+    # 1. A filename in a caller-supplied label is allowed: the client sent it.
+    assert_clean(
+        {"items": [{"name": "Отчёт encrypted.pdf"}]},
+        ("audit-b6",),
+        "caller label",
+    )
+
+    # 2. The same text in a field the server generates is still a leak.
+    with pytest.raises(AssertionError, match="a PDF filename"):
+        assert_clean({"items": [{"source_label": "encrypted.pdf"}]}, (), "server field")
+
+    # 3. An internal address inside the exempt field is still refused, by value...
+    with pytest.raises(AssertionError, match="internal address"):
+        assert_clean({"items": [{"name": "audit-b6/objects/ab/cd"}]}, ("audit-b6",), "label")
+
+    # ...and a forbidden property name is still refused whatever the exemption.
+    with pytest.raises(AssertionError, match="no response may carry"):
+        assert_clean({"items": [{"object_key": "anything"}]}, (), "label")
