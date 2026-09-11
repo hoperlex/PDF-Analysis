@@ -33,9 +33,16 @@ proceed regardless of the ruling.
 
 - **Base:** the literal SHA in the dispatch prompt. Never `HEAD`, never a branch name.
 - **Branch:** `agent/<session-id>` from that SHA. Do not stack on another session's branch.
+- **Where the tree lives:** outside `/tmp`, worktree and scratch both —
+  `/root/<something>-scratch` works. Docker here is a snap package and cannot see `/tmp`;
+  `make up` from there fails with a `/var/lib/snapd/void/...` path error that cost `B-III`
+  its first pass.
 - **Instance:** unique `FOUNDATION_INSTANCE`, `POSTGRES_PORT`, `S3_API_PORT`,
   `S3_CONSOLE_PORT`, `POSTGRES_DB`, `S3_BUCKET` (FF-01 §5). Never run `make up` against
   another session's instance.
+- **Bootstrap:** `make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12` when the ambient
+  interpreter is an active virtualenv. The bare form is refused by design — that refusal is
+  the guard working, not a defect to report or to work around.
 - **Command surface:** the nine `make` targets are frozen. Fill your reserved path; never
   edit the `Makefile` or add a private alias. A missing implementation fails explicitly.
 - **Out of bounds for all:** `contracts/domain|analysis|events/v1/**`, `fixtures/golden/**`,
@@ -43,6 +50,9 @@ proceed regardless of the ruling.
   locks, `src/auditmanager/bootstrap/**`, and every other session's tree.
 - **Historical suites are not your gate.** `tests/contract` and `tests/checkpoint` are CP-00
   evidence and are red on this tree before you touch anything. Run only your own commands.
+- **Host constraints:** read `dispatch/OPERATING_CONSTRAINTS.md` before your first command.
+  Six traps, each found the hard way by a named session — the two above, plus what a mutation
+  run must prove before you believe it and why the integration suites interfere.
 - **Report:** changed paths, the exact commands run and their exit codes, what you could not
   do, and any seam you needed but did not have. Do not report a command you did not run.
 
