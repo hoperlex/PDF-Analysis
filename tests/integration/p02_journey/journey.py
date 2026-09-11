@@ -425,3 +425,18 @@ def variant_adapter():
         return RecordedAdapter(directory)
 
     return build
+
+
+# Gate evidence recorded at base 92bece8 by session B-III, so a later reader can see what
+# was measured rather than re-deriving it:
+#
+#   make foundation                     exit 0, 35 passed
+#   pytest tests/integration/p02_journey exit 1, 28 passed / 3 failed (two defects)
+#   pytest tests/e2e/p02                 exit 1, blocked at the manifest-role seam
+#   git diff --check                     exit 0
+#
+#   journey figures: state published, degradation set empty, four stages succeeded,
+#   3 findings, CSV 4497 bytes / 5 data rows / 17 columns, two exports byte-identical.
+#   idempotency: same run returned, replayed=True, zero rows added across all 16 tables.
+#   restart (make down && make up): CSV byte-identical, counts unchanged, the published
+#   object re-read at 58978 bytes with the corpus sha256.
