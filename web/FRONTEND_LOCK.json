@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "678a8bf72104f7927c3c0d7d3fec09e1f6337fcb816329ad950e4a509eadd6a5",
+    "sha256": "88120361fc86843632f06880675ca5a85ba72357c3ac26b055c8f5b9693c4d18",
     "content_commit": "2662ec2",
     "content_commit_subject": "fix(api-v1): restate FindingDetail as a closed object, not an allOf",
     "dispatch_named_commit": "9924d32",
-    "commit_note": "The digest, not any commit name, is the anchor. A5 generated from c97890c5f51c2a27adaaa7307fe65506a91fc9a884480cc54821aca8e30ecb12, the content frozen by c704458 (the A5 dispatch brief named 9924d32, which does not touch contracts/api/v1/** and at which the bytes were identical). Session A7-FIX then repaired the FindingDetail composition defect A5 reported, moving the document to the sha256 above; this client is regenerated from that document and never hand-edited.",
+    "commit_note": "Resealed 2026-09-11 after the DependencyUnavailable description was corrected: it called dependency_unavailable the one retryable code in this surface, while idempotency_key_in_progress is also retryable and is reachable on every write.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
     "paths": 10,
     "operations": 12,
     "component_schemas": 43,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "678a8bf72104f7927c3c0d7d3fec09e1f6337fcb816329ad950e4a509eadd6a5",
+    "snapshot_sha256": "88120361fc86843632f06880675ca5a85ba72357c3ac26b055c8f5b9693c4d18",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "77d7041d538e61a003f079681a05fc588780060a4f5e12ad5162a2b988d79dbf",
-      "index.ts": "59151133b252f022a39e3cc24b7c65a42ac5d47b5b7d41e5c13124dde13b5b3a",
-      "operations.gen.ts": "5354ee0c3cd1b5ef1e3363d3909e1b2bb7064752cf006bd4c0b23d16cd82e370",
-      "types.gen.ts": "2035eab8dbbe206c2620b619bb5c8059fc19265a49fe05bc6e4e60eb3b702825"
+      "client.gen.ts": "46b8280de453364414b2355ab5924ded8a86601057bc8378053820d2605dfd1d",
+      "index.ts": "ab01715356b7507c8c692ea22caa6ed61349411081558b827d4a33ecb08a0ed8",
+      "operations.gen.ts": "4fcf8767222846d4f754ebf27ec13693388b732aa9ce149e5e610f5f48d4c67b",
+      "types.gen.ts": "5e575af5ef8651662bcce275893eafb4545609c9109fced53e86fde3e097ae1d"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
