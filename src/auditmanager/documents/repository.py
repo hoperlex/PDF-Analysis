@@ -59,7 +59,14 @@ _SELECT_PROJECT = text(
     "SELECT project_uid, name, created_at FROM project WHERE project_uid = :project_uid"
 )
 _LIST_PROJECTS = text(
-    "SELECT project_uid, name, created_at FROM project ORDER BY created_at, project_uid"
+    # Newest first, as `listProjects` declares. The tiebreaker makes the order **total and
+    # stable** - two rows sharing a `created_at` tick always come back in the same order,
+    # which is what a cursor pages over. It deliberately does **not** claim to reproduce
+    # creation order inside a tick: a ULID is monotonic across milliseconds, not within one,
+    # so its random tail decides there. Ordering by timestamp is the contract's guarantee;
+    # a total order is the implementation's.
+    "SELECT project_uid, name, created_at FROM project "
+    "ORDER BY created_at DESC, project_uid DESC"
 )
 _INSERT_DOCUMENT = text(
     "INSERT INTO document (document_uid, project_uid, display_title) "

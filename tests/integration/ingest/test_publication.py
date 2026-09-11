@@ -291,3 +291,48 @@ def test_no_version_is_resolved_by_its_ordinal() -> None:
         if resolving.search(p.read_text(encoding="utf-8"))
     ]
     assert offenders == [], f"a version is being resolved by its ordinal in: {offenders}"
+
+
+def test_projects_are_listed_newest_first(session_factory) -> None:  # noqa: ANN001
+    """`listProjects` declares "newest first"; the repository returned oldest first.
+
+    Two claims, deliberately separated. Creation order inside one `created_at` tick is not
+    recoverable - a ULID is monotonic across milliseconds, not within one - so what the
+    contract guarantees is descending time, and what the tiebreaker buys is a total, stable
+    order for a cursor to page over.
+
+    The timestamps are spread explicitly. The first version of this test created four
+    projects in a loop and asserted the returned stamps were descending; all four landed in
+    the same millisecond, every stamp was equal, and the assertion held for **any** order -
+    it stayed green against an ORDER BY created_at ASC. A test that cannot fail is worse
+    than no test, because it reports a guarantee nobody is providing.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import text
+
+    from auditmanager.documents import DocumentRepository
+
+    repo = DocumentRepository()
+    base = datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+    with session_factory() as session:
+        created = [repo.create_project(session, name=f"Проект {n}") for n in range(4)]
+        for offset, record in enumerate(created):
+            session.execute(
+                text("UPDATE project SET created_at = :t WHERE project_uid = :p"),
+                {"t": base + timedelta(minutes=offset), "p": str(record.project_uid)},
+            )
+        session.commit()
+        listed = repo.list_projects(session)
+        again = repo.list_projects(session)
+
+    stamps = [p.created_at for p in listed]
+    assert len(set(stamps)) == len(stamps), (
+        "the fixture failed to spread the timestamps, so this test cannot discriminate"
+    )
+    assert stamps == sorted(stamps, reverse=True), (
+        f"projects are not newest first by created_at: {stamps}"
+    )
+    assert [str(p.project_uid) for p in listed] == [str(p.project_uid) for p in again], (
+        "the order is not stable across two calls, so a cursor cannot page over it"
+    )
