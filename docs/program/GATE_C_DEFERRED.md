@@ -87,13 +87,20 @@ Four rulings, taken while Gate C waits.
   about five times headroom — enough for the 30-page document the PC-01 envelope allows.
   Recorded in `P02_LOCK.json`, which `B3`'s guard and `P4-OPS-01`'s measurement both read.
 
-- **Blob identity against `rejected` — accept the consequence, correct the claim.** The
-  partial index `uq_blob_available_content` is dropped in migration `0003_open_items`. It
-  promised that "a rejected or erased blob must not block a later good upload" and could not
-  deliver it: `blob_id` is derived from `(sha256, size)` and is the primary key, so content
-  uniqueness already holds in every state. Rejected bytes are permanently banned, the PC-01
-  ingest path never rejects — it probes before claiming a key — and the column comment now
-  says so instead of the opposite.
+- **Blob identity against `rejected` — accept the consequence, correct the claim.** `B1` was
+  right that the index comment could not be true: `blob_id` is derived from `(sha256, size)`
+  and is the primary key, so a rejected blob bans those bytes whatever the index is scoped
+  to.
+
+  **The first attempt at this correction dropped the index, and that was wrong.** Two
+  existing tests caught it immediately, and they were right to: the *database* does not know
+  `blob_id` is derived. The storage adapter guarantees that; the schema does not. Without
+  the partial index, two `available` rows with different `blob_id`s and identical content
+  insert cleanly — so it is the only content-uniqueness guarantee the database itself holds,
+  and dropping it would have deleted a real invariant to fix a false sentence.
+
+  The index stays and its comment is corrected, which is all that was ever wrong. Migration
+  `0003_open_items`.
 
 - **The dead diagnostic path — accepted as `B-III` found it.** The analysis stage resolves
   each quote and drops what does not resolve before writing its artifact, so the grounding

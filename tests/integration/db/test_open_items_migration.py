@@ -23,14 +23,21 @@ def _constraint(session: Session, name: str) -> str | None:
     ).scalar()
 
 
-class TestTheBlobIndexNoLongerClaimsWhatItCannotDo:
-    def test_the_partial_index_is_gone(self, migrated_engine: Engine) -> None:
-        """Its comment promised a rejected blob would not block a later upload.
+class TestTheBlobIndexSaysWhatItDoes:
+    """The correction here is to a comment, not to an invariant.
 
-        It could not: blob_id is derived from (sha256, size) and is the PRIMARY KEY, so
-        content uniqueness already holds in every state. Scoping a second index to
-        `available` bought nothing and described behaviour nobody had.
-        """
+    B1 was right that the old comment could not be true: blob_id is derived from
+    (sha256, size) and is the primary key, so a rejected blob bans those bytes whatever the
+    index is scoped to. The integrator's first attempt therefore dropped the index - and two
+    existing tests caught it, because the **database** does not know blob_id is derived. The
+    storage adapter guarantees that; the schema does not. Without the partial index, two
+    available rows with different blob_ids and identical content insert cleanly.
+
+    So the index is the only content-uniqueness guarantee the database itself holds, and
+    removing it would have deleted a real invariant to fix a false sentence.
+    """
+
+    def test_the_index_is_still_there(self, migrated_engine: Engine) -> None:
         with Session(migrated_engine) as session:
             present = session.execute(
                 text(
@@ -38,32 +45,18 @@ class TestTheBlobIndexNoLongerClaimsWhatItCannotDo:
                     "WHERE indexname = 'uq_blob_available_content'"
                 )
             ).scalar_one()
-        assert present == 0
+        assert present == 1, "the database's only content-uniqueness guarantee is gone"
 
-    def test_content_uniqueness_still_holds_through_the_primary_key(
+    def test_its_comment_no_longer_promises_a_rejected_blob_can_return(
         self, migrated_engine: Engine
     ) -> None:
-        """Dropping the index must not weaken the invariant it was shadowing."""
-        blob_id = f"blob_{uuid.uuid4().hex[:26].upper()}"
         with Session(migrated_engine) as session:
-            session.execute(
-                text(
-                    "INSERT INTO blob (blob_id, state, sha256, size_bytes, media_type) "
-                    "VALUES (:b, 'temporary', :s, 1, 'application/pdf')"
-                ),
-                {"b": blob_id, "s": "a" * 64},
-            )
-            session.flush()
-            with pytest.raises(DBAPIError):
-                session.execute(
-                    text(
-                        "INSERT INTO blob (blob_id, state, sha256, size_bytes, media_type) "
-                        "VALUES (:b, 'temporary', :s, 1, 'application/pdf')"
-                    ),
-                    {"b": blob_id, "s": "a" * 64},
-                )
-                session.flush()
-            session.rollback()
+            comment = session.execute(
+                text("SELECT obj_description('uq_blob_available_content'::regclass, 'pg_class')")
+            ).scalar()
+        assert comment is not None, "the index carries no comment at all"
+        assert "does NOT let a rejected blob be re-uploaded" in comment
+        assert "must not block a later good upload" not in comment
 
 
 class TestTheProvenanceVocabularyFits:

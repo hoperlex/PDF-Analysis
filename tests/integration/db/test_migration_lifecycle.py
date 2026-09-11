@@ -115,9 +115,21 @@ def test_clean_install_runs_against_postgresql_and_not_sqlite(
 
 
 def test_the_head_is_single_and_the_history_is_linear() -> None:
+    """Asserts the shape, not the enumeration.
+
+    This test used to pin the exact revision list, so every migration broke it and the fix
+    was to paste the new name in - which is not a linearity check, it is a transcription
+    exercise that happens to fail. It now asserts what its own name says: the walk starts at
+    the baseline, has no gaps or forks, and ends at the single declared head.
+    """
     walk = revision_walk()
-    assert walk == ["0001_baseline", "0002_pc01_schema"]
-    assert head_revision() == "0002_pc01_schema"
+    assert walk, "the revision walk is empty"
+    assert walk[0] == "0001_baseline", "the history does not start at the baseline"
+    assert len(set(walk)) == len(walk), f"a revision appears twice: {walk}"
+    assert head_revision() == walk[-1], (
+        f"the declared head {head_revision()} is not the end of the walk {walk}"
+    )
+    assert len(walk) >= 2, "the walk is too short to have exercised the P02 head"
 
 
 def test_stamped_revision_equals_the_declared_head(migrated_engine: Engine) -> None:

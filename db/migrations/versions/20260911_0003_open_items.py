@@ -19,28 +19,29 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # 1. The blob content index promised something it could not deliver.
+    # 1. The blob content index says what it actually does.
     #
-    # Its comment read "a rejected or erased blob must not block a later good upload", and
-    # scoping it `WHERE state = 'available'` would achieve that only if blob_id were
-    # allocated. It is derived from (sha256, size) - `machines.blob.retry` requires that
-    # re-uploading identical content be idempotent by content - and blob_id is the PRIMARY
-    # KEY, so content uniqueness already holds in every state and the partial scope bought
-    # nothing. Session B1 found it by reading both halves; neither A1 nor A3 could, because
-    # each had written only one.
+    # B1 reported that its comment - "a rejected or erased blob must not block a later good
+    # upload" - cannot be true, because blob_id is derived from (sha256, size) and is the
+    # primary key, so a rejected blob bans those bytes regardless of the scope. That much is
+    # correct and the owner accepted the consequence.
     #
-    # The owner ruled: accept the consequence, correct the claim. Rejected bytes are
-    # permanently banned, the PC-01 ingest path never rejects - B1 designed around it and
-    # pinned that with a test - and the index stops describing behaviour nobody has.
-    op.execute("DROP INDEX IF EXISTS uq_blob_available_content;")
+    # **Dropping the index was wrong and two tests caught it.** The database does not know
+    # that blob_id is derived; the storage adapter guarantees that, and nothing in the schema
+    # does. Without the partial index, two `available` rows with different blob_ids and
+    # identical content insert cleanly - so it was the only content-uniqueness guarantee the
+    # database itself held, and removing it deleted a real invariant to fix a false comment.
+    #
+    # The index stays. The comment is corrected instead, which is all that was ever wrong.
     op.execute(
         """
-        COMMENT ON COLUMN blob.sha256 IS
-            'Content checksum. Uniqueness of (sha256, size_bytes) is enforced by the '
-            'PRIMARY KEY on blob_id, which is DERIVED from exactly those two values, so '
-            'it holds in every state rather than only in available. A rejected blob '
-            'therefore bans those bytes permanently. The PC-01 ingest path never rejects: '
-            'it probes before claiming a key, so a refused upload creates no row at all.';
+        COMMENT ON INDEX uq_blob_available_content IS
+            'Content uniqueness among available blobs, enforced by the database itself. '
+            'It does NOT let a rejected blob be re-uploaded: blob_id is derived from '
+            '(sha256, size) by the storage adapter and is the primary key, so those bytes '
+            'are banned in every state. The scope to available is what the database can '
+            'guarantee without knowing how blob_id is chosen. The PC-01 ingest path never '
+            'rejects - it probes before claiming a key - so a refused upload writes no row.';
         """
     )
 
@@ -96,12 +97,5 @@ def downgrade() -> None:
         """
         ALTER TABLE model_call ADD CONSTRAINT ck_model_call_status
             CHECK (status IN ('succeeded', 'failed'));
-        """
-    )
-    op.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_blob_available_content
-            ON blob (sha256, size_bytes)
-            WHERE state = 'available';
         """
     )
