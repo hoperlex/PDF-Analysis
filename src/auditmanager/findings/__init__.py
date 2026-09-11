@@ -48,6 +48,7 @@ from auditmanager.findings.queries import (
     observation_belongs_to_finding,
     published_finding_count,
     published_finding_evidence,
+    finding_by_uid,
     published_findings,
 )
 from auditmanager.findings.terminal import (
@@ -91,6 +92,7 @@ __all__ = [
     "publish_gate_result",
     "published_finding_count",
     "published_finding_evidence",
+    "finding_by_uid",
     "published_findings",
     "run_grounding_gate",
     "select_terminal",

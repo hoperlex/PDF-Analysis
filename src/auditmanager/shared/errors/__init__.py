@@ -10,6 +10,7 @@ from auditmanager.shared.errors.codes import ErrorCode, from_internal
 from auditmanager.shared.errors.envelope import (
     ErrorEnvelope,
     UnsafeDetailKey,
+    UnsafeDetailValue,
     UnsafeMessage,
     build,
     screen_message,
@@ -24,6 +25,7 @@ __all__ = [
     "DomainError",
     "InternalError",
     "UnsafeDetailKey",
+    "UnsafeDetailValue",
     "UnsafeMessage",
     "build",
     "from_internal",

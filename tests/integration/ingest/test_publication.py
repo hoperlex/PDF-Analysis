@@ -116,6 +116,13 @@ def test_return_value_carries_no_filename_ordinal_key_or_path(
     outcome = upload(service, project, baseline_pdf, key)
     track(outcome.version.source.blob_id)
 
+    # `version_ordinal` is deliberately NOT in this set. Foundation invariant 3 says a
+    # display ordinal is not an *identifier*; it does not say it may not be shown, and the
+    # frozen `DocumentVersion` schema in contracts/api/v1 lists it as **required**.
+    # Withholding it left getDocumentVersion and uploadDocument unable to emit a conformant
+    # body from this surface at all - B6 found that, and it blocked Gate C. The invariant is
+    # enforced where it actually bites, by `test_no_version_is_resolved_by_its_ordinal`:
+    # nothing looks a version up by ordinal, so the ordinal is a label, never a key.
     forbidden_names = {
         "bucket",
         "current_version_uid",
@@ -128,7 +135,6 @@ def test_return_value_carries_no_filename_ordinal_key_or_path(
         "source_filename",
         "uri",
         "url",
-        "version_ordinal",
     }
     seen_values: list[object] = []
 
@@ -258,3 +264,30 @@ def test_unknown_project_is_refused_before_anything_is_published(
             connection.execute(text("SELECT count(*) FROM command_record")).scalar_one()
             == 0
         ), "a bad target burned an idempotency key"
+
+
+def test_no_version_is_resolved_by_its_ordinal() -> None:
+    """The ordinal is a label, never a key.
+
+    This is what foundation invariant 3 actually forbids. `version_ordinal` may be shown -
+    the frozen contract requires it on `DocumentVersion` - but nothing may address a
+    version by it. A `WHERE version_ordinal = ...` anywhere in the package would mean the
+    ordinal had become an identifier.
+
+    The allocation query `max(version_ordinal) + 1` is excluded: it computes the next
+    label, it does not resolve a version.
+    """
+    import pathlib
+    import re
+
+    package = pathlib.Path(__file__).resolve().parents[3] / "src" / "auditmanager"
+    sources = [p for p in package.rglob("*.py")]
+    assert len(sources) > 20, "the sweep found too few sources to be meaningful"
+
+    resolving = re.compile(r"version_ordinal\s*=\s*:|WHERE[^\n]*version_ordinal\s*=", re.I)
+    offenders = [
+        str(p.relative_to(package))
+        for p in sources
+        if resolving.search(p.read_text(encoding="utf-8"))
+    ]
+    assert offenders == [], f"a version is being resolved by its ordinal in: {offenders}"

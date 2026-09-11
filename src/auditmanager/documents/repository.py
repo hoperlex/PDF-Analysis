@@ -91,7 +91,8 @@ _POINT_DOCUMENT_AT_VERSION = text(
     "WHERE document_uid = :document_uid"
 )
 _SELECT_VERSION = text(
-    "SELECT v.version_uid, v.document_uid, d.project_uid, v.media_type, v.byte_size,"
+    "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
+    "       v.media_type, v.byte_size,"
     "       v.sha256, v.page_count, v.published_at "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
     "WHERE v.version_uid = :version_uid"
@@ -248,6 +249,7 @@ class DocumentRepository:
             found_version_uid,
             document_uid,
             project_uid,
+            version_ordinal,
             media_type,
             byte_size,
             sha256,
@@ -258,6 +260,7 @@ class DocumentRepository:
             version_uid=VersionUid(found_version_uid),
             document_uid=DocumentUid(document_uid),
             project_uid=ProjectUid(project_uid),
+            version_ordinal=int(version_ordinal),
             media_type=media_type,
             byte_size=int(byte_size),
             sha256=sha256,
