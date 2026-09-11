@@ -185,3 +185,61 @@ class TestCreateProjectHonoursItsKey:
         _, one = call(app, "POST", "/projects", body={"name": "A"}, key=_key("idem"))
         _, two = call(app, "POST", "/projects", body={"name": "A"}, key=_key("idem"))
         assert one["project_uid"] != two["project_uid"]
+
+
+class TestTheAdaptersHonourWhatThePortsDeclare:
+    """A declared parameter that an adapter swallows is worse than one that is refused.
+
+    The router read `category` and `verdict`, validated them against their enums and passed
+    them; the adapter took `**_` and dropped both, so a filtered request returned everything
+    and looked like it had worked. This checks the shape rather than the behaviour, because
+    the behaviour needs a populated run and the shape is what silently drifted.
+    """
+
+    def test_every_adapter_accepts_every_parameter_its_port_declares(self) -> None:
+        import inspect
+
+        from auditmanager.api.routers import ports as port_module
+        from auditmanager.bootstrap import adapters as adapter_module
+
+        pairs = [
+            ("ProjectPort", "ProjectAdapter"),
+            ("DocumentPort", "DocumentAdapter"),
+            ("RunPort", "RunAdapter"),
+            ("FindingPort", "FindingAdapter"),
+            ("DecisionPort", "DecisionAdapter"),
+            ("CsvExportPort", "CsvExportAdapter"),
+        ]
+        assert len(pairs) == 6, "the six ports build_router takes"
+
+        problems: list[str] = []
+        for port_name, adapter_name in pairs:
+            port = getattr(port_module, port_name)
+            adapter = getattr(adapter_module, adapter_name)
+            for method_name in dir(port):
+                if method_name.startswith("_"):
+                    continue
+                port_method = getattr(port, method_name, None)
+                adapter_method = getattr(adapter, method_name, None)
+                if not callable(port_method) or adapter_method is None:
+                    continue
+                declared = {
+                    name
+                    for name, p in inspect.signature(port_method).parameters.items()
+                    if name != "self" and p.kind is not p.VAR_KEYWORD
+                }
+                signature = inspect.signature(adapter_method)
+                accepted = {n for n in signature.parameters if n != "self"}
+                swallows = any(
+                    p.kind is p.VAR_KEYWORD for p in signature.parameters.values()
+                )
+                missing = declared - accepted
+                if missing:
+                    where = "swallowed by **kwargs" if swallows else "absent"
+                    problems.append(
+                        f"{adapter_name}.{method_name}: {sorted(missing)} {where}"
+                    )
+        assert problems == [], (
+            "an adapter does not accept a parameter its port declares, so the value is "
+            f"dropped between the router and the module: {problems}"
+        )

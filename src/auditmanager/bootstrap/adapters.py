@@ -124,14 +124,20 @@ class DocumentAdapter:
         *,
         project_uid: str,
         content: bytes,
-        filename: str | None = None,
+        source_filename: str | None = None,
         display_title: str | None = None,
         idempotency_key: str = "",
-        **_: Any,
     ) -> Any:
+        """The port declares ``source_filename``; this method called it ``filename``.
+
+        The router passed the declared name, no parameter matched, and it fell into a
+        ``**kwargs`` that discarded it - so every upload was stored under a default name and
+        nothing said so. A parameter renamed in an adapter is not a rename, it is a deletion
+        with a plausible signature.
+        """
         from auditmanager.shared.identity import IdempotencyKey, ProjectUid
 
-        name = filename or "upload.pdf"
+        name = source_filename or "upload.pdf"
         outcome = self._service.upload_single_pdf(
             project_uid=ProjectUid.parse(project_uid),
             content=content,
@@ -191,8 +197,31 @@ class RunAdapter(_SessionHolder):
         self._profile = analysis_profile_id
         self._bundle = prompt_bundle_id
 
-    def start_run(self, *, version_uid: str, idempotency_key: str, **_: Any) -> Any:
+    def start_run(
+        self,
+        *,
+        version_uid: str,
+        idempotency_key: str,
+        provider_mode: str | None = None,
+    ) -> Any:
+        """A caller-supplied provider mode is refused, never silently overridden.
+
+        The port declares the parameter and this method used to swallow it, always using
+        the configured mode instead. That is the right *outcome* and the wrong way to reach
+        it: a client asking for `live` against a recorded deployment was told nothing and
+        got a recorded run. Silently substituting a mode is the same failure class as
+        publishing a recorded run as live, which `B-III` found one level down.
+        """
         from auditmanager.runs import execute_run, start_audit_run
+
+        if provider_mode is not None and provider_mode != self._provider_mode:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message=(
+                    "the requested provider mode is not the one this deployment is "
+                    "configured to provide; a run is never silently given a different one"
+                ),
+            )
 
         def work(session: Session) -> Any:
             started = start_audit_run(
@@ -302,17 +331,42 @@ def _finding_view(row: Any, evidence: Sequence[Any], verdict: Any) -> FindingVie
 
 
 class FindingAdapter(_SessionHolder):
-    def list_run_findings(self, *, run_id: str, **_: Any) -> Sequence[FindingView]:
+    def list_run_findings(
+        self,
+        *,
+        run_id: str,
+        category: str | None = None,
+        verdict: str | None = None,
+    ) -> Sequence[FindingView]:
+        """The published findings of one run, filtered as the contract declares.
+
+        The first version of this method took ``**_`` and swallowed both filters. The
+        router read them, validated them against their enums and passed them; the adapter
+        dropped them silently, so `?category=explicit_placeholder` returned everything and
+        looked like it had worked. A filter that is accepted and ignored is worse than one
+        that is refused.
+
+        Filtering here rather than in SQL is deliberate for PC-01: a run publishes a handful
+        of findings, the router already paginates the ordered sequence in memory, and pushing
+        a predicate into the query would add a second place for the ordering contract to
+        drift. If a run ever publishes enough findings for that to matter, this is the line
+        to move, and the port signature does not change when it does.
+        """
         from auditmanager.decisions import current_verdict
         from auditmanager.findings import published_finding_evidence, published_findings
 
         def work(session: Session) -> Sequence[FindingView]:
             rows = published_findings(session, run_id)
             evidence = published_finding_evidence(session, run_id)
-            return tuple(
+            views = [
                 _finding_view(r, evidence, current_verdict(session, r.finding_uid))
                 for r in rows
-            )
+            ]
+            if category is not None:
+                views = [v for v in views if v.category == category]
+            if verdict is not None:
+                views = [v for v in views if v.current_verdict == verdict]
+            return tuple(views)
 
         return self._read(work)
 
