@@ -20,86 +20,164 @@
     }
   ],
   "tags": [
-    { "name": "projects", "description": "Create and list projects." },
-    { "name": "documents", "description": "Upload one PDF and read the published version." },
-    { "name": "runs", "description": "Start a run and read its per-stage status." },
-    { "name": "findings", "description": "Published findings, their evidence and detail." },
-    { "name": "decisions", "description": "The append-only expert decision ledger." },
-    { "name": "export", "description": "Synchronous CSV export of one run." }
+    {
+      "name": "projects",
+      "description": "Create and list projects."
+    },
+    {
+      "name": "documents",
+      "description": "Upload one PDF and read the published version."
+    },
+    {
+      "name": "runs",
+      "description": "Start a run and read its per-stage status."
+    },
+    {
+      "name": "findings",
+      "description": "Published findings, their evidence and detail."
+    },
+    {
+      "name": "decisions",
+      "description": "The append-only expert decision ledger."
+    },
+    {
+      "name": "export",
+      "description": "Synchronous CSV export of one run."
+    }
   ],
   "paths": {
     "/projects": {
       "post": {
         "operationId": "createProject",
-        "tags": ["projects"],
+        "tags": [
+          "projects"
+        ],
         "summary": "Create a project.",
         "parameters": [
-          { "$ref": "#/components/parameters/IdempotencyKey" },
-          { "$ref": "#/components/parameters/CorrelationId" }
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateProjectRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
             }
           }
         },
         "responses": {
           "201": {
             "description": "The project was created, or the recorded outcome of an identical earlier request was replayed.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/Project" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
             }
           },
-          "409": { "$ref": "#/components/responses/IdempotencyConflict" },
-          "422": { "$ref": "#/components/responses/ValidationFailed" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       },
       "get": {
         "operationId": "listProjects",
-        "tags": ["projects"],
+        "tags": [
+          "projects"
+        ],
         "summary": "List projects, newest first.",
         "parameters": [
-          { "$ref": "#/components/parameters/Cursor" },
-          { "$ref": "#/components/parameters/Limit" },
-          { "$ref": "#/components/parameters/CorrelationId" }
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "One page of projects.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ProjectPage" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectPage"
+                }
+              }
             }
           },
-          "422": { "$ref": "#/components/responses/ValidationFailed" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       }
     },
     "/projects/{project_uid}/documents": {
-      "parameters": [{ "$ref": "#/components/parameters/ProjectUid" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectUid"
+        }
+      ],
       "post": {
         "operationId": "uploadDocument",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "summary": "Upload one PDF and publish an immutable document version.",
         "description": "The whole PC-01 ingest path. The accepted envelope is one unencrypted PDF, at most 25 MiB and at most 30 pages, every page carrying extractable embedded text. A scanned or image-only file, a password-protected file, a non-PDF, an oversize file, an over-page-count file and a companion or archive upload are each refused with `validation_failed` and a `constraint` detail. OCR is never silently substituted.\n\nOn success the version and its input manifest are immutable: there is no update or delete endpoint for either, and the database refuses both.",
         "parameters": [
-          { "$ref": "#/components/parameters/IdempotencyKey" },
-          { "$ref": "#/components/parameters/CorrelationId" }
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "multipart/form-data": {
-              "schema": { "$ref": "#/components/schemas/UploadDocumentRequest" },
+              "schema": {
+                "$ref": "#/components/schemas/UploadDocumentRequest"
+              },
               "encoding": {
-                "file": { "contentType": "application/pdf" }
+                "file": {
+                  "contentType": "application/pdf"
+                }
               }
             }
           }
@@ -107,284 +185,542 @@
         "responses": {
           "201": {
             "description": "A published, immutable document version.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/DocumentVersion" }
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVersion"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "409": { "$ref": "#/components/responses/IdempotencyConflict" },
-          "422": { "$ref": "#/components/responses/UploadRejected" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UploadRejected"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       }
     },
     "/versions/{version_uid}": {
-      "parameters": [{ "$ref": "#/components/parameters/VersionUid" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/VersionUid"
+        }
+      ],
       "get": {
         "operationId": "getDocumentVersion",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "summary": "Read one published document version.",
-        "parameters": [{ "$ref": "#/components/parameters/CorrelationId" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
         "responses": {
           "200": {
             "description": "The version and its input manifest.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/DocumentVersion" }
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVersion"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       }
     },
     "/versions/{version_uid}/content": {
-      "parameters": [{ "$ref": "#/components/parameters/VersionUid" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/VersionUid"
+        }
+      ],
       "get": {
         "operationId": "streamDocumentVersionContent",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "summary": "Stream the PDF bytes for the viewer.",
         "description": "The server streams the bytes itself. It does not redirect and does not return a presigned link: a URL into object storage is exactly the internal address the contract forbids putting in a response, and it would also outlive the request that authorized it.",
         "parameters": [
-          { "$ref": "#/components/parameters/CorrelationId" },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
           {
             "name": "Range",
             "in": "header",
             "required": false,
             "description": "Byte range, so the viewer can page a large document without fetching all of it.",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "The complete PDF.",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
               "Content-Length": {
                 "description": "Byte size of the published version.",
-                "schema": { "type": "integer", "minimum": 0 }
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
               }
             },
             "content": {
-              "application/pdf": { "schema": { "type": "string", "format": "binary" } }
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
             }
           },
           "206": {
             "description": "The requested byte range.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
-              "application/pdf": { "schema": { "type": "string", "format": "binary" } }
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "422": { "$ref": "#/components/responses/StorageIntegrityError" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/StorageIntegrityError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       }
     },
     "/runs": {
       "post": {
         "operationId": "startRun",
-        "tags": ["runs"],
+        "tags": [
+          "runs"
+        ],
         "summary": "Start a text-consistency run over one published version.",
         "description": "PD-03, in the subset PC-01 exercises. A new idempotency key creates a run. The same key with the same payload returns the existing run and creates nothing, whatever state that run is in, terminal included. The same key with a different payload returns `idempotency_key_reuse` and creates nothing. A new key over a terminal run creates a new run and leaves the terminal one exactly as it was: a terminal run is never reopened.",
         "parameters": [
-          { "$ref": "#/components/parameters/IdempotencyKey" },
-          { "$ref": "#/components/parameters/CorrelationId" }
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/StartRunRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/StartRunRequest"
+              }
             }
           }
         },
         "responses": {
           "202": {
             "description": "The run exists. A replay under the same key and payload returns the same run and this same status.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RunStatus" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStatus"
+                }
+              }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "409": { "$ref": "#/components/responses/IdempotencyConflict" },
-          "422": { "$ref": "#/components/responses/RunInputInvalid" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/RunInputInvalid"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       }
     },
     "/runs/{run_id}": {
-      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        }
+      ],
       "get": {
         "operationId": "getRunStatus",
-        "tags": ["runs"],
+        "tags": [
+          "runs"
+        ],
         "summary": "Read run state and per-stage state.",
         "description": "The polling target. `state` is the contract run state; `stages` carries one entry per stage the run scheduled, with the `StageResult` status vocabulary. A client stops polling on any terminal state.",
-        "parameters": [{ "$ref": "#/components/parameters/CorrelationId" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Current run state.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/RunStatus" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStatus"
+                }
+              }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       }
     },
     "/runs/{run_id}/findings": {
-      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        }
+      ],
       "get": {
         "operationId": "listRunFindings",
-        "tags": ["findings"],
+        "tags": [
+          "findings"
+        ],
         "summary": "List the published findings of one run, with their evidence.",
         "description": "Published means grounded: every listed finding's quotations were verified present at their declared anchors. An ungrounded model item is not a finding, does not appear here and is retained only as run diagnostics.",
         "parameters": [
-          { "$ref": "#/components/parameters/Cursor" },
-          { "$ref": "#/components/parameters/Limit" },
-          { "$ref": "#/components/parameters/CategoryFilter" },
-          { "$ref": "#/components/parameters/VerdictFilter" },
-          { "$ref": "#/components/parameters/CorrelationId" }
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CategoryFilter"
+          },
+          {
+            "$ref": "#/components/parameters/VerdictFilter"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "One page of findings.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/FindingPage" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingPage"
+                }
+              }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "422": { "$ref": "#/components/responses/ValidationFailed" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       }
     },
     "/findings/{finding_uid}": {
-      "parameters": [{ "$ref": "#/components/parameters/FindingUid" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/FindingUid"
+        }
+      ],
       "get": {
         "operationId": "getFinding",
-        "tags": ["findings"],
+        "tags": [
+          "findings"
+        ],
         "summary": "Read one finding with its observation, evidence and provenance.",
-        "parameters": [{ "$ref": "#/components/parameters/CorrelationId" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
         "responses": {
           "200": {
             "description": "The finding detail.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/FindingDetail" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingDetail"
+                }
+              }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       }
     },
     "/findings/{finding_uid}/decisions": {
-      "parameters": [{ "$ref": "#/components/parameters/FindingUid" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/FindingUid"
+        }
+      ],
       "post": {
         "operationId": "appendDecision",
-        "tags": ["decisions"],
+        "tags": [
+          "decisions"
+        ],
         "summary": "Append one expert decision event.",
         "description": "Append-only. Nothing is updated: an accept after a reject is a third event, and the current verdict is a projection over the stream. Replaying under one idempotency key appends exactly one event, which the database enforces rather than the handler promising it.\n\nPC-01 emits `accept`, `reject` and `comment`. `revoke` is declared so the PD-01 revocation semantics stay implementable without a schema change; no PC-01 client offers it.",
         "parameters": [
-          { "$ref": "#/components/parameters/IdempotencyKey" },
-          { "$ref": "#/components/parameters/CorrelationId" }
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AppendDecisionRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/AppendDecisionRequest"
+              }
             }
           }
         },
         "responses": {
           "201": {
             "description": "The appended event, and the projection that now follows from the stream.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AppendDecisionResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/AppendDecisionResponse"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "409": { "$ref": "#/components/responses/IdempotencyConflict" },
-          "422": { "$ref": "#/components/responses/ValidationFailed" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       },
       "get": {
         "operationId": "listDecisionHistory",
-        "tags": ["decisions"],
+        "tags": [
+          "decisions"
+        ],
         "summary": "Read the decision history of one finding, oldest first.",
         "description": "Ordered by `(recorded_at, decision_id)`, which is a total order and is stable across pages. The server's row sequence is never exposed, in a field or inside a cursor.",
         "parameters": [
-          { "$ref": "#/components/parameters/Cursor" },
-          { "$ref": "#/components/parameters/Limit" },
-          { "$ref": "#/components/parameters/CorrelationId" }
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "One page of decision events.",
-            "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/DecisionEventPage" }
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionEventPage"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "422": { "$ref": "#/components/responses/ValidationFailed" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       }
     },
     "/runs/{run_id}/export.csv": {
-      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        }
+      ],
       "get": {
         "operationId": "exportRunCsv",
-        "tags": ["export"],
+        "tags": [
+          "export"
+        ],
         "summary": "Download the CSV for one run.",
         "description": "Synchronous. Nothing is created, so there is no export resource, no export identity and nothing to poll. Repeating the request returns byte-identical bytes.\n\nThe discriminator is the frozen `terminal_semantics.publishes_result` flag, not a hand-written state list (`OD-11`). A run whose terminal declares `publishes_result: true` - `published` or `partial` - is exported, with the degraded state carried explicitly in the `run_state` column rather than as a silent empty file. Every other state is refused with `state_transition_not_allowed`: a non-terminal run, and the terminal `failed`. `cancelled` is likewise not exportable and is unreachable in PC-01. `partial_result_not_publishable` is never emitted by this surface.\n\nBytes: UTF-8 with a byte-order mark, comma delimiter, CRLF line ending, RFC 4180 quoting. The column list and its order are frozen in `docs/program/P02_SEAMS.md` section 6.",
-        "parameters": [{ "$ref": "#/components/parameters/CorrelationId" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
         "responses": {
           "200": {
             "description": "The CSV for this exact project, version and run.",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
               "Content-Disposition": {
                 "description": "Attachment with a display file name built from opaque identifiers. The file name is presentation only and is never an identity.",
-                "schema": { "type": "string" }
+                "schema": {
+                  "type": "string"
+                }
               }
             },
             "content": {
-              "text/csv": { "schema": { "type": "string", "format": "binary" } }
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "409": { "$ref": "#/components/responses/RunNotExportable" },
-          "500": { "$ref": "#/components/responses/InternalError" },
-          "503": { "$ref": "#/components/responses/DependencyUnavailable" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/RunNotExportable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
         }
       }
     }
@@ -396,137 +732,234 @@
         "in": "header",
         "required": true,
         "description": "Client-supplied command key. Passed through to the owning command handler unchanged and never re-derived in the router. Never returned in a response body and never placed in an error envelope: it is a forbidden detail key.",
-        "schema": { "$ref": "#/components/schemas/IdempotencyKey" }
+        "schema": {
+          "$ref": "#/components/schemas/IdempotencyKey"
+        }
       },
       "CorrelationId": {
         "name": "X-Correlation-Id",
         "in": "header",
         "required": false,
         "description": "Correlates this request with its diagnostic record. The edge assigns one when the caller does not supply it.",
-        "schema": { "$ref": "#/components/schemas/CorrelationId" }
+        "schema": {
+          "$ref": "#/components/schemas/CorrelationId"
+        }
       },
       "Cursor": {
         "name": "cursor",
         "in": "query",
         "required": false,
         "description": "Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one.",
-        "schema": { "$ref": "#/components/schemas/Cursor" }
+        "schema": {
+          "$ref": "#/components/schemas/Cursor"
+        }
       },
       "Limit": {
         "name": "limit",
         "in": "query",
         "required": false,
         "description": "Page size.",
-        "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        }
       },
       "CategoryFilter": {
         "name": "category",
         "in": "query",
         "required": false,
         "description": "Restrict the page to one finding category.",
-        "schema": { "$ref": "#/components/schemas/FindingCategory" }
+        "schema": {
+          "$ref": "#/components/schemas/FindingCategory"
+        }
       },
       "VerdictFilter": {
         "name": "verdict",
         "in": "query",
         "required": false,
         "description": "Restrict the page to findings whose current projected verdict is this value.",
-        "schema": { "$ref": "#/components/schemas/Verdict" }
+        "schema": {
+          "$ref": "#/components/schemas/Verdict"
+        }
       },
       "ProjectUid": {
         "name": "project_uid",
         "in": "path",
         "required": true,
-        "schema": { "$ref": "#/components/schemas/ProjectUid" }
+        "schema": {
+          "$ref": "#/components/schemas/ProjectUid"
+        }
       },
       "VersionUid": {
         "name": "version_uid",
         "in": "path",
         "required": true,
-        "schema": { "$ref": "#/components/schemas/VersionUid" }
+        "schema": {
+          "$ref": "#/components/schemas/VersionUid"
+        }
       },
       "RunId": {
         "name": "run_id",
         "in": "path",
         "required": true,
-        "schema": { "$ref": "#/components/schemas/RunId" }
+        "schema": {
+          "$ref": "#/components/schemas/RunId"
+        }
       },
       "FindingUid": {
         "name": "finding_uid",
         "in": "path",
         "required": true,
-        "schema": { "$ref": "#/components/schemas/FindingUid" }
+        "schema": {
+          "$ref": "#/components/schemas/FindingUid"
+        }
       }
     },
     "headers": {
       "CorrelationId": {
         "description": "Present on every response, success or failure, so an operator can find the diagnostic record without the response carrying unsafe content.",
         "required": true,
-        "schema": { "$ref": "#/components/schemas/CorrelationId" }
+        "schema": {
+          "$ref": "#/components/schemas/CorrelationId"
+        }
       }
     },
     "responses": {
       "NotFound": {
         "description": "The addressed aggregate does not exist or is not visible. The response never reveals the existence of a resource the caller may not see.",
-        "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
         }
       },
       "ValidationFailed": {
         "description": "The request or payload violates a declared schema, enum, format or invariant. Nothing was created or changed.",
-        "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
         }
       },
       "UploadRejected": {
         "description": "The upload failed the PC-01 input envelope (`validation_failed`) or its bytes did not match their declared checksum or size (`storage_integrity_error`). In both cases nothing was published: no version row, no manifest and no readable object.",
-        "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
         }
       },
       "StorageIntegrityError": {
         "description": "Stored bytes do not match their declared identity.",
-        "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
         }
       },
       "RunInputInvalid": {
         "description": "The declared analysis inputs are not structurally acceptable (`analysis_input_invalid`) or the request itself is invalid (`validation_failed`).",
-        "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
         }
       },
       "IdempotencyConflict": {
         "description": "One of: `idempotency_key_reuse`, the same key with a different payload, which creates and changes nothing; `idempotency_key_in_progress`, the same key and payload still executing, which the caller retries under the same key and never re-issues under a new one; `idempotency_key_stale`, the recorded outcome is no longer available and is not guessed; or `conflict` for a uniqueness invariant with no more specific code.",
-        "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
         }
       },
       "RunNotExportable": {
         "description": "`state_transition_not_allowed`. The run's terminal does not publish a result - a non-terminal run, or the terminal `failed` - so there is no download. A `partial` run is exported and is never refused here.",
-        "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
         }
       },
       "InternalError": {
         "description": "An unclassified server fault, or a declared run failure. The original internal code stays in protected diagnostics and never reaches this envelope.",
-        "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
         }
       },
       "DependencyUnavailable": {
-        "description": "`dependency_unavailable`, the one retryable code in this surface. The caller retries; nothing was partially applied.",
-        "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" } },
+        "description": "`dependency_unavailable`. The caller retries; nothing was partially applied. `idempotency_key_in_progress` is also retryable and is reachable on every write, so a caller reads `retryable` from the envelope, where the catalog pins it per code, and never infers it from the status or from a description like this one.",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
         }
       }
     },
@@ -535,39 +968,53 @@
         "type": "string",
         "description": "Opaque project identity.",
         "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
-        "examples": ["prj_01M2545JSD15ETSNNV904X991F"]
+        "examples": [
+          "prj_01M2545JSD15ETSNNV904X991F"
+        ]
       },
       "DocumentUid": {
         "type": "string",
         "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$",
-        "examples": ["doc_01M2545JSD15ETSNNV904X991G"]
+        "examples": [
+          "doc_01M2545JSD15ETSNNV904X991G"
+        ]
       },
       "VersionUid": {
         "type": "string",
         "pattern": "^ver_[0-9A-HJKMNP-TV-Z]{26}$",
-        "examples": ["ver_01M2545JSD15ETSNNV904X991J"]
+        "examples": [
+          "ver_01M2545JSD15ETSNNV904X991J"
+        ]
       },
       "RunId": {
         "type": "string",
         "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
-        "examples": ["run_01M2545JSD15ETSNNV904X991K"]
+        "examples": [
+          "run_01M2545JSD15ETSNNV904X991K"
+        ]
       },
       "FindingUid": {
         "type": "string",
         "description": "Durable semantic issue identity, carrying expert history across reruns.",
         "pattern": "^fnd_[0-9A-HJKMNP-TV-Z]{26}$",
-        "examples": ["fnd_01M2545JSD15ETSNNV904X991M"]
+        "examples": [
+          "fnd_01M2545JSD15ETSNNV904X991M"
+        ]
       },
       "FindingObservationId": {
         "type": "string",
         "description": "Immutable evidence emitted by exactly one run.",
         "pattern": "^fobs_[0-9A-HJKMNP-TV-Z]{26}$",
-        "examples": ["fobs_01M2545JSD15ETSNNV904X991N"]
+        "examples": [
+          "fobs_01M2545JSD15ETSNNV904X991N"
+        ]
       },
       "DecisionId": {
         "type": "string",
         "pattern": "^dec_[0-9A-HJKMNP-TV-Z]{26}$",
-        "examples": ["dec_01M2545JSD15ETSNNV904X991P"]
+        "examples": [
+          "dec_01M2545JSD15ETSNNV904X991P"
+        ]
       },
       "AnalysisProfileId": {
         "type": "string",
@@ -609,11 +1056,20 @@
       "PageInfo": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["next_cursor"],
+        "required": [
+          "next_cursor"
+        ],
         "properties": {
           "next_cursor": {
             "description": "Token for the next page, or null when this is the last page.",
-            "oneOf": [{ "$ref": "#/components/schemas/Cursor" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Cursor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -647,25 +1103,47 @@
         "type": "object",
         "description": "The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message.",
         "additionalProperties": false,
-        "required": ["contract_version", "error_code", "message", "correlation_id", "retryable"],
+        "required": [
+          "contract_version",
+          "error_code",
+          "message",
+          "correlation_id",
+          "retryable"
+        ],
         "properties": {
-          "contract_version": { "const": "1.0.0-draft.1" },
-          "error_code": { "$ref": "#/components/schemas/ErrorCode" },
+          "contract_version": {
+            "const": "1.0.0-draft.1"
+          },
+          "error_code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
           "message": {
             "type": "string",
             "description": "Stable caller-safe sentence. No path, object key, URL, credential, token, prompt, payload, query or stack content.",
             "minLength": 1,
             "maxLength": 512
           },
-          "correlation_id": { "$ref": "#/components/schemas/CorrelationId" },
-          "retryable": { "type": "boolean" },
+          "correlation_id": {
+            "$ref": "#/components/schemas/CorrelationId"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
           "details": {
             "type": "object",
             "description": "Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected.",
             "maxProperties": 16,
-            "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+            "propertyNames": {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
             "additionalProperties": {
-              "type": ["string", "number", "integer", "boolean", "null"],
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ],
               "maxLength": 256
             }
           }
@@ -688,7 +1166,12 @@
       "StageStatus": {
         "type": "string",
         "description": "StageResult statuses from contracts/analysis/v1. A `succeeded` stage carries no error; every other status carries one.",
-        "enum": ["succeeded", "partial", "failed", "skipped"]
+        "enum": [
+          "succeeded",
+          "partial",
+          "failed",
+          "skipped"
+        ]
       },
       "StageId": {
         "type": "string",
@@ -708,27 +1191,45 @@
       "ProviderMode": {
         "type": "string",
         "description": "Whether the model call was made live or replayed from a recording. Visible in the UI and in the CSV, because a recorded run is not evidence of a live one.",
-        "enum": ["live", "recorded"]
+        "enum": [
+          "live",
+          "recorded"
+        ]
       },
       "FindingCategory": {
         "type": "string",
         "description": "The only two questions PC-01 answers.",
-        "enum": ["internal_contradiction", "explicit_placeholder"]
+        "enum": [
+          "internal_contradiction",
+          "explicit_placeholder"
+        ]
       },
       "Verdict": {
         "type": "string",
         "description": "The current projected verdict. `pending` when the ledger holds no verdict-bearing event, and after a revocation. `needs_manual_review` is declared for the closed union and has no PC-01 producer.",
-        "enum": ["pending", "accepted", "rejected", "needs_manual_review"]
+        "enum": [
+          "pending",
+          "accepted",
+          "rejected",
+          "needs_manual_review"
+        ]
       },
       "DecisionEventType": {
         "type": "string",
         "description": "PC-01 emits accept, reject and comment. `revoke` is declared so PD-01 revocation stays implementable without a schema change.",
-        "enum": ["accept", "reject", "comment", "revoke"]
+        "enum": [
+          "accept",
+          "reject",
+          "comment",
+          "revoke"
+        ]
       },
       "CreateProjectRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -741,27 +1242,55 @@
       "Project": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["project_uid", "name", "created_at"],
+        "required": [
+          "project_uid",
+          "name",
+          "created_at"
+        ],
         "properties": {
-          "project_uid": { "$ref": "#/components/schemas/ProjectUid" },
-          "name": { "type": "string", "minLength": 1, "maxLength": 200 },
-          "created_at": { "type": "string", "format": "date-time" },
-          "document_count": { "type": "integer", "minimum": 0 }
+          "project_uid": {
+            "$ref": "#/components/schemas/ProjectUid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "document_count": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       },
       "ProjectPage": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["items", "page"],
+        "required": [
+          "items",
+          "page"
+        ],
         "properties": {
-          "items": { "type": "array", "items": { "$ref": "#/components/schemas/Project" } },
-          "page": { "$ref": "#/components/schemas/PageInfo" }
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Project"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
         }
       },
       "UploadDocumentRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["file"],
+        "required": [
+          "file"
+        ],
         "properties": {
           "file": {
             "type": "string",
@@ -780,12 +1309,27 @@
         "type": "object",
         "description": "One role of the immutable input manifest. It carries a blob_id and a checksum and never an object key, bucket or URL.",
         "additionalProperties": false,
-        "required": ["role", "sha256", "size_bytes", "media_type"],
+        "required": [
+          "role",
+          "sha256",
+          "size_bytes",
+          "media_type"
+        ],
         "properties": {
-          "role": { "type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$" },
-          "sha256": { "$ref": "#/components/schemas/Sha256" },
-          "size_bytes": { "type": "integer", "minimum": 0 },
-          "media_type": { "type": "string" }
+          "role": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"
+          },
+          "sha256": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "media_type": {
+            "type": "string"
+          }
         }
       },
       "DocumentVersion": {
@@ -805,36 +1349,73 @@
           "input_manifest"
         ],
         "properties": {
-          "version_uid": { "$ref": "#/components/schemas/VersionUid" },
-          "document_uid": { "$ref": "#/components/schemas/DocumentUid" },
-          "project_uid": { "$ref": "#/components/schemas/ProjectUid" },
+          "version_uid": {
+            "$ref": "#/components/schemas/VersionUid"
+          },
+          "document_uid": {
+            "$ref": "#/components/schemas/DocumentUid"
+          },
+          "project_uid": {
+            "$ref": "#/components/schemas/ProjectUid"
+          },
           "version_ordinal": {
             "type": "integer",
             "minimum": 1,
             "description": "Display and ordering value only. Never an identity and never accepted as a path parameter."
           },
-          "display_title": { "type": "string", "minLength": 1, "maxLength": 400 },
+          "display_title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
           "source_filename": {
             "description": "The uploaded file name, for display. Never an identity.",
-            "oneOf": [{ "type": "string" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "media_type": { "const": "application/pdf" },
-          "byte_size": { "type": "integer", "minimum": 0 },
-          "sha256": { "$ref": "#/components/schemas/Sha256" },
-          "page_count": { "type": "integer", "minimum": 1, "maximum": 30 },
-          "published_at": { "type": "string", "format": "date-time" },
+          "media_type": {
+            "const": "application/pdf"
+          },
+          "byte_size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "page_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "input_manifest": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/InputManifestEntry" }
+            "items": {
+              "$ref": "#/components/schemas/InputManifestEntry"
+            }
           }
         }
       },
       "StartRunRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["version_uid"],
+        "required": [
+          "version_uid"
+        ],
         "properties": {
-          "version_uid": { "$ref": "#/components/schemas/VersionUid" },
+          "version_uid": {
+            "$ref": "#/components/schemas/VersionUid"
+          },
           "provider_mode": {
             "$ref": "#/components/schemas/ProviderMode",
             "description": "Defaults to the server's configured mode. A client asking for `live` is asking to spend money against the OD-03 ceiling."
@@ -844,17 +1425,54 @@
       "StageState": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["stage_id", "status"],
+        "required": [
+          "stage_id",
+          "status"
+        ],
         "properties": {
-          "stage_id": { "$ref": "#/components/schemas/StageId" },
-          "stage_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
-          "status": { "$ref": "#/components/schemas/StageStatus" },
+          "stage_id": {
+            "$ref": "#/components/schemas/StageId"
+          },
+          "stage_version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StageStatus"
+          },
           "error_code": {
             "description": "The typed reason a non-succeeded stage carries. Null exactly when the status is `succeeded`.",
-            "oneOf": [{ "type": "string" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "started_at": { "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
-          "finished_at": { "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] }
+          "started_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finished_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         }
       },
       "RunStatus": {
@@ -870,54 +1488,132 @@
           "created_at"
         ],
         "properties": {
-          "run_id": { "$ref": "#/components/schemas/RunId" },
-          "project_uid": { "$ref": "#/components/schemas/ProjectUid" },
-          "version_uid": { "$ref": "#/components/schemas/VersionUid" },
-          "state": { "$ref": "#/components/schemas/RunState" },
-          "provider_mode": { "$ref": "#/components/schemas/ProviderMode" },
-          "analysis_profile_id": { "$ref": "#/components/schemas/AnalysisProfileId" },
-          "prompt_bundle_id": { "$ref": "#/components/schemas/PromptBundleId" },
+          "run_id": {
+            "$ref": "#/components/schemas/RunId"
+          },
+          "project_uid": {
+            "$ref": "#/components/schemas/ProjectUid"
+          },
+          "version_uid": {
+            "$ref": "#/components/schemas/VersionUid"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RunState"
+          },
+          "provider_mode": {
+            "$ref": "#/components/schemas/ProviderMode"
+          },
+          "analysis_profile_id": {
+            "$ref": "#/components/schemas/AnalysisProfileId"
+          },
+          "prompt_bundle_id": {
+            "$ref": "#/components/schemas/PromptBundleId"
+          },
           "stages": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/StageState" }
+            "items": {
+              "$ref": "#/components/schemas/StageState"
+            }
           },
           "degradation_set": {
             "type": "array",
             "description": "The explicitly recorded missing or degraded stage set. Non-empty exactly when the run is `partial`; a `published` run carries none.",
-            "items": { "$ref": "#/components/schemas/StageId" }
+            "items": {
+              "$ref": "#/components/schemas/StageId"
+            }
           },
           "terminal_reason": {
             "description": "The catalog code a `failed` run terminated with. Null otherwise.",
-            "oneOf": [{ "$ref": "#/components/schemas/ErrorCode" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ErrorCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "interrupted_reason": {
             "description": "OD-10: a run left `running` by a crash is reconciled to `failed` with an explicit interrupted reason. There is no `interrupted` state.",
-            "oneOf": [{ "type": "string" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "published_finding_count": { "type": "integer", "minimum": 0 },
+          "published_finding_count": {
+            "type": "integer",
+            "minimum": 0
+          },
           "diagnostic_observation_count": {
             "type": "integer",
             "minimum": 0,
             "description": "Ungrounded model items rejected by the grounding gate. They are not findings and appear in no finding list."
           },
-          "created_at": { "type": "string", "format": "date-time" },
-          "terminal_at": { "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] }
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "terminal_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         }
       },
       "Evidence": {
         "type": "object",
         "description": "One verified quotation. `char_start` and `char_end` index the document-global character sequence of the prepared text layer, counted in Unicode code points after the declared normalization - see docs/program/P02_SEAMS.md section 4.",
         "additionalProperties": false,
-        "required": ["evidence_ordinal", "page_number", "quote", "char_start", "char_end"],
+        "required": [
+          "evidence_ordinal",
+          "page_number",
+          "quote",
+          "char_start",
+          "char_end"
+        ],
         "properties": {
-          "evidence_ordinal": { "type": "integer", "minimum": 0 },
-          "page_number": { "type": "integer", "minimum": 1 },
-          "quote": { "type": "string", "minLength": 1, "maxLength": 2000 },
-          "char_start": { "type": "integer", "minimum": 0 },
-          "char_end": { "type": "integer", "minimum": 1 },
+          "evidence_ordinal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "page_number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "char_start": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "char_end": {
+            "type": "integer",
+            "minimum": 1
+          },
           "block_id": {
             "description": "Secondary anchor into this version's block index. Not a contract identifier.",
-            "oneOf": [{ "type": "string", "pattern": "^b_[0-9]{6}$" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^b_[0-9]{6}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -925,16 +1621,45 @@
         "type": "object",
         "description": "What produced this observation. Checksums and identities only: never the prompt, the request or the response body.",
         "additionalProperties": false,
-        "required": ["stage_id", "analysis_profile_id", "prompt_bundle_id", "provider_mode"],
+        "required": [
+          "stage_id",
+          "analysis_profile_id",
+          "prompt_bundle_id",
+          "provider_mode"
+        ],
         "properties": {
-          "stage_id": { "$ref": "#/components/schemas/StageId" },
-          "analysis_profile_id": { "$ref": "#/components/schemas/AnalysisProfileId" },
-          "prompt_bundle_id": { "$ref": "#/components/schemas/PromptBundleId" },
-          "provider_mode": { "$ref": "#/components/schemas/ProviderMode" },
-          "model_call_id": {
-            "oneOf": [{ "$ref": "#/components/schemas/ModelCallId" }, { "type": "null" }]
+          "stage_id": {
+            "$ref": "#/components/schemas/StageId"
           },
-          "model_identity": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
+          "analysis_profile_id": {
+            "$ref": "#/components/schemas/AnalysisProfileId"
+          },
+          "prompt_bundle_id": {
+            "$ref": "#/components/schemas/PromptBundleId"
+          },
+          "provider_mode": {
+            "$ref": "#/components/schemas/ProviderMode"
+          },
+          "model_call_id": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ModelCallId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model_identity": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         }
       },
       "FindingObservation": {
@@ -950,17 +1675,35 @@
           "provenance"
         ],
         "properties": {
-          "finding_observation_id": { "$ref": "#/components/schemas/FindingObservationId" },
-          "run_id": { "$ref": "#/components/schemas/RunId" },
-          "category": { "$ref": "#/components/schemas/FindingCategory" },
-          "finding_text": { "type": "string", "minLength": 1, "maxLength": 4000 },
-          "recommendation_text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+          "finding_observation_id": {
+            "$ref": "#/components/schemas/FindingObservationId"
+          },
+          "run_id": {
+            "$ref": "#/components/schemas/RunId"
+          },
+          "category": {
+            "$ref": "#/components/schemas/FindingCategory"
+          },
+          "finding_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "recommendation_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
           "evidence": {
             "type": "array",
             "minItems": 1,
-            "items": { "$ref": "#/components/schemas/Evidence" }
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            }
           },
-          "provenance": { "$ref": "#/components/schemas/ObservationProvenance" }
+          "provenance": {
+            "$ref": "#/components/schemas/ObservationProvenance"
+          }
         }
       },
       "Finding": {
@@ -977,18 +1720,47 @@
           "current_verdict"
         ],
         "properties": {
-          "finding_uid": { "$ref": "#/components/schemas/FindingUid" },
-          "project_uid": { "$ref": "#/components/schemas/ProjectUid" },
-          "version_uid": { "$ref": "#/components/schemas/VersionUid" },
-          "run_id": { "$ref": "#/components/schemas/RunId" },
-          "category": { "$ref": "#/components/schemas/FindingCategory" },
-          "observation": { "$ref": "#/components/schemas/FindingObservation" },
-          "current_verdict": { "$ref": "#/components/schemas/Verdict" },
+          "finding_uid": {
+            "$ref": "#/components/schemas/FindingUid"
+          },
+          "project_uid": {
+            "$ref": "#/components/schemas/ProjectUid"
+          },
+          "version_uid": {
+            "$ref": "#/components/schemas/VersionUid"
+          },
+          "run_id": {
+            "$ref": "#/components/schemas/RunId"
+          },
+          "category": {
+            "$ref": "#/components/schemas/FindingCategory"
+          },
+          "observation": {
+            "$ref": "#/components/schemas/FindingObservation"
+          },
+          "current_verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          },
           "latest_decision_id": {
-            "oneOf": [{ "$ref": "#/components/schemas/DecisionId" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DecisionId"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "decision_recorded_at": {
-            "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -1006,48 +1778,111 @@
           "current_verdict"
         ],
         "properties": {
-          "finding_uid": { "$ref": "#/components/schemas/FindingUid" },
-          "project_uid": { "$ref": "#/components/schemas/ProjectUid" },
-          "version_uid": { "$ref": "#/components/schemas/VersionUid" },
-          "run_id": { "$ref": "#/components/schemas/RunId" },
-          "category": { "$ref": "#/components/schemas/FindingCategory" },
-          "observation": { "$ref": "#/components/schemas/FindingObservation" },
-          "current_verdict": { "$ref": "#/components/schemas/Verdict" },
+          "finding_uid": {
+            "$ref": "#/components/schemas/FindingUid"
+          },
+          "project_uid": {
+            "$ref": "#/components/schemas/ProjectUid"
+          },
+          "version_uid": {
+            "$ref": "#/components/schemas/VersionUid"
+          },
+          "run_id": {
+            "$ref": "#/components/schemas/RunId"
+          },
+          "category": {
+            "$ref": "#/components/schemas/FindingCategory"
+          },
+          "observation": {
+            "$ref": "#/components/schemas/FindingObservation"
+          },
+          "current_verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          },
           "latest_decision_id": {
-            "oneOf": [{ "$ref": "#/components/schemas/DecisionId" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DecisionId"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "decision_recorded_at": {
-            "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "latest_comment": {
             "description": "The comment of the most recent event carrying one, whatever its type.",
-            "oneOf": [{ "type": "string" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "decision_event_count": { "type": "integer", "minimum": 0 }
+          "decision_event_count": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       },
       "FindingPage": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["items", "page"],
+        "required": [
+          "items",
+          "page"
+        ],
         "properties": {
-          "items": { "type": "array", "items": { "$ref": "#/components/schemas/Finding" } },
-          "page": { "$ref": "#/components/schemas/PageInfo" }
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
         }
       },
       "AppendDecisionRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["event_type", "finding_observation_id"],
+        "required": [
+          "event_type",
+          "finding_observation_id"
+        ],
         "properties": {
-          "event_type": { "$ref": "#/components/schemas/DecisionEventType" },
+          "event_type": {
+            "$ref": "#/components/schemas/DecisionEventType"
+          },
           "finding_observation_id": {
             "$ref": "#/components/schemas/FindingObservationId",
             "description": "The observation the expert actually reviewed. A verdict is recorded against the evidence in front of the reviewer, not against whatever the newest run later produced."
           },
           "comment": {
             "description": "Required for `comment`; optional on any other event type.",
-            "oneOf": [{ "type": "string", "minLength": 1, "maxLength": 4000 }, { "type": "null" }]
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -1064,43 +1899,84 @@
           "recorded_at"
         ],
         "properties": {
-          "decision_id": { "$ref": "#/components/schemas/DecisionId" },
-          "finding_uid": { "$ref": "#/components/schemas/FindingUid" },
-          "finding_observation_id": { "$ref": "#/components/schemas/FindingObservationId" },
-          "event_type": { "$ref": "#/components/schemas/DecisionEventType" },
+          "decision_id": {
+            "$ref": "#/components/schemas/DecisionId"
+          },
+          "finding_uid": {
+            "$ref": "#/components/schemas/FindingUid"
+          },
+          "finding_observation_id": {
+            "$ref": "#/components/schemas/FindingObservationId"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/DecisionEventType"
+          },
           "verdict": {
             "description": "The verdict this event carries, or null for a comment.",
-            "oneOf": [{ "$ref": "#/components/schemas/Verdict" }, { "type": "null" }]
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Verdict"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "comment": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+          "comment": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "author_label": {
             "type": "string",
             "description": "OD-12: one configured local reviewer label, persisted server-side. It is a label, not a subject identity, and it authorizes nothing.",
             "minLength": 1,
             "maxLength": 128
           },
-          "recorded_at": { "type": "string", "format": "date-time" }
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "AppendDecisionResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["event", "current_verdict"],
+        "required": [
+          "event",
+          "current_verdict"
+        ],
         "properties": {
-          "event": { "$ref": "#/components/schemas/DecisionEvent" },
-          "current_verdict": { "$ref": "#/components/schemas/Verdict" }
+          "event": {
+            "$ref": "#/components/schemas/DecisionEvent"
+          },
+          "current_verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
         }
       },
       "DecisionEventPage": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["items", "page"],
+        "required": [
+          "items",
+          "page"
+        ],
         "properties": {
           "items": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/DecisionEvent" }
+            "items": {
+              "$ref": "#/components/schemas/DecisionEvent"
+            }
           },
-          "page": { "$ref": "#/components/schemas/PageInfo" }
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
         }
       }
     }

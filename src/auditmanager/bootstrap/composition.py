@@ -74,8 +74,8 @@ def build_application(
     ingest = IngestService(store, session_factory=sessions)
 
     router = build_router(
-        projects=ProjectAdapter(sessions, ingest),
-        documents=DocumentAdapter(sessions, ingest),
+        projects=ProjectAdapter(ingest),
+        documents=DocumentAdapter(ingest),
         runs=RunAdapter(
             sessions,
             blob_store=store,

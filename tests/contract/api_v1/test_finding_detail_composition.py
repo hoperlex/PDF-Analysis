@@ -284,3 +284,41 @@ def test_the_detail_shape_is_the_base_shape_plus_exactly_two_properties(
         "FindingDetail's required set has drifted from Finding's"
     )
     assert detail["type"] == base["type"] == "object"
+
+
+def test_no_response_description_claims_a_unique_retryable_code(openapi_document) -> None:
+    """Prose in the document must not contradict the catalog it points at.
+
+    `DependencyUnavailable` called `dependency_unavailable` "the one retryable code in this
+    surface". The catalog marks two codes retryable, and the second -
+    `idempotency_key_in_progress` - is reachable on every write. B6 found it while
+    implementing the routers.
+
+    The harm is specific: `retryable` is pinned per code by the catalog and a caller must
+    read it from the envelope. A description asserting there is only one retryable code
+    invites exactly the inference the envelope exists to prevent.
+    """
+    import json
+    import pathlib
+    import re
+
+    catalog = json.loads(
+        (
+            pathlib.Path(__file__).resolve().parents[3]
+            / "contracts/domain/v1/error-codes.json"
+        ).read_text(encoding="utf-8")
+    )
+    retryable = {code for code, entry in catalog["codes"].items() if entry["retryable"]}
+    assert len(retryable) > 1, (
+        "this guard assumes more than one retryable code; if the catalog ever has exactly "
+        "one, the claim it forbids would become true and this test must be revisited"
+    )
+
+    prose = json.dumps(openapi_document, ensure_ascii=False)
+    uniqueness_claim = re.compile(
+        r"the (?:one|only|single) retryable code", re.IGNORECASE
+    )
+    assert not uniqueness_claim.search(prose), (
+        "a response description claims a unique retryable code, but the catalog marks "
+        f"{sorted(retryable)} retryable"
+    )

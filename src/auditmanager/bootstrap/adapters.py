@@ -56,16 +56,26 @@ def _not_found(what: str) -> DomainError:
     return DomainError(ErrorCode.NOT_FOUND, aggregate_type=what)
 
 
-class ProjectAdapter(_SessionHolder):
-    def __init__(self, session_factory: sessionmaker[Session], service: Any) -> None:
-        super().__init__(session_factory)
+class ProjectAdapter:
+    """Projects. ``IngestService`` owns its own sessions, so this adapter opens none.
+
+    The first version of this class wrapped every call in a session and passed it in, which
+    raised a TypeError on the real signature and surfaced as a 500. Nothing caught it: the
+    composition suite proves the application *builds*, and until the router was driven end to
+    end nothing proved it *answers*. That gap is what session `C2` exists for, and it was
+    found by driving the router once before dispatching.
+    """
+
+    def __init__(self, service: Any) -> None:
         self._service = service
 
     def create_project(self, *, name: str, idempotency_key: str) -> ProjectView:
-        # The key is accepted and validated at the edge. `B1` publishes no key-accepting
-        # project command, which GATE_B2_CLOSURE records as an open item; nothing here
-        # pretends otherwise by inventing a claim the ledger would not recognise.
-        record = self._write(lambda s: self._service.create_project(s, name=name))
+        # The key is claimed, not validated and discarded. Until `create_project_under_key`
+        # existed, the edge checked the header the frozen document requires and the key
+        # stopped there, so a repeat created a second project with a second identity.
+        record, _replayed = self._service.create_project_under_key(
+            name=name, idempotency_key=idempotency_key
+        )
         return ProjectView(
             project_uid=str(record.project_uid),
             name=record.name,
@@ -73,12 +83,11 @@ class ProjectAdapter(_SessionHolder):
         )
 
     def list_projects(self) -> Sequence[ProjectView]:
-        records = self._read(lambda s: self._service.list_projects(s))
         return tuple(
             ProjectView(
                 project_uid=str(r.project_uid), name=r.name, created_at=r.created_at
             )
-            for r in records
+            for r in self._service.list_projects()
         )
 
 
@@ -104,29 +113,51 @@ def _version_view(record: Any) -> DocumentVersionView:
     )
 
 
-class DocumentAdapter(_SessionHolder):
-    def __init__(self, session_factory: sessionmaker[Session], service: Any) -> None:
-        super().__init__(session_factory)
+class DocumentAdapter:
+    """Documents. Like :class:`ProjectAdapter`, the service owns its sessions."""
+
+    def __init__(self, service: Any) -> None:
         self._service = service
 
     def upload_document(
-        self, *, project_uid: str, content: bytes, filename: str | None, **_: Any
+        self,
+        *,
+        project_uid: str,
+        content: bytes,
+        source_filename: str | None = None,
+        display_title: str | None = None,
+        idempotency_key: str = "",
     ) -> Any:
-        outcome = self._write(
-            lambda s: self._service.upload_single_pdf(
-                s, project_uid=project_uid, content=content, source_filename=filename
-            )
+        """The port declares ``source_filename``; this method called it ``filename``.
+
+        The router passed the declared name, no parameter matched, and it fell into a
+        ``**kwargs`` that discarded it - so every upload was stored under a default name and
+        nothing said so. A parameter renamed in an adapter is not a rename, it is a deletion
+        with a plausible signature.
+        """
+        from auditmanager.shared.identity import IdempotencyKey, ProjectUid
+
+        name = source_filename or "upload.pdf"
+        outcome = self._service.upload_single_pdf(
+            project_uid=ProjectUid.parse(project_uid),
+            content=content,
+            source_filename=name,
+            display_title=display_title or name,
+            idempotency_key=IdempotencyKey(idempotency_key),
         )
-        return _Uploaded(_version_view(outcome.version), bool(getattr(outcome, "replayed", False)))
+        return _Uploaded(
+            _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
+        )
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
-        record = self._read(lambda s: self._service.get_version(s, version_uid))
-        if record is None:
-            raise _not_found("DocumentVersion")
-        return _version_view(record)
+        from auditmanager.shared.identity import VersionUid
+
+        return _version_view(self._service.get_version(VersionUid.parse(version_uid)))
 
     def read_content(self, *, version_uid: str) -> bytes:
-        return self._read(lambda s: self._service.read_source_bytes(s, version_uid))
+        from auditmanager.shared.identity import VersionUid
+
+        return self._service.read_source_bytes(VersionUid.parse(version_uid))
 
 
 class _Uploaded:
@@ -166,8 +197,31 @@ class RunAdapter(_SessionHolder):
         self._profile = analysis_profile_id
         self._bundle = prompt_bundle_id
 
-    def start_run(self, *, version_uid: str, idempotency_key: str, **_: Any) -> Any:
+    def start_run(
+        self,
+        *,
+        version_uid: str,
+        idempotency_key: str,
+        provider_mode: str | None = None,
+    ) -> Any:
+        """A caller-supplied provider mode is refused, never silently overridden.
+
+        The port declares the parameter and this method used to swallow it, always using
+        the configured mode instead. That is the right *outcome* and the wrong way to reach
+        it: a client asking for `live` against a recorded deployment was told nothing and
+        got a recorded run. Silently substituting a mode is the same failure class as
+        publishing a recorded run as live, which `B-III` found one level down.
+        """
         from auditmanager.runs import execute_run, start_audit_run
+
+        if provider_mode is not None and provider_mode != self._provider_mode:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message=(
+                    "the requested provider mode is not the one this deployment is "
+                    "configured to provide; a run is never silently given a different one"
+                ),
+            )
 
         def work(session: Session) -> Any:
             started = start_audit_run(
@@ -277,17 +331,42 @@ def _finding_view(row: Any, evidence: Sequence[Any], verdict: Any) -> FindingVie
 
 
 class FindingAdapter(_SessionHolder):
-    def list_run_findings(self, *, run_id: str, **_: Any) -> Sequence[FindingView]:
+    def list_run_findings(
+        self,
+        *,
+        run_id: str,
+        category: str | None = None,
+        verdict: str | None = None,
+    ) -> Sequence[FindingView]:
+        """The published findings of one run, filtered as the contract declares.
+
+        The first version of this method took ``**_`` and swallowed both filters. The
+        router read them, validated them against their enums and passed them; the adapter
+        dropped them silently, so `?category=explicit_placeholder` returned everything and
+        looked like it had worked. A filter that is accepted and ignored is worse than one
+        that is refused.
+
+        Filtering here rather than in SQL is deliberate for PC-01: a run publishes a handful
+        of findings, the router already paginates the ordered sequence in memory, and pushing
+        a predicate into the query would add a second place for the ordering contract to
+        drift. If a run ever publishes enough findings for that to matter, this is the line
+        to move, and the port signature does not change when it does.
+        """
         from auditmanager.decisions import current_verdict
         from auditmanager.findings import published_finding_evidence, published_findings
 
         def work(session: Session) -> Sequence[FindingView]:
             rows = published_findings(session, run_id)
             evidence = published_finding_evidence(session, run_id)
-            return tuple(
+            views = [
                 _finding_view(r, evidence, current_verdict(session, r.finding_uid))
                 for r in rows
-            )
+            ]
+            if category is not None:
+                views = [v for v in views if v.category == category]
+            if verdict is not None:
+                views = [v for v in views if v.current_verdict == verdict]
+            return tuple(views)
 
         return self._read(work)
 
