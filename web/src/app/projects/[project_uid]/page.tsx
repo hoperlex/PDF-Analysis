@@ -1,27 +1,17 @@
 /**
- * `/projects/{project_uid}` — one project: upload an AR PDF, start a run.
+ * `/projects/{project_uid}` — one project, its documents and its runs.
  *
- * Delegation-only. When `B7` lands `@/_pages/project-detail`, the body becomes
- * `return <ProjectDetailPage projectUid={project_uid} />;`.
- *
- * The route parameter is named `project_uid`, matching the contract's path parameter
- * exactly. It is an opaque `prj_<ULID>`; nothing in the UI parses it.
+ * Delegation-only. See the note in `/projects/page.tsx` for why these three routes were
+ * wired by the integrator rather than by the session that wrote the screens.
  */
 
-import { RoutePlaceholder } from '@/shared/ui';
+import { ProjectDetailPage } from '@/_pages/project-detail';
 
-export default async function ProjectDetailRoute({
+export default async function ProjectRoute({
   params,
 }: {
   params: Promise<{ project_uid: string }>;
 }) {
   const { project_uid } = await params;
-  return (
-    <RoutePlaceholder
-      screen="Project"
-      route={`/projects/${project_uid}`}
-      awaitingModule="@/_pages/project-detail"
-      owner="Gate B session B7"
-    />
-  );
+  return <ProjectDetailPage projectUid={project_uid} />;
 }
