@@ -26,6 +26,7 @@ never taken from a request body — PC-01 has no authentication, and a client-su
 
 from __future__ import annotations
 
+
 from dataclasses import dataclass
 from typing import Final
 
@@ -269,3 +270,89 @@ def decision_history(session: Session, finding_uid: str) -> tuple[DecisionEvent,
     """
     rows = session.execute(_EVENTS_FOR_FINDING, {"finding_uid": finding_uid}).mappings().all()
     return tuple(_row_to_event(row) for row in rows)
+
+
+COMMAND_TYPE_APPEND_DECISION = "append_decision"
+
+
+def append_decision_under_key(
+    session: Session,
+    *,
+    finding_uid: str,
+    finding_observation_id: str,
+    event_type: str,
+    idempotency_key: str,
+    comment: str | None = None,
+    correlation_id: str | None = None,
+    author_label: str = CONFIGURED_AUTHOR_LABEL,
+) -> tuple[DecisionEvent, bool]:
+    """Append one decision event under an idempotency key, or replay the first one.
+
+    Returns ``(event, replayed)``.
+
+    ``record_decision`` accepts a ``command_id`` but nothing claimed one, while
+    ``expert_decision_event.command_id`` is a **foreign key into ``command_record``** — so
+    the key an API caller supplies had nowhere to go, and a repeat appended a second event
+    to an append-only ledger. `B6` found the gap from the edge, where the frozen contract
+    requires the header; neither `B4` nor `B6` could close it from inside its own tree.
+
+    The claim primitive is `auditmanager.ingest.CommandRepository`, which is generic in
+    ``command_type`` and is what `B5` already uses for `start_run`. Reusing it is what keeps
+    the two write paths idempotent in the same way rather than in two ways.
+
+    The caller owns the transaction; this opens no engine and commits nothing.
+    """
+    from auditmanager.ingest import CommandReplay, CommandRepository, payload_fingerprint
+
+    # The canonical primitive, the one `B1` and `B5` already claim with, so all three
+    # write paths compare payloads the same way rather than three ways.
+    fingerprint = payload_fingerprint(
+        {
+            "command": "append_decision.v1",
+            "finding_uid": finding_uid,
+            "finding_observation_id": finding_observation_id,
+            "event_type": event_type,
+            "comment": comment,
+            "author_label": author_label,
+        }
+    )
+
+    claimed = CommandRepository().begin(
+        session,
+        command_type=COMMAND_TYPE_APPEND_DECISION,
+        idempotency_key=idempotency_key,
+        fingerprint=fingerprint,
+    )
+
+    if isinstance(claimed, CommandReplay):
+        decision_id = claimed.outcome.get("decision_id")
+        if not isinstance(decision_id, str):
+            raise DomainError(
+                ErrorCode.IDEMPOTENCY_KEY_STALE, command_type=COMMAND_TYPE_APPEND_DECISION
+            )
+        existing = _existing_event(session, str(claimed.command_id))
+        if existing is None:
+            raise DomainError(
+                ErrorCode.IDEMPOTENCY_KEY_STALE, command_type=COMMAND_TYPE_APPEND_DECISION
+            )
+        return existing, True
+
+    # ``CommandId`` is a value type; the ledger's SQL binds plain strings, so it is
+    # narrowed once here rather than at each of the three call sites below.
+    command_id = str(claimed.command_id)
+
+    event = record_decision(
+        session,
+        finding_uid=finding_uid,
+        finding_observation_id=finding_observation_id,
+        event_type=event_type,
+        comment=comment,
+        command_id=command_id,
+        correlation_id=correlation_id,
+        author_label=author_label,
+    )
+    CommandRepository().succeed(
+        session, command_id=claimed.command_id, outcome={"decision_id": event.decision_id}
+    )
+
+    return event, False
