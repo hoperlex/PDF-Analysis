@@ -132,6 +132,23 @@ Every brief carries these. Each earned its place:
    CP-00 evidence and are red before you start.
 8. **Report elapsed wall-clock from start to last commit.** This is how the forecast stops
    being an extrapolation.
+9. **Keep your worktree and your scratch tree out of `/tmp`.** Docker here is a snap package
+   and cannot see it; `B-III` lost its first pass to a `make up` failure naming
+   `/var/lib/snapd/void/...`, which reads like a broken compose file and is not one.
+   `/root/<something>-scratch` works.
+10. **A mutation is not evidence until you have proved the mutated copy was imported.** This
+    is rule 5's trap: `pyproject.toml` pins `pythonpath = ["src"]` and overrides an exported
+    `PYTHONPATH`, so pytest loads the original tree and reports green while the guard looks
+    dead. Run `pytest -o pythonpath=<copy>/src`, print the loaded module's `__file__` first,
+    symlink `contracts/` and `docs/` beside the copied `src/` or it will not import at all,
+    and name the scratch tree for your session. `B6` and the integrator each believed an
+    unproven run, the integrator twice; `B1` and `B8` each had a shared-name scratch tree
+    overwritten mid-run by a peer.
+11. **Run only your own integration suite.** They share one database and some assert global
+    state, so a cross-suite failure is a known open item and not a defect to report.
+
+The exact commands behind 9–11, and two setup constraints every session meets before it
+writes anything, are in `dispatch/OPERATING_CONSTRAINTS.md`. Link it from every brief.
 
 ## 9. Forecast, and what it rests on
 
