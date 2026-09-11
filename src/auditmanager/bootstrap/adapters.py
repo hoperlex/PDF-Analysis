@@ -56,16 +56,26 @@ def _not_found(what: str) -> DomainError:
     return DomainError(ErrorCode.NOT_FOUND, aggregate_type=what)
 
 
-class ProjectAdapter(_SessionHolder):
-    def __init__(self, session_factory: sessionmaker[Session], service: Any) -> None:
-        super().__init__(session_factory)
+class ProjectAdapter:
+    """Projects. ``IngestService`` owns its own sessions, so this adapter opens none.
+
+    The first version of this class wrapped every call in a session and passed it in, which
+    raised a TypeError on the real signature and surfaced as a 500. Nothing caught it: the
+    composition suite proves the application *builds*, and until the router was driven end to
+    end nothing proved it *answers*. That gap is what session `C2` exists for, and it was
+    found by driving the router once before dispatching.
+    """
+
+    def __init__(self, service: Any) -> None:
         self._service = service
 
     def create_project(self, *, name: str, idempotency_key: str) -> ProjectView:
-        # The key is accepted and validated at the edge. `B1` publishes no key-accepting
-        # project command, which GATE_B2_CLOSURE records as an open item; nothing here
-        # pretends otherwise by inventing a claim the ledger would not recognise.
-        record = self._write(lambda s: self._service.create_project(s, name=name))
+        # The key is claimed, not validated and discarded. Until `create_project_under_key`
+        # existed, the edge checked the header the frozen document requires and the key
+        # stopped there, so a repeat created a second project with a second identity.
+        record, _replayed = self._service.create_project_under_key(
+            name=name, idempotency_key=idempotency_key
+        )
         return ProjectView(
             project_uid=str(record.project_uid),
             name=record.name,
@@ -73,12 +83,11 @@ class ProjectAdapter(_SessionHolder):
         )
 
     def list_projects(self) -> Sequence[ProjectView]:
-        records = self._read(lambda s: self._service.list_projects(s))
         return tuple(
             ProjectView(
                 project_uid=str(r.project_uid), name=r.name, created_at=r.created_at
             )
-            for r in records
+            for r in self._service.list_projects()
         )
 
 
@@ -104,29 +113,45 @@ def _version_view(record: Any) -> DocumentVersionView:
     )
 
 
-class DocumentAdapter(_SessionHolder):
-    def __init__(self, session_factory: sessionmaker[Session], service: Any) -> None:
-        super().__init__(session_factory)
+class DocumentAdapter:
+    """Documents. Like :class:`ProjectAdapter`, the service owns its sessions."""
+
+    def __init__(self, service: Any) -> None:
         self._service = service
 
     def upload_document(
-        self, *, project_uid: str, content: bytes, filename: str | None, **_: Any
+        self,
+        *,
+        project_uid: str,
+        content: bytes,
+        filename: str | None = None,
+        display_title: str | None = None,
+        idempotency_key: str = "",
+        **_: Any,
     ) -> Any:
-        outcome = self._write(
-            lambda s: self._service.upload_single_pdf(
-                s, project_uid=project_uid, content=content, source_filename=filename
-            )
+        from auditmanager.shared.identity import IdempotencyKey, ProjectUid
+
+        name = filename or "upload.pdf"
+        outcome = self._service.upload_single_pdf(
+            project_uid=ProjectUid.parse(project_uid),
+            content=content,
+            source_filename=name,
+            display_title=display_title or name,
+            idempotency_key=IdempotencyKey(idempotency_key),
         )
-        return _Uploaded(_version_view(outcome.version), bool(getattr(outcome, "replayed", False)))
+        return _Uploaded(
+            _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
+        )
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
-        record = self._read(lambda s: self._service.get_version(s, version_uid))
-        if record is None:
-            raise _not_found("DocumentVersion")
-        return _version_view(record)
+        from auditmanager.shared.identity import VersionUid
+
+        return _version_view(self._service.get_version(VersionUid.parse(version_uid)))
 
     def read_content(self, *, version_uid: str) -> bytes:
-        return self._read(lambda s: self._service.read_source_bytes(s, version_uid))
+        from auditmanager.shared.identity import VersionUid
+
+        return self._service.read_source_bytes(VersionUid.parse(version_uid))
 
 
 class _Uploaded:

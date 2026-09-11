@@ -73,6 +73,7 @@ from auditmanager.storage import (
 from auditmanager.storage.blob_repository import BlobMetadataRepository
 
 from .commands import (
+    COMMAND_TYPE_CREATE_PROJECT,
     COMMAND_TYPE_UPLOAD,
     CommandReplay,
     CommandRepository,
@@ -114,6 +115,54 @@ class IngestService:
     def create_project(self, name: str) -> ProjectRecord:
         with session_scope(self._factory) as session:
             return self._documents.create_project(session, name)
+
+    def create_project_under_key(
+        self, *, name: str, idempotency_key: IdempotencyKey | str
+    ) -> tuple[ProjectRecord, bool]:
+        """Create one project under an idempotency key, or replay the first outcome.
+
+        Returns ``(record, replayed)``.
+
+        ``createProject`` requires an ``Idempotency-Key`` in the frozen document, and until
+        this existed the edge validated the header and the key stopped there: a repeat
+        created a second project with a second identity. `B6` reported the gap from the
+        router, `B1` had published no key-accepting command, and neither could close it from
+        inside its own tree.
+
+        The claim goes through :class:`CommandRepository`, the same generic primitive the
+        upload path and `B5`'s run start already use, so all three write paths compare
+        payloads the same way rather than three ways.
+        """
+        key = (
+            idempotency_key
+            if isinstance(idempotency_key, IdempotencyKey)
+            else IdempotencyKey(idempotency_key)
+        )
+        fingerprint = payload_fingerprint({"command": "create_project.v1", "name": name})
+
+        with session_scope(self._factory) as session:
+            claimed = CommandRepository().begin(
+                session,
+                command_type=COMMAND_TYPE_CREATE_PROJECT,
+                idempotency_key=key,
+                fingerprint=fingerprint,
+            )
+            if isinstance(claimed, CommandReplay):
+                project_uid = claimed.outcome.get("project_uid")
+                if not isinstance(project_uid, str):
+                    raise DomainError(
+                        ErrorCode.IDEMPOTENCY_KEY_STALE,
+                        command_type=COMMAND_TYPE_CREATE_PROJECT,
+                    )
+                return self._documents.get_project(session, ProjectUid.parse(project_uid)), True
+
+            record = self._documents.create_project(session, name)
+            CommandRepository().succeed(
+                session,
+                command_id=claimed.command_id,
+                outcome={"project_uid": str(record.project_uid)},
+            )
+            return record, False
 
     def list_projects(self) -> tuple[ProjectRecord, ...]:
         with session_scope(self._factory) as session:

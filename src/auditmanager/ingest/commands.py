@@ -48,6 +48,7 @@ from auditmanager.shared.statemachine import load as load_topology
 
 __all__ = [
     "COMMAND_MACHINE",
+    "COMMAND_TYPE_CREATE_PROJECT",
     "COMMAND_TYPE_UPLOAD",
     "CommandRecord",
     "CommandRepository",
@@ -62,6 +63,9 @@ COMMAND_MACHINE: Final[str] = "command_idempotency"
 
 #: Matches ``ck_command_record_command_type``: lowercase snake_case, 3-64 characters.
 COMMAND_TYPE_UPLOAD: Final[str] = "upload_source_document"
+#: The project-creation command. `createProject` requires an Idempotency-Key in the
+#: frozen document, so the key must be claimed rather than validated and discarded.
+COMMAND_TYPE_CREATE_PROJECT: Final[str] = "create_project"
 
 _COLUMNS = (
     "command_id, command_type, idempotency_key, payload_fingerprint, state, outcome, "
