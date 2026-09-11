@@ -301,3 +301,107 @@ def _project_uid(value: str) -> Any:
     from auditmanager.shared.identity import ProjectUid
 
     return ProjectUid(value)
+
+
+def seed_version_with_contract_manifest(session: Session, blob_store: S3BlobStore, label: str) -> dict[str, str]:
+    """Publish the corpus PDF and a version whose manifest carries the CONTRACT role.
+
+    This exists only because ``IngestService`` cannot currently produce such a version:
+    it writes ``source_document`` where the frozen stage registry declares
+    ``source.document``, and ``input_manifest_entry`` is immutable, so the row cannot be
+    corrected afterwards either. That defect has its own dedicated test in
+    ``test_manifest_role_seam.py`` and is **not** hidden by this helper -- a test that
+    seeds its input here is asserting some other property, and says so.
+
+    Every row goes through the owning module's public surface: ``S3BlobStore`` for the
+    bytes, ``BlobMetadataRepository`` for the blob lifecycle, ``DocumentRepository`` for
+    project, document, version and manifest.
+    """
+    from auditmanager.documents import DocumentRepository, ManifestEntry
+    from auditmanager.storage import parse_blob_role, sha256_of
+    from auditmanager.storage.blob_repository import BlobMetadataRepository
+    from auditmanager.storage.models import VerifiedBlob
+
+    payload = BASELINE_PDF.read_bytes()
+    digest = sha256_of(payload)
+    published = blob_store.put_blob(
+        payload,
+        declared_sha256=digest,
+        declared_size=len(payload),
+        role=parse_blob_role("source_document"),
+        media_type="application/pdf",
+    )
+    blobs = BlobMetadataRepository()
+    blobs.record_verified(
+        session,
+        VerifiedBlob(
+            blob_id=published.blob_id,
+            upload_token=f"b3conv-{label}",
+            sha256=published.sha256,
+            size=published.size,
+            role=published.role,
+            media_type=published.media_type,
+        ),
+    )
+    blobs.mark_available(session, published.blob_id)
+
+    documents = DocumentRepository()
+    project = documents.create_project(session, f"B-III {label}")
+    document_uid = documents.create_document(
+        session, project_uid=project.project_uid, display_title="СП-7-АР"
+    )
+    version_uid = documents.publish_version(
+        session,
+        document_uid=document_uid,
+        media_type="application/pdf",
+        byte_size=len(payload),
+        sha256=digest,
+        page_count=8,
+        source_filename="ar_baseline.pdf",
+        entries=(
+            ManifestEntry(
+                role="source.document",
+                blob_id=published.blob_id,
+                sha256=published.sha256,
+                size_bytes=published.size,
+                media_type=published.media_type,
+            ),
+        ),
+    )
+    session.commit()
+    return {
+        "project_uid": str(project.project_uid),
+        "document_uid": str(document_uid),
+        "version_uid": str(version_uid),
+    }
+
+
+def run_from_seed(
+    session: Session,
+    seed: Mapping[str, str],
+    *,
+    blob_store: S3BlobStore,
+    adapter: Any,
+    provider_config: ProviderConfig,
+    declared_provider_mode: str,
+    run_key: IdempotencyKey,
+) -> str:
+    """Start and execute a run over a seeded version; return the run id."""
+    started = start_audit_run(
+        session,
+        version_uid=seed["version_uid"],
+        analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
+        prompt_bundle_id=str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
+        provider_mode=declared_provider_mode,
+        idempotency_key=run_key,
+    )
+    session.commit()
+    execute_run(
+        session,
+        started.run_id,
+        blob_store=blob_store,
+        adapter=adapter,
+        provider_config=provider_config,
+    )
+    session.commit()
+    return str(started.run_id)
