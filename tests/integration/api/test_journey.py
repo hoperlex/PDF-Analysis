@@ -15,6 +15,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from auditmanager.documents import MANIFEST_ROLE_SOURCE_DOCUMENT
 from auditmanager.api.routers import Router, dispatch
 from auditmanager.api.routers.http import Request, Response
 
@@ -101,7 +102,9 @@ def test_the_ingest_path_publishes_an_immutable_version(
     assert version["version_ordinal"] == 1
     assert version["byte_size"] == len(corpus_pdf)
     assert version["input_manifest"], "a published version carries its input manifest"
-    assert {entry["role"] for entry in version["input_manifest"]} == {"source_document"}
+    assert {entry["role"] for entry in version["input_manifest"]} == {
+        MANIFEST_ROLE_SOURCE_DOCUMENT
+    }
 
     fetched = ok(dispatch(router, Request.build("GET", f"/versions/{version['version_uid']}")))
     assert fetched == version, "the read and the write disagree about the same version"

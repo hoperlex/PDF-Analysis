@@ -40,55 +40,68 @@ def _csv_modes(session, run_id: str) -> set[str]:
     return {row[position] for row in reader if row}
 
 
-def test_recorded_run_declared_live_is_exported_as_recorded(
+def test_a_run_declared_live_and_executed_recorded_is_refused(
     session, blob_store, recorded_adapter, provider_config, journey_harness
 ):
     """The attack: declare ``live`` at start, execute with the recorded adapter.
 
-    DEFECT as of base 92bece8: the run row and every CSV row report ``live`` while the
-    adapter, the model-call provenance and the observation rows all say ``recorded``.
+    This test originally asserted that the export should *correct* the mode. The
+    integrator closed the defect by **refusing** the mismatch instead, and changed this
+    expectation — recorded here because the session that found the defect proposed the
+    other remedy, and a reader deserves to know an expectation was overridden rather than
+    met.
+
+    The reason for refusing rather than correcting: ``audit_run.provider_mode`` is the
+    canonical field. Correcting at the export leaves a false value standing in the
+    database while one reader compensates, so every *other* reader — the API, the UI
+    badge, a later export — is correct only as long as each one remembers to re-derive.
+    Refusing before any stage runs means the column cannot hold a mode the run did not
+    have, and every downstream reader is right by construction.
+
+    ``analysis.text`` still guards its own provenance with ``assert_consistent_mode``;
+    this is the same refusal one level up, in the only place holding both the run row and
+    the adapter.
     """
     h = journey_harness
     seed = h.seed_version_with_contract_manifest(session, blob_store, h.new_key("modeattack"))
+
+    actual = recorded_adapter.provider_mode.value
+    assert actual == "recorded", "fixture precondition: this adapter must be the recorded one"
+
+    with pytest.raises(Exception) as raised:
+        h.run_from_seed(
+            session,
+            seed,
+            blob_store=blob_store,
+            adapter=recorded_adapter,
+            provider_config=provider_config,
+            declared_provider_mode="live",
+            run_key=h.new_key("run"),
+        )
+    assert "provider mode" in str(raised.value), (
+        f"the mismatch was not refused for the stated reason: {raised.value}"
+    )
+
+
+def test_a_run_declared_recorded_and_executed_recorded_still_works(
+    session, blob_store, recorded_adapter, provider_config, journey_harness
+):
+    """The control. The refusal above must reject a disagreement, not every run.
+
+    Without this, a guard that refused unconditionally would look identical.
+    """
+    h = journey_harness
+    seed = h.seed_version_with_contract_manifest(session, blob_store, h.new_key("modeok"))
     run_id = h.run_from_seed(
         session,
         seed,
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
-        declared_provider_mode="live",
+        declared_provider_mode="recorded",
         run_key=h.new_key("run"),
     )
-
-    actual = recorded_adapter.provider_mode.value
-    assert actual == "recorded", "fixture precondition: this adapter must be the recorded one"
-
-    call_modes = set(
-        session.execute(
-            text("SELECT DISTINCT provider_mode FROM model_call WHERE run_id = :r"),
-            {"r": run_id},
-        ).scalars()
-    )
-    assert call_modes == {"recorded"}, (
-        f"provenance disagrees with the adapter: model_call says {call_modes}"
-    )
-
-    run_row_mode = session.execute(
-        text("SELECT provider_mode FROM audit_run WHERE run_id = :r"), {"r": run_id}
-    ).scalar_one()
-    exported = _csv_modes(session, run_id)
-
-    assert exported == {actual}, (
-        f"a run executed by the {actual} adapter is exported as {exported}. "
-        f"audit_run.provider_mode is {run_row_mode!r}, taken unvalidated from the caller's "
-        f"start_audit_run argument, while model_call.provider_mode is {call_modes}. "
-        "Nothing reconciles the run row with the adapter that executed it, so the CSV "
-        "an expert reads can claim a live review that never happened."
-    )
-    assert run_row_mode == actual, (
-        f"audit_run.provider_mode is {run_row_mode!r} for a run executed by the {actual} adapter"
-    )
-
+    assert _csv_modes(session, run_id) == {"recorded"}
 
 def test_truthful_declaration_still_works(
     session, blob_store, recorded_adapter, provider_config, journey_harness
