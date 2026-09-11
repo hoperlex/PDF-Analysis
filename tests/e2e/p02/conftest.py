@@ -29,6 +29,7 @@ blob_store = _module.blob_store
 ingest = _module.ingest
 recorded_adapter = _module.recorded_adapter
 provider_config = _module.provider_config
+variant_adapter = _module.variant_adapter
 
 
 import pytest

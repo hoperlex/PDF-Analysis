@@ -405,3 +405,23 @@ def run_from_seed(
     )
     session.commit()
     return str(started.run_id)
+
+
+VARIANTS = RECORDINGS / "variants"
+
+
+@pytest.fixture(scope="session")
+def variant_adapter():
+    """An adapter bound to one of the recorded variant directories.
+
+    ``fixtures/recorded/text_analysis/README.md``: variants are a second answer to the
+    same request, invisible to the canonical adapter, reached by pointing an adapter at
+    that directory.
+    """
+
+    def build(name: str) -> RecordedAdapter:
+        directory = VARIANTS / name
+        assert directory.is_dir(), f"no recorded variant {name!r} at {directory}"
+        return RecordedAdapter(directory)
+
+    return build
