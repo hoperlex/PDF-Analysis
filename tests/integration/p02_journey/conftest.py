@@ -34,7 +34,7 @@ provider_config = _module.provider_config
 import pytest
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def journey_harness():
     """The non-fixture helpers, reached through a fixture rather than imported."""
     return _module
