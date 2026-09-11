@@ -81,6 +81,12 @@ class DocumentVersionRecord:
     version_uid: VersionUid
     document_uid: DocumentUid
     project_uid: ProjectUid
+    #: The display ordinal of this version within its document, 1-based. Foundation
+    #: invariant 3 says a display ordinal is **not an identifier** - it is never a key,
+    #: never resolved against, and never used to address a version. It is carried
+    #: because ``DocumentVersion`` in the frozen API contract requires it, so a reviewer
+    #: can be told they are looking at version 2 rather than version 1.
+    version_ordinal: int
     media_type: str
     byte_size: int
     sha256: str

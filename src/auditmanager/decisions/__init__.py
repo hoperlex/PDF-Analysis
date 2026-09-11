@@ -12,6 +12,8 @@ from auditmanager.decisions.ledger import (
     VERDICT_FOR_EVENT,
     DecisionEvent,
     decision_history,
+    COMMAND_TYPE_APPEND_DECISION,
+    append_decision_under_key,
     record_decision,
 )
 from auditmanager.decisions.projection import (
@@ -30,5 +32,7 @@ __all__ = [
     "current_verdict",
     "decision_history",
     "rebuild_current_verdict",
+    "COMMAND_TYPE_APPEND_DECISION",
+    "append_decision_under_key",
     "record_decision",
 ]

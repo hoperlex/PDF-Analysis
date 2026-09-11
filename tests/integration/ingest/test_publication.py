@@ -116,6 +116,13 @@ def test_return_value_carries_no_filename_ordinal_key_or_path(
     outcome = upload(service, project, baseline_pdf, key)
     track(outcome.version.source.blob_id)
 
+    # `version_ordinal` is deliberately NOT in this set. Foundation invariant 3 says a
+    # display ordinal is not an *identifier*; it does not say it may not be shown, and the
+    # frozen `DocumentVersion` schema in contracts/api/v1 lists it as **required**.
+    # Withholding it left getDocumentVersion and uploadDocument unable to emit a conformant
+    # body from this surface at all - B6 found that, and it blocked Gate C. The invariant is
+    # enforced where it actually bites, by `test_no_version_is_resolved_by_its_ordinal`:
+    # nothing looks a version up by ordinal, so the ordinal is a label, never a key.
     forbidden_names = {
         "bucket",
         "current_version_uid",
@@ -128,7 +135,6 @@ def test_return_value_carries_no_filename_ordinal_key_or_path(
         "source_filename",
         "uri",
         "url",
-        "version_ordinal",
     }
     seen_values: list[object] = []
 
@@ -258,3 +264,75 @@ def test_unknown_project_is_refused_before_anything_is_published(
             connection.execute(text("SELECT count(*) FROM command_record")).scalar_one()
             == 0
         ), "a bad target burned an idempotency key"
+
+
+def test_no_version_is_resolved_by_its_ordinal() -> None:
+    """The ordinal is a label, never a key.
+
+    This is what foundation invariant 3 actually forbids. `version_ordinal` may be shown -
+    the frozen contract requires it on `DocumentVersion` - but nothing may address a
+    version by it. A `WHERE version_ordinal = ...` anywhere in the package would mean the
+    ordinal had become an identifier.
+
+    The allocation query `max(version_ordinal) + 1` is excluded: it computes the next
+    label, it does not resolve a version.
+    """
+    import pathlib
+    import re
+
+    package = pathlib.Path(__file__).resolve().parents[3] / "src" / "auditmanager"
+    sources = [p for p in package.rglob("*.py")]
+    assert len(sources) > 20, "the sweep found too few sources to be meaningful"
+
+    resolving = re.compile(r"version_ordinal\s*=\s*:|WHERE[^\n]*version_ordinal\s*=", re.I)
+    offenders = [
+        str(p.relative_to(package))
+        for p in sources
+        if resolving.search(p.read_text(encoding="utf-8"))
+    ]
+    assert offenders == [], f"a version is being resolved by its ordinal in: {offenders}"
+
+
+def test_projects_are_listed_newest_first(session_factory) -> None:  # noqa: ANN001
+    """`listProjects` declares "newest first"; the repository returned oldest first.
+
+    Two claims, deliberately separated. Creation order inside one `created_at` tick is not
+    recoverable - a ULID is monotonic across milliseconds, not within one - so what the
+    contract guarantees is descending time, and what the tiebreaker buys is a total, stable
+    order for a cursor to page over.
+
+    The timestamps are spread explicitly. The first version of this test created four
+    projects in a loop and asserted the returned stamps were descending; all four landed in
+    the same millisecond, every stamp was equal, and the assertion held for **any** order -
+    it stayed green against an ORDER BY created_at ASC. A test that cannot fail is worse
+    than no test, because it reports a guarantee nobody is providing.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import text
+
+    from auditmanager.documents import DocumentRepository
+
+    repo = DocumentRepository()
+    base = datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+    with session_factory() as session:
+        created = [repo.create_project(session, name=f"Проект {n}") for n in range(4)]
+        for offset, record in enumerate(created):
+            session.execute(
+                text("UPDATE project SET created_at = :t WHERE project_uid = :p"),
+                {"t": base + timedelta(minutes=offset), "p": str(record.project_uid)},
+            )
+        session.commit()
+        listed = repo.list_projects(session)
+        again = repo.list_projects(session)
+
+    stamps = [p.created_at for p in listed]
+    assert len(set(stamps)) == len(stamps), (
+        "the fixture failed to spread the timestamps, so this test cannot discriminate"
+    )
+    assert stamps == sorted(stamps, reverse=True), (
+        f"projects are not newest first by created_at: {stamps}"
+    )
+    assert [str(p.project_uid) for p in listed] == [str(p.project_uid) for p in again], (
+        "the order is not stable across two calls, so a cursor cannot page over it"
+    )

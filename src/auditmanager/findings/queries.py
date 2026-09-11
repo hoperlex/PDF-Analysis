@@ -24,6 +24,9 @@ _PUBLISHED_FINDINGS = text(
     SELECT
         o.finding_uid,
         o.finding_observation_id,
+        f.project_uid,
+        f.version_uid,
+        f.allocated_by_run_id,
         o.category,
         o.finding_text,
         o.recommendation_text,
@@ -95,6 +98,12 @@ _FIND_BY_UID = text(
 class FindingRow:
     finding_uid: str
     finding_observation_id: str
+    #: The three the frozen ``Finding`` schema requires. They live on ``finding``, which
+    #: every query here already joins; until this widening the join selected nothing from
+    #: it, so the API could not render a conformant body from this surface at all.
+    project_uid: str
+    version_uid: str
+    run_id: str
     category: str
     finding_text: str
     recommendation_text: str
@@ -131,6 +140,9 @@ def published_findings(session: Session, run_id: str) -> tuple[FindingRow, ...]:
         FindingRow(
             finding_uid=row["finding_uid"],
             finding_observation_id=row["finding_observation_id"],
+            project_uid=row["project_uid"],
+            version_uid=row["version_uid"],
+            run_id=row["allocated_by_run_id"],
             category=row["category"],
             finding_text=row["finding_text"],
             recommendation_text=row["recommendation_text"],
@@ -224,3 +236,63 @@ def evidence_resolves(
         if sequence[row.char_start : row.char_end] != row.quote:
             offenders.append(row)
     return tuple(offenders)
+
+
+_FINDING_BY_UID = text(
+    """
+    SELECT
+        o.finding_uid,
+        o.finding_observation_id,
+        f.project_uid,
+        f.version_uid,
+        f.allocated_by_run_id,
+        o.category,
+        o.finding_text,
+        o.recommendation_text,
+        o.stage_id,
+        o.analysis_profile_id,
+        o.prompt_bundle_id,
+        o.model_call_id,
+        o.provider_mode,
+        o.created_at
+    FROM finding_observation o
+    JOIN finding f ON f.finding_uid = o.finding_uid
+    WHERE o.finding_uid = :finding_uid
+      AND o.grounded
+    ORDER BY o.finding_observation_id DESC
+    LIMIT 1
+    """
+)
+
+
+def finding_by_uid(session: Session, finding_uid: str) -> FindingRow | None:
+    """The published finding behind one ``finding_uid``, or ``None``.
+
+    ``getFinding`` had no read path at all until this existed; the module could list a
+    run's findings and never fetch one. The ``grounded`` predicate is the same one
+    :func:`published_findings` applies, so a diagnostic observation is unreachable here
+    for the same reason it is unreachable there - by the column the database pairs with
+    ``finding_uid``, not by a ``WHERE`` clause a later reader has to remember.
+
+    PC-01 allocates a fresh ``finding_uid`` per published observation per run, so at most
+    one observation carries any given uid. The ordering and ``LIMIT`` are belt and braces
+    against a future that relaxes that, and pick the newest rather than an arbitrary row.
+    """
+    row = session.execute(_FINDING_BY_UID, {"finding_uid": finding_uid}).mappings().first()
+    if row is None:
+        return None
+    return FindingRow(
+        finding_uid=row["finding_uid"],
+        finding_observation_id=row["finding_observation_id"],
+        project_uid=row["project_uid"],
+        version_uid=row["version_uid"],
+        run_id=row["allocated_by_run_id"],
+        category=row["category"],
+        finding_text=row["finding_text"],
+        recommendation_text=row["recommendation_text"],
+        stage_id=row["stage_id"],
+        analysis_profile_id=row["analysis_profile_id"],
+        prompt_bundle_id=row["prompt_bundle_id"],
+        model_call_id=row["model_call_id"],
+        provider_mode=row["provider_mode"],
+    )

@@ -54,6 +54,15 @@ class UnsafeDetailKey(ValueError):
     """Raised when ``details`` carries a key the catalog does not declare safe."""
 
 
+class UnsafeDetailValue(ValueError):
+    """Raised when a ``details`` value carries a shape the catalog forbids.
+
+    Distinct from :class:`UnsafeDetailKey` because the remedies differ: a bad key means
+    the call site chose a field the catalog does not declare, while a bad value means a
+    declared field was filled with raw input instead of a classifier.
+    """
+
+
 def screen_message(message: str) -> str:
     if not message or len(message) > _MAX_MESSAGE:
         raise UnsafeMessage(f"message must be 1..{_MAX_MESSAGE} characters")
@@ -117,8 +126,25 @@ def build(
                 )
             if not isinstance(value, (str, int, float, bool, type(None))):
                 raise UnsafeDetailKey(f"detail {key!r} must be a scalar, got {type(value).__name__}")
-            if isinstance(value, str) and len(value) > _MAX_DETAIL_VALUE:
-                raise UnsafeDetailKey(f"detail {key!r} exceeds {_MAX_DETAIL_VALUE} characters")
+            if isinstance(value, str):
+                if len(value) > _MAX_DETAIL_VALUE:
+                    raise UnsafeDetailKey(
+                        f"detail {key!r} exceeds {_MAX_DETAIL_VALUE} characters"
+                    )
+                # Screen the value with the same patterns as a message. The catalog says
+                # details carry "safe scalar classifiers only ... raw inputs and secrets
+                # are not", and a key being declared safe says nothing about what a call
+                # site puts under it. B6 found this the hard way: its additionalProperties
+                # refusal echoed the caller's own property name into details.field, so a
+                # property named /etc/passwd came back inside the envelope. The key was
+                # legitimate; the value was the caller's raw input.
+                for what, pattern in _FORBIDDEN:
+                    if pattern.search(value):
+                        raise UnsafeDetailValue(
+                            f"detail {key!r} appears to contain {what}; the catalog's "
+                            "safety rules forbid it. Details carry classifiers, not "
+                            "raw input - map the input to a classifier first."
+                        )
             checked[key] = value
         if len(checked) > _MAX_DETAILS:
             raise UnsafeDetailKey(f"details carries more than {_MAX_DETAILS} keys")
