@@ -4,7 +4,8 @@
   "base_commit": "3cf98c251171d1d243da279df3e347385d6a41b2",
   "decisions_applied": {
     "OD-01": "PDF text extraction: a permissively licensed extractor giving per-character boxes, plus a separate page-count and encryption probe. Copyleft blocked.",
-    "OD-02": "Model provider: Anthropic first-party API."
+    "OD-02": "Model provider: Anthropic first-party API.",
+    "OD-03": "Per-run cost ceiling: USD 1.00, decided by the repository owner on 2026-09-11. It replaces the $1.00 stand-in B3 put in place and explicitly marked as not the owner's decision; the value is unchanged and its authority is not. A run over the eight-page corpus costs roughly $0.20 at the recorded rates, so the ceiling carries about five times headroom - enough for a 30-page document, which is the PC-01 envelope's upper bound. Exceeding it raises cost_budget_exceeded and halts."
   },
   "pins": {
     "pdfplumber": {
@@ -49,7 +50,8 @@
       "model_id": "claude-sonnet-5",
       "input_per_mtok_usd": 2.0,
       "output_per_mtok_usd": 10.0
-    }
+    },
+    "run_cost_ceiling_usd": 1.0
   },
   "provider_configuration": {
     "$comment": "READ THIS BEFORE ADDING A NAME TO .env. Provider configuration is deliberately NOT in the lane .env, and B-0 did not add one.",

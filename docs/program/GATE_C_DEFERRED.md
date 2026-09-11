@@ -76,3 +76,39 @@ an executable gate can tell an integrator what a prose gate cannot.
 Nine tests have been caught passing or failing without exercising what they named. The shape
 was identical every time: the test asserted a property of the fixture rather than of the
 code. That count is the most transferable thing this programme has produced.
+
+## 6. Owner decisions of 2026-09-11
+
+Four rulings, taken while Gate C waits.
+
+- **`OD-03` — the per-run cost ceiling is USD 1.00.** The value is what `B3` had already
+  put in place and explicitly marked as not the owner's decision; what changes is its
+  authority. A corpus run costs roughly $0.20 at the recorded rates, so the ceiling carries
+  about five times headroom — enough for the 30-page document the PC-01 envelope allows.
+  Recorded in `P02_LOCK.json`, which `B3`'s guard and `P4-OPS-01`'s measurement both read.
+
+- **Blob identity against `rejected` — accept the consequence, correct the claim.** The
+  partial index `uq_blob_available_content` is dropped in migration `0003_open_items`. It
+  promised that "a rejected or erased blob must not block a later good upload" and could not
+  deliver it: `blob_id` is derived from `(sha256, size)` and is the primary key, so content
+  uniqueness already holds in every state. Rejected bytes are permanently banned, the PC-01
+  ingest path never rejects — it probes before claiming a key — and the column comment now
+  says so instead of the opposite.
+
+- **The dead diagnostic path — accepted as `B-III` found it.** The analysis stage resolves
+  each quote and drops what does not resolve before writing its artifact, so the grounding
+  gate never sees an unresolvable anchor and no `grounded = false` row is written. `B-III`
+  proved by mutation that the gate is still load-bearing: removing the drop sent the run to
+  `failed`, publishing nothing. The five-value `ungrounded_reason` vocabulary therefore has
+  **no producer**, and *which* quotation a model invented survives only as a per-stage
+  counter.
+
+  **This is a real limit on P04.** Its protocol measures evidence-location correctness, and
+  with no per-quotation record that metric is available as a rate, not as a list. `P4-QA-01`
+  must say so rather than discover it.
+
+  The constraint is added anyway, in the same migration: a declared vocabulary that nothing
+  enforces drifts the moment a producer appears, and enforcing it costs one line.
+
+- **Close the open items while Gate C waits**, rather than halting. So that `C2` arrives at
+  a tree with nothing known-wrong in it.
