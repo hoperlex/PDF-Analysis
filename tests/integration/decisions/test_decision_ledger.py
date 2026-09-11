@@ -472,12 +472,21 @@ class TestWhatMayBeJudged:
             )
         assert caught.value.code is ErrorCode.NOT_FOUND
 
+        # Scoped to the observation under test, not to the table. A global count is only
+        # zero while this suite owns the database alone, and it does not: the suites share
+        # one instance, so running the battery in sequence made this assertion read rows
+        # written by earlier suites and fail on work that was never its own. Scoping keeps
+        # the property - nothing was appended *here* - and makes it order-independent.
         assert (
             session.execute(
-                text("SELECT count(*) FROM expert_decision_event")
+                text(
+                    "SELECT count(*) FROM expert_decision_event "
+                    "WHERE finding_observation_id = :o"
+                ),
+                {"o": rejected},
             ).scalar_one()
             == 0
-        ), "no event was appended for an ungrounded observation"
+        ), "an event was appended for an ungrounded observation"
 
     def test_an_observation_that_is_not_the_findings_own_is_refused(
         self, session: Session, published
