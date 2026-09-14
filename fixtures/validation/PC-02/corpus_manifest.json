@@ -1,0 +1,1976 @@
+{
+  "schema": "pc02-validation-corpus/1",
+  "checkpoint": "PC-02",
+  "task": "P4-QA-01",
+  "synthetic": true,
+  "notice": "Synthetic corpus. No customer, production or real project bytes, and no real organisation, address, person or project. Owner decision OD-17 rules the corpus synthetic-only; every record's provenance is 'synthetic' and no record is 'anonymized'.",
+  "generated_by": "fixtures/validation/PC-02/build_pc02_corpus.py",
+  "regenerate": "python3 fixtures/validation/PC-02/build_pc02_corpus.py",
+  "verify": ".venv/bin/python tools/validation/corpus_check.py fixtures/validation/PC-02/corpus_manifest.json",
+  "protocol": "docs/program/validation/PC-02_PROTOCOL.md",
+  "session_record_schema": "fixtures/validation/PC-02/session_record.schema.json",
+  "text_extraction": "Quotation offsets are into the text of a single page as produced by tools/fixtures/ar_corpus/pdfextract.py: runs grouped into lines by baseline, lines top to bottom, joined by a single newline. Every quotation lies wholly within one line, so any extractor that preserves line content resolves it identically. Every quotation was additionally resolved with pdfplumber, which shares no code with the writer.",
+  "independent_extractor": "pdfplumber",
+  "envelope": {
+    "max_bytes": 26214400,
+    "max_pages": 30,
+    "rules": {
+      "ENV-PDF": "the input is a PDF file",
+      "ENV-ENCRYPTED": "the PDF is not encrypted or password-protected",
+      "ENV-SIZE": "the file is at most 26214400 bytes (25 MiB)",
+      "ENV-PAGES": "the document has at most 30 pages",
+      "ENV-TEXT": "every page carries extractable embedded text"
+    }
+  },
+  "composition": {
+    "measurable_documents": 14,
+    "seeded_documents": 5,
+    "control_documents": 9,
+    "seeded_issues": 9,
+    "control_statements": 64,
+    "control_archetypes_used": 12,
+    "negative_envelope_documents": 4,
+    "note": "Negative-envelope documents are counted separately and are excluded from every finding denominator and from every gate that counts measurable documents, G4 included."
+  },
+  "categories": [
+    "internal_contradiction",
+    "explicit_placeholder"
+  ],
+  "finding_labels": [
+    "useful",
+    "incorrect",
+    "unclear"
+  ],
+  "control_archetypes": {
+    "other_object": "the same attribute stated for a different, explicitly named object - a gatehouse, a substation, a neighbouring block",
+    "scope_dependent": "values that legitimately differ because they describe different scopes - a ground floor against a typical floor, an above-ground part against a basement",
+    "identical_repeat": "the same value restated identically on another page; two mentions of one attribute are not two values",
+    "excluded_by_text": "a value the surrounding text explicitly excludes from the comparison it would otherwise contradict",
+    "superseded": "a value the document explicitly withdraws, so it is history rather than a competing claim",
+    "notation_variant": "one value written two ways - thin space against none, м² against кв. м - identical to a reader, different to a string comparator",
+    "placeholder_stem": "prose carrying the stem of a placeholder word while recording a decision that has actually been made",
+    "absence_by_scope": "something genuinely absent from this document because another document owns it, which is not an unfilled field",
+    "decided_alternative": "an alternative mentioned and then explicitly rejected in favour of a stated choice",
+    "sibling_filled": "a filled value for a sibling of an attribute that is genuinely blank nearby, so the blank has to be distinguished from its neighbour",
+    "tolerance_or_rounding": "text that legitimises a small numeric divergence, so the divergence is declared rather than accidental",
+    "class_notation": "several class-like tokens that belong to different classification systems and are easy to conflate"
+  },
+  "documents": [
+    {
+      "label": "PC02-S01",
+      "role": "seeded",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-S01.pdf",
+      "title_ru": "Корпус 1. Архитектурные решения",
+      "summary_ru": "Семь страниц. Класс конструктивной пожарной опасности корпуса 1 назван дважды по-разному, и марка фасадных кассет оставлена незаполненной.",
+      "sha256": "59d7da27189684c9ef33b280390fcc4a28e7d159c66c59831de6fe9bdf31f622",
+      "bytes": 52421,
+      "pages": 7,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "07a80e0e4d2bba5b83ae0f18ff5710fd524609b88f3331db8c1797ea6ceafa7c",
+        "92b81193007ffe1ff5f9765552b036ac5bfba7092f015acf0339ab42b5caf184",
+        "b65a4680f028601c5b81240567dad849fceef41ec07940bf02f298db697eacb1",
+        "b3187a3471eb24bcad280f8d0b0d18ffb4819f6aaefa865cebcc4f40f9f32d9f",
+        "ea6498c25f58575ffe2bda4a171cbaede4879d8dd410db8eee07b3dab9cfa94d",
+        "cf80f5b3a4143b076a777983c350bd49e7c9c6001ae43b70a8b7682579ff19b0",
+        "cdb8d8f711f958c1154a46d7350640e430dabdee2d6da56321fda63cd5868530"
+      ],
+      "seeded_issue_count": 2,
+      "seeded_issues": [
+        {
+          "id": "PC02-S01-I1",
+          "category": "internal_contradiction",
+          "attribute_ru": "класс конструктивной пожарной опасности корпуса 1",
+          "pages": [
+            2,
+            5
+          ],
+          "summary_ru": "Класс конструктивной пожарной опасности одного и того же корпуса 1 указан как С0 на странице 2 и как С1 на странице 5.",
+          "why_seeded": "Two sections of a real AR volume are often written by different people weeks apart, and the structural fire-hazard class is exactly the kind of attribute each restates independently. The wording is identical apart from the value, so the contradiction is unambiguous, while the same page range also carries the same class for a different object and a different class system for the same object - so finding it requires reading the subject of the sentence, not matching a pattern.",
+          "evidence": [
+            {
+              "page": 2,
+              "quotation": "Класс конструктивной пожарной опасности корпуса 1 — С0.",
+              "char_offset_in_page_text": 150,
+              "line_index_in_page_text": 3,
+              "line_text": "Класс конструктивной пожарной опасности корпуса 1 — С0."
+            },
+            {
+              "page": 5,
+              "quotation": "Класс конструктивной пожарной опасности корпуса 1 — С1.",
+              "char_offset_in_page_text": 166,
+              "line_index_in_page_text": 3,
+              "line_text": "Класс конструктивной пожарной опасности корпуса 1 — С1."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S01-I2",
+          "category": "explicit_placeholder",
+          "attribute_ru": "марка фасадных кассет корпуса 1",
+          "pages": [
+            7
+          ],
+          "summary_ru": "Марка фасадных кассет оставлена как литерал TBD на странице 7.",
+          "why_seeded": "PROTOTYPE_PROFILE.md section 7.1 names TBD explicitly, and it is the placeholder PC-01 did not use. It is planted two lines above a *decided* value for the colour of the same product, so a detector that fires on the phrase 'фасадные кассеты' rather than on the incompleteness scores a false positive next to it.",
+          "evidence": [
+            {
+              "page": 7,
+              "quotation": "Марка фасадных кассет корпуса 1 — TBD.",
+              "char_offset_in_page_text": 92,
+              "line_index_in_page_text": 2,
+              "line_text": "Марка фасадных кассет корпуса 1 — TBD."
+            }
+          ]
+        }
+      ],
+      "control_count": 4,
+      "controls": [
+        {
+          "id": "PC02-S01-K1",
+          "pages": [
+            3
+          ],
+          "quotation": "Класс конструктивной пожарной опасности отдельно стоящей ТП — С1.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a second structural fire-hazard class, read as contradicting С0",
+          "why_not_an_issue_ru": "Класс относится к отдельно стоящей трансформаторной подстанции, а не к корпусу 1; объект назван в самой строке.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Класс конструктивной пожарной опасности отдельно стоящей ТП — С1.",
+              "char_offset_in_page_text": 93,
+              "line_index_in_page_text": 2,
+              "line_text": "Класс конструктивной пожарной опасности отдельно стоящей ТП — С1."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S01-K2",
+          "pages": [
+            4
+          ],
+          "quotation": "Уточнённые размеры проёмов приведены в ведомости заполнений корпуса 1.",
+          "archetype": "placeholder_stem",
+          "would_be_false_positive_as": "the stem 'уточн', read as an unfilled field",
+          "why_not_an_issue_ru": "Размеры уже уточнены и приведены в ведомости; строка фиксирует принятое решение, а не пробел.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Уточнённые размеры проёмов приведены в ведомости заполнений корпуса 1.",
+              "char_offset_in_page_text": 172,
+              "line_index_in_page_text": 3,
+              "line_text": "Уточнённые размеры проёмов приведены в ведомости заполнений корпуса 1."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S01-K3",
+          "pages": [
+            3,
+            6
+          ],
+          "quotation": "Класс функциональной пожарной опасности корпуса 1 — Ф1.3.",
+          "archetype": "identical_repeat",
+          "would_be_false_positive_as": "one attribute mentioned twice, read as two competing values",
+          "why_not_an_issue_ru": "Значение Ф1.3 повторено дословно; это класс функциональной, а не конструктивной пожарной опасности.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Класс функциональной пожарной опасности корпуса 1 — Ф1.3.",
+              "char_offset_in_page_text": 225,
+              "line_index_in_page_text": 4,
+              "line_text": "Класс функциональной пожарной опасности корпуса 1 — Ф1.3."
+            },
+            {
+              "page": 6,
+              "quotation": "Класс функциональной пожарной опасности корпуса 1 — Ф1.3.",
+              "char_offset_in_page_text": 94,
+              "line_index_in_page_text": 2,
+              "line_text": "Класс функциональной пожарной опасности корпуса 1 — Ф1.3."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S01-K4",
+          "pages": [
+            7
+          ],
+          "quotation": "Цвет фасадных кассет корпуса 1 принят RAL 7040 и не изменяется.",
+          "archetype": "sibling_filled",
+          "would_be_false_positive_as": "a fasade-cassette line beside a TBD, read as part of the same gap",
+          "why_not_an_issue_ru": "Цвет кассет определён и зафиксирован; незаполнена только марка.",
+          "anchors": [
+            {
+              "page": 7,
+              "quotation": "Цвет фасадных кассет корпуса 1 принят RAL 7040 и не изменяется.",
+              "char_offset_in_page_text": 131,
+              "line_index_in_page_text": 3,
+              "line_text": "Цвет фасадных кассет корпуса 1 принят RAL 7040 и не изменяется."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-S02",
+      "role": "seeded",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-S02.pdf",
+      "title_ru": "Корпус 2. Объёмно-планировочные решения",
+      "summary_ru": "Шесть страниц. Общая площадь здания названа двумя разными числами, и рядом стоит то же самое число в другой записи, которое расхождением не является.",
+      "sha256": "2582b230d33428d012914833b13b9addb26b82c3df21d84eec845434365fb5e8",
+      "bytes": 49939,
+      "pages": 6,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "ae8ed5d3d669a362aa57861c5131a876757aca38aa541e2edb4c71ac7fbc56a1",
+        "0ff2cecc5d041d783734ed15caaf1286664614c1fe9567a93fcdca60eca2da9b",
+        "c3f4f2cb482b75b68654aee805973fc2a773bc682add980f2b0e95aa5dcc651a",
+        "5ddff8a321d398cde5c70720c38357cc99e7c63136b39198b87c1def871acfc0",
+        "8398af7bcb4917f73da00bd46aa40f7f03f6f3a716e6292c1e49e4da95c29cc1",
+        "0103055dcf5650831225ce32b703de7a1c8099cba8de566388d3aff8b07db789"
+      ],
+      "seeded_issue_count": 1,
+      "seeded_issues": [
+        {
+          "id": "PC02-S02-I1",
+          "category": "internal_contradiction",
+          "attribute_ru": "общая площадь здания корпуса 2",
+          "pages": [
+            2,
+            5
+          ],
+          "summary_ru": "Общая площадь здания корпуса 2 указана как 4 812,5 м² на странице 2 и как 4 218,5 м² на странице 5.",
+          "why_seeded": "A transposed pair of digits (812 against 218) is the most common way a real area disagrees with itself, and it is the hardest kind for a reader skimming a table to catch. The same document restates the correct value in a different notation and carries two other areas of the building, so the model has to decide which pair of numbers describes one attribute.",
+          "evidence": [
+            {
+              "page": 2,
+              "quotation": "Общая площадь здания корпуса 2 — 4 812,5 м².",
+              "char_offset_in_page_text": 105,
+              "line_index_in_page_text": 2,
+              "line_text": "Общая площадь здания корпуса 2 — 4 812,5 м²."
+            },
+            {
+              "page": 5,
+              "quotation": "Общая площадь здания корпуса 2 — 4 218,5 м².",
+              "char_offset_in_page_text": 154,
+              "line_index_in_page_text": 3,
+              "line_text": "Общая площадь здания корпуса 2 — 4 218,5 м²."
+            }
+          ]
+        }
+      ],
+      "control_count": 6,
+      "controls": [
+        {
+          "id": "PC02-S02-K1",
+          "pages": [
+            2
+          ],
+          "quotation": "Площадь застройки корпуса 2 — 1 204,0 м².",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a second area figure, read as contradicting the total",
+          "why_not_an_issue_ru": "Площадь застройки — иной показатель, чем общая площадь здания.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Площадь застройки корпуса 2 — 1 204,0 м².",
+              "char_offset_in_page_text": 150,
+              "line_index_in_page_text": 3,
+              "line_text": "Площадь застройки корпуса 2 — 1 204,0 м²."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S02-K2",
+          "pages": [
+            3
+          ],
+          "quotation": "Полезная площадь корпуса 2 — 4 312,0 м².",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a third area figure close to the total, read as a contradiction",
+          "why_not_an_issue_ru": "Полезная площадь — самостоятельный показатель и по определению меньше общей.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Полезная площадь корпуса 2 — 4 312,0 м².",
+              "char_offset_in_page_text": 94,
+              "line_index_in_page_text": 2,
+              "line_text": "Полезная площадь корпуса 2 — 4 312,0 м²."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S02-K3",
+          "pages": [
+            3
+          ],
+          "quotation": "Высота первого этажа корпуса 2 от пола до пола — 3,60 м.",
+          "archetype": "scope_dependent",
+          "would_be_false_positive_as": "a storey height differing from the one on the next page",
+          "why_not_an_issue_ru": "Высота первого этажа законно отличается от высоты типового этажа.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Высота первого этажа корпуса 2 от пола до пола — 3,60 м.",
+              "char_offset_in_page_text": 201,
+              "line_index_in_page_text": 4,
+              "line_text": "Высота первого этажа корпуса 2 от пола до пола — 3,60 м."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S02-K4",
+          "pages": [
+            4
+          ],
+          "quotation": "Высота типового этажа корпуса 2 от пола до пола — 3,00 м.",
+          "archetype": "scope_dependent",
+          "would_be_false_positive_as": "a second storey height, read as contradicting the first",
+          "why_not_an_issue_ru": "Относится к типовому этажу, а не к первому; область действия названа.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Высота типового этажа корпуса 2 от пола до пола — 3,00 м.",
+              "char_offset_in_page_text": 96,
+              "line_index_in_page_text": 2,
+              "line_text": "Высота типового этажа корпуса 2 от пола до пола — 3,00 м."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S02-K5",
+          "pages": [
+            6
+          ],
+          "quotation": "Показатели приведены с округлением до 0,1; итоги могут расходиться.",
+          "archetype": "tolerance_or_rounding",
+          "would_be_false_positive_as": "a statement that sums may diverge, read as an admission of error",
+          "why_not_an_issue_ru": "Округление объявлено в самом документе, расхождение итогов предусмотрено и ограничено.",
+          "anchors": [
+            {
+              "page": 6,
+              "quotation": "Показатели приведены с округлением до 0,1; итоги могут расходиться.",
+              "char_offset_in_page_text": 98,
+              "line_index_in_page_text": 2,
+              "line_text": "Показатели приведены с округлением до 0,1; итоги могут расходиться."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S02-K6",
+          "pages": [
+            4
+          ],
+          "quotation": "Общая площадь здания корпуса 2 составляет 4812,5 кв. м.",
+          "archetype": "notation_variant",
+          "would_be_false_positive_as": "the same total written without a thin space and as кв. м",
+          "why_not_an_issue_ru": "Число совпадает со страницей 2 посимвольно по значению; различается только запись.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Общая площадь здания корпуса 2 составляет 4812,5 кв. м.",
+              "char_offset_in_page_text": 221,
+              "line_index_in_page_text": 4,
+              "line_text": "Общая площадь здания корпуса 2 составляет 4812,5 кв. м."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-S03",
+      "role": "seeded",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-S03.pdf",
+      "title_ru": "Корпус 3. Кровля и фасадные системы",
+      "summary_ru": "Семь страниц. Тип кровли одного корпуса назван и плоским, и скатным, а толщина утеплителя покрытия оставлена прочерком.",
+      "sha256": "cbcf93e69f91e0aaf9a9e810a3e9ba6e1c3fd80cb92fd01a0bc82b6365a0299e",
+      "bytes": 51423,
+      "pages": 7,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "f330b4a33dd6a0e715a27baef98014a991b527314835a8cac009c62310b5da53",
+        "672ae04bd502e4d9e9674e0f0d41eb2ec662f26263e941f889dc98cbaadd487c",
+        "ef7ce69929d6582125583b9786c6f1d05691f92f89f7bcc7bdc07d45a2e2ced3",
+        "9c8c12f28b5a4589dc495914fa8ecd844123d4117d50969d4043b75b0d7a2fc4",
+        "bb9b932d322da5bb95d2a99dcb855dd36a27f10a980b98320f1c8cc24c2f276f",
+        "2aa66ae7bd5a70c49162775acb9b18489df204d6e17bca6e8ec2ad79589c1efb",
+        "30a2eb143f37ccc1e73eb83f39dd0431f5e272c3f038ddf7379930229fe4ad5e"
+      ],
+      "seeded_issue_count": 2,
+      "seeded_issues": [
+        {
+          "id": "PC02-S03-I1",
+          "category": "internal_contradiction",
+          "attribute_ru": "тип кровли корпуса 3",
+          "pages": [
+            3,
+            6
+          ],
+          "summary_ru": "Кровля корпуса 3 описана как плоская с внутренним водостоком на странице 3 и как скатная с наружным водостоком на странице 6.",
+          "why_seeded": "Every other seeded contradiction in this corpus is numeric. This one is categorical, and a rate measured only on numbers would not generalize to the half of AR prose that carries no figures. It is also the contradiction with the largest professional consequence here, which is what makes it worth asking a reviewer whether the finding was useful.",
+          "evidence": [
+            {
+              "page": 3,
+              "quotation": "Кровля корпуса 3 — плоская, с внутренним организованным водостоком.",
+              "char_offset_in_page_text": 159,
+              "line_index_in_page_text": 3,
+              "line_text": "Кровля корпуса 3 — плоская, с внутренним организованным водостоком."
+            },
+            {
+              "page": 6,
+              "quotation": "Кровля корпуса 3 — скатная, с наружным организованным водостоком.",
+              "char_offset_in_page_text": 91,
+              "line_index_in_page_text": 2,
+              "line_text": "Кровля корпуса 3 — скатная, с наружным организованным водостоком."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S03-I2",
+          "category": "explicit_placeholder",
+          "attribute_ru": "толщина утеплителя покрытия корпуса 3",
+          "pages": [
+            5
+          ],
+          "summary_ru": "Толщина утеплителя покрытия оставлена прочерком на странице 5.",
+          "why_seeded": "A blank rule is a placeholder with no placeholder *word* in it. A detector keyed to уточнить and TBD misses it entirely, so it measures whether the stage understands incompleteness or only recognises vocabulary. The filled thickness of a sibling structure sits on the next line.",
+          "evidence": [
+            {
+              "page": 5,
+              "quotation": "Толщина утеплителя покрытия корпуса 3 — ___ мм.",
+              "char_offset_in_page_text": 109,
+              "line_index_in_page_text": 2,
+              "line_text": "Толщина утеплителя покрытия корпуса 3 — ___ мм."
+            }
+          ]
+        }
+      ],
+      "control_count": 4,
+      "controls": [
+        {
+          "id": "PC02-S03-K1",
+          "pages": [
+            4
+          ],
+          "quotation": "Кровля отдельно стоящего гаража — скатная, с наружным водостоком.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a second roof type, read as contradicting the main roof",
+          "why_not_an_issue_ru": "Относится к отдельно стоящему гаражу; объект назван в строке.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Кровля отдельно стоящего гаража — скатная, с наружным водостоком.",
+              "char_offset_in_page_text": 99,
+              "line_index_in_page_text": 2,
+              "line_text": "Кровля отдельно стоящего гаража — скатная, с наружным водостоком."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S03-K2",
+          "pages": [
+            5
+          ],
+          "quotation": "Толщина утеплителя наружных стен корпуса 3 — 150 мм.",
+          "archetype": "sibling_filled",
+          "would_be_false_positive_as": "a filled insulation thickness beside a blank one",
+          "why_not_an_issue_ru": "Это утеплитель наружных стен, а не покрытия; значение задано.",
+          "anchors": [
+            {
+              "page": 5,
+              "quotation": "Толщина утеплителя наружных стен корпуса 3 — 150 мм.",
+              "char_offset_in_page_text": 157,
+              "line_index_in_page_text": 3,
+              "line_text": "Толщина утеплителя наружных стен корпуса 3 — 150 мм."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S03-K3",
+          "pages": [
+            2,
+            6
+          ],
+          "quotation": "Класс энергетической эффективности корпуса 3 — А.",
+          "archetype": "identical_repeat",
+          "would_be_false_positive_as": "an energy class stated twice, read as two values",
+          "why_not_an_issue_ru": "Значение А повторено дословно.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Класс энергетической эффективности корпуса 3 — А.",
+              "char_offset_in_page_text": 75,
+              "line_index_in_page_text": 2,
+              "line_text": "Класс энергетической эффективности корпуса 3 — А."
+            },
+            {
+              "page": 6,
+              "quotation": "Класс энергетической эффективности корпуса 3 — А.",
+              "char_offset_in_page_text": 226,
+              "line_index_in_page_text": 4,
+              "line_text": "Класс энергетической эффективности корпуса 3 — А."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S03-K4",
+          "pages": [
+            7
+          ],
+          "quotation": "Водосточные воронки приняты по каталогу изготовителя, позиция 4.2.",
+          "archetype": "absence_by_scope",
+          "would_be_false_positive_as": "a reference to an external catalogue, read as an unfilled field",
+          "why_not_an_issue_ru": "Позиция изделия определена ссылкой на каталог; выбор сделан.",
+          "anchors": [
+            {
+              "page": 7,
+              "quotation": "Водосточные воронки приняты по каталогу изготовителя, позиция 4.2.",
+              "char_offset_in_page_text": 151,
+              "line_index_in_page_text": 3,
+              "line_text": "Водосточные воронки приняты по каталогу изготовителя, позиция 4.2."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-S04",
+      "role": "seeded",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-S04.pdf",
+      "title_ru": "Корпус 4. Вертикальный транспорт и высотные отметки",
+      "summary_ru": "Девять страниц с двумя заложенными расхождениями и явно отменённым третьим значением отметки, которое расхождением не является.",
+      "sha256": "4ec5f6f9199023f2c29aba51753f8545ac00de0edabcd9221696879a693f684c",
+      "bytes": 55184,
+      "pages": 9,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "69ee9ea1a9f480d088f4a7c6efa23c7b9e4f314f1894a4a4d885c7eeee9d49ad",
+        "4edf21a219c94a4af0703b6275e004fc23705dbd920b0f35cdaa86c0fcb6a830",
+        "b69f4bfd952ce8ad94773ab82af8f50e0a904a14b2d6b49bb65612ffdf0b4c29",
+        "07cf4aba512e916d1f5568a95cde72d7dd02f8e725b3d3aefe13f6efb91a63b2",
+        "5603a24cbb551da23d1623e42ae0ee9e8b3476c75e134c5538dc5eacac6b05ce",
+        "f19d35e5f405d20d7fce171140483dd30b59877d107ebf4d1b352a67ebbd65c3",
+        "a08ffe1a9d18dc3bfd06c488ce1a4dff5f2083a86fdc02cf5a9d39bbf0788f02",
+        "740783502e99f5b42ad7a3c38bed5f5a1f9eaa441567eb812dd4d7d1d8065266",
+        "a2c9b2b6522e5a3979a2b37a7fb3a6c0413f67766a0fadf99df10b1e71f4c1ee"
+      ],
+      "seeded_issue_count": 2,
+      "seeded_issues": [
+        {
+          "id": "PC02-S04-I1",
+          "category": "internal_contradiction",
+          "attribute_ru": "абсолютная отметка нуля корпуса 4",
+          "pages": [
+            2,
+            7
+          ],
+          "summary_ru": "Абсолютная отметка нуля корпуса 4 указана как 143,60 на странице 2 и как 143,80 на странице 7.",
+          "why_seeded": "A 200 mm disagreement in the datum is small enough to survive review and expensive enough to matter on site, which is exactly the profile of a finding worth paying for. The document also carries the datum of a neighbouring block and a third value it explicitly withdraws, so three numbers are in play and only one pair is a contradiction.",
+          "evidence": [
+            {
+              "page": 2,
+              "quotation": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,60.",
+              "char_offset_in_page_text": 154,
+              "line_index_in_page_text": 3,
+              "line_text": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,60."
+            },
+            {
+              "page": 7,
+              "quotation": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,80.",
+              "char_offset_in_page_text": 102,
+              "line_index_in_page_text": 2,
+              "line_text": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,80."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S04-I2",
+          "category": "internal_contradiction",
+          "attribute_ru": "количество пассажирских лифтов корпуса 4",
+          "pages": [
+            4,
+            8
+          ],
+          "summary_ru": "Количество пассажирских лифтов корпуса 4 указано как два на странице 4 и как три на странице 8.",
+          "why_seeded": "Counts of the same equipment class in one building are a standard AR inconsistency. The wording is identical apart from the numeral, so the claim is unambiguous, while a goods lift in the same building offers the obvious wrong reconciliation - two plus one - which a careless reader would accept.",
+          "evidence": [
+            {
+              "page": 4,
+              "quotation": "В корпусе 4 предусмотрено два пассажирских лифта.",
+              "char_offset_in_page_text": 161,
+              "line_index_in_page_text": 3,
+              "line_text": "В корпусе 4 предусмотрено два пассажирских лифта."
+            },
+            {
+              "page": 8,
+              "quotation": "В корпусе 4 предусмотрено три пассажирских лифта.",
+              "char_offset_in_page_text": 152,
+              "line_index_in_page_text": 3,
+              "line_text": "В корпусе 4 предусмотрено три пассажирских лифта."
+            }
+          ]
+        }
+      ],
+      "control_count": 5,
+      "controls": [
+        {
+          "id": "PC02-S04-K1",
+          "pages": [
+            3
+          ],
+          "quotation": "Отметка 0,000 корпуса 5 соответствует абсолютной отметке 144,10.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a third datum value, read as contradicting the other two",
+          "why_not_an_issue_ru": "Отметка относится к корпусу 5; корпус назван в строке.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Отметка 0,000 корпуса 5 соответствует абсолютной отметке 144,10.",
+              "char_offset_in_page_text": 86,
+              "line_index_in_page_text": 2,
+              "line_text": "Отметка 0,000 корпуса 5 соответствует абсолютной отметке 144,10."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S04-K2",
+          "pages": [
+            5
+          ],
+          "quotation": "В корпусе 4 предусмотрен один грузопассажирский лифт.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a lift count that appears to reconcile two against three",
+          "why_not_an_issue_ru": "Лифт грузопассажирский, а не пассажирский; классы разные.",
+          "anchors": [
+            {
+              "page": 5,
+              "quotation": "В корпусе 4 предусмотрен один грузопассажирский лифт.",
+              "char_offset_in_page_text": 90,
+              "line_index_in_page_text": 2,
+              "line_text": "В корпусе 4 предусмотрен один грузопассажирский лифт."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S04-K3",
+          "pages": [
+            6
+          ],
+          "quotation": "Ранее принятая отметка 143,40 настоящим листом не применяется.",
+          "archetype": "superseded",
+          "would_be_false_positive_as": "a third datum value, read as a live competing claim",
+          "why_not_an_issue_ru": "Значение прямо отменено настоящим листом и в сравнении не участвует.",
+          "anchors": [
+            {
+              "page": 6,
+              "quotation": "Ранее принятая отметка 143,40 настоящим листом не применяется.",
+              "char_offset_in_page_text": 98,
+              "line_index_in_page_text": 2,
+              "line_text": "Ранее принятая отметка 143,40 настоящим листом не применяется."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S04-K4",
+          "pages": [
+            9
+          ],
+          "quotation": "Количество лифтов корпуса 5 — четыре, включая один грузовой.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a fourth lift count, read as contradicting the building's own",
+          "why_not_an_issue_ru": "Относится к корпусу 5.",
+          "anchors": [
+            {
+              "page": 9,
+              "quotation": "Количество лифтов корпуса 5 — четыре, включая один грузовой.",
+              "char_offset_in_page_text": 98,
+              "line_index_in_page_text": 2,
+              "line_text": "Количество лифтов корпуса 5 — четыре, включая один грузовой."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S04-K5",
+          "pages": [
+            3,
+            7
+          ],
+          "quotation": "Отметки даны в Балтийской системе высот.",
+          "archetype": "identical_repeat",
+          "would_be_false_positive_as": "a datum system stated twice, read as two claims",
+          "why_not_an_issue_ru": "Строка повторена дословно и значения не содержит.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Отметки даны в Балтийской системе высот.",
+              "char_offset_in_page_text": 151,
+              "line_index_in_page_text": 3,
+              "line_text": "Отметки даны в Балтийской системе высот."
+            },
+            {
+              "page": 7,
+              "quotation": "Отметки даны в Балтийской системе высот.",
+              "char_offset_in_page_text": 240,
+              "line_index_in_page_text": 4,
+              "line_text": "Отметки даны в Балтийской системе высот."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-S05",
+      "role": "seeded",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-S05.pdf",
+      "title_ru": "Корпус 5. Этажность и встроенные помещения",
+      "summary_ru": "Десять страниц. Этажность корпуса названа дважды по-разному, а назначение одного из встроенных помещений оставлено неопределённым.",
+      "sha256": "95330a757e3f724a1b2cc994d453ba805f6c456f93e5246df022b9f78d1f4c40",
+      "bytes": 56651,
+      "pages": 10,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "21b7f43218bd8dc3ca31d0fbe6fa5805d6ab74db5000fc3a528d7a71d9163de3",
+        "f00ba614a9d38dc0388bf090b7ceed397094b99ff76bfa351007a360a83535e0",
+        "21690d5ad37c40c1368b1d832246a77cbb4b8044d844125ef9d2c7dfca95a7fa",
+        "1fcba95f26a39ccc42bede1de4be46b40476b2ffc55aa9bdf39decf68f766bec",
+        "f0f239dfe8c87ce196929650b1258cb2dda9d40841db2b98dca1742d2edf478d",
+        "441ca54417ed33ae6db432c3d74caf09b3b734aacbbcdd7eef92da44dc77ad8e",
+        "fe6a554a61223837fdd0413a1c5d23f858cdb13603b0a77d0145c10595a13a38",
+        "589fe84ad0d57d138f3c71f33559a6d539da8c3799533aae54d18f0e8db7cc49",
+        "6792a62eb44504e1db1a7f2c343fe2cd907e31ab2d38194c2172ef46b9ca6244",
+        "7130b947df7e68abe0613b09eec825a0be6aea0061c1b2c8c3077569563fc5fd"
+      ],
+      "seeded_issue_count": 2,
+      "seeded_issues": [
+        {
+          "id": "PC02-S05-I1",
+          "category": "internal_contradiction",
+          "attribute_ru": "этажность корпуса 5",
+          "pages": [
+            2,
+            9
+          ],
+          "summary_ru": "Этажность корпуса 5 указана как 12 этажей на странице 2 и как 14 этажей на странице 9.",
+          "why_seeded": "Storey count is the attribute most often restated in an AR volume and therefore most often restated wrongly. This one is planted directly beside the legitimate Russian distinction between этажность and количество этажей, which differ by the basement on purpose - so a model that treats every nearby number as the same attribute produces a false positive on the very next line while finding the real one.",
+          "evidence": [
+            {
+              "page": 2,
+              "quotation": "Этажность корпуса 5 — 12 этажей.",
+              "char_offset_in_page_text": 79,
+              "line_index_in_page_text": 2,
+              "line_text": "Этажность корпуса 5 — 12 этажей."
+            },
+            {
+              "page": 9,
+              "quotation": "Этажность корпуса 5 — 14 этажей.",
+              "char_offset_in_page_text": 163,
+              "line_index_in_page_text": 3,
+              "line_text": "Этажность корпуса 5 — 14 этажей."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S05-I2",
+          "category": "explicit_placeholder",
+          "attribute_ru": "назначение помещения 1.12",
+          "pages": [
+            6
+          ],
+          "summary_ru": "Назначение помещения 1.12 оставлено как «не определено» на странице 6.",
+          "why_seeded": "An explicitly undetermined field with no conventional placeholder token. It sits two pages from a filled sibling room and one page from a sentence carrying the уточн stem about a list that is complete, so both the recall and the precision sides of the placeholder category are exercised in one document.",
+          "evidence": [
+            {
+              "page": 6,
+              "quotation": "Назначение помещения 1.12 — не определено.",
+              "char_offset_in_page_text": 163,
+              "line_index_in_page_text": 3,
+              "line_text": "Назначение помещения 1.12 — не определено."
+            }
+          ]
+        }
+      ],
+      "control_count": 6,
+      "controls": [
+        {
+          "id": "PC02-S05-K1",
+          "pages": [
+            2
+          ],
+          "quotation": "Количество этажей корпуса 5, включая подземные, — 13.",
+          "archetype": "scope_dependent",
+          "would_be_false_positive_as": "a storey count differing from этажность on the same page",
+          "why_not_an_issue_ru": "Этажность и количество этажей — разные показатели; подземный этаж в этажность не входит, разница в один этаж закономерна.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Количество этажей корпуса 5, включая подземные, — 13.",
+              "char_offset_in_page_text": 112,
+              "line_index_in_page_text": 3,
+              "line_text": "Количество этажей корпуса 5, включая подземные, — 13."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S05-K2",
+          "pages": [
+            3
+          ],
+          "quotation": "Этажность корпуса 6 — 9 этажей.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a third storey count, read as contradicting the building's own",
+          "why_not_an_issue_ru": "Относится к корпусу 6.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Этажность корпуса 6 — 9 этажей.",
+              "char_offset_in_page_text": 85,
+              "line_index_in_page_text": 2,
+              "line_text": "Этажность корпуса 6 — 9 этажей."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S05-K3",
+          "pages": [
+            5
+          ],
+          "quotation": "Назначение помещения 1.14 — помещение уборочного инвентаря.",
+          "archetype": "sibling_filled",
+          "would_be_false_positive_as": "a room-purpose line beside an undetermined one",
+          "why_not_an_issue_ru": "Назначение помещения 1.14 определено; пробел только у 1.12.",
+          "anchors": [
+            {
+              "page": 5,
+              "quotation": "Назначение помещения 1.14 — помещение уборочного инвентаря.",
+              "char_offset_in_page_text": 89,
+              "line_index_in_page_text": 2,
+              "line_text": "Назначение помещения 1.14 — помещение уборочного инвентаря."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S05-K4",
+          "pages": [
+            7
+          ],
+          "quotation": "Перечень встроенных помещений уточнён и приведён в таблице 5.1.",
+          "archetype": "placeholder_stem",
+          "would_be_false_positive_as": "the stem 'уточн', read as an unfilled field",
+          "why_not_an_issue_ru": "Перечень уже уточнён и приведён в таблице.",
+          "anchors": [
+            {
+              "page": 7,
+              "quotation": "Перечень встроенных помещений уточнён и приведён в таблице 5.1.",
+              "char_offset_in_page_text": 101,
+              "line_index_in_page_text": 2,
+              "line_text": "Перечень встроенных помещений уточнён и приведён в таблице 5.1."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S05-K5",
+          "pages": [
+            4,
+            8
+          ],
+          "quotation": "Класс функциональной пожарной опасности встроенной части — Ф4.3.",
+          "archetype": "identical_repeat",
+          "would_be_false_positive_as": "a fire-hazard class stated twice, read as two values",
+          "why_not_an_issue_ru": "Значение Ф4.3 повторено дословно.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Класс функциональной пожарной опасности встроенной части — Ф4.3.",
+              "char_offset_in_page_text": 97,
+              "line_index_in_page_text": 2,
+              "line_text": "Класс функциональной пожарной опасности встроенной части — Ф4.3."
+            },
+            {
+              "page": 8,
+              "quotation": "Класс функциональной пожарной опасности встроенной части — Ф4.3.",
+              "char_offset_in_page_text": 100,
+              "line_index_in_page_text": 2,
+              "line_text": "Класс функциональной пожарной опасности встроенной части — Ф4.3."
+            }
+          ]
+        },
+        {
+          "id": "PC02-S05-K6",
+          "pages": [
+            10
+          ],
+          "quotation": "Помещения подвала в этажность здания не включаются.",
+          "archetype": "excluded_by_text",
+          "would_be_false_positive_as": "a rule about basements, read as contradicting the storey count",
+          "why_not_an_issue_ru": "Строка объясняет, почему количество этажей больше этажности, и сама значения не назначает.",
+          "anchors": [
+            {
+              "page": 10,
+              "quotation": "Помещения подвала в этажность здания не включаются.",
+              "char_offset_in_page_text": 97,
+              "line_index_in_page_text": 2,
+              "line_text": "Помещения подвала в этажность здания не включаются."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-C01",
+      "role": "control",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-C01.pdf",
+      "title_ru": "Корпус 6. Общие архитектурные решения",
+      "summary_ru": "Пять страниц. Три разные степени огнестойкости, каждая — у своего названного объекта. Расхождений нет.",
+      "sha256": "9a09e5ea9ac8542c60694482e0f3b090f808779e837c68f7b11d39a5e4b373a9",
+      "bytes": 47381,
+      "pages": 5,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "3faefea78268b3f69c98551771ee5d26b05fb85b7fb4d33f89d0175246f16654",
+        "47aa154488ab6b747cc4c015da2f4ff820f0872c69bb5c2eba6a3871ec7c866e",
+        "bd0dd7c0453a9f7b060c27605b906514023aa9d115de6b45f6e82c9f315e83fa",
+        "17f802dc1a5228bef949d1dc20ab97e39a021b75f587bb1443f66ba7e01adcea",
+        "631a2df5d2ca2805c1b4c1822e4653362e616f89f44b510bc2fd3c693bd27975"
+      ],
+      "seeded_issue_count": 0,
+      "seeded_issues": [],
+      "control_count": 3,
+      "controls": [
+        {
+          "id": "PC02-C01-K1",
+          "pages": [
+            2,
+            5
+          ],
+          "quotation": "Степень огнестойкости корпуса 6 — II.",
+          "archetype": "identical_repeat",
+          "would_be_false_positive_as": "a fire-resistance degree stated twice, read as two values",
+          "why_not_an_issue_ru": "Значение II повторено дословно на двух страницах.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Степень огнестойкости корпуса 6 — II.",
+              "char_offset_in_page_text": 80,
+              "line_index_in_page_text": 2,
+              "line_text": "Степень огнестойкости корпуса 6 — II."
+            },
+            {
+              "page": 5,
+              "quotation": "Степень огнестойкости корпуса 6 — II.",
+              "char_offset_in_page_text": 102,
+              "line_index_in_page_text": 2,
+              "line_text": "Степень огнестойкости корпуса 6 — II."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C01-K2",
+          "pages": [
+            3
+          ],
+          "quotation": "Степень огнестойкости отдельно стоящей котельной — IV.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a second fire-resistance degree, read as a contradiction",
+          "why_not_an_issue_ru": "Относится к отдельно стоящей котельной.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Степень огнестойкости отдельно стоящей котельной — IV.",
+              "char_offset_in_page_text": 98,
+              "line_index_in_page_text": 2,
+              "line_text": "Степень огнестойкости отдельно стоящей котельной — IV."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C01-K3",
+          "pages": [
+            4
+          ],
+          "quotation": "Степень огнестойкости навеса автостоянки не нормируется.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a third fire-resistance statement, read as a contradiction",
+          "why_not_an_issue_ru": "Относится к навесу автостоянки, для которого степень не нормируется.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Степень огнестойкости навеса автостоянки не нормируется.",
+              "char_offset_in_page_text": 98,
+              "line_index_in_page_text": 2,
+              "line_text": "Степень огнестойкости навеса автостоянки не нормируется."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-C02",
+      "role": "control",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-C02.pdf",
+      "title_ru": "Корпус 7. Высоты помещений и этажей",
+      "summary_ru": "Шесть страниц. Пять разных высот, каждая со своей областью действия. Расхождений нет.",
+      "sha256": "42d941d57b76cf0edb963119908e8011511579058d272818bc31e5251e423f6e",
+      "bytes": 49155,
+      "pages": 6,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "501c38762ca754bb2f05328ee806df572af69fb07e42f6e35571de4b6033db8b",
+        "d0ab89a7a8fae3b84be53d03511d7dec4419b3fc828fdf030c755300ead5e272",
+        "c83a1d4dc318f0d9b6df382e61afe22b95abeaa675c06fc39336aaa6f0316530",
+        "ba3eaff73a3212f3f39b191e97ee1c674a6aa558f3b471a8a13aea10e11015e9",
+        "cb6ee7fe31f0576bd2850589fc7b546baae74bdbd5a4534147343fd60ba69391",
+        "c9b5f38c1419a36f301e7cb5d26c4df47cf23f0e85a9f00f878766f03e1b183e"
+      ],
+      "seeded_issue_count": 0,
+      "seeded_issues": [],
+      "control_count": 5,
+      "controls": [
+        {
+          "id": "PC02-C02-K1",
+          "pages": [
+            2
+          ],
+          "quotation": "Высота первого этажа корпуса 7 от пола до пола — 4,20 м.",
+          "archetype": "scope_dependent",
+          "would_be_false_positive_as": "the first of five heights, read as contradicting the others",
+          "why_not_an_issue_ru": "Относится к первому этажу.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Высота первого этажа корпуса 7 от пола до пола — 4,20 м.",
+              "char_offset_in_page_text": 98,
+              "line_index_in_page_text": 2,
+              "line_text": "Высота первого этажа корпуса 7 от пола до пола — 4,20 м."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C02-K2",
+          "pages": [
+            3
+          ],
+          "quotation": "Высота типового этажа корпуса 7 от пола до пола — 3,00 м.",
+          "archetype": "scope_dependent",
+          "would_be_false_positive_as": "a second storey height, read as a contradiction",
+          "why_not_an_issue_ru": "Относится к типовому этажу.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Высота типового этажа корпуса 7 от пола до пола — 3,00 м.",
+              "char_offset_in_page_text": 86,
+              "line_index_in_page_text": 2,
+              "line_text": "Высота типового этажа корпуса 7 от пола до пола — 3,00 м."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C02-K3",
+          "pages": [
+            4
+          ],
+          "quotation": "Высота технического этажа корпуса 7 от пола до пола — 2,40 м.",
+          "archetype": "scope_dependent",
+          "would_be_false_positive_as": "a third storey height, read as a contradiction",
+          "why_not_an_issue_ru": "Относится к техническому этажу.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Высота технического этажа корпуса 7 от пола до пола — 2,40 м.",
+              "char_offset_in_page_text": 89,
+              "line_index_in_page_text": 2,
+              "line_text": "Высота технического этажа корпуса 7 от пола до пола — 2,40 м."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C02-K4",
+          "pages": [
+            5
+          ],
+          "quotation": "Высота жилых помещений корпуса 7 в чистоте — не менее 2,70 м.",
+          "archetype": "scope_dependent",
+          "would_be_false_positive_as": "a clear height stated as a minimum, read as contradicting a floor-to-floor height",
+          "why_not_an_issue_ru": "Высота в чистоте и высота от пола до пола — разные величины.",
+          "anchors": [
+            {
+              "page": 5,
+              "quotation": "Высота жилых помещений корпуса 7 в чистоте — не менее 2,70 м.",
+              "char_offset_in_page_text": 83,
+              "line_index_in_page_text": 2,
+              "line_text": "Высота жилых помещений корпуса 7 в чистоте — не менее 2,70 м."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C02-K5",
+          "pages": [
+            6
+          ],
+          "quotation": "Высота помещений общественного назначения в чистоте — 3,00 м.",
+          "archetype": "scope_dependent",
+          "would_be_false_positive_as": "a clear height equal to another floor-to-floor height",
+          "why_not_an_issue_ru": "Относится к общественным помещениям; совпадение значений случайно и расхождением не является.",
+          "anchors": [
+            {
+              "page": 6,
+              "quotation": "Высота помещений общественного назначения в чистоте — 3,00 м.",
+              "char_offset_in_page_text": 95,
+              "line_index_in_page_text": 2,
+              "line_text": "Высота помещений общественного назначения в чистоте — 3,00 м."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-C03",
+      "role": "control",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-C03.pdf",
+      "title_ru": "Корпус 8. Заполнение проёмов",
+      "summary_ru": "Шесть страниц, насыщенных корнем «уточн», при том что ни одно поле не оставлено незаполненным.",
+      "sha256": "0850722c23c6a6949ec0dac8b7a7ca322364e5f27c17fe0c4afc048948b17230",
+      "bytes": 49231,
+      "pages": 6,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "07029175a561e4dc5dd1969c188f16aa3df03b0938e8b3b759e3724ca4f95221",
+        "e456d99fb385d516b56654112a4e7e23f65368d5e43ed34aa8bb40c75db389ea",
+        "db21c9291c6c695107dfbf17bdb69b7b2624ce1b250899b1bc66ccf0006f76c5",
+        "b4b40e68a07fa60d52ad89854a0c739c344b783536fdf78fd4ac67594ccfbfcc",
+        "0bda7bb432a6447dfa0af58c574a5a3c880ea460f0d1a15b82f2d13de7746cc0",
+        "fea7f56157814680034e6988ca4b7105094e07622852b14d7eb4ce631792253d"
+      ],
+      "seeded_issue_count": 0,
+      "seeded_issues": [],
+      "control_count": 5,
+      "controls": [
+        {
+          "id": "PC02-C03-K1",
+          "pages": [
+            2
+          ],
+          "quotation": "Уточнённая ведомость заполнения проёмов приведена в приложении Б.",
+          "archetype": "placeholder_stem",
+          "would_be_false_positive_as": "the stem 'уточн', read as an unfilled field",
+          "why_not_an_issue_ru": "Ведомость уточнена и приложена; решение принято.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Уточнённая ведомость заполнения проёмов приведена в приложении Б.",
+              "char_offset_in_page_text": 92,
+              "line_index_in_page_text": 2,
+              "line_text": "Уточнённая ведомость заполнения проёмов приведена в приложении Б."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C03-K2",
+          "pages": [
+            3
+          ],
+          "quotation": "Тип заполнения проёмов уточнён при разработке и принят ПВХ.",
+          "archetype": "placeholder_stem",
+          "would_be_false_positive_as": "the stem 'уточн' beside a material choice",
+          "why_not_an_issue_ru": "Тип заполнения назван прямо в той же строке.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Тип заполнения проёмов уточнён при разработке и принят ПВХ.",
+              "char_offset_in_page_text": 92,
+              "line_index_in_page_text": 2,
+              "line_text": "Тип заполнения проёмов уточнён при разработке и принят ПВХ."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C03-K3",
+          "pages": [
+            4
+          ],
+          "quotation": "Ведомость уточнений по проёмам закрыта, изменений не предусмотрено.",
+          "archetype": "placeholder_stem",
+          "would_be_false_positive_as": "the word 'уточнений' in a heading-like sentence",
+          "why_not_an_issue_ru": "Ведомость закрыта; строка сообщает об отсутствии изменений.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Ведомость уточнений по проёмам закрыта, изменений не предусмотрено.",
+              "char_offset_in_page_text": 88,
+              "line_index_in_page_text": 2,
+              "line_text": "Ведомость уточнений по проёмам закрыта, изменений не предусмотрено."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C03-K4",
+          "pages": [
+            5
+          ],
+          "quotation": "Возможна замена на алюминиевые витражи; проектом принято ПВХ.",
+          "archetype": "decided_alternative",
+          "would_be_false_positive_as": "a mentioned alternative, read as an undecided choice",
+          "why_not_an_issue_ru": "Вариант назван и отклонён; принятое решение указано в той же строке.",
+          "anchors": [
+            {
+              "page": 5,
+              "quotation": "Возможна замена на алюминиевые витражи; проектом принято ПВХ.",
+              "char_offset_in_page_text": 91,
+              "line_index_in_page_text": 2,
+              "line_text": "Возможна замена на алюминиевые витражи; проектом принято ПВХ."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C03-K5",
+          "pages": [
+            6
+          ],
+          "quotation": "Цвет профиля проёмов — RAL 7016, изменению не подлежит.",
+          "archetype": "decided_alternative",
+          "would_be_false_positive_as": "a colour code, read as provisional",
+          "why_not_an_issue_ru": "Цвет зафиксирован и объявлен неизменяемым.",
+          "anchors": [
+            {
+              "page": 6,
+              "quotation": "Цвет профиля проёмов — RAL 7016, изменению не подлежит.",
+              "char_offset_in_page_text": 91,
+              "line_index_in_page_text": 2,
+              "line_text": "Цвет профиля проёмов — RAL 7016, изменению не подлежит."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-C04",
+      "role": "control",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-C04.pdf",
+      "title_ru": "Корпус 9. Технико-экономические показатели",
+      "summary_ru": "Семь страниц с шестью числовыми показателями. Единственный повторённый показатель записан двумя способами с одним и тем же значением.",
+      "sha256": "74a6e72eb88d08140504b483e3e4711345560025ea12f98e05ef71ccd53382bf",
+      "bytes": 51049,
+      "pages": 7,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "38285955bf431433219fc10fa03c05532115905df378ca048e60ff5984e9c101",
+        "cc117f293dc95f0396a633ccf47221436482e238b0bf39bc091fb7876a672a3f",
+        "0b14af1c53fbcfeaaf3425cd75fa44d29b40e83f65cb6cb39bbc7e1817f20a80",
+        "2804571936ba5362f41a4694fcd306a633d04a348dcbdb97b8fce86834df716e",
+        "902646033cf4d59ba228f8f71e3f565d6fb80651f62236b3938a2087982ace1e",
+        "968cf27f01db0ca40d3abe1596bad5482b40df19e66ee2e5c850748a99383fc2",
+        "7a05137aa07d3e69467e8d4ea5127b34d531c99b6df9acf5784498fadc284516"
+      ],
+      "seeded_issue_count": 0,
+      "seeded_issues": [],
+      "control_count": 6,
+      "controls": [
+        {
+          "id": "PC02-C04-K1",
+          "pages": [
+            2
+          ],
+          "quotation": "Общая площадь здания корпуса 9 — 6 340,0 м².",
+          "archetype": "notation_variant",
+          "would_be_false_positive_as": "a total area restated on another page, read as two values",
+          "why_not_an_issue_ru": "То же значение, что на странице 3, в записи с разделителем разрядов.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Общая площадь здания корпуса 9 — 6 340,0 м².",
+              "char_offset_in_page_text": 100,
+              "line_index_in_page_text": 2,
+              "line_text": "Общая площадь здания корпуса 9 — 6 340,0 м²."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C04-K2",
+          "pages": [
+            3
+          ],
+          "quotation": "Общая площадь здания корпуса 9 составляет 6340,0 кв. м.",
+          "archetype": "notation_variant",
+          "would_be_false_positive_as": "the same total without a separator and as кв. м",
+          "why_not_an_issue_ru": "Значение совпадает со страницей 2; различается только запись.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Общая площадь здания корпуса 9 составляет 6340,0 кв. м.",
+              "char_offset_in_page_text": 89,
+              "line_index_in_page_text": 2,
+              "line_text": "Общая площадь здания корпуса 9 составляет 6340,0 кв. м."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C04-K3",
+          "pages": [
+            4
+          ],
+          "quotation": "Площадь застройки корпуса 9 — 1 015,5 м².",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a second area figure, read as contradicting the total",
+          "why_not_an_issue_ru": "Площадь застройки — иной показатель.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Площадь застройки корпуса 9 — 1 015,5 м².",
+              "char_offset_in_page_text": 87,
+              "line_index_in_page_text": 2,
+              "line_text": "Площадь застройки корпуса 9 — 1 015,5 м²."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C04-K4",
+          "pages": [
+            5
+          ],
+          "quotation": "Строительный объём корпуса 9 — 24 120,0 м³.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a volume figure, read as an area contradiction",
+          "why_not_an_issue_ru": "Строительный объём измеряется в кубических метрах.",
+          "anchors": [
+            {
+              "page": 5,
+              "quotation": "Строительный объём корпуса 9 — 24 120,0 м³.",
+              "char_offset_in_page_text": 92,
+              "line_index_in_page_text": 2,
+              "line_text": "Строительный объём корпуса 9 — 24 120,0 м³."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C04-K5",
+          "pages": [
+            6
+          ],
+          "quotation": "Показатели корпуса 9 округлены до 0,1; итоги могут расходиться.",
+          "archetype": "tolerance_or_rounding",
+          "would_be_false_positive_as": "an admission that sums may diverge",
+          "why_not_an_issue_ru": "Округление объявлено; расхождение итогов предусмотрено.",
+          "anchors": [
+            {
+              "page": 6,
+              "quotation": "Показатели корпуса 9 округлены до 0,1; итоги могут расходиться.",
+              "char_offset_in_page_text": 102,
+              "line_index_in_page_text": 2,
+              "line_text": "Показатели корпуса 9 округлены до 0,1; итоги могут расходиться."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C04-K6",
+          "pages": [
+            7
+          ],
+          "quotation": "Общая площадь квартир корпуса 9 — 4 980,2 м², без учёта лоджий.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a fourth area figure, read as contradicting the total",
+          "why_not_an_issue_ru": "Площадь квартир — иной показатель, и оговорено исключение лоджий.",
+          "anchors": [
+            {
+              "page": 7,
+              "quotation": "Общая площадь квартир корпуса 9 — 4 980,2 м², без учёта лоджий.",
+              "char_offset_in_page_text": 89,
+              "line_index_in_page_text": 2,
+              "line_text": "Общая площадь квартир корпуса 9 — 4 980,2 м², без учёта лоджий."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-C05",
+      "role": "control",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-C05.pdf",
+      "title_ru": "Корпус 10. Эвакуация",
+      "summary_ru": "Шесть страниц. Три разных числа выходов, разделённые по областям действия и явно исключённые друг из друга.",
+      "sha256": "5a2f16772af0c9b31d8c41cd506ba0c5eeb0b3fc10c6366abec6c5efdded5155",
+      "bytes": 49150,
+      "pages": 6,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "9270e44f10558737991b485591e8879589cc5de302dd28191926cda82e6e0bce",
+        "4a1e1dfaf1a98186f9819de9a946eff7f6ada63852d536880b3ac5ce0c4617f1",
+        "de458dbae44d4273cbdc30f3c1e3790b35c5a554a34d18594b8b9b9454ba6f47",
+        "a22ab62a2e3b05eb24f86a815546d90b6cf790065bfce8b0e893ee33c42ef7ee",
+        "0f8e1d4fe2f11cc246693c8924050f031d2590217959e5c2019c22b99f7bbfa7",
+        "79784e334889b4a746808743727253ab7fdc58e339841361402ec6eacaec7e1f"
+      ],
+      "seeded_issue_count": 0,
+      "seeded_issues": [],
+      "control_count": 4,
+      "controls": [
+        {
+          "id": "PC02-C05-K1",
+          "pages": [
+            2,
+            5
+          ],
+          "quotation": "Из надземной части корпуса 10 предусмотрено два эвакуационных выхода.",
+          "archetype": "identical_repeat",
+          "would_be_false_positive_as": "an exit count stated twice, read as two values",
+          "why_not_an_issue_ru": "Строка повторена дословно.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Из надземной части корпуса 10 предусмотрено два эвакуационных выхода.",
+              "char_offset_in_page_text": 93,
+              "line_index_in_page_text": 2,
+              "line_text": "Из надземной части корпуса 10 предусмотрено два эвакуационных выхода."
+            },
+            {
+              "page": 5,
+              "quotation": "Из надземной части корпуса 10 предусмотрено два эвакуационных выхода.",
+              "char_offset_in_page_text": 82,
+              "line_index_in_page_text": 2,
+              "line_text": "Из надземной части корпуса 10 предусмотрено два эвакуационных выхода."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C05-K2",
+          "pages": [
+            3
+          ],
+          "quotation": "Из подземной автостоянки предусмотрен один обособленный выход.",
+          "archetype": "scope_dependent",
+          "would_be_false_positive_as": "a different exit count, read as contradicting the building's own",
+          "why_not_an_issue_ru": "Относится к подземной автостоянке.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Из подземной автостоянки предусмотрен один обособленный выход.",
+              "char_offset_in_page_text": 89,
+              "line_index_in_page_text": 2,
+              "line_text": "Из подземной автостоянки предусмотрен один обособленный выход."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C05-K3",
+          "pages": [
+            4
+          ],
+          "quotation": "Выход из автостоянки в число выходов надземной части не входит.",
+          "archetype": "excluded_by_text",
+          "would_be_false_positive_as": "a sentence about exits, read as a third count",
+          "why_not_an_issue_ru": "Строка прямо исключает выход автостоянки из счёта надземной части.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Выход из автостоянки в число выходов надземной части не входит.",
+              "char_offset_in_page_text": 96,
+              "line_index_in_page_text": 2,
+              "line_text": "Выход из автостоянки в число выходов надземной части не входит."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C05-K4",
+          "pages": [
+            6
+          ],
+          "quotation": "Из корпуса 11 предусмотрено три эвакуационных выхода.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a third exit count, read as a contradiction",
+          "why_not_an_issue_ru": "Относится к корпусу 11.",
+          "anchors": [
+            {
+              "page": 6,
+              "quotation": "Из корпуса 11 предусмотрено три эвакуационных выхода.",
+              "char_offset_in_page_text": 88,
+              "line_index_in_page_text": 2,
+              "line_text": "Из корпуса 11 предусмотрено три эвакуационных выхода."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-C06",
+      "role": "control",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-C06.pdf",
+      "title_ru": "Корпус 11. Конструктивные и отделочные решения",
+      "summary_ru": "Пять страниц. Два значения толщины утеплителя, одно из которых документ прямо отменяет.",
+      "sha256": "484b3db96a8149793ba478dd9f52fc47fc1e703ebcb7da011c965dd52dda72f4",
+      "bytes": 47593,
+      "pages": 5,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "9b9abf9ecc91f9855d8f6f51a24db9d79f3322a9ce730e0c34574f7b6b154424",
+        "730ef59bc9523973eee539cdb943bb9cacf8a8a548f97e62752224131e9356a7",
+        "4484009d7af7fe10f77627a4f44c6eabe87337636fd0cc5884189580e3f216e8",
+        "d27e29d35ae9e2f8ae3866caba965b4231e23f7e7967fdba9476130a0eb23e80",
+        "d32b3104dc9bf13b4175170d7e383035e02953024b53874880ce6d80a8d99335"
+      ],
+      "seeded_issue_count": 0,
+      "seeded_issues": [],
+      "control_count": 4,
+      "controls": [
+        {
+          "id": "PC02-C06-K1",
+          "pages": [
+            2
+          ],
+          "quotation": "Настоящим листом принята толщина утеплителя стен корпуса 11 — 200 мм.",
+          "archetype": "superseded",
+          "would_be_false_positive_as": "the live insulation thickness, read as contradicting the old one",
+          "why_not_an_issue_ru": "Значение принято настоящим листом и действует.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Настоящим листом принята толщина утеплителя стен корпуса 11 — 200 мм.",
+              "char_offset_in_page_text": 108,
+              "line_index_in_page_text": 2,
+              "line_text": "Настоящим листом принята толщина утеплителя стен корпуса 11 — 200 мм."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C06-K2",
+          "pages": [
+            3
+          ],
+          "quotation": "Ранее принятая толщина утеплителя 150 мм более не применяется.",
+          "archetype": "superseded",
+          "would_be_false_positive_as": "a second insulation thickness, read as a live competing claim",
+          "why_not_an_issue_ru": "Значение прямо отменено и в сравнении не участвует.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Ранее принятая толщина утеплителя 150 мм более не применяется.",
+              "char_offset_in_page_text": 92,
+              "line_index_in_page_text": 2,
+              "line_text": "Ранее принятая толщина утеплителя 150 мм более не применяется."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C06-K3",
+          "pages": [
+            4
+          ],
+          "quotation": "Изменение внесено в раздел целиком и учтено во всех листах.",
+          "archetype": "absence_by_scope",
+          "would_be_false_positive_as": "a change note, read as an incomplete record",
+          "why_not_an_issue_ru": "Строка подтверждает, что изменение учтено во всех листах.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Изменение внесено в раздел целиком и учтено во всех листах.",
+              "char_offset_in_page_text": 93,
+              "line_index_in_page_text": 2,
+              "line_text": "Изменение внесено в раздел целиком и учтено во всех листах."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C06-K4",
+          "pages": [
+            5
+          ],
+          "quotation": "Толщина утеплителя стен корпуса 11 — 200 мм.",
+          "archetype": "identical_repeat",
+          "would_be_false_positive_as": "the live thickness restated, read as a third value",
+          "why_not_an_issue_ru": "Значение совпадает со страницей 2.",
+          "anchors": [
+            {
+              "page": 5,
+              "quotation": "Толщина утеплителя стен корпуса 11 — 200 мм.",
+              "char_offset_in_page_text": 93,
+              "line_index_in_page_text": 2,
+              "line_text": "Толщина утеплителя стен корпуса 11 — 200 мм."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-C07",
+      "role": "control",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-C07.pdf",
+      "title_ru": "Корпус 12. Ссылки и разграничение разделов",
+      "summary_ru": "Пять страниц, в которых четыре сведения отсутствуют по принадлежности к другим разделам. Незаполненных полей нет.",
+      "sha256": "603174e8e8a4cd050194ab7154e58a87be3fdc1ac2131f4bad195b821d0c7760",
+      "bytes": 47653,
+      "pages": 5,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "1141b88a9d690225617b1551bb0f471c25a05c6e0f538541e6bf7e7c4fdbfcd2",
+        "62cd8c5c9d8162fe1854e3abcb1bd3ca7e0c95283a2d7aae74ecbfcad410f3e1",
+        "276a4b33ec4e1409fc1ebc0221a58731be8312182237d0d9485148ccfe371a10",
+        "4fa6540aaa35a6bfaf753bf642135352ffb598e11f24c393c0847b9826cac0f5",
+        "8f26db4950ad9dacaeae73112754fb8c001437515c3b44cf717a690f7161fb57"
+      ],
+      "seeded_issue_count": 0,
+      "seeded_issues": [],
+      "control_count": 4,
+      "controls": [
+        {
+          "id": "PC02-C07-K1",
+          "pages": [
+            2
+          ],
+          "quotation": "Расчёт инсоляции выполнен в отдельном томе и здесь не приводится.",
+          "archetype": "absence_by_scope",
+          "would_be_false_positive_as": "a missing calculation, read as an unfilled field",
+          "why_not_an_issue_ru": "Расчёт выполнен, но принадлежит другому тому.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Расчёт инсоляции выполнен в отдельном томе и здесь не приводится.",
+              "char_offset_in_page_text": 94,
+              "line_index_in_page_text": 2,
+              "line_text": "Расчёт инсоляции выполнен в отдельном томе и здесь не приводится."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C07-K2",
+          "pages": [
+            3
+          ],
+          "quotation": "Количество машино-мест приведено в разделе ПЗУ и не дублируется.",
+          "archetype": "absence_by_scope",
+          "would_be_false_positive_as": "a missing count, read as an unfilled field",
+          "why_not_an_issue_ru": "Показатель определён в разделе ПЗУ и намеренно не дублируется.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Количество машино-мест приведено в разделе ПЗУ и не дублируется.",
+              "char_offset_in_page_text": 101,
+              "line_index_in_page_text": 2,
+              "line_text": "Количество машино-мест приведено в разделе ПЗУ и не дублируется."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C07-K3",
+          "pages": [
+            4
+          ],
+          "quotation": "Сведения о наружных сетях в настоящий раздел не входят.",
+          "archetype": "absence_by_scope",
+          "would_be_false_positive_as": "absent information, read as incompleteness",
+          "why_not_an_issue_ru": "Сведения не относятся к предмету раздела.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Сведения о наружных сетях в настоящий раздел не входят.",
+              "char_offset_in_page_text": 95,
+              "line_index_in_page_text": 2,
+              "line_text": "Сведения о наружных сетях в настоящий раздел не входят."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C07-K4",
+          "pages": [
+            5
+          ],
+          "quotation": "Раздел выполнен в объёме стадии П; рабочая документация выпускается позже.",
+          "archetype": "absence_by_scope",
+          "would_be_false_positive_as": "a stage note, read as a document that is not finished",
+          "why_not_an_issue_ru": "Стадия П завершена в своём объёме; выпуск РД — следующая стадия, а не пробел в этом документе.",
+          "anchors": [
+            {
+              "page": 5,
+              "quotation": "Раздел выполнен в объёме стадии П; рабочая документация выпускается позже.",
+              "char_offset_in_page_text": 94,
+              "line_index_in_page_text": 2,
+              "line_text": "Раздел выполнен в объёме стадии П; рабочая документация выпускается позже."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-C08",
+      "role": "control",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-C08.pdf",
+      "title_ru": "Корпус 13. Фасады и колористика",
+      "summary_ru": "Восемь страниц обычного текста с двумя цветовыми кодами и без единой противоречивой пары. Самый длинный документ корпуса: он проверяет, молчит ли модель, когда находить нечего.",
+      "sha256": "e6935694423688290d1db42a91fc6c044468eb0f7417002eae2d59e4f1907ac6",
+      "bytes": 52887,
+      "pages": 8,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "12d794a9556d7ebbcc1f78101cd9ed66569c340e1cb731a93260e18251228ff3",
+        "b18eec145d20f26a9ddd20d8e8bc12b65c3de529932d69ef26d3ee1363dbbc39",
+        "7584380bf11dbd52fb6bcf746d1364bd0f73006f2346054acc655f194e975791",
+        "a8f57e315fe1f240650e2c9352265d1bd5466416348736d81bb599e46accb48e",
+        "62786d565f1c51633eaccf9dbd8407bc6c7c097190e44761192f03f2ead30784",
+        "360c8f19b350858cd5205e1c3370770706c8e8e5de5d3cbe1512ac4c0ebdab4c",
+        "13c3267996083727b7b2412c2b2746bb6cbd1a76bec6b4bd6ab78c5984306c0b",
+        "27f56a0578aaf7ac49058fdc0dfc2a89d9b7dcd75a73e913353c8696c8c6fb7f"
+      ],
+      "seeded_issue_count": 0,
+      "seeded_issues": [],
+      "control_count": 2,
+      "controls": [
+        {
+          "id": "PC02-C08-K1",
+          "pages": [
+            3,
+            6
+          ],
+          "quotation": "Цвет фасадных кассет корпуса 13 — RAL 7040.",
+          "archetype": "identical_repeat",
+          "would_be_false_positive_as": "a colour code stated twice, read as two values",
+          "why_not_an_issue_ru": "Значение RAL 7040 повторено дословно.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Цвет фасадных кассет корпуса 13 — RAL 7040.",
+              "char_offset_in_page_text": 90,
+              "line_index_in_page_text": 2,
+              "line_text": "Цвет фасадных кассет корпуса 13 — RAL 7040."
+            },
+            {
+              "page": 6,
+              "quotation": "Цвет фасадных кассет корпуса 13 — RAL 7040.",
+              "char_offset_in_page_text": 100,
+              "line_index_in_page_text": 2,
+              "line_text": "Цвет фасадных кассет корпуса 13 — RAL 7040."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C08-K2",
+          "pages": [
+            7
+          ],
+          "quotation": "Цвет ограждений балконов корпуса 13 — RAL 7016.",
+          "archetype": "other_object",
+          "would_be_false_positive_as": "a second colour code, read as contradicting the fasade colour",
+          "why_not_an_issue_ru": "Относится к ограждениям балконов, а не к фасадным кассетам.",
+          "anchors": [
+            {
+              "page": 7,
+              "quotation": "Цвет ограждений балконов корпуса 13 — RAL 7016.",
+              "char_offset_in_page_text": 82,
+              "line_index_in_page_text": 2,
+              "line_text": "Цвет ограждений балконов корпуса 13 — RAL 7016."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "PC02-C09",
+      "role": "control",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/documents/PC02-C09.pdf",
+      "title_ru": "Корпус 14. Пожарно-технические характеристики",
+      "summary_ru": "Семь страниц с шестью классификационными строками из трёх разных систем классификации. Ни одна пара не противоречива.",
+      "sha256": "87cc077d9b79257b9be54410b250b474a2bde5e936789141903f6dfaa1cad647",
+      "bytes": 51189,
+      "pages": 7,
+      "language": "ru",
+      "discipline": "AR",
+      "page_text_sha256": [
+        "53d5743131c6c8996870dd00427f276e07cfc997ed11e19241e73b0414e1f120",
+        "94a31b5927a74add211ef6fd9237f1ef7c2a6cff2a576d682b7b0c3a8d8570e0",
+        "a4ca45b07a47a87ec8c9d9caaf6adfaab9e6e452038e01af88e3c5a4afe81677",
+        "80f79d3a650b0b8318603a5f21138d5bd2a46820c14648f0a9200b78aef5143d",
+        "aa9b9e763d0137d83ea2ec0cfe5e73c4ff6bc9a79cc58b3790e6091340bb3fb5",
+        "0ea8be45bdeb01e968481b9bf7182832fd7a6b3e716fbed70259ce7b334991b5",
+        "3a89ed85db5757143d3b0fa7310effa38d0cf9748f0565717d010e810f965aef"
+      ],
+      "seeded_issue_count": 0,
+      "seeded_issues": [],
+      "control_count": 6,
+      "controls": [
+        {
+          "id": "PC02-C09-K1",
+          "pages": [
+            2
+          ],
+          "quotation": "Класс функциональной пожарной опасности корпуса 14 — Ф1.3.",
+          "archetype": "class_notation",
+          "would_be_false_positive_as": "a class token, read as contradicting Ф4.3 or С0",
+          "why_not_an_issue_ru": "Класс функциональной пожарной опасности — отдельная система.",
+          "anchors": [
+            {
+              "page": 2,
+              "quotation": "Класс функциональной пожарной опасности корпуса 14 — Ф1.3.",
+              "char_offset_in_page_text": 104,
+              "line_index_in_page_text": 2,
+              "line_text": "Класс функциональной пожарной опасности корпуса 14 — Ф1.3."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C09-K2",
+          "pages": [
+            3
+          ],
+          "quotation": "Корпус 14 относится к классу Ф1.3 — многоквартирные жилые дома.",
+          "archetype": "notation_variant",
+          "would_be_false_positive_as": "the same class written in expanded form, read as a second claim",
+          "why_not_an_issue_ru": "Ф1.3 повторён с расшифровкой; значение то же.",
+          "anchors": [
+            {
+              "page": 3,
+              "quotation": "Корпус 14 относится к классу Ф1.3 — многоквартирные жилые дома.",
+              "char_offset_in_page_text": 92,
+              "line_index_in_page_text": 2,
+              "line_text": "Корпус 14 относится к классу Ф1.3 — многоквартирные жилые дома."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C09-K3",
+          "pages": [
+            4
+          ],
+          "quotation": "Встроенные помещения корпуса 14 отнесены к классу Ф4.3.",
+          "archetype": "scope_dependent",
+          "would_be_false_positive_as": "a different functional class, read as a contradiction",
+          "why_not_an_issue_ru": "Относится к встроенным помещениям, а не к жилой части.",
+          "anchors": [
+            {
+              "page": 4,
+              "quotation": "Встроенные помещения корпуса 14 отнесены к классу Ф4.3.",
+              "char_offset_in_page_text": 91,
+              "line_index_in_page_text": 2,
+              "line_text": "Встроенные помещения корпуса 14 отнесены к классу Ф4.3."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C09-K4",
+          "pages": [
+            5
+          ],
+          "quotation": "Класс конструктивной пожарной опасности корпуса 14 — С0.",
+          "archetype": "class_notation",
+          "would_be_false_positive_as": "a structural class token, read as contradicting Ф1.3",
+          "why_not_an_issue_ru": "Конструктивная и функциональная пожарная опасность — разные системы.",
+          "anchors": [
+            {
+              "page": 5,
+              "quotation": "Класс конструктивной пожарной опасности корпуса 14 — С0.",
+              "char_offset_in_page_text": 100,
+              "line_index_in_page_text": 2,
+              "line_text": "Класс конструктивной пожарной опасности корпуса 14 — С0."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C09-K5",
+          "pages": [
+            6
+          ],
+          "quotation": "Степень огнестойкости корпуса 14 — II.",
+          "archetype": "class_notation",
+          "would_be_false_positive_as": "a Roman numeral, read as contradicting С0",
+          "why_not_an_issue_ru": "Степень огнестойкости — третья система классификации.",
+          "anchors": [
+            {
+              "page": 6,
+              "quotation": "Степень огнестойкости корпуса 14 — II.",
+              "char_offset_in_page_text": 94,
+              "line_index_in_page_text": 2,
+              "line_text": "Степень огнестойкости корпуса 14 — II."
+            }
+          ]
+        },
+        {
+          "id": "PC02-C09-K6",
+          "pages": [
+            7
+          ],
+          "quotation": "Классы указаны для здания в целом; для ТП классы не нормируются.",
+          "archetype": "excluded_by_text",
+          "would_be_false_positive_as": "a scope sentence, read as an admission of a gap",
+          "why_not_an_issue_ru": "Строка ограничивает область применения классов и значений не назначает.",
+          "anchors": [
+            {
+              "page": 7,
+              "quotation": "Классы указаны для здания в целом; для ТП классы не нормируются.",
+              "char_offset_in_page_text": 103,
+              "line_index_in_page_text": 2,
+              "line_text": "Классы указаны для здания в целом; для ТП классы не нормируются."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "negative_envelope_documents": [
+    {
+      "label": "PC02-N01",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/negative/PC02-N01-encrypted.pdf",
+      "violates_rule": "ENV-ENCRYPTED",
+      "rule_description": "the PDF is not encrypted or password-protected",
+      "sha256": "ec9d4869bceb56f4343c6aa3d20e486b8440454311b25b54096423603647475f",
+      "bytes": 40559,
+      "description_ru": "Двухстраничный PDF, защищённый паролем пользователя synthetic-user-pw и паролем владельца synthetic-owner-pw.",
+      "why_it_matters": "A password-protected submission is the most common over-the-wall failure in practice. The observation is that the product says so, and does not report a page count it cannot have read."
+    },
+    {
+      "label": "PC02-N02",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/negative/PC02-N02-image-only.pdf",
+      "violates_rule": "ENV-TEXT",
+      "rule_description": "every page carries extractable embedded text",
+      "sha256": "aec237c9626acb96f935a9d3934371fd58cfd2738a5d528141daf353ae83e0ff",
+      "bytes": 246110,
+      "description_ru": "Двухстраничный PDF, каждая страница — растровое изображение без единого текстового оператора.",
+      "why_it_matters": "The scanned-drawing case. PROTOTYPE_PROFILE.md section 7.1 forbids silently substituting OCR, so the only acceptable behaviour is an explicit refusal naming ENV-TEXT."
+    },
+    {
+      "label": "PC02-N03",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/negative/PC02-N03-oversize.pdf",
+      "violates_rule": "ENV-SIZE",
+      "rule_description": "the file is at most 26214400 bytes (25 MiB)",
+      "sha256": "2f73b6050bbc172957464047bb6dad9a5084ba94d79a5cc50fb08d15ba350066",
+      "bytes": 27303351,
+      "description_ru": "Корректный двухстраничный PDF, доведённый до размера свыше 25 МиБ одним несвязанным потоком-заполнителем.",
+      "why_it_matters": "Size is the rule most likely to be checked late, after the bytes have already been read into memory. The fixture is genuinely oversized on disk rather than merely declared so."
+    },
+    {
+      "label": "PC02-N04",
+      "provenance": "synthetic",
+      "path": "fixtures/validation/PC-02/negative/PC02-N04-too-many-pages.pdf",
+      "violates_rule": "ENV-PAGES",
+      "rule_description": "the document has at most 30 pages",
+      "sha256": "deb68e9c75ad7e88d41a21ee846540377a552d1fff0e56170b703ff8bb4afe1d",
+      "bytes": 69947,
+      "description_ru": "PDF из 31 страницы, каждая с текстовым слоем: ровно на одну страницу больше предела.",
+      "why_it_matters": "One page over the limit, because the interesting failure is the boundary rather than an obvious excess."
+    }
+  ]
+}
