@@ -1069,10 +1069,17 @@ def test_c10_an_oversize_upload_is_refused_rather_than_truncated(
 def test_c10_an_unavailable_provider_fails_the_run_explicitly(journey: Journey) -> None:
     """A model that cannot be reached is a typed failure, never a quiet recorded answer.
 
-    The deployment is composed against a proxy address with nothing listening, so the
-    adapter's only honest answer is ``dependency_unavailable``. The assertion that matters
-    is the second one: whatever the run does, it must not reach ``published``, because a
-    published run carries findings that no model produced.
+    The deployment is composed against a proxy address with nothing listening. The
+    assertions that matter are the negative ones: the run must not reach ``published``,
+    and it must publish nothing, because a published finding that no model produced is
+    the fake success criterion 10 forbids.
+
+    Two observations are recorded here rather than asserted, because correcting them
+    belongs to the owning trees and not to this suite. The failed ``text_analysis`` stage
+    carries ``error_code: null``, and the run's ``terminal_reason`` is ``analysis_failed``
+    -- so a provider that was simply unreachable, which the catalog calls
+    ``dependency_unavailable`` and marks retryable, is reported through the API as a
+    non-retryable analysis failure. The failure is explicit; what it was is not.
     """
     unavailable = build_client(
         AUDITMANAGER_PROVIDER_MODE="proxy",
@@ -1081,23 +1088,38 @@ def test_c10_an_unavailable_provider_fails_the_run_explicitly(journey: Journey) 
         PROXY_LLM_MODEL="anthropic/claude-opus-5",
     )
     answer = unavailable.start_run(
-        version_uid=journey.version_uid, key=key("run-unavailable", unique=True)
+        version_uid=journey.version_uid,
+        key=key("run-unavailable", unique=True),
+        provider_mode="live",
     )
-    if answer.status in (200, 202):
-        run_id = answer.json["run_id"]
-        state = unavailable.run_status(run_id).json["state"]
-        assert state != "published", (
-            "a run whose provider was unreachable reported itself published"
-        )
-        assert state in {"failed", "partial"}, state
-    else:
-        assert answer.error_code in {
-            "dependency_unavailable",
-            "analysis_failed",
-        }, answer.body
-        assert answer.status != 500 or answer.error_code != "internal_error", (
-            f"an unreachable provider produced an unclassified fault: {answer.body!r}"
-        )
+    if answer.status not in (200, 202):
+        assert answer.error_code in {"dependency_unavailable", "analysis_failed"}, answer.body
+        return
+
+    run_id = answer.json["run_id"]
+    status = unavailable.run_status(run_id)
+    assert status.status == 200, status.body
+    state = status.json["state"]
+    assert state != "published", (
+        "a run whose provider was unreachable reported itself published"
+    )
+    assert state == "failed", state
+    assert status.json["degradation_set"] == ["text_analysis"], status.json
+
+    stages = {s["stage_id"]: s["status"] for s in status.json["stages"]}
+    assert stages["text_analysis"] == "failed", stages
+    # The deterministic path still ran and is still reported as having run. A failure
+    # that erased the successful stages would make a provider outage indistinguishable
+    # from a document the pipeline could not read at all.
+    assert stages["source_preparation"] == "succeeded", stages
+    assert stages["page_geometry_extraction"] == "succeeded", stages
+    assert stages["document_context_build"] == "succeeded", stages
+
+    findings = unavailable.run_findings(run_id)
+    assert findings.status == 200
+    assert findings.json["items"] == [], (
+        "a run that could not reach a model published findings anyway"
+    )
 
 
 def test_c10_a_missing_credential_refuses_to_start_rather_than_fail_later() -> None:
