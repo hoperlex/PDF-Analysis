@@ -98,3 +98,54 @@ class TestWhatItActuallyWires:
             env.pop(required, None)
             with pytest.raises(ConfigurationError):
                 load(env)
+
+
+class TestTheProxyIsATransportNotAProvenanceMode:
+    """`OD-02` was revised to an LLM proxy on 2026-09-14.
+
+    Three things independently refuse `proxy` as a run's recorded mode, and they agree: the
+    database CHECK on `audit_run.provider_mode` admits only `live` and `recorded`;
+    `execute_run` refuses a run whose declared mode disagrees with its adapter; and the proxy
+    adapter reports `live`, because a model really answered. The composition root translates,
+    and it is the only place that knows both the transport and the run.
+    """
+
+    def test_proxy_transport_records_a_live_run(self) -> None:
+        from auditmanager.bootstrap.composition import _provenance_mode
+
+        assert _provenance_mode("proxy") == "live"
+        assert _provenance_mode("live") == "live"
+        assert _provenance_mode("recorded") == "recorded"
+
+    def test_the_proxy_adapter_reports_live(self) -> None:
+        from auditmanager.analysis.text import ProxyAdapter, ProxySettings
+
+        adapter = ProxyAdapter(ProxySettings(base_url="https://p", token="t"))
+        assert adapter.provider_mode.value == "live", (
+            "if this ever said 'proxy', the database would refuse every run"
+        )
+
+    def test_proxy_mode_without_a_token_is_refused_at_startup(self) -> None:
+        env = _base_env() | {
+            PROVIDER_MODE_ENV: "proxy",
+            "PROXY_LLM_BASE_URL": "https://proxy.example",
+        }
+        env.pop("PROXY_LLM_TOKEN", None)
+        with pytest.raises(ConfigurationError, match="PROXY_LLM_TOKEN"):
+            build_application(environ=env)
+
+    def test_proxy_mode_without_a_base_url_is_refused_at_startup(self) -> None:
+        env = _base_env() | {PROVIDER_MODE_ENV: "proxy", "PROXY_LLM_TOKEN": "t"}
+        env.pop("PROXY_LLM_BASE_URL", None)
+        with pytest.raises(ConfigurationError, match="PROXY_LLM_BASE_URL"):
+            build_application(environ=env)
+
+    def test_a_proxied_application_wires_all_twelve_operations(self) -> None:
+        env = _base_env() | {
+            PROVIDER_MODE_ENV: "proxy",
+            "PROXY_LLM_BASE_URL": "https://proxy.example",
+            "PROXY_LLM_TOKEN": "t",
+        }
+        app = build_application(environ=env)
+        assert len(app.router.routes) == 12
+        assert app.settings.provider_mode == "proxy"
