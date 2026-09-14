@@ -1,0 +1,344 @@
+{
+  "classification_vocabulary": [
+    "persisted",
+    "derivable",
+    "absent"
+  ],
+  "dispatch_precondition": {
+    "blocked": false,
+    "blocked_on": [],
+    "gating_metrics": [
+      "provider_latency",
+      "provider_token_usage",
+      "provider_cost"
+    ],
+    "rule": "if per-call latency or token/cost is absent, P4-OPS-01 halts with BLOCKED and its gap register; P4-BHV-01 does not start until the owner rules under OD-23",
+    "states": {
+      "provider_cost": "persisted",
+      "provider_latency": "persisted",
+      "provider_token_usage": "persisted"
+    }
+  },
+  "entries": [
+    {
+      "finding": "the persisted vocabulary is accepted/rejected/pending, a two-way verdict. §9's three-way useful/incorrect/unclear is not it. 'unclear' would map to needs_manual_review, which the contract and P02_SEAMS both record as having NO PC-01 producer. The label is a session-side instrument per PROTOTYPE_EXECUTION_PLAN §6.1, not a database field.",
+      "metric_id": "finding_label_distribution",
+      "owner": "P4-BHV-01",
+      "probe": {
+        "needs_manual_review_rows": 0,
+        "verdicts_observed": [
+          "accepted",
+          "pending",
+          "rejected"
+        ]
+      },
+      "profile_bullet": "percentage of findings marked useful, incorrect and unclear",
+      "state": "absent",
+      "what_persisting_it_would_take": "a producer for needs_manual_review, or a distinct label column on expert_decision_event. Both are P02 schema changes and are out of scope for P04 by the profile's own no-foundation-change rule.",
+      "where_i_looked": [
+        "db/migrations/versions/20260910_0002_pc01_schema.py VERDICTS + DECISION_EVENT_TYPES",
+        "expert_decision_event.verdict, finding_current_verdict.current_verdict",
+        "contracts/api/v1/openapi.json current_verdict description",
+        "docs/program/P02_SEAMS.md §534"
+      ]
+    },
+    {
+      "finding": "available as a PER-STAGE RATE, not as a per-quotation list. text_analysis resolves each quotation and DROPS what does not resolve before the grounding gate sees it, so no grounded=false row is ever written and ungrounded_reason has no producer (owner-accepted 2026-09-11). What IS persisted is the count: stage_result.metrics carries evidence_emitted, evidence_unresolved, observations_proposed, observations_emitted and observations_dropped_unresolved. P4-INT-01 MUST NOT design a metric around a per-quotation list.",
+      "metric_id": "evidence_location_correctness",
+      "owner": null,
+      "probe": {
+        "grounding_counts_seen": [
+          {
+            "evidence_emitted": 5,
+            "evidence_unresolved": 0,
+            "observations_dropped_unresolved": 0,
+            "run_id": "run_01M2FN4D76D579KGBPKNW6VQ41"
+          }
+        ],
+        "stages_carrying_grounding_counts": 1,
+        "ungrounded_observation_rows": 0
+      },
+      "profile_bullet": "evidence-location correctness",
+      "state": "derivable",
+      "what_persisting_it_would_take": "writing the dropped anchors as grounded=false rows instead of discarding them — a runtime change in src/auditmanager/analysis, forbidden to this task and already ruled on by the owner.",
+      "where_i_looked": [
+        "finding_observation.grounded / ungrounded_reason",
+        "src/auditmanager/analysis/text/stage.py _ground() and its metrics block",
+        "stage_result.metrics evidence_emitted / evidence_unresolved / observations_dropped_unresolved",
+        "db/migrations/versions/20260911_0003_open_items.py item 3",
+        "artifacts/checkpoints/PC-01/report.json limits.not_inducible"
+      ]
+    },
+    {
+      "finding": "no expert-time column exists. expert_decision_event.recorded_at is a server clock stamp on a decision, not seconds-on-finding, and PC-01 has no authentication so there is no subject to attribute time to (author_label authorizes nothing, OD-12). §6.1 makes seconds-on-finding a session instrument.",
+      "metric_id": "expert_review_time_and_navigation_friction",
+      "owner": "P4-BHV-01",
+      "probe": {
+        "decision_event_rows": 3
+      },
+      "profile_bullet": "expert review time and navigation friction",
+      "state": "absent",
+      "what_persisting_it_would_take": "a session-side instrument; P4-BHV-01 owns it",
+      "where_i_looked": [
+        "every table in CENSUS_TABLES for a per-expert timing column",
+        "expert_decision_event.recorded_at",
+        "PROTOTYPE_EXECUTION_PLAN.md §6.1"
+      ]
+    },
+    {
+      "finding": "model_call.latency_ms is present on every call row. A recorded call replays the recording's stored figure, so live and recorded latency must be reported separately and never pooled.",
+      "metric_id": "provider_latency",
+      "owner": null,
+      "probe": {
+        "calls_total": 1,
+        "calls_with_latency_ms": 1,
+        "modes": [
+          "recorded"
+        ]
+      },
+      "profile_bullet": "provider latency, cost and failure distribution (latency)",
+      "state": "persisted",
+      "where_i_looked": [
+        "model_call.latency_ms",
+        "stage_result.metrics.latency_ms"
+      ]
+    },
+    {
+      "finding": "the figure is persisted, but WHICH KIND of figure it is, is not. cost_micros holds the proxy's reported spend when the proxy returned usage.cost, and a P02_LOCK rate-table estimate otherwise, with no column distinguishing them. The tool derives the basis (see classify_cost_basis) and labels every figure measured/estimated/indeterminate. Recorded mode is structurally always an estimate.",
+      "metric_id": "provider_cost",
+      "owner": null,
+      "probe": {
+        "bases_observed": [
+          "estimated"
+        ],
+        "calls_with_cost_micros": 1,
+        "discriminator_column_exists": false
+      },
+      "profile_bullet": "provider latency, cost and failure distribution (cost)",
+      "state": "persisted",
+      "what_persisting_it_would_take": "one cost_basis column on model_call. A P02 schema change; raised as a P02 defect for owner decision, not fixed here.",
+      "where_i_looked": [
+        "model_call.cost_micros and its COMMENT",
+        "src/auditmanager/analysis/text/cost.py CostMeter.charge",
+        "src/auditmanager/analysis/text/proxy.py _reported_cost",
+        "src/auditmanager/analysis/text/recorded.py ModelResponse construction",
+        "docs/program/P02_LOCK.json models"
+      ]
+    },
+    {
+      "finding": "both columns present and non-null on every observed call. A recorded call replays authored token counts, which the recording itself says.",
+      "metric_id": "provider_token_usage",
+      "owner": null,
+      "probe": {
+        "calls_total": 1,
+        "calls_with_both_token_counts": 1
+      },
+      "profile_bullet": "provider latency, cost and failure distribution (tokens)",
+      "state": "persisted",
+      "where_i_looked": [
+        "model_call.input_tokens, model_call.output_tokens"
+      ]
+    },
+    {
+      "finding": "persisted, but across THREE surfaces, and model_call alone is insufficient: a provider that could not be reached writes no model_call row at all. The failure ledger unions all three. Separately, provider_timeout has no persisted discriminator — proxy.py maps both a 504 deadline and an unreachable proxy onto dependency_unavailable, and model_call stores only the code — so that one bucket is filled from the stage error message and is flagged as heuristic wherever it is used.",
+      "metric_id": "provider_failure_distribution",
+      "owner": null,
+      "probe": {
+        "failures_found": 1,
+        "model_call_failure_rows": 0,
+        "surfaces": [
+          "stage_result"
+        ]
+      },
+      "profile_bullet": "provider latency, cost and failure distribution (failures)",
+      "state": "persisted",
+      "what_persisting_it_would_take": "a distinct catalog code for a provider deadline, or the error reason persisted on model_call. A P02 change; raised, not fixed.",
+      "where_i_looked": [
+        "model_call.status / error_code",
+        "stage_result.error jsonb",
+        "audit_run.terminal_reason / interrupted_reason",
+        "src/auditmanager/analysis/text/proxy.py _map_http_failure"
+      ]
+    },
+    {
+      "finding": "the mechanical half is persisted: degradation_set names degraded stages and the executed stage set is enumerable against the nine-stage registry, so 'which stages did not run' is derivable. 'Which missing capability PREVENTS REAL USE' is a judgement and comes from the post-session ranking in §6.1, not from any row.",
+      "metric_id": "missing_stage_or_capability",
+      "owner": "P4-BHV-01",
+      "probe": {
+        "runs_with_degradation": [
+          "run_01M2FN4EJ4KNJ6RFGATG5ZDD82"
+        ],
+        "stages_executed": [
+          "document_context_build",
+          "page_geometry_extraction",
+          "source_preparation",
+          "text_analysis"
+        ]
+      },
+      "profile_bullet": "which missing stage or capability prevents real use",
+      "state": "derivable",
+      "where_i_looked": [
+        "audit_run.degradation_set",
+        "stage_result rows against the nine-stage registry",
+        "contracts/analysis/v1/stage-registry.json"
+      ]
+    },
+    {
+      "finding": "a forced-choice answer from the post-session instrument. No comparison aggregate exists in PC-01 at all — the 0002 migration deliberately creates no comparison table — so there is nothing to derive it from.",
+      "metric_id": "audit_depth_vs_document_comparison",
+      "owner": "P4-BHV-01",
+      "probe": {
+        "comparison_tables_present": false
+      },
+      "profile_bullet": "whether audit depth or document comparison is the next highest-value investment",
+      "state": "absent",
+      "where_i_looked": [
+        "every table in CENSUS_TABLES",
+        "PROTOTYPE_EXECUTION_PLAN.md §6.1 post-session items"
+      ]
+    },
+    {
+      "finding": "the retryable flag is persisted on every stage error, so the failure ledger can answer the retry question from evidence rather than from memory — which is exactly what P4-BHV-01 needs it for. Attempt fencing is NOT evaluable: PC-01 instantiates no Job and no Attempt, so no fencing evidence can exist. Remote execution likewise has no producer.",
+      "metric_id": "failures_requiring_retry_or_fencing",
+      "owner": null,
+      "probe": {
+        "attempt_tables_present": false,
+        "stage_errors_with_retryable": 1
+      },
+      "profile_bullet": "which failures actually require retry, Attempt fencing or remote execution",
+      "state": "derivable",
+      "what_persisting_it_would_take": "Attempt/Job aggregates, which PC-01 deliberately does not instantiate",
+      "where_i_looked": [
+        "stage_result.error->'retryable'",
+        "audit_run.interrupted_reason (OD-10)",
+        "0002 migration comment on audit_run: no Job, no Attempt, no execution token"
+      ]
+    },
+    {
+      "finding": "execution is synchronous inside startRun, so queued, running and validating never appear through the API and no row ever holds them. Any §9 metric about time-in-state is unavailable. Run WALL-CLOCK duration IS available as terminal_at - created_at.",
+      "metric_id": "run_state_timing",
+      "owner": "P3-INT-01 (accepted limit) / owner ruling OD-24",
+      "probe": {
+        "intermediate_states_observed": [],
+        "states_observed": [
+          "failed",
+          "published"
+        ]
+      },
+      "profile_bullet": "derived from §9 latency/friction: time-in-state for queued, running, validating",
+      "state": "absent",
+      "where_i_looked": [
+        "audit_run.state and the RUN_STATES enum",
+        "artifacts/checkpoints/PC-01/report.json limits.intermediate_run_states",
+        "0002 migration COMMENT ON TABLE audit_run"
+      ]
+    },
+    {
+      "finding": "P1-NAV-01 is 'specified; not dispatchable' and docs/navigation/ does not exist, so the directory contract this metric reads has never been created. Under the PROTOTYPE_EXECUTION_PLAN §3.3 status-aware rule the metric is ABSENT, not zero: no in-scope task reported a status at all. An empty (here, missing) incident directory is evidence of neither friction nor its absence.",
+      "metric_id": "agent_navigation_friction",
+      "owner": "P1-NAV-01 (not accepted)",
+      "probe": {
+        "aggregated_tasks": [
+          "P2-AI-01",
+          "P2-API-01",
+          "P2-BHV-01",
+          "P2-DOM-01",
+          "P2-ENG-01",
+          "P2-EXP-01",
+          "P2-FND-01",
+          "P2-INT-00",
+          "P2-INT-01",
+          "P2-INT-02",
+          "P2-META-01",
+          "P2-QA-01",
+          "P2-RUN-01",
+          "P3-API-01",
+          "P3-INT-01",
+          "P3-QA-01",
+          "P3-WEB-00",
+          "P3-WEB-01",
+          "P3-WEB-02",
+          "P3-WEB-03",
+          "P3-WEB-04"
+        ],
+        "incidents_dir": "docs/navigation/incidents",
+        "incidents_dir_exists": false,
+        "p04_or_p05_tasks_aggregated": [],
+        "rule": "PROTOTYPE_EXECUTION_PLAN.md §3.3",
+        "scope": "the 21 P02/P03 tasks complete at P4-OPS-01 run time",
+        "state": "absent",
+        "statuses": {
+          "P2-AI-01": null,
+          "P2-API-01": null,
+          "P2-BHV-01": null,
+          "P2-DOM-01": null,
+          "P2-ENG-01": null,
+          "P2-EXP-01": null,
+          "P2-FND-01": null,
+          "P2-INT-00": null,
+          "P2-INT-01": null,
+          "P2-INT-02": null,
+          "P2-META-01": null,
+          "P2-QA-01": null,
+          "P2-RUN-01": null,
+          "P3-API-01": "none_observed",
+          "P3-INT-01": null,
+          "P3-QA-01": null,
+          "P3-WEB-00": "none_observed",
+          "P3-WEB-01": null,
+          "P3-WEB-02": null,
+          "P3-WEB-03": null,
+          "P3-WEB-04": null
+        },
+        "tasks_not_reporting": [
+          "P2-AI-01",
+          "P2-API-01",
+          "P2-BHV-01",
+          "P2-DOM-01",
+          "P2-ENG-01",
+          "P2-EXP-01",
+          "P2-FND-01",
+          "P2-INT-00",
+          "P2-INT-01",
+          "P2-INT-02",
+          "P2-META-01",
+          "P2-QA-01",
+          "P2-RUN-01",
+          "P3-INT-01",
+          "P3-QA-01",
+          "P3-WEB-01",
+          "P3-WEB-02",
+          "P3-WEB-03",
+          "P3-WEB-04"
+        ],
+        "tasks_practice_not_exercised": [],
+        "tasks_reporting": [
+          "P3-API-01",
+          "P3-WEB-00"
+        ],
+        "value": null,
+        "why": "an empty or missing incident directory is never itself evidence that navigation was frictionless"
+      },
+      "profile_bullet": "agent navigation friction: the search and rework incidents tasks recorded",
+      "state": "absent",
+      "what_persisting_it_would_take": "P1-NAV-01 accepted and integrated",
+      "where_i_looked": [
+        "docs/navigation/incidents/ (directory does not exist)",
+        "docs/navigation/entries/ (directory does not exist)",
+        "docs/program/tasks/P1-NAV-01.md status line",
+        "the handoff section of all 21 completed P02/P03 tasks"
+      ]
+    }
+  ],
+  "schema": "P4-OPS-01/gap-register/1",
+  "source": "docs/program/PROTOTYPE_PROFILE.md §9",
+  "tool_version": "1.0.0",
+  "totals": {
+    "absent": 5,
+    "absent_without_owner": [],
+    "derivable": 3,
+    "metrics": 12,
+    "persisted": 4,
+    "unclassified": []
+  }
+}

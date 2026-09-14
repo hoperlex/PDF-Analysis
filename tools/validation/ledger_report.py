@@ -1693,7 +1693,9 @@ def mode_snapshot(out_dir: Path) -> int:
     ):
         path = out_dir / name
         path.write_text(canonical_json(payload), encoding="utf-8")
-        written.append({"path": str(path), "sha256": digest(payload)})
+        # The NAME, not the path: the manifest is then identical wherever the snapshot
+        # is written, and the digest is what actually identifies the content.
+        written.append({"name": name, "sha256": digest(payload)})
 
     manifest = {
         "schema": "P4-OPS-01/preflight-manifest/1",
@@ -1716,7 +1718,8 @@ def mode_snapshot(out_dir: Path) -> int:
     print(canonical_json({
         "mode": "snapshot",
         "out_dir": str(out_dir),
-        "files": [w["path"] for w in written] + [str(out_dir / "MANIFEST.json")],
+        "files": [str(out_dir / w["name"]) for w in written]
+        + [str(out_dir / "MANIFEST.json")],
         "gap_register_totals": register["totals"],
         "dispatch_precondition": register["dispatch_precondition"],
         "statement_log": log.summary(),
