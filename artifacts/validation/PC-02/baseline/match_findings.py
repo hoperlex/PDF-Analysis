@@ -372,6 +372,32 @@ def self_proofs(manifest: dict) -> dict:
         "passed": bool(control_probe_hits),
     }
 
+    # The classifier's third branch. The corpus run produced no finding in the
+    # `declared_control` group, and a group that is empty because the classifier cannot
+    # produce it is a different fact from a group that is empty because nothing fell in
+    # it. This proves the branch is reachable.
+    control_only = classify([negatives["control_quotation_is_not_the_seed"]], subject,
+                            normalised=False)
+    proofs["declared_control_group_is_reachable"] = {
+        "description": "a finding matching a control and no seed is classified "
+                       "`declared_control`; an empty third group must mean nothing fell "
+                       "there, not that the branch is dead",
+        "group": control_only["findings"][0]["group"],
+        "passed": control_only["findings"][0]["group"] == "declared_control",
+    }
+
+    # And the `neither` branch, for the same reason: this run reported an empty third
+    # group, which is only meaningful if the classifier can populate it.
+    stranger = _finding(placeholder["category"],
+                        [(1, "Строка, которой нет ни в одном эталоне корпуса.")])
+    neither = classify([stranger], subject, normalised=False)
+    proofs["neither_group_is_reachable"] = {
+        "description": "a finding matching no seed and no control is classified "
+                       "`neither`; the reported empty third group depends on this",
+        "group": neither["findings"][0]["group"],
+        "passed": neither["findings"][0]["group"] == "neither",
+    }
+
     # -- Proof 3: an empty finding set must not report success -------------------------
     empty = score({}, manifest, normalised=False)
     proofs["empty_finding_set_is_not_success"] = {

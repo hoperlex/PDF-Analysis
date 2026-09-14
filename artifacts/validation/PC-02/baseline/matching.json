@@ -48,6 +48,16 @@
       "hit_count": 1,
       "passed": true
     },
+    "declared_control_group_is_reachable": {
+      "description": "a finding matching a control and no seed is classified `declared_control`; an empty third group must mean nothing fell there, not that the branch is dead",
+      "group": "declared_control",
+      "passed": true
+    },
+    "neither_group_is_reachable": {
+      "description": "a finding matching no seed and no control is classified `neither`; the reported empty third group depends on this",
+      "group": "neither",
+      "passed": true
+    },
     "empty_finding_set_is_not_success": {
       "description": "scoring with no findings at all",
       "recall": 0.0,
