@@ -1,0 +1,15 @@
+# This corpus is byte-exact. Its SHA-256 values are the PC-02 ground-truth oracle and
+# every seeded quotation is anchored at a character offset into the extracted page text,
+# so any end-of-line translation on checkout would corrupt every fixture, every offset
+# and every recorded digest at once - silently, on the machine that did the checkout and
+# nowhere else.
+#
+# This is not hypothetical. Session A4 found that a page of white scanlines has no NUL
+# byte in its first 8000, so Git's content heuristic reads such a PDF as *text*. Marking
+# the artefacts binary stops Git rewriting a byte and stops it trying to diff one.
+#
+# It also settles a smaller nuisance: a PDF cross-reference entry is required by the
+# format to be exactly twenty bytes ending in a space, so `git diff --check` reports
+# "trailing whitespace" on any PDF it mistakes for text. Those spaces are mandated, not
+# stray.
+*.pdf binary

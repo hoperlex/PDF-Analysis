@@ -1,0 +1,510 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdf-analysis.invalid/schemas/pc02-session-record/1",
+  "title": "PC-02 validation session record",
+  "description": "One validation session with one domain expert, moderated by one moderator, over documents drawn from fixtures/validation/PC-02. The protocol this schema records is docs/program/validation/PC-02_PROTOCOL.md. Every session record validates against this schema; a record that does not is not pooled, because a field a moderator invented is a field the other moderator did not fill.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "session",
+    "documents",
+    "findings",
+    "envelope_refusals",
+    "post_session",
+    "deviations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "pc02-session-record/1"
+    },
+    "session": {
+      "$ref": "#/$defs/session"
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/document_record"
+      },
+      "minItems": 1
+    },
+    "findings": {
+      "type": "array",
+      "description": "Every finding the system published, in the order it was reviewed. May be empty only if the system published none across the whole session, which is itself a result.",
+      "items": {
+        "$ref": "#/$defs/finding_record"
+      }
+    },
+    "envelope_refusals": {
+      "type": "array",
+      "description": "One record per negative-envelope document offered. Excluded from every finding denominator and from every gate that counts measurable documents.",
+      "items": {
+        "$ref": "#/$defs/envelope_refusal_record"
+      }
+    },
+    "post_session": {
+      "$ref": "#/$defs/post_session_record"
+    },
+    "deviations": {
+      "type": "array",
+      "description": "Every departure from the protocol, including questions asked outside the closed set. Required, and may be empty - but empty means the moderator asserts there were none, not that nobody looked.",
+      "items": {
+        "$ref": "#/$defs/deviation"
+      }
+    }
+  },
+  "$defs": {
+    "label": {
+      "description": "The three finding labels fixed by PROTOTYPE_PROFILE.md section 9. There is no fourth, and no 'partially useful'. A finding that tempts one is 'unclear'.",
+      "enum": ["useful", "incorrect", "unclear"]
+    },
+    "tri_state": {
+      "enum": ["yes", "no", "unsure"]
+    },
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "rationale": {
+      "type": "string",
+      "description": "The expert's own words for why, recorded as spoken rather than paraphrased. At least 15 characters: a rationale of 'ok' does not let a second reader check the label.",
+      "minLength": 15,
+      "maxLength": 4000
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "protocol_version",
+        "date",
+        "moderator_id",
+        "expert_id",
+        "expert_profile",
+        "build_commit",
+        "provider_mode",
+        "model",
+        "document_order",
+        "calibration_completed",
+        "ground_truth_withheld"
+      ],
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "protocol_version": {
+          "const": "PC-02_PROTOCOL/1"
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "moderator_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Pseudonymous. Needed to compute inter-moderator agreement, which is the whole reason this protocol is written the way it is."
+        },
+        "expert_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Pseudonymous. No name, employer or contact detail enters the record."
+        },
+        "expert_profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["years_in_discipline", "role", "reviews_ar_documents"],
+          "properties": {
+            "years_in_discipline": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 60
+            },
+            "role": {
+              "enum": [
+                "design_engineer",
+                "chief_project_engineer",
+                "normative_control",
+                "expert_review",
+                "other"
+              ]
+            },
+            "reviews_ar_documents": {
+              "$ref": "#/$defs/tri_state",
+              "description": "Whether the expert reviews AR volumes as part of their actual work. An expert who does not is still worth hearing, and their records are reported separately rather than pooled."
+            }
+          }
+        },
+        "build_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "The commit the application was run from. Without it the session cannot be re-read against the code that produced it."
+        },
+        "provider_mode": {
+          "enum": ["live", "recorded"]
+        },
+        "model": {
+          "$ref": "#/$defs/identifier"
+        },
+        "document_order": {
+          "type": "array",
+          "description": "The labels of the measurable documents in the order presented, taken from the pre-registered rotation table in the protocol. Recorded rather than chosen, so order effects are comparable between sessions instead of being confounded with the moderator.",
+          "items": {
+            "type": "string",
+            "pattern": "^PC02-[SC][0-9]{2}$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "calibration_completed": {
+          "type": "boolean",
+          "description": "Whether the calibration pass on the PC-01 baseline fixture was completed before the first PC-02 document. False invalidates the session for pooling."
+        },
+        "ground_truth_withheld": {
+          "type": "boolean",
+          "description": "The moderator asserts that neither they nor the expert saw corpus_manifest.json, any seeded-issue list or any control list before or during the session. False invalidates the session for pooling: a moderator who knows the answer cannot un-know it while phrasing a question."
+        }
+      }
+    },
+    "document_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_label",
+        "order_position",
+        "run_id",
+        "review_seconds",
+        "findings_returned",
+        "time_box_reached",
+        "expert_suspected_issues",
+        "would_use_output"
+      ],
+      "properties": {
+        "document_label": {
+          "type": "string",
+          "pattern": "^PC02-[SC][0-9]{2}$"
+        },
+        "order_position": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "run_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "review_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Wall-clock from opening the finding list to the last label recorded, excluding any interruption recorded below."
+        },
+        "interruption_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "findings_returned": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "time_box_reached": {
+          "type": "boolean",
+          "description": "Whether the per-document time box was hit. A document that hit it is reported with its labels and separately flagged, never silently averaged in."
+        },
+        "expert_suspected_issues": {
+          "type": "array",
+          "description": "Issues the expert believes the document contains that the system did NOT report, captured before any ground truth is revealed. This is the only false-negative evidence a session can produce from the expert's side; the manifest supplies the rest afterwards.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["page", "description"],
+            "properties": {
+              "page": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "description": {
+                "type": "string",
+                "minLength": 5,
+                "maxLength": 2000
+              },
+              "quotation": {
+                "type": "string",
+                "maxLength": 2000
+              }
+            }
+          }
+        },
+        "would_use_output": {
+          "$ref": "#/$defs/tri_state",
+          "description": "Answer to protocol question D4 exactly as scripted: whether the expert would have used this finding list on a real document of this kind."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      }
+    },
+    "finding_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_label",
+        "run_id",
+        "finding_uid",
+        "finding_observation_id",
+        "category",
+        "evidence",
+        "label",
+        "label_rationale",
+        "evidence_location_correct",
+        "expert_would_have_raised_it",
+        "seconds_to_label"
+      ],
+      "properties": {
+        "document_label": {
+          "type": "string",
+          "pattern": "^PC02-[SC][0-9]{2}$"
+        },
+        "run_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "finding_uid": {
+          "$ref": "#/$defs/identifier"
+        },
+        "finding_observation_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "category": {
+          "enum": ["internal_contradiction", "explicit_placeholder"]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["page", "quotation"],
+            "properties": {
+              "page": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "quotation": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              }
+            }
+          }
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "label_rationale": {
+          "$ref": "#/$defs/rationale"
+        },
+        "evidence_location_correct": {
+          "enum": ["correct", "wrong_page", "wrong_quotation", "not_checked"],
+          "description": "Whether the quotation the finding cites is actually where it says it is, judged by the expert opening it. 'not_checked' is honest and usable; a guess is not."
+        },
+        "expert_would_have_raised_it": {
+          "$ref": "#/$defs/tri_state",
+          "description": "The professional-usefulness question, asked separately from the label. A finding can be correct and still not worth raising, and PC-01 could not tell those apart."
+        },
+        "seconds_to_label": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "navigation_steps": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Interactions needed to get from the finding to its evidence in the document. Feeds the navigation-friction metric in PROTOTYPE_PROFILE.md section 9."
+        },
+        "navigation_notes": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "envelope_refusal_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_label",
+        "expected_rule",
+        "refused",
+        "rule_named_in_message",
+        "message_quoted"
+      ],
+      "properties": {
+        "document_label": {
+          "type": "string",
+          "pattern": "^PC02-N[0-9]{2}$"
+        },
+        "expected_rule": {
+          "enum": [
+            "ENV-PDF",
+            "ENV-ENCRYPTED",
+            "ENV-SIZE",
+            "ENV-PAGES",
+            "ENV-TEXT"
+          ]
+        },
+        "refused": {
+          "type": "boolean",
+          "description": "Whether the upload or run was refused at all. An accepted negative-envelope document is a defect, not a finding."
+        },
+        "rule_named_in_message": {
+          "$ref": "#/$defs/tri_state",
+          "description": "Whether the refusal identified the rule rather than failing generically. 'Something went wrong' is a refusal that teaches the user nothing."
+        },
+        "message_quoted": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "The refusal message verbatim, so two sessions can be compared on wording rather than on the moderator's summary of it."
+        },
+        "ocr_silently_substituted": {
+          "type": "boolean",
+          "description": "Whether the product silently OCR'd or partially read a document it should have refused. PROTOTYPE_PROFILE.md section 7.1 forbids this outright."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "post_session_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blocking_capability",
+        "next_investment",
+        "failures_observed",
+        "navigation_friction_incidents",
+        "expert_closing_comment"
+      ],
+      "properties": {
+        "blocking_capability": {
+          "type": "object",
+          "description": "Which missing stage or capability prevents real use (PROTOTYPE_PROFILE.md section 9). Chosen from a closed list so two sessions can be counted together, with free text beside it so a reason nobody anticipated is not lost.",
+          "additionalProperties": false,
+          "required": ["choice", "in_own_words"],
+          "properties": {
+            "choice": {
+              "enum": [
+                "none_it_is_usable",
+                "norm_compliance_checking",
+                "drawing_and_visual_review",
+                "cross_document_comparison",
+                "scanned_document_support",
+                "multi_discipline_support",
+                "deeper_audit_trail",
+                "export_and_integration",
+                "other"
+              ]
+            },
+            "in_own_words": {
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 4000
+            }
+          }
+        },
+        "next_investment": {
+          "type": "object",
+          "description": "Whether audit depth or document comparison is the next highest-value investment, asked as a forced choice with a reason.",
+          "additionalProperties": false,
+          "required": ["choice", "in_own_words"],
+          "properties": {
+            "choice": {
+              "enum": ["audit_depth", "document_comparison", "neither", "cannot_say"]
+            },
+            "in_own_words": {
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 4000
+            }
+          }
+        },
+        "failures_observed": {
+          "type": "array",
+          "description": "Failures seen during the session and what each would actually need. Feeds the retry / Attempt-fencing / remote-execution question.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["what_happened", "remedy"],
+            "properties": {
+              "what_happened": {
+                "type": "string",
+                "minLength": 5,
+                "maxLength": 2000
+              },
+              "remedy": {
+                "enum": [
+                  "retry_would_fix",
+                  "needs_attempt_fencing",
+                  "needs_remote_execution",
+                  "needs_none_of_these",
+                  "cannot_say"
+                ]
+              },
+              "run_id": {
+                "$ref": "#/$defs/identifier"
+              }
+            }
+          }
+        },
+        "navigation_friction_incidents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["what_happened"],
+            "properties": {
+              "what_happened": {
+                "type": "string",
+                "minLength": 5,
+                "maxLength": 2000
+              },
+              "document_label": {
+                "type": "string"
+              },
+              "seconds_lost": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "expert_closing_comment": {
+          "type": "string",
+          "description": "The answer to the single open closing question, recorded verbatim. It is the last thing asked and the only unscripted one, so it cannot contaminate any label.",
+          "minLength": 1,
+          "maxLength": 8000
+        }
+      }
+    },
+    "deviation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["what", "why", "affects"],
+      "properties": {
+        "what": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 2000
+        },
+        "why": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 2000
+        },
+        "affects": {
+          "type": "array",
+          "description": "The document labels whose records this deviation touches, so the analyst can exclude exactly those rather than the whole session.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
