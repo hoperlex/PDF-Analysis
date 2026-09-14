@@ -92,6 +92,15 @@ CHECKS = (
     "CHK-NEGATIVE-RULE",
     "CHK-NEGATIVE-EVALUATED",
     "CHK-INDEPENDENT-AVAILABLE",
+    "CHK-SESSION-SCHEMA",
+)
+
+SESSION_SCHEMA_ID = "https://pdf-analysis.invalid/schemas/pc02-session-record/1"
+SESSION_RECORD_TYPES = (
+    "finding_record",
+    "document_record",
+    "envelope_refusal_record",
+    "post_session_record",
 )
 
 
@@ -419,6 +428,85 @@ def _check_anchor(label: str, owner: str, anchor: dict, pages: list[str],
     return problems
 
 
+def _check_session_schema(manifest: dict, root: Path) -> list[Problem]:
+    """The recording schema exists and still fixes the same three labels as the corpus.
+
+    The corpus and the protocol have to agree about what a label is, and they live in
+    different files that different people edit. If the schema grew a fourth label while
+    the manifest kept three, two moderators could record data that validates and still
+    cannot be pooled - which is the exact failure this whole protocol is built to
+    prevent, arriving through the back door.
+
+    This is a structural check, not a JSON Schema meta-validation: `jsonschema` is not in
+    `docs/program/P02_LOCK.json` and this task does not take the root lock to add it.
+    """
+    problems: list[Problem] = []
+    declared = manifest.get("session_record_schema")
+    if not declared:
+        problems.append(Problem(
+            "CHK-SESSION-SCHEMA",
+            "the manifest names no session_record_schema, so nothing ties the corpus's "
+            "labels to the ones a session will record",
+        ))
+        return problems
+
+    path = root / str(declared)
+    if not path.is_file():
+        problems.append(Problem(
+            "CHK-SESSION-SCHEMA", f"session record schema {declared} is missing"
+        ))
+        return problems
+
+    try:
+        schema = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        problems.append(Problem(
+            "CHK-SESSION-SCHEMA", f"{declared} is not valid JSON: {exc}"
+        ))
+        return problems
+
+    if schema.get("$id") != SESSION_SCHEMA_ID:
+        problems.append(Problem(
+            "CHK-SESSION-SCHEMA",
+            f"{declared}: $id is {schema.get('$id')!r}, expected {SESSION_SCHEMA_ID!r}",
+        ))
+
+    defs = schema.get("$defs", {})
+    label_enum = defs.get("label", {}).get("enum")
+    if label_enum != FINDING_LABELS:
+        problems.append(Problem(
+            "CHK-SESSION-SCHEMA",
+            f"{declared}: the label enum is {label_enum!r}, but the corpus and "
+            f"PROTOTYPE_PROFILE.md section 9 fix exactly {FINDING_LABELS!r}",
+        ))
+    if label_enum != manifest.get("finding_labels"):
+        problems.append(Problem(
+            "CHK-SESSION-SCHEMA",
+            f"{declared}: the schema's labels {label_enum!r} do not match the "
+            f"manifest's {manifest.get('finding_labels')!r}",
+        ))
+
+    for record_type in SESSION_RECORD_TYPES:
+        if record_type not in defs:
+            problems.append(Problem(
+                "CHK-SESSION-SCHEMA",
+                f"{declared}: no definition for {record_type!r}; the protocol requires "
+                "a per-finding, per-document, envelope-refusal and post-session record",
+            ))
+
+    category_enum = (
+        defs.get("finding_record", {}).get("properties", {})
+        .get("category", {}).get("enum")
+    )
+    if category_enum is not None and sorted(category_enum) != sorted(CATEGORIES):
+        problems.append(Problem(
+            "CHK-SESSION-SCHEMA",
+            f"{declared}: finding categories {category_enum!r} do not match the two "
+            f"fixed by the profile, {CATEGORIES!r}",
+        ))
+    return problems
+
+
 def _check_negatives(manifest: dict, root: Path) -> list[Problem]:
     """Each negative-envelope document is refused by the specific rule it names."""
     problems: list[Problem] = []
@@ -484,6 +572,7 @@ def check_corpus(manifest_path: Path, root: Path | None = None,
     problems += _check_manifest_shape(manifest)
     problems += _check_composition(manifest)
     problems += _check_control_documents(manifest)
+    problems += _check_session_schema(manifest, root)
     for record in manifest.get("documents", []):
         problems += _check_document(record, root, extractor)
     problems += _check_negatives(manifest, root)
@@ -669,6 +758,14 @@ def _mutations(root: Path) -> list[Mutation]:
     def second_reader_goes_blind(_root: Path, _manifest: dict) -> None:
         pass  # applied by the self-test harness, see Mutation.kind
 
+    def schema_grows_a_fourth_label(work: Path, manifest: dict) -> None:
+        path = work / manifest["session_record_schema"]
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        schema["$defs"]["label"]["enum"] = FINDING_LABELS + ["partially_useful"]
+        path.write_text(
+            json.dumps(schema, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+
     return [
         Mutation("declared-sha256-wrong", "CHK-SHA256",
                  "flip one hex digit of a document's declared SHA-256",
@@ -735,6 +832,10 @@ def _mutations(root: Path) -> list[Mutation]:
                  "claim the encrypted fixture violates ENV-TEXT, a rule that cannot be "
                  "evaluated on a document nothing can open",
                  negative_names_an_unevaluable_rule),
+        Mutation("schema-grows-a-fourth-label", "CHK-SESSION-SCHEMA",
+                 "add a fourth label to the session record schema while the manifest "
+                 "still fixes three, so records would validate and still not pool",
+                 schema_grows_a_fourth_label),
         Mutation("second-reader-goes-blind", "CHK-QUOTATION-INDEPENDENT",
                  "make the independent extractor return page text with a seeded "
                  "quotation removed, so the two readers disagree",
