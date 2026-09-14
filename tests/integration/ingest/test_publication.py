@@ -124,10 +124,15 @@ def test_return_value_carries_no_filename_ordinal_key_or_path(
     # body from this surface at all - B6 found that, and it blocked Gate C. The invariant is
     # enforced where it actually bites, by `test_no_version_is_resolved_by_its_ordinal`:
     # nothing looks a version up by ordinal, so the ordinal is a label, never a key.
+    #
+    # `display_title` left this set for the same reason and a narrower one: invariant 3 names
+    # path, object key, filename and display ordinal, and a display title is none of them.
+    # The frozen `DocumentVersion` schema declares it, and `B7`'s upload panel had no way to
+    # show a reviewer the title they had just typed. `source_filename` stays forbidden - that
+    # one IS a filename, and it is the field the invariant is actually about.
     forbidden_names = {
         "bucket",
         "current_version_uid",
-        "display_title",
         "file_name",
         "filename",
         "key",
@@ -157,8 +162,16 @@ def test_return_value_carries_no_filename_ordinal_key_or_path(
     walk(outcome)
 
     rendered = [str(item) for item in seen_values]
-    assert SOURCE_FILENAME not in rendered
-    assert DISPLAY_TITLE not in rendered
+    assert SOURCE_FILENAME not in rendered, (
+        "the source filename crossed the boundary; invariant 3 names it directly"
+    )
+    # DISPLAY_TITLE is deliberately expected to be present. It is the label the uploader
+    # typed, the frozen DocumentVersion schema declares it, and a reviewer has no other way
+    # to see the title they gave the document. Asserting its absence was asserting that a
+    # feature must not work.
+    assert DISPLAY_TITLE in rendered, (
+        "the display title is withheld, so nothing can show a reviewer the title they typed"
+    )
 
     # Every string in the returned graph would survive the envelope screen -- the guard
     # that refuses a path, an object key, a URL, a credential, SQL or a stack frame.
