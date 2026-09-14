@@ -1,0 +1,2696 @@
+{
+  "schema": "pc02-baseline-run/1",
+  "checkpoint": "PC-02",
+  "task": "P4-RUN-01",
+  "produced_by": "artifacts/validation/PC-02/baseline/emit_baseline.py",
+  "corpus_manifest": "fixtures/validation/PC-02/corpus_manifest.json",
+  "protocol": "docs/program/validation/PC-02_PROTOCOL.md",
+  "session": {
+    "session_tag": "p4run01",
+    "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+    "provider_mode": "proxy",
+    "model_id": "claude-opus-5",
+    "cost_ceiling_usd": "1.0",
+    "pre_registered_order": [
+      "PC02-S01",
+      "PC02-C01",
+      "PC02-S02",
+      "PC02-C02",
+      "PC02-S03",
+      "PC02-C03",
+      "PC02-C04",
+      "PC02-S04",
+      "PC02-C05",
+      "PC02-S05",
+      "PC02-C06",
+      "PC02-C07",
+      "PC02-C08",
+      "PC02-C09"
+    ]
+  },
+  "note": "One live run per measurable document, driven through auditmanager.api.app.create_app() and the Router it returns. Nothing was tuned in response to any result; the matching rule and the whitespace decision were fixed before the corpus was scored.",
+  "aggregate": {
+    "measurable_documents": 14,
+    "documents_reaching_terminal_state": 14,
+    "states": {
+      "published": 14
+    },
+    "findings_total": 9,
+    "group_counts": {
+      "seeded_issue": 9,
+      "declared_control": 0,
+      "neither": 0
+    },
+    "group_definition": {
+      "seeded_issue": "matches a seeded issue by protocol section 11",
+      "declared_control": "matches a declared control statement and no seeded issue",
+      "neither": "matches neither; the corpus's blind spot, reported in full"
+    },
+    "recall": {
+      "seeded_issues_total": 9,
+      "found": 9,
+      "rate": 1.0,
+      "found_ids": [
+        "PC02-S01-I1",
+        "PC02-S01-I2",
+        "PC02-S02-I1",
+        "PC02-S03-I1",
+        "PC02-S03-I2",
+        "PC02-S04-I1",
+        "PC02-S04-I2",
+        "PC02-S05-I1",
+        "PC02-S05-I2"
+      ],
+      "missed_ids": []
+    },
+    "false_positive_pressure": {
+      "control_statements_total": 64,
+      "flagged": 1,
+      "flagged_ids": [
+        "PC02-S02-K6"
+      ],
+      "by_archetype": {
+        "other_object": {
+          "total": 15,
+          "flagged": 0,
+          "flagged_ids": []
+        },
+        "placeholder_stem": {
+          "total": 5,
+          "flagged": 0,
+          "flagged_ids": []
+        },
+        "identical_repeat": {
+          "total": 8,
+          "flagged": 0,
+          "flagged_ids": []
+        },
+        "sibling_filled": {
+          "total": 3,
+          "flagged": 0,
+          "flagged_ids": []
+        },
+        "scope_dependent": {
+          "total": 10,
+          "flagged": 0,
+          "flagged_ids": []
+        },
+        "tolerance_or_rounding": {
+          "total": 2,
+          "flagged": 0,
+          "flagged_ids": []
+        },
+        "notation_variant": {
+          "total": 4,
+          "flagged": 1,
+          "flagged_ids": [
+            "PC02-S02-K6"
+          ]
+        },
+        "absence_by_scope": {
+          "total": 6,
+          "flagged": 0,
+          "flagged_ids": []
+        },
+        "superseded": {
+          "total": 3,
+          "flagged": 0,
+          "flagged_ids": []
+        },
+        "excluded_by_text": {
+          "total": 3,
+          "flagged": 0,
+          "flagged_ids": []
+        },
+        "decided_alternative": {
+          "total": 2,
+          "flagged": 0,
+          "flagged_ids": []
+        },
+        "class_notation": {
+          "total": 3,
+          "flagged": 0,
+          "flagged_ids": []
+        }
+      }
+    },
+    "grounding": {
+      "quotations_verified": 16,
+      "failure_count": 0,
+      "failures": [],
+      "independent_reader": "tools/fixtures/ar_corpus/pdfextract.py",
+      "product_extractor": "pdfplumber (src/auditmanager/analysis/stages/extraction.py:51)",
+      "documents_pinned_to_manifest": 14
+    },
+    "cost": {
+      "total_measured_usd": 0.28254,
+      "total_model_calls": 14,
+      "cost_basis_values": [
+        "measured"
+      ],
+      "run_cost_ceiling_usd": 1.0,
+      "ceiling_source": "docs/program/P02_LOCK.json models.run_cost_ceiling_usd (OD-03)",
+      "runs_halted_on_ceiling": [],
+      "most_expensive_document": [
+        "PC02-S05",
+        0.029775
+      ],
+      "highest_fraction_of_ceiling": 0.0298
+    },
+    "latency": {
+      "total_run_wall_seconds": 89.896,
+      "total_provider_latency_ms": 85533
+    }
+  },
+  "provider_reliability": {
+    "note": "Every measurable document reached `published`, but three run attempts had to be made twice or three times. Each failure was the same transient one: the text_analysis stage ended `dependency_unavailable` ('the model proxy could not be reached') after roughly 133 seconds. Only the run command's idempotency key was varied between attempts; the document, the prompt, the profile and the model were identical, and nothing was tuned.",
+    "attempts_total": 17,
+    "failed_attempts": [
+      {
+        "label": "PC02-C07",
+        "attempt": "1",
+        "run_id": "run_01M2FS599Z2PSGVGPW9NHJ2GFP",
+        "state": "failed",
+        "terminal_reason": "analysis_failed",
+        "stage_error_code_as_published_by_api": null,
+        "stage_error_code_as_stored": "dependency_unavailable (stage_result.error.code)",
+        "run_wall_seconds": 132.829,
+        "model_call_rows": 0,
+        "recorded_cost_usd": 0.0
+      },
+      {
+        "label": "PC02-S05",
+        "attempt": "1",
+        "run_id": "run_01M2FS1119E796G2FHW9TGKTRP",
+        "state": "failed",
+        "terminal_reason": "analysis_failed",
+        "stage_error_code_as_published_by_api": null,
+        "stage_error_code_as_stored": "dependency_unavailable (stage_result.error.code)",
+        "run_wall_seconds": 133.106,
+        "model_call_rows": 0,
+        "recorded_cost_usd": 0.0
+      },
+      {
+        "label": "PC02-S05",
+        "attempt": "2",
+        "run_id": "run_01M2FSBQ87RPE6NZPJT74NC3EK",
+        "state": "failed",
+        "terminal_reason": "analysis_failed",
+        "stage_error_code_as_published_by_api": null,
+        "stage_error_code_as_stored": "dependency_unavailable (stage_result.error.code)",
+        "run_wall_seconds": 134.951,
+        "model_call_rows": 0,
+        "recorded_cost_usd": 0.0
+      }
+    ],
+    "ledger_blind_spot": "A run whose text_analysis stage failed with dependency_unavailable records no model_call row, so it contributes nothing to measured spend and any upstream tokens it consumed are not visible to this ledger."
+  },
+  "seed_status": {
+    "PC02-S01-I1": {
+      "document": "PC02-S01",
+      "category": "internal_contradiction",
+      "pages": [
+        2,
+        5
+      ],
+      "attribute_ru": "класс конструктивной пожарной опасности корпуса 1",
+      "summary_ru": "Класс конструктивной пожарной опасности одного и того же корпуса 1 указан как С0 на странице 2 и как С1 на странице 5.",
+      "quotations": [
+        "Класс конструктивной пожарной опасности корпуса 1 — С0.",
+        "Класс конструктивной пожарной опасности корпуса 1 — С1."
+      ],
+      "found": true
+    },
+    "PC02-S01-I2": {
+      "document": "PC02-S01",
+      "category": "explicit_placeholder",
+      "pages": [
+        7
+      ],
+      "attribute_ru": "марка фасадных кассет корпуса 1",
+      "summary_ru": "Марка фасадных кассет оставлена как литерал TBD на странице 7.",
+      "quotations": [
+        "Марка фасадных кассет корпуса 1 — TBD."
+      ],
+      "found": true
+    },
+    "PC02-S02-I1": {
+      "document": "PC02-S02",
+      "category": "internal_contradiction",
+      "pages": [
+        2,
+        5
+      ],
+      "attribute_ru": "общая площадь здания корпуса 2",
+      "summary_ru": "Общая площадь здания корпуса 2 указана как 4 812,5 м² на странице 2 и как 4 218,5 м² на странице 5.",
+      "quotations": [
+        "Общая площадь здания корпуса 2 — 4 812,5 м².",
+        "Общая площадь здания корпуса 2 — 4 218,5 м²."
+      ],
+      "found": true
+    },
+    "PC02-S03-I1": {
+      "document": "PC02-S03",
+      "category": "internal_contradiction",
+      "pages": [
+        3,
+        6
+      ],
+      "attribute_ru": "тип кровли корпуса 3",
+      "summary_ru": "Кровля корпуса 3 описана как плоская с внутренним водостоком на странице 3 и как скатная с наружным водостоком на странице 6.",
+      "quotations": [
+        "Кровля корпуса 3 — плоская, с внутренним организованным водостоком.",
+        "Кровля корпуса 3 — скатная, с наружным организованным водостоком."
+      ],
+      "found": true
+    },
+    "PC02-S03-I2": {
+      "document": "PC02-S03",
+      "category": "explicit_placeholder",
+      "pages": [
+        5
+      ],
+      "attribute_ru": "толщина утеплителя покрытия корпуса 3",
+      "summary_ru": "Толщина утеплителя покрытия оставлена прочерком на странице 5.",
+      "quotations": [
+        "Толщина утеплителя покрытия корпуса 3 — ___ мм."
+      ],
+      "found": true
+    },
+    "PC02-S04-I1": {
+      "document": "PC02-S04",
+      "category": "internal_contradiction",
+      "pages": [
+        2,
+        7
+      ],
+      "attribute_ru": "абсолютная отметка нуля корпуса 4",
+      "summary_ru": "Абсолютная отметка нуля корпуса 4 указана как 143,60 на странице 2 и как 143,80 на странице 7.",
+      "quotations": [
+        "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,60.",
+        "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,80."
+      ],
+      "found": true
+    },
+    "PC02-S04-I2": {
+      "document": "PC02-S04",
+      "category": "internal_contradiction",
+      "pages": [
+        4,
+        8
+      ],
+      "attribute_ru": "количество пассажирских лифтов корпуса 4",
+      "summary_ru": "Количество пассажирских лифтов корпуса 4 указано как два на странице 4 и как три на странице 8.",
+      "quotations": [
+        "В корпусе 4 предусмотрено два пассажирских лифта.",
+        "В корпусе 4 предусмотрено три пассажирских лифта."
+      ],
+      "found": true
+    },
+    "PC02-S05-I1": {
+      "document": "PC02-S05",
+      "category": "internal_contradiction",
+      "pages": [
+        2,
+        9
+      ],
+      "attribute_ru": "этажность корпуса 5",
+      "summary_ru": "Этажность корпуса 5 указана как 12 этажей на странице 2 и как 14 этажей на странице 9.",
+      "quotations": [
+        "Этажность корпуса 5 — 12 этажей.",
+        "Этажность корпуса 5 — 14 этажей."
+      ],
+      "found": true
+    },
+    "PC02-S05-I2": {
+      "document": "PC02-S05",
+      "category": "explicit_placeholder",
+      "pages": [
+        6
+      ],
+      "attribute_ru": "назначение помещения 1.12",
+      "summary_ru": "Назначение помещения 1.12 оставлено как «не определено» на странице 6.",
+      "quotations": [
+        "Назначение помещения 1.12 — не определено."
+      ],
+      "found": true
+    }
+  },
+  "control_status": {
+    "PC02-S01-K1": {
+      "document": "PC02-S01",
+      "archetype": "other_object",
+      "pages": [
+        3
+      ],
+      "quotation": "Класс конструктивной пожарной опасности отдельно стоящей ТП — С1.",
+      "would_be_false_positive_as": "a second structural fire-hazard class, read as contradicting С0",
+      "why_not_an_issue_ru": "Класс относится к отдельно стоящей трансформаторной подстанции, а не к корпусу 1; объект назван в самой строке.",
+      "flagged": false
+    },
+    "PC02-S01-K2": {
+      "document": "PC02-S01",
+      "archetype": "placeholder_stem",
+      "pages": [
+        4
+      ],
+      "quotation": "Уточнённые размеры проёмов приведены в ведомости заполнений корпуса 1.",
+      "would_be_false_positive_as": "the stem 'уточн', read as an unfilled field",
+      "why_not_an_issue_ru": "Размеры уже уточнены и приведены в ведомости; строка фиксирует принятое решение, а не пробел.",
+      "flagged": false
+    },
+    "PC02-S01-K3": {
+      "document": "PC02-S01",
+      "archetype": "identical_repeat",
+      "pages": [
+        3,
+        6
+      ],
+      "quotation": "Класс функциональной пожарной опасности корпуса 1 — Ф1.3.",
+      "would_be_false_positive_as": "one attribute mentioned twice, read as two competing values",
+      "why_not_an_issue_ru": "Значение Ф1.3 повторено дословно; это класс функциональной, а не конструктивной пожарной опасности.",
+      "flagged": false
+    },
+    "PC02-S01-K4": {
+      "document": "PC02-S01",
+      "archetype": "sibling_filled",
+      "pages": [
+        7
+      ],
+      "quotation": "Цвет фасадных кассет корпуса 1 принят RAL 7040 и не изменяется.",
+      "would_be_false_positive_as": "a fasade-cassette line beside a TBD, read as part of the same gap",
+      "why_not_an_issue_ru": "Цвет кассет определён и зафиксирован; незаполнена только марка.",
+      "flagged": false
+    },
+    "PC02-S02-K1": {
+      "document": "PC02-S02",
+      "archetype": "other_object",
+      "pages": [
+        2
+      ],
+      "quotation": "Площадь застройки корпуса 2 — 1 204,0 м².",
+      "would_be_false_positive_as": "a second area figure, read as contradicting the total",
+      "why_not_an_issue_ru": "Площадь застройки — иной показатель, чем общая площадь здания.",
+      "flagged": false
+    },
+    "PC02-S02-K2": {
+      "document": "PC02-S02",
+      "archetype": "other_object",
+      "pages": [
+        3
+      ],
+      "quotation": "Полезная площадь корпуса 2 — 4 312,0 м².",
+      "would_be_false_positive_as": "a third area figure close to the total, read as a contradiction",
+      "why_not_an_issue_ru": "Полезная площадь — самостоятельный показатель и по определению меньше общей.",
+      "flagged": false
+    },
+    "PC02-S02-K3": {
+      "document": "PC02-S02",
+      "archetype": "scope_dependent",
+      "pages": [
+        3
+      ],
+      "quotation": "Высота первого этажа корпуса 2 от пола до пола — 3,60 м.",
+      "would_be_false_positive_as": "a storey height differing from the one on the next page",
+      "why_not_an_issue_ru": "Высота первого этажа законно отличается от высоты типового этажа.",
+      "flagged": false
+    },
+    "PC02-S02-K4": {
+      "document": "PC02-S02",
+      "archetype": "scope_dependent",
+      "pages": [
+        4
+      ],
+      "quotation": "Высота типового этажа корпуса 2 от пола до пола — 3,00 м.",
+      "would_be_false_positive_as": "a second storey height, read as contradicting the first",
+      "why_not_an_issue_ru": "Относится к типовому этажу, а не к первому; область действия названа.",
+      "flagged": false
+    },
+    "PC02-S02-K5": {
+      "document": "PC02-S02",
+      "archetype": "tolerance_or_rounding",
+      "pages": [
+        6
+      ],
+      "quotation": "Показатели приведены с округлением до 0,1; итоги могут расходиться.",
+      "would_be_false_positive_as": "a statement that sums may diverge, read as an admission of error",
+      "why_not_an_issue_ru": "Округление объявлено в самом документе, расхождение итогов предусмотрено и ограничено.",
+      "flagged": false
+    },
+    "PC02-S02-K6": {
+      "document": "PC02-S02",
+      "archetype": "notation_variant",
+      "pages": [
+        4
+      ],
+      "quotation": "Общая площадь здания корпуса 2 составляет 4812,5 кв. м.",
+      "would_be_false_positive_as": "the same total written without a thin space and as кв. м",
+      "why_not_an_issue_ru": "Число совпадает со страницей 2 посимвольно по значению; различается только запись.",
+      "flagged": true
+    },
+    "PC02-S03-K1": {
+      "document": "PC02-S03",
+      "archetype": "other_object",
+      "pages": [
+        4
+      ],
+      "quotation": "Кровля отдельно стоящего гаража — скатная, с наружным водостоком.",
+      "would_be_false_positive_as": "a second roof type, read as contradicting the main roof",
+      "why_not_an_issue_ru": "Относится к отдельно стоящему гаражу; объект назван в строке.",
+      "flagged": false
+    },
+    "PC02-S03-K2": {
+      "document": "PC02-S03",
+      "archetype": "sibling_filled",
+      "pages": [
+        5
+      ],
+      "quotation": "Толщина утеплителя наружных стен корпуса 3 — 150 мм.",
+      "would_be_false_positive_as": "a filled insulation thickness beside a blank one",
+      "why_not_an_issue_ru": "Это утеплитель наружных стен, а не покрытия; значение задано.",
+      "flagged": false
+    },
+    "PC02-S03-K3": {
+      "document": "PC02-S03",
+      "archetype": "identical_repeat",
+      "pages": [
+        2,
+        6
+      ],
+      "quotation": "Класс энергетической эффективности корпуса 3 — А.",
+      "would_be_false_positive_as": "an energy class stated twice, read as two values",
+      "why_not_an_issue_ru": "Значение А повторено дословно.",
+      "flagged": false
+    },
+    "PC02-S03-K4": {
+      "document": "PC02-S03",
+      "archetype": "absence_by_scope",
+      "pages": [
+        7
+      ],
+      "quotation": "Водосточные воронки приняты по каталогу изготовителя, позиция 4.2.",
+      "would_be_false_positive_as": "a reference to an external catalogue, read as an unfilled field",
+      "why_not_an_issue_ru": "Позиция изделия определена ссылкой на каталог; выбор сделан.",
+      "flagged": false
+    },
+    "PC02-S04-K1": {
+      "document": "PC02-S04",
+      "archetype": "other_object",
+      "pages": [
+        3
+      ],
+      "quotation": "Отметка 0,000 корпуса 5 соответствует абсолютной отметке 144,10.",
+      "would_be_false_positive_as": "a third datum value, read as contradicting the other two",
+      "why_not_an_issue_ru": "Отметка относится к корпусу 5; корпус назван в строке.",
+      "flagged": false
+    },
+    "PC02-S04-K2": {
+      "document": "PC02-S04",
+      "archetype": "other_object",
+      "pages": [
+        5
+      ],
+      "quotation": "В корпусе 4 предусмотрен один грузопассажирский лифт.",
+      "would_be_false_positive_as": "a lift count that appears to reconcile two against three",
+      "why_not_an_issue_ru": "Лифт грузопассажирский, а не пассажирский; классы разные.",
+      "flagged": false
+    },
+    "PC02-S04-K3": {
+      "document": "PC02-S04",
+      "archetype": "superseded",
+      "pages": [
+        6
+      ],
+      "quotation": "Ранее принятая отметка 143,40 настоящим листом не применяется.",
+      "would_be_false_positive_as": "a third datum value, read as a live competing claim",
+      "why_not_an_issue_ru": "Значение прямо отменено настоящим листом и в сравнении не участвует.",
+      "flagged": false
+    },
+    "PC02-S04-K4": {
+      "document": "PC02-S04",
+      "archetype": "other_object",
+      "pages": [
+        9
+      ],
+      "quotation": "Количество лифтов корпуса 5 — четыре, включая один грузовой.",
+      "would_be_false_positive_as": "a fourth lift count, read as contradicting the building's own",
+      "why_not_an_issue_ru": "Относится к корпусу 5.",
+      "flagged": false
+    },
+    "PC02-S04-K5": {
+      "document": "PC02-S04",
+      "archetype": "identical_repeat",
+      "pages": [
+        3,
+        7
+      ],
+      "quotation": "Отметки даны в Балтийской системе высот.",
+      "would_be_false_positive_as": "a datum system stated twice, read as two claims",
+      "why_not_an_issue_ru": "Строка повторена дословно и значения не содержит.",
+      "flagged": false
+    },
+    "PC02-S05-K1": {
+      "document": "PC02-S05",
+      "archetype": "scope_dependent",
+      "pages": [
+        2
+      ],
+      "quotation": "Количество этажей корпуса 5, включая подземные, — 13.",
+      "would_be_false_positive_as": "a storey count differing from этажность on the same page",
+      "why_not_an_issue_ru": "Этажность и количество этажей — разные показатели; подземный этаж в этажность не входит, разница в один этаж закономерна.",
+      "flagged": false
+    },
+    "PC02-S05-K2": {
+      "document": "PC02-S05",
+      "archetype": "other_object",
+      "pages": [
+        3
+      ],
+      "quotation": "Этажность корпуса 6 — 9 этажей.",
+      "would_be_false_positive_as": "a third storey count, read as contradicting the building's own",
+      "why_not_an_issue_ru": "Относится к корпусу 6.",
+      "flagged": false
+    },
+    "PC02-S05-K3": {
+      "document": "PC02-S05",
+      "archetype": "sibling_filled",
+      "pages": [
+        5
+      ],
+      "quotation": "Назначение помещения 1.14 — помещение уборочного инвентаря.",
+      "would_be_false_positive_as": "a room-purpose line beside an undetermined one",
+      "why_not_an_issue_ru": "Назначение помещения 1.14 определено; пробел только у 1.12.",
+      "flagged": false
+    },
+    "PC02-S05-K4": {
+      "document": "PC02-S05",
+      "archetype": "placeholder_stem",
+      "pages": [
+        7
+      ],
+      "quotation": "Перечень встроенных помещений уточнён и приведён в таблице 5.1.",
+      "would_be_false_positive_as": "the stem 'уточн', read as an unfilled field",
+      "why_not_an_issue_ru": "Перечень уже уточнён и приведён в таблице.",
+      "flagged": false
+    },
+    "PC02-S05-K5": {
+      "document": "PC02-S05",
+      "archetype": "identical_repeat",
+      "pages": [
+        4,
+        8
+      ],
+      "quotation": "Класс функциональной пожарной опасности встроенной части — Ф4.3.",
+      "would_be_false_positive_as": "a fire-hazard class stated twice, read as two values",
+      "why_not_an_issue_ru": "Значение Ф4.3 повторено дословно.",
+      "flagged": false
+    },
+    "PC02-S05-K6": {
+      "document": "PC02-S05",
+      "archetype": "excluded_by_text",
+      "pages": [
+        10
+      ],
+      "quotation": "Помещения подвала в этажность здания не включаются.",
+      "would_be_false_positive_as": "a rule about basements, read as contradicting the storey count",
+      "why_not_an_issue_ru": "Строка объясняет, почему количество этажей больше этажности, и сама значения не назначает.",
+      "flagged": false
+    },
+    "PC02-C01-K1": {
+      "document": "PC02-C01",
+      "archetype": "identical_repeat",
+      "pages": [
+        2,
+        5
+      ],
+      "quotation": "Степень огнестойкости корпуса 6 — II.",
+      "would_be_false_positive_as": "a fire-resistance degree stated twice, read as two values",
+      "why_not_an_issue_ru": "Значение II повторено дословно на двух страницах.",
+      "flagged": false
+    },
+    "PC02-C01-K2": {
+      "document": "PC02-C01",
+      "archetype": "other_object",
+      "pages": [
+        3
+      ],
+      "quotation": "Степень огнестойкости отдельно стоящей котельной — IV.",
+      "would_be_false_positive_as": "a second fire-resistance degree, read as a contradiction",
+      "why_not_an_issue_ru": "Относится к отдельно стоящей котельной.",
+      "flagged": false
+    },
+    "PC02-C01-K3": {
+      "document": "PC02-C01",
+      "archetype": "other_object",
+      "pages": [
+        4
+      ],
+      "quotation": "Степень огнестойкости навеса автостоянки не нормируется.",
+      "would_be_false_positive_as": "a third fire-resistance statement, read as a contradiction",
+      "why_not_an_issue_ru": "Относится к навесу автостоянки, для которого степень не нормируется.",
+      "flagged": false
+    },
+    "PC02-C02-K1": {
+      "document": "PC02-C02",
+      "archetype": "scope_dependent",
+      "pages": [
+        2
+      ],
+      "quotation": "Высота первого этажа корпуса 7 от пола до пола — 4,20 м.",
+      "would_be_false_positive_as": "the first of five heights, read as contradicting the others",
+      "why_not_an_issue_ru": "Относится к первому этажу.",
+      "flagged": false
+    },
+    "PC02-C02-K2": {
+      "document": "PC02-C02",
+      "archetype": "scope_dependent",
+      "pages": [
+        3
+      ],
+      "quotation": "Высота типового этажа корпуса 7 от пола до пола — 3,00 м.",
+      "would_be_false_positive_as": "a second storey height, read as a contradiction",
+      "why_not_an_issue_ru": "Относится к типовому этажу.",
+      "flagged": false
+    },
+    "PC02-C02-K3": {
+      "document": "PC02-C02",
+      "archetype": "scope_dependent",
+      "pages": [
+        4
+      ],
+      "quotation": "Высота технического этажа корпуса 7 от пола до пола — 2,40 м.",
+      "would_be_false_positive_as": "a third storey height, read as a contradiction",
+      "why_not_an_issue_ru": "Относится к техническому этажу.",
+      "flagged": false
+    },
+    "PC02-C02-K4": {
+      "document": "PC02-C02",
+      "archetype": "scope_dependent",
+      "pages": [
+        5
+      ],
+      "quotation": "Высота жилых помещений корпуса 7 в чистоте — не менее 2,70 м.",
+      "would_be_false_positive_as": "a clear height stated as a minimum, read as contradicting a floor-to-floor height",
+      "why_not_an_issue_ru": "Высота в чистоте и высота от пола до пола — разные величины.",
+      "flagged": false
+    },
+    "PC02-C02-K5": {
+      "document": "PC02-C02",
+      "archetype": "scope_dependent",
+      "pages": [
+        6
+      ],
+      "quotation": "Высота помещений общественного назначения в чистоте — 3,00 м.",
+      "would_be_false_positive_as": "a clear height equal to another floor-to-floor height",
+      "why_not_an_issue_ru": "Относится к общественным помещениям; совпадение значений случайно и расхождением не является.",
+      "flagged": false
+    },
+    "PC02-C03-K1": {
+      "document": "PC02-C03",
+      "archetype": "placeholder_stem",
+      "pages": [
+        2
+      ],
+      "quotation": "Уточнённая ведомость заполнения проёмов приведена в приложении Б.",
+      "would_be_false_positive_as": "the stem 'уточн', read as an unfilled field",
+      "why_not_an_issue_ru": "Ведомость уточнена и приложена; решение принято.",
+      "flagged": false
+    },
+    "PC02-C03-K2": {
+      "document": "PC02-C03",
+      "archetype": "placeholder_stem",
+      "pages": [
+        3
+      ],
+      "quotation": "Тип заполнения проёмов уточнён при разработке и принят ПВХ.",
+      "would_be_false_positive_as": "the stem 'уточн' beside a material choice",
+      "why_not_an_issue_ru": "Тип заполнения назван прямо в той же строке.",
+      "flagged": false
+    },
+    "PC02-C03-K3": {
+      "document": "PC02-C03",
+      "archetype": "placeholder_stem",
+      "pages": [
+        4
+      ],
+      "quotation": "Ведомость уточнений по проёмам закрыта, изменений не предусмотрено.",
+      "would_be_false_positive_as": "the word 'уточнений' in a heading-like sentence",
+      "why_not_an_issue_ru": "Ведомость закрыта; строка сообщает об отсутствии изменений.",
+      "flagged": false
+    },
+    "PC02-C03-K4": {
+      "document": "PC02-C03",
+      "archetype": "decided_alternative",
+      "pages": [
+        5
+      ],
+      "quotation": "Возможна замена на алюминиевые витражи; проектом принято ПВХ.",
+      "would_be_false_positive_as": "a mentioned alternative, read as an undecided choice",
+      "why_not_an_issue_ru": "Вариант назван и отклонён; принятое решение указано в той же строке.",
+      "flagged": false
+    },
+    "PC02-C03-K5": {
+      "document": "PC02-C03",
+      "archetype": "decided_alternative",
+      "pages": [
+        6
+      ],
+      "quotation": "Цвет профиля проёмов — RAL 7016, изменению не подлежит.",
+      "would_be_false_positive_as": "a colour code, read as provisional",
+      "why_not_an_issue_ru": "Цвет зафиксирован и объявлен неизменяемым.",
+      "flagged": false
+    },
+    "PC02-C04-K1": {
+      "document": "PC02-C04",
+      "archetype": "notation_variant",
+      "pages": [
+        2
+      ],
+      "quotation": "Общая площадь здания корпуса 9 — 6 340,0 м².",
+      "would_be_false_positive_as": "a total area restated on another page, read as two values",
+      "why_not_an_issue_ru": "То же значение, что на странице 3, в записи с разделителем разрядов.",
+      "flagged": false
+    },
+    "PC02-C04-K2": {
+      "document": "PC02-C04",
+      "archetype": "notation_variant",
+      "pages": [
+        3
+      ],
+      "quotation": "Общая площадь здания корпуса 9 составляет 6340,0 кв. м.",
+      "would_be_false_positive_as": "the same total without a separator and as кв. м",
+      "why_not_an_issue_ru": "Значение совпадает со страницей 2; различается только запись.",
+      "flagged": false
+    },
+    "PC02-C04-K3": {
+      "document": "PC02-C04",
+      "archetype": "other_object",
+      "pages": [
+        4
+      ],
+      "quotation": "Площадь застройки корпуса 9 — 1 015,5 м².",
+      "would_be_false_positive_as": "a second area figure, read as contradicting the total",
+      "why_not_an_issue_ru": "Площадь застройки — иной показатель.",
+      "flagged": false
+    },
+    "PC02-C04-K4": {
+      "document": "PC02-C04",
+      "archetype": "other_object",
+      "pages": [
+        5
+      ],
+      "quotation": "Строительный объём корпуса 9 — 24 120,0 м³.",
+      "would_be_false_positive_as": "a volume figure, read as an area contradiction",
+      "why_not_an_issue_ru": "Строительный объём измеряется в кубических метрах.",
+      "flagged": false
+    },
+    "PC02-C04-K5": {
+      "document": "PC02-C04",
+      "archetype": "tolerance_or_rounding",
+      "pages": [
+        6
+      ],
+      "quotation": "Показатели корпуса 9 округлены до 0,1; итоги могут расходиться.",
+      "would_be_false_positive_as": "an admission that sums may diverge",
+      "why_not_an_issue_ru": "Округление объявлено; расхождение итогов предусмотрено.",
+      "flagged": false
+    },
+    "PC02-C04-K6": {
+      "document": "PC02-C04",
+      "archetype": "other_object",
+      "pages": [
+        7
+      ],
+      "quotation": "Общая площадь квартир корпуса 9 — 4 980,2 м², без учёта лоджий.",
+      "would_be_false_positive_as": "a fourth area figure, read as contradicting the total",
+      "why_not_an_issue_ru": "Площадь квартир — иной показатель, и оговорено исключение лоджий.",
+      "flagged": false
+    },
+    "PC02-C05-K1": {
+      "document": "PC02-C05",
+      "archetype": "identical_repeat",
+      "pages": [
+        2,
+        5
+      ],
+      "quotation": "Из надземной части корпуса 10 предусмотрено два эвакуационных выхода.",
+      "would_be_false_positive_as": "an exit count stated twice, read as two values",
+      "why_not_an_issue_ru": "Строка повторена дословно.",
+      "flagged": false
+    },
+    "PC02-C05-K2": {
+      "document": "PC02-C05",
+      "archetype": "scope_dependent",
+      "pages": [
+        3
+      ],
+      "quotation": "Из подземной автостоянки предусмотрен один обособленный выход.",
+      "would_be_false_positive_as": "a different exit count, read as contradicting the building's own",
+      "why_not_an_issue_ru": "Относится к подземной автостоянке.",
+      "flagged": false
+    },
+    "PC02-C05-K3": {
+      "document": "PC02-C05",
+      "archetype": "excluded_by_text",
+      "pages": [
+        4
+      ],
+      "quotation": "Выход из автостоянки в число выходов надземной части не входит.",
+      "would_be_false_positive_as": "a sentence about exits, read as a third count",
+      "why_not_an_issue_ru": "Строка прямо исключает выход автостоянки из счёта надземной части.",
+      "flagged": false
+    },
+    "PC02-C05-K4": {
+      "document": "PC02-C05",
+      "archetype": "other_object",
+      "pages": [
+        6
+      ],
+      "quotation": "Из корпуса 11 предусмотрено три эвакуационных выхода.",
+      "would_be_false_positive_as": "a third exit count, read as a contradiction",
+      "why_not_an_issue_ru": "Относится к корпусу 11.",
+      "flagged": false
+    },
+    "PC02-C06-K1": {
+      "document": "PC02-C06",
+      "archetype": "superseded",
+      "pages": [
+        2
+      ],
+      "quotation": "Настоящим листом принята толщина утеплителя стен корпуса 11 — 200 мм.",
+      "would_be_false_positive_as": "the live insulation thickness, read as contradicting the old one",
+      "why_not_an_issue_ru": "Значение принято настоящим листом и действует.",
+      "flagged": false
+    },
+    "PC02-C06-K2": {
+      "document": "PC02-C06",
+      "archetype": "superseded",
+      "pages": [
+        3
+      ],
+      "quotation": "Ранее принятая толщина утеплителя 150 мм более не применяется.",
+      "would_be_false_positive_as": "a second insulation thickness, read as a live competing claim",
+      "why_not_an_issue_ru": "Значение прямо отменено и в сравнении не участвует.",
+      "flagged": false
+    },
+    "PC02-C06-K3": {
+      "document": "PC02-C06",
+      "archetype": "absence_by_scope",
+      "pages": [
+        4
+      ],
+      "quotation": "Изменение внесено в раздел целиком и учтено во всех листах.",
+      "would_be_false_positive_as": "a change note, read as an incomplete record",
+      "why_not_an_issue_ru": "Строка подтверждает, что изменение учтено во всех листах.",
+      "flagged": false
+    },
+    "PC02-C06-K4": {
+      "document": "PC02-C06",
+      "archetype": "identical_repeat",
+      "pages": [
+        5
+      ],
+      "quotation": "Толщина утеплителя стен корпуса 11 — 200 мм.",
+      "would_be_false_positive_as": "the live thickness restated, read as a third value",
+      "why_not_an_issue_ru": "Значение совпадает со страницей 2.",
+      "flagged": false
+    },
+    "PC02-C07-K1": {
+      "document": "PC02-C07",
+      "archetype": "absence_by_scope",
+      "pages": [
+        2
+      ],
+      "quotation": "Расчёт инсоляции выполнен в отдельном томе и здесь не приводится.",
+      "would_be_false_positive_as": "a missing calculation, read as an unfilled field",
+      "why_not_an_issue_ru": "Расчёт выполнен, но принадлежит другому тому.",
+      "flagged": false
+    },
+    "PC02-C07-K2": {
+      "document": "PC02-C07",
+      "archetype": "absence_by_scope",
+      "pages": [
+        3
+      ],
+      "quotation": "Количество машино-мест приведено в разделе ПЗУ и не дублируется.",
+      "would_be_false_positive_as": "a missing count, read as an unfilled field",
+      "why_not_an_issue_ru": "Показатель определён в разделе ПЗУ и намеренно не дублируется.",
+      "flagged": false
+    },
+    "PC02-C07-K3": {
+      "document": "PC02-C07",
+      "archetype": "absence_by_scope",
+      "pages": [
+        4
+      ],
+      "quotation": "Сведения о наружных сетях в настоящий раздел не входят.",
+      "would_be_false_positive_as": "absent information, read as incompleteness",
+      "why_not_an_issue_ru": "Сведения не относятся к предмету раздела.",
+      "flagged": false
+    },
+    "PC02-C07-K4": {
+      "document": "PC02-C07",
+      "archetype": "absence_by_scope",
+      "pages": [
+        5
+      ],
+      "quotation": "Раздел выполнен в объёме стадии П; рабочая документация выпускается позже.",
+      "would_be_false_positive_as": "a stage note, read as a document that is not finished",
+      "why_not_an_issue_ru": "Стадия П завершена в своём объёме; выпуск РД — следующая стадия, а не пробел в этом документе.",
+      "flagged": false
+    },
+    "PC02-C08-K1": {
+      "document": "PC02-C08",
+      "archetype": "identical_repeat",
+      "pages": [
+        3,
+        6
+      ],
+      "quotation": "Цвет фасадных кассет корпуса 13 — RAL 7040.",
+      "would_be_false_positive_as": "a colour code stated twice, read as two values",
+      "why_not_an_issue_ru": "Значение RAL 7040 повторено дословно.",
+      "flagged": false
+    },
+    "PC02-C08-K2": {
+      "document": "PC02-C08",
+      "archetype": "other_object",
+      "pages": [
+        7
+      ],
+      "quotation": "Цвет ограждений балконов корпуса 13 — RAL 7016.",
+      "would_be_false_positive_as": "a second colour code, read as contradicting the fasade colour",
+      "why_not_an_issue_ru": "Относится к ограждениям балконов, а не к фасадным кассетам.",
+      "flagged": false
+    },
+    "PC02-C09-K1": {
+      "document": "PC02-C09",
+      "archetype": "class_notation",
+      "pages": [
+        2
+      ],
+      "quotation": "Класс функциональной пожарной опасности корпуса 14 — Ф1.3.",
+      "would_be_false_positive_as": "a class token, read as contradicting Ф4.3 or С0",
+      "why_not_an_issue_ru": "Класс функциональной пожарной опасности — отдельная система.",
+      "flagged": false
+    },
+    "PC02-C09-K2": {
+      "document": "PC02-C09",
+      "archetype": "notation_variant",
+      "pages": [
+        3
+      ],
+      "quotation": "Корпус 14 относится к классу Ф1.3 — многоквартирные жилые дома.",
+      "would_be_false_positive_as": "the same class written in expanded form, read as a second claim",
+      "why_not_an_issue_ru": "Ф1.3 повторён с расшифровкой; значение то же.",
+      "flagged": false
+    },
+    "PC02-C09-K3": {
+      "document": "PC02-C09",
+      "archetype": "scope_dependent",
+      "pages": [
+        4
+      ],
+      "quotation": "Встроенные помещения корпуса 14 отнесены к классу Ф4.3.",
+      "would_be_false_positive_as": "a different functional class, read as a contradiction",
+      "why_not_an_issue_ru": "Относится к встроенным помещениям, а не к жилой части.",
+      "flagged": false
+    },
+    "PC02-C09-K4": {
+      "document": "PC02-C09",
+      "archetype": "class_notation",
+      "pages": [
+        5
+      ],
+      "quotation": "Класс конструктивной пожарной опасности корпуса 14 — С0.",
+      "would_be_false_positive_as": "a structural class token, read as contradicting Ф1.3",
+      "why_not_an_issue_ru": "Конструктивная и функциональная пожарная опасность — разные системы.",
+      "flagged": false
+    },
+    "PC02-C09-K5": {
+      "document": "PC02-C09",
+      "archetype": "class_notation",
+      "pages": [
+        6
+      ],
+      "quotation": "Степень огнестойкости корпуса 14 — II.",
+      "would_be_false_positive_as": "a Roman numeral, read as contradicting С0",
+      "why_not_an_issue_ru": "Степень огнестойкости — третья система классификации.",
+      "flagged": false
+    },
+    "PC02-C09-K6": {
+      "document": "PC02-C09",
+      "archetype": "excluded_by_text",
+      "pages": [
+        7
+      ],
+      "quotation": "Классы указаны для здания в целом; для ТП классы не нормируются.",
+      "would_be_false_positive_as": "a scope sentence, read as an admission of a gap",
+      "why_not_an_issue_ru": "Строка ограничивает область применения классов и значений не назначает.",
+      "flagged": false
+    }
+  },
+  "third_group": [],
+  "matcher_self_proofs": {
+    "positive_matches": {
+      "description": "a finding carrying the seeded category and both declared quotations on their declared pages",
+      "seed_id": "PC02-S01-I1",
+      "hit_count": 2,
+      "group": "seeded_issue",
+      "passed": true
+    },
+    "positive_containment_either_direction": {
+      "description": "the declared quotation contained inside a longer published quote",
+      "hit_count": 1,
+      "passed": true
+    },
+    "negatives_do_not_match": {
+      "description": "one probe per way the rule can refuse a match",
+      "probes": {
+        "wrong_category": {
+          "hit_count": 0,
+          "passed": true
+        },
+        "wrong_page": {
+          "hit_count": 0,
+          "passed": true
+        },
+        "unrelated_text": {
+          "hit_count": 0,
+          "passed": true
+        },
+        "control_quotation_is_not_the_seed": {
+          "hit_count": 0,
+          "passed": true
+        },
+        "other_document_quotation": {
+          "hit_count": 0,
+          "passed": true
+        },
+        "empty_quote": {
+          "hit_count": 0,
+          "passed": true
+        }
+      },
+      "passed": true
+    },
+    "control_rule_matches_its_control": {
+      "description": "the probe that must not match the seed must still match the control it quotes; otherwise the negative proof is vacuous",
+      "control_id": "PC02-S01-K1",
+      "hit_count": 1,
+      "passed": true
+    },
+    "declared_control_group_is_reachable": {
+      "description": "a finding matching a control and no seed is classified `declared_control`; an empty third group must mean nothing fell there, not that the branch is dead",
+      "group": "declared_control",
+      "passed": true
+    },
+    "neither_group_is_reachable": {
+      "description": "a finding matching no seed and no control is classified `neither`; the reported empty third group depends on this",
+      "group": "neither",
+      "passed": true
+    },
+    "empty_finding_set_is_not_success": {
+      "description": "scoring with no findings at all",
+      "recall": 0.0,
+      "seeded_issues_found": 0,
+      "control_statements_flagged": 0,
+      "findings_total": 0,
+      "passed": true,
+      "note": "zero flagged controls here is NOT precision: with no findings there is nothing to be precise about, which is exactly the vacuity this proves against. Precision is only meaningful beside a non-zero findings_total."
+    },
+    "all_passed": true
+  },
+  "whitespace_normalised_diagnostic": {
+    "seeded_issues_found": 9,
+    "seeded_issues_found_ids": [
+      "PC02-S01-I1",
+      "PC02-S01-I2",
+      "PC02-S02-I1",
+      "PC02-S03-I1",
+      "PC02-S03-I2",
+      "PC02-S04-I1",
+      "PC02-S04-I2",
+      "PC02-S05-I1",
+      "PC02-S05-I2"
+    ],
+    "control_statements_flagged": 1,
+    "control_statements_flagged_ids": [
+      "PC02-S02-K6"
+    ],
+    "group_counts": {
+      "seeded_issue": 9,
+      "declared_control": 0,
+      "neither": 0
+    },
+    "differs_from_primary": false
+  },
+  "documents": [
+    {
+      "label": "PC02-C01",
+      "role": "control",
+      "pages": 5,
+      "sha256": "9a09e5ea9ac8542c60694482e0f3b090f808779e837c68f7b11d39a5e4b373a9",
+      "run_id": "run_01M2FRZGVQ5CHKJT6N7W9FGBF6",
+      "version_uid": "ver_01M2FRZGTW4E82YAZH4BE3TYDH",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 0,
+      "findings": [],
+      "seeded_issues_declared": [],
+      "seeded_issues_matched": [],
+      "controls_declared": [
+        "PC02-C01-K1",
+        "PC02-C01-K2",
+        "PC02-C01-K3"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.01282,
+        "cost_micros": 12820,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2514,
+        "output_tokens": 10,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 2767,
+        "run_wall_seconds": 3.014,
+        "upload_seconds": 0.291
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 0,
+        "quotations_verified": 0,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-C02",
+      "role": "control",
+      "pages": 6,
+      "sha256": "42d941d57b76cf0edb963119908e8011511579058d272818bc31e5251e423f6e",
+      "run_id": "run_01M2FRZS183YB9VVXKEK9BJQSX",
+      "version_uid": "ver_01M2FRZS13JC6WP0RWH506NS1J",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 0,
+      "findings": [],
+      "seeded_issues_declared": [],
+      "seeded_issues_matched": [],
+      "controls_declared": [
+        "PC02-C02-K1",
+        "PC02-C02-K2",
+        "PC02-C02-K3",
+        "PC02-C02-K4",
+        "PC02-C02-K5"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.016565,
+        "cost_micros": 16565,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2668,
+        "output_tokens": 129,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 6323,
+        "run_wall_seconds": 6.542,
+        "upload_seconds": 0.075
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 0,
+        "quotations_verified": 0,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-C03",
+      "role": "control",
+      "pages": 6,
+      "sha256": "0850722c23c6a6949ec0dac8b7a7ca322364e5f27c17fe0c4afc048948b17230",
+      "run_id": "run_01M2FS05NGWE7BXGYGWRZSM32W",
+      "version_uid": "ver_01M2FS05NAXB79B0C93V33XN9Q",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 0,
+      "findings": [],
+      "seeded_issues_declared": [],
+      "seeded_issues_matched": [],
+      "controls_declared": [
+        "PC02-C03-K1",
+        "PC02-C03-K2",
+        "PC02-C03-K3",
+        "PC02-C03-K4",
+        "PC02-C03-K5"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.018575,
+        "cost_micros": 18575,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2670,
+        "output_tokens": 209,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 6377,
+        "run_wall_seconds": 6.612,
+        "upload_seconds": 0.072
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 0,
+        "quotations_verified": 0,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-C04",
+      "role": "control",
+      "pages": 7,
+      "sha256": "74a6e72eb88d08140504b483e3e4711345560025ea12f98e05ef71ccd53382bf",
+      "run_id": "run_01M2FS0CBWAR6P8W49FPZ34218",
+      "version_uid": "ver_01M2FS0CBPHQ512TZCX9ZZEBM3",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 0,
+      "findings": [],
+      "seeded_issues_declared": [],
+      "seeded_issues_matched": [],
+      "controls_declared": [
+        "PC02-C04-K1",
+        "PC02-C04-K2",
+        "PC02-C04-K3",
+        "PC02-C04-K4",
+        "PC02-C04-K5",
+        "PC02-C04-K6"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.017155,
+        "cost_micros": 17155,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2846,
+        "output_tokens": 117,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 7296,
+        "run_wall_seconds": 7.543,
+        "upload_seconds": 0.244
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 0,
+        "quotations_verified": 0,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-C05",
+      "role": "control",
+      "pages": 6,
+      "sha256": "5a2f16772af0c9b31d8c41cd506ba0c5eeb0b3fc10c6366abec6c5efdded5155",
+      "run_id": "run_01M2FS0V6VTHCVGMQNW8ATGK4F",
+      "version_uid": "ver_01M2FS0V6QD3JDKEGP56ZJ59EY",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 0,
+      "findings": [],
+      "seeded_issues_declared": [],
+      "seeded_issues_matched": [],
+      "controls_declared": [
+        "PC02-C05-K1",
+        "PC02-C05-K2",
+        "PC02-C05-K3",
+        "PC02-C05-K4"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.01602,
+        "cost_micros": 16020,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2659,
+        "output_tokens": 109,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 5512,
+        "run_wall_seconds": 5.869,
+        "upload_seconds": 0.068
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 0,
+        "quotations_verified": 0,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-C06",
+      "role": "control",
+      "pages": 5,
+      "sha256": "484b3db96a8149793ba478dd9f52fc47fc1e703ebcb7da011c965dd52dda72f4",
+      "run_id": "run_01M2FS53390PCFNMXTTTMN381W",
+      "version_uid": "ver_01M2FS53323MQYZ3AGYDWZSJ8B",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 0,
+      "findings": [],
+      "seeded_issues_declared": [],
+      "seeded_issues_matched": [],
+      "controls_declared": [
+        "PC02-C06-K1",
+        "PC02-C06-K2",
+        "PC02-C06-K3",
+        "PC02-C06-K4"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.015015,
+        "cost_micros": 15015,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2523,
+        "output_tokens": 96,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 6047,
+        "run_wall_seconds": 6.279,
+        "upload_seconds": 0.074
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 0,
+        "quotations_verified": 0,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-C07",
+      "role": "control",
+      "pages": 5,
+      "sha256": "603174e8e8a4cd050194ab7154e58a87be3fdc1ac2131f4bad195b821d0c7760",
+      "run_id": "run_01M2FSFV29D35BEVRVF6QV77G2",
+      "version_uid": "ver_01M2FS599NRG6YZPGW1Q67EA61",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 0,
+      "findings": [],
+      "seeded_issues_declared": [],
+      "seeded_issues_matched": [],
+      "controls_declared": [
+        "PC02-C07-K1",
+        "PC02-C07-K2",
+        "PC02-C07-K3",
+        "PC02-C07-K4"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.013,
+        "cost_micros": 13000,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2550,
+        "output_tokens": 10,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 3085,
+        "run_wall_seconds": 3.285,
+        "upload_seconds": 0.035
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 0,
+        "quotations_verified": 0,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-C08",
+      "role": "control",
+      "pages": 8,
+      "sha256": "e6935694423688290d1db42a91fc6c044468eb0f7417002eae2d59e4f1907ac6",
+      "run_id": "run_01M2FS9B7MBFM3PR2SN85SBJS9",
+      "version_uid": "ver_01M2FS9B7CKPK6FH9J5MQF2ZPF",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 0,
+      "findings": [],
+      "seeded_issues_declared": [],
+      "seeded_issues_matched": [],
+      "controls_declared": [
+        "PC02-C08-K1",
+        "PC02-C08-K2"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.019105,
+        "cost_micros": 19105,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2971,
+        "output_tokens": 170,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 5780,
+        "run_wall_seconds": 6.024,
+        "upload_seconds": 0.212
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 0,
+        "quotations_verified": 0,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-C09",
+      "role": "control",
+      "pages": 7,
+      "sha256": "87cc077d9b79257b9be54410b250b474a2bde5e936789141903f6dfaa1cad647",
+      "run_id": "run_01M2FS9H62ND02X2M0X22927B0",
+      "version_uid": "ver_01M2FS9H5XQW9TZK64E43TZQF8",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 0,
+      "findings": [],
+      "seeded_issues_declared": [],
+      "seeded_issues_matched": [],
+      "controls_declared": [
+        "PC02-C09-K1",
+        "PC02-C09-K2",
+        "PC02-C09-K3",
+        "PC02-C09-K4",
+        "PC02-C09-K5",
+        "PC02-C09-K6"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.02739,
+        "cost_micros": 27390,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2828,
+        "output_tokens": 530,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 9939,
+        "run_wall_seconds": 10.307,
+        "upload_seconds": 0.068
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 0,
+        "quotations_verified": 0,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-S01",
+      "role": "seeded",
+      "pages": 7,
+      "sha256": "59d7da27189684c9ef33b280390fcc4a28e7d159c66c59831de6fe9bdf31f622",
+      "run_id": "run_01M2FRWKXWSQ8T8V63MNZN3DRK",
+      "version_uid": "ver_01M2FRWKW5Z4JK0M0K6PXGHDBT",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 2,
+      "findings": [
+        {
+          "index": 0,
+          "group": "seeded_issue",
+          "finding_uid": "fnd_01M2FRWT2VS5XBBTJPTYG1QWPV",
+          "category": "internal_contradiction",
+          "finding_text": "Класс конструктивной пожарной опасности корпуса 1 указан по-разному: на с. 2 — С0, на с. 5 — С1.",
+          "recommendation_text": "Согласовать единое значение класса конструктивной пожарной опасности корпуса 1 во всех разделах документа.",
+          "evidence": [
+            {
+              "page_number": 2,
+              "quote": "Класс конструктивной пожарной опасности корпуса 1 — С0.",
+              "char_start": 376,
+              "char_end": 431
+            },
+            {
+              "page_number": 5,
+              "quote": "Класс конструктивной пожарной опасности корпуса 1 — С1.",
+              "char_start": 1579,
+              "char_end": 1634
+            }
+          ],
+          "seed_matches": [
+            {
+              "seed_id": "PC02-S01-I1",
+              "category": "internal_contradiction",
+              "hits": [
+                {
+                  "page": 2,
+                  "published_quote": "Класс конструктивной пожарной опасности корпуса 1 — С0.",
+                  "declared_quotation": "Класс конструктивной пожарной опасности корпуса 1 — С0.",
+                  "evidence_ordinal": 0
+                },
+                {
+                  "page": 5,
+                  "published_quote": "Класс конструктивной пожарной опасности корпуса 1 — С1.",
+                  "declared_quotation": "Класс конструктивной пожарной опасности корпуса 1 — С1.",
+                  "evidence_ordinal": 1
+                }
+              ]
+            }
+          ],
+          "control_matches": [],
+          "matched_both": false
+        },
+        {
+          "index": 1,
+          "group": "seeded_issue",
+          "finding_uid": "fnd_01M2FRWT34YBWHA5MZ0RYQAS8H",
+          "category": "explicit_placeholder",
+          "finding_text": "Марка фасадных кассет корпуса 1 не определена — вместо значения оставлена отметка «TBD».",
+          "recommendation_text": "Определить и указать конкретную марку фасадных кассет корпуса 1.",
+          "evidence": [
+            {
+              "page_number": 7,
+              "quote": "Марка фасадных кассет корпуса 1 — TBD.",
+              "char_start": 2165,
+              "char_end": 2203
+            }
+          ],
+          "seed_matches": [
+            {
+              "seed_id": "PC02-S01-I2",
+              "category": "explicit_placeholder",
+              "hits": [
+                {
+                  "page": 7,
+                  "published_quote": "Марка фасадных кассет корпуса 1 — TBD.",
+                  "declared_quotation": "Марка фасадных кассет корпуса 1 — TBD.",
+                  "evidence_ordinal": 0
+                }
+              ]
+            }
+          ],
+          "control_matches": [],
+          "matched_both": false
+        }
+      ],
+      "seeded_issues_declared": [
+        "PC02-S01-I1",
+        "PC02-S01-I2"
+      ],
+      "seeded_issues_matched": [
+        "PC02-S01-I1",
+        "PC02-S01-I2"
+      ],
+      "controls_declared": [
+        "PC02-S01-K1",
+        "PC02-S01-K2",
+        "PC02-S01-K3",
+        "PC02-S01-K4"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.02348,
+        "cost_micros": 23480,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2941,
+        "output_tokens": 351,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 5959,
+        "run_wall_seconds": 6.359,
+        "upload_seconds": 0.563
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 3,
+        "quotations_verified": 3,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-S02",
+      "role": "seeded",
+      "pages": 6,
+      "sha256": "2582b230d33428d012914833b13b9addb26b82c3df21d84eec845434365fb5e8",
+      "run_id": "run_01M2FRZKW6E8B1WS2S7BJEKZT6",
+      "version_uid": "ver_01M2FRZKVZ7MW71YGGY8Z0H4H7",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 1,
+      "findings": [
+        {
+          "index": 0,
+          "group": "seeded_issue",
+          "finding_uid": "fnd_01M2FRZRYEZKA43TD7F27YXQKX",
+          "category": "internal_contradiction",
+          "finding_text": "Общая площадь здания корпуса 2 указана по-разному: 4 812,5 м² (стр. 2 и 4) и 4 218,5 м² (стр. 5).",
+          "recommendation_text": "Согласовать единое значение общей площади здания корпуса 2 во всех разделах документа.",
+          "evidence": [
+            {
+              "page_number": 2,
+              "quote": "Общая площадь здания корпуса 2 — 4 812,5 м².",
+              "char_start": 339,
+              "char_end": 383
+            },
+            {
+              "page_number": 4,
+              "quote": "Общая площадь здания корпуса 2 составляет 4812,5 кв. м.",
+              "char_start": 1199,
+              "char_end": 1254
+            },
+            {
+              "page_number": 5,
+              "quote": "Общая площадь здания корпуса 2 — 4 218,5 м².",
+              "char_start": 1519,
+              "char_end": 1563
+            }
+          ],
+          "seed_matches": [
+            {
+              "seed_id": "PC02-S02-I1",
+              "category": "internal_contradiction",
+              "hits": [
+                {
+                  "page": 2,
+                  "published_quote": "Общая площадь здания корпуса 2 — 4 812,5 м².",
+                  "declared_quotation": "Общая площадь здания корпуса 2 — 4 812,5 м².",
+                  "evidence_ordinal": 0
+                },
+                {
+                  "page": 5,
+                  "published_quote": "Общая площадь здания корпуса 2 — 4 218,5 м².",
+                  "declared_quotation": "Общая площадь здания корпуса 2 — 4 218,5 м².",
+                  "evidence_ordinal": 2
+                }
+              ]
+            }
+          ],
+          "control_matches": [
+            {
+              "control_id": "PC02-S02-K6",
+              "archetype": "notation_variant",
+              "would_be_false_positive_as": "the same total written without a thin space and as кв. м",
+              "hits": [
+                {
+                  "page": 4,
+                  "published_quote": "Общая площадь здания корпуса 2 составляет 4812,5 кв. м.",
+                  "declared_quotation": "Общая площадь здания корпуса 2 составляет 4812,5 кв. м.",
+                  "evidence_ordinal": 1
+                }
+              ]
+            }
+          ],
+          "matched_both": true
+        }
+      ],
+      "seeded_issues_declared": [
+        "PC02-S02-I1"
+      ],
+      "seeded_issues_matched": [
+        "PC02-S02-I1"
+      ],
+      "controls_declared": [
+        "PC02-S02-K1",
+        "PC02-S02-K2",
+        "PC02-S02-K3",
+        "PC02-S02-K4",
+        "PC02-S02-K5",
+        "PC02-S02-K6"
+      ],
+      "controls_flagged": [
+        "PC02-S02-K6"
+      ],
+      "cost": {
+        "measured_cost_usd": 0.02026,
+        "cost_micros": 20260,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2757,
+        "output_tokens": 259,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 4803,
+        "run_wall_seconds": 5.204,
+        "upload_seconds": 0.081
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 3,
+        "quotations_verified": 3,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-S03",
+      "role": "seeded",
+      "pages": 7,
+      "sha256": "cbcf93e69f91e0aaf9a9e810a3e9ba6e1c3fd80cb92fd01a0bc82b6365a0299e",
+      "run_id": "run_01M2FRZZFYG8R19CA5N0E2H30K",
+      "version_uid": "ver_01M2FRZZFS0X8GMC0B44J8XMCF",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 2,
+      "findings": [
+        {
+          "index": 0,
+          "group": "seeded_issue",
+          "finding_uid": "fnd_01M2FS05JRRACYVFN1PR429J6A",
+          "category": "internal_contradiction",
+          "finding_text": "Тип кровли и схема водоотвода корпуса 3 указаны по-разному: на с. 3 — плоская с внутренним водостоком, на с. 6 — скатная с наружным водостоком.",
+          "recommendation_text": "Согласовать в тексте единое решение по типу кровли и организации водоотвода корпуса 3.",
+          "evidence": [
+            {
+              "page_number": 3,
+              "quote": "Кровля корпуса 3 — плоская, с внутренним организованным водостоком.",
+              "char_start": 697,
+              "char_end": 764
+            },
+            {
+              "page_number": 6,
+              "quote": "Кровля корпуса 3 — скатная, с наружным организованным водостоком.",
+              "char_start": 1620,
+              "char_end": 1685
+            }
+          ],
+          "seed_matches": [
+            {
+              "seed_id": "PC02-S03-I1",
+              "category": "internal_contradiction",
+              "hits": [
+                {
+                  "page": 3,
+                  "published_quote": "Кровля корпуса 3 — плоская, с внутренним организованным водостоком.",
+                  "declared_quotation": "Кровля корпуса 3 — плоская, с внутренним организованным водостоком.",
+                  "evidence_ordinal": 0
+                },
+                {
+                  "page": 6,
+                  "published_quote": "Кровля корпуса 3 — скатная, с наружным организованным водостоком.",
+                  "declared_quotation": "Кровля корпуса 3 — скатная, с наружным организованным водостоком.",
+                  "evidence_ordinal": 1
+                }
+              ]
+            }
+          ],
+          "control_matches": [],
+          "matched_both": false
+        },
+        {
+          "index": 1,
+          "group": "seeded_issue",
+          "finding_uid": "fnd_01M2FS05JV18TT1AD5JKHFHDB6",
+          "category": "explicit_placeholder",
+          "finding_text": "Толщина утеплителя покрытия корпуса 3 не указана — на месте значения оставлен незаполненный прочерк.",
+          "recommendation_text": "Определить и внести числовое значение толщины утеплителя покрытия корпуса 3.",
+          "evidence": [
+            {
+              "page_number": 5,
+              "quote": "Толщина утеплителя покрытия корпуса 3 — ___ мм.",
+              "char_start": 1324,
+              "char_end": 1371
+            }
+          ],
+          "seed_matches": [
+            {
+              "seed_id": "PC02-S03-I2",
+              "category": "explicit_placeholder",
+              "hits": [
+                {
+                  "page": 5,
+                  "published_quote": "Толщина утеплителя покрытия корпуса 3 — ___ мм.",
+                  "declared_quotation": "Толщина утеплителя покрытия корпуса 3 — ___ мм.",
+                  "evidence_ordinal": 0
+                }
+              ]
+            }
+          ],
+          "control_matches": [],
+          "matched_both": false
+        }
+      ],
+      "seeded_issues_declared": [
+        "PC02-S03-I1",
+        "PC02-S03-I2"
+      ],
+      "seeded_issues_matched": [
+        "PC02-S03-I1",
+        "PC02-S03-I2"
+      ],
+      "controls_declared": [
+        "PC02-S03-K1",
+        "PC02-S03-K2",
+        "PC02-S03-K3",
+        "PC02-S03-K4"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.023845,
+        "cost_micros": 23845,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 2849,
+        "output_tokens": 384,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 5904,
+        "run_wall_seconds": 6.244,
+        "upload_seconds": 0.07
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 3,
+        "quotations_verified": 3,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-S04",
+      "role": "seeded",
+      "pages": 9,
+      "sha256": "4ec5f6f9199023f2c29aba51753f8545ac00de0edabcd9221696879a693f684c",
+      "run_id": "run_01M2FS0KT9NSYVB0Q14ZKKZWNX",
+      "version_uid": "ver_01M2FS0KT31HG319504XDSK7CM",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 2,
+      "findings": [
+        {
+          "index": 0,
+          "group": "seeded_issue",
+          "finding_uid": "fnd_01M2FS0V4BVF2EA0GD1J5GZ3GF",
+          "category": "internal_contradiction",
+          "finding_text": "Абсолютная отметка, соответствующая отметке 0,000 корпуса 4, указана по-разному: 143,60 и 143,80.",
+          "recommendation_text": "Согласовать единое значение абсолютной отметки уровня 0,000 корпуса 4 во всех листах раздела.",
+          "evidence": [
+            {
+              "page_number": 2,
+              "quote": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,60.",
+              "char_start": 400,
+              "char_end": 464
+            },
+            {
+              "page_number": 7,
+              "quote": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,80.",
+              "char_start": 1954,
+              "char_end": 2018
+            }
+          ],
+          "seed_matches": [
+            {
+              "seed_id": "PC02-S04-I1",
+              "category": "internal_contradiction",
+              "hits": [
+                {
+                  "page": 2,
+                  "published_quote": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,60.",
+                  "declared_quotation": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,60.",
+                  "evidence_ordinal": 0
+                },
+                {
+                  "page": 7,
+                  "published_quote": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,80.",
+                  "declared_quotation": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,80.",
+                  "evidence_ordinal": 1
+                }
+              ]
+            }
+          ],
+          "control_matches": [],
+          "matched_both": false
+        },
+        {
+          "index": 1,
+          "group": "seeded_issue",
+          "finding_uid": "fnd_01M2FS0V4DBH2F38P6H31J63C3",
+          "category": "internal_contradiction",
+          "finding_text": "Количество пассажирских лифтов в корпусе 4 указано по-разному: два и три.",
+          "recommendation_text": "Уточнить и привести к единому значению количество пассажирских лифтов корпуса 4.",
+          "evidence": [
+            {
+              "page_number": 4,
+              "quote": "В корпусе 4 предусмотрено два пассажирских лифта.",
+              "char_start": 1033,
+              "char_end": 1082
+            },
+            {
+              "page_number": 8,
+              "quote": "В корпусе 4 предусмотрено три пассажирских лифта.",
+              "char_start": 2395,
+              "char_end": 2444
+            }
+          ],
+          "seed_matches": [
+            {
+              "seed_id": "PC02-S04-I2",
+              "category": "internal_contradiction",
+              "hits": [
+                {
+                  "page": 4,
+                  "published_quote": "В корпусе 4 предусмотрено два пассажирских лифта.",
+                  "declared_quotation": "В корпусе 4 предусмотрено два пассажирских лифта.",
+                  "evidence_ordinal": 0
+                },
+                {
+                  "page": 8,
+                  "published_quote": "В корпусе 4 предусмотрено три пассажирских лифта.",
+                  "declared_quotation": "В корпусе 4 предусмотрено три пассажирских лифта.",
+                  "evidence_ordinal": 1
+                }
+              ]
+            }
+          ],
+          "control_matches": [],
+          "matched_both": false
+        }
+      ],
+      "seeded_issues_declared": [
+        "PC02-S04-I1",
+        "PC02-S04-I2"
+      ],
+      "seeded_issues_matched": [
+        "PC02-S04-I1",
+        "PC02-S04-I2"
+      ],
+      "controls_declared": [
+        "PC02-S04-K1",
+        "PC02-S04-K2",
+        "PC02-S04-K3",
+        "PC02-S04-K4",
+        "PC02-S04-K5"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.029535,
+        "cost_micros": 29535,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 3177,
+        "output_tokens": 546,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 7121,
+        "run_wall_seconds": 7.499,
+        "upload_seconds": 0.082
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 4,
+        "quotations_verified": 4,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    },
+    {
+      "label": "PC02-S05",
+      "role": "seeded",
+      "pages": 10,
+      "sha256": "95330a757e3f724a1b2cc994d453ba805f6c456f93e5246df022b9f78d1f4c40",
+      "run_id": "run_01M2FSH2EXNAPKRESS683Y81YK",
+      "version_uid": "ver_01M2FS1114AY62TCPZQ9FSWVEV",
+      "state": "published",
+      "terminal": true,
+      "terminal_reason": null,
+      "degradation_set": [],
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0",
+          "error_code": null
+        }
+      ],
+      "findings_returned": 2,
+      "findings": [
+        {
+          "index": 0,
+          "group": "seeded_issue",
+          "finding_uid": "fnd_01M2FSHBAR5BTJ9SBY1ZV8ZRE1",
+          "category": "internal_contradiction",
+          "finding_text": "Этажность корпуса 5 указана по-разному: в общих данных — 12 этажей, в технико-экономических показателях — 14 этажей.",
+          "recommendation_text": "Согласовать значение этажности корпуса 5 во всех разделах текста и привести его к единому виду.",
+          "evidence": [
+            {
+              "page_number": 2,
+              "quote": "Этажность корпуса 5 — 12 этажей.",
+              "char_start": 316,
+              "char_end": 348
+            },
+            {
+              "page_number": 9,
+              "quote": "Этажность корпуса 5 — 14 этажей.",
+              "char_start": 2683,
+              "char_end": 2715
+            }
+          ],
+          "seed_matches": [
+            {
+              "seed_id": "PC02-S05-I1",
+              "category": "internal_contradiction",
+              "hits": [
+                {
+                  "page": 2,
+                  "published_quote": "Этажность корпуса 5 — 12 этажей.",
+                  "declared_quotation": "Этажность корпуса 5 — 12 этажей.",
+                  "evidence_ordinal": 0
+                },
+                {
+                  "page": 9,
+                  "published_quote": "Этажность корпуса 5 — 14 этажей.",
+                  "declared_quotation": "Этажность корпуса 5 — 14 этажей.",
+                  "evidence_ordinal": 1
+                }
+              ]
+            }
+          ],
+          "control_matches": [],
+          "matched_both": false
+        },
+        {
+          "index": 1,
+          "group": "seeded_issue",
+          "finding_uid": "fnd_01M2FSHBAWPJA5FSV0DRHCBN4Z",
+          "category": "explicit_placeholder",
+          "finding_text": "Назначение помещения 1.12 в составе встроенной части оставлено незаполненным («не определено»).",
+          "recommendation_text": "Определить и указать функциональное назначение помещения 1.12.",
+          "evidence": [
+            {
+              "page_number": 6,
+              "quote": "Назначение помещения 1.12 — не определено.",
+              "char_start": 1697,
+              "char_end": 1739
+            }
+          ],
+          "seed_matches": [
+            {
+              "seed_id": "PC02-S05-I2",
+              "category": "explicit_placeholder",
+              "hits": [
+                {
+                  "page": 6,
+                  "published_quote": "Назначение помещения 1.12 — не определено.",
+                  "declared_quotation": "Назначение помещения 1.12 — не определено.",
+                  "evidence_ordinal": 0
+                }
+              ]
+            }
+          ],
+          "control_matches": [],
+          "matched_both": false
+        }
+      ],
+      "seeded_issues_declared": [
+        "PC02-S05-I1",
+        "PC02-S05-I2"
+      ],
+      "seeded_issues_matched": [
+        "PC02-S05-I1",
+        "PC02-S05-I2"
+      ],
+      "controls_declared": [
+        "PC02-S05-K1",
+        "PC02-S05-K2",
+        "PC02-S05-K3",
+        "PC02-S05-K4",
+        "PC02-S05-K5",
+        "PC02-S05-K6"
+      ],
+      "controls_flagged": [],
+      "cost": {
+        "measured_cost_usd": 0.029775,
+        "cost_micros": 29775,
+        "cost_basis": [
+          "measured"
+        ],
+        "model_calls": 1,
+        "input_tokens": 3250,
+        "output_tokens": 541,
+        "model_identity": [
+          "claude-opus-5"
+        ]
+      },
+      "latency": {
+        "provider_latency_ms": 8620,
+        "run_wall_seconds": 9.115,
+        "upload_seconds": 0.289
+      },
+      "grounding": {
+        "page_text_sha256_pinned": true,
+        "quotations_checked": 3,
+        "quotations_verified": 3,
+        "global_offsets_run_in_page_order": true,
+        "global_offsets_distinct": true
+      }
+    }
+  ],
+  "negative_envelope": {
+    "note": "Excluded from every finding denominator and from every gate that counts measurable documents, G4 included.",
+    "documents": [
+      {
+        "label": "PC02-N01",
+        "violates_rule": "ENV-ENCRYPTED",
+        "rule_description": "the PDF is not encrypted or password-protected",
+        "bytes": 40559,
+        "upload_status": 422,
+        "refused": true,
+        "error_code": "validation_failed",
+        "message": "The document is encrypted. This prototype accepts unencrypted PDFs only.",
+        "details": {
+          "field": "content",
+          "constraint": "not_encrypted"
+        },
+        "seconds": 0.005,
+        "expected_constraint_for_rule": "not_encrypted",
+        "expected_guard": "src/auditmanager/ingest/envelope.py:193 (the envelope probe)",
+        "actual_constraint": "not_encrypted",
+        "refused_by_its_own_declared_guard": true,
+        "refused_for_the_reason_the_rule_states": true
+      },
+      {
+        "label": "PC02-N02",
+        "violates_rule": "ENV-TEXT",
+        "rule_description": "every page carries extractable embedded text",
+        "bytes": 246110,
+        "upload_status": 422,
+        "refused": true,
+        "error_code": "validation_failed",
+        "message": "At least one page carries no extractable embedded text. This prototype never substitutes OCR for a text layer.",
+        "details": {
+          "field": "page_text",
+          "constraint": "every_page_has_extractable_text"
+        },
+        "seconds": 0.006,
+        "expected_constraint_for_rule": "every_page_has_extractable_text",
+        "expected_guard": "src/auditmanager/ingest/envelope.py:229 (the envelope probe)",
+        "actual_constraint": "every_page_has_extractable_text",
+        "refused_by_its_own_declared_guard": true,
+        "refused_for_the_reason_the_rule_states": true
+      },
+      {
+        "label": "PC02-N03",
+        "violates_rule": "ENV-SIZE",
+        "rule_description": "the file is at most 26214400 bytes (25 MiB)",
+        "bytes": 27303351,
+        "upload_status": 422,
+        "refused": true,
+        "error_code": "validation_failed",
+        "message": "The upload exceeds the maximum accepted size.",
+        "details": {
+          "field": "file",
+          "constraint": "max_bytes"
+        },
+        "seconds": 0.0,
+        "expected_constraint_for_rule": "byte_size <= 26214400",
+        "expected_guard": "src/auditmanager/ingest/envelope.py:153 (the envelope probe, 25 MiB)",
+        "actual_constraint": "max_bytes",
+        "refused_by_its_own_declared_guard": false,
+        "refused_for_the_reason_the_rule_states": true
+      },
+      {
+        "label": "PC02-N04",
+        "violates_rule": "ENV-PAGES",
+        "rule_description": "the document has at most 30 pages",
+        "bytes": 69947,
+        "upload_status": 422,
+        "refused": true,
+        "error_code": "validation_failed",
+        "message": "The document carries more pages than the accepted envelope allows, or carries none at all.",
+        "details": {
+          "field": "page_count",
+          "constraint": "1 <= page_count <= 30"
+        },
+        "seconds": 0.005,
+        "expected_constraint_for_rule": "1 <= page_count <= 30",
+        "expected_guard": "src/auditmanager/ingest/envelope.py:162 (the envelope probe)",
+        "actual_constraint": "1 <= page_count <= 30",
+        "refused_by_its_own_declared_guard": true,
+        "refused_for_the_reason_the_rule_states": true
+      }
+    ],
+    "all_refused": true,
+    "all_refused_by_their_own_declared_guard": false,
+    "guard_note": "ENV-SIZE is the one rule whose fixture does not reach the guard that declares it. PC02-N03 is 27303351 bytes, which exceeds both the envelope's 25 MiB ENV-SIZE limit and the transport's 26 MiB multipart body limit (src/auditmanager/api/routers/multipart.py:30,64). The transport guard is outermost, so it refuses first and the response carries constraint `max_bytes` rather than the envelope's `byte_size <= 26214400`. The file is still refused for being too large, which is what ENV-SIZE states, but this run does not exercise the envelope's own ENV-SIZE check. A fixture between 25 and 26 MiB would."
+  }
+}

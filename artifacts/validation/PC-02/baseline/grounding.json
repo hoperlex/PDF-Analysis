@@ -1,0 +1,339 @@
+{
+  "independent_reader": "tools/fixtures/ar_corpus/pdfextract.py",
+  "independent_reader_note": "a from-scratch PDF parser importing only re and zlib; the product extracts with pdfplumber",
+  "product_extractor": "pdfplumber (src/auditmanager/analysis/stages/extraction.py:51)",
+  "documents": {
+    "PC02-C01": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 5,
+      "evidence_items": [],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-C02": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 6,
+      "evidence_items": [],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-C03": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 6,
+      "evidence_items": [],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-C04": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 7,
+      "evidence_items": [],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-C05": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 6,
+      "evidence_items": [],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-C06": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 5,
+      "evidence_items": [],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-C07": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 5,
+      "evidence_items": [],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-C08": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 8,
+      "evidence_items": [],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-C09": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 7,
+      "evidence_items": [],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-S01": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 7,
+      "evidence_items": [
+        {
+          "finding_uid": "fnd_01M2FRWT2VS5XBBTJPTYG1QWPV",
+          "evidence_ordinal": 0,
+          "page_number": 2,
+          "page_in_range": true,
+          "quote": "Класс конструктивной пожарной опасности корпуса 1 — С0.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 150,
+          "declared_char_start": 376,
+          "declared_char_end": 431,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FRWT2VS5XBBTJPTYG1QWPV",
+          "evidence_ordinal": 1,
+          "page_number": 5,
+          "page_in_range": true,
+          "quote": "Класс конструктивной пожарной опасности корпуса 1 — С1.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 166,
+          "declared_char_start": 1579,
+          "declared_char_end": 1634,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FRWT34YBWHA5MZ0RYQAS8H",
+          "evidence_ordinal": 0,
+          "page_number": 7,
+          "page_in_range": true,
+          "quote": "Марка фасадных кассет корпуса 1 — TBD.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 92,
+          "declared_char_start": 2165,
+          "declared_char_end": 2203,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        }
+      ],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-S02": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 6,
+      "evidence_items": [
+        {
+          "finding_uid": "fnd_01M2FRZRYEZKA43TD7F27YXQKX",
+          "evidence_ordinal": 0,
+          "page_number": 2,
+          "page_in_range": true,
+          "quote": "Общая площадь здания корпуса 2 — 4 812,5 м².",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 105,
+          "declared_char_start": 339,
+          "declared_char_end": 383,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FRZRYEZKA43TD7F27YXQKX",
+          "evidence_ordinal": 1,
+          "page_number": 4,
+          "page_in_range": true,
+          "quote": "Общая площадь здания корпуса 2 составляет 4812,5 кв. м.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 221,
+          "declared_char_start": 1199,
+          "declared_char_end": 1254,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FRZRYEZKA43TD7F27YXQKX",
+          "evidence_ordinal": 2,
+          "page_number": 5,
+          "page_in_range": true,
+          "quote": "Общая площадь здания корпуса 2 — 4 218,5 м².",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 154,
+          "declared_char_start": 1519,
+          "declared_char_end": 1563,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        }
+      ],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-S03": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 7,
+      "evidence_items": [
+        {
+          "finding_uid": "fnd_01M2FS05JRRACYVFN1PR429J6A",
+          "evidence_ordinal": 0,
+          "page_number": 3,
+          "page_in_range": true,
+          "quote": "Кровля корпуса 3 — плоская, с внутренним организованным водостоком.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 159,
+          "declared_char_start": 697,
+          "declared_char_end": 764,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FS05JRRACYVFN1PR429J6A",
+          "evidence_ordinal": 1,
+          "page_number": 6,
+          "page_in_range": true,
+          "quote": "Кровля корпуса 3 — скатная, с наружным организованным водостоком.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 91,
+          "declared_char_start": 1620,
+          "declared_char_end": 1685,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FS05JV18TT1AD5JKHFHDB6",
+          "evidence_ordinal": 0,
+          "page_number": 5,
+          "page_in_range": true,
+          "quote": "Толщина утеплителя покрытия корпуса 3 — ___ мм.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 109,
+          "declared_char_start": 1324,
+          "declared_char_end": 1371,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        }
+      ],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-S04": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 9,
+      "evidence_items": [
+        {
+          "finding_uid": "fnd_01M2FS0V4BVF2EA0GD1J5GZ3GF",
+          "evidence_ordinal": 0,
+          "page_number": 2,
+          "page_in_range": true,
+          "quote": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,60.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 154,
+          "declared_char_start": 400,
+          "declared_char_end": 464,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FS0V4BVF2EA0GD1J5GZ3GF",
+          "evidence_ordinal": 1,
+          "page_number": 7,
+          "page_in_range": true,
+          "quote": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,80.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 102,
+          "declared_char_start": 1954,
+          "declared_char_end": 2018,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FS0V4DBH2F38P6H31J63C3",
+          "evidence_ordinal": 0,
+          "page_number": 4,
+          "page_in_range": true,
+          "quote": "В корпусе 4 предусмотрено два пассажирских лифта.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 161,
+          "declared_char_start": 1033,
+          "declared_char_end": 1082,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FS0V4DBH2F38P6H31J63C3",
+          "evidence_ordinal": 1,
+          "page_number": 8,
+          "page_in_range": true,
+          "quote": "В корпусе 4 предусмотрено три пассажирских лифта.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 152,
+          "declared_char_start": 2395,
+          "declared_char_end": 2444,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        }
+      ],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    },
+    "PC02-S05": {
+      "page_text_sha256_pinned": true,
+      "pages_extracted": 10,
+      "evidence_items": [
+        {
+          "finding_uid": "fnd_01M2FSHBAR5BTJ9SBY1ZV8ZRE1",
+          "evidence_ordinal": 0,
+          "page_number": 2,
+          "page_in_range": true,
+          "quote": "Этажность корпуса 5 — 12 этажей.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 79,
+          "declared_char_start": 316,
+          "declared_char_end": 348,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FSHBAR5BTJ9SBY1ZV8ZRE1",
+          "evidence_ordinal": 1,
+          "page_number": 9,
+          "page_in_range": true,
+          "quote": "Этажность корпуса 5 — 14 этажей.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 163,
+          "declared_char_start": 2683,
+          "declared_char_end": 2715,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        },
+        {
+          "finding_uid": "fnd_01M2FSHBAWPJA5FSV0DRHCBN4Z",
+          "evidence_ordinal": 0,
+          "page_number": 6,
+          "page_in_range": true,
+          "quote": "Назначение помещения 1.12 — не определено.",
+          "present_on_declared_page": true,
+          "page_local_offset_independent": 163,
+          "declared_char_start": 1697,
+          "declared_char_end": 1739,
+          "span_length_matches_quotation": true,
+          "pinned_to_manifest": true,
+          "verified": true
+        }
+      ],
+      "global_offsets_run_in_page_order": true,
+      "global_offsets_distinct": true
+    }
+  },
+  "quotations_verified": 16,
+  "failures": [],
+  "failure_count": 0,
+  "documents_pinned_to_manifest": 14,
+  "vacuity_note": "A loop over an empty evidence set verifies nothing and would report no failures. quotations_verified is therefore reported beside the count, and a finding that published no evidence at all is itself recorded as a failure."
+}

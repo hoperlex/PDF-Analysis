@@ -1,0 +1,149 @@
+{
+  "label": "PC02-C09",
+  "role": "control",
+  "path": "fixtures/validation/PC-02/documents/PC02-C09.pdf",
+  "pages": 7,
+  "bytes": 51189,
+  "sha256": "87cc077d9b79257b9be54410b250b474a2bde5e936789141903f6dfaa1cad647",
+  "session_tag": "p4run01",
+  "upload": {
+    "status": 201,
+    "body": {
+      "version_uid": "ver_01M2FS9H5XQW9TZK64E43TZQF8",
+      "document_uid": "doc_01M2FS9H5X7G04GEK6T0FXVBXS",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_ordinal": 1,
+      "media_type": "application/pdf",
+      "byte_size": 51189,
+      "sha256": "87cc077d9b79257b9be54410b250b474a2bde5e936789141903f6dfaa1cad647",
+      "page_count": 7,
+      "published_at": "2026-09-14T11:02:02.172176Z",
+      "input_manifest": [
+        {
+          "role": "source.document",
+          "sha256": "87cc077d9b79257b9be54410b250b474a2bde5e936789141903f6dfaa1cad647",
+          "size_bytes": 51189,
+          "media_type": "application/pdf"
+        }
+      ],
+      "display_title": "Корпус 14. Пожарно-технические характеристики"
+    }
+  },
+  "upload_seconds": 0.068,
+  "version_uid": "ver_01M2FS9H5XQW9TZK64E43TZQF8",
+  "page_count_reported": 7,
+  "start_run": {
+    "status": 202,
+    "body": {
+      "run_id": "run_01M2FS9H62ND02X2M0X22927B0",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FS9H5XQW9TZK64E43TZQF8",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T11:02:02.176966Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T11:02:02.176966Z"
+    }
+  },
+  "run_wall_seconds": 10.307,
+  "run_id": "run_01M2FS9H62ND02X2M0X22927B0",
+  "status_read": {
+    "status": 200,
+    "body": {
+      "run_id": "run_01M2FS9H62ND02X2M0X22927B0",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FS9H5XQW9TZK64E43TZQF8",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T11:02:02.176966Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T11:02:02.176966Z"
+    }
+  },
+  "state": "published",
+  "terminated": true,
+  "stages": [
+    {
+      "stage_id": "document_context_build",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "page_geometry_extraction",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "source_preparation",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "text_analysis",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    }
+  ],
+  "degradation_set": [],
+  "terminal_reason": null,
+  "published_finding_count": null,
+  "diagnostic_observation_count": null,
+  "findings": [],
+  "finding_pages": [
+    {
+      "target": "/runs/run_01M2FS9H62ND02X2M0X22927B0/findings?limit=200",
+      "status": 200
+    }
+  ],
+  "findings_returned": 0,
+  "began_epoch": 1789383722.1088328,
+  "ended_epoch": 1789383732.4881535
+}

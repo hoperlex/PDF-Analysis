@@ -1,0 +1,226 @@
+{
+  "label": "PC02-S03",
+  "role": "seeded",
+  "path": "fixtures/validation/PC-02/documents/PC02-S03.pdf",
+  "pages": 7,
+  "bytes": 51423,
+  "sha256": "cbcf93e69f91e0aaf9a9e810a3e9ba6e1c3fd80cb92fd01a0bc82b6365a0299e",
+  "session_tag": "p4run01",
+  "upload": {
+    "status": 201,
+    "body": {
+      "version_uid": "ver_01M2FRZZFS0X8GMC0B44J8XMCF",
+      "document_uid": "doc_01M2FRZZFSCXYY58G88M8MD7RN",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_ordinal": 1,
+      "media_type": "application/pdf",
+      "byte_size": 51423,
+      "sha256": "cbcf93e69f91e0aaf9a9e810a3e9ba6e1c3fd80cb92fd01a0bc82b6365a0299e",
+      "page_count": 7,
+      "published_at": "2026-09-14T10:56:49.143803Z",
+      "input_manifest": [
+        {
+          "role": "source.document",
+          "sha256": "cbcf93e69f91e0aaf9a9e810a3e9ba6e1c3fd80cb92fd01a0bc82b6365a0299e",
+          "size_bytes": 51423,
+          "media_type": "application/pdf"
+        }
+      ],
+      "display_title": "Корпус 3. Кровля и фасадные системы"
+    }
+  },
+  "upload_seconds": 0.07,
+  "version_uid": "ver_01M2FRZZFS0X8GMC0B44J8XMCF",
+  "page_count_reported": 7,
+  "start_run": {
+    "status": 202,
+    "body": {
+      "run_id": "run_01M2FRZZFYG8R19CA5N0E2H30K",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRZZFS0X8GMC0B44J8XMCF",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:56:49.149040Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:56:49.149040Z"
+    }
+  },
+  "run_wall_seconds": 6.244,
+  "run_id": "run_01M2FRZZFYG8R19CA5N0E2H30K",
+  "status_read": {
+    "status": 200,
+    "body": {
+      "run_id": "run_01M2FRZZFYG8R19CA5N0E2H30K",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRZZFS0X8GMC0B44J8XMCF",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:56:49.149040Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:56:49.149040Z"
+    }
+  },
+  "state": "published",
+  "terminated": true,
+  "stages": [
+    {
+      "stage_id": "document_context_build",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "page_geometry_extraction",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "source_preparation",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "text_analysis",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    }
+  ],
+  "degradation_set": [],
+  "terminal_reason": null,
+  "published_finding_count": null,
+  "diagnostic_observation_count": null,
+  "findings": [
+    {
+      "finding_uid": "fnd_01M2FS05JRRACYVFN1PR429J6A",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRZZFS0X8GMC0B44J8XMCF",
+      "run_id": "run_01M2FRZZFYG8R19CA5N0E2H30K",
+      "category": "internal_contradiction",
+      "observation": {
+        "finding_observation_id": "fobs_01M2FS05JRNH3BK0E7Y2F7B1M5",
+        "run_id": "run_01M2FRZZFYG8R19CA5N0E2H30K",
+        "category": "internal_contradiction",
+        "finding_text": "Тип кровли и схема водоотвода корпуса 3 указаны по-разному: на с. 3 — плоская с внутренним водостоком, на с. 6 — скатная с наружным водостоком.",
+        "recommendation_text": "Согласовать в тексте единое решение по типу кровли и организации водоотвода корпуса 3.",
+        "evidence": [
+          {
+            "evidence_ordinal": 0,
+            "page_number": 3,
+            "quote": "Кровля корпуса 3 — плоская, с внутренним организованным водостоком.",
+            "char_start": 697,
+            "char_end": 764,
+            "block_id": "b_000017"
+          },
+          {
+            "evidence_ordinal": 1,
+            "page_number": 6,
+            "quote": "Кровля корпуса 3 — скатная, с наружным организованным водостоком.",
+            "char_start": 1620,
+            "char_end": 1685,
+            "block_id": "b_000034"
+          }
+        ],
+        "provenance": {
+          "stage_id": "text_analysis",
+          "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+          "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+          "provider_mode": "live",
+          "model_call_id": "mc_01M2FS05HVRM96YARTJNYY0E45"
+        }
+      },
+      "current_verdict": "pending",
+      "latest_decision_id": null,
+      "decision_recorded_at": null
+    },
+    {
+      "finding_uid": "fnd_01M2FS05JV18TT1AD5JKHFHDB6",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRZZFS0X8GMC0B44J8XMCF",
+      "run_id": "run_01M2FRZZFYG8R19CA5N0E2H30K",
+      "category": "explicit_placeholder",
+      "observation": {
+        "finding_observation_id": "fobs_01M2FS05JV1JJVGA6YR625JHRX",
+        "run_id": "run_01M2FRZZFYG8R19CA5N0E2H30K",
+        "category": "explicit_placeholder",
+        "finding_text": "Толщина утеплителя покрытия корпуса 3 не указана — на месте значения оставлен незаполненный прочерк.",
+        "recommendation_text": "Определить и внести числовое значение толщины утеплителя покрытия корпуса 3.",
+        "evidence": [
+          {
+            "evidence_ordinal": 0,
+            "page_number": 5,
+            "quote": "Толщина утеплителя покрытия корпуса 3 — ___ мм.",
+            "char_start": 1324,
+            "char_end": 1371,
+            "block_id": "b_000028"
+          }
+        ],
+        "provenance": {
+          "stage_id": "text_analysis",
+          "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+          "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+          "provider_mode": "live",
+          "model_call_id": "mc_01M2FS05HVRM96YARTJNYY0E45"
+        }
+      },
+      "current_verdict": "pending",
+      "latest_decision_id": null,
+      "decision_recorded_at": null
+    }
+  ],
+  "finding_pages": [
+    {
+      "target": "/runs/run_01M2FRZZFYG8R19CA5N0E2H30K/findings?limit=200",
+      "status": 200
+    }
+  ],
+  "findings_returned": 2,
+  "began_epoch": 1789383409.0788686,
+  "ended_epoch": 1789383415.3969243
+}

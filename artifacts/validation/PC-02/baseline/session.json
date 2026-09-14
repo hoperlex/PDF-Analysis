@@ -1,0 +1,23 @@
+{
+  "session_tag": "p4run01",
+  "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+  "provider_mode": "proxy",
+  "model_id": "claude-opus-5",
+  "cost_ceiling_usd": "1.0",
+  "pre_registered_order": [
+    "PC02-S01",
+    "PC02-C01",
+    "PC02-S02",
+    "PC02-C02",
+    "PC02-S03",
+    "PC02-C03",
+    "PC02-C04",
+    "PC02-S04",
+    "PC02-C05",
+    "PC02-S05",
+    "PC02-C06",
+    "PC02-C07",
+    "PC02-C08",
+    "PC02-C09"
+  ]
+}

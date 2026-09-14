@@ -1,0 +1,226 @@
+{
+  "label": "PC02-S01",
+  "role": "seeded",
+  "path": "fixtures/validation/PC-02/documents/PC02-S01.pdf",
+  "pages": 7,
+  "bytes": 52421,
+  "sha256": "59d7da27189684c9ef33b280390fcc4a28e7d159c66c59831de6fe9bdf31f622",
+  "session_tag": "p4run01",
+  "upload": {
+    "status": 201,
+    "body": {
+      "version_uid": "ver_01M2FRWKW5Z4JK0M0K6PXGHDBT",
+      "document_uid": "doc_01M2FRWKW4JSYJM2N7V9RSCSM7",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_ordinal": 1,
+      "media_type": "application/pdf",
+      "byte_size": 52421,
+      "sha256": "59d7da27189684c9ef33b280390fcc4a28e7d159c66c59831de6fe9bdf31f622",
+      "page_count": 7,
+      "published_at": "2026-09-14T10:54:58.945556Z",
+      "input_manifest": [
+        {
+          "role": "source.document",
+          "sha256": "59d7da27189684c9ef33b280390fcc4a28e7d159c66c59831de6fe9bdf31f622",
+          "size_bytes": 52421,
+          "media_type": "application/pdf"
+        }
+      ],
+      "display_title": "Корпус 1. Архитектурные решения"
+    }
+  },
+  "upload_seconds": 0.563,
+  "version_uid": "ver_01M2FRWKW5Z4JK0M0K6PXGHDBT",
+  "page_count_reported": 7,
+  "start_run": {
+    "status": 202,
+    "body": {
+      "run_id": "run_01M2FRWKXWSQ8T8V63MNZN3DRK",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRWKW5Z4JK0M0K6PXGHDBT",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:54:58.999745Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:54:58.999745Z"
+    }
+  },
+  "run_wall_seconds": 6.359,
+  "run_id": "run_01M2FRWKXWSQ8T8V63MNZN3DRK",
+  "status_read": {
+    "status": 200,
+    "body": {
+      "run_id": "run_01M2FRWKXWSQ8T8V63MNZN3DRK",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRWKW5Z4JK0M0K6PXGHDBT",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:54:58.999745Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:54:58.999745Z"
+    }
+  },
+  "state": "published",
+  "terminated": true,
+  "stages": [
+    {
+      "stage_id": "document_context_build",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "page_geometry_extraction",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "source_preparation",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "text_analysis",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    }
+  ],
+  "degradation_set": [],
+  "terminal_reason": null,
+  "published_finding_count": null,
+  "diagnostic_observation_count": null,
+  "findings": [
+    {
+      "finding_uid": "fnd_01M2FRWT2VS5XBBTJPTYG1QWPV",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRWKW5Z4JK0M0K6PXGHDBT",
+      "run_id": "run_01M2FRWKXWSQ8T8V63MNZN3DRK",
+      "category": "internal_contradiction",
+      "observation": {
+        "finding_observation_id": "fobs_01M2FRWT2VS64VF6YFDYJQ28VG",
+        "run_id": "run_01M2FRWKXWSQ8T8V63MNZN3DRK",
+        "category": "internal_contradiction",
+        "finding_text": "Класс конструктивной пожарной опасности корпуса 1 указан по-разному: на с. 2 — С0, на с. 5 — С1.",
+        "recommendation_text": "Согласовать единое значение класса конструктивной пожарной опасности корпуса 1 во всех разделах документа.",
+        "evidence": [
+          {
+            "evidence_ordinal": 0,
+            "page_number": 2,
+            "quote": "Класс конструктивной пожарной опасности корпуса 1 — С0.",
+            "char_start": 376,
+            "char_end": 431,
+            "block_id": "b_000011"
+          },
+          {
+            "evidence_ordinal": 1,
+            "page_number": 5,
+            "quote": "Класс конструктивной пожарной опасности корпуса 1 — С1.",
+            "char_start": 1579,
+            "char_end": 1634,
+            "block_id": "b_000032"
+          }
+        ],
+        "provenance": {
+          "stage_id": "text_analysis",
+          "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+          "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+          "provider_mode": "live",
+          "model_call_id": "mc_01M2FRWT1Q250WNZBNS5H9PZPP"
+        }
+      },
+      "current_verdict": "pending",
+      "latest_decision_id": null,
+      "decision_recorded_at": null
+    },
+    {
+      "finding_uid": "fnd_01M2FRWT34YBWHA5MZ0RYQAS8H",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRWKW5Z4JK0M0K6PXGHDBT",
+      "run_id": "run_01M2FRWKXWSQ8T8V63MNZN3DRK",
+      "category": "explicit_placeholder",
+      "observation": {
+        "finding_observation_id": "fobs_01M2FRWT34EPTH8ZVWAKXM28TF",
+        "run_id": "run_01M2FRWKXWSQ8T8V63MNZN3DRK",
+        "category": "explicit_placeholder",
+        "finding_text": "Марка фасадных кассет корпуса 1 не определена — вместо значения оставлена отметка «TBD».",
+        "recommendation_text": "Определить и указать конкретную марку фасадных кассет корпуса 1.",
+        "evidence": [
+          {
+            "evidence_ordinal": 0,
+            "page_number": 7,
+            "quote": "Марка фасадных кассет корпуса 1 — TBD.",
+            "char_start": 2165,
+            "char_end": 2203,
+            "block_id": "b_000043"
+          }
+        ],
+        "provenance": {
+          "stage_id": "text_analysis",
+          "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+          "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+          "provider_mode": "live",
+          "model_call_id": "mc_01M2FRWT1Q250WNZBNS5H9PZPP"
+        }
+      },
+      "current_verdict": "pending",
+      "latest_decision_id": null,
+      "decision_recorded_at": null
+    }
+  ],
+  "finding_pages": [
+    {
+      "target": "/runs/run_01M2FRWKXWSQ8T8V63MNZN3DRK/findings?limit=200",
+      "status": 200
+    }
+  ],
+  "findings_returned": 2,
+  "began_epoch": 1789383298.4050465,
+  "ended_epoch": 1789383305.3453076
+}

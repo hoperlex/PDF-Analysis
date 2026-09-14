@@ -1,0 +1,21 @@
+{
+  "label": "PC02-N01",
+  "path": "fixtures/validation/PC-02/negative/PC02-N01-encrypted.pdf",
+  "bytes": 40559,
+  "violates_rule": "ENV-ENCRYPTED",
+  "rule_description": "the PDF is not encrypted or password-protected",
+  "upload_status": 422,
+  "refused": true,
+  "response": {
+    "contract_version": "1.0.0-draft.1",
+    "error_code": "validation_failed",
+    "message": "The document is encrypted. This prototype accepts unencrypted PDFs only.",
+    "correlation_id": "cid-3ac152e111383f38f573b8fe4b724a58",
+    "retryable": false,
+    "details": {
+      "field": "content",
+      "constraint": "not_encrypted"
+    }
+  },
+  "seconds": 0.005
+}
