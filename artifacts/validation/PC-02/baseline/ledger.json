@@ -1,0 +1,32 @@
+{
+  "source": "model_call, read directly; cost_micros are integer millionths of USD",
+  "documents": {
+    "PC02-S01": {
+      "run_id": "run_01M2FRWKXWSQ8T8V63MNZN3DRK",
+      "call_count": 1,
+      "cost_micros": "23480",
+      "latency_ms": 5959,
+      "input_tokens": 2941,
+      "output_tokens": 351,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-S01",
+      "cost_usd": "0.02348"
+    }
+  },
+  "total_cost_usd": "0.023480",
+  "total_calls": 1,
+  "cost_basis_values": [
+    "measured"
+  ]
+}
