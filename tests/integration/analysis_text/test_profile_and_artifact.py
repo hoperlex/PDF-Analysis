@@ -214,7 +214,12 @@ def test_the_model_call_record_carries_the_declared_provenance(
         run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
     )
     record = outcome.model_calls[0].as_dict()
+    # `cost_basis` joined the record when OD-02 was revised to a proxy that reports what a
+    # call actually cost: the same `cost_usd` now carries a measurement for a proxied call
+    # and a derivation for a replay, and a figure whose basis nobody records is a figure a
+    # measurement study cannot cite.
     assert set(record) == {
+        "cost_basis",
         "model_call_id",
         "provider",
         "model_id",

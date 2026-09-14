@@ -37,7 +37,14 @@ class ModelPin:
     output_per_mtok_usd: float
 
     def cost_usd(self, *, input_tokens: int, output_tokens: int) -> float:
-        """Measured cost for one call, in USD.
+        """**Estimated** cost for one call, in USD, from this model's pinned rates.
+
+        The word matters and used to be wrong here. This is a derivation from a rate table,
+        not a measurement: the transport reports a real figure for a proxied or direct call
+        and `CostMeter.charge` prefers it whenever there is one. This method is the fallback
+        for a replay, and for a model the table does not cover it is not merely imprecise -
+        it is absent. `P4-OPS-01` found the docstring while classifying which PC-02 figures
+        are measured and which derived, which is exactly where the distinction bites.
 
         The lock records two rates per model and no separate cache rate, so a caller
         holding cache-read or cache-write tokens folds them into ``input_tokens``.
