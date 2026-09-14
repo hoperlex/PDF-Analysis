@@ -299,7 +299,13 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
                 # non-retryable analysis failure and an operator would not retry a run that
                 # failed only because the proxy was down. The code is in the stage's own
                 # error object; it was simply not read.
-                error_code=(stage.error or {}).get("error_code"),
+                # The stored key is `code`, not `error_code`. The first version of this
+                # line read the latter, so every failed stage still published null - the
+                # defect the comment above claims to fix, surviving inside its own repair.
+                # Nothing caught it because no test drove a failed stage through the API,
+                # which is the same gap that hid the four defects this method was written
+                # to close. `test_a_failed_stage_reports_its_code` is that test.
+                error_code=(stage.error or {}).get("code"),
             )
             for stage in stages
         ),

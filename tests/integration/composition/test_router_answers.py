@@ -243,3 +243,68 @@ class TestTheAdaptersHonourWhatThePortsDeclare:
             "an adapter does not accept a parameter its port declares, so the value is "
             f"dropped between the router and the module: {problems}"
         )
+
+
+class TestAFailedStageReportsItsCode:
+    """A stage that failed must say why, through the API, in the catalog's vocabulary.
+
+    The gap this closes is narrow and was expensive: a `dependency_unavailable` failure -
+    **retryable** - was published with `error_code: null`, so the API reported a transport
+    outage as an unclassified analysis failure and an operator would not retry a run that
+    failed only because the provider was down.
+
+    It survived a repair that named it correctly. The fix read `stage.error["error_code"]`
+    while the stored key is `code`, and nothing noticed because no test drove a failed stage
+    through the router - the same blind spot that hid four defects in this same method.
+    """
+
+    def test_the_adapter_reads_the_key_the_engine_writes(self) -> None:
+        """Pins the two halves together so a rename on either side fails here.
+
+        Asserted against the engine's own type rather than a literal, because a test that
+        restates the key is the mechanism that let the mismatch survive.
+        """
+        import dataclasses as dc
+
+        from auditmanager.analysis.engine.result import StageError
+
+        stored = {field.name for field in dc.fields(StageError)}
+        assert "code" in stored, "the engine no longer stores `code`; the adapter must follow"
+
+        import inspect
+
+        from auditmanager.bootstrap import adapters
+
+        source = inspect.getsource(adapters._run_status_view)
+        assert '.get("code")' in source, (
+            "the adapter does not read the key the engine writes, so a failed stage "
+            "publishes a null error_code"
+        )
+        assert '.get("error_code")' not in source, (
+            "the adapter still reads `error_code`, which the engine does not store"
+        )
+
+    def test_a_stored_failure_renders_its_catalog_code(self, app: Any) -> None:
+        """Drives the mapping over a real stored error rather than a constructed one."""
+        import os
+
+        from sqlalchemy import create_engine, text
+
+        engine = create_engine(os.environ["DATABASE_URL"])
+        with engine.connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT run_id FROM stage_result WHERE error IS NOT NULL "
+                    "AND error ? 'code' LIMIT 1"
+                )
+            ).first()
+        if row is None:
+            pytest.skip("this database holds no failed stage to render")
+
+        status, body = call(app, "GET", f"/runs/{row[0]}")
+        assert status == 200, body
+        failed = [s for s in body["stages"] if s["status"] != "succeeded"]
+        assert failed, "the run has no non-succeeded stage to check"
+        assert all(s.get("error_code") for s in failed), (
+            f"a failed stage published no error_code: {failed}"
+        )
