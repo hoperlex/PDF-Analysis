@@ -48,7 +48,7 @@ the control list before or during a session. The session record asserts this in
 
 Before the session, verify the corpus is intact:
 
-```
+```console
 .venv/bin/python tools/validation/corpus_check.py \
     fixtures/validation/PC-02/corpus_manifest.json
 ```
@@ -232,13 +232,19 @@ Asked once, after the last document, in this order. The first four are closed-ch
 a reason; the fifth is the only open question in the whole protocol, and it is last so it
 cannot contaminate any label.
 
-> **P1.** "What is the single thing missing that would stop you using this on real work?"
-> — record the closest option in `blocking_capability.choice`, and the expert's own words
-> verbatim in `in_own_words`. Read the options aloud only if the expert asks.
+> **P1.** "Is there anything missing that would stop you using this on real work? If there
+> is, which one matters most?" — record the closest option in
+> `blocking_capability.choice`, and the expert's own words verbatim in `in_own_words`.
+> Read the options aloud only if the expert asks.
+>
+> *Not* "what is the single thing missing" — that presupposes something is, and
+> `none_it_is_usable` is a real answer this checkpoint needs to be able to hear.
 >
 > **P2.** "If one thing could be built next — going deeper on a single document, or
 > comparing documents against each other — which is worth more?" — forced choice into
-> `next_investment.choice`, plus the reason.
+> `next_investment.choice`, plus the reason. If the expert volunteers that neither is
+> worth more, or that they cannot say, record `neither` or `cannot_say`; do not press for
+> one of the two named options.
 >
 > **P3.** "Did anything fail or go wrong during the session?" — one entry per failure in
 > `failures_observed`, each with its `remedy`.

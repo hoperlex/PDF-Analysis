@@ -123,12 +123,16 @@ every measurement without anyone noticing. The corpus is therefore built so that
 
 ## Verifying and regenerating
 
-```
-.venv/bin/python tools/validation/corpus_check.py corpus_manifest.json  # from repo root
+```console
+# from the repository root, with the interpreter that has the pinned pdfplumber:
+.venv/bin/python tools/validation/corpus_check.py \
+    fixtures/validation/PC-02/corpus_manifest.json
 .venv/bin/python tools/validation/corpus_check.py --self-test
-python3 fixtures/validation/PC-02/build_pc02_corpus.py --check          # rebuild + compare
-python3 fixtures/validation/PC-02/build_pc02_corpus.py                  # rewrite
-sha256sum -c SHA256SUMS                                                 # from here
+.venv/bin/python fixtures/validation/PC-02/build_pc02_corpus.py --check  # rebuild, compare
+.venv/bin/python fixtures/validation/PC-02/build_pc02_corpus.py          # rewrite
+
+# from this directory:
+sha256sum -c SHA256SUMS
 ```
 
 `--self-test` breaks the corpus one way per assertion and requires *that named assertion*
