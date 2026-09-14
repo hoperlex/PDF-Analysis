@@ -66,20 +66,22 @@ without exercising what it named.
 Mutation totals this wave: **11** (`B1`), 7 (`B2`), 7 (`B3`), 7 (`B4`), 6 (`B7`), 10 (`B8`) —
 48 demonstrations, none editing a tracked file.
 
-## 4. Open items — none blocking, all needing a decision
+## 4. Open items — reconciled 2026-09-14
 
-| # | Item | Owner |
+**Five of the six are closed.** Each row below was checked against the tree, not against this
+document: the constraints were read from `pg_constraint`, the decisions from
+`P02_LOCK.json`, and the projection from the dataclass. A list that says "open" about
+something already done is the defect that cost the CP-00 line ten acceptance rounds, so it
+is reconciled here rather than left to be re-derived.
+
+| # | Item | State |
 |---|---|---|
-| 1 | `finding_observation.ungrounded_reason` is plain nullable `text` with no CHECK, while §5.1 declares exactly five reasons and every other closed field on that table carries one | migration owner |
-| 2 | Blob identity against `rejected` — §2.3 above. Either the `WHERE` clause is vestigial, or `rejected` needs a different identity strategy | repository owner |
-| 3 | **Extractor divergence.** `B4` tests the gate against `A4`'s reference extractor, the one the manifest hashes were computed with; production uses the pinned `pdfplumber`, and all eight `page_text_sha256` values differ. The manifest anchors on line content precisely because extractors differ, and every anchor resolves either way — but **the real `B2`→`B3`→`B4` chain on the pinned extractor is untested**, because each session verified its own segment on its own fixture | `B-III` |
-| 4 | No public return value carries `display_title`, so `B7`'s upload panel cannot read back the title a caller supplied | seam owner |
-| 5 | `OD-03` records no machine-readable cost ceiling. `B3` used a $1.00 stand-in explicitly marked as not the owner's decision. **Needed before the first live run** | repository owner |
-| 6 | The error catalog has no code for "usable output over a strict subset of the input". `B3` borrowed `partial_result_not_publishable`, whose intent fits but whose safe keys describe a missing stage, not a page subset | contract owner |
-
-**Item 3 is the one that matters most.** Everything else is tidy-up; that one is the question
-of whether six independently correct modules actually compose, and it is exactly what `B-III`
-exists to answer.
+| 1 | `finding_observation.ungrounded_reason` had no CHECK | **closed** — migration `0003_open_items`; the five-value constraint is present. Nothing writes the column, per item 5.2 of the `B-II` closure, and the constraint is there so the vocabulary cannot drift when a producer appears |
+| 2 | Blob identity against `rejected` | **closed** — owner ruled accept-the-consequence. The index is **kept**: the first attempt dropped it and two existing tests caught that, because the database does not know `blob_id` is derived. Only the false comment was wrong, and only the comment changed |
+| 3 | Extractor divergence | **closed** — `B5` proved the pinned `pdfplumber` reproduces the committed text layer character for character, and `B-III` confirmed it independently. The manifest hashes still differ on all eight pages and the chain uses no manifest offset, so it is a trap for a future session rather than a defect |
+| 4 | No public return value carried `display_title` | **closed** — projected through `DocumentVersionRecord`. Foundation invariant 3 names path, object key, filename and display ordinal; a display title is none of them. `source_filename` stays withheld |
+| 5 | `OD-03` had no owner-decided ceiling | **closed** — USD 1.00, recorded in `P02_LOCK.json` where `B3`'s guard and `P4-OPS-01`'s measurement both read it |
+| 6 | The catalog has no code for **usable output over a strict subset of the input** | **OPEN.** `B3` borrowed `partial_result_not_publishable`, whose intent fits and whose declared safe keys — `run_id`, `missing_stage_count` — describe a missing stage rather than a page subset. Closing it means a twenty-first code in a frozen twenty-code catalog, which propagates to the closed enum in `shared/errors`, the API schema, the generated client and every consumer. **That is an owner decision, not a repair** |
 
 ## 5. The historical suite is drifting further, by construction
 
