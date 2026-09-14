@@ -68,7 +68,15 @@ interesting ones:
 defect it had introduced: the `additionalProperties` refusal echoed the caller's property
 name into `details.field`, so a property named `/etc/passwd` came back inside the envelope.
 
-## 5. Open items
+## 5. Open items — reconciled 2026-09-14, all closed except one
+
+> Every item in this section is **closed** unless marked otherwise, and the one exception is
+> item 6 of the `B-I` closure: the catalog has no code for usable output over a strict subset
+> of the input. The two Gate C blockers were closed by the seam repair, the dead diagnostic
+> path was accepted by owner ruling, `model_call.status` admits `truncated` and `details`
+> values are screened. The text below is left as the record of what was found and why.
+
+### 5.0 Original text
 
 ### 5.1 Two Gate C blockers, both verified by the integrator
 
