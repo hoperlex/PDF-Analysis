@@ -1,0 +1,46 @@
+{
+  "dispatch_precondition": {
+    "blocked": false,
+    "blocked_on": [],
+    "gating_metrics": [
+      "provider_latency",
+      "provider_token_usage",
+      "provider_cost"
+    ],
+    "rule": "if per-call latency or token/cost is absent, P4-OPS-01 halts with BLOCKED and its gap register; P4-BHV-01 does not start until the owner rules under OD-23",
+    "states": {
+      "provider_cost": "persisted",
+      "provider_latency": "persisted",
+      "provider_token_usage": "persisted"
+    }
+  },
+  "files": [
+    {
+      "name": "snapshot.json",
+      "sha256": "9b5281598f86d888a6b76fe3ccebc2edfd89c2d46b126a10a185aab814f0a9c4"
+    },
+    {
+      "name": "gap_register.json",
+      "sha256": "a2d90928560c729ad5b3fa92382541938894efa1f062379177a3fc87f82445aa"
+    },
+    {
+      "name": "navigation.json",
+      "sha256": "738600a8c90a11f0c6ad4ed5f083c4d82f2431feffc1f03b0dcf75b8abfda118"
+    }
+  ],
+  "gap_register_totals": {
+    "absent": 5,
+    "absent_without_owner": [],
+    "derivable": 3,
+    "metrics": 12,
+    "persisted": 4,
+    "unclassified": []
+  },
+  "reproducible": "these artifacts carry no wall-clock; re-running --snapshot over the same database state and tree reproduces them byte for byte",
+  "schema": "P4-OPS-01/preflight-manifest/1",
+  "tool": {
+    "id": "P4-OPS-01/ledger_report",
+    "version": "1.0.0"
+  },
+  "written_by": "the tool, not by hand"
+}

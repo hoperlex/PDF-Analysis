@@ -1,6 +1,13 @@
 # Task P4-OPS-01 — build the PC-02 measurement tooling and the pre-session preflight
 
-> **Status: specified; not dispatchable.** Planned for P04, after `PC-01` acceptance.
+> **Status: built; awaiting integration.** Delivered by session `P4-OPS-01` on
+> 2026-09-14 from base `7f2f656` (`PC-01` accepted). The tooling, the pre-session
+> snapshot and the §9 gap register are complete and the dispatch precondition is
+> **clear** — per-call latency, tokens and cost are all persisted — so `P4-BHV-01` is
+> not blocked by this task. One predecessor named in *Depends on* is **not** met:
+> `P1-NAV-01` is still "specified; not dispatchable" and `docs/navigation/` does not
+> exist, so the navigation-friction metric is reported `absent` rather than measured.
+> See the handoff for the consequence.
 
 ## Outcome
 
@@ -188,3 +195,65 @@ remediation if the dispatch precondition fires. Calibration pending.
   metric's value or its `absent` status with the non-reporting tasks named
 - explicit confirmation that no file was written under `artifacts/validation/PC-02/ledger/`
 - observed spend against the `OD-03` ceiling
+
+### Handoff result — session `P4-OPS-01`, 2026-09-14
+
+**Navigation incident status: `practice_not_exercised`.** `P1-NAV-01` is not accepted and
+`docs/navigation/` does not exist, so there was no entry or incident schema to write
+against. No incident file was created; per the *Allowed paths* rule that file is created
+only if an incident is actually recorded.
+
+**Changed files** (`git diff --name-only 7f2f656..HEAD`, five paths, all owned):
+
+- `tools/validation/ledger_report.py`
+- `artifacts/validation/PC-02/preflight/snapshot.json`
+- `artifacts/validation/PC-02/preflight/gap_register.json`
+- `artifacts/validation/PC-02/preflight/navigation.json`
+- `artifacts/validation/PC-02/preflight/MANIFEST.json`
+- this file, status and handoff sections only
+
+**Tool version `1.0.0`.** `--self-check` exits `0`, 17 checks passed, 0 failed. Every
+assertion names an independent source: the recording file on disk and the `P02_LOCK.json`
+rate card, not the row the tool just read.
+
+**Pre-session snapshot:** `artifacts/validation/PC-02/preflight/`, written by the tool.
+Baseline: 4 runs, 2 model calls, 16 stage results, 6 published findings, 2 failures.
+The artifacts carry no wall-clock, so two invocations to different directories are
+byte-identical; `MANIFEST.json` records each file's `sha256`.
+
+**Gap register:** 12 §9 metrics — 4 `persisted`, 3 `derivable`, 5 `absent`. None
+unclassified; no `absent` entry lacks an owner. **No `BLOCKED` precondition:**
+`provider_latency`, `provider_token_usage` and `provider_cost` are all `persisted`, so
+`P4-BHV-01` may proceed.
+
+Two consequences `P4-INT-01` must design around, both confirmed against the schema rather
+than transcribed:
+
+- **evidence-location correctness is a per-stage RATE, not a per-quotation list.**
+  `text_analysis` drops unresolvable anchors before the grounding gate sees them, so no
+  `grounded = false` row is ever written. What is persisted is the count, in
+  `stage_result.metrics`: `evidence_emitted`, `evidence_unresolved`,
+  `observations_proposed`, `observations_emitted`, `observations_dropped_unresolved`.
+- **no §9 metric about time-in-state is available.** Execution is synchronous inside
+  `startRun`, so `queued`, `running` and `validating` never reach a row. Run wall-clock
+  duration *is* available as `terminal_at - created_at`.
+
+**Navigation metric.** Scope is the 21 completed P02/P03 tasks, listed in
+`preflight/navigation.json` under `aggregated_tasks`; no P04 or P05 task is aggregated.
+The metric is **`absent`**, not zero. Only `P3-API-01` and `P3-WEB-00` reported a status
+(both `none_observed`). The 19 that did not report are:
+`P2-AI-01`, `P2-API-01`, `P2-BHV-01`, `P2-DOM-01`, `P2-ENG-01`, `P2-EXP-01`, `P2-FND-01`,
+`P2-INT-00`, `P2-INT-01`, `P2-INT-02`, `P2-META-01`, `P2-QA-01`, `P2-RUN-01`, `P3-INT-01`,
+`P3-QA-01`, `P3-WEB-01`, `P3-WEB-02`, `P3-WEB-03`, `P3-WEB-04`.
+
+**No file was written under `artifacts/validation/PC-02/ledger/`.** The directory does not
+exist. `--period` was exercised against fixtures in a scratch directory outside the
+repository, so `P4-INT-01` invokes an interface this task has already proven while
+remaining its sole writer.
+
+**Spend against `OD-03`.** Cumulative baseline spend USD `0.0688`, basis **estimated**, no
+run over the USD `1.00` per-run ceiling. The basis is `estimated` because both calls ran in
+`recorded` mode, and the recorded adapter supplies no reported cost, so the `P02_LOCK` rate
+table applies. **No live provider call was made by this task.** `OD-03` records a per-run
+ceiling only; there is no machine-readable campaign ceiling, so cumulative spend is reported
+against no threshold and `P4-BHV-01` must not infer one.
