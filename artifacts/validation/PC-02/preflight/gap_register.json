@@ -53,9 +53,15 @@
             "evidence_unresolved": 0,
             "observations_dropped_unresolved": 0,
             "run_id": "run_01M2FN4D76D579KGBPKNW6VQ41"
+          },
+          {
+            "evidence_emitted": 5,
+            "evidence_unresolved": 0,
+            "observations_dropped_unresolved": 0,
+            "run_id": "run_01M2FNPNQFM0J7ZC315RMJAQS5"
           }
         ],
-        "stages_carrying_grounding_counts": 1,
+        "stages_carrying_grounding_counts": 2,
         "ungrounded_observation_rows": 0
       },
       "profile_bullet": "evidence-location correctness",
@@ -74,7 +80,7 @@
       "metric_id": "expert_review_time_and_navigation_friction",
       "owner": "P4-BHV-01",
       "probe": {
-        "decision_event_rows": 3
+        "decision_event_rows": 6
       },
       "profile_bullet": "expert review time and navigation friction",
       "state": "absent",
@@ -90,14 +96,21 @@
       "metric_id": "provider_latency",
       "owner": null,
       "probe": {
-        "calls_total": 1,
-        "calls_with_latency_ms": 1,
+        "calls_total": 2,
+        "calls_with_latency_ms": 2,
+        "column": {
+          "column": "model_call.latency_ms",
+          "exists": true,
+          "populated": 2,
+          "rows": 2
+        },
         "modes": [
           "recorded"
         ]
       },
       "profile_bullet": "provider latency, cost and failure distribution (latency)",
       "state": "persisted",
+      "state_reason": "the column exists and rows carry values",
       "where_i_looked": [
         "model_call.latency_ms",
         "stage_result.metrics.latency_ms"
@@ -111,11 +124,18 @@
         "bases_observed": [
           "estimated"
         ],
-        "calls_with_cost_micros": 1,
+        "calls_with_cost_micros": 2,
+        "column": {
+          "column": "model_call.cost_micros",
+          "exists": true,
+          "populated": 2,
+          "rows": 2
+        },
         "discriminator_column_exists": false
       },
       "profile_bullet": "provider latency, cost and failure distribution (cost)",
       "state": "persisted",
+      "state_reason": "the column exists and rows carry values",
       "what_persisting_it_would_take": "one cost_basis column on model_call. A P02 schema change; raised as a P02 defect for owner decision, not fixed here.",
       "where_i_looked": [
         "model_call.cost_micros and its COMMENT",
@@ -130,11 +150,26 @@
       "metric_id": "provider_token_usage",
       "owner": null,
       "probe": {
-        "calls_total": 1,
-        "calls_with_both_token_counts": 1
+        "calls_total": 2,
+        "calls_with_both_token_counts": 2,
+        "columns": [
+          {
+            "column": "model_call.input_tokens",
+            "exists": true,
+            "populated": 2,
+            "rows": 2
+          },
+          {
+            "column": "model_call.output_tokens",
+            "exists": true,
+            "populated": 2,
+            "rows": 2
+          }
+        ]
       },
       "profile_bullet": "provider latency, cost and failure distribution (tokens)",
       "state": "persisted",
+      "state_reason": "the column exists and rows carry values",
       "where_i_looked": [
         "model_call.input_tokens, model_call.output_tokens"
       ]
@@ -144,7 +179,7 @@
       "metric_id": "provider_failure_distribution",
       "owner": null,
       "probe": {
-        "failures_found": 1,
+        "failures_found": 2,
         "model_call_failure_rows": 0,
         "surfaces": [
           "stage_result"
@@ -152,6 +187,7 @@
       },
       "profile_bullet": "provider latency, cost and failure distribution (failures)",
       "state": "persisted",
+      "state_reason": "the column exists and rows carry values",
       "what_persisting_it_would_take": "a distinct catalog code for a provider deadline, or the error reason persisted on model_call. A P02 change; raised, not fixed.",
       "where_i_looked": [
         "model_call.status / error_code",
@@ -166,7 +202,8 @@
       "owner": "P4-BHV-01",
       "probe": {
         "runs_with_degradation": [
-          "run_01M2FN4EJ4KNJ6RFGATG5ZDD82"
+          "run_01M2FN4EJ4KNJ6RFGATG5ZDD82",
+          "run_01M2FNPPMJP0MJ2EQE06TEPC2Y"
         ],
         "stages_executed": [
           "document_context_build",
@@ -203,7 +240,7 @@
       "owner": null,
       "probe": {
         "attempt_tables_present": false,
-        "stage_errors_with_retryable": 1
+        "stage_errors_with_retryable": 2
       },
       "profile_bullet": "which failures actually require retry, Attempt fencing or remote execution",
       "state": "derivable",

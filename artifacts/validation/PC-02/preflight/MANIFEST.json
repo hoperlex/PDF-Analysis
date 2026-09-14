@@ -17,11 +17,11 @@
   "files": [
     {
       "name": "snapshot.json",
-      "sha256": "d8f4fbd4e8e3b5a20e04f08a85a1531b9d2956dcbc7ac3597f739d6dde9e5556"
+      "sha256": "9b5281598f86d888a6b76fe3ccebc2edfd89c2d46b126a10a185aab814f0a9c4"
     },
     {
       "name": "gap_register.json",
-      "sha256": "45559e2e7d39c536b003600aab75f531d0fc6edf0fc6675af08715a3eb176da0"
+      "sha256": "a2d90928560c729ad5b3fa92382541938894efa1f062379177a3fc87f82445aa"
     },
     {
       "name": "navigation.json",

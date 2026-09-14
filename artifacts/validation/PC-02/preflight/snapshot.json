@@ -19,6 +19,26 @@
       "stage_id": "text_analysis",
       "status": "succeeded",
       "total_tokens": 3120
+    },
+    {
+      "catalog_error_code": null,
+      "cost_basis": "estimated",
+      "cost_basis_reason": "recorded adapter supplies no reported cost; rate table applies",
+      "cost_micros": 34400,
+      "cost_usd": 0.0344,
+      "created_at": "2026-09-14T09:59:18.508803+00:00",
+      "input_tokens": 2180,
+      "latency_ms": 11940,
+      "model_call_id": "mc_01M2FNPP2J8FCSG2CDANQJDXY4",
+      "model_identity": "claude-opus-5",
+      "output_tokens": 940,
+      "provider": "anthropic",
+      "provider_mode": "recorded",
+      "rate_table_estimate_micros": 34400,
+      "run_id": "run_01M2FNPNQFM0J7ZC315RMJAQS5",
+      "stage_id": "text_analysis",
+      "status": "succeeded",
+      "total_tokens": 3120
     }
   ],
   "baseline_cost_per_document": [
@@ -29,6 +49,16 @@
       "cost_usd": 0.0344,
       "cost_usd_per_published_finding": 0.011466666666666667,
       "document_uid": "doc_01M2FN4D4539XDWQXN8Q2F9YBG",
+      "published_findings": 3,
+      "run_count": 2
+    },
+    {
+      "accepted_findings": 1,
+      "cost_basis": "estimated",
+      "cost_micros": 34400,
+      "cost_usd": 0.0344,
+      "cost_usd_per_published_finding": 0.011466666666666667,
+      "document_uid": "doc_01M2FNPNPG7H0SRHZJZ6Y25BPV",
       "published_findings": 3,
       "run_count": 2
     }
@@ -69,36 +99,72 @@
       "published_findings": 0,
       "run_id": "run_01M2FN4EJ4KNJ6RFGATG5ZDD82",
       "state": "failed"
+    },
+    {
+      "accepted_findings": 1,
+      "call_count": 1,
+      "cost_basis": "estimated",
+      "cost_micros": 34400,
+      "cost_usd": 0.0344,
+      "cost_usd_per_accepted_finding": 0.0344,
+      "cost_usd_per_published_finding": 0.011466666666666667,
+      "document_uid": "doc_01M2FNPNPG7H0SRHZJZ6Y25BPV",
+      "input_tokens": 2180,
+      "output_tokens": 940,
+      "over_run_ceiling": false,
+      "per_finding_figures_are": "an allocation of run spend, not a billed unit",
+      "provider_mode": "recorded",
+      "published_findings": 3,
+      "run_id": "run_01M2FNPNQFM0J7ZC315RMJAQS5",
+      "state": "published"
+    },
+    {
+      "accepted_findings": 0,
+      "call_count": 0,
+      "cost_basis": "none",
+      "cost_micros": 0,
+      "cost_usd": 0.0,
+      "cost_usd_per_accepted_finding": null,
+      "cost_usd_per_published_finding": null,
+      "document_uid": "doc_01M2FNPNPG7H0SRHZJZ6Y25BPV",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "over_run_ceiling": false,
+      "per_finding_figures_are": "an allocation of run spend, not a billed unit",
+      "provider_mode": "live",
+      "published_findings": 0,
+      "run_id": "run_01M2FNPPMJP0MJ2EQE06TEPC2Y",
+      "state": "failed"
     }
   ],
   "baseline_counts": {
-    "failures": 1,
-    "model_calls": 1,
-    "published_findings": 3,
-    "runs": 2,
-    "stage_results": 8,
+    "failures": 2,
+    "model_calls": 2,
+    "published_findings": 6,
+    "runs": 4,
+    "stage_results": 16,
     "table_rows": {
       "alembic_version": 1,
       "audit_event": 0,
-      "audit_run": 2,
+      "audit_run": 4,
       "blob": 1,
-      "command_record": 8,
+      "command_record": 16,
       "contract_state_transition": 24,
-      "document": 2,
-      "document_version": 2,
-      "expert_decision_event": 3,
-      "finding": 3,
-      "finding_evidence": 5,
-      "finding_observation": 3,
-      "input_manifest_entry": 2,
-      "model_call": 1,
-      "project": 1,
-      "stage_result": 8
+      "document": 4,
+      "document_version": 4,
+      "expert_decision_event": 6,
+      "finding": 6,
+      "finding_evidence": 10,
+      "finding_observation": 6,
+      "input_manifest_entry": 4,
+      "model_call": 2,
+      "project": 2,
+      "stage_result": 16
     }
   },
   "baseline_failures": {
     "by_catalog_code": {
-      "dependency_unavailable": 1
+      "dependency_unavailable": 2
     },
     "by_observation_class": {
       "application_or_process_crash": 0,
@@ -106,22 +172,23 @@
       "malformed_provider_response": 0,
       "other": 0,
       "provider_timeout": 0,
-      "provider_unavailable": 1,
+      "provider_unavailable": 2,
       "ungrounded_item_rejected": 0,
       "unsupported_input": 0
     },
     "classified_by_heuristic": 0,
     "note": "observation classes are reporting buckets defined by P4-OPS-01; the catalog code is recorded beside every one of them",
-    "total": 1
+    "total": 2
   },
   "baseline_latency": {
     "by_mode": {
       "live": [],
       "recorded": [
+        11940,
         11940
       ]
     },
-    "calls_with_latency": 1,
+    "calls_with_latency": 2,
     "calls_without_latency": 0,
     "caveat": "a recorded call replays the latency figure stored in its recording; it is not a measurement of this machine and must not be pooled with live latency",
     "max_ms": 11940,
@@ -213,6 +280,90 @@
       "terminal_reason": "analysis_failed",
       "terminal_state": "failed",
       "version_uid": "ver_01M2FN4D46NB0VV816VVXEE75J"
+    },
+    {
+      "degradation_set": [],
+      "document_uid": "doc_01M2FNPNPG7H0SRHZJZ6Y25BPV",
+      "interrupted_reason": null,
+      "provider_mode": "recorded",
+      "run_duration_ms": 0.0,
+      "run_id": "run_01M2FNPNQFM0J7ZC315RMJAQS5",
+      "stage_outcomes": [
+        {
+          "duration_ms": 221.369,
+          "error_code": null,
+          "retryable": null,
+          "stage_id": "source_preparation",
+          "status": "succeeded"
+        },
+        {
+          "duration_ms": 98.614,
+          "error_code": null,
+          "retryable": null,
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded"
+        },
+        {
+          "duration_ms": 19.328,
+          "error_code": null,
+          "retryable": null,
+          "stage_id": "document_context_build",
+          "status": "succeeded"
+        },
+        {
+          "duration_ms": 25.512,
+          "error_code": null,
+          "retryable": null,
+          "stage_id": "text_analysis",
+          "status": "succeeded"
+        }
+      ],
+      "terminal_reason": null,
+      "terminal_state": "published",
+      "version_uid": "ver_01M2FNPNPHG2DACWB5TV1HTAW6"
+    },
+    {
+      "degradation_set": [
+        "text_analysis"
+      ],
+      "document_uid": "doc_01M2FNPNPG7H0SRHZJZ6Y25BPV",
+      "interrupted_reason": null,
+      "provider_mode": "live",
+      "run_duration_ms": 0.0,
+      "run_id": "run_01M2FNPPMJP0MJ2EQE06TEPC2Y",
+      "stage_outcomes": [
+        {
+          "duration_ms": 142.792,
+          "error_code": null,
+          "retryable": null,
+          "stage_id": "source_preparation",
+          "status": "succeeded"
+        },
+        {
+          "duration_ms": 102.053,
+          "error_code": null,
+          "retryable": null,
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded"
+        },
+        {
+          "duration_ms": 17.833,
+          "error_code": null,
+          "retryable": null,
+          "stage_id": "document_context_build",
+          "status": "succeeded"
+        },
+        {
+          "duration_ms": 23.013,
+          "error_code": "dependency_unavailable",
+          "retryable": true,
+          "stage_id": "text_analysis",
+          "status": "failed"
+        }
+      ],
+      "terminal_reason": "analysis_failed",
+      "terminal_state": "failed",
+      "version_uid": "ver_01M2FNPNPHG2DACWB5TV1HTAW6"
     }
   ],
   "baseline_spend": {
@@ -220,18 +371,18 @@
     "campaign_ceiling_usd": null,
     "ceiling_source": "docs/program/P02_LOCK.json models.run_cost_ceiling_usd (OD-03)",
     "cost_basis": "estimated",
-    "cost_micros": 34400,
-    "cost_usd": 0.0344,
+    "cost_micros": 68800,
+    "cost_usd": 0.0688,
     "run_cost_ceiling_usd": 1.0,
     "runs_over_run_ceiling": []
   },
   "mode_summary": {
     "calls_by_mode": {
-      "recorded": 1
+      "recorded": 2
     },
     "runs_by_mode": {
-      "live": 1,
-      "recorded": 1
+      "live": 2,
+      "recorded": 2
     }
   },
   "navigation": {
@@ -333,8 +484,8 @@
   "read_only_evidence": {
     "row_census_identical": true,
     "statement_log": {
-      "read_statements": 38,
-      "statements_issued": 38,
+      "read_statements": 49,
+      "statements_issued": 49,
       "write_statements": 0,
       "writes": []
     }
