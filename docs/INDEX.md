@@ -48,6 +48,8 @@
 - [Task P3-WEB-04](program/tasks/P3-WEB-04.md) — CSV export and column verification
 - [Task P3-QA-01](program/tasks/P3-QA-01.md) — automated PC-01 journey and restart evidence
 - [Task P3-INT-01](program/tasks/P3-INT-01.md) — PC-01 acceptance runbook and checkpoint
+- [PC-01 runbook](manual-tests/PC-01_prototype.md) — the ten §8 criteria, executed from a clean clone
+- [PC-01 report](../artifacts/checkpoints/PC-01/report.json) — what was certified, by whom, and what it does not establish
 - [Task P4-QA-01](program/tasks/P4-QA-01.md) — PC-02 validation corpus and session protocol
 - [Task P4-OPS-01](program/tasks/P4-OPS-01.md) — PC-02 measurement tooling and pre-session preflight
 - [Task P4-BHV-01](program/tasks/P4-BHV-01.md) — moderated expert validation sessions
