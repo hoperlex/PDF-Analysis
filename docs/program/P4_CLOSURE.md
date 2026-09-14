@@ -105,11 +105,39 @@ negative result is honest. But the run never reaches `ENV-SIZE`, so the corpus d
 demonstrate that guard — it demonstrates the transport's. The two are independently
 breakable, and a regression in `ENV-SIZE` would leave this corpus green.
 
-**Action for P4-QA-01** (`fixtures/validation/PC-02/`): add a fixture between 25 MiB and
-26 MiB — 26 000 000 bytes sits cleanly inside the window. That one document reaches
-`ENV-SIZE` with the transport guard satisfied, and the existing `PC02-N03` should stay,
-since the outermost guard is worth a case of its own. Not a product defect and nothing in
-`src/` should move for it.
+**First action, withdrawn.** This section originally told `P4-QA-01` to add a fifth
+negative document in the 25–26 MiB window. That is not possible and would have been the
+wrong tool anyway. `build_pc02_corpus.py` fixes the corpus at 2–4 negative-envelope
+documents (`MIN_NEGATIVE`/`MAX_NEGATIVE`) and there are already 4, so a fifth is refused
+by the builder's own composition guard. Recorded rather than quietly replaced, because
+the instruction was written here before it was checked.
+
+**The finding is also wider than PC-02.** The AR corpus has the same hole:
+`fixtures/synthetic/ar/negative/oversize.pdf` is 27 303 204 bytes, likewise over the
+transport's 27 262 976. *Every* oversize fixture in the repository is over both limits,
+so no request anywhere reaches `ENV-SIZE` through HTTP.
+
+`ENV-SIZE` is not unguarded — it is covered twice, both times **underneath** the
+transport: `tests/integration/ingest/test_negative_envelope.py` imports
+`auditmanager.ingest` directly, and `tests/contract/fixtures_ar/test_negative_fixtures.py`
+calls `envelope.check()` on a byte string. So the rule could stop being applied on the
+HTTP path with every suite still green. That is the real gap, and it is a missing test
+rather than a missing document.
+
+**Action taken instead — no corpus change.** `tests/integration/ingest/test_size_guard_boundary.py`
+builds its own body sized into the window between the two limits and drives it through
+the router, asserting that the refusal carries the envelope's
+`details.constraint: byte_size <= 26214400` and not the transport's `max_bytes`. A test
+can make its bytes; changing corpus bytes would invalidate a measurement already taken,
+which is the stronger reason not to touch either corpus here.
+
+It carries its own premise: a second test asserts the window between the guards is open
+at all, so if the transport limit were ever lowered to the envelope's, that fails loudly
+instead of leaving a test that passes while exercising nothing. Shown red by sizing the
+body like `PC02-N03` — over both guards — and green on revert.
+
+`PC02-N03` stays exactly as it is. It is a correct fixture for the outermost guard, which
+is worth a case of its own, and nothing in `src/` or in either corpus moves for this.
 
 ## 6. Recommendations the session recorded and did not apply
 
