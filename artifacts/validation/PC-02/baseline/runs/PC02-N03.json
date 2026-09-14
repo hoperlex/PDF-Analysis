@@ -1,0 +1,21 @@
+{
+  "label": "PC02-N03",
+  "path": "fixtures/validation/PC-02/negative/PC02-N03-oversize.pdf",
+  "bytes": 27303351,
+  "violates_rule": "ENV-SIZE",
+  "rule_description": "the file is at most 26214400 bytes (25 MiB)",
+  "upload_status": 422,
+  "refused": true,
+  "response": {
+    "contract_version": "1.0.0-draft.1",
+    "error_code": "validation_failed",
+    "message": "The upload exceeds the maximum accepted size.",
+    "correlation_id": "cid-6a84e06ebe18451b487fa98c17262b8c",
+    "retryable": false,
+    "details": {
+      "field": "file",
+      "constraint": "max_bytes"
+    }
+  },
+  "seconds": 0.0
+}

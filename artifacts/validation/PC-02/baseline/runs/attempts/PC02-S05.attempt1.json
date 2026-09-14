@@ -1,45 +1,44 @@
 {
-  "label": "PC02-C07",
-  "role": "control",
-  "path": "fixtures/validation/PC-02/documents/PC02-C07.pdf",
-  "pages": 5,
-  "bytes": 47653,
-  "sha256": "603174e8e8a4cd050194ab7154e58a87be3fdc1ac2131f4bad195b821d0c7760",
+  "label": "PC02-S05",
+  "role": "seeded",
+  "path": "fixtures/validation/PC-02/documents/PC02-S05.pdf",
+  "pages": 10,
+  "bytes": 56651,
+  "sha256": "95330a757e3f724a1b2cc994d453ba805f6c456f93e5246df022b9f78d1f4c40",
   "session_tag": "p4run01",
   "upload": {
     "status": 201,
     "body": {
-      "version_uid": "ver_01M2FS599NRG6YZPGW1Q67EA61",
-      "document_uid": "doc_01M2FS599NEZVQ0ZH83EZX684H",
+      "version_uid": "ver_01M2FS1114AY62TCPZQ9FSWVEV",
+      "document_uid": "doc_01M2FS1113XYCK5CNQAMADH9JZ",
       "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
       "version_ordinal": 1,
       "media_type": "application/pdf",
-      "byte_size": 47653,
-      "sha256": "603174e8e8a4cd050194ab7154e58a87be3fdc1ac2131f4bad195b821d0c7760",
-      "page_count": 5,
-      "published_at": "2026-09-14T10:59:43.027079Z",
+      "byte_size": 56651,
+      "sha256": "95330a757e3f724a1b2cc994d453ba805f6c456f93e5246df022b9f78d1f4c40",
+      "page_count": 10,
+      "published_at": "2026-09-14T10:57:23.489512Z",
       "input_manifest": [
         {
           "role": "source.document",
-          "sha256": "603174e8e8a4cd050194ab7154e58a87be3fdc1ac2131f4bad195b821d0c7760",
-          "size_bytes": 47653,
+          "sha256": "95330a757e3f724a1b2cc994d453ba805f6c456f93e5246df022b9f78d1f4c40",
+          "size_bytes": 56651,
           "media_type": "application/pdf"
         }
       ],
-      "display_title": "Корпус 12. Ссылки и разграничение разделов"
+      "display_title": "Корпус 5. Этажность и встроенные помещения"
     }
   },
-  "upload_seconds": 0.035,
-  "version_uid": "ver_01M2FS599NRG6YZPGW1Q67EA61",
-  "page_count_reported": 5,
-  "attempt": "2",
+  "upload_seconds": 0.093,
+  "version_uid": "ver_01M2FS1114AY62TCPZQ9FSWVEV",
+  "page_count_reported": 10,
   "start_run": {
     "status": 202,
     "body": {
-      "run_id": "run_01M2FSFV29D35BEVRVF6QV77G2",
+      "run_id": "run_01M2FS1119E796G2FHW9TGKTRP",
       "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
-      "version_uid": "ver_01M2FS599NRG6YZPGW1Q67EA61",
-      "state": "published",
+      "version_uid": "ver_01M2FS1114AY62TCPZQ9FSWVEV",
+      "state": "failed",
       "provider_mode": "live",
       "stages": [
         {
@@ -59,26 +58,30 @@
         },
         {
           "stage_id": "text_analysis",
-          "status": "succeeded",
-          "stage_version": "1.0.0"
+          "status": "failed",
+          "stage_version": "1.0.0",
+          "error_code": null
         }
       ],
-      "created_at": "2026-09-14T11:05:28.903616Z",
+      "created_at": "2026-09-14T10:57:23.495461Z",
       "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
       "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
-      "degradation_set": [],
-      "terminal_at": "2026-09-14T11:05:28.903616Z"
+      "degradation_set": [
+        "text_analysis"
+      ],
+      "terminal_reason": "analysis_failed",
+      "terminal_at": "2026-09-14T10:57:23.495461Z"
     }
   },
-  "run_wall_seconds": 3.285,
-  "run_id": "run_01M2FSFV29D35BEVRVF6QV77G2",
+  "run_wall_seconds": 133.106,
+  "run_id": "run_01M2FS1119E796G2FHW9TGKTRP",
   "status_read": {
     "status": 200,
     "body": {
-      "run_id": "run_01M2FSFV29D35BEVRVF6QV77G2",
+      "run_id": "run_01M2FS1119E796G2FHW9TGKTRP",
       "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
-      "version_uid": "ver_01M2FS599NRG6YZPGW1Q67EA61",
-      "state": "published",
+      "version_uid": "ver_01M2FS1114AY62TCPZQ9FSWVEV",
+      "state": "failed",
       "provider_mode": "live",
       "stages": [
         {
@@ -98,18 +101,22 @@
         },
         {
           "stage_id": "text_analysis",
-          "status": "succeeded",
-          "stage_version": "1.0.0"
+          "status": "failed",
+          "stage_version": "1.0.0",
+          "error_code": null
         }
       ],
-      "created_at": "2026-09-14T11:05:28.903616Z",
+      "created_at": "2026-09-14T10:57:23.495461Z",
       "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
       "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
-      "degradation_set": [],
-      "terminal_at": "2026-09-14T11:05:28.903616Z"
+      "degradation_set": [
+        "text_analysis"
+      ],
+      "terminal_reason": "analysis_failed",
+      "terminal_at": "2026-09-14T10:57:23.495461Z"
     }
   },
-  "state": "published",
+  "state": "failed",
   "terminated": true,
   "stages": [
     {
@@ -129,22 +136,25 @@
     },
     {
       "stage_id": "text_analysis",
-      "status": "succeeded",
-      "stage_version": "1.0.0"
+      "status": "failed",
+      "stage_version": "1.0.0",
+      "error_code": null
     }
   ],
-  "degradation_set": [],
-  "terminal_reason": null,
+  "degradation_set": [
+    "text_analysis"
+  ],
+  "terminal_reason": "analysis_failed",
   "published_finding_count": null,
   "diagnostic_observation_count": null,
   "findings": [],
   "finding_pages": [
     {
-      "target": "/runs/run_01M2FSFV29D35BEVRVF6QV77G2/findings?limit=200",
+      "target": "/runs/run_01M2FS1119E796G2FHW9TGKTRP/findings?limit=200",
       "status": 200
     }
   ],
   "findings_returned": 0,
-  "began_epoch": 1789383928.8678663,
-  "ended_epoch": 1789383932.1919734
+  "began_epoch": 1789383443.4020963,
+  "ended_epoch": 1789383576.603514
 }

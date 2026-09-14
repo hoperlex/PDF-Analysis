@@ -29,16 +29,17 @@
       "display_title": "Корпус 5. Этажность и встроенные помещения"
     }
   },
-  "upload_seconds": 0.093,
+  "upload_seconds": 0.289,
   "version_uid": "ver_01M2FS1114AY62TCPZQ9FSWVEV",
   "page_count_reported": 10,
+  "attempt": "3",
   "start_run": {
     "status": 202,
     "body": {
-      "run_id": "run_01M2FS1119E796G2FHW9TGKTRP",
+      "run_id": "run_01M2FSH2EXNAPKRESS683Y81YK",
       "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
       "version_uid": "ver_01M2FS1114AY62TCPZQ9FSWVEV",
-      "state": "failed",
+      "state": "published",
       "provider_mode": "live",
       "stages": [
         {
@@ -58,30 +59,26 @@
         },
         {
           "stage_id": "text_analysis",
-          "status": "failed",
-          "stage_version": "1.0.0",
-          "error_code": null
+          "status": "succeeded",
+          "stage_version": "1.0.0"
         }
       ],
-      "created_at": "2026-09-14T10:57:23.495461Z",
+      "created_at": "2026-09-14T11:06:09.239456Z",
       "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
       "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
-      "degradation_set": [
-        "text_analysis"
-      ],
-      "terminal_reason": "analysis_failed",
-      "terminal_at": "2026-09-14T10:57:23.495461Z"
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T11:06:09.239456Z"
     }
   },
-  "run_wall_seconds": 133.106,
-  "run_id": "run_01M2FS1119E796G2FHW9TGKTRP",
+  "run_wall_seconds": 9.115,
+  "run_id": "run_01M2FSH2EXNAPKRESS683Y81YK",
   "status_read": {
     "status": 200,
     "body": {
-      "run_id": "run_01M2FS1119E796G2FHW9TGKTRP",
+      "run_id": "run_01M2FSH2EXNAPKRESS683Y81YK",
       "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
       "version_uid": "ver_01M2FS1114AY62TCPZQ9FSWVEV",
-      "state": "failed",
+      "state": "published",
       "provider_mode": "live",
       "stages": [
         {
@@ -101,22 +98,18 @@
         },
         {
           "stage_id": "text_analysis",
-          "status": "failed",
-          "stage_version": "1.0.0",
-          "error_code": null
+          "status": "succeeded",
+          "stage_version": "1.0.0"
         }
       ],
-      "created_at": "2026-09-14T10:57:23.495461Z",
+      "created_at": "2026-09-14T11:06:09.239456Z",
       "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
       "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
-      "degradation_set": [
-        "text_analysis"
-      ],
-      "terminal_reason": "analysis_failed",
-      "terminal_at": "2026-09-14T10:57:23.495461Z"
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T11:06:09.239456Z"
     }
   },
-  "state": "failed",
+  "state": "published",
   "terminated": true,
   "stages": [
     {
@@ -136,25 +129,99 @@
     },
     {
       "stage_id": "text_analysis",
-      "status": "failed",
-      "stage_version": "1.0.0",
-      "error_code": null
+      "status": "succeeded",
+      "stage_version": "1.0.0"
     }
   ],
-  "degradation_set": [
-    "text_analysis"
-  ],
-  "terminal_reason": "analysis_failed",
+  "degradation_set": [],
+  "terminal_reason": null,
   "published_finding_count": null,
   "diagnostic_observation_count": null,
-  "findings": [],
+  "findings": [
+    {
+      "finding_uid": "fnd_01M2FSHBAR5BTJ9SBY1ZV8ZRE1",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FS1114AY62TCPZQ9FSWVEV",
+      "run_id": "run_01M2FSH2EXNAPKRESS683Y81YK",
+      "category": "internal_contradiction",
+      "observation": {
+        "finding_observation_id": "fobs_01M2FSHBARY0Q81Z5NJJ8H66K0",
+        "run_id": "run_01M2FSH2EXNAPKRESS683Y81YK",
+        "category": "internal_contradiction",
+        "finding_text": "Этажность корпуса 5 указана по-разному: в общих данных — 12 этажей, в технико-экономических показателях — 14 этажей.",
+        "recommendation_text": "Согласовать значение этажности корпуса 5 во всех разделах текста и привести его к единому виду.",
+        "evidence": [
+          {
+            "evidence_ordinal": 0,
+            "page_number": 2,
+            "quote": "Этажность корпуса 5 — 12 этажей.",
+            "char_start": 316,
+            "char_end": 348,
+            "block_id": "b_000010"
+          },
+          {
+            "evidence_ordinal": 1,
+            "page_number": 9,
+            "quote": "Этажность корпуса 5 — 14 этажей.",
+            "char_start": 2683,
+            "char_end": 2715,
+            "block_id": "b_000054"
+          }
+        ],
+        "provenance": {
+          "stage_id": "text_analysis",
+          "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+          "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+          "provider_mode": "live",
+          "model_call_id": "mc_01M2FSHB9RBVMVTMNQ1G160TEH"
+        }
+      },
+      "current_verdict": "pending",
+      "latest_decision_id": null,
+      "decision_recorded_at": null
+    },
+    {
+      "finding_uid": "fnd_01M2FSHBAWPJA5FSV0DRHCBN4Z",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FS1114AY62TCPZQ9FSWVEV",
+      "run_id": "run_01M2FSH2EXNAPKRESS683Y81YK",
+      "category": "explicit_placeholder",
+      "observation": {
+        "finding_observation_id": "fobs_01M2FSHBAW55TJGKGCF5KM92YN",
+        "run_id": "run_01M2FSH2EXNAPKRESS683Y81YK",
+        "category": "explicit_placeholder",
+        "finding_text": "Назначение помещения 1.12 в составе встроенной части оставлено незаполненным («не определено»).",
+        "recommendation_text": "Определить и указать функциональное назначение помещения 1.12.",
+        "evidence": [
+          {
+            "evidence_ordinal": 0,
+            "page_number": 6,
+            "quote": "Назначение помещения 1.12 — не определено.",
+            "char_start": 1697,
+            "char_end": 1739,
+            "block_id": "b_000036"
+          }
+        ],
+        "provenance": {
+          "stage_id": "text_analysis",
+          "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+          "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+          "provider_mode": "live",
+          "model_call_id": "mc_01M2FSHB9RBVMVTMNQ1G160TEH"
+        }
+      },
+      "current_verdict": "pending",
+      "latest_decision_id": null,
+      "decision_recorded_at": null
+    }
+  ],
   "finding_pages": [
     {
-      "target": "/runs/run_01M2FS1119E796G2FHW9TGKTRP/findings?limit=200",
+      "target": "/runs/run_01M2FSH2EXNAPKRESS683Y81YK/findings?limit=200",
       "status": 200
     }
   ],
-  "findings_returned": 0,
-  "began_epoch": 1789383443.4020963,
-  "ended_epoch": 1789383576.603514
+  "findings_returned": 2,
+  "began_epoch": 1789383968.9340816,
+  "ended_epoch": 1789383978.3461597
 }

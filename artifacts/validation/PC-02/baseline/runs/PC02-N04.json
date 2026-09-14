@@ -1,0 +1,21 @@
+{
+  "label": "PC02-N04",
+  "path": "fixtures/validation/PC-02/negative/PC02-N04-too-many-pages.pdf",
+  "bytes": 69947,
+  "violates_rule": "ENV-PAGES",
+  "rule_description": "the document has at most 30 pages",
+  "upload_status": 422,
+  "refused": true,
+  "response": {
+    "contract_version": "1.0.0-draft.1",
+    "error_code": "validation_failed",
+    "message": "The document carries more pages than the accepted envelope allows, or carries none at all.",
+    "correlation_id": "cid-56f6778c6375939176795a260c115c7e",
+    "retryable": false,
+    "details": {
+      "field": "page_count",
+      "constraint": "1 <= page_count <= 30"
+    }
+  },
+  "seconds": 0.005
+}

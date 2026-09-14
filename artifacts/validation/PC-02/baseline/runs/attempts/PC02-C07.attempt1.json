@@ -29,17 +29,16 @@
       "display_title": "Корпус 12. Ссылки и разграничение разделов"
     }
   },
-  "upload_seconds": 0.035,
+  "upload_seconds": 0.074,
   "version_uid": "ver_01M2FS599NRG6YZPGW1Q67EA61",
   "page_count_reported": 5,
-  "attempt": "2",
   "start_run": {
     "status": 202,
     "body": {
-      "run_id": "run_01M2FSFV29D35BEVRVF6QV77G2",
+      "run_id": "run_01M2FS599Z2PSGVGPW9NHJ2GFP",
       "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
       "version_uid": "ver_01M2FS599NRG6YZPGW1Q67EA61",
-      "state": "published",
+      "state": "failed",
       "provider_mode": "live",
       "stages": [
         {
@@ -59,26 +58,30 @@
         },
         {
           "stage_id": "text_analysis",
-          "status": "succeeded",
-          "stage_version": "1.0.0"
+          "status": "failed",
+          "stage_version": "1.0.0",
+          "error_code": null
         }
       ],
-      "created_at": "2026-09-14T11:05:28.903616Z",
+      "created_at": "2026-09-14T10:59:43.037092Z",
       "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
       "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
-      "degradation_set": [],
-      "terminal_at": "2026-09-14T11:05:28.903616Z"
+      "degradation_set": [
+        "text_analysis"
+      ],
+      "terminal_reason": "analysis_failed",
+      "terminal_at": "2026-09-14T10:59:43.037092Z"
     }
   },
-  "run_wall_seconds": 3.285,
-  "run_id": "run_01M2FSFV29D35BEVRVF6QV77G2",
+  "run_wall_seconds": 132.829,
+  "run_id": "run_01M2FS599Z2PSGVGPW9NHJ2GFP",
   "status_read": {
     "status": 200,
     "body": {
-      "run_id": "run_01M2FSFV29D35BEVRVF6QV77G2",
+      "run_id": "run_01M2FS599Z2PSGVGPW9NHJ2GFP",
       "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
       "version_uid": "ver_01M2FS599NRG6YZPGW1Q67EA61",
-      "state": "published",
+      "state": "failed",
       "provider_mode": "live",
       "stages": [
         {
@@ -98,18 +101,22 @@
         },
         {
           "stage_id": "text_analysis",
-          "status": "succeeded",
-          "stage_version": "1.0.0"
+          "status": "failed",
+          "stage_version": "1.0.0",
+          "error_code": null
         }
       ],
-      "created_at": "2026-09-14T11:05:28.903616Z",
+      "created_at": "2026-09-14T10:59:43.037092Z",
       "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
       "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
-      "degradation_set": [],
-      "terminal_at": "2026-09-14T11:05:28.903616Z"
+      "degradation_set": [
+        "text_analysis"
+      ],
+      "terminal_reason": "analysis_failed",
+      "terminal_at": "2026-09-14T10:59:43.037092Z"
     }
   },
-  "state": "published",
+  "state": "failed",
   "terminated": true,
   "stages": [
     {
@@ -129,22 +136,25 @@
     },
     {
       "stage_id": "text_analysis",
-      "status": "succeeded",
-      "stage_version": "1.0.0"
+      "status": "failed",
+      "stage_version": "1.0.0",
+      "error_code": null
     }
   ],
-  "degradation_set": [],
-  "terminal_reason": null,
+  "degradation_set": [
+    "text_analysis"
+  ],
+  "terminal_reason": "analysis_failed",
   "published_finding_count": null,
   "diagnostic_observation_count": null,
   "findings": [],
   "finding_pages": [
     {
-      "target": "/runs/run_01M2FSFV29D35BEVRVF6QV77G2/findings?limit=200",
+      "target": "/runs/run_01M2FS599Z2PSGVGPW9NHJ2GFP/findings?limit=200",
       "status": 200
     }
   ],
   "findings_returned": 0,
-  "began_epoch": 1789383928.8678663,
-  "ended_epoch": 1789383932.1919734
+  "began_epoch": 1789383582.9618917,
+  "ended_epoch": 1789383715.8682854
 }

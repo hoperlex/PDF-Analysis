@@ -1,10 +1,208 @@
 {
   "source": "model_call, read directly; cost_micros are integer millionths of USD",
   "documents": {
+    "PC02-C01": {
+      "run_id": "run_01M2FRZGVQ5CHKJT6N7W9FGBF6",
+      "call_count": 1,
+      "cost_micros": 12820,
+      "latency_ms": 2767,
+      "input_tokens": 2514,
+      "output_tokens": 10,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-C01",
+      "cost_usd": 0.01282
+    },
+    "PC02-C02": {
+      "run_id": "run_01M2FRZS183YB9VVXKEK9BJQSX",
+      "call_count": 1,
+      "cost_micros": 16565,
+      "latency_ms": 6323,
+      "input_tokens": 2668,
+      "output_tokens": 129,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-C02",
+      "cost_usd": 0.016565
+    },
+    "PC02-C03": {
+      "run_id": "run_01M2FS05NGWE7BXGYGWRZSM32W",
+      "call_count": 1,
+      "cost_micros": 18575,
+      "latency_ms": 6377,
+      "input_tokens": 2670,
+      "output_tokens": 209,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-C03",
+      "cost_usd": 0.018575
+    },
+    "PC02-C04": {
+      "run_id": "run_01M2FS0CBWAR6P8W49FPZ34218",
+      "call_count": 1,
+      "cost_micros": 17155,
+      "latency_ms": 7296,
+      "input_tokens": 2846,
+      "output_tokens": 117,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-C04",
+      "cost_usd": 0.017155
+    },
+    "PC02-C05": {
+      "run_id": "run_01M2FS0V6VTHCVGMQNW8ATGK4F",
+      "call_count": 1,
+      "cost_micros": 16020,
+      "latency_ms": 5512,
+      "input_tokens": 2659,
+      "output_tokens": 109,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-C05",
+      "cost_usd": 0.01602
+    },
+    "PC02-C06": {
+      "run_id": "run_01M2FS53390PCFNMXTTTMN381W",
+      "call_count": 1,
+      "cost_micros": 15015,
+      "latency_ms": 6047,
+      "input_tokens": 2523,
+      "output_tokens": 96,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-C06",
+      "cost_usd": 0.015015
+    },
+    "PC02-C07": {
+      "run_id": "run_01M2FSFV29D35BEVRVF6QV77G2",
+      "call_count": 1,
+      "cost_micros": 13000,
+      "latency_ms": 3085,
+      "input_tokens": 2550,
+      "output_tokens": 10,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-C07",
+      "cost_usd": 0.013
+    },
+    "PC02-C08": {
+      "run_id": "run_01M2FS9B7MBFM3PR2SN85SBJS9",
+      "call_count": 1,
+      "cost_micros": 19105,
+      "latency_ms": 5780,
+      "input_tokens": 2971,
+      "output_tokens": 170,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-C08",
+      "cost_usd": 0.019105
+    },
+    "PC02-C09": {
+      "run_id": "run_01M2FS9H62ND02X2M0X22927B0",
+      "call_count": 1,
+      "cost_micros": 27390,
+      "latency_ms": 9939,
+      "input_tokens": 2828,
+      "output_tokens": 530,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-C09",
+      "cost_usd": 0.02739
+    },
     "PC02-S01": {
       "run_id": "run_01M2FRWKXWSQ8T8V63MNZN3DRK",
       "call_count": 1,
-      "cost_micros": "23480",
+      "cost_micros": 23480,
       "latency_ms": 5959,
       "input_tokens": 2941,
       "output_tokens": 351,
@@ -21,12 +219,118 @@
         "live"
       ],
       "label": "PC02-S01",
-      "cost_usd": "0.02348"
+      "cost_usd": 0.02348
+    },
+    "PC02-S02": {
+      "run_id": "run_01M2FRZKW6E8B1WS2S7BJEKZT6",
+      "call_count": 1,
+      "cost_micros": 20260,
+      "latency_ms": 4803,
+      "input_tokens": 2757,
+      "output_tokens": 259,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-S02",
+      "cost_usd": 0.02026
+    },
+    "PC02-S03": {
+      "run_id": "run_01M2FRZZFYG8R19CA5N0E2H30K",
+      "call_count": 1,
+      "cost_micros": 23845,
+      "latency_ms": 5904,
+      "input_tokens": 2849,
+      "output_tokens": 384,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-S03",
+      "cost_usd": 0.023845
+    },
+    "PC02-S04": {
+      "run_id": "run_01M2FS0KT9NSYVB0Q14ZKKZWNX",
+      "call_count": 1,
+      "cost_micros": 29535,
+      "latency_ms": 7121,
+      "input_tokens": 3177,
+      "output_tokens": 546,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-S04",
+      "cost_usd": 0.029535
+    },
+    "PC02-S05": {
+      "run_id": "run_01M2FSH2EXNAPKRESS683Y81YK",
+      "call_count": 1,
+      "cost_micros": 29775,
+      "latency_ms": 8620,
+      "input_tokens": 3250,
+      "output_tokens": 541,
+      "cost_basis": [
+        "measured"
+      ],
+      "statuses": [
+        "succeeded"
+      ],
+      "model_identity": [
+        "claude-opus-5"
+      ],
+      "provider_mode": [
+        "live"
+      ],
+      "label": "PC02-S05",
+      "cost_usd": 0.029775
     }
   },
-  "total_cost_usd": "0.023480",
-  "total_calls": 1,
+  "total_cost_usd": 0.28254,
+  "total_calls": 14,
   "cost_basis_values": [
     "measured"
-  ]
+  ],
+  "failed_attempts": {
+    "PC02-C07#attempt1": {
+      "run_id": "run_01M2FS599Z2PSGVGPW9NHJ2GFP",
+      "model_call_rows": 0,
+      "cost_micros": 0
+    },
+    "PC02-S05#attempt1": {
+      "run_id": "run_01M2FS1119E796G2FHW9TGKTRP",
+      "model_call_rows": 0,
+      "cost_micros": 0
+    },
+    "PC02-S05#attempt2": {
+      "run_id": "run_01M2FSBQ87RPE6NZPJT74NC3EK",
+      "model_call_rows": 0,
+      "cost_micros": 0
+    }
+  },
+  "failed_attempt_note": "A run whose text_analysis stage failed with dependency_unavailable records no model_call row, so it contributes nothing to measured spend and any upstream tokens it consumed are not visible to this ledger."
 }

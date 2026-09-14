@@ -103,8 +103,21 @@ def multipart(content: bytes, *, filename: str, title: str) -> tuple[str, bytes]
     return f"multipart/form-data; boundary={boundary}", head + content + tail
 
 
+#: Which attempt this process is. Only the *run* command's idempotency key carries it.
+#: Replaying an upload key returns the version already published, which is what a retry
+#: wants -- the same bytes, the same version_uid, no second version. Replaying a *run*
+#: key would return the original run verbatim, so a retry of a run that failed on a
+#: transient provider outage would silently re-report the failure it was retrying.
+ATTEMPT = os.environ.get("P4RUN_ATTEMPT", "1")
+
+
 def key(label: str) -> str:
     return f"p4run01-{SESSION_TAG}-{label}"
+
+
+def run_key(label: str) -> str:
+    suffix = "" if ATTEMPT == "1" else f"-a{ATTEMPT}"
+    return f"p4run01-{SESSION_TAG}-run-{label}{suffix}"
 
 
 def collect_findings(app: Any, run_id: str) -> tuple[list[dict], list[dict]]:
@@ -163,10 +176,11 @@ def run_one(app: Any, project_uid: str, record: dict) -> dict:
     t1 = time.monotonic()
     status, raw = answer(
         app, "POST", "/runs",
-        headers={"Idempotency-Key": key(f"run-{label}"), "Content-Type": "application/json"},
+        headers={"Idempotency-Key": run_key(label), "Content-Type": "application/json"},
         body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
     )
     started = as_json(raw)
+    out["attempt"] = ATTEMPT
     out["start_run"] = {"status": status, "body": started}
     out["run_wall_seconds"] = round(time.monotonic() - t1, 3)
     if status >= 300:

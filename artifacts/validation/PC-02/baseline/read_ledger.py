@@ -49,6 +49,16 @@ def main() -> int:
         record = json.loads(path.read_text(encoding="utf-8"))
         if record.get("run_id"):
             by_run[record["run_id"]] = record["label"]
+
+    # The attempts that failed on a transient provider outage are read too. They are
+    # expected to carry no `model_call` row at all -- the stage fails before a call is
+    # recorded -- and that absence is itself the thing worth reporting: whatever those
+    # attempts cost upstream is invisible to this ledger.
+    failed: dict[str, str] = {}
+    for path in sorted((runs_dir / "attempts").glob("PC02-*.json")):
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if record.get("run_id"):
+            failed[record["run_id"]] = f"{record['label']}#attempt{record.get('attempt', '1')}"
     if not by_run:
         print("no run ids recorded yet", file=sys.stderr)
         return 1
@@ -56,7 +66,15 @@ def main() -> int:
     url = os.environ["DATABASE_URL"]
     engine = create_engine(url, isolation_level="AUTOCOMMIT")
     rows: dict[str, dict] = {}
+    failed_rows: dict[str, Any] = {}
     with engine.connect() as conn:
+        for run_id, name in failed.items():
+            found = list(conn.execute(text(QUERY), {"run_ids": [run_id]}).mappings())
+            failed_rows[name] = {
+                "run_id": run_id,
+                "model_call_rows": len(found),
+                "cost_micros": sum(int(r["cost_micros"] or 0) for r in found),
+            }
         for row in conn.execute(text(QUERY), {"run_ids": list(by_run)}).mappings():
             entry = dict(row)
             entry["label"] = by_run[entry["run_id"]]
@@ -79,6 +97,11 @@ def main() -> int:
         "cost_basis_values": sorted(
             {b for r in rows.values() for b in (r["cost_basis"] or [])}
         ),
+        "failed_attempts": failed_rows,
+        "failed_attempt_note":
+            "A run whose text_analysis stage failed with dependency_unavailable records "
+            "no model_call row, so it contributes nothing to measured spend and any "
+            "upstream tokens it consumed are not visible to this ledger.",
     }
     target = Path(__file__).resolve().parent / "ledger.json"
     target.write_text(json.dumps(out, ensure_ascii=False, indent=2, default=str) + "\n",

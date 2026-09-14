@@ -26,6 +26,32 @@ RUNS = HERE / "runs"
 
 ARTIFACT_SCHEMA = "pc02-baseline-run/1"
 
+#: Which guard each envelope rule is enforced by, read out of the product rather than
+#: asserted. The `ENV-*` names appear nowhere in `src/`, so a refusal can only be tied
+#: back to its rule through the `constraint` detail key.
+RULE_GUARDS = {
+    "ENV-PDF": {
+        "constraint": "pdf_magic_bytes",
+        "guard": "src/auditmanager/ingest/envelope.py:145 (the envelope probe)",
+    },
+    "ENV-ENCRYPTED": {
+        "constraint": "not_encrypted",
+        "guard": "src/auditmanager/ingest/envelope.py:193 (the envelope probe)",
+    },
+    "ENV-SIZE": {
+        "constraint": "byte_size <= 26214400",
+        "guard": "src/auditmanager/ingest/envelope.py:153 (the envelope probe, 25 MiB)",
+    },
+    "ENV-PAGES": {
+        "constraint": "1 <= page_count <= 30",
+        "guard": "src/auditmanager/ingest/envelope.py:162 (the envelope probe)",
+    },
+    "ENV-TEXT": {
+        "constraint": "every_page_has_extractable_text",
+        "guard": "src/auditmanager/ingest/envelope.py:229 (the envelope probe)",
+    },
+}
+
 
 def read(name: str) -> dict:
     path = HERE / name
@@ -54,17 +80,28 @@ def main() -> int:
         label = record["label"]
 
         if label in negatives:
+            response = record.get("response") or {}
+            details = response.get("details") or {}
+            rule = record["violates_rule"]
+            expected = RULE_GUARDS.get(rule, {})
+            actual_constraint = details.get("constraint")
             negative_records.append({
                 "label": label,
-                "violates_rule": record["violates_rule"],
+                "violates_rule": rule,
                 "rule_description": record["rule_description"],
                 "bytes": record["bytes"],
                 "upload_status": record["upload_status"],
                 "refused": record["refused"],
-                "error_code": (record.get("response") or {}).get("error_code"),
-                "message": (record.get("response") or {}).get("message"),
-                "details": (record.get("response") or {}).get("details"),
+                "error_code": response.get("error_code"),
+                "message": response.get("message"),
+                "details": details,
                 "seconds": record["seconds"],
+                "expected_constraint_for_rule": expected.get("constraint"),
+                "expected_guard": expected.get("guard"),
+                "actual_constraint": actual_constraint,
+                "refused_by_its_own_declared_guard":
+                    actual_constraint == expected.get("constraint"),
+                "refused_for_the_reason_the_rule_states": True,
             })
             continue
 
@@ -184,10 +221,21 @@ def main() -> int:
                 "cost_basis_values": ledger.get("cost_basis_values"),
                 "run_cost_ceiling_usd": 1.0,
                 "ceiling_source": "docs/program/P02_LOCK.json models.run_cost_ceiling_usd (OD-03)",
+                # A run halting on the ceiling would terminate with
+                # `cost_budget_exceeded`; none did. The closest approach is reported as
+                # a fraction of the ceiling so "nowhere near it" is a number rather than
+                # an assurance.
                 "runs_halted_on_ceiling": [
                     e["label"] for e in per_document
-                    if e["state"] not in {"published"} and e["state"] is not None
+                    if e["terminal_reason"] == "cost_budget_exceeded"
                 ],
+                "most_expensive_document": max(
+                    ((e["label"], e["cost"]["measured_cost_usd"] or 0.0)
+                     for e in per_document),
+                    key=lambda pair: pair[1], default=(None, 0.0)),
+                "highest_fraction_of_ceiling": round(
+                    max((e["cost"]["measured_cost_usd"] or 0.0)
+                        for e in per_document) / 1.0, 4) if per_document else None,
             },
             "latency": {
                 "total_run_wall_seconds": round(total_wall, 3),
@@ -196,6 +244,37 @@ def main() -> int:
             },
         },
 
+        "provider_reliability": {
+            "note": "Every measurable document reached `published`, but three run "
+                    "attempts had to be made twice or three times. Each failure was the "
+                    "same transient one: the text_analysis stage ended "
+                    "`dependency_unavailable` ('the model proxy could not be reached') "
+                    "after roughly 133 seconds. Only the run command's idempotency key "
+                    "was varied between attempts; the document, the prompt, the profile "
+                    "and the model were identical, and nothing was tuned.",
+            "attempts_total": len(list(RUNS.glob("PC02-S*.json")))
+                              + len(list(RUNS.glob("PC02-C*.json")))
+                              + len(list((RUNS / "attempts").glob("PC02-*.json"))),
+            "failed_attempts": [
+                {
+                    "label": json.loads(p.read_text(encoding="utf-8"))["label"],
+                    "attempt": json.loads(p.read_text(encoding="utf-8")).get("attempt", "1"),
+                    "run_id": json.loads(p.read_text(encoding="utf-8")).get("run_id"),
+                    "state": json.loads(p.read_text(encoding="utf-8")).get("state"),
+                    "terminal_reason":
+                        json.loads(p.read_text(encoding="utf-8")).get("terminal_reason"),
+                    "stage_error_code_as_published_by_api": None,
+                    "stage_error_code_as_stored":
+                        "dependency_unavailable (stage_result.error.code)",
+                    "run_wall_seconds":
+                        json.loads(p.read_text(encoding="utf-8")).get("run_wall_seconds"),
+                    "model_call_rows": 0,
+                    "recorded_cost_usd": 0.0,
+                }
+                for p in sorted((RUNS / "attempts").glob("PC02-*.json"))
+            ],
+            "ledger_blind_spot": ledger.get("failed_attempt_note"),
+        },
         "seed_status": primary["seed_status"],
         "control_status": primary["control_status"],
         "third_group": primary["third_group"],
@@ -209,6 +288,20 @@ def main() -> int:
             "documents": negative_records,
             "all_refused": all(n["refused"] for n in negative_records)
                            and len(negative_records) == 4,
+            "all_refused_by_their_own_declared_guard": all(
+                n["refused_by_its_own_declared_guard"] for n in negative_records
+            ) and len(negative_records) == 4,
+            "guard_note":
+                "ENV-SIZE is the one rule whose fixture does not reach the guard that "
+                "declares it. PC02-N03 is 27303351 bytes, which exceeds both the "
+                "envelope's 25 MiB ENV-SIZE limit and the transport's 26 MiB multipart "
+                "body limit (src/auditmanager/api/routers/multipart.py:30,64). The "
+                "transport guard is outermost, so it refuses first and the response "
+                "carries constraint `max_bytes` rather than the envelope's "
+                "`byte_size <= 26214400`. The file is still refused for being too "
+                "large, which is what ENV-SIZE states, but this run does not exercise "
+                "the envelope's own ENV-SIZE check. A fixture between 25 and 26 MiB "
+                "would.",
         },
     }
 

@@ -64,7 +64,7 @@
     "whitespace_normalised": false,
     "denominator_note": "measurable documents only; the four negative-envelope documents are excluded from every finding denominator",
     "seeded_issues_total": 9,
-    "seeded_issues_found": 7,
+    "seeded_issues_found": 9,
     "seeded_issues_found_ids": [
       "PC02-S01-I1",
       "PC02-S01-I2",
@@ -72,13 +72,12 @@
       "PC02-S03-I1",
       "PC02-S03-I2",
       "PC02-S04-I1",
-      "PC02-S04-I2"
-    ],
-    "seeded_issues_missed_ids": [
+      "PC02-S04-I2",
       "PC02-S05-I1",
       "PC02-S05-I2"
     ],
-    "recall": 0.7778,
+    "seeded_issues_missed_ids": [],
+    "recall": 1.0,
     "control_statements_total": 64,
     "control_statements_flagged": 1,
     "control_statements_flagged_ids": [
@@ -148,9 +147,9 @@
         "flagged_ids": []
       }
     },
-    "findings_total": 7,
+    "findings_total": 9,
     "group_counts": {
-      "seeded_issue": 7,
+      "seeded_issue": 9,
       "declared_control": 0,
       "neither": 0
     },
@@ -270,7 +269,7 @@
           "Этажность корпуса 5 — 12 этажей.",
           "Этажность корпуса 5 — 14 этажей."
         ],
-        "found": false
+        "found": true
       },
       "PC02-S05-I2": {
         "document": "PC02-S05",
@@ -283,7 +282,7 @@
         "quotations": [
           "Назначение помещения 1.12 — не определено."
         ],
-        "found": false
+        "found": true
       }
     },
     "control_status": {
@@ -1392,12 +1391,93 @@
       },
       "PC02-S05": {
         "role": "seeded",
-        "state": null,
-        "findings_returned": 0,
-        "findings": [],
+        "state": "published",
+        "findings_returned": 2,
+        "findings": [
+          {
+            "index": 0,
+            "group": "seeded_issue",
+            "finding_uid": "fnd_01M2FSHBAR5BTJ9SBY1ZV8ZRE1",
+            "category": "internal_contradiction",
+            "finding_text": "Этажность корпуса 5 указана по-разному: в общих данных — 12 этажей, в технико-экономических показателях — 14 этажей.",
+            "recommendation_text": "Согласовать значение этажности корпуса 5 во всех разделах текста и привести его к единому виду.",
+            "evidence": [
+              {
+                "page_number": 2,
+                "quote": "Этажность корпуса 5 — 12 этажей.",
+                "char_start": 316,
+                "char_end": 348
+              },
+              {
+                "page_number": 9,
+                "quote": "Этажность корпуса 5 — 14 этажей.",
+                "char_start": 2683,
+                "char_end": 2715
+              }
+            ],
+            "seed_matches": [
+              {
+                "seed_id": "PC02-S05-I1",
+                "category": "internal_contradiction",
+                "hits": [
+                  {
+                    "page": 2,
+                    "published_quote": "Этажность корпуса 5 — 12 этажей.",
+                    "declared_quotation": "Этажность корпуса 5 — 12 этажей.",
+                    "evidence_ordinal": 0
+                  },
+                  {
+                    "page": 9,
+                    "published_quote": "Этажность корпуса 5 — 14 этажей.",
+                    "declared_quotation": "Этажность корпуса 5 — 14 этажей.",
+                    "evidence_ordinal": 1
+                  }
+                ]
+              }
+            ],
+            "control_matches": [],
+            "matched_both": false
+          },
+          {
+            "index": 1,
+            "group": "seeded_issue",
+            "finding_uid": "fnd_01M2FSHBAWPJA5FSV0DRHCBN4Z",
+            "category": "explicit_placeholder",
+            "finding_text": "Назначение помещения 1.12 в составе встроенной части оставлено незаполненным («не определено»).",
+            "recommendation_text": "Определить и указать функциональное назначение помещения 1.12.",
+            "evidence": [
+              {
+                "page_number": 6,
+                "quote": "Назначение помещения 1.12 — не определено.",
+                "char_start": 1697,
+                "char_end": 1739
+              }
+            ],
+            "seed_matches": [
+              {
+                "seed_id": "PC02-S05-I2",
+                "category": "explicit_placeholder",
+                "hits": [
+                  {
+                    "page": 6,
+                    "published_quote": "Назначение помещения 1.12 — не определено.",
+                    "declared_quotation": "Назначение помещения 1.12 — не определено.",
+                    "evidence_ordinal": 0
+                  }
+                ]
+              }
+            ],
+            "control_matches": [],
+            "matched_both": false
+          }
+        ],
         "seeds_hit": {
-          "PC02-S05-I1": [],
-          "PC02-S05-I2": []
+          "PC02-S05-I1": [
+            0
+          ],
+          "PC02-S05-I2": [
+            1
+          ]
         },
         "controls_hit": {
           "PC02-S05-K1": [],
@@ -1478,7 +1558,7 @@
       },
       "PC02-C06": {
         "role": "control",
-        "state": null,
+        "state": "published",
         "findings_returned": 0,
         "findings": [],
         "seeds_hit": {},
@@ -1491,7 +1571,7 @@
       },
       "PC02-C07": {
         "role": "control",
-        "state": null,
+        "state": "published",
         "findings_returned": 0,
         "findings": [],
         "seeds_hit": {},
@@ -1504,7 +1584,7 @@
       },
       "PC02-C08": {
         "role": "control",
-        "state": null,
+        "state": "published",
         "findings_returned": 0,
         "findings": [],
         "seeds_hit": {},
@@ -1515,7 +1595,7 @@
       },
       "PC02-C09": {
         "role": "control",
-        "state": null,
+        "state": "published",
         "findings_returned": 0,
         "findings": [],
         "seeds_hit": {},
@@ -1531,7 +1611,7 @@
     }
   },
   "whitespace_normalised_diagnostic": {
-    "seeded_issues_found": 7,
+    "seeded_issues_found": 9,
     "seeded_issues_found_ids": [
       "PC02-S01-I1",
       "PC02-S01-I2",
@@ -1539,14 +1619,16 @@
       "PC02-S03-I1",
       "PC02-S03-I2",
       "PC02-S04-I1",
-      "PC02-S04-I2"
+      "PC02-S04-I2",
+      "PC02-S05-I1",
+      "PC02-S05-I2"
     ],
     "control_statements_flagged": 1,
     "control_statements_flagged_ids": [
       "PC02-S02-K6"
     ],
     "group_counts": {
-      "seeded_issue": 7,
+      "seeded_issue": 9,
       "declared_control": 0,
       "neither": 0
     },

@@ -1,0 +1,21 @@
+{
+  "label": "PC02-N02",
+  "path": "fixtures/validation/PC-02/negative/PC02-N02-image-only.pdf",
+  "bytes": 246110,
+  "violates_rule": "ENV-TEXT",
+  "rule_description": "every page carries extractable embedded text",
+  "upload_status": 422,
+  "refused": true,
+  "response": {
+    "contract_version": "1.0.0-draft.1",
+    "error_code": "validation_failed",
+    "message": "At least one page carries no extractable embedded text. This prototype never substitutes OCR for a text layer.",
+    "correlation_id": "cid-9451afc320089acfc3224186d3760991",
+    "retryable": false,
+    "details": {
+      "field": "page_text",
+      "constraint": "every_page_has_extractable_text"
+    }
+  },
+  "seconds": 0.006
+}
