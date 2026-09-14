@@ -58,14 +58,30 @@ class CostMeter:
         if self.spent_usd >= self.ceiling_usd:
             raise cost_budget_exceeded()
 
-    def charge(self, pin: ModelPin, *, input_tokens: int, output_tokens: int) -> float:
+    def charge(
+        self,
+        pin: ModelPin,
+        *,
+        input_tokens: int,
+        output_tokens: int,
+        reported_cost_usd: float | None = None,
+    ) -> float:
         """Add one call's measured cost, then halt if the run has passed the ceiling.
 
         The charge is recorded before the check so the model call record and the run
         report show what was actually spent, including the call that broke the
         budget. Hiding that call would understate the spend.
         """
-        cost = pin.cost_usd(input_tokens=input_tokens, output_tokens=output_tokens)
+        # A reported figure wins over the pinned table. The table is a rate card for one
+        # model; under `OD-02`'s revision the model is chosen at configuration time and may
+        # not be in the table at all, in which case the estimate is not merely imprecise but
+        # absent. When the transport measures the spend, the ceiling should hold against the
+        # measurement.
+        cost = (
+            float(reported_cost_usd)
+            if reported_cost_usd is not None
+            else pin.cost_usd(input_tokens=input_tokens, output_tokens=output_tokens)
+        )
         self.spent_usd += cost
         self.call_count += 1
         if self.spent_usd > self.ceiling_usd:

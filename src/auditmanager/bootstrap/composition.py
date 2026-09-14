@@ -12,6 +12,7 @@ takes six protocols and constructs none of them, and this is the other half of t
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -144,6 +145,13 @@ def _build_provider(settings: AppSettings) -> tuple[Any, Any, str, str]:
     else:
         adapter = RecordedAdapter()
 
-    config = load_provider_config()
+    # `analysis.text` parses the provider mode from the environment itself and its
+    # vocabulary is live-or-recorded, by design: it is asking about provenance, and a
+    # transport is not an answer to that question. So it is handed the **provenance** mode
+    # rather than taught a third value. The translation stays in one place - here - which is
+    # the only place that knows both the transport and what the run will record.
+    config = load_provider_config(
+        dict(os.environ) | {"AUDITMANAGER_PROVIDER_MODE": _provenance_mode(settings.provider_mode)}
+    )
     profile = resolve_profile()
     return adapter, config, str(profile.analysis_profile_id), str(profile.prompt_bundle.prompt_bundle_id)

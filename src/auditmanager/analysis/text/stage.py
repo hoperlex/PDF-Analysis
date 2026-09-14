@@ -242,7 +242,10 @@ def run_text_analysis(
 
     try:
         cost = cost_meter.charge(
-            pin, input_tokens=response.input_tokens, output_tokens=response.output_tokens
+            pin,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            reported_cost_usd=response.reported_cost_usd,
         )
     except DomainError as error:
         # The spend that broke the budget is still recorded: the run report should

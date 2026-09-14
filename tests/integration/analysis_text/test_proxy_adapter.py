@@ -236,3 +236,62 @@ class TestItRefusesToBeBuiltWrong:
     def test_a_relative_base_url_is_refused(self) -> None:
         with pytest.raises(DomainError):
             ProxySettings(base_url="proxy.example", token="t")
+
+
+class TestTheMeasuredCostBeatsTheEstimate:
+    """`OD-02`'s revision makes the model selectable, so no rate table can cover it.
+
+    The pinned table is a rate card for one model. Under the proxy the model is chosen at
+    configuration time and may not be in the table at all - in which case the estimate is not
+    merely imprecise, it is absent. The proxy returns what the call actually cost, and the
+    `OD-03` ceiling should hold against a measurement rather than a derivation.
+    """
+
+    def test_the_reported_cost_is_carried_off_the_response(self) -> None:
+        document = _ok_document()
+        document["usage"]["cost"] = 0.000175
+        response = _adapter(_Captured(document=document)).complete(
+            ModelRequest(model_id="m", body=ANTHROPIC_BODY)
+        )
+        assert response.reported_cost_usd == pytest.approx(0.000175)
+
+    def test_a_response_without_a_cost_leaves_it_none(self) -> None:
+        """Then the meter falls back to the pinned table, as it always did."""
+        response = _adapter(_Captured()).complete(
+            ModelRequest(model_id="m", body=ANTHROPIC_BODY)
+        )
+        assert response.reported_cost_usd is None
+
+    def test_a_non_numeric_cost_is_ignored_rather_than_trusted(self) -> None:
+        document = _ok_document()
+        document["usage"]["cost"] = "free"
+        response = _adapter(_Captured(document=document)).complete(
+            ModelRequest(model_id="m", body=ANTHROPIC_BODY)
+        )
+        assert response.reported_cost_usd is None
+
+    def test_the_meter_charges_the_reported_figure_when_there_is_one(self) -> None:
+        from auditmanager.analysis.text.cost import CostMeter
+        from auditmanager.analysis.text.lock import ModelPin
+
+        pin = ModelPin(model_id="m", input_per_mtok_usd=5.0, output_per_mtok_usd=25.0)
+        meter = CostMeter(ceiling_usd=1.0)
+        estimated = pin.cost_usd(input_tokens=1000, output_tokens=1000)
+        charged = meter.charge(
+            pin, input_tokens=1000, output_tokens=1000, reported_cost_usd=0.5
+        )
+        assert charged == pytest.approx(0.5)
+        assert charged != pytest.approx(estimated), (
+            "the fixture no longer discriminates: pick a reported value the table cannot "
+            "coincidentally produce"
+        )
+
+    def test_the_ceiling_still_halts_on_the_reported_figure(self) -> None:
+        from auditmanager.analysis.text.cost import CostMeter
+        from auditmanager.analysis.text.lock import ModelPin
+
+        pin = ModelPin(model_id="m", input_per_mtok_usd=5.0, output_per_mtok_usd=25.0)
+        meter = CostMeter(ceiling_usd=0.10)
+        with pytest.raises(DomainError) as caught:
+            meter.charge(pin, input_tokens=1, output_tokens=1, reported_cost_usd=0.25)
+        assert caught.value.code is ErrorCode.COST_BUDGET_EXCEEDED

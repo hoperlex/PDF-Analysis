@@ -189,7 +189,15 @@ def _from_openai_response(document: Mapping[str, Any], latency_ms: int) -> Model
         input_tokens=int(usage.get("prompt_tokens") or 0),
         output_tokens=int(usage.get("completion_tokens") or 0),
         latency_ms=latency_ms,
+        # The proxy returns the real spend for the call, including whatever the upstream
+        # actually charged. It is the only number here that is measured rather than derived.
+        reported_cost_usd=_reported_cost(usage),
     )
+
+
+def _reported_cost(usage: Mapping[str, Any]) -> float | None:
+    value = usage.get("cost")
+    return float(value) if isinstance(value, (int, float)) else None
 
 
 def _stop_reason(finish_reason: str | None) -> str:

@@ -58,6 +58,12 @@ class ModelResponse:
     input_tokens: int
     output_tokens: int
     latency_ms: int
+    #: What the transport says the call actually cost, when it says anything. The direct
+    #: provider adapter leaves it ``None`` and the meter falls back to the pinned rate
+    #: table. The LLM proxy reports a real figure, and under `OD-02`'s revision the model
+    #: is selectable, so no fixed rate table can cover it - a measurement must beat an
+    #: estimate whenever one exists.
+    reported_cost_usd: float | None = None
 
     @property
     def response_sha256(self) -> str:
