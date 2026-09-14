@@ -397,12 +397,35 @@ def classify_cost_basis(
 # 4. Extraction
 # ---------------------------------------------------------------------------
 
-_CALLS_SQL = """
+#: ``model_call`` columns the report needs, with the type to substitute when one is
+#: not in the schema. A telemetry column that has gone missing is exactly what this
+#: tool exists to detect, so its disappearance must produce a GAP, not a traceback:
+#: the extraction selects a typed NULL in its place and the gap register classifies
+#: the metric ``absent``. A preflight that crashes on missing telemetry tells the
+#: reader nothing, and would do it after the expert sessions were booked.
+_OPTIONAL_CALL_COLUMNS = {
+    "input_tokens": "integer",
+    "output_tokens": "integer",
+    "latency_ms": "integer",
+    "cost_micros": "bigint",
+    "error_code": "text",
+}
+
+
+def build_calls_sql(present: Iterable[str]) -> str:
+    available = set(present)
+    projected = []
+    for column, sql_type in _OPTIONAL_CALL_COLUMNS.items():
+        if column in available:
+            projected.append(f"mc.{column}")
+        else:
+            projected.append(f"NULL::{sql_type} AS {column}")
+    return f"""
 SELECT
     mc.model_call_id, mc.run_id, mc.stage_id, mc.provider, mc.model_identity,
     mc.provider_mode, mc.request_sha256, mc.response_sha256,
-    mc.input_tokens, mc.output_tokens, mc.latency_ms, mc.cost_micros,
-    mc.status, mc.error_code, mc.created_at,
+    mc.status, mc.created_at,
+    {", ".join(projected)},
     sr.status AS stage_status,
     sr.error ->> 'code'    AS stage_error_code,
     sr.error ->> 'message' AS stage_error_message
@@ -410,6 +433,15 @@ FROM model_call mc
 LEFT JOIN stage_result sr ON sr.run_id = mc.run_id AND sr.stage_id = mc.stage_id
 ORDER BY mc.created_at, mc.model_call_id
 """
+
+
+def existing_columns(db: ReadOnlyDatabase, table: str) -> set[str]:
+    rows = db.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = current_schema() AND table_name = %s",
+        [table],
+    )
+    return {str(row["column_name"]) for row in rows}
 
 _RUNS_SQL = """
 SELECT
@@ -494,7 +526,7 @@ class Extraction:
 
 def extract(db: ReadOnlyDatabase) -> Extraction:
     rates = load_rate_table()
-    calls = _rows(db, _CALLS_SQL)
+    calls = _rows(db, build_calls_sql(existing_columns(db, "model_call")))
     for call in calls:
         basis, why = classify_cost_basis(
             provider_mode=call["provider_mode"],
