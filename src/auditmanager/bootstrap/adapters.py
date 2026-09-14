@@ -98,9 +98,13 @@ def _version_view(record: Any) -> DocumentVersionView:
         project_uid=str(record.project_uid),
         version_ordinal=record.version_ordinal,
         byte_size=record.byte_size,
+        # Required by the frozen schema and simply omitted here, so every call raised a
+        # TypeError inside the adapter and answered 500. The record carried it all along.
+        sha256=record.sha256,
         page_count=record.page_count,
         published_at=record.published_at,
         media_type=record.media_type,
+        display_title=record.display_title,
         input_manifest=tuple(
             ManifestEntryView(
                 role=e.role,
@@ -248,47 +252,58 @@ class RunAdapter(_SessionHolder):
             return started
 
         started = self._write(work)
-        return _StartedRunView(str(started.run_id), bool(started.replayed))
+        # The frozen document renders `startRun` and `getRunStatus` with the same
+        # `RunStatus` body, so this must be the whole view and not a receipt. Returning two
+        # fields answered 500 *after* the analysis had run and every row was written, which
+        # left the caller unable to address what it had just created - the worst shape a
+        # failure can take on a write.
+        return self._read(lambda session: _run_status_view(session, str(started.run_id)))
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
-        from auditmanager.runs import RunRepository
+        return self._read(lambda session: _run_status_view(session, run_id))
 
-        def work(session: Session) -> RunStatusView:
-            run = RunRepository().get(session, run_id)
-            stages = getattr(run, "stages", ()) or ()
-            return RunStatusView(
-                run_id=str(run.run_id),
-                project_uid=str(run.project_uid),
-                version_uid=str(run.version_uid),
-                state=run.state,
-                provider_mode=run.provider_mode,
-                created_at=run.created_at,
-                analysis_profile_id=getattr(run, "analysis_profile_id", None),
-                prompt_bundle_id=getattr(run, "prompt_bundle_id", None),
-                degradation_set=tuple(getattr(run, "degradation_set", ()) or ()),
-                terminal_reason=getattr(run, "terminal_reason", None),
-                interrupted_reason=getattr(run, "interrupted_reason", None),
-                terminal_at=getattr(run, "terminal_at", None),
-                stages=tuple(
-                    StageStateView(
-                        stage_id=s.stage_id,
-                        status=s.status,
-                        error_code=getattr(s, "error_code", None),
-                        started_at=getattr(s, "started_at", None),
-                        finished_at=getattr(s, "finished_at", None),
-                    )
-                    for s in stages
-                ),
+
+def _run_status_view(session: Session, run_id: str) -> RunStatusView:
+    """The whole frozen `RunStatus`, from the two places that hold it.
+
+    `RunRow` carries the run; the stage rows are behind `RunRepository.stage_results`. The
+    first version read `getattr(run, "stages", ())`, which `RunRow` does not have, so
+    `RunStatus.stages` was permanently empty and nothing said so - a `getattr` default is a
+    silent answer to a question the object cannot answer.
+    """
+    from auditmanager.runs import RunRepository
+
+    repository = RunRepository()
+    run = repository.get(session, run_id)
+    stages = repository.stage_results(session, run_id)
+    return RunStatusView(
+        run_id=str(run.run_id),
+        project_uid=str(run.project_uid),
+        version_uid=str(run.version_uid),
+        state=run.state,
+        provider_mode=run.provider_mode,
+        created_at=run.created_at,
+        analysis_profile_id=run.analysis_profile_id,
+        prompt_bundle_id=run.prompt_bundle_id,
+        degradation_set=tuple(run.degradation_set or ()),
+        terminal_reason=run.terminal_reason,
+        interrupted_reason=run.interrupted_reason,
+        terminal_at=run.terminal_at,
+        stages=tuple(
+            StageStateView(
+                stage_id=stage.stage_id,
+                status=stage.status,
+                stage_version=stage.stage_version,
+                # D4: a stage that failed because the provider was unreachable carried a
+                # null error_code, so a *retryable* dependency failure was reported as a
+                # non-retryable analysis failure and an operator would not retry a run that
+                # failed only because the proxy was down. The code is in the stage's own
+                # error object; it was simply not read.
+                error_code=(stage.error or {}).get("error_code"),
             )
-
-        return self._read(work)
-
-
-class _StartedRunView:
-    __slots__ = ("run_id", "replayed")
-
-    def __init__(self, run_id: str, replayed: bool) -> None:
-        self.run_id, self.replayed = run_id, replayed
+            for stage in stages
+        ),
+    )
 
 
 def _finding_view(row: Any, evidence: Sequence[Any], verdict: Any) -> FindingView:

@@ -60,7 +60,7 @@ PC01_STAGES: Final[tuple[str, ...]] = (
 _RUN_COLUMNS = (
     "run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id, "
     "norms_snapshot_id, provider_mode, frozen_input_digest, command_id, terminal_reason, "
-    "interrupted_reason, degradation_set, terminal_at"
+    "interrupted_reason, degradation_set, terminal_at, created_at"
 )
 
 _INSERT_RUN = text(
@@ -163,6 +163,9 @@ class RunRow:
     terminal_reason: str | None
     interrupted_reason: str | None
     degradation_set: tuple[str, ...]
+    #: Required by the frozen `RunStatus`. The column existed in the schema from the first
+    #: migration and simply was not selected, so a required API property had no producer.
+    created_at: datetime
     terminal_at: datetime | None
 
 
@@ -194,6 +197,7 @@ def _run_row(row: Any) -> RunRow:
         interrupted_reason,
         degradation_set,
         terminal_at,
+        created_at,
     ) = tuple(row)
     return RunRow(
         run_id=run_id,
@@ -210,6 +214,7 @@ def _run_row(row: Any) -> RunRow:
         interrupted_reason=interrupted_reason,
         degradation_set=tuple(degradation_set or ()),
         terminal_at=terminal_at,
+        created_at=created_at,
     )
 
 
