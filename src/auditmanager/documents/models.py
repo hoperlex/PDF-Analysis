@@ -131,6 +131,12 @@ class DocumentVersionRecord:
     #: because ``DocumentVersion`` in the frozen API contract requires it, so a reviewer
     #: can be told they are looking at version 2 rather than version 1.
     version_ordinal: int
+    #: The display label the uploader supplied, carried because the frozen
+    #: ``DocumentVersion`` schema declares it and `B7`'s upload panel has no other way to
+    #: show a reviewer the title they typed. It is a label, never an identity: nothing
+    #: resolves a version by it, and `source_filename` stays withheld because a filename is
+    #: named in foundation invariant 3 and a display title is not.
+    display_title: str
     media_type: str
     byte_size: int
     sha256: str
