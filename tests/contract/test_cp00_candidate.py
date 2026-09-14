@@ -3714,18 +3714,60 @@ class _CheckpointSandbox:
     #: object database, which is copied separately.
     NOT_COPIED = frozenset({".git", ".venv"})
 
+    #: Skipped because :func:`_digest_paths` cannot reach inside them, so their contents
+    #: cannot change any digest this sandbox computes.
+    #:
+    #: The recipe enumerates ``ls-files --cached --others --exclude-standard``: tracked,
+    #: plus untracked-but-not-ignored. ``.local`` is gitignored in full (the 5.3 GB norms
+    #: corpus), and ``.claude`` holds agent worktrees, which are nested repositories that
+    #: ``--others`` does not descend into. Neither contributes a single one of the 752
+    #: paths the live tree enumerates.
+    #:
+    #: Copying them anyway cost 7.4 GB per sandbox against a 63 MB tracked tree - 117x -
+    #: and that is not merely wasteful. On 2026-09-14 two full-suite runs filled the host
+    #: filesystem, PostgreSQL took a DiskFull and fell into recovery, and the suite
+    #: returned two different answers for one unchanged tree (52 failed/126 errors, then
+    #: 156/501). Sandboxes leak on exactly the runs that crash, because `tearDownClass`
+    #: never arrives - so the copy must be small enough that leaking it is survivable.
+    #:
+    #: ``.claude`` carried a second hazard: a worktree's ``.git`` is a *file* pointing
+    #: into the parent repository's metadata, and copying it produces something git reads
+    #: differently than the original. The sandbox could then enumerate paths the live tree
+    #: does not, which is a digest disagreement between two trees that must agree.
+    #:
+    #: The skip is self-policing. :meth:`_skippable` re-derives the live digest set and
+    #: copies any of these directories that turns out to contribute to it, so tracking a
+    #: file under one of them can slow the sandbox down but can never silently change what
+    #: it hashes. Correctness does not depend on the claim above staying true.
+    NOT_IN_THE_DIGEST = frozenset({".local", ".claude"})
+
     #: The `mkdtemp` prefix, and half of what :func:`_refuse_to_write_outside` checks.
     PREFIX = "w0-qa-01-checkpoint-"
 
+    @classmethod
+    def _skippable(cls) -> frozenset[str]:
+        """Which of :attr:`NOT_IN_THE_DIGEST` the digest recipe really cannot reach.
+
+        Asked of the live tree on every construction rather than trusted as a constant:
+        the moment one of these directories contributes a path, it is copied like any
+        other. The optimisation can cost time; it cannot cost correctness.
+        """
+        contributing = {path.split("/", 1)[0] for path in _digest_paths(REPOSITORY_ROOT)}
+        return frozenset(cls.NOT_IN_THE_DIGEST - contributing)
+
     def __init__(self) -> None:
         self.root = Path(tempfile.mkdtemp(prefix=self.PREFIX))
+        #: Recorded, not hidden: a probe that wants to know whether this sandbox is the
+        #: cheap shape or the full one can ask, and the answer is a fact about the live
+        #: tree rather than about this class.
+        self.skipped = self._skippable()
         shutil.copytree(REPOSITORY_ROOT / ".git", self.root / ".git")
         # The whole tree, not a hand-listed subset. The candidate digest enumerates
         # every tracked path, so a sandbox that carried only the interesting
         # directories would make the recipe unrunnable rather than make the probe
         # meaningful — and a hand-listed subset silently rots as the repository grows.
         for entry in sorted(REPOSITORY_ROOT.iterdir()):
-            if entry.name in self.NOT_COPIED:
+            if entry.name in self.NOT_COPIED or entry.name in self.skipped:
                 continue
             if entry.is_dir():
                 shutil.copytree(entry, self.root / entry.name, symlinks=True)
@@ -3741,6 +3783,36 @@ class _CheckpointSandbox:
         exclude.parent.mkdir(parents=True, exist_ok=True)
         with exclude.open("a", encoding="utf-8") as handle:
             handle.write("\n.venv\n")
+            # The live tree's ignore decisions, carried where a reset cannot reach them.
+            #
+            # Most ignore rules live in TRACKED `.gitignore` files, so `_reset_to` can
+            # delete the rule while leaving the file it was ignoring. `web/.gitignore`
+            # is exactly that: absent from the frozen commit c34506d, so the reset
+            # removes it, and `web/next-env.d.ts` and `web/tsconfig.tsbuildinfo` - build
+            # output ignored everywhere in the live tree - become untracked-not-ignored
+            # inside the sandbox. `_digest_paths` then enumerates two paths the frozen
+            # commit has no blob for, `unresettable` records both, and all 147 probes
+            # that need a reset sandbox fail. They fail with the right words for the
+            # wrong reason: the message says "tracked now and absent there", and neither
+            # file is tracked in either tree. The sandbox was measuring the host's build
+            # output, which is the failure that message exists to warn about.
+            #
+            # `.git/info/exclude` is in no commit, so no reset can remove it - the same
+            # property that makes it the right home for the `.venv` line above. Writing
+            # the live decisions here makes the sandbox enumerate what the live tree
+            # enumerates both before and after the reset, rather than inheriting whatever
+            # ignore rules happened to exist at the frozen commit.
+            #
+            # `--directory` collapses whole ignored trees to one entry (64 lines, not one
+            # per `__pycache__` file), and the paths are git's own output, not a pattern
+            # this module invents.
+            ignored = _git(
+                "-C", str(REPOSITORY_ROOT),
+                "ls-files", "--others", "--ignored", "--exclude-standard", "--directory",
+                text=True, check=True,
+            ).stdout
+            for path in sorted({line for line in ignored.split("\n") if line}):
+                handle.write(f"/{path}\n")
         self._pristine: dict[str, bytes] = {}
         #: The commit that froze the live `tested_candidate_digest`, the value it froze,
         #: and any path this sandbox could not return to that tree. Filled by
@@ -12135,6 +12207,7 @@ class TableExpectationTests(unittest.TestCase):
                 "IMMUTABLE_REVIEWED_PREFIXES",
                 "MANUAL_VERDICTS",
                 "NOT_COPIED",
+                "NOT_IN_THE_DIGEST",
                 "PINNING_ASSERTIONS",
                 "POST_FREEZE_DELTA_CEILING",
                 "PREFIX_PROBE_STRANGERS",
@@ -12917,6 +12990,15 @@ class TableExpectationTests(unittest.TestCase):
 
     def test_the_sandbox_and_probe_fixtures_are_pinned(self) -> None:
         self.assertEqual(sorted(_CheckpointSandbox.NOT_COPIED), [".git", ".venv"])
+        # Pinned as a literal for the usual reason, and one particular to it: emptying
+        # this table does not turn any *behavioural* probe red. The sandbox would simply
+        # copy 7.4 GB instead of 63 MB and still compute every digest correctly - until a
+        # full run fills the host filesystem, which is how it was found rather than how it
+        # was caught. A silent 117x regression with green tests is exactly the shape this
+        # class exists to make impossible, so the literal is the guard.
+        self.assertEqual(
+            sorted(_CheckpointSandbox.NOT_IN_THE_DIGEST), [".claude", ".local"]
+        )
         # The two names the prefix probe plants. Pinned as literals because the point of
         # the probe is *which* names it plants: one absent from every frozen tree and
         # one that a freeze taken after `W0-INT-02` lands really tracks, which is the

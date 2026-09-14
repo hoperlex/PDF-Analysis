@@ -26,8 +26,13 @@ of an error is the vacuous shape this programme keeps finding:
 Measured cost versus estimated cost
 -----------------------------------
 ``model_call.cost_micros`` holds **either** the proxy's reported spend **or** a
-``P02_LOCK.json`` rate-table estimate, and the schema records no discriminator. See
-:func:`classify_cost_basis`: the basis is derived, and every figure this tool emits
+``P02_LOCK.json`` rate-table estimate, and the two can be numerically identical: the
+proxy bills the same published prices the rate card lists, so the first live run's
+reported cost matched the estimate to the micro. The figures alone cannot be told
+apart, which is why the discriminator is recorded rather than inferred. See
+:func:`classify_cost_basis`: since migration ``0004`` the basis is **read** from
+``model_call.cost_basis`` and derived only when that column is absent or was backfilled
+onto a row that predates it; every figure this tool emits
 carries the basis beside it. A measurement and an estimate presented identically is how
 a report becomes uncitable.
 """
@@ -364,10 +369,30 @@ def classify_cost_basis(
     output_tokens: int | None,
     cost_micros: int | None,
     rates: Mapping[str, Mapping[str, Any]],
+    stored_basis: str | None = None,
 ) -> tuple[str, str]:
     """Return ``(basis, why)`` for one call's cost.
 
-    The schema has no column saying which of the two a figure is, so this derives it:
+    **The schema now records the discriminator.** Migration ``0004_cost_basis`` added
+    ``model_call.cost_basis``, written by ``analysis/text/stage.py`` from whether the
+    provider returned a cost at all - so the writer's own knowledge is available and is
+    strictly better than anything inferable here. The first live run makes the
+    difference concrete: the proxy reported ``usage.cost``, and it equalled the rate
+    card *to the micro*, because the rate card is that same published price list. The
+    derivation below calls that ``indeterminate``; the column calls it ``measured``, and
+    the column is right.
+
+    Inference survives for two cases the column cannot answer:
+
+    * the column is missing, on a database older than ``0004`` or one where the telemetry
+      has been dropped - which is the condition this tool exists to report, not to crash on;
+    * the column was **backfilled**. ``0004`` added it ``NOT NULL DEFAULT 'estimated'``, so
+      every pre-migration row now asserts ``estimated`` without evidence. Where that label
+      contradicts the arithmetic - a live call whose stored cost is *not* the rate-table
+      figure, so something other than the rate table produced it - the label is a
+      migration artefact and this reports ``indeterminate`` rather than repeating it.
+
+    The remaining derivation, used only when no column is present:
 
     * ``recorded`` mode is **always** an estimate, and structurally so.
       ``analysis/text/recorded.py`` builds its ``ModelResponse`` without
@@ -379,6 +404,24 @@ def classify_cost_basis(
     """
     if cost_micros is None:
         return "absent", "cost_micros is NULL"
+
+    expected_for_stored = rate_table_micros(rates, model_identity, input_tokens, output_tokens)
+    if stored_basis == "measured":
+        return "measured", "model_call.cost_basis: the provider returned a cost for this call"
+    if stored_basis == "estimated":
+        if (
+            provider_mode == "live"
+            and expected_for_stored is not None
+            and abs(expected_for_stored - cost_micros) > 1
+        ):
+            return (
+                "indeterminate",
+                "model_call.cost_basis says estimated, but this live call's stored cost is "
+                "not the rate-table figure, so the rate table did not produce it; the label "
+                "is the NOT NULL DEFAULT that migration 0004 backfilled onto pre-existing rows",
+            )
+        return "estimated", "model_call.cost_basis: no provider cost; the rate table applies"
+
     if provider_mode == "recorded":
         return "estimated", "recorded adapter supplies no reported cost; rate table applies"
     expected = rate_table_micros(rates, model_identity, input_tokens, output_tokens)
@@ -408,6 +451,7 @@ _OPTIONAL_CALL_COLUMNS = {
     "output_tokens": "integer",
     "latency_ms": "integer",
     "cost_micros": "bigint",
+    "cost_basis": "text",
     "error_code": "text",
 }
 
@@ -528,7 +572,11 @@ def extract(db: ReadOnlyDatabase) -> Extraction:
     rates = load_rate_table()
     calls = _rows(db, build_calls_sql(existing_columns(db, "model_call")))
     for call in calls:
+        # Captured before the derived label overwrites it: once both exist, a reader
+        # must be able to see which of the two spoke, and whether they agreed.
+        stored = call.get("cost_basis")
         basis, why = classify_cost_basis(
+            stored_basis=stored,
             provider_mode=call["provider_mode"],
             model_identity=call["model_identity"],
             input_tokens=call["input_tokens"],
@@ -538,6 +586,8 @@ def extract(db: ReadOnlyDatabase) -> Extraction:
         )
         call["cost_basis"] = basis
         call["cost_basis_reason"] = why
+        call["cost_basis_stored"] = stored
+        call["cost_basis_source"] = "model_call.cost_basis" if stored else "derived"
         call["cost_usd"] = (
             None if call["cost_micros"] is None else call["cost_micros"] / 1_000_000.0
         )
@@ -1027,22 +1077,38 @@ def build_gap_register(
                 "docs/program/P02_LOCK.json models",
             ],
             "finding": (
-                "the figure is persisted, but WHICH KIND of figure it is, is not. "
-                "cost_micros holds the proxy's reported spend when the proxy returned "
-                "usage.cost, and a P02_LOCK rate-table estimate otherwise, with no "
-                "column distinguishing them. The tool derives the basis (see "
-                "classify_cost_basis) and labels every figure measured/estimated/"
-                "indeterminate. Recorded mode is structurally always an estimate."
+                "CLOSED by migration 0004_cost_basis. cost_micros holds the proxy's "
+                "reported spend when the proxy returned usage.cost and a P02_LOCK "
+                "rate-table estimate otherwise, and the two are not distinguishable by "
+                "value - the proxy bills the published prices the rate card lists, so "
+                "the first live run's reported cost equalled the estimate to the micro "
+                "and the old derivation called a genuine measurement 'indeterminate'. "
+                "model_call.cost_basis now records which kind each figure is, written "
+                "by the adapter that knows. The derivation survives only for databases "
+                "without the column, and to refuse the NOT NULL DEFAULT that 0004 "
+                "backfilled onto pre-existing rows where the arithmetic contradicts it. "
+                "Recorded mode is structurally always an estimate."
             ),
             "what_persisting_it_would_take": (
-                "one cost_basis column on model_call. A P02 schema change; raised as a "
-                "P02 defect for owner decision, not fixed here."
+                "nothing further: model_call.cost_basis exists and is populated. This "
+                "entry is retained because the probe below is what proves it, and a "
+                "dropped column must reopen the gap rather than silently pass."
             ),
             "probe": {
                 "column": probes["cost_micros"],
                 "calls_with_cost_micros": cost_present,
                 "bases_observed": sorted(bases),
-                "discriminator_column_exists": False,
+                # Computed from the live schema, never asserted: this entry claimed
+                # `False` as a literal, and went on claiming it after 0004 made it
+                # untrue. A probe cannot go stale; a hard-coded fact can and did.
+                "discriminator_column_exists": bool(probes["cost_basis"]["exists"]),
+                "discriminator_column": probes["cost_basis"],
+                "labels_read_from_column": sum(
+                    1 for c in calls if c.get("cost_basis_source") == "model_call.cost_basis"
+                ),
+                "labels_derived": sum(
+                    1 for c in calls if c.get("cost_basis_source") == "derived"
+                ),
             },
         },
         {
@@ -1574,7 +1640,14 @@ def _open(log: StatementLog) -> ReadOnlyDatabase:
 
 
 #: The model_call columns the gap register's classifications are computed from.
-GAP_PROBE_COLUMNS = ("latency_ms", "input_tokens", "output_tokens", "cost_micros", "status")
+GAP_PROBE_COLUMNS = (
+    "latency_ms",
+    "input_tokens",
+    "output_tokens",
+    "cost_micros",
+    "cost_basis",
+    "status",
+)
 
 
 def _with_census(
@@ -1621,33 +1694,73 @@ def mode_self_check() -> int:
     )
 
     # Independent source: the recording file itself, not the row we just read.
+    #
+    # `request_sha256` is NOT unique across recordings, and treating it as a key was
+    # wrong. The variants under `variants/` are deliberately the SAME request with a
+    # different response - that is what makes them variants - so four files share one
+    # sha. A dict keyed by sha kept whichever sorted last and silently discarded the
+    # rest, and a `*.json` glob never descended into `variants/` to find them at all.
+    # Rows replayed from a variant were then compared against the base recording and
+    # reported as mismatches: 40 failed checks and a permanent exit 3, describing a
+    # defect in the database that did not exist. A row is faithful if it matches ANY
+    # recording bearing its request checksum, and the check names which one.
     fixture_dir = REPO_ROOT / "fixtures/recorded/text_analysis"
-    recordings = {}
-    for path in sorted(fixture_dir.glob("*.json")):
+    recordings: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for path in sorted(fixture_dir.rglob("*.json")):
         doc = json.loads(path.read_text(encoding="utf-8"))
-        recordings[str(doc.get("request_sha256"))] = doc
+        sha = doc.get("request_sha256")
+        if sha is None:
+            continue  # `inputs/` holds request material, not responses
+        label = str(path.relative_to(fixture_dir))
+        recordings.setdefault(str(sha), []).append((label, doc))
+
+    check(
+        "the recordings sharing one request checksum were all loaded",
+        any(len(docs) > 1 for docs in recordings.values()),
+        {
+            "by_checksum": {
+                sha[:12]: [label for label, _ in docs] for sha, docs in recordings.items()
+            }
+        },
+    )
 
     matched = 0
     for call in recorded_calls:
-        doc = recordings.get(call["request_sha256"])
-        if doc is None:
+        candidates = recordings.get(call["request_sha256"])
+        if not candidates:
             continue
         matched += 1
-        usage = doc.get("usage") or {}
+        usage_of = lambda d: d.get("usage") or {}  # noqa: E731
+        agreeing = [
+            label
+            for label, doc in candidates
+            if call["latency_ms"] == doc.get("latency_ms")
+            and call["input_tokens"] == usage_of(doc).get("input_tokens")
+            and call["output_tokens"] == usage_of(doc).get("output_tokens")
+        ]
         check(
-            f"{call['model_call_id']}: latency matches its recording",
-            call["latency_ms"] == doc.get("latency_ms"),
-            {"row": call["latency_ms"], "recording": doc.get("latency_ms")},
-        )
-        check(
-            f"{call['model_call_id']}: tokens match its recording",
-            call["input_tokens"] == usage.get("input_tokens")
-            and call["output_tokens"] == usage.get("output_tokens"),
+            f"{call['model_call_id']}: telemetry matches one of its recordings",
+            bool(agreeing),
             {
-                "row": [call["input_tokens"], call["output_tokens"]],
-                "recording": [usage.get("input_tokens"), usage.get("output_tokens")],
+                "row": {
+                    "latency_ms": call["latency_ms"],
+                    "tokens": [call["input_tokens"], call["output_tokens"]],
+                },
+                "matched": agreeing,
+                "candidates": {
+                    label: {
+                        "latency_ms": doc.get("latency_ms"),
+                        "tokens": [
+                            usage_of(doc).get("input_tokens"),
+                            usage_of(doc).get("output_tokens"),
+                        ],
+                    }
+                    for label, doc in candidates
+                },
             },
         )
+        doc = next((d for label, d in candidates if label in agreeing), candidates[0][1])
+        usage = usage_of(doc)
         check(
             f"{call['model_call_id']}: the recording carries no cost, so the "
             "row's cost must be an estimate",
