@@ -81,7 +81,13 @@ def build_application(
             blob_store=store,
             adapter=model_adapter,
             provider_config=provider_config,
-            provider_mode=resolved.provider_mode,
+            # The **provenance** mode, not the transport. `proxy` is how the call travels;
+            # `live` is what the run records, because a model really answered. Two things
+            # enforce that independently and both would refuse `proxy` here: the database
+            # CHECK on audit_run.provider_mode admits only live and recorded, and execute_run
+            # refuses a run whose declared mode disagrees with its adapter - and the proxy
+            # adapter reports `live`. Translating here is the only place that knows both.
+            provider_mode=_provenance_mode(resolved.provider_mode),
             analysis_profile_id=profile_id,
             prompt_bundle_id=bundle_id,
         ),
@@ -90,6 +96,15 @@ def build_application(
         exports=CsvExportAdapter(sessions),
     )
     return Application(router=router, settings=resolved, session_factory=sessions)
+
+
+def _provenance_mode(transport: str) -> str:
+    """What the run records, given how the call travels.
+
+    The live-or-recorded vocabulary answers one question: did a model produce this, or was
+    it replayed. A proxy changes neither answer, so it maps to `live`.
+    """
+    return "recorded" if transport == "recorded" else "live"
 
 
 def _build_provider(settings: AppSettings) -> tuple[Any, Any, str, str]:
@@ -104,15 +119,28 @@ def _build_provider(settings: AppSettings) -> tuple[Any, Any, str, str]:
     """
     from auditmanager.analysis.text import (
         LiveAdapter,
+        ProxyAdapter,
+        ProxySettings,
         RecordedAdapter,
         load_provider_config,
         resolve_profile,
     )
 
-    if settings.provider_mode == "live":
+    if settings.provider_mode == "proxy":
+        # A proxied call is `live` in the run's provenance, because a model really answered
+        # it. The proxy is the transport, and the transport is not the question the
+        # live-or-recorded vocabulary asks.
+        adapter: Any = ProxyAdapter(
+            ProxySettings(
+                base_url=settings.proxy_base_url or "",
+                token=settings.proxy_token or "",
+                model=settings.proxy_model,
+            )
+        )
+    elif settings.provider_mode == "live":
         if settings.api_key is None:  # pragma: no cover - settings.load refuses first
             raise ConfigurationError("live mode requires a credential")
-        adapter: Any = LiveAdapter()
+        adapter = LiveAdapter(api_key=settings.api_key)
     else:
         adapter = RecordedAdapter()
 

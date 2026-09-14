@@ -29,7 +29,14 @@ MODEL_ID_ENV: Final[str] = "AUDITMANAGER_MODEL_ID"
 COST_CEILING_ENV: Final[str] = "AUDITMANAGER_RUN_COST_CEILING_USD"
 API_KEY_ENV: Final[str] = "ANTHROPIC_API_KEY"
 
-_DECLARED_MODES: Final[frozenset[str]] = frozenset({"live", "recorded"})
+#: How the application reaches a model. `proxy` is a **transport**, not a provenance mode:
+#: a proxied call is recorded in the run as `live`, because a model really answered it.
+#: `OD-02` was revised to the proxy on 2026-09-14.
+_DECLARED_MODES: Final[frozenset[str]] = frozenset({"live", "recorded", "proxy"})
+
+PROXY_BASE_URL_ENV: Final[str] = "PROXY_LLM_BASE_URL"
+PROXY_TOKEN_ENV: Final[str] = "PROXY_LLM_TOKEN"
+PROXY_MODEL_ENV: Final[str] = "PROXY_LLM_MODEL"
 
 
 class ConfigurationError(DomainError):
@@ -51,6 +58,9 @@ class AppSettings:
     s3_bucket: str
     provider_mode: str
     model_id: str
+    proxy_base_url: str | None
+    proxy_token: str | None
+    proxy_model: str
     run_cost_ceiling_usd: float
     api_key: str | None
 
@@ -91,6 +101,22 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
     if ceiling <= 0:
         raise ConfigurationError(f"{COST_CEILING_ENV} must be positive, got {ceiling}")
 
+    proxy_base_url = env.get(PROXY_BASE_URL_ENV, "").strip() or None
+    proxy_token = env.get(PROXY_TOKEN_ENV, "").strip() or None
+    if mode == "proxy":
+        # Refused at startup for the same reason a missing credential is: a process that
+        # starts must be able to serve. The token is the one value the proxy cannot be
+        # reached without, and the base URL is the one it cannot be found without.
+        if proxy_base_url is None:
+            raise ConfigurationError(
+                f"{PROVIDER_MODE_ENV} is proxy but {PROXY_BASE_URL_ENV} is unset"
+            )
+        if proxy_token is None:
+            raise ConfigurationError(
+                f"{PROVIDER_MODE_ENV} is proxy but {PROXY_TOKEN_ENV} is unset; the proxy "
+                "authenticates every call and refuses a blank token before reading the body"
+            )
+
     api_key = env.get(API_KEY_ENV, "").strip() or None
     if mode == "live" and api_key is None:
         # Refusing here is the point. A live-mode process with no credential would start,
@@ -112,4 +138,10 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
         model_id=env.get(MODEL_ID_ENV, "").strip() or "claude-opus-5",
         run_cost_ceiling_usd=ceiling,
         api_key=api_key,
+        proxy_base_url=proxy_base_url,
+        proxy_token=proxy_token,
+        # The stub the proxy reads as "I am not choosing a model", so the operator's default
+        # and its fallback chain apply. Any other value is a real choice that changes routing
+        # and billing and switches the fallback chain off.
+        proxy_model=env.get(PROXY_MODEL_ENV, "").strip() or "proxy",
     )

@@ -60,6 +60,7 @@ from auditmanager.analysis.text.lock import STAGE_ID, ModelPin, ProviderLock, pr
 from auditmanager.analysis.text.profile import AR_TEXT_PROFILE, AnalysisProfile, resolve_profile
 from auditmanager.analysis.text.prompt import AR_TEXT_PROMPT_BUNDLE, CATEGORIES, PromptBundle
 from auditmanager.analysis.text.provenance import ModelCallRecord, assert_consistent_mode
+from auditmanager.analysis.text.proxy import ProxyAdapter, ProxySettings
 from auditmanager.analysis.text.recorded import RecordedAdapter, recording_document
 from auditmanager.analysis.text.stage import (
     STATUS_FAILED,
@@ -101,6 +102,8 @@ __all__ = [
     "ProviderConfig",
     "ProviderLock",
     "ProviderMode",
+    "ProxyAdapter",
+    "ProxySettings",
     "RecordedAdapter",
     "ResolvedAnchor",
     "TextAnalysisOutcome",
