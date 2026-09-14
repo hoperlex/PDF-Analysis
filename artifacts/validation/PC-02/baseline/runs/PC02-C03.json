@@ -1,0 +1,149 @@
+{
+  "label": "PC02-C03",
+  "role": "control",
+  "path": "fixtures/validation/PC-02/documents/PC02-C03.pdf",
+  "pages": 6,
+  "bytes": 49231,
+  "sha256": "0850722c23c6a6949ec0dac8b7a7ca322364e5f27c17fe0c4afc048948b17230",
+  "session_tag": "p4run01",
+  "upload": {
+    "status": 201,
+    "body": {
+      "version_uid": "ver_01M2FS05NAXB79B0C93V33XN9Q",
+      "document_uid": "doc_01M2FS05NAP5WNR8DRC3MQW04Q",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_ordinal": 1,
+      "media_type": "application/pdf",
+      "byte_size": 49231,
+      "sha256": "0850722c23c6a6949ec0dac8b7a7ca322364e5f27c17fe0c4afc048948b17230",
+      "page_count": 6,
+      "published_at": "2026-09-14T10:56:55.464513Z",
+      "input_manifest": [
+        {
+          "role": "source.document",
+          "sha256": "0850722c23c6a6949ec0dac8b7a7ca322364e5f27c17fe0c4afc048948b17230",
+          "size_bytes": 49231,
+          "media_type": "application/pdf"
+        }
+      ],
+      "display_title": "Корпус 8. Заполнение проёмов"
+    }
+  },
+  "upload_seconds": 0.072,
+  "version_uid": "ver_01M2FS05NAXB79B0C93V33XN9Q",
+  "page_count_reported": 6,
+  "start_run": {
+    "status": 202,
+    "body": {
+      "run_id": "run_01M2FS05NGWE7BXGYGWRZSM32W",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FS05NAXB79B0C93V33XN9Q",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:56:55.470214Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:56:55.470214Z"
+    }
+  },
+  "run_wall_seconds": 6.612,
+  "run_id": "run_01M2FS05NGWE7BXGYGWRZSM32W",
+  "status_read": {
+    "status": 200,
+    "body": {
+      "run_id": "run_01M2FS05NGWE7BXGYGWRZSM32W",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FS05NAXB79B0C93V33XN9Q",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:56:55.470214Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:56:55.470214Z"
+    }
+  },
+  "state": "published",
+  "terminated": true,
+  "stages": [
+    {
+      "stage_id": "document_context_build",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "page_geometry_extraction",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "source_preparation",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "text_analysis",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    }
+  ],
+  "degradation_set": [],
+  "terminal_reason": null,
+  "published_finding_count": null,
+  "diagnostic_observation_count": null,
+  "findings": [],
+  "finding_pages": [
+    {
+      "target": "/runs/run_01M2FS05NGWE7BXGYGWRZSM32W/findings?limit=200",
+      "status": 200
+    }
+  ],
+  "findings_returned": 0,
+  "began_epoch": 1789383415.3975623,
+  "ended_epoch": 1789383422.0858657
+}

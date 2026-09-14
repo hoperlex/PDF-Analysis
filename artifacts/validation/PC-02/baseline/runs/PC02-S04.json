@@ -1,0 +1,234 @@
+{
+  "label": "PC02-S04",
+  "role": "seeded",
+  "path": "fixtures/validation/PC-02/documents/PC02-S04.pdf",
+  "pages": 9,
+  "bytes": 55184,
+  "sha256": "4ec5f6f9199023f2c29aba51753f8545ac00de0edabcd9221696879a693f684c",
+  "session_tag": "p4run01",
+  "upload": {
+    "status": 201,
+    "body": {
+      "version_uid": "ver_01M2FS0KT31HG319504XDSK7CM",
+      "document_uid": "doc_01M2FS0KT36XN30JZ0DD66K3EH",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_ordinal": 1,
+      "media_type": "application/pdf",
+      "byte_size": 55184,
+      "sha256": "4ec5f6f9199023f2c29aba51753f8545ac00de0edabcd9221696879a693f684c",
+      "page_count": 9,
+      "published_at": "2026-09-14T10:57:09.954432Z",
+      "input_manifest": [
+        {
+          "role": "source.document",
+          "sha256": "4ec5f6f9199023f2c29aba51753f8545ac00de0edabcd9221696879a693f684c",
+          "size_bytes": 55184,
+          "media_type": "application/pdf"
+        }
+      ],
+      "display_title": "Корпус 4. Вертикальный транспорт и высотные отметки"
+    }
+  },
+  "upload_seconds": 0.082,
+  "version_uid": "ver_01M2FS0KT31HG319504XDSK7CM",
+  "page_count_reported": 9,
+  "start_run": {
+    "status": 202,
+    "body": {
+      "run_id": "run_01M2FS0KT9NSYVB0Q14ZKKZWNX",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FS0KT31HG319504XDSK7CM",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:57:09.959619Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:57:09.959619Z"
+    }
+  },
+  "run_wall_seconds": 7.499,
+  "run_id": "run_01M2FS0KT9NSYVB0Q14ZKKZWNX",
+  "status_read": {
+    "status": 200,
+    "body": {
+      "run_id": "run_01M2FS0KT9NSYVB0Q14ZKKZWNX",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FS0KT31HG319504XDSK7CM",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:57:09.959619Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:57:09.959619Z"
+    }
+  },
+  "state": "published",
+  "terminated": true,
+  "stages": [
+    {
+      "stage_id": "document_context_build",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "page_geometry_extraction",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "source_preparation",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "text_analysis",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    }
+  ],
+  "degradation_set": [],
+  "terminal_reason": null,
+  "published_finding_count": null,
+  "diagnostic_observation_count": null,
+  "findings": [
+    {
+      "finding_uid": "fnd_01M2FS0V4BVF2EA0GD1J5GZ3GF",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FS0KT31HG319504XDSK7CM",
+      "run_id": "run_01M2FS0KT9NSYVB0Q14ZKKZWNX",
+      "category": "internal_contradiction",
+      "observation": {
+        "finding_observation_id": "fobs_01M2FS0V4B33H3WQS42MBAA72Q",
+        "run_id": "run_01M2FS0KT9NSYVB0Q14ZKKZWNX",
+        "category": "internal_contradiction",
+        "finding_text": "Абсолютная отметка, соответствующая отметке 0,000 корпуса 4, указана по-разному: 143,60 и 143,80.",
+        "recommendation_text": "Согласовать единое значение абсолютной отметки уровня 0,000 корпуса 4 во всех листах раздела.",
+        "evidence": [
+          {
+            "evidence_ordinal": 0,
+            "page_number": 2,
+            "quote": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,60.",
+            "char_start": 400,
+            "char_end": 464,
+            "block_id": "b_000011"
+          },
+          {
+            "evidence_ordinal": 1,
+            "page_number": 7,
+            "quote": "Отметка 0,000 корпуса 4 соответствует абсолютной отметке 143,80.",
+            "char_start": 1954,
+            "char_end": 2018,
+            "block_id": "b_000040"
+          }
+        ],
+        "provenance": {
+          "stage_id": "text_analysis",
+          "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+          "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+          "provider_mode": "live",
+          "model_call_id": "mc_01M2FS0V37JNJFEK6WSQW5X6WW"
+        }
+      },
+      "current_verdict": "pending",
+      "latest_decision_id": null,
+      "decision_recorded_at": null
+    },
+    {
+      "finding_uid": "fnd_01M2FS0V4DBH2F38P6H31J63C3",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FS0KT31HG319504XDSK7CM",
+      "run_id": "run_01M2FS0KT9NSYVB0Q14ZKKZWNX",
+      "category": "internal_contradiction",
+      "observation": {
+        "finding_observation_id": "fobs_01M2FS0V4D61H7FG5ECMTJVJM7",
+        "run_id": "run_01M2FS0KT9NSYVB0Q14ZKKZWNX",
+        "category": "internal_contradiction",
+        "finding_text": "Количество пассажирских лифтов в корпусе 4 указано по-разному: два и три.",
+        "recommendation_text": "Уточнить и привести к единому значению количество пассажирских лифтов корпуса 4.",
+        "evidence": [
+          {
+            "evidence_ordinal": 0,
+            "page_number": 4,
+            "quote": "В корпусе 4 предусмотрено два пассажирских лифта.",
+            "char_start": 1033,
+            "char_end": 1082,
+            "block_id": "b_000023"
+          },
+          {
+            "evidence_ordinal": 1,
+            "page_number": 8,
+            "quote": "В корпусе 4 предусмотрено три пассажирских лифта.",
+            "char_start": 2395,
+            "char_end": 2444,
+            "block_id": "b_000048"
+          }
+        ],
+        "provenance": {
+          "stage_id": "text_analysis",
+          "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+          "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+          "provider_mode": "live",
+          "model_call_id": "mc_01M2FS0V37JNJFEK6WSQW5X6WW"
+        }
+      },
+      "current_verdict": "pending",
+      "latest_decision_id": null,
+      "decision_recorded_at": null
+    }
+  ],
+  "finding_pages": [
+    {
+      "target": "/runs/run_01M2FS0KT9NSYVB0Q14ZKKZWNX/findings?limit=200",
+      "status": 200
+    }
+  ],
+  "findings_returned": 2,
+  "began_epoch": 1789383429.8772345,
+  "ended_epoch": 1789383437.461274
+}

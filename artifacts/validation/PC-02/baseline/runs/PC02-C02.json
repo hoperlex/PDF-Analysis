@@ -1,0 +1,149 @@
+{
+  "label": "PC02-C02",
+  "role": "control",
+  "path": "fixtures/validation/PC-02/documents/PC02-C02.pdf",
+  "pages": 6,
+  "bytes": 49155,
+  "sha256": "42d941d57b76cf0edb963119908e8011511579058d272818bc31e5251e423f6e",
+  "session_tag": "p4run01",
+  "upload": {
+    "status": 201,
+    "body": {
+      "version_uid": "ver_01M2FRZS13JC6WP0RWH506NS1J",
+      "document_uid": "doc_01M2FRZS13BG5T8SK9D1KSQYP6",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_ordinal": 1,
+      "media_type": "application/pdf",
+      "byte_size": 49155,
+      "sha256": "42d941d57b76cf0edb963119908e8011511579058d272818bc31e5251e423f6e",
+      "page_count": 6,
+      "published_at": "2026-09-14T10:56:42.530369Z",
+      "input_manifest": [
+        {
+          "role": "source.document",
+          "sha256": "42d941d57b76cf0edb963119908e8011511579058d272818bc31e5251e423f6e",
+          "size_bytes": 49155,
+          "media_type": "application/pdf"
+        }
+      ],
+      "display_title": "Корпус 7. Высоты помещений и этажей"
+    }
+  },
+  "upload_seconds": 0.075,
+  "version_uid": "ver_01M2FRZS13JC6WP0RWH506NS1J",
+  "page_count_reported": 6,
+  "start_run": {
+    "status": 202,
+    "body": {
+      "run_id": "run_01M2FRZS183YB9VVXKEK9BJQSX",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRZS13JC6WP0RWH506NS1J",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:56:42.534954Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:56:42.534954Z"
+    }
+  },
+  "run_wall_seconds": 6.542,
+  "run_id": "run_01M2FRZS183YB9VVXKEK9BJQSX",
+  "status_read": {
+    "status": 200,
+    "body": {
+      "run_id": "run_01M2FRZS183YB9VVXKEK9BJQSX",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRZS13JC6WP0RWH506NS1J",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:56:42.534954Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:56:42.534954Z"
+    }
+  },
+  "state": "published",
+  "terminated": true,
+  "stages": [
+    {
+      "stage_id": "document_context_build",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "page_geometry_extraction",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "source_preparation",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "text_analysis",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    }
+  ],
+  "degradation_set": [],
+  "terminal_reason": null,
+  "published_finding_count": null,
+  "diagnostic_observation_count": null,
+  "findings": [],
+  "finding_pages": [
+    {
+      "target": "/runs/run_01M2FRZS183YB9VVXKEK9BJQSX/findings?limit=200",
+      "status": 200
+    }
+  ],
+  "findings_returned": 0,
+  "began_epoch": 1789383402.460025,
+  "ended_epoch": 1789383409.078419
+}

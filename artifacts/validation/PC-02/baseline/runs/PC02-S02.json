@@ -1,0 +1,200 @@
+{
+  "label": "PC02-S02",
+  "role": "seeded",
+  "path": "fixtures/validation/PC-02/documents/PC02-S02.pdf",
+  "pages": 6,
+  "bytes": 49939,
+  "sha256": "2582b230d33428d012914833b13b9addb26b82c3df21d84eec845434365fb5e8",
+  "session_tag": "p4run01",
+  "upload": {
+    "status": 201,
+    "body": {
+      "version_uid": "ver_01M2FRZKVZ7MW71YGGY8Z0H4H7",
+      "document_uid": "doc_01M2FRZKVZWQDAWBADYF2N4JGV",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_ordinal": 1,
+      "media_type": "application/pdf",
+      "byte_size": 49939,
+      "sha256": "2582b230d33428d012914833b13b9addb26b82c3df21d84eec845434365fb5e8",
+      "page_count": 6,
+      "published_at": "2026-09-14T10:56:37.244910Z",
+      "input_manifest": [
+        {
+          "role": "source.document",
+          "sha256": "2582b230d33428d012914833b13b9addb26b82c3df21d84eec845434365fb5e8",
+          "size_bytes": 49939,
+          "media_type": "application/pdf"
+        }
+      ],
+      "display_title": "Корпус 2. Объёмно-планировочные решения"
+    }
+  },
+  "upload_seconds": 0.081,
+  "version_uid": "ver_01M2FRZKVZ7MW71YGGY8Z0H4H7",
+  "page_count_reported": 6,
+  "start_run": {
+    "status": 202,
+    "body": {
+      "run_id": "run_01M2FRZKW6E8B1WS2S7BJEKZT6",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRZKVZ7MW71YGGY8Z0H4H7",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:56:37.251791Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:56:37.251791Z"
+    }
+  },
+  "run_wall_seconds": 5.204,
+  "run_id": "run_01M2FRZKW6E8B1WS2S7BJEKZT6",
+  "status_read": {
+    "status": 200,
+    "body": {
+      "run_id": "run_01M2FRZKW6E8B1WS2S7BJEKZT6",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRZKVZ7MW71YGGY8Z0H4H7",
+      "state": "published",
+      "provider_mode": "live",
+      "stages": [
+        {
+          "stage_id": "document_context_build",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "page_geometry_extraction",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "source_preparation",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        },
+        {
+          "stage_id": "text_analysis",
+          "status": "succeeded",
+          "stage_version": "1.0.0"
+        }
+      ],
+      "created_at": "2026-09-14T10:56:37.251791Z",
+      "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+      "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+      "degradation_set": [],
+      "terminal_at": "2026-09-14T10:56:37.251791Z"
+    }
+  },
+  "state": "published",
+  "terminated": true,
+  "stages": [
+    {
+      "stage_id": "document_context_build",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "page_geometry_extraction",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "source_preparation",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    },
+    {
+      "stage_id": "text_analysis",
+      "status": "succeeded",
+      "stage_version": "1.0.0"
+    }
+  ],
+  "degradation_set": [],
+  "terminal_reason": null,
+  "published_finding_count": null,
+  "diagnostic_observation_count": null,
+  "findings": [
+    {
+      "finding_uid": "fnd_01M2FRZRYEZKA43TD7F27YXQKX",
+      "project_uid": "prj_01M2FRWKB02RRW3MY1Y085XSXF",
+      "version_uid": "ver_01M2FRZKVZ7MW71YGGY8Z0H4H7",
+      "run_id": "run_01M2FRZKW6E8B1WS2S7BJEKZT6",
+      "category": "internal_contradiction",
+      "observation": {
+        "finding_observation_id": "fobs_01M2FRZRYE89W39EHBAD3C7GMA",
+        "run_id": "run_01M2FRZKW6E8B1WS2S7BJEKZT6",
+        "category": "internal_contradiction",
+        "finding_text": "Общая площадь здания корпуса 2 указана по-разному: 4 812,5 м² (стр. 2 и 4) и 4 218,5 м² (стр. 5).",
+        "recommendation_text": "Согласовать единое значение общей площади здания корпуса 2 во всех разделах документа.",
+        "evidence": [
+          {
+            "evidence_ordinal": 0,
+            "page_number": 2,
+            "quote": "Общая площадь здания корпуса 2 — 4 812,5 м².",
+            "char_start": 339,
+            "char_end": 383,
+            "block_id": "b_000010"
+          },
+          {
+            "evidence_ordinal": 1,
+            "page_number": 4,
+            "quote": "Общая площадь здания корпуса 2 составляет 4812,5 кв. м.",
+            "char_start": 1199,
+            "char_end": 1254,
+            "block_id": "b_000026"
+          },
+          {
+            "evidence_ordinal": 2,
+            "page_number": 5,
+            "quote": "Общая площадь здания корпуса 2 — 4 218,5 м².",
+            "char_start": 1519,
+            "char_end": 1563,
+            "block_id": "b_000032"
+          }
+        ],
+        "provenance": {
+          "stage_id": "text_analysis",
+          "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+          "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+          "provider_mode": "live",
+          "model_call_id": "mc_01M2FRZRXGJRZ2EVMJCHA5GSK6"
+        }
+      },
+      "current_verdict": "pending",
+      "latest_decision_id": null,
+      "decision_recorded_at": null
+    }
+  ],
+  "finding_pages": [
+    {
+      "target": "/runs/run_01M2FRZKW6E8B1WS2S7BJEKZT6/findings?limit=200",
+      "status": 200
+    }
+  ],
+  "findings_returned": 1,
+  "began_epoch": 1789383397.170083,
+  "ended_epoch": 1789383402.4596152
+}
