@@ -272,13 +272,28 @@ def run_text_analysis(
                 "stage_version": STAGE_VERSION,
                 "provider_mode": mode.value,
                 "cost_usd": round(cost_meter.spent_usd, 8),
+                # Which of the two the figure above is. The transport reports a real number
+                # for a proxied or direct call and reports nothing for a replay, so the
+                # basis is known here and was being discarded one layer later.
+                "cost_basis": (
+                    "measured" if response.reported_cost_usd is not None else "estimated"
+                ),
                 "cost_ceiling_usd": cost_meter.ceiling_usd,
                 "observations_emitted": 0,
             },
         )
 
     call = _record(
-        model_call_id, request, response, mode=mode, status=call_status, cost_usd=cost
+        model_call_id,
+        request,
+        response,
+        mode=mode,
+        status=call_status,
+        cost_usd=cost,
+        # The response is in scope here and nowhere below, so this is where the basis is
+        # known. My first attempt set it on the error path's own dict, which the executor
+        # never reads - the figure reached the row and the provenance did not.
+        cost_basis="measured" if response.reported_cost_usd is not None else "estimated",
     )
     parsed = parse_response(response.output_text, truncated=response.truncated)
     grounding = _ground(
@@ -366,6 +381,7 @@ def _record(
     mode: ProviderMode,
     status: str,
     cost_usd: float,
+    cost_basis: str = "estimated",
 ) -> ModelCallRecord:
     return ModelCallRecord(
         model_call_id=model_call_id,
@@ -380,6 +396,7 @@ def _record(
         latency_ms=response.latency_ms,
         status=status,
         cost_usd=cost_usd,
+        cost_basis=cost_basis,
     )
 
 

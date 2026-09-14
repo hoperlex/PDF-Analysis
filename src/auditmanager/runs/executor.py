@@ -110,11 +110,11 @@ _INSERT_MODEL_CALL = sql_text(
     INSERT INTO model_call (
         model_call_id, run_id, stage_id, provider, model_identity, provider_mode,
         parameters, request_sha256, response_sha256, input_tokens, output_tokens,
-        latency_ms, cost_micros, status, error_code
+        latency_ms, cost_micros, cost_basis, status, error_code
     ) VALUES (
         :model_call_id, :run_id, :stage_id, :provider, :model_identity, :provider_mode,
         CAST(:parameters AS jsonb), :request_sha256, :response_sha256, :input_tokens,
-        :output_tokens, :latency_ms, :cost_micros, :status, :error_code
+        :output_tokens, :latency_ms, :cost_micros, :cost_basis, :status, :error_code
     )
     """
 )
@@ -226,6 +226,10 @@ def _record_model_calls(
                 "output_tokens": document["output_tokens"],
                 "latency_ms": document["latency_ms"],
                 "cost_micros": int(round(document["cost_usd"] * 1_000_000)),
+                # Defaults to estimated rather than to the more flattering value: a row
+                # whose basis the stage did not state was derived, and saying otherwise
+                # would invent provenance.
+                "cost_basis": document.get("cost_basis", "estimated"),
                 "status": persisted_status,
                 "error_code": (
                     None

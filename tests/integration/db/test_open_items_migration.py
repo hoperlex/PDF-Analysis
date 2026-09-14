@@ -108,3 +108,55 @@ class TestTheUngroundedVocabularyIsEnforced:
                 },
             )
             session.flush()
+
+
+class TestTheCostBasisIsRecordedRatherThanDerived:
+    """`model_call.cost_micros` held a measurement or a derivation with nothing saying which.
+
+    Tolerable while a rate table was the only source; not tolerable once `OD-02` was revised
+    to a proxy that reports what a call actually cost, because the same column now carries a
+    measurement for a proxied run and a derivation for a replay. A report presenting the two
+    identically is one nobody can cite - which `P4-OPS-01` hit directly, having to derive the
+    basis rather than read it.
+    """
+
+    def test_the_column_exists_and_is_constrained_to_the_two_values(
+        self, migrated_engine: Engine
+    ) -> None:
+        with Session(migrated_engine) as session:
+            definition = _constraint(session, "ck_model_call_cost_basis")
+        assert definition is not None, "cost_basis carries no constraint"
+        assert "measured" in definition and "estimated" in definition
+
+    def test_an_invented_basis_is_refused(self, migrated_engine: Engine) -> None:
+        with Session(migrated_engine) as session, pytest.raises(DBAPIError):
+            session.execute(
+                text(
+                    "INSERT INTO model_call "
+                    "(model_call_id, run_id, stage_id, provider, model_identity, "
+                    " provider_mode, cost_basis, status) "
+                    "VALUES (:m, :r, 'text_analysis', 'p', 'm', 'recorded', 'guessed', "
+                    " 'succeeded')"
+                ),
+                {
+                    "m": f"mc_{uuid.uuid4().hex[:26].upper()}",
+                    "r": f"run_{uuid.uuid4().hex[:26].upper()}",
+                },
+            )
+            session.flush()
+        session.rollback()
+
+    def test_the_default_is_the_honest_one(self, migrated_engine: Engine) -> None:
+        """Every row written before the column existed was derived.
+
+        Defaulting to `measured` would have invented provenance for calls nobody measured,
+        which is worse than the gap it closed.
+        """
+        with Session(migrated_engine) as session:
+            default = session.execute(
+                text(
+                    "SELECT column_default FROM information_schema.columns "
+                    "WHERE table_name = 'model_call' AND column_name = 'cost_basis'"
+                )
+            ).scalar_one()
+        assert "estimated" in str(default)

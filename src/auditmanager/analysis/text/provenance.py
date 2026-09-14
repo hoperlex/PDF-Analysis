@@ -55,6 +55,10 @@ class ModelCallRecord:
     latency_ms: int
     status: str
     cost_usd: float
+    #: Whether ``cost_usd`` was reported by the transport or derived from the pinned rate
+    #: table. Carried on the record rather than inferred downstream: this is the only layer
+    #: that saw the response and therefore the only one that knows.
+    cost_basis: str = "estimated"
 
     def as_dict(self) -> dict[str, Any]:
         """The record as it is written out. Every value is ASCII or a number."""
@@ -71,6 +75,7 @@ class ModelCallRecord:
             "latency_ms": self.latency_ms,
             "status": self.status,
             "cost_usd": round(self.cost_usd, 8),
+            "cost_basis": self.cost_basis,
         }
 
 
