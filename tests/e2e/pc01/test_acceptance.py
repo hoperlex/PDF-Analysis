@@ -509,9 +509,12 @@ def test_c4_the_run_states_the_ui_must_distinguish_are_the_frozen_enum(
 ) -> None:
     """The vocabulary itself, asserted against the contract rather than restated."""
     document = json.loads(OPENAPI.read_text("utf-8"))
-    declared = set(
-        document["components"]["schemas"]["RunStatus"]["properties"]["state"]["enum"]
-    )
+    schemas = document["components"]["schemas"]
+    # RunStatus.state is a $ref; following it rather than restating the target's name is
+    # what keeps this test honest if the document ever inlines or renames the enum.
+    ref = schemas["RunStatus"]["properties"]["state"]["$ref"]
+    assert ref.startswith("#/components/schemas/"), ref
+    declared = set(schemas[ref.rsplit("/", 1)[1]]["enum"])
     required = {"queued", "running", "validating", "published", "partial", "failed"}
     assert required <= declared, declared
     assert "succeeded" not in declared, (
