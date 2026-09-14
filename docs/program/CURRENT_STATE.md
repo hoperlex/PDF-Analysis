@@ -66,6 +66,25 @@
 > paragraphs. Section 9 C-4 of `PROTOTYPE_EXECUTION_PLAN.md` carries the comparison and
 > what it does to `OD-14`.
 >
+> **PC-01 accepted, 2026-09-14.** The first working prototype passes at `6d3c0f3`. A live
+> `text_analysis` run through the operated LLM proxy on `anthropic/claude-opus-5` found all
+> three seeded issues in the synthetic AR corpus and flagged none of the six near-miss
+> controls, with every published quotation verified present on its declared page. Measured
+> spend USD 0.1147 against a USD 1.00 ceiling.
+>
+> Certified by a session that authored none of the slices and repaired none of them: it found
+> four defects, all in the integrator's composition adapters, all answering HTTP 500, and
+> proved they were the only thing between the tree and acceptance. They were repaired and its
+> own suite is the proof.
+>
+> Two criterion-10 failures are **not inducible** through the twelve operations - a checksum
+> mismatch, proved at the storage layer instead, and an ungrounded model item, which is
+> unreachable by design and owner-accepted. Both are named in
+> `artifacts/checkpoints/PC-01/report.json` rather than left to be discovered.
+>
+> **What PC-01 does not establish is whether the findings are professionally useful.** That is
+> the question P04 asks, and nothing here answers it.
+>
 > **Prototype-planning overlay, 2026-09-09.** On branch
 > `planning/prototype-roadmap`, the repository owner recorded `FF-01 ACCEPTED` without
 > qualification and completed `P0-FND-00`. No product or infrastructure implementation

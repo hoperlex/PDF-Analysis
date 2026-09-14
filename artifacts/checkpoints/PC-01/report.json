@@ -1,0 +1,61 @@
+{
+  "checkpoint_id": "PC-01",
+  "name": "First working prototype - AR text-consistency review",
+  "status": "accepted",
+  "accepted_on": "2026-09-14",
+  "accepted_commit": "6d3c0f3d9b633e2dcd894c28e53bc16a00189544",
+  "tag": null,
+  "tag_note": "PC-01 is a product checkpoint of the prototype line and carries no tag. It neither moves nor replaces any CP tag; CP-00 remains unratified on its own line.",
+  "what_was_certified": {
+    "by": "session C2, which authored none of the slices it certified and repaired none of them",
+    "method": "the ten criteria of PROTOTYPE_PROFILE.md section 8, driven through the composed application's router rather than by importing modules",
+    "independent_of_the_integrator": true
+  },
+  "criteria": {
+    "1_services_and_start": "proved",
+    "2_migration_from_empty": "proved; head 0003_open_items",
+    "3_upload_immutable_version_private_object": "proved",
+    "4_deterministic_path_and_text_analysis": "proved live",
+    "5_seeded_issues_and_quotation_grounding": "proved live - 3 of 3 seeded issues found, 0 of 6 near-miss controls flagged, every published quotation present on its declared page",
+    "6_evidence_decisions_and_history": "proved",
+    "7_csv_resolving_to_exact_aggregates": "proved - 5 rows, 17 columns, 4251 bytes, two exports byte-identical",
+    "8_restart_preserves_canonical_state": "proved",
+    "9_idempotency_creates_no_duplicates": "proved",
+    "10_explicit_failures": "partially proved - see limits.not_inducible"
+  },
+  "live_run": {
+    "run_id": "run_01M2FFYWY1GBGRJ7H05MCCXEXS",
+    "provider": "operated LLM proxy, OD-02 revised 2026-09-14",
+    "model": "anthropic/claude-opus-5, selected explicitly because the proxy's own default is a small fast model and the prompt was written against Opus",
+    "state": "published",
+    "provider_mode": "live",
+    "degradation_set": [],
+    "seeded_issues_found": 3,
+    "seeded_issues_total": 3,
+    "controls_flagged": 0,
+    "controls_total": 6,
+    "quotation_grounding": "every published quotation verified present on its declared page against the corpus's own extractor",
+    "measured_spend_usd": 0.1147,
+    "ceiling_usd": 1.0
+  },
+  "limits": {
+    "not_inducible": {
+      "checksum_mismatch": "proved at the storage layer, where a corrupt upload is refused and nothing canonical is written. The twelve operations offer no way to hand the store bytes disagreeing with their own declared digest, so it is not reachable through the journey.",
+      "ungrounded_model_item": "unreachable by design. The analysis stage resolves each quotation against the text layer and drops what does not resolve before the grounding gate sees it, so no grounded = false row is ever written. Owner-accepted 2026-09-11; the gate was proved still load-bearing by mutation - removing the drop sent the run to failed, publishing nothing."
+    },
+    "one_version_per_document": "every upload creates a new document, so version_ordinal is always 1 and no operation in the frozen twelve adds a version to an existing document. Version isolation is proved between documents, not within one.",
+    "intermediate_run_states": "execution is synchronous inside startRun, so queued, running and validating are never observable from outside; criterion 4's six-state distinction reduces to published and failed through the API.",
+    "professional_usefulness": "not established and not claimable here. The findings are grounded and the controls are clean; whether a practising reviewer would have raised them is what P04 asks."
+  },
+  "defects_found_by_certification": {
+    "count": 4,
+    "all_in": "src/auditmanager/bootstrap/adapters.py, the integrator's own tree",
+    "note": "C2 proved they were the only thing between the tree and acceptance: its corrected copy differed from src/ in one file and four hunks. All four answered HTTP 500 and the journey stopped at the second operation. Repaired before acceptance; C2's own suite is the proof."
+  },
+  "evidence": {
+    "acceptance_suite": "tests/e2e/pc01/** - 49 passed, 5 skipped on the recorded adapter; the 5 are the live steps and pass against the proxy",
+    "runbook": "docs/manual-tests/PC-01_prototype.md",
+    "guards_mutated_by_the_certifying_session": 14,
+    "guards_that_went_red_and_green": 14
+  }
+}

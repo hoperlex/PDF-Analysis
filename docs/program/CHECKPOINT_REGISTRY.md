@@ -3,12 +3,14 @@
 ## Prototype checkpoints
 
 These approval records govern the prototype-first route and do not move or replace any
-CP tag.
+CP tag. PC-01 carries no tag: it is a product checkpoint, and CP-00 remains unratified on its
+own line, which this record neither advances nor disturbs.
 
 | ID | Tag | Entry requirement | Status |
 |---|---|---|---|
 | FF-01 | none | owner accepts `PROTOTYPE_FOUNDATION_FREEZE.md` | **accepted 2026-09-09**; exact `FF-01 ACCEPTED` record in freeze; `P1-INT-00` unlocked |
 | PF-01 | none | accepted P1 providers, convergence suite and independent integration review | planned; `P1-INT-01` is the sole status writer |
+| PC-01 | none | ten criteria of `PROTOTYPE_PROFILE.md` §8, certified by a session that authored none of the slices | **accepted 2026-09-14** at `6d3c0f3`; live run found 3 of 3 seeded issues and flagged 0 of 6 controls; two criterion-10 failures are not inducible through the twelve operations and are named in `artifacts/checkpoints/PC-01/report.json` |
 
 ## Historical CP checkpoints
 
