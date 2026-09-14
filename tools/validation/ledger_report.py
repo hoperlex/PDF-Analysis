@@ -1693,6 +1693,26 @@ def mode_self_check() -> int:
         ),
         {"bases": sorted({c["cost_basis"] for c in extraction.calls})},
     )
+    # The joins are load-bearing and silent when broken: a run that loses its
+    # document_version join simply disappears from the per-document cost roll-up
+    # rather than erroring, and the report would understate spend with no sign of it.
+    run_ids = {r["run_id"] for r in extraction.runs}
+    orphan_calls = [c["model_call_id"] for c in extraction.calls if c["run_id"] not in run_ids]
+    check(
+        "every call resolves to a run (the audit_run/document_version join holds)",
+        not orphan_calls and bool(run_ids),
+        {"runs": len(run_ids), "calls_without_a_run": orphan_calls},
+    )
+    check(
+        "every run resolves to a document (per-document roll-up is complete)",
+        all(r["document_uid"] for r in extraction.runs) and bool(extraction.runs),
+        {
+            "runs": len(extraction.runs),
+            "runs_without_document_uid": [
+                r["run_id"] for r in extraction.runs if not r["document_uid"]
+            ],
+        },
+    )
     check("the tool issued no write statement", not log.writes, log.summary())
     check("the row census is unchanged", census["identical"], census["changed"])
 
