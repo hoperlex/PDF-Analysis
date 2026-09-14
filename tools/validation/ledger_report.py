@@ -216,6 +216,51 @@ def table_row_counts(db: ReadOnlyDatabase) -> dict[str, int]:
     return counts
 
 
+def probe_column(db: ReadOnlyDatabase, table: str, column: str) -> dict[str, Any]:
+    """Does this column exist, and does any row actually carry a value?
+
+    The gap register's classifications are computed from this, never asserted as
+    literals. A register that reports "persisted" for a column the database does not
+    have, or holds no value for, would be asserting a property of the source it was
+    written against rather than of the database in front of it — which is the exact
+    vacuous shape this programme keeps finding. Emptying the table must be able to
+    change the verdict, and because of this function it does.
+    """
+    exists = db.execute(
+        "SELECT count(*) AS n FROM information_schema.columns "
+        "WHERE table_schema = current_schema() AND table_name = %s AND column_name = %s",
+        [table, column],
+    )
+    if not int(exists[0]["n"]):
+        return {"column": f"{table}.{column}", "exists": False, "rows": 0, "populated": 0}
+    counts = db.execute(
+        f"SELECT count(*) AS rows, count({column}) AS populated FROM {table}"  # noqa: S608
+    )
+    return {
+        "column": f"{table}.{column}",
+        "exists": True,
+        "rows": int(counts[0]["rows"]),
+        "populated": int(counts[0]["populated"]),
+    }
+
+
+def state_from_probe(*probes: Mapping[str, Any]) -> tuple[str, str]:
+    """``persisted`` only when every column exists and at least one row carries it."""
+    missing = [p["column"] for p in probes if not p["exists"]]
+    if missing:
+        return "absent", f"column(s) absent from the schema: {missing}"
+    unpopulated = [p["column"] for p in probes if p["populated"] == 0]
+    if unpopulated:
+        if all(p["rows"] == 0 for p in probes):
+            return (
+                "absent",
+                "the column exists but the table holds no rows, so nothing demonstrates "
+                "a producer populates it; the preflight cannot promise this metric",
+            )
+        return "absent", f"column(s) present but never populated: {unpopulated}"
+    return "persisted", "the column exists and rows carry values"
+
+
 # ---------------------------------------------------------------------------
 # 2. Observation classes
 # ---------------------------------------------------------------------------
@@ -785,7 +830,9 @@ def failure_distribution(failures: Sequence[Mapping[str, Any]]) -> dict[str, Any
 # ---------------------------------------------------------------------------
 
 
-def build_gap_register(extraction: Extraction, nav: Mapping[str, Any]) -> dict[str, Any]:
+def build_gap_register(
+    extraction: Extraction, nav: Mapping[str, Any], probes: Mapping[str, Any]
+) -> dict[str, Any]:
     """Every ``PROTOTYPE_PROFILE.md`` §9 metric, classified against the live schema.
 
     Classifications are probed against the database that is actually in front of the
@@ -808,6 +855,15 @@ def build_gap_register(extraction: Extraction, nav: Mapping[str, Any]) -> dict[s
     )
     cost_present = sum(1 for c in calls if c["cost_micros"] is not None)
     bases = {c["cost_basis"] for c in calls}
+
+    # Computed, never asserted. Emptying model_call or dropping one of these columns
+    # flips the classification and fires the dispatch precondition.
+    latency_state, latency_why = state_from_probe(probes["latency_ms"])
+    tokens_state, tokens_why = state_from_probe(
+        probes["input_tokens"], probes["output_tokens"]
+    )
+    cost_state, cost_why = state_from_probe(probes["cost_micros"])
+    failure_state, failure_why = state_from_probe(probes["status"])
 
     entries: list[dict[str, Any]] = [
         {
@@ -909,8 +965,9 @@ def build_gap_register(extraction: Extraction, nav: Mapping[str, Any]) -> dict[s
         {
             "metric_id": "provider_latency",
             "profile_bullet": "provider latency, cost and failure distribution (latency)",
-            "state": "persisted",
-            "owner": None,
+            "state": latency_state,
+            "state_reason": latency_why,
+            "owner": None if latency_state == "persisted" else "P2-AI-01 (no producer)",
             "where_i_looked": ["model_call.latency_ms", "stage_result.metrics.latency_ms"],
             "finding": (
                 "model_call.latency_ms is present on every call row. A recorded call "
@@ -918,6 +975,7 @@ def build_gap_register(extraction: Extraction, nav: Mapping[str, Any]) -> dict[s
                 "must be reported separately and never pooled."
             ),
             "probe": {
+                "column": probes["latency_ms"],
                 "calls_total": len(calls),
                 "calls_with_latency_ms": latency_present,
                 "modes": sorted({c["provider_mode"] for c in calls}),
@@ -926,8 +984,9 @@ def build_gap_register(extraction: Extraction, nav: Mapping[str, Any]) -> dict[s
         {
             "metric_id": "provider_cost",
             "profile_bullet": "provider latency, cost and failure distribution (cost)",
-            "state": "persisted",
-            "owner": None,
+            "state": cost_state,
+            "state_reason": cost_why,
+            "owner": None if cost_state == "persisted" else "P2-AI-01 (no producer)",
             "where_i_looked": [
                 "model_call.cost_micros and its COMMENT",
                 "src/auditmanager/analysis/text/cost.py CostMeter.charge",
@@ -948,6 +1007,7 @@ def build_gap_register(extraction: Extraction, nav: Mapping[str, Any]) -> dict[s
                 "P02 defect for owner decision, not fixed here."
             ),
             "probe": {
+                "column": probes["cost_micros"],
                 "calls_with_cost_micros": cost_present,
                 "bases_observed": sorted(bases),
                 "discriminator_column_exists": False,
@@ -956,20 +1016,26 @@ def build_gap_register(extraction: Extraction, nav: Mapping[str, Any]) -> dict[s
         {
             "metric_id": "provider_token_usage",
             "profile_bullet": "provider latency, cost and failure distribution (tokens)",
-            "state": "persisted",
-            "owner": None,
+            "state": tokens_state,
+            "state_reason": tokens_why,
+            "owner": None if tokens_state == "persisted" else "P2-AI-01 (no producer)",
             "where_i_looked": ["model_call.input_tokens, model_call.output_tokens"],
             "finding": (
                 "both columns present and non-null on every observed call. A recorded "
                 "call replays authored token counts, which the recording itself says."
             ),
-            "probe": {"calls_total": len(calls), "calls_with_both_token_counts": tokens_present},
+            "probe": {
+                "columns": [probes["input_tokens"], probes["output_tokens"]],
+                "calls_total": len(calls),
+                "calls_with_both_token_counts": tokens_present,
+            },
         },
         {
             "metric_id": "provider_failure_distribution",
             "profile_bullet": "provider latency, cost and failure distribution (failures)",
-            "state": "persisted",
-            "owner": None,
+            "state": failure_state,
+            "state_reason": failure_why,
+            "owner": None if failure_state == "persisted" else "P2-AI-01 (no producer)",
             "where_i_looked": [
                 "model_call.status / error_code",
                 "stage_result.error jsonb",
@@ -1475,11 +1541,20 @@ def _open(log: StatementLog) -> ReadOnlyDatabase:
     return ReadOnlyDatabase(load_dsn(), log)
 
 
-def _with_census(log: StatementLog) -> tuple[Extraction, dict[str, Any]]:
+#: The model_call columns the gap register's classifications are computed from.
+GAP_PROBE_COLUMNS = ("latency_ms", "input_tokens", "output_tokens", "cost_micros", "status")
+
+
+def _with_census(
+    log: StatementLog,
+) -> tuple[Extraction, dict[str, Any], dict[str, Any]]:
     """Extract, with a row census on both sides of the work."""
     with _open(log) as db:
         before = table_row_counts(db)
         extraction = extract(db)
+        probes = {
+            column: probe_column(db, "model_call", column) for column in GAP_PROBE_COLUMNS
+        }
         after = table_row_counts(db)
     census = {
         "tables": len(CENSUS_TABLES),
@@ -1488,7 +1563,7 @@ def _with_census(log: StatementLog) -> tuple[Extraction, dict[str, Any]]:
         "identical": before == after,
         "changed": {t: [before[t], after[t]] for t in before if before[t] != after[t]},
     }
-    return extraction, census
+    return extraction, census, probes
 
 
 def mode_self_check() -> int:
@@ -1500,7 +1575,7 @@ def mode_self_check() -> int:
     names an independent source for the value it expects.
     """
     log = StatementLog()
-    extraction, census = _with_census(log)
+    extraction, census, probes = _with_census(log)
     checks: list[dict[str, Any]] = []
 
     def check(name: str, ok: bool, detail: Any) -> None:
@@ -1606,7 +1681,7 @@ def mode_self_check() -> int:
 def mode_dry_run() -> int:
     """Every read the tool performs, and the proof that none of them wrote."""
     log = StatementLog()
-    extraction, census = _with_census(log)
+    extraction, census, probes = _with_census(log)
     report = build_report(extraction)
     summary = log.summary()
     ok = summary["write_statements"] == 0 and census["identical"]
@@ -1642,10 +1717,10 @@ def mode_snapshot(out_dir: Path) -> int:
     That is what makes the final ledger differenceable against them.
     """
     log = StatementLog()
-    extraction, census = _with_census(log)
+    extraction, census, probes = _with_census(log)
     nav = aggregate_navigation()
     report = build_report(extraction)
-    register = build_gap_register(extraction, nav)
+    register = build_gap_register(extraction, nav, probes)
 
     snapshot = {
         "schema": "P4-OPS-01/pre-session-snapshot/1",
@@ -1785,7 +1860,7 @@ def mode_period(sessions: Path, baseline: Path, out: Path) -> int:
     baseline_doc = json.loads(baseline_bytes.decode("utf-8"))
 
     log = StatementLog()
-    extraction, census = _with_census(log)
+    extraction, census, probes = _with_census(log)
     report = build_report(extraction)
 
     base_counts = baseline_doc.get("baseline_counts", {})
@@ -1866,7 +1941,7 @@ def mode_period(sessions: Path, baseline: Path, out: Path) -> int:
 
 def mode_report() -> int:
     log = StatementLog()
-    extraction, census = _with_census(log)
+    extraction, census, probes = _with_census(log)
     report = build_report(extraction)
     report["read_only_evidence"] = {
         "statement_log": log.summary(),
