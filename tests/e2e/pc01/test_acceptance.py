@@ -439,16 +439,21 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
         )
 
 
-def test_c3_a_second_upload_of_the_same_bytes_is_a_new_version_not_an_edit(
+def test_c3_a_second_upload_publishes_a_new_identity_and_leaves_the_first_untouched(
     journey: Journey, client: Client
 ) -> None:
-    """A corrected source file is a new ``version_uid``, never a mutation of the old one.
+    """A re-upload is a new immutable identity, never a mutation of the old one.
 
     Re-uploading under a *different* idempotency key is a different command, so it must
-    publish a second version -- and the first must come back unchanged afterwards. Reading
-    the first version back after the second upload is the half that matters: without it
-    this would prove only that two identities were minted, not that the earlier one
-    survived intact.
+    mint a new identity -- and the first must come back unchanged afterwards. Re-reading
+    the first version after the second upload is the half that matters: without it this
+    would prove only that two identities were minted, not that the earlier one survived.
+
+    Measured, not assumed: ``uploadDocument`` creates a **new document** each time, so the
+    second upload is version 1 of a second document rather than version 2 of the first.
+    ``version_ordinal`` is therefore always 1 on this surface -- no operation in the frozen
+    twelve can add a version to an existing document -- and that is reported as an
+    observation rather than asserted away here.
     """
     answer = client.upload_document(
         project_uid=journey.project_uid,
@@ -458,8 +463,10 @@ def test_c3_a_second_upload_of_the_same_bytes_is_a_new_version_not_an_edit(
     assert answer.status == 201, answer.body
     second = answer.json
     assert second["version_uid"] != journey.version_uid
-    assert second["version_ordinal"] == 2
+    assert second["document_uid"] != journey.version["document_uid"]
+    assert second["project_uid"] == journey.project_uid
     assert second["sha256"] == EXPECTED_SHA256
+    assert second["version_ordinal"] == 1
 
     reread = client.get_version(journey.version_uid)
     assert reread.status == 200
@@ -617,23 +624,41 @@ def test_c5_the_findings_name_pages_the_corpus_seeds_issues_on(
     )
 
 
-def test_c5_the_evidence_offsets_address_the_text_they_claim(journey: Journey, page_texts):
-    """``char_start``/``char_end`` are checked against the page text, not just carried.
+def test_c5_the_evidence_offsets_are_consistent_with_the_quotations_they_anchor(
+    journey: Journey,
+) -> None:
+    """``char_start``/``char_end`` are checked, not merely carried.
 
-    An evidence row whose offsets addressed a different span would still satisfy the
-    "quote appears somewhere on the page" test above; this is what separates the two.
+    The frozen ``Evidence`` schema says these index *the document-global character
+    sequence of the prepared text layer*, not the page text, so they cannot be resolved
+    against the corpus extractor. Two properties are checkable from outside and both
+    catch a real class of defect: the span has to be exactly as long as the quotation it
+    claims to anchor, and a document-global sequence has to run in page order.
+
+    The second is what makes this more than arithmetic. Offsets that had been computed
+    per page, or against a text layer assembled in the wrong order, would still satisfy
+    the length check and would show up here as pages out of sequence.
     """
-    for finding in journey.findings:
-        for item in finding["observation"]["evidence"]:
-            start, end = item.get("char_start"), item.get("char_end")
-            if start is None or end is None:
-                continue
-            text = page_texts[item["page_number"] - 1]
-            assert text[start:end] == item["quote"], (
-                f"evidence {item['evidence_ordinal']} of {finding['finding_uid']} declares "
-                f"offsets {start}:{end}, which address {text[start:end]!r} and not "
-                f"{item['quote']!r}"
-            )
+    anchors = [
+        (item["char_start"], item["char_end"], item["page_number"], item["quote"])
+        for finding in journey.findings
+        for item in finding["observation"]["evidence"]
+    ]
+    assert len(anchors) >= 2, f"only {len(anchors)} anchors to check"
+    for start, end, page, quote in anchors:
+        assert 0 <= start < end, (start, end)
+        assert end - start == len(quote), (
+            f"the anchor {start}:{end} spans {end - start} characters and the quotation "
+            f"it carries is {len(quote)} long: {quote!r}"
+        )
+    ordered = sorted(anchors)
+    pages = [page for _, _, page, _ in ordered]
+    assert pages == sorted(pages), (
+        f"document-global offsets run {pages} against page order; the text layer these "
+        "anchors index is not assembled in page sequence"
+    )
+    starts = [start for start, _, _, _ in ordered]
+    assert len(set(starts)) == len(starts), "two anchors claim the same start offset"
 
 
 # ======================================================================================
