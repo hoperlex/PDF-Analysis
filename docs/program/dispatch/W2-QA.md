@@ -1,13 +1,13 @@
 # `W2-QA` dispatch prompt — convergence QA for wave 2
 
-Base: **the convergence commit**, after `W2-RUN`, `W2-PROV` and `W2-API` are all merged.
+Base `4182b440308dcd7e54b83523badde89c787be3e7` — the convergence commit, all three wave-2 sessions merged and the full gate green: 754 passed / 5 skipped / 116 subtests, `make foundation` 35 passed, frontend 289 passed, `git diff --check` clean.
 The integrator fills the SHA in at dispatch and must not leave a placeholder here.
 
 ---
 
 You are session `W2-QA`. Repository: /root/projects/PDF-Analysis.
 
-BASE COMMIT: `<integrator: the convergence SHA>` on `planning/prototype-roadmap`.
+BASE COMMIT: `4182b440308dcd7e54b83523badde89c787be3e7` on `planning/prototype-roadmap`.
 Branch `agent/w2-qa`.
 
 ## What you are for
