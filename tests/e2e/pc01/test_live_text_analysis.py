@@ -31,6 +31,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,29 @@ LIVE_MODEL = "anthropic/claude-opus-5"
 REQUIRED_SEEDED_ISSUES = 2
 
 
+def _main_checkout() -> Path | None:
+    """The main repository checkout, from inside a linked worktree or the checkout itself.
+
+    ``None`` when git cannot answer -- a source export with no repository, say. A missing
+    credential must make this suite *skip*, never error, so every failure mode here is
+    swallowed deliberately.
+    """
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=driver.REPOSITORY_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if common.returncode != 0 or not common.stdout.strip():
+        return None
+    return Path(common.stdout.strip()).parent
+
+
 def _provider_file() -> Path | None:
     """Where the credential is, or ``None``.
 
@@ -80,8 +104,20 @@ def _provider_file() -> Path | None:
     candidates = [Path(named)] if named else []
     candidates.append(driver.REPOSITORY_ROOT / ".env.provider")
     # A dispatched worktree does not carry the git-ignored credential file; the checkout
-    # it was created from does.
-    candidates.append(driver.REPOSITORY_ROOT.parents[2] / ".env.provider")
+    # it was created from does. Ask git where that is instead of guessing a depth:
+    # `--git-common-dir` resolves to the *main* repository's `.git` from inside any linked
+    # worktree, so its parent is the checkout holding the credential, whatever the worktree
+    # is called and wherever it sits.
+    #
+    # This replaces `REPOSITORY_ROOT.parents[2]`, which assumed one layout and broke on
+    # another. It happened to land on the repository root for a worktree under
+    # `.claude/worktrees/`, and raised `IndexError` for one directly under `/root/` -- the
+    # layout the dispatch briefs themselves prescribe. `W5-CERT` hit it from `/root/w5cert`
+    # and the suite *errored* rather than skipping, so criterion 4's live step could not be
+    # reproduced from a dispatched worktree at all.
+    main_checkout = _main_checkout()
+    if main_checkout is not None:
+        candidates.append(main_checkout / ".env.provider")
     for candidate in candidates:
         if candidate.is_file():
             return candidate
