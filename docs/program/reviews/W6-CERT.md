@@ -24,3 +24,14 @@
 | `alembic current` | 0 — `0005_truncated_call_status (head)` |
 | `alembic downgrade -1` then `make check-db` | 2 — `FOUNDATION-CHECK FAIL check-db` (criterion 2 red) |
 | `make migrate` then `make check-db` | 0 — head restored, `FOUNDATION-CHECK OK` |
+| `pytest -q tests --ignore=tests/contract --ignore=tests/checkpoint` | 0 — **803 passed, 5 skipped, 116 subtests** |
+| `git diff --check` | 0 |
+| `PYTHONPATH=src .venv/bin/python -m auditmanager.api.app` | 0 — `wired, provider_mode=proxy`, `operations=12` |
+| same with `DATABASE_URL` unset | **2** — names `DATABASE_URL` |
+| same with `S3_BUCKET` unset | **2** — names `S3_BUCKET` |
+| `pytest -q tests/e2e/pc01` (recorded) | 0 — 49 passed, 5 skipped |
+| `C2_PC01_LIVE=1 pytest -q tests/e2e/pc01/test_live_text_analysis.py` | 0 — 5 passed |
+
+Recorded-adapter corpus run reports: state `published`, degradation set empty, four stages
+`succeeded`, 3 findings, 0 ungrounded diagnostics, CSV 5 rows / 17 columns / 4251 bytes —
+identical to the accepted record.
