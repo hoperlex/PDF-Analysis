@@ -33,6 +33,19 @@ CALL_SUCCEEDED = "succeeded"
 CALL_TRUNCATED = "truncated"
 CALL_FAILED = "failed"
 
+#: The closed vocabulary, named once so that no reader has to infer it from three
+#: constants that merely happen to sit together. ``model_call.status`` holds exactly
+#: these three (migration ``0005``), and :class:`ModelCallRecord` refuses anything else
+#: at the layer that builds the row rather than leaving it to the CHECK: a record that
+#: cannot be persisted should not be constructible.
+CALL_STATUSES: frozenset[str] = frozenset({CALL_SUCCEEDED, CALL_TRUNCATED, CALL_FAILED})
+
+#: What ``truncated`` asserts, stated as a rule rather than as prose. A truncated call
+#: *answered*: the provider produced output and stopped at the ceiling part-way through,
+#: so there is a response and it has a checksum. A call with no response is a failure,
+#: whatever its stop reason said.
+_STATUSES_THAT_ANSWERED: frozenset[str] = frozenset({CALL_SUCCEEDED, CALL_TRUNCATED})
+
 
 @dataclass(frozen=True, slots=True)
 class ModelCallRecord:
@@ -51,6 +64,12 @@ class ModelCallRecord:
     request_sha256: str
     response_sha256: str
     input_tokens: int
+    #: The provider's own figure for how much the model said, lifted verbatim out of its
+    #: usage block by the adapter. It is never recomputed from ``output_text``: the two
+    #: answer different questions, and they diverge precisely where this figure is worth
+    #: recording. A reply cut short at the ceiling reports the whole ceiling here while
+    #: only its complete prefix survives parsing, and a reply that reasons at length and
+    #: publishes nothing reports that reasoning here and no observation anywhere.
     output_tokens: int
     latency_ms: int
     status: str
@@ -59,6 +78,45 @@ class ModelCallRecord:
     #: table. Carried on the record rather than inferred downstream: this is the only layer
     #: that saw the response and therefore the only one that knows.
     cost_basis: str = "estimated"
+
+    def __post_init__(self) -> None:
+        """Refuse a record the database would refuse, at the layer that knows why.
+
+        The three checks below mirror ``ck_model_call_status``,
+        ``ck_model_call_truncated_has_response`` and ``ck_model_call_tokens``. Duplicating
+        them here is not belt-and-braces: this is the only layer that saw the response, so
+        it is the only one that can say *which* provider call was malformed, and a
+        constraint violation surfacing from an INSERT several frames later names a row id
+        and nothing about the call.
+        """
+        if self.status not in CALL_STATUSES:
+            raise DomainError(
+                ErrorCode.ANALYSIS_FAILED,
+                message=(
+                    "a model call record declared a status outside the closed vocabulary "
+                    "succeeded|truncated|failed; the run provenance is not publishable"
+                ),
+                stage_id=STAGE_ID,
+            )
+        if self.status in _STATUSES_THAT_ANSWERED and not self.response_sha256:
+            raise DomainError(
+                ErrorCode.ANALYSIS_FAILED,
+                message=(
+                    "a model call record claims the provider answered but carries no "
+                    "response checksum; the run provenance is not publishable"
+                ),
+                stage_id=STAGE_ID,
+            )
+        if self.input_tokens < 0 or self.output_tokens < 0:
+            raise DomainError(
+                ErrorCode.ANALYSIS_FAILED,
+                message=(
+                    "a model call record carries a negative token count; the provider "
+                    "reports usage and this layer never computes it, so a negative figure "
+                    "means the usage block was not read"
+                ),
+                stage_id=STAGE_ID,
+            )
 
     def as_dict(self) -> dict[str, Any]:
         """The record as it is written out. Every value is ASCII or a number."""

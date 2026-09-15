@@ -280,6 +280,12 @@ def run_text_analysis(
                 ),
                 "cost_ceiling_usd": cost_meter.ceiling_usd,
                 "observations_emitted": 0,
+                # The reply was paid for and never parsed. Reporting the spend without
+                # what was bought is how a budget overrun becomes unreadable afterwards.
+                "input_tokens": response.input_tokens,
+                "output_tokens": response.output_tokens,
+                "output_tokens_source": "provider",
+                "call_status": call_status,
             },
         )
 
@@ -315,6 +321,20 @@ def run_text_analysis(
         "pages_analysed": len(analysed),
         "observations_proposed": len(parsed.observations),
         "observations_emitted": len(grounding.observations),
+        # Beside the finding count deliberately. `P4_CLOSURE.md` §6: precision evidence
+        # on this corpus is saturated - zero findings across nine controls - so the next
+        # question is not how many findings but whether the document was read at all, and
+        # `observations_emitted` alone cannot tell a model that read and found nothing
+        # from one that returned after ten tokens. These two figures only mean something
+        # together, so they are emitted together.
+        #
+        # Both are the PROVIDER's own, lifted from its usage block by the adapter and
+        # never recomputed from the response text. `output_tokens_source` says so on the
+        # record rather than in a comment a consumer cannot read.
+        "input_tokens": response.input_tokens,
+        "output_tokens": response.output_tokens,
+        "output_tokens_source": "provider",
+        "call_status": call_status,
         "observations_dropped_unresolved": grounding.dropped_observations,
         "evidence_emitted": grounding.resolved_evidence,
         "evidence_unresolved": len(grounding.unresolved),
