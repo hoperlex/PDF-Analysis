@@ -202,3 +202,14 @@ somebody remembered to write one for:
   frontend suite — but the contract and the routers change in one commit and the frontend
   suite is a separate command, so an unregenerated client now reddens the suite sitting
   next to the edit.
+
+A paging test carries one trap worth naming, because this suite fell into it. `project`
+is append-only and projects accumulate across sessions and days, so the steady state of a
+long-lived database is a table of any size — 495 rows in the shared checkout when this was
+written. A walk bounded by a constant number of pages, or compared against a single
+`?limit=200` request, is asserting a property of a *small* table: the frozen maximum is
+200, so one request stops being the whole listing long before anyone notices. **Derive the
+bound from the measured population and take the expected sequence from the rows.** The
+fixture that guarantees the size is `crowd`, and scoping such a walk to the handful of rows
+the test created would be the vacuous repair — a cursor that restarts, repeats or resumes
+by position still serves those.
