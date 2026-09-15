@@ -746,11 +746,15 @@ def collect_failures(
         # The DERIVED status, not the stored one. A call the executor filed as
         # ``succeeded`` before migration 0005 because the CHECK refused ``truncated`` is
         # not a failure, and neither is a truncated call written after it: the provider
-        # answered. Filing truncation in the failure ledger would put a reply that was cut
-        # short in the same bucket as a provider that could not be reached, and PC-02 is
+        # answered. Filing truncation here would put a reply cut short at the output
+        # ceiling in the same bucket as a provider that could not be reached, and PC-02 is
         # going to cite this distribution.
-        if call["call_status"] == "truncated":
-            continue
+        #
+        # Truncation is excluded by these two conditions rather than by a case of its own,
+        # and that is deliberate. It is not ``failed``, and it carries no ``error_code``
+        # because ``ck_model_call_truncated_has_no_error_code`` refuses the row that would
+        # — so a third branch here would be a guard nothing could ever make fire, and this
+        # programme has enough of those. The constraint is the guard; this reads it.
         if call["call_status"] == "failed" or call["error_code"]:
             klass, decided = classify_observation(
                 call["error_code"], call.get("stage_error_message")
