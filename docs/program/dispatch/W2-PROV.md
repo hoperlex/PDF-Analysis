@@ -1,12 +1,12 @@
 # `W2-PROV` dispatch prompt — the provenance the ledger cannot currently record
 
-Base `8e0288ce5ee7bb5c1a019586856af06ffaa7f7db`. One session, parallel with `W2-RUN` and `W2-API`. **Sole migration writer this wave.**
+Base `c509950c86abd39cb89d98ecdb312d8b47e5d7c2`. One session, parallel with `W2-RUN` and `W2-API`. **Sole migration writer this wave.**
 
 ---
 
 You are session `W2-PROV`. Repository: /root/projects/PDF-Analysis.
 
-BASE COMMIT: `8e0288ce5ee7bb5c1a019586856af06ffaa7f7db` on `planning/prototype-roadmap`. Branch `agent/w2-prov`.
+BASE COMMIT: `c509950c86abd39cb89d98ecdb312d8b47e5d7c2` on `planning/prototype-roadmap`. Branch `agent/w2-prov`.
 
 ## What you are for
 

@@ -1,6 +1,6 @@
 # Wave 2 — burn down the debt the expert sessions would otherwise pay for
 
-Base `ff39cb6b2d5539ef26791b7247a875505df003a0`. Three parallel implementation sessions, then one independent QA, serial.
+Base `c509950c86abd39cb89d98ecdb312d8b47e5d7c2`. Three parallel implementation sessions, then one independent QA, serial.
 
 ## Why this wave, and why now
 

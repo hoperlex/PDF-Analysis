@@ -1,12 +1,12 @@
 # `W2-RUN` dispatch prompt — a retry policy where it belongs
 
-Base `8e0288ce5ee7bb5c1a019586856af06ffaa7f7db`. One session, parallel with `W2-PROV` and `W2-API`. Dispatch text below, verbatim.
+Base `c509950c86abd39cb89d98ecdb312d8b47e5d7c2`. One session, parallel with `W2-PROV` and `W2-API`. Dispatch text below, verbatim.
 
 ---
 
 You are session `W2-RUN`. Repository: /root/projects/PDF-Analysis.
 
-BASE COMMIT: `8e0288ce5ee7bb5c1a019586856af06ffaa7f7db` on `planning/prototype-roadmap`. Branch `agent/w2-run`.
+BASE COMMIT: `c509950c86abd39cb89d98ecdb312d8b47e5d7c2` on `planning/prototype-roadmap`. Branch `agent/w2-run`.
 
 ## What you are for
 
