@@ -53,3 +53,20 @@ firing.
 Publishing a commit is not accepting it. `origin/dev` carries whatever the integrator has
 merged, including work no checkpoint has certified. Only `origin/main` carries an accepted
 state, and only the owner moves it.
+
+## `main` advances for the first time since PC-01, 2026-09-15
+
+`origin/main` moved `6d3c0f3 → 1a3f5d9` on the owner's ruling, a fast-forward.
+
+It had stood at the PC-01 acceptance through waves 2, 3 and 4 because those waves changed
+behaviour PC-01 had certified and re-certification is an owner decision. `W5-CERT`
+re-established all ten criteria at `beaa7f7`, and `src/` and `db/` are byte-identical
+between `beaa7f7` and `1a3f5d9` — a zero-line diff — so `main` carries exactly the certified
+behaviour plus the evidence for it.
+
+**This also closes the worktree-seeding defect for real.** The harness seeds agent worktrees
+from `origin/main`. Wave 5's two sessions did not hit it only because their launch prompts
+created worktrees from `origin/dev` explicitly — preempted, not absent, as `W5_CLOSURE.md` §6
+records. With `main` at the tip, a session provisioned the ordinary way now lands on current
+code.
+
