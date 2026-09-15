@@ -490,8 +490,16 @@ run_frontend() {
     "The gate does not skip a component it cannot check. Install the toolchain, or" \
     "run the backend halves individually and say in the wave record that web/ was not" \
     "covered."
+  # No fallback to another checkout's modules, deliberately. A linked worktree is exactly
+  # where package.json might differ from the one those modules were installed for, and
+  # borrowing them would run the wrong dependency set while looking like a pass. The cost
+  # of an install per worktree is the price of the suite meaning what it says.
   [ -d web/node_modules ] || fail \
-    "GATE: web/node_modules is absent. Run: npm --prefix web ci"
+    "GATE: web/node_modules is absent in this checkout." \
+    "Run: npm --prefix web ci" \
+    "A linked worktree does not inherit it -- node_modules is git-ignored -- and the gate" \
+    "will not borrow another checkout's modules, because that would run a dependency set" \
+    "this tree never declared."
   npm --prefix web test || fail "GATE: the frontend suite failed."
 }
 
