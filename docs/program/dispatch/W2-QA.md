@@ -1,7 +1,6 @@
 # `W2-QA` dispatch prompt — convergence QA for wave 2
 
 Base `4182b440308dcd7e54b83523badde89c787be3e7` — the convergence commit, all three wave-2 sessions merged and the full gate green: 754 passed / 5 skipped / 116 subtests, `make foundation` 35 passed, frontend 289 passed, `git diff --check` clean.
-The integrator fills the SHA in at dispatch and must not leave a placeholder here.
 
 ---
 
