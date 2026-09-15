@@ -101,7 +101,18 @@ The canonical command is:
 .venv/bin/pytest tests --ignore=tests/contract --ignore=tests/checkpoint
 ```
 
-Prefer it over naming the suites positively. It picks up a directory a later wave adds, and
+**Since wave 7 it is also `make gate`, and that is the one to prefer.** The battery is one
+of four things a wave must pass, and until wave 7 only `make foundation` was a target while
+the other three lived here, as prose. The frontend suite went four waves without being run
+because nothing named it. `make gate` runs all four and fails if any fails, so the
+composition is reviewable in a diff rather than recalled from this paragraph.
+
+The literal command above is kept for the case where one half is wanted alone — a session
+whose brief covers only backend paths, say — and because a document that only says "run the
+target" cannot be checked against the target. **If the two ever disagree, the Makefile is
+the authority and this paragraph is the defect.**
+
+Prefer the negative form over naming the suites positively. It picks up a directory a later wave adds, and
 it excludes exactly the two quarantined trees named in `PROTOTYPE_PROFILE.md` §6.3 and
 nothing else. A positive list silently stops covering whatever is created after it is
 written.
