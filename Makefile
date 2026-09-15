@@ -140,7 +140,7 @@ override DB_CHECK := src/auditmanager/shared/db/check.py
 override STO_CHECK := src/auditmanager/storage/check.py
 override QA_SUITE := tests/integration/foundation
 
-.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation foundation
+.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate foundation
 
 # --- shared guards -----------------------------------------------------------------
 # Expanded verbatim into each recipe that needs them. No guard has a success path that
@@ -455,6 +455,50 @@ probe_bootstrap_env() {
 probe_runtime_env() {
   "$$RUNTIME_PY" -c "$$RUNTIME_PROBE"
 }
+# --- the gate's own steps ----------------------------------------------------------
+# `run_suite` above is the foundation suite's runner and carries that suite's failure
+# messages. These are the other three things a wave must pass, and they lived only in
+# `OPERATING_CONSTRAINTS.md` as prose until wave 7 -- which is to say they lived in
+# whoever happened to remember them.
+
+run_battery() {
+  # OPERATING_CONSTRAINTS.md section 7. `tests/contract` and `tests/checkpoint` are CP-00
+  # historical evidence, red before any wave starts and quarantined by
+  # PROTOTYPE_PROFILE.md section 6.3, so they are excluded here rather than left to each
+  # caller to remember -- the reason this target exists at all.
+  local status
+  set +e
+  scrubbed_run PYTHONUNBUFFERED=1 -- \
+    "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q \
+    tests --ignore=tests/contract --ignore=tests/checkpoint
+  status=$$?
+  set -e
+  if [ "$$status" -eq 5 ]; then
+    fail "GATE: pytest collected no tests from the canonical battery." \
+      "Exit status 5 means nothing ran. An empty or fully deselected run is not a pass."
+  fi
+  [ "$$status" -eq 0 ] || fail \
+    "GATE: the canonical battery failed with pytest exit status $$status."
+}
+
+run_frontend() {
+  # The frontend is a delivered part of PC-01 and four waves passed without it being run
+  # once, because no target named it. It fails rather than skips when the toolchain is
+  # absent: a gate that quietly drops a component reports a pass it did not earn.
+  command -v npm >/dev/null 2>&1 || fail \
+    "GATE: npm is not on PATH, so the frontend suite cannot run." \
+    "The gate does not skip a component it cannot check. Install the toolchain, or" \
+    "run the backend halves individually and say in the wave record that web/ was not" \
+    "covered."
+  [ -d web/node_modules ] || fail \
+    "GATE: web/node_modules is absent. Run: npm --prefix web ci"
+  npm --prefix web test || fail "GATE: the frontend suite failed."
+}
+
+check_whitespace() {
+  git diff --check || fail \
+    "GATE: git diff --check reports whitespace errors in the working tree."
+}
 endef
 
 # --- probe programs ----------------------------------------------------------------
@@ -756,3 +800,26 @@ test-foundation:
 # The accepted foundation sequence, serial by .NOTPARALLEL.
 foundation: up check-services migrate check-db check-storage test-foundation
 	@echo "foundation sequence complete"
+
+# --- the gate ----------------------------------------------------------------------
+# Everything a wave must pass, as one command.
+#
+# Before wave 7 this was four things and only one of them was a target: `make
+# foundation` was in the Makefile, while the canonical battery, the frontend suite and
+# `git diff --check` existed as prose in OPERATING_CONSTRAINTS.md. Three quarters of the
+# gate was a convention carried in somebody's head, and the frontend half of it had not
+# been run since wave 2 because nothing required it.
+#
+# The composition is now reviewable in a diff instead of recalled from a closure, which
+# is the same correction this programme has made to registers, to briefs and to its own
+# schema assumptions.
+gate: foundation
+	@$(GUARDS)
+	freeze_paths
+	require_runtime_env
+	load_env
+	require_env_coherence
+	run_battery
+	run_frontend
+	check_whitespace
+	printf '%s\n' "GATE OK: battery, foundation, frontend and whitespace all pass"
