@@ -149,3 +149,54 @@ class TestTheProxyIsATransportNotAProvenanceMode:
         app = build_application(environ=env)
         assert len(app.router.routes) == 12
         assert app.settings.provider_mode == "proxy"
+
+
+class TestTheInjectedEnvironmentGovernsTheWholeWiring:
+    """An ``environ`` handed to ``build_application`` must reach every part it builds.
+
+    ``W5CERT-DEF-2``: ``_build_provider`` reached for ``os.environ`` directly, so an
+    injected environment set ``AppSettings`` and the provider then enforced whatever the
+    *process* said. `W5-CERT` proved the consequence with a live run — a ceiling of 0.01
+    passed through ``environ`` published a run that spent 0.0387, while the same value in
+    the process environment failed it as ``cost_budget_exceeded``.
+
+    The root's own README calls it "every accepted module constructed from configuration".
+    Half of it was constructed from a different configuration.
+    """
+
+    def test_the_wired_provider_takes_its_ceiling_from_the_injected_environment(
+        self,
+    ) -> None:
+        app = build_application(
+            environ=_base_env() | {COST_CEILING_ENV: "0.01", PROVIDER_MODE_ENV: "recorded"}
+        )
+        assert app.settings.run_cost_ceiling_usd == 0.01
+        assert app.provider_config.run_cost_ceiling_usd == 0.01, (
+            "the provider enforces the ceiling; if it reads a different environment from "
+            "the one that produced AppSettings, the ceiling a caller set is not the "
+            "ceiling the run obeys"
+        )
+
+    def test_the_two_halves_cannot_disagree(self) -> None:
+        """The property, not the instance: whatever the ceiling, both halves report it.
+
+        `tests/conftest.py` strips `AUDITMANAGER_RUN_COST_CEILING_USD` from the process
+        environment for the whole session, so under the defect both halves quietly fell
+        back to the same 1.00 default and looked consistent. A test pinning 1.00 would
+        have passed against the defect. These values are ones the process does not carry.
+        """
+        for ceiling in ("0.25", "2.50"):
+            app = build_application(
+                environ=_base_env()
+                | {COST_CEILING_ENV: ceiling, PROVIDER_MODE_ENV: "recorded"}
+            )
+            assert app.settings.run_cost_ceiling_usd == float(ceiling)
+            assert app.provider_config.run_cost_ceiling_usd == float(ceiling)
+
+    def test_the_case_really_does_discriminate(self) -> None:
+        """The process environment must not carry the ceiling, or the guards above are
+        vacuous: both halves would agree by accident rather than by wiring."""
+        assert COST_CEILING_ENV not in os.environ, (
+            "the process carries the ceiling, so reading the wrong environment would "
+            "still produce the right number and the guards above would prove nothing"
+        )
