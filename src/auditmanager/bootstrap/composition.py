@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -38,6 +39,10 @@ class Application:
     router: Router
     settings: AppSettings
     session_factory: sessionmaker[Session]
+    #: The provider configuration actually wired, exposed so that "constructed from
+    #: configuration" is checkable rather than asserted. Without it the ceiling the run
+    #: will enforce is invisible from outside, which is how `W5CERT-DEF-2` survived.
+    provider_config: Any
 
 
 def build_application(
@@ -46,7 +51,14 @@ def build_application(
     environ: dict[str, str] | None = None,
 ) -> Application:
     """Wire the application, or refuse to."""
-    resolved = settings if settings is not None else load_settings(environ)
+    # Resolve the environment once. Everything built below reads *this* mapping, so an
+    # injected environ governs the whole wiring rather than just the half that happens to
+    # take a parameter. `W5CERT-DEF-2`: `_build_provider` used to reach for `os.environ`
+    # directly, so `create_app(environ=...)` set `AppSettings.run_cost_ceiling_usd` and the
+    # provider then enforced a different one read from the process. The two could disagree
+    # and nothing would say so.
+    env: dict[str, str] = dict(os.environ) if environ is None else dict(environ)
+    resolved = settings if settings is not None else load_settings(env)
 
     from auditmanager.ingest import IngestService
     from auditmanager.shared.db import create_database_engine, create_session_factory
@@ -70,7 +82,7 @@ def build_application(
         )
     )
 
-    model_adapter, provider_config, profile_id, bundle_id = _build_provider(resolved)
+    model_adapter, provider_config, profile_id, bundle_id = _build_provider(resolved, env)
 
     ingest = IngestService(store, session_factory=sessions)
 
@@ -96,7 +108,12 @@ def build_application(
         decisions=DecisionAdapter(sessions),
         exports=CsvExportAdapter(sessions),
     )
-    return Application(router=router, settings=resolved, session_factory=sessions)
+    return Application(
+        router=router,
+        settings=resolved,
+        session_factory=sessions,
+        provider_config=provider_config,
+    )
 
 
 def _provenance_mode(transport: str) -> str:
@@ -108,7 +125,9 @@ def _provenance_mode(transport: str) -> str:
     return "recorded" if transport == "recorded" else "live"
 
 
-def _build_provider(settings: AppSettings) -> tuple[Any, Any, str, str]:
+def _build_provider(
+    settings: AppSettings, environ: Mapping[str, str]
+) -> tuple[Any, Any, str, str]:
     """Construct the model adapter the configured mode names.
 
     Constructing it here rather than at first run is what makes a broken provider a startup
@@ -151,7 +170,7 @@ def _build_provider(settings: AppSettings) -> tuple[Any, Any, str, str]:
     # rather than taught a third value. The translation stays in one place - here - which is
     # the only place that knows both the transport and what the run will record.
     config = load_provider_config(
-        dict(os.environ) | {"AUDITMANAGER_PROVIDER_MODE": _provenance_mode(settings.provider_mode)}
+        dict(environ) | {"AUDITMANAGER_PROVIDER_MODE": _provenance_mode(settings.provider_mode)}
     )
     profile = resolve_profile()
     return adapter, config, str(profile.analysis_profile_id), str(profile.prompt_bundle.prompt_bundle_id)

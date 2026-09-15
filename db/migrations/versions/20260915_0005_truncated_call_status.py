@@ -39,9 +39,22 @@ as the source, in exactly the way it already names ``model_call.cost_basis`` ver
 derivation. The stored value and the derived one are both shown, so a reader can see which
 of the two spoke.
 
-Both constraints are therefore satisfied vacuously by every row in every existing database:
-no row anywhere has ``status = 'truncated'`` yet, because until this revision the executor
-could not write one. Validation is immediate and no table is rewritten.
+Both constraints are therefore satisfied vacuously by every row in every existing database
+**at the moment this revision was authored**: no row anywhere had ``status = 'truncated'``
+yet, because until this revision the executor could not write one. Validation is immediate
+and no table is rewritten.
+
+.. note::
+
+   **That justification expired the day this shipped, and is kept rather than rewritten
+   because the distinction matters to anyone re-applying it.** The executor now writes
+   ``truncated``, so any database that has run the proxy holds such rows -- ``W5-ADV`` found
+   four in one lane. Re-applying this revision therefore validates the CHECKs against real
+   data and *can* fail, where on the day it was written it could not.
+
+   The migration itself is unchanged and correct: a row that fails validation is a row that
+   violates the invariant, which is what the CHECK is for. What has changed is only the
+   cost and the risk of running it -- no longer free, no longer certain.
 """
 
 from __future__ import annotations

@@ -26,6 +26,16 @@ from auditmanager.shared.identity import IdempotencyKey
 
 
 def _run_against(session, seeded, blob_store, adapter, provider_config) -> str:
+    """Drive one run to its terminal and return its id.
+
+    ``sleep`` is captured rather than left to the clock. The unreachable-provider case here
+    goes through the retry loop -- ``dependency_unavailable`` is retryable, which is exactly
+    what makes this fixture reach the exhausted-budget path -- so without the injection each
+    run really waited out the pinned ``(2.0, 8.0)`` backoffs. ``W5-ADV`` measured ~20 s per
+    battery spent asleep, proving nothing: the waits are already guarded, by order and by
+    value, in ``test_retry_policy.py``.
+    """
+    waits: list[float] = []
     started = start_audit_run(
         session,
         version_uid=seeded.version_uid,
@@ -41,6 +51,7 @@ def _run_against(session, seeded, blob_store, adapter, provider_config) -> str:
             blob_store=blob_store,
             adapter=adapter,
             provider_config=provider_config,
+            sleep=waits.append,
         )
     except DomainError:
         pass

@@ -298,6 +298,13 @@ def test_the_model_answering_badly_is_never_retried(
     assert stage.error["code"] == ErrorCode.ANALYSIS_FAILED.value
     assert stage.metrics.get("attempts") == 1
     assert stage.metrics.get("retried_on_error_code") is None
+    assert stage.metrics.get("attempt_budget_exhausted") is False, (
+        "one attempt of three was used. The run failed, but it did not run out of "
+        "attempts - it was refused a second one because the catalog marks this code not "
+        "retryable. A definition keyed only on 'the last attempt failed' would report "
+        "True here and make every count of exhausted budgets meaningless in the other "
+        "direction"
+    )
 
 
 def test_the_budget_is_finite_and_its_exhaustion_reaches_a_terminal(
@@ -476,4 +483,54 @@ def test_a_later_reader_can_tell_a_first_try_success_from_a_retried_one(
     assert (len(without_a_retry), len(published)) == (1, 2), (
         "this is the 12/14-vs-14/14 computation in miniature: the published count and "
         "the published-without-a-retry count are both queries, not recollections"
+    )
+
+
+def test_a_success_on_the_last_allowed_attempt_did_not_exhaust_the_budget(
+    session: Session, seeded, blob_store, recorded_adapter, provider_config, new_key
+):
+    """Using every attempt is not the same as running out of them.
+
+    ``W5-ADV`` found that ``attempt_budget_exhausted`` was ``attempts >= attempt_budget``
+    and never asked whether the last attempt *failed*. A run that answered on its final
+    allowed try therefore published **and** recorded the budget as exhausted, so any query
+    counting exhausted budgets — the reason the field is persisted at all — silently
+    included successful runs.
+
+    The existing guards could not see it: the success case asserts ``False`` at
+    ``attempts == 2``, one short of the budget, and the failure case asserts ``True`` at
+    ``attempts == 3``. Both agree with the broken definition and the correct one. This is
+    the case that separates them.
+    """
+    adapter = _ScriptedProvider(recorded_adapter, outages=ATTEMPT_BUDGET - 1)
+    waits: list[float] = []
+    run_id = _start(session, seeded, new_key, "succeeds-on-the-last-attempt")
+
+    result = execute_run(
+        session,
+        run_id,
+        blob_store=blob_store,
+        adapter=adapter,
+        provider_config=provider_config,
+        sleep=waits.append,
+    )
+
+    # -- the precondition: this run really did use its whole budget and still publish.
+    assert adapter.calls == ATTEMPT_BUDGET
+    assert result.attempts == ATTEMPT_BUDGET
+    assert waits == list(BACKOFF_SECONDS), "every pinned backoff was taken, in order"
+    assert result.terminal_state == "published", (
+        "the last allowed attempt answered, so the run must publish; without this the "
+        "assertion below would be about a failed run and would prove nothing"
+    )
+
+    stage = _stage_row(session, run_id)
+    assert stage.status == "succeeded"
+    assert stage.metrics.get("attempts") == ATTEMPT_BUDGET
+
+    # -- the claim.
+    assert stage.metrics.get("attempt_budget_exhausted") is False, (
+        "the run answered on its last allowed attempt, so the budget was spent but not "
+        "exhausted: nothing was left undone for want of another try. Reporting True here "
+        "puts published runs into every count of exhausted budgets"
     )

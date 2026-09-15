@@ -269,7 +269,13 @@ def test_a_retried_run_persists_both_authors_metrics_on_one_row(
     # Both halves must be *informative*, not merely present.
     assert metrics["attempts"] == 3, metrics["attempts"]
     assert metrics["attempt_budget"] == 3
-    assert metrics["attempt_budget_exhausted"] is True
+    # Corrected in wave 6. This run answered on its third attempt and published, so it
+    # spent its budget without exhausting it. The original assertion here read `is True`,
+    # which is what `budget_exhausted` returned when it was `attempts >= attempt_budget`
+    # and never asked whether the last attempt failed (`W5ADV-D1`). This test is about the
+    # seam -- both authors' metrics surviving on one row -- and that is unaffected: the
+    # key is present and informative either way.
+    assert metrics["attempt_budget_exhausted"] is False
     assert metrics["retried_on_error_code"] == ErrorCode.DEPENDENCY_UNAVAILABLE.value
     assert metrics["retry_waited_seconds"] > 0, (
         "two retries were taken, so the pinned backoff must have been recorded"
@@ -361,8 +367,12 @@ def test_a_first_try_and_a_third_try_success_are_distinguishable_from_the_row_al
     assert third_metrics["attempts"] == 3
     assert first_metrics["retried_on_error_code"] is None
     assert third_metrics["retried_on_error_code"] == "dependency_unavailable"
+    # Both are successes, so neither exhausted its budget -- see `W5ADV-D1` and the note
+    # in the test above. What distinguishes a first-try from a third-try run, which is
+    # what this test is named for, is `attempts` and `retried_on_error_code` just above;
+    # both still discriminate, and this field never did.
     assert first_metrics["attempt_budget_exhausted"] is False
-    assert third_metrics["attempt_budget_exhausted"] is True
+    assert third_metrics["attempt_budget_exhausted"] is False
 
     for key in PROVENANCE_METRIC_KEYS + ("request_sha256", "cost_usd"):
         assert first_metrics[key] == third_metrics[key], (
