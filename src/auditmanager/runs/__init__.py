@@ -9,11 +9,15 @@ executor, a read model and a reconciler — because ``B6``'s API is written agai
 
 What PC-01 has no such thing as
 -------------------------------
-``Job``, ``Attempt``, lease, heartbeat, execution token, fencing, resume, automatic
-retry and outbox. None of those tables exists (P02 §3.1) and a test asserts their
-absence. There is also **no ``succeeded`` run state**: the success terminal is
-``published``, and ``succeeded`` is a *stage* status. :mod:`auditmanager.runs.scope`
-records, as data, every clause of the ``audit_run`` contract PC-01 leaves unevaluated.
+``Job``, ``Attempt``, lease, heartbeat, execution token, fencing, resume and outbox. None
+of those tables exists (P02 §3.1) and a test asserts their absence. The model stage does
+retry an unreachable provider, in process and within a pinned budget
+(:mod:`auditmanager.runs.retry`); that is a loop inside one execution, and it creates no
+``Attempt`` row, takes no lease and redelivers nothing.
+
+There is also **no ``succeeded`` run state**: the success terminal is ``published``, and
+``succeeded`` is a *stage* status. :mod:`auditmanager.runs.scope` records, as data, every
+clause of the ``audit_run`` contract PC-01 leaves unevaluated.
 """
 
 from auditmanager.runs.commands import (
@@ -25,6 +29,14 @@ from auditmanager.runs.commands import (
     start_run_fingerprint,
 )
 from auditmanager.runs.executor import ExecutionResult, execute_run
+from auditmanager.runs.retry import (
+    ATTEMPT_BUDGET,
+    BACKOFF_SECONDS,
+    RETRYABLE_STAGE_ERRORS,
+    AttemptRecord,
+    AttemptSummary,
+    RetryPolicy,
+)
 from auditmanager.runs.reconciliation import (
     INTERRUPTED_REASON,
     INTERRUPTED_TERMINAL_REASON,
@@ -54,18 +66,24 @@ from auditmanager.runs.scope import (
 __all__ = [
     "ABSENT_CAPABILITIES",
     "AGGREGATES_NOT_INSTANTIATED",
+    "ATTEMPT_BUDGET",
+    "BACKOFF_SECONDS",
     "COMMAND_TYPE_START_RUN",
     "INITIAL_STATE",
     "INTERRUPTED_REASON",
     "INTERRUPTED_TERMINAL_REASON",
     "PC01_STAGES",
     "RECONCILIATION_TERMINAL",
+    "RETRYABLE_STAGE_ERRORS",
     "RUN_MACHINE",
     "SCHEMAS_NOT_CLAIMED",
     "UNEVALUATED_GUARDS",
+    "AttemptRecord",
+    "AttemptSummary",
     "ExecutionResult",
     "ReconciledRun",
     "ReconciliationReport",
+    "RetryPolicy",
     "RunRepository",
     "RunRow",
     "StageResultRow",
