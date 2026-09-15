@@ -35,6 +35,34 @@ apart, which is why the discriminator is recorded rather than inferred. See
 onto a row that predates it; every figure this tool emits
 carries the basis beside it. A measurement and an estimate presented identically is how
 a report becomes uncitable.
+
+Truncated calls, and the rows that predate the column that can say so
+--------------------------------------------------------------------
+``model_call.status`` holds three values since migration ``0005``: ``succeeded``,
+``truncated`` and ``failed``. A truncated call is the provider answering and stopping at
+the output ceiling part-way through - it produced a checksummed response and carries no
+error code - and the run it belongs to is ``partial``. It is a different product fact from
+a clean answer and a different one again from an unreachable provider, and a report that
+files it as either is a report that says something untrue about what the model did.
+
+**Rows written before ``0005`` cannot say ``truncated`` and must still be read correctly.**
+The executor persisted them as ``succeeded`` and kept the provider's own stop reason in
+``parameters.call_status``, which is the whole reason that workaround was lossless.
+``model_call`` is immutable by trigger, so those rows were never rewritten and never will
+be. :func:`classify_call_status` reads the pair and reports ``truncated``, naming
+``parameters.call_status`` as the source - the same stored-versus-derived discipline
+:func:`classify_cost_basis` applies to cost, and for the same reason: the reader must be
+able to see which of the two spoke.
+
+How much the model actually said
+--------------------------------
+``model_call.output_tokens`` is the provider's own figure and is reported per call and
+rolled up per run **beside the finding count**. ``P4_CLOSURE.md`` section 6 asked for this:
+precision evidence on the PC-02 corpus is saturated - zero findings across nine controls -
+so a finding count of zero no longer discriminates, and the open question became whether
+the document was read at all. ``PC02-C01`` and ``PC02-C07`` returned after 10 output
+tokens; ``PC02-C09`` produced 530 and published nothing. Those are three different
+outcomes and one finding count.
 """
 
 from __future__ import annotations
@@ -436,6 +464,72 @@ def classify_cost_basis(
     return "measured", "live call whose stored cost differs from the rate-table estimate"
 
 
+#: The closed three-value vocabulary of ``model_call.status`` since migration ``0005``.
+#: Named here rather than spelled inline at each use, so that a fourth value arriving in
+#: the column is caught by one check instead of slipping past three literals.
+CALL_STATUSES = ("succeeded", "truncated", "failed")
+
+
+def classify_call_status(
+    *, stored_status: str | None, parameters: Mapping[str, Any] | None
+) -> tuple[str, str, str]:
+    """Return ``(status, source, why)`` for one call.
+
+    Two shapes reach this function and they disagree about the same call.
+
+    A row written at or after ``0005`` states its status in the column, and
+    ``parameters.call_status`` repeats it. A row written before ``0005`` **cannot** state
+    ``truncated`` in the column: the executor mapped it onto ``succeeded`` and put the
+    provider's real stop reason in ``parameters.call_status``. So a legacy truncated call
+    is the pair ``(succeeded, truncated)``, and reporting it as ``succeeded`` would file a
+    reply cut short at the output ceiling as a clean answer.
+
+    The column is preferred whenever it can carry the answer. ``parameters`` is consulted
+    only where the column provably could not - that is, where it says ``succeeded`` or
+    ``failed`` and the parameters say ``truncated`` - so this never lets a parameters blob
+    overrule a column that was free to disagree. Anything else in ``parameters`` is
+    ignored: it is a provider-shaped blob, not a second status column.
+    """
+    stored = str(stored_status) if stored_status is not None else None
+    recorded = None
+    if isinstance(parameters, Mapping):
+        raw = parameters.get("call_status")
+        if isinstance(raw, str):
+            recorded = raw
+
+    if stored == "truncated":
+        return (
+            "truncated",
+            "model_call.status",
+            "the column carries the third status, so the row is at or after 0005",
+        )
+    if stored in ("succeeded", "failed") and recorded == "truncated":
+        return (
+            "truncated",
+            "parameters.call_status",
+            (
+                f"written before migration 0005: the column could not hold truncated, so "
+                f"the executor persisted {stored} and kept the provider stop reason in "
+                f"parameters.call_status. The call answered and was cut short at the "
+                f"output ceiling"
+            ),
+        )
+    if stored in CALL_STATUSES:
+        return (
+            stored,
+            "model_call.status",
+            "the column and the provider stop reason agree, or no stop reason was kept",
+        )
+    return (
+        "unknown",
+        "model_call.status",
+        (
+            f"the column holds {stored!r}, which is outside the closed vocabulary "
+            f"{list(CALL_STATUSES)}; no status is asserted for this call"
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # 4. Extraction
 # ---------------------------------------------------------------------------
@@ -453,6 +547,11 @@ _OPTIONAL_CALL_COLUMNS = {
     "cost_micros": "bigint",
     "cost_basis": "text",
     "error_code": "text",
+    # Not telemetry, but the only place a pre-0005 row records that it was truncated.
+    # Projected as a typed NULL if it ever goes missing, like the rest: losing it would
+    # silently turn every legacy truncated call back into a clean success, which is
+    # exactly the misreport this tool exists to prevent.
+    "parameters": "jsonb",
 }
 
 
@@ -600,6 +699,18 @@ def extract(db: ReadOnlyDatabase) -> Extraction:
             else call["input_tokens"] + call["output_tokens"]
         )
         call["latency_ms_present"] = call["latency_ms"] is not None
+        # Same stored-versus-derived discipline as cost_basis above: both values are kept
+        # so a reader can see which of the two spoke, and a legacy truncated call is not
+        # silently reported as the clean success its column claims it was.
+        stored_status = call["status"]
+        status, source, status_why = classify_call_status(
+            stored_status=stored_status, parameters=call.get("parameters")
+        )
+        call["call_status"] = status
+        call["call_status_stored"] = stored_status
+        call["call_status_source"] = source
+        call["call_status_reason"] = status_why
+        call["truncated"] = status == "truncated"
 
     runs = _rows(db, _RUNS_SQL)
     stages = _rows(db, _STAGES_SQL)
@@ -632,7 +743,15 @@ def collect_failures(
     ledger: list[dict[str, Any]] = []
 
     for call in calls:
-        if call["status"] == "failed" or call["error_code"]:
+        # The DERIVED status, not the stored one. A call the executor filed as
+        # ``succeeded`` before migration 0005 because the CHECK refused ``truncated`` is
+        # not a failure, and neither is a truncated call written after it: the provider
+        # answered. Filing truncation in the failure ledger would put a reply that was cut
+        # short in the same bucket as a provider that could not be reached, and PC-02 is
+        # going to cite this distribution.
+        if call["call_status"] == "truncated":
+            continue
+        if call["call_status"] == "failed" or call["error_code"]:
             klass, decided = classify_observation(
                 call["error_code"], call.get("stage_error_message")
             )
@@ -1158,7 +1277,18 @@ def build_gap_register(
                 "failures_found": len(extraction.failures),
                 "surfaces": sorted({f["surface"] for f in extraction.failures}),
                 "model_call_failure_rows": sum(
-                    1 for c in calls if c["status"] == "failed" or c["error_code"]
+                    1
+                    for c in calls
+                    if c["call_status"] != "truncated"
+                    and (c["call_status"] == "failed" or c["error_code"])
+                ),
+                # Reported next to the failure count because the two were one number
+                # until migration 0005 and a reader needs to see them separated.
+                "model_call_truncated_rows": sum(1 for c in calls if c["truncated"]),
+                "truncated_rows_read_from_parameters": sum(
+                    1
+                    for c in calls
+                    if c["truncated"] and c["call_status_source"] == "parameters.call_status"
                 ),
             },
         },
@@ -1550,6 +1680,64 @@ def validate_sessions(directory: Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _sum_or_none(values: Iterable[Any]) -> int | None:
+    """Sum, or ``None`` when there is nothing to sum.
+
+    Zero and "nothing recorded" are different answers and this tool may not conflate
+    them: a run whose calls report no token count at all must not be published as a run
+    that used no tokens. A present ``None`` among real figures is likewise not silently
+    treated as zero - the total becomes ``None`` and the reader is told the set is
+    incomplete rather than handed an understatement.
+    """
+    seen = list(values)
+    if not seen or any(v is None for v in seen):
+        return None
+    return sum(int(v) for v in seen)
+
+
+def output_rollup(extraction: Extraction) -> dict[str, Any]:
+    """How much the model said, per run, beside how much it published.
+
+    The provider's own figure throughout. Nothing here recomputes a token count from a
+    response body, and nothing could: ``model_call`` stores checksums, never text. That
+    is the point rather than a limitation - a count taken off the text would measure what
+    survived parsing, and the gap between the two is the signal. A reply cut short at the
+    ceiling reports the whole ceiling and salvages a prefix; a reply that reasons at
+    length and publishes nothing reports the reasoning and yields no finding.
+    """
+    per_run: list[dict[str, Any]] = []
+    for run in extraction.runs:
+        calls = [c for c in extraction.calls if c["run_id"] == run["run_id"]]
+        per_run.append(
+            {
+                "run_id": run["run_id"],
+                "document_uid": run["document_uid"],
+                "terminal_state": run["state"],
+                "calls": len(calls),
+                "truncated_calls": sum(1 for c in calls if c["truncated"]),
+                "input_tokens": _sum_or_none(c["input_tokens"] for c in calls),
+                "output_tokens": _sum_or_none(c["output_tokens"] for c in calls),
+                "findings": sum(
+                    1 for f in extraction.findings if f["run_id"] == run["run_id"]
+                ),
+            }
+        )
+    return {
+        "source": "model_call.output_tokens, as the provider reported it",
+        "recomputed_from_response_text": False,
+        "calls_total": len(extraction.calls),
+        "calls_missing_an_output_token_count": sum(
+            1 for c in extraction.calls if c["output_tokens"] is None
+        ),
+        "output_tokens_total": _sum_or_none(
+            c["output_tokens"] for c in extraction.calls
+        ),
+        "input_tokens_total": _sum_or_none(c["input_tokens"] for c in extraction.calls),
+        "findings_total": len(extraction.findings),
+        "by_run": per_run,
+    }
+
+
 def build_report(extraction: Extraction) -> dict[str, Any]:
     """The per-call and per-run report, the thing every consumer actually reads."""
     return {
@@ -1572,7 +1760,14 @@ def build_report(extraction: Extraction) -> dict[str, Any]:
                 "cost_basis": c["cost_basis"],
                 "cost_basis_reason": c["cost_basis_reason"],
                 "rate_table_estimate_micros": c["rate_table_estimate_micros"],
-                "status": c["status"],
+                # ``status`` is what the column says; ``call_status`` is what the call
+                # was. They differ on exactly one shape - a truncated call written before
+                # migration 0005 - and both are emitted so a reader can see it happen.
+                "status": c["call_status_stored"],
+                "call_status": c["call_status"],
+                "call_status_source": c["call_status_source"],
+                "call_status_reason": c["call_status_reason"],
+                "truncated": c["truncated"],
                 "catalog_error_code": c["error_code"],
                 "created_at": c["created_at"],
             }
@@ -1589,6 +1784,20 @@ def build_report(extraction: Extraction) -> dict[str, Any]:
                 "terminal_reason": r["terminal_reason"],
                 "interrupted_reason": r["interrupted_reason"],
                 "degradation_set": r["degradation_set"],
+                # The two figures P4_CLOSURE section 6 asked to see together. A finding
+                # count of zero means one thing beside 940 output tokens and quite another
+                # beside 10, and until now the report carried only the first of the pair.
+                "findings": sum(1 for f in extraction.findings if f["run_id"] == r["run_id"]),
+                "output_tokens": _sum_or_none(
+                    c["output_tokens"] for c in extraction.calls if c["run_id"] == r["run_id"]
+                ),
+                "input_tokens": _sum_or_none(
+                    c["input_tokens"] for c in extraction.calls if c["run_id"] == r["run_id"]
+                ),
+                "calls": sum(1 for c in extraction.calls if c["run_id"] == r["run_id"]),
+                "truncated_calls": sum(
+                    1 for c in extraction.calls if c["run_id"] == r["run_id"] and c["truncated"]
+                ),
                 "stage_outcomes": [
                     {
                         "stage_id": s["stage_id"],
@@ -1610,7 +1819,15 @@ def build_report(extraction: Extraction) -> dict[str, Any]:
         "mode_summary": {
             "runs_by_mode": _tally(r["provider_mode"] for r in extraction.runs),
             "calls_by_mode": _tally(c["provider_mode"] for c in extraction.calls),
+            # Both tallies, because their disagreement is the legacy shape made visible:
+            # every call they disagree about is one migration 0005 could not reach.
+            "calls_by_status": _tally(c["call_status"] for c in extraction.calls),
+            "calls_by_stored_status": _tally(c["call_status_stored"] for c in extraction.calls),
+            "calls_by_status_source": _tally(
+                c["call_status_source"] for c in extraction.calls
+            ),
         },
+        "output": output_rollup(extraction),
     }
 
 
@@ -1826,6 +2043,122 @@ def mode_self_check() -> int:
             ],
         },
     )
+    # The provider's figure, not a count of the response text. These two answers are
+    # allowed to differ and on the truncated fixture they differ by a factor of fifty, so
+    # a tool that quietly recomputed the count would be caught here rather than reported
+    # as telemetry. `model_call` stores no response body, so the recording on disk is the
+    # only place the text exists and the only place this can be checked from.
+    for call in recorded_calls:
+        candidates = recordings.get(call["request_sha256"]) or []
+        if not candidates:
+            continue
+        agreeing_usage = [
+            (label, doc)
+            for label, doc in candidates
+            if (doc.get("usage") or {}).get("output_tokens") == call["output_tokens"]
+        ]
+        text_derived = {
+            label: len(str(doc.get("output_text") or "")) // 4 for label, doc in candidates
+        }
+        check(
+            f"{call['model_call_id']}: the output-token count is the provider's own "
+            "figure and not a count of its response text",
+            bool(agreeing_usage)
+            and call["output_tokens"] not in text_derived.values(),
+            {
+                "row_output_tokens": call["output_tokens"],
+                "provider_usage_figures": {
+                    label: (doc.get("usage") or {}).get("output_tokens")
+                    for label, doc in candidates
+                },
+                "a_text_derived_estimate_would_be": text_derived,
+            },
+        )
+
+    # Every call lands in exactly one of the three statuses, and says which source
+    # decided it. A fourth value in the column, or a row this tool could not place,
+    # breaks the identity rather than being rounded into `succeeded`.
+    by_status = _tally(c["call_status"] for c in extraction.calls)
+    check(
+        "every call declares a status from the closed three-value vocabulary",
+        bool(extraction.calls)
+        and set(by_status) <= set(CALL_STATUSES)
+        and sum(by_status.values()) == len(extraction.calls),
+        {
+            "by_status": by_status,
+            "by_stored_status": _tally(c["call_status_stored"] for c in extraction.calls),
+            "vocabulary": list(CALL_STATUSES),
+        },
+    )
+    check(
+        "every call names the source that decided its status",
+        all(
+            c["call_status_source"] in ("model_call.status", "parameters.call_status")
+            for c in extraction.calls
+        )
+        and bool(extraction.calls),
+        {"by_source": _tally(c["call_status_source"] for c in extraction.calls)},
+    )
+    # The accounting identity that keeps truncation out of the failure distribution.
+    # It holds whether or not a truncated row exists, and the counts are printed so a
+    # reader can see which population it held over.
+    truncated_calls = [c for c in extraction.calls if c["truncated"]]
+    call_surface_failures = [f for f in extraction.failures if f["surface"] == "model_call"]
+    failing_ids = {f["model_call_id"] for f in call_surface_failures}
+    check(
+        "no truncated call is filed as a provider failure, and the call surface accounts "
+        "for every call exactly once",
+        not (failing_ids & {c["model_call_id"] for c in truncated_calls})
+        and len(call_surface_failures)
+        == sum(
+            1
+            for c in extraction.calls
+            if not c["truncated"] and (c["call_status"] == "failed" or c["error_code"])
+        ),
+        {
+            "calls": len(extraction.calls),
+            "truncated": len(truncated_calls),
+            "truncated_read_from_parameters": sum(
+                1
+                for c in truncated_calls
+                if c["call_status_source"] == "parameters.call_status"
+            ),
+            "model_call_surface_failures": len(call_surface_failures),
+        },
+    )
+    check(
+        "a truncated call carries no catalog error code",
+        all(c["error_code"] is None for c in truncated_calls),
+        {
+            "truncated": len(truncated_calls),
+            "with_a_code": [
+                c["model_call_id"] for c in truncated_calls if c["error_code"] is not None
+            ],
+            "why": (
+                "GATE_B1_CLOSURE.md section 4 item 6 is open; a call status is not an "
+                "error code and this tool must not present one as the other"
+            ),
+        },
+    )
+    # The per-run roll-up loses nothing. A run whose calls report no count is reported as
+    # null rather than zero, so the total is only a number when every part of it was.
+    rollup = output_rollup(extraction)
+    per_run_total = _sum_or_none(
+        r["output_tokens"] for r in rollup["by_run"] if r["calls"]
+    )
+    check(
+        "output tokens roll up per run without loss, beside the finding count",
+        rollup["output_tokens_total"] == per_run_total
+        and rollup["calls_missing_an_output_token_count"] == 0
+        and rollup["output_tokens_total"] is not None,
+        {
+            "output_tokens_total": rollup["output_tokens_total"],
+            "sum_of_per_run_totals": per_run_total,
+            "findings_total": rollup["findings_total"],
+            "calls_missing_a_count": rollup["calls_missing_an_output_token_count"],
+        },
+    )
+
     check("the tool issued no write statement", not log.writes, log.summary())
     check("the row census is unchanged", census["identical"], census["changed"])
 

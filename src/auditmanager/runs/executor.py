@@ -91,19 +91,26 @@ from auditmanager.shared.identity import RunId, VersionUid
 from auditmanager.storage import BlobStore
 from auditmanager.storage.models import parse_blob_id
 
-#: ``model_call.status`` admits exactly ``succeeded`` and ``failed``. The provenance
-#: vocabulary of ``analysis.text`` has a third value, ``truncated``, for a reply cut
-#: short at the output ceiling — the very case that yields a ``partial`` stage. A
-#: truncated call did return a usable, checksummed response, so it is persisted as
-#: ``succeeded`` and the stage's own ``partial`` status is what carries the degradation.
-#: Recording it as ``failed`` would misdescribe a call that produced output, and would
-#: also require an error code the catalog has no right value for. See the module note in
-#: ``docs``-facing reporting: this mapping exists because the two vocabularies disagree.
-_CALL_STATUS_FOR_PERSISTENCE: Mapping[str, str] = {
-    "succeeded": "succeeded",
-    "truncated": "succeeded",
-    "failed": "failed",
-}
+#: The two vocabularies now agree, so nothing is mapped. ``analysis.text`` reports one of
+#: ``succeeded|truncated|failed`` for a provider call and migration ``0005`` makes
+#: ``model_call.status`` hold exactly those three, so the status is written through
+#: unchanged. What stood here before was a map collapsing ``truncated`` onto ``succeeded``,
+#: kept lossless by stashing the real stop reason in ``parameters.call_status`` — a
+#: workaround adopted because the CHECK would have refused the row, and recorded as such in
+#: ``GATE_B2_CLOSURE.md`` §5.3. It cost the ledger the one distinction the PC-02 report
+#: needs: a reply cut short at the output ceiling is a different product fact from a clean
+#: answer, and the run it belongs to is ``partial`` rather than ``published``.
+#:
+#: ``parameters.call_status`` is still written. It is now redundant for a new row and it is
+#: deliberately kept, because it is the *only* thing that lets a row written before ``0005``
+#: be read back correctly, and a key that disappears from new rows would leave the reader
+#: unable to tell an old truncated call from an old clean one.
+#:
+#: A ``truncated`` row carries **no** ``error_code``. The catalog has no code meaning "usable
+#: output over a strict subset of the input" — ``GATE_B1_CLOSURE.md`` §4 item 6, still an
+#: open owner decision about a frozen twenty-member enum — and a call status is a different
+#: object from an error code. ``ck_model_call_truncated_has_no_error_code`` refuses the row
+#: that would conflate them.
 
 _INSERT_MODEL_CALL = sql_text(
     """
@@ -204,7 +211,6 @@ def _record_model_calls(
     """
     for call in calls:
         document = call.as_dict()
-        persisted_status = _CALL_STATUS_FOR_PERSISTENCE.get(call.status, "failed")
         session.execute(
             _INSERT_MODEL_CALL,
             {
@@ -214,8 +220,8 @@ def _record_model_calls(
                 "provider": document["provider"],
                 "model_identity": document["model_id"],
                 "provider_mode": document["provider_mode"],
-                # The provider's own stop reason is kept here so that mapping
-                # ``truncated`` onto ``succeeded`` above loses nothing.
+                # The provider's own stop reason. Redundant with ``status`` since
+                # ``0005`` and kept anyway: it is what makes a pre-0005 row legible.
                 "parameters": json.dumps(
                     {**document["parameters"], "call_status": call.status},
                     sort_keys=True,
@@ -230,11 +236,12 @@ def _record_model_calls(
                 # whose basis the stage did not state was derived, and saying otherwise
                 # would invent provenance.
                 "cost_basis": document.get("cost_basis", "estimated"),
-                "status": persisted_status,
+                # Written through, not mapped. The stage that consumed a truncated call
+                # is ``partial``; the call itself is ``truncated``; the two are recorded
+                # separately because they are separate facts.
+                "status": call.status,
                 "error_code": (
-                    None
-                    if persisted_status == "succeeded"
-                    else ErrorCode.ANALYSIS_FAILED.value
+                    ErrorCode.ANALYSIS_FAILED.value if call.status == "failed" else None
                 ),
             },
         )
