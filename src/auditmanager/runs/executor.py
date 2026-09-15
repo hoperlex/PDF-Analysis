@@ -659,8 +659,19 @@ def execute_run(
             terminal_reason=ErrorCode.ANALYSIS_FAILED.value,
         )
     else:
+        # The stages' own error codes, so the run row can name what killed it instead
+        # of flattening every failure into analysis_failed. Read back from the persisted
+        # rows for the same reason stage_statuses is: the terminal is chosen from what
+        # was actually written, not from an in-process tally.
+        stage_errors = {
+            row.stage_id: (row.error or {}).get("code")
+            for row in run_repo.stage_results(session, run_id)
+        }
         selection = select_terminal(
-            statuses, required_stages=PC01_STAGES, gate_ran=gate_ran
+            statuses,
+            required_stages=PC01_STAGES,
+            gate_ran=gate_ran,
+            stage_errors=stage_errors,
         )
 
     run_repo.terminate(

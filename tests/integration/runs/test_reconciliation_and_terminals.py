@@ -82,12 +82,15 @@ def test_terminal_selection_is_delegated(
     # -- behavioural: substitute the gate, and the run follows it.
     calls: list[dict] = []
 
-    def fake_select_terminal(stage_statuses, *, required_stages, gate_ran=True):
+    def fake_select_terminal(
+        stage_statuses, *, required_stages, gate_ran=True, stage_errors=None
+    ):
         calls.append(
             {
                 "stage_statuses": dict(stage_statuses),
                 "required_stages": tuple(required_stages),
                 "gate_ran": gate_ran,
+                "stage_errors": dict(stage_errors or {}),
             }
         )
         # A terminal the run would never have reached on its own: every stage succeeded.
@@ -116,6 +119,12 @@ def test_terminal_selection_is_delegated(
     assert result.terminal_state == "partial"
     assert helpers.run_state_of(session, started.run_id) == "partial"
     assert result.degradation_set == ("document_context_build",)
+    # The reason is the gate's business too: the executor hands over each stage's error
+    # code and writes back whatever reason comes out, rather than naming a cause itself.
+    assert set(calls[0]["stage_errors"]) == set(calls[0]["stage_statuses"]), (
+        "the gate was handed statuses for stages whose error codes it never saw, so it "
+        "could not name a cause even when one exists"
+    )
 
     # -- structural: the literal never appears in the executor's code.
     tree = ast.parse(EXECUTOR_SOURCE.read_text(encoding="utf-8"))

@@ -39,7 +39,7 @@ _PUBLISHED_FINDINGS = text(
     FROM finding_observation o
     JOIN finding f ON f.finding_uid = o.finding_uid
     WHERE o.run_id = :run_id
-    ORDER BY o.finding_observation_id
+    ORDER BY f.finding_uid COLLATE "C", o.finding_observation_id COLLATE "C"
     """
 )
 
@@ -57,7 +57,7 @@ _FINDING_EVIDENCE = text(
     JOIN finding_observation o ON o.finding_observation_id = e.finding_observation_id
     JOIN finding f ON f.finding_uid = o.finding_uid
     WHERE o.run_id = :run_id
-    ORDER BY e.finding_observation_id, e.evidence_ordinal
+    ORDER BY f.finding_uid COLLATE "C", e.finding_observation_id COLLATE "C", e.evidence_ordinal
     """
 )
 

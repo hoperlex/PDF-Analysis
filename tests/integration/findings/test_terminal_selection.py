@@ -262,3 +262,51 @@ class TestTheRunCanActuallyReachTheChosenTerminal:
                 )
                 assert proxy.rowcount == 1
         assert caught.value.orig.sqlstate == "AM001"
+
+
+class TestTheReasonNamesTheCause:
+    """``select_terminal`` reports the stages' own code when they agree on one.
+
+    The end-to-end behaviour is guarded in ``tests/integration/runs``; these cover the two
+    branches a live run cannot easily produce — stages failing for *different* reasons, and
+    a code outside the frozen catalog.
+    """
+
+    stages = ("source_preparation", "text_analysis")
+
+    def test_one_shared_code_becomes_the_reason(self) -> None:
+        selection = select_terminal(
+            {"source_preparation": "succeeded", "text_analysis": "failed"},
+            required_stages=self.stages,
+            stage_errors={"text_analysis": "dependency_unavailable"},
+        )
+        assert selection.terminal_reason == "dependency_unavailable"
+
+    def test_two_different_codes_keep_the_generic_reason(self) -> None:
+        """One reason cannot represent two causes, so naming either would be a guess."""
+        selection = select_terminal(
+            {"source_preparation": "failed", "text_analysis": "failed"},
+            required_stages=self.stages,
+            stage_errors={
+                "source_preparation": "dependency_unavailable",
+                "text_analysis": "analysis_input_invalid",
+            },
+        )
+        assert selection.terminal_reason == "analysis_failed"
+
+    def test_a_code_outside_the_frozen_catalog_is_not_passed_through(self) -> None:
+        """``audit_run.terminal_reason`` is CHECK-constrained to the catalog; a stage that
+        invented a code must not turn a failed run into a database error."""
+        selection = select_terminal(
+            {"source_preparation": "succeeded", "text_analysis": "failed"},
+            required_stages=self.stages,
+            stage_errors={"text_analysis": "not_a_catalog_member"},
+        )
+        assert selection.terminal_reason == "analysis_failed"
+
+    def test_no_codes_at_all_keeps_the_generic_reason(self) -> None:
+        selection = select_terminal(
+            {"source_preparation": "succeeded", "text_analysis": "failed"},
+            required_stages=self.stages,
+        )
+        assert selection.terminal_reason == "analysis_failed"
