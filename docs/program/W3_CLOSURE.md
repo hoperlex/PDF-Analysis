@@ -33,13 +33,44 @@ two orders apart, so the guard cannot pass by never exercising the case.
 |---|---|
 | M1 restore the single-key order | **RED** |
 | M4 reverse the tiebreaker | **RED** |
-| M2 drop the tiebreaker entirely | green — **reported, not repaired** |
-| M3 drop `COLLATE "C"` | green — **reported** |
+| M2 drop the tiebreaker entirely | green here — **wrong; `W5-ADV` reddened it, see below** |
+| M3 drop `COLLATE "C"` | green — **reported; the reason given below was wrong** |
 
-M2 cannot be reddened and this is worth stating plainly: dropping the tiebreaker makes the
+> **Corrected 2026-09-15 after `W5-ADV`, and both corrections verified independently by the
+> integrator before being recorded here.** The two paragraphs below are kept as written,
+> struck through, because what I concluded from them is the useful part.
+
+~~M2 cannot be reddened and this is worth stating plainly: dropping the tiebreaker makes the
 order *unspecified* rather than *wrong*, and PostgreSQL happens to return the rows the
 expected way on this data. A test that passed today would be resting on the planner, not on
-a property. M3 is defensive against a future non-C collation; it guards nothing today.
+a property.~~
+
+**Wrong, and wrong in a way worth naming: I generalised "unreddenable" from a two-row
+case.** `W5-ADV` reddened M2 with **20 observations tied under one `finding_uid`**, inserted
+in descending id order — the listing returns `0019, 0016, 0017, 0018, 0000…` while the CSV
+returns `0000…0019`. Reproduced by me on a copy at `/root/w3-m2` with imports proven under
+the copy: **red 3 of 3 under M2, green on revert.**
+
+The "resting on the planner" objection does not survive either, and the reason is a lesson
+about how to write this kind of guard: `W5-ADV`'s test **pins no sequence**. It runs the two
+live queries and compares them, so only a total order on *both* sides can keep them
+agreeing. My mutation was fine; my test design was what could not discriminate.
+
+~~M3 is defensive against a future non-C collation; it guards nothing today.~~
+
+**The result stands, the stated reason was false.** The database collation is **`en_US.utf8`**,
+not C — `datcollate` measured, and `finding_observation_id` carries no column collation, so
+it inherits it. `COLLATE "C"` is therefore an *active override* today, not a no-op waiting
+for a future change.
+
+The real reason M3 cannot be reddened is a CHECK constraint: ids are pinned to the Crockford
+alphabet `[0-9A-HJKMNP-TV-Z]` behind a constant prefix, and over all **1024 pairs** of that
+alphabet C and `en_US.utf8` disagree **zero** times (measured). So M3 is unreddenable *by
+construction*, and the `COLLATE` is load-bearing insurance against the id alphabet ever
+widening — not against a collation change.
+
+This matters practically: my original wording invites a later reader to delete `COLLATE "C"`
+on the grounds that the database is already C. It is not.
 
 ## 2. The run row flattened every failure into `analysis_failed`
 
