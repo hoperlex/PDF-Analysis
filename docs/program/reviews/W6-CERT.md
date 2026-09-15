@@ -340,4 +340,4 @@ all in `tests/`, all documentation or environment, and none defeats a criterion.
 **No tag was created. Nothing was pushed. `main` was not touched.** Whether `main` advances
 to carry this re-certification is the owner's decision.
 
-Elapsed wall clock: approximately 40 minutes.
+Elapsed wall clock: approximately 35 minutes (16:22–16:56 UTC, 2026-09-15).
