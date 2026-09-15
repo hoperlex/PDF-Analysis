@@ -1074,12 +1074,16 @@ def test_c10_an_unavailable_provider_fails_the_run_explicitly(journey: Journey) 
     and it must publish nothing, because a published finding that no model produced is
     the fake success criterion 10 forbids.
 
-    Two observations are recorded here rather than asserted, because correcting them
-    belongs to the owning trees and not to this suite. The failed ``text_analysis`` stage
-    carries ``error_code: null``, and the run's ``terminal_reason`` is ``analysis_failed``
-    -- so a provider that was simply unreachable, which the catalog calls
-    ``dependency_unavailable`` and marks retryable, is reported through the API as a
-    non-retryable analysis failure. The failure is explicit; what it was is not.
+    This docstring used to record two observations rather than assert them, because
+    correcting them belonged to the owning trees: the failed stage carried
+    ``error_code: null`` and the run's ``terminal_reason`` was ``analysis_failed``, so an
+    unreachable provider -- which the catalog calls ``dependency_unavailable`` and marks
+    retryable -- was reported as a non-retryable analysis failure.
+
+    **Wave 3 fixed both, and this text went on describing the defect for three waves.**
+    `W6-CERT` found it. A recorded observation drifts silently in whichever direction the
+    code moves; the same shape as `W2-QA` pinning a stale value, pointing the other way.
+    So the observations are now assertions. They cannot go stale again without failing.
     """
     unavailable = build_client(
         AUDITMANAGER_PROVIDER_MODE="proxy",
@@ -1119,6 +1123,23 @@ def test_c10_an_unavailable_provider_fails_the_run_explicitly(journey: Journey) 
     assert findings.status == 200
     assert findings.json["items"] == [], (
         "a run that could not reach a model published findings anyway"
+    )
+
+    # What the failure *was*, not merely that there was one. The catalog marks
+    # `analysis_failed` not retryable and `dependency_unavailable` retryable, so an
+    # operator reading this run has to be able to tell a model that answered badly from a
+    # provider that never answered -- and here nothing was listening on port 1.
+    assert status.json["terminal_reason"] == "dependency_unavailable", (
+        "the provider was unreachable, so reporting a generic analysis failure tells an "
+        f"operator the run is not worth retrying when it is: {status.json['terminal_reason']!r}"
+    )
+    # `StageState.error_code` in the frozen document: "The typed reason a non-succeeded
+    # stage carries. Null exactly when the status is `succeeded`." So a failed stage with
+    # a null code is a contract violation, not a display preference.
+    stage_codes = {s["stage_id"]: s.get("error_code") for s in status.json["stages"]}
+    assert stage_codes.get("text_analysis") == "dependency_unavailable", (
+        "the failed stage must name its own cause; the frozen document says error_code is "
+        f"null exactly when the status is succeeded: {stage_codes!r}"
     )
 
 

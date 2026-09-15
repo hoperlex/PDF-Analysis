@@ -28,7 +28,9 @@ forbids, one level up.
 
 from __future__ import annotations
 
+import csv
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -319,6 +321,17 @@ def test_live_the_findings_are_exportable_and_resolve_to_this_run(live_run) -> N
     for finding in live_run["findings"]:
         assert finding["finding_uid"] in text
     assert run_id in text
-    assert ",live," in text or text.count("live") >= 1, (
-        "the export does not carry the live provider mode"
+    # Read the named column rather than hunting for a substring. The disjunct that stood
+    # here -- `",live," in text or text.count("live") >= 1` -- was satisfied by the letters
+    # "live" appearing anywhere at all, including inside a quotation a model had written,
+    # so it could pass on a recorded export. `W6-CERT` found it. The CSV declares a
+    # `provider_mode` column; asserting on that is both stricter and simpler.
+    rows = list(csv.DictReader(io.StringIO(text)))
+    assert rows, "the export carries a header but no data rows"
+    assert "provider_mode" in rows[0], (
+        f"the export has no provider_mode column: {sorted(rows[0])}"
+    )
+    modes = {row["provider_mode"] for row in rows}
+    assert modes == {"live"}, (
+        f"a live run must export every row as live provenance, got {sorted(modes)}"
     )
