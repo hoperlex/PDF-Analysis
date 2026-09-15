@@ -28,6 +28,31 @@ stage makes the run ``partial``; and ``partial`` must reach the CSV's ``run_stat
 and the API's run body without being rounded back to ``published`` or down to ``failed``.
 A run that published three findings from a reply cut short at the output ceiling is not
 the same product fact as one that published three findings from a complete answer.
+Mutation evidence
+-----------------
+Every guard below was shown to fail, against a copy of ``src/`` and ``tools/`` outside the
+worktree, proved to be the imported tree before any result was believed, and reverted
+afterwards.
+
+==== ============================================================ ==========================
+ id   mutation                                                     guards it reddened
+==== ============================================================ ==========================
+ M2   ``_record_model_calls`` restores the pre-0005 map, writing    stop-reason-reaches-the-
+      ``succeeded`` for a truncated call                            column, post-0005-read,
+                                                                    two-shapes
+ M3   ``parameters.call_status`` dropped from the written row       stop-reason-reaches-the-
+                                                                    column
+ M4   ``classify_call_status`` loses its legacy branch              legacy-read, two-shapes
+ M5   ``classify_call_status`` prefers the blob unconditionally     post-0005-read,
+                                                                    not-overruled, two-shapes
+ M6   ``RetryPolicy.retries`` returns ``True`` for any error, so    every guard in this file
+      a truncated partial is re-asked                                that reads the run
+ M13  the export hard-codes ``published`` in ``run_state``          csv-carries-partial
+==== ============================================================ ==========================
+
+M4 and M5 are the pair that matters. A read side with only M4 reverted passes the legacy
+case; one with only M5 reverted passes the post-0005 case. Only a reader that gets the
+asymmetry right passes both, which is why both directions are asserted here.
 """
 
 from __future__ import annotations

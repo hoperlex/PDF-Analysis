@@ -35,6 +35,32 @@ Nothing here repairs anything. The adapters are local doubles over the shipped r
 adapter, and every fact is read back out of PostgreSQL through SQL rather than off the
 :class:`ExecutionResult` the call returned, because the object and the row are exactly
 the two things that are allowed to disagree.
+Mutation evidence
+-----------------
+Every guard below was shown to fail. Each mutation was applied to a copy of ``src/`` and
+``tools/`` outside the worktree, run with ``-o pythonpath=<copy>/src`` after printing
+``auditmanager.__file__`` to prove the copy was the imported tree, then reverted and
+re-run green. No tracked file was edited to mutate anything.
+
+==== =========================================================== ==========================
+ id   mutation                                                    guards it reddened
+==== =========================================================== ==========================
+ M1   ``AttemptSummary.metrics()`` emits ``output_tokens``         both-authors, disjoint,
+      instead of ``attempts`` -- the exact key collision the       first-vs-third, one-row,
+      merge order makes silent                                     both ceiling guards
+ M7   ``_run_text_analysis_stage`` builds a fresh ``CostMeter``    both ceiling guards
+      per attempt instead of using the run's
+ M8   ``AttemptSummary.metrics()`` always reports ``attempts: 1``  both-authors,
+                                                                   first-vs-third, one-row
+ M9   ``_record_model_calls`` writes each call twice               one-row
+ M2   the pre-wave-2 map: ``truncated`` written as ``succeeded``   truncated-not-retried
+ M6   ``RetryPolicy.retries`` returns ``True`` for any error       truncated-not-retried
+==== =========================================================== ==========================
+
+M1 reddens the both-authors guard with its named assertion -- "W2-RUN's attempt tally is
+not on the persisted row: ['attempts']" -- and not with a ``KeyError``, which is the
+difference between a guard that fired and a test that crashed. M7 likewise reddens with
+"the meter this caller supplied recorded no spend after a run that published and charged".
 """
 
 from __future__ import annotations
@@ -427,7 +453,19 @@ def test_a_retry_does_not_refill_the_run_cost_ceiling(
     )
     assert _terminal(session, control)["state"] == "published"
     one_call = control_meter.spent_usd
-    assert one_call > 0, "the control run charged nothing; the pre-spend cannot be sized"
+    # Named before the pre-spend is sized, because this is the first thing a per-attempt
+    # meter breaks: the caller's object is handed to `execute_run` and, if the executor
+    # builds its own inside the loop, comes back untouched. A test that only sized the
+    # pre-spend from it would fail here as an arithmetic accident rather than as a finding.
+    assert one_call > 0, (
+        "the meter this caller supplied recorded no spend after a run that published and "
+        "charged: execute_run is not spending through it, so OD-03's ceiling is a "
+        "property of an attempt rather than of the run"
+    )
+    assert control_meter.call_count == 1, (
+        f"the run's meter counted {control_meter.call_count} charged calls; a three-"
+        "attempt run charges once, and a meter rebuilt per attempt counts zero"
+    )
 
     ceiling = provider_config.run_cost_ceiling_usd
     pre_spent = CostMeter(ceiling_usd=ceiling, spent_usd=ceiling - one_call / 2)

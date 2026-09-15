@@ -30,6 +30,39 @@ the rest of this tree, and every request goes through the real ``Router`` over t
 ``FindingAdapter`` the composition root wires -- not the suite-local ``FindingPort``
 double in ``tests/integration/api``, which cannot tell whether the shipped adapter agrees
 with it.
+Mutation evidence
+-----------------
+Every guard below was shown to fail, against a copy of ``src/`` outside the worktree,
+proved to be the imported tree, and reverted afterwards.
+
+==== ============================================================ ==========================
+ id   mutation                                                     guards it reddened
+==== ============================================================ ==========================
+ M10  ``FindingAdapter.list_run_findings`` accepts ``category``     both filter guards,
+      and ``verdict`` and drops them -- the defect that was there    filters-compose
+      before
+ M11  ``paginate`` ignores the cursor and always returns page one   one-per-page walk,
+                                                                    cursor-stable
+ M12  ``published_findings`` loses its ``run_id`` predicate         run-filter-narrows, and
+                                                                    three others
+ M14  an enum value outside the closed set is dropped instead of    outside-the-enum
+      refused
+ M15  the router filters **after** ``paginate`` rather than before  walk-under-a-filter
+ M16  ``paginate``'s exhaustion test becomes ``>`` instead of       last-page-no-cursor
+      ``>=``
+==== ============================================================ ==========================
+
+``test_the_population_is_not_a_fixture_of_three_rows`` guards this module's premise rather
+than any line of product code, so no source mutation can redden it. It was shown to fail
+the only way it can be made to: the module was copied to the scratch tree with
+``NEIGHBOUR_RUNS = 0`` and run against a freshly migrated, empty database
+(``audit_w2qa_empty``). It failed there with "the run's findings are the whole table;
+nothing was narrowed" -- ``assert 3 < 3`` -- while eight of this module's ten guards still
+passed, which is also the evidence that nothing here depends on residue from a peer suite.
+
+M15 is the one worth naming. Filtering after paging returns short pages, and at
+``limit=1`` it drops a filtered-out row's page entirely; every other guard in this file
+stays green under it, and only the walk under a filter goes red.
 """
 
 from __future__ import annotations

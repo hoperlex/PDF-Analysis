@@ -24,6 +24,19 @@ The byte count is the sharpest of these. Rows and columns are structural and sur
 change to what a column *contains*; the byte count does not. A recommendation text that
 grew, an evidence quote that was re-anchored, a verdict column that started emitting a
 default -- each keeps five rows of seventeen columns and moves this number.
+Mutation evidence
+-----------------
+==== ============================================================ ==========================
+ id   mutation                                                     guards it reddened
+==== ============================================================ ==========================
+ M17  a CSV column's content grows by two characters per row --    figures-have-not-moved
+      five rows of seventeen columns, different byte count
+ M18  ``RetryPolicy.retries`` returns ``True`` for ``None``, so    one-first-try-call
+      a stage that did not fail is retried
+==== ============================================================ ==========================
+
+M17 is the reason the byte count is pinned at all: it leaves every structural figure in
+this file untouched and moves only that one.
 """
 
 from __future__ import annotations
