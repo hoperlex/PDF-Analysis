@@ -1,0 +1,184 @@
+{
+  "checkpoint_id": "PC-01",
+  "record_type": "re-certification",
+  "supersedes_nothing": "This record sits beside report.json and recertification-beaa7f7.json. Neither is edited: each records a certification that really happened at its own commit. Whether main advances to carry this one is the owner's decision.",
+  "status": "holds",
+  "certified_on": "2026-09-15",
+  "certified_commit": "c0d7dafab33a47e62050ba7c1c6916fae96ff98a",
+  "worktree_head": "04848450a84d0752d075e021a26fd7894558e4cf",
+  "worktree_head_note": "c0d7daf plus the W6-CERT dispatch commit; git diff c0d7daf..HEAD touches only docs/program/dispatch/W6-CERT.md.",
+  "previous_recertified_commit": "beaa7f732bcb0c87f612db82c0159e785247a5a9",
+  "previous_accepted_commit": "6d3c0f3d9b633e2dcd894c28e53bc16a00189544",
+  "why_re_certification": "Wave 6 changed 87 lines across four files in src/ and db/ after PC-01 was re-certified at beaa7f7: AttemptSummary.budget_exhausted, the composition root's environment resolution, migration 0004's downgrade guard, and migration 0005's expired vacuity justification.",
+  "what_was_certified": {
+    "by": "session W6-CERT, which authored none of wave 6 and repaired nothing",
+    "method": "the ten criteria of PROTOTYPE_PROFILE.md section 8, driven through the composed application's router; every criterion additionally shown able to fail",
+    "independent_of_the_integrator": true,
+    "instance": "gate-w6, POSTGRES_PORT 55580, S3_API_PORT 59180, S3_CONSOLE_PORT 59181, POSTGRES_DB audit_w6, bucket auditmanager-gate-w6"
+  },
+  "gate": {
+    "pytest tests --ignore=tests/contract --ignore=tests/checkpoint": "803 passed, 5 skipped, 116 subtests - exit 0",
+    "gate_note": "803, not the 793 the dispatch brief quoted; 793 was measured at beaa7f7 and wave 6 added test files across eight paths.",
+    "re_run_against_a_populated_database": "803 passed, 5 skipped - exit 0, with 103 audit_run rows present, so the suite is population-independent (OPERATING_CONSTRAINTS section 9)",
+    "make foundation": "35 passed, three FOUNDATION-CHECK OK sentinels - exit 0",
+    "git diff --check": "exit 0",
+    "tests/e2e/pc01 on the recorded adapter": "49 passed, 5 skipped - exit 0",
+    "bootstrap_idempotence": "two consecutive make bootstrap runs, both exit 0, git status --porcelain empty after"
+  },
+  "criteria": {
+    "1_services_and_start": "proved; three sentinels, wired/provider_mode=proxy/operations=12. Red three ways: DATABASE_URL unset -> exit 2 naming it, S3_BUCKET likewise, make check-services with containers stopped -> exit 2, and mutation M1 on settings._require -> the construction-time test FAILED",
+    "2_migration_from_empty": "proved on a database verified empty first (Did not find any relations); head 0005_truncated_call_status, 17 tables. Red by alembic downgrade -1 -> FOUNDATION-CHECK FAIL check-db, exit 2",
+    "3_upload_immutable_version_private_object": "proved; version_ordinal 1, sha256 6d53674f, 58978 bytes streamed back identical. Red by mutation M3b (version view reports a digest one nibble off) -> 4 tests FAILED",
+    "4_deterministic_path_and_text_analysis": "proved live through the proxy; run published, provider_mode live, four stages succeeded, degradation set empty. Red by mutation M4b removing the adapter-level mode refusal at bootstrap/adapters.py:221",
+    "5_seeded_issues_and_quotation_grounding": "proved live - 3 of 3 seeded issues, 0 of 6 near-miss controls, every published quotation verified present on its declared page. Red by mutation M5 (evidence attributed to the next page): published findings collapse 3 -> 0 rather than publishing misattributed evidence",
+    "6_evidence_decisions_and_history": "proved; accept 201, reject 201, later comment 201 appending without altering the verdict. Red two ways: a direct UPDATE and a direct DELETE on expert_decision_event are both refused with SQLSTATE AM002, ledger intact at 51 rows; and mutation M6 truncating decision_history",
+    "7_csv_resolving_to_exact_aggregates": "proved - 17 columns, 5 rows, UTF-8 BOM, CRLF, 4251 bytes on a run with no decisions, two exports byte-identical. Red by mutation M7 dropping latest_comment from the frozen column set",
+    "8_restart_preserves_canonical_state": "proved across a real make down / make up: runs 72, observations 148, decision events 51, measured model calls 1 - all identical after; the live run still published and readable through a fresh composition root; export byte-identical; stored object streams back at sha256 6d53674f. Red by check-services exit 2 while down, and by mutation M3b",
+    "9_idempotency_creates_no_duplicates": "proved; replaying createProject, uploadDocument, startRun and appendDecision under identical keys created nothing new. Red by mutation M9b making the caller's key unique per call -> 4 of 5 c9 tests FAILED",
+    "10_explicit_failures": "proved; five negative fixtures each HTTP 422 with a DISTINCT details.constraint, measured directly because the suite pins only the error-code class. Red by mutation M10c widening the envelope so too_many_pages.pdf is accepted"
+  },
+  "explicit_failures": {
+    "five_input_refusals": "not_a_pdf.txt -> content/pdf_magic_bytes; encrypted.pdf -> content/not_encrypted; image_only.pdf -> page_text/every_page_has_extractable_text; too_many_pages.pdf -> page_count/1 <= page_count <= 30; oversize.pdf -> file/max_bytes. All HTTP 422 validation_failed.",
+    "provider_unavailable_retry_exhausted": "measured through the journey: 10.44s wall clock against the pinned (2.0, 8.0) ladder; state failed, terminal_reason dependency_unavailable, stage text_analysis failed with error_code dependency_unavailable retryable true, three deterministic stages still succeeded, 0 findings published; persisted metrics attempts 3, attempt_budget 3, attempt_budget_exhausted TRUE, retry_waited_seconds 10.0",
+    "cost_budget_exceeded": "reachable AND now governed by the caller's ceiling - see w5cert_def_2_verified below"
+  },
+  "limits_re_examined": {
+    "checksum_mismatch": {
+      "verdict": "STILL NOT INDUCIBLE through the twelve operations - re-established, not inherited",
+      "evidence_surface": "All twelve operations enumerated from contracts/api/v1/openapi.json (count = 12). Of the four write operations, none accepts a digest-shaped field anywhere in its request body; CreateProjectRequest, UploadDocumentRequest, StartRunRequest and AppendDecisionRequest all declare additionalProperties: false, and the routers independently reject unknown keys.",
+      "evidence_guard": "Against the live store, green half first: true digest + true size PUBLISH; a false digest raises ChecksumMismatchError; a real digest belonging to different bytes also raises ChecksumMismatchError; a false declared size raises SizeMismatchError."
+    },
+    "ungrounded_model_item": {
+      "verdict": "STILL UNREACHABLE BY DESIGN - proved by mutation, not inherited",
+      "note_on_the_dispatch_premise": "The brief again expected this limit's subject to have moved because 'stage.py and provenance.py both moved'. Against beaa7f7 NEITHER file moved - wave 6 touched four files and neither is among them. Against 6d3c0f3 they did move, but _ground, the drop-before-the-gate the limit is actually about, is byte-identical to 6d3c0f3, and findings/grounding.py is unchanged. W5-CERT recorded this same correction about its own brief and it was carried forward unaltered.",
+      "evidence": "Baseline: 122 finding_observation rows, all grounded = true, zero grounded = false; a fresh journey published 3 findings and added 0 ungrounded rows. Mutation A (nothing resolves): findings 3 -> 0, observation rows 125 -> 125 so no row written at all, 0 grounded = false. Mutation B (the drop additionally removed, so the gate must judge unresolvable quotations): the run FAILED with terminal_reason analysis_input_invalid, text_analysis failed, 0 findings, still 0 grounded = false."
+    },
+    "one_version_per_document": "unchanged from the accepted report",
+    "intermediate_run_states": "unchanged from the accepted report",
+    "professional_usefulness": "not established and not claimable here"
+  },
+  "wave_6_behaviour_judged": {
+    "attempt_budget_exhausted": {
+      "verdict": "the new value is CORRECT; wave 6 is right and W2-QA's expectation was wrong",
+      "contract_status": "the field appears NOWHERE in contracts/. It is an internal stage metric, so the question was argued rather than looked up.",
+      "argument": "Under the old definition the field was exactly attempts >= attempt_budget - a pure function of two scalars already persisted on the same row - so it carried no information while poisoning any query counting exhausted budgets with runs that had published. Under the new definition it encodes the last attempt's outcome, which is NOT recoverable from the row: retried_on_error_code names the error that caused a retry, not the final outcome. The new definition is the only one under which persisting the field is justified.",
+      "truth_table_probed_directly": {
+        "not_attempted_0_of_3": false,
+        "1_of_3_succeeded": false,
+        "3_of_3_succeeded_on_last": false,
+        "3_of_3_failed_on_last": true,
+        "2_of_3_failed_non_retryable": false,
+        "3_of_3_last_is_partial": false,
+        "1_of_1_failed": true,
+        "attempt_budget_0": "refused by RetryPolicy: a stage gets at least one attempt"
+      },
+      "edge_named": "with attempt_budget == 1 any failure reports true although no retry was ever available. Unreachable in practice (ATTEMPT_BUDGET is pinned at 3) and unchanged from the old behaviour, so an observation rather than a defect.",
+      "genuine_exhaustion_still_true": "verified end to end through the journey - see explicit_failures.provider_unavailable_retry_exhausted"
+    },
+    "w5cert_def_2_verified": {
+      "verdict": "GENUINELY FIXED, proved behaviourally rather than by the agreement test that claims it",
+      "evidence": "AUDITMANAGER_RUN_COST_CEILING_USD absent from the process environment, so only the injected mapping could carry it. Injected ceiling 1.00 -> wired 1.0, run PUBLISHED (green half first). Injected ceiling 0.000001 -> wired 1e-06, run FAILED with terminal_reason cost_budget_exceeded and 0 findings. The ceiling a caller sets is now the ceiling the run obeys."
+    },
+    "migration_0004_downgrade_guard": {
+      "verdict": "correct, and conditional rather than a blanket refusal - shown both ways",
+      "refuses": "against audit_w6 holding 1 measured row: exit 1, 'refusing to drop model_call.cost_basis: 1 row(s) record a measured cost', HINT intact. Head restored, measured row survived.",
+      "allows": "on a scratch database migrated to head with 0 measured rows: downgrade 0004 -> 0003 succeeded and cost_basis was actually dropped.",
+      "upgrade_path_unaffected": "verified rather than assumed, by migrating the scratch database from empty to head"
+    },
+    "migration_0005": "docstring only; the expired vacuity justification is now marked as expired. No behaviour, and none observed."
+  },
+  "credential_fix": {
+    "id": "W5CERT-DEF-1",
+    "verdict": "FIXED, and this session is the first to exercise it",
+    "evidence": "From /root/w6cert - a worktree directly under /root/, the exact layout that made W5-CERT error - with C2_PC01_PROVIDER_ENV unset and .env.provider never sourced, the suite printed 'live provider configuration read from /root/projects/PDF-Analysis/.env.provider'. _provider_file resolved it through git rev-parse --git-common-dir. No credential was printed at any point."
+  },
+  "live_run": {
+    "run_id": "run_01M2JYF182K234A50AFEMMTT9E",
+    "provider": "operated LLM proxy, OD-02 revised 2026-09-14",
+    "provider_transport_mode": "proxy",
+    "model": "anthropic/claude-opus-5, pinned by the suite rather than read from the credential file",
+    "state": "published",
+    "provider_mode": "live",
+    "degradation_set": [],
+    "seeded_issues_found": 3,
+    "seeded_issues_total": 3,
+    "seeded_issue_ids": ["SI-01", "SI-02", "SI-03"],
+    "controls_flagged": 0,
+    "controls_total": 6,
+    "controls_caveat": "test_live_the_near_miss_controls_are_reported asserts only isinstance(flagged, list), deliberately, because a flagged control is a precision result rather than a gate. The 0 was confirmed from the published evidence rather than taken from the print.",
+    "quotation_grounding": "every published quotation verified present on its declared page against the corpus's own extractor",
+    "measured_spend_usd": 0.038125,
+    "ceiling_usd": 1.0,
+    "spend_as_fraction_of_ceiling": "3.8%",
+    "cost_basis": "measured",
+    "input_tokens": 3895,
+    "output_tokens": 746,
+    "latency_ms": 10490,
+    "attempts": 1,
+    "spend_verified_not_assumed": "the database holds exactly one row with provider_mode = 'live' and cost_basis = 'measured', cost_micros = 38125. A run that had silently fallen back to the recorded adapter would have left no such row.",
+    "comparison_to_accepted": "identical on both product numbers - 3 of 3 and 0 of 6; cost 0.038125 against 0.038225 at beaa7f7 and 0.1147 in the accepted report"
+  },
+  "defects_found": {
+    "count": 4,
+    "all_left_unrepaired": true,
+    "none_in_src_or_db": true,
+    "items": [
+      {
+        "id": "W6CERT-DEF-1",
+        "owning_tree": "tests/",
+        "location": "tests/e2e/pc01/test_acceptance.py, test_c10_an_unavailable_provider_fails_the_run_explicitly",
+        "summary": "The docstring records 'two observations': that the failed text_analysis stage carries error_code: null and that terminal_reason is analysis_failed, concluding 'The failure is explicit; what it was is not.' Both are now false. Measured at c0d7daf: error_code = dependency_unavailable with retryable true, and terminal_reason = dependency_unavailable.",
+        "impact": "documentation only - the behaviour is better than the docstring claims. But because the test RECORDS rather than asserts these values, nothing could catch the drift: the same shape as W2-QA pinning the wrong value, in the opposite direction."
+      },
+      {
+        "id": "W6CERT-DEF-2",
+        "owning_tree": "tests/",
+        "location": "tests/e2e/pc01/test_live_text_analysis.py, test_live_the_findings_are_exportable_and_resolve_to_this_run",
+        "summary": "assert ',live,' in text or text.count('live') >= 1 is satisfied by the substring 'live' appearing anywhere in the CSV, including inside a published quotation. The first disjunct is the real check; the second can only weaken it.",
+        "impact": "low - the strong disjunct holds in practice, but the assertion is weaker than it reads."
+      },
+      {
+        "id": "W6CERT-DEF-3",
+        "owning_tree": "tests/",
+        "location": "tests/contract/**, tests/checkpoint/**",
+        "summary": "These suites copytree the working tree and fail with NotADirectoryError on .git, because .git is a FILE in a linked git worktree, not a directory. The same class of path assumption as W5CERT-DEF-1.",
+        "impact": "none on PC-01 - this is CP-00 material and is excluded from the PC-01 gate by definition. Recorded because the class of defect recurs."
+      },
+      {
+        "id": "W6CERT-DEF-4",
+        "owning_tree": "tests/ and provisioning",
+        "location": "requirements/validation.lock and the two venvs",
+        "summary": "Neither provisioned interpreter can run tests/contract or tests/checkpoint: the runtime .venv lacks jsonschema and the validation .venv/bootstrap lacks pytest.",
+        "impact": "none on PC-01, same scoping as W6CERT-DEF-3."
+      }
+    ]
+  },
+  "not_certified_by_this_journey": {
+    "executor_provider_mode_cross_check": "src/auditmanager/runs/executor.py:566. Removing it leaves the whole criterion-4 suite green, because the refusal fires earlier at bootstrap/adapters.py:221 and answers validation_failed rather than the executor's analysis_input_invalid. The executor's comment claiming 'this is the only place that holds both the run row and the adapter' overstates its role. Defence in depth, not a defect - but nothing in the twelve operations reaches it."
+  },
+  "mutations_that_did_not_bite": {
+    "note": "Recorded because a red not earned is worse than no red.",
+    "pdf_magic_emptied": "criterion 10 stayed green - the parser refuses not_a_pdf.txt independently. Defence in depth, and a demonstration that the suite's error-code-class assertion would not notice that rule being removed.",
+    "command_store_pre_read_nulled": "criterion 9 stayed green - the UNIQUE (command_type, idempotency_key) constraint raises and the IntegrityError handler re-finds the winner. The DATABASE CONSTRAINT, not the pre-read, is where criterion 9's safety lives."
+  },
+  "false_premises_in_the_dispatch_brief": [
+    "'origin/main is deliberately still at 6d3c0f3 - it has not moved.' False: origin/main is 8f418e9, six commits on, already carrying the W5-CERT certification and the owner's ruling that main advances to 1a3f5d9.",
+    "'Gate at that commit: 793 passed.' The gate at c0d7daf is 803 passed. 793 was measured at beaa7f7 and carried forward without re-measurement; wave 6 added test files across eight paths. Skip and subtest counts were right.",
+    "'stage.py and provenance.py both moved.' False against beaa7f7 - wave 6 touched four files and neither is among them. Third stale premise of this class in the programme, and the second time this one has reached a certification brief.",
+    "Minor: the runbook step 2 instructs sourcing ./.env.provider, which does not exist in a dispatched worktree. The pytest path resolves it by asking git; the manual step did not. Corrected in the runbook."
+  ],
+  "brief_premises_confirmed_true": [
+    "87 lines across four files in src/ and db/, and all four mappings in the change table",
+    "a run costs about $0.038 (measured: 0.038125)",
+    "the mode is proxy, not live",
+    "the two accepted criterion-10 limits, both of which still hold"
+  ],
+  "evidence": {
+    "acceptance_suite": "tests/e2e/pc01/** - 49 passed, 5 skipped on the recorded adapter; the 5 live steps pass against the proxy from the dispatched worktree itself, which W5-CERT could not do",
+    "runbook": "docs/manual-tests/PC-01_prototype.md",
+    "report": "docs/program/reviews/W6-CERT.md",
+    "criteria_shown_able_to_fail": 10,
+    "criteria_shown_able_to_fail_note": "Every one of the ten was demonstrated red as well as green - by downgrade, by an unset variable, by stopped containers, by a dead provider endpoint, by a false digest, by negative fixtures, or by a mutation applied to an isolated copy of src/ proved to be the imported one by printing auditmanager.__file__ in the same process as the assertions. No tracked file was edited at any point. No criterion is counted on an environment assertion alone."
+  },
+  "verdict": "PC-01 HOLDS at c0d7daf. No tag was created, nothing was pushed, and main was not touched."
+}

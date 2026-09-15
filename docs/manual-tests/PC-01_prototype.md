@@ -42,6 +42,19 @@ PYTHONPATH=src .venv/bin/python -m auditmanager.api.app
 
 **Observe:** `wired, provider_mode=proxy` and `operations=12`.
 
+> **From a dispatched worktree, `./.env.provider` is not there.** The credential is
+> git-ignored, so it lives in the checkout the worktree was created from, not in the
+> worktree. Source it from there instead:
+>
+> ```bash
+> set -a; . ./.env; . "$(dirname "$(git rev-parse --git-common-dir)")/.env.provider"; set +a
+> ```
+>
+> Step 5 needs no such help: `_provider_file` asks `git rev-parse --git-common-dir` itself
+> and finds the credential from any linked worktree. `W6-CERT` was the first session to
+> exercise that and it resolved correctly from `/root/w6cert`. This note covers only the
+> manual step, which does not go through that code.
+
 Now break it deliberately:
 
 ```bash
@@ -105,7 +118,8 @@ an audit tool.
 Record what happened and move on.
 
 **Observe the cost.** The per-run ceiling is USD 1.00 under `OD-03` and the proxy reports the
-measured spend of each call. A corpus run costs a few cents.
+measured spend of each call. A corpus run costs a few cents: `W5-CERT` measured USD 0.038225
+and `W6-CERT` USD 0.038125, both against the USD 1.00 ceiling.
 
 ## 6. Evidence, decisions and export
 
@@ -148,6 +162,13 @@ across all sixteen tables are unchanged.
 | `negative/too_many_pages.pdf` | 31 pages against the 30-page envelope |
 | `negative/oversize.pdf` | 26 MiB against the 25 MiB envelope |
 | provider unreachable | `dependency_unavailable`, **retryable**, with the run failing rather than publishing |
+
+`W6-CERT` measured the five refusals rather than trusting the table, because the acceptance
+suite pins only the error-code class and not which rule refused. All five answer **HTTP 422
+`validation_failed`** with a distinct `details.constraint`: `pdf_magic_bytes`,
+`not_encrypted`, `every_page_has_extractable_text`, `1 <= page_count <= 30` and `max_bytes`.
+The unreachable provider fails the run at `terminal_reason dependency_unavailable` after
+three attempts over ~10.4 s on the pinned `(2.0, 8.0)` ladder, publishing nothing.
 
 **Two failures in §8 criterion 10 cannot be induced through the twelve operations**, and this
 is a known limit rather than an untested path:
