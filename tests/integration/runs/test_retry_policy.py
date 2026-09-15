@@ -298,6 +298,13 @@ def test_the_model_answering_badly_is_never_retried(
     assert stage.error["code"] == ErrorCode.ANALYSIS_FAILED.value
     assert stage.metrics.get("attempts") == 1
     assert stage.metrics.get("retried_on_error_code") is None
+    assert stage.metrics.get("attempt_budget_exhausted") is False, (
+        "one attempt of three was used. The run failed, but it did not run out of "
+        "attempts - it was refused a second one because the catalog marks this code not "
+        "retryable. A definition keyed only on 'the last attempt failed' would report "
+        "True here and make every count of exhausted budgets meaningless in the other "
+        "direction"
+    )
 
 
 def test_the_budget_is_finite_and_its_exhaustion_reaches_a_terminal(

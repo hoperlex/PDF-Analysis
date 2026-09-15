@@ -171,8 +171,21 @@ class AttemptSummary:
 
     @property
     def budget_exhausted(self) -> bool:
-        """``True`` when the last attempt was the last one the budget allowed."""
-        return self.attempts >= self.attempt_budget
+        """``True`` when every allowed attempt was used **and the last one still failed**.
+
+        Spending the budget and running out of it are different facts, and only the second
+        is worth counting. A run that answered on its final allowed attempt used everything
+        it was given, but nothing was left undone for want of another try.
+
+        This asks the last record rather than comparing counts. ``W5-ADV`` found the count
+        comparison reporting ``True`` for runs that published, which put successful runs
+        into every query over this field — the one thing persisting it was for. ``records``
+        is empty only for :func:`not_attempted`, where ``attempts`` is 0 and the comparison
+        is ``False`` anyway.
+        """
+        if self.attempts < self.attempt_budget:
+            return False
+        return bool(self.records) and self.records[-1].error_code is not None
 
     def metrics(self) -> dict[str, str | int | float | bool | None]:
         """The scalar provenance that makes attempts countable after the fact.
