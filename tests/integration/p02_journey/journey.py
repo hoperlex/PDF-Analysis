@@ -437,6 +437,16 @@ def variant_adapter():
 #
 #   journey figures: state published, degradation set empty, four stages succeeded,
 #   3 findings, CSV 4497 bytes / 5 data rows / 17 columns, two exports byte-identical.
+#
+# W2-QA, convergence QA for wave 2, re-measured all of these at 4182b44 and found every
+# one of them unchanged except the byte count, which is 4251. That is not a wave-2
+# regression: GATE_B2_CLOSURE.md section 1, artifacts/checkpoints/PC-01/report.json item
+# 7 and docs/manual-tests/PC-01_prototype.md all record 4251 and all predate wave 2, so
+# the 4497 above is the outlier and was already stale when it was written. It is left in
+# place rather than corrected, because it is B-III's record of what B-III measured and
+# overwriting another session's evidence would lose the fact that the two disagree.
+# tests/e2e/p02/test_journey_figures_pinned.py pins the figures a wave-2 change could
+# move, byte count included, so the next reader gets a failure rather than a comment.
 #   idempotency: same run returned, replayed=True, zero rows added across all 16 tables.
 #   restart (make down && make up): CSV byte-identical, counts unchanged, the published
 #   object re-read at 58978 bytes with the corpus sha256.
