@@ -13,6 +13,32 @@ fixture. The provider is a scripted adapter rather than a recording, because a r
 cannot be made to fail twice and answer on the third try, which is the behaviour under
 test; every scripted response that is not an outage comes from the committed recording, so
 what publishes here is the same artifact the rest of the suite publishes.
+
+Shown to fail
+-------------
+Every guard below was mutated and watched go red, then reverted and watched go green. The
+mutations were applied to a copy of ``src/`` outside the worktree and run with
+``pytest -o pythonpath=<copy>/src``; no tracked file was edited to produce them. What each
+one changed, and which assertion caught it:
+
+* ``RetryPolicy.retries`` returns ``False`` (nothing is retried) — ``adapter.calls == 2``
+  failed as ``1 == 2``.
+* ``RetryPolicy.retries`` returns ``error is not None`` (everything is retried) —
+  ``adapter.calls == 1`` failed as ``3 == 1``.
+* the loop's budget check stops one attempt early — ``adapter.calls == ATTEMPT_BUDGET``
+  failed as ``2 == 3``.
+* the exhausted branch replaces the outcome with ``analysis_failed`` —
+  ``stage.error["code"]`` failed as ``analysis_failed != dependency_unavailable``.
+* a fresh ``CostMeter`` is built per attempt — ``terminal_state == "failed"`` failed as
+  ``published``, the run buying its way past a spent ceiling.
+* ``metrics.update(attempts.metrics())`` removed — ``attempts[clean_run] == 1`` failed as
+  ``None == 1``.
+* ``ATTEMPT_BUDGET`` 3 -> 4 with a matching ladder — ``ATTEMPT_BUDGET == 3`` failed as
+  ``4 == 3``.
+* the catalog check dropped from ``RetryPolicy.__post_init__`` — ``pytest.raises(ValueError)``
+  failed as DID NOT RAISE.
+* the backoff is computed and never slept — ``waits == [BACKOFF_SECONDS[0]]`` failed as
+  ``[] == [2.0]``.
 """
 
 from __future__ import annotations
