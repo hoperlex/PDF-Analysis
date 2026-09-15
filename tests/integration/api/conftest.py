@@ -279,9 +279,17 @@ class IngestProjectAdapter:
         )
 
     def list_projects(self) -> Sequence[ProjectView]:
-        # The frozen document says "newest first"; `B1`'s query is `ORDER BY created_at,
-        # project_uid`, which is oldest first. Reversing here is the adapter's job, not
-        # the router's, and the mismatch is reported.
+        # No reversal. `B1`'s query is now `ORDER BY created_at DESC, project_uid DESC`,
+        # which is the "newest first" the frozen document declares, so this adapter
+        # forwards the order it is given.
+        #
+        # It did reverse, once. When the repository was `ORDER BY created_at` the
+        # reversal was the compensation; the repository was repaired and the
+        # compensation was left behind, so this adapter served the *oldest* project
+        # first while the shipped `bootstrap.adapters.ProjectAdapter` served the
+        # newest -- and nothing caught it, because no test in this suite asserted an
+        # order. `test_query_surface.py` asserts it now, over timestamps proved
+        # distinct first.
         rows = self._ingest.list_projects()
         return tuple(
             ProjectView(
@@ -289,7 +297,7 @@ class IngestProjectAdapter:
                 name=record.name,
                 created_at=record.created_at,
             )
-            for record in reversed(rows)
+            for record in rows
         )
 
 
@@ -665,6 +673,45 @@ def router(ingest: IngestService, session: Session) -> Router:
     )
 
 
+@pytest.fixture
+def shipped_router(
+    ingest: IngestService,
+    session: Session,
+    session_factory: sessionmaker[Session],
+) -> Router:
+    """The router over the adapters the application actually ships.
+
+    ``router`` above wires three **test** adapters, because three shapes the frozen
+    document requires had no producer when this suite was written. That is honest about
+    the seam and useless for one question: does the *shipped* surface honour a declared
+    query parameter? A fixture adapter that filters proves only that the fixture
+    filters. The defect this guards against is exactly that shape -- the shipped
+    ``FindingAdapter.list_run_findings`` once took ``**_`` and dropped ``category`` and
+    ``verdict`` on the floor while the router read them, validated them and passed them
+    on, and every filter test in this suite stayed green because it was filtering
+    through ``DatabaseFindingAdapter``.
+
+    So: ``ProjectPort``, ``FindingPort`` and ``DecisionPort`` are the real
+    ``auditmanager.bootstrap.adapters`` classes here, constructed on this fixture's
+    savepoint-joined session factory so the suite's rollback isolation still holds.
+    The remaining three keep the seam adapters; no query parameter is declared on them.
+    """
+    from auditmanager.bootstrap.adapters import (
+        DecisionAdapter,
+        FindingAdapter,
+        ProjectAdapter,
+    )
+
+    return build_router(
+        projects=ProjectAdapter(ingest),
+        documents=IngestDocumentAdapter(ingest, session),
+        runs=SeamRunAdapter(session),
+        findings=FindingAdapter(session_factory),
+        decisions=DecisionAdapter(session_factory),
+        exports=SeamExportAdapter(session),
+    )
+
+
 # ---------------------------------------------------------------------------
 # A really published run: through the gate, never a hand-written INSERT
 # ---------------------------------------------------------------------------
@@ -696,8 +743,14 @@ def _text_layer_artifact() -> dict[str, Any]:
 class PublishedRun:
     """One run whose findings reached the database through the real grounding gate."""
 
-    def __init__(self, session: Session, state: str = "created") -> None:
+    def __init__(
+        self,
+        session: Session,
+        state: str = "created",
+        observations: Sequence[dict[str, Any]] | None = None,
+    ) -> None:
         self.session = session
+        self._observations = observations
         self.project_uid = str(ProjectUid.new())
         self.document_uid = str(DocumentUid.new())
         self.version_uid = str(VersionUid.new())
@@ -796,7 +849,9 @@ class PublishedRun:
             "prompt_bundle_id": self.prompt_bundle_id,
             "provider_mode": "recorded",
             "pages_analysed": [1, 2],
-            "observations": [
+            "observations": list(self._observations)
+            if self._observations is not None
+            else [
                 {
                     "observation_ordinal": 0,
                     "category": "internal_contradiction",
