@@ -29,7 +29,9 @@ exits 0 and prints three `FOUNDATION-CHECK OK` sentinels — services, database,
 A sentinel is the evidence, not the exit code: a checker that exits 0 without printing one is
 refused by the command surface on purpose.
 
-**Observe the migration head is `0003_open_items`**, not merely "a head".
+**Observe the migration head is `0005_truncated_call_status`**, not merely "a head".
+It was `0003_open_items` when PC-01 was first accepted; migrations `0004_cost_basis` and
+`0005_truncated_call_status` landed in waves 2 and 3.
 
 ## 2. The application composes, or refuses to
 
@@ -113,7 +115,10 @@ appended to the accepted finding **leaves the verdict and the earlier events int
 ledger is append-only and the database refuses an UPDATE with SQLSTATE `AM002`.
 
 **Observe the CSV:** 17 columns, one row per evidence item, UTF-8 with a byte-order mark,
-CRLF. For this corpus: **5 rows, 4251 bytes**. Export twice and compare bytes — they must be
+CRLF. For this corpus: **5 rows**, and **4251 bytes on a run carrying no decisions**
+— the byte count moves with the verdicts recorded, and is 4525 once an accept and a reject
+are in the ledger, so compare the row and column counts first and the byte count only
+against a run in the same decision state. Export twice and compare bytes — they must be
 identical.
 
 ## 7. Restart
