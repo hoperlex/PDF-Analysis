@@ -36,13 +36,31 @@ status field — and ``text_analysis`` is the one PC-01 stage whose registry pol
 ``succeeded``, which is precisely the silent degradation the whole design is arranged to
 prevent.
 
-No ``Job``, no ``Attempt``, no lease, no heartbeat, no fencing token, no resume, no
-retry and no outbox. One execution per run, in one process.
+The one retry
+-------------
+The model stage is attempted more than once when, and only when, the provider was
+unreachable. ``P4_CLOSURE.md`` §6 put that policy here rather than in each caller;
+:mod:`auditmanager.runs.retry` holds the pins and the classification, and the loop in
+:func:`_run_text_analysis_stage` is the whole of the mechanism. Three properties of it are
+load-bearing and are each guarded by a test in ``tests/integration/runs``:
+
+* the attempts share **one** :class:`~auditmanager.analysis.text.CostMeter`, built once per
+  run, so ``OD-03``'s USD 1.00 ceiling binds across the attempts rather than once per
+  attempt — a retry cannot buy a fresh budget;
+* the budget is finite, and exhausting it ends the run at a terminal carrying the
+  transport code rather than an invented state;
+* the attempt count reaches the persisted ``stage_result.metrics``, so a first-try success
+  and a third-try success stay distinguishable after the process is gone.
+
+No ``Job``, no ``Attempt`` row, no lease, no heartbeat, no fencing token, no resume and no
+outbox. One execution per run, in one process, and a retry is a loop inside that one
+execution rather than a second delivery of it. The run's idempotency key never changes.
 """
 
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
@@ -67,10 +85,12 @@ from auditmanager.analysis.ports.artifacts import publish_artifact
 from auditmanager.analysis.text import (
     AR_TEXT_PROFILE,
     ARTIFACT_ROLE as ROLE_TEXT_OBSERVATIONS,
+    CostMeter,
     ModelAdapter,
     ModelCallRecord,
     ProviderConfig,
     TextAnalysisOutcome,
+    load_provider_config,
     run_text_analysis,
 )
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
@@ -86,6 +106,12 @@ from auditmanager.findings import (
     select_terminal,
 )
 from auditmanager.runs.repository import PC01_STAGES, RunRepository, RunRow
+from auditmanager.runs.retry import (
+    AttemptLedger,
+    AttemptSummary,
+    RetryPolicy,
+    not_attempted,
+)
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId, VersionUid
 from auditmanager.storage import BlobStore
@@ -128,6 +154,10 @@ _INSERT_MODEL_CALL = sql_text(
 
 Clock = Callable[[], datetime]
 
+#: How the executor waits between attempts. Injected for the same reason ``Clock`` is: a
+#: test must be able to assert *that* the pinned backoff was taken without spending it.
+Sleep = Callable[[float], None]
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -149,6 +179,16 @@ class ExecutionResult:
     published_finding_count: int
     diagnostic_count: int
     gate_ran: bool
+    #: How many attempts the model stage took, and why a second one happened. The same
+    #: facts are persisted on the stage row, so a caller that keeps this object and a
+    #: reader who has only the database agree without either re-deriving the other.
+    model_attempts: AttemptSummary
+
+    @property
+    def attempts(self) -> int:
+        """Attempts at the model stage. ``1`` on a first-try run; never ``0`` on a run
+        that reached the provider at all."""
+        return self.model_attempts.attempts
 
     @property
     def terminal_state(self) -> str:
@@ -251,6 +291,7 @@ def _text_stage_result(
     outcome: TextAnalysisOutcome,
     *,
     artifact_ref: ArtifactRef | None,
+    attempts: AttemptSummary,
     started: datetime,
     finished: datetime,
 ) -> StageResult:
@@ -258,12 +299,23 @@ def _text_stage_result(
 
     The one adaptation this module owns. ``partial`` survives it, which is the whole
     reason the binding is not a ``StageHandler``.
+
+    ``started``/``finished`` span **every** attempt, not the last one: the stage is what
+    the run waited for, and reporting only the successful attempt's duration would hide a
+    266-second wait behind a 4-second number. The per-attempt tally is in the metrics.
+
+    The scalar filter is not tidiness. ``contracts/analysis/v1/stage-result.schema.json``
+    admits only ``number | integer | string | boolean | null`` in ``metrics``, so a stage
+    that returned a structured metric would otherwise write a row the contract refuses.
+    The attempt facts are merged *after* it, and are scalars by construction — see
+    :meth:`AttemptSummary.metrics`.
     """
     status = StageStatus(outcome.status)
     metrics: dict[str, Any] = {}
     for key, value in dict(outcome.metrics).items():
         if isinstance(value, (str, int, float, bool)) or value is None:
             metrics[key] = value
+    metrics.update(attempts.metrics())
     return StageResult(
         stage_id="text_analysis",
         stage_version=TEXT_STAGE_VERSION,
@@ -288,11 +340,23 @@ def _run_text_analysis_stage(
     outputs: _StageOutputs,
     blob_store: BlobStore,
     adapter: ModelAdapter,
-    provider_config: ProviderConfig | None,
+    provider_config: ProviderConfig,
+    cost_meter: CostMeter,
+    policy: RetryPolicy,
+    sleep: Sleep,
     clock: Clock,
-) -> tuple[StageResult, Mapping[str, Any] | None]:
-    """Run ``text_analysis`` and publish its artifact. Returns the result and document."""
+) -> tuple[StageResult, Mapping[str, Any] | None, AttemptSummary]:
+    """Run ``text_analysis``, retrying transport failures, and publish its artifact.
+
+    Returns the stage result, the observations document, and the attempt tally.
+
+    Everything the provider does not touch happens **once**, above the loop: the required
+    inputs are checked and the three input artifacts are read before the first attempt, so
+    a retry re-asks the provider and re-reads nothing. The loop therefore has exactly one
+    reason to run twice, which is the one ``P4_CLOSURE.md`` §1 ruled on.
+    """
     started = clock()
+    ledger = AttemptLedger(attempt_budget=policy.attempt_budget)
 
     text_layer_ref = outputs.refs.get(ROLE_TEXT_LAYER)
     graph_ref = outputs.refs.get(ROLE_DOCUMENT_GRAPH)
@@ -314,10 +378,12 @@ def _run_text_analysis_stage(
                     status="failed", artifact=None, model_calls=(), error=error
                 ),
                 artifact_ref=None,
+                attempts=not_attempted(policy),
                 started=started,
                 finished=clock(),
             ),
             None,
+            not_attempted(policy),
         )
 
     text_layer_document, _ = read_artifact(
@@ -333,19 +399,52 @@ def _run_text_analysis_stage(
             blob_store, parse_blob_id(block_ref.blob_id), expected_role=ROLE_BLOCK_INDEX
         )
 
-    outcome = run_text_analysis(
-        run_id=RunId.parse(run_id),
-        text_layer_document=text_layer_document,
-        adapter=adapter,
-        config=provider_config,
-        document_graph=graph_document,
-        block_index_document=block_index_document,
-        profile=AR_TEXT_PROFILE,
-    )
+    while True:
+        attempt = ledger.attempts + 1
+        # The wait belongs to the attempt that is about to run, and is taken before it
+        # rather than after the failure, so the last attempt never sleeps for nothing.
+        waited = policy.backoff_before_attempt(attempt)
+        if waited:
+            sleep(waited)
 
-    _record_model_calls(
-        session, run_id=run_id, stage_id="text_analysis", calls=outcome.model_calls
-    )
+        outcome = run_text_analysis(
+            run_id=RunId.parse(run_id),
+            text_layer_document=text_layer_document,
+            adapter=adapter,
+            config=provider_config,
+            document_graph=graph_document,
+            block_index_document=block_index_document,
+            profile=AR_TEXT_PROFILE,
+            # One meter for the whole run, supplied by the caller above. Building it here
+            # would give every attempt a fresh USD 1.00, which is precisely the reading of
+            # OD-03 that a retry must not be able to buy.
+            meter=cost_meter,
+        )
+
+        # Every attempt's provenance, as that attempt produced it. A transport failure
+        # carries none - `adapter.complete()` raised, so there is no response to record a
+        # row from, which is the `model_call_rows: 0` P4_CLOSURE section 1 cites as the
+        # evidence that the failed attempts were preserved rather than swallowed.
+        _record_model_calls(
+            session, run_id=run_id, stage_id="text_analysis", calls=outcome.model_calls
+        )
+        ledger.record(
+            status=outcome.status, error=outcome.error, waited_seconds=waited
+        )
+
+        if not policy.retries(outcome.error):
+            # Succeeded, partial, or a failure no second attempt could answer
+            # differently - `analysis_failed` above all, which is the model having
+            # answered. The policy owns that classification; there is no status or code
+            # comparison here.
+            break
+        if not policy.has_budget_for(attempt + 1):
+            # Exhausted. The outcome of the last attempt stands as the stage's outcome,
+            # carrying the transport error it failed with, and the run goes on to a
+            # terminal from it. No new state and no invented code.
+            break
+
+    attempts = ledger.close()
 
     artifact_ref: ArtifactRef | None = None
     if outcome.artifact is not None:
@@ -354,9 +453,13 @@ def _run_text_analysis_stage(
         )
 
     result = _text_stage_result(
-        outcome, artifact_ref=artifact_ref, started=started, finished=clock()
+        outcome,
+        artifact_ref=artifact_ref,
+        attempts=attempts,
+        started=started,
+        finished=clock(),
     )
-    return result, outcome.artifact
+    return result, outcome.artifact, attempts
 
 
 def _run_evidence_gate(
@@ -418,15 +521,29 @@ def execute_run(
     runs: RunRepository | None = None,
     documents: DocumentRepository | None = None,
     clock: Clock = _utc_now,
+    retry_policy: RetryPolicy | None = None,
+    cost_meter: CostMeter | None = None,
+    sleep: Sleep = time.sleep,
 ) -> ExecutionResult:
     """Drive one run from ``created`` to a terminal state.
 
     The caller owns the transaction. Every stage result is persisted as it is produced,
     and the terminal is whatever :func:`select_terminal` returns for the statuses that
     were actually written.
+
+    ``cost_meter`` is the run's whole model budget, and it is built **here**, once, so that
+    ``OD-03``'s ceiling is a property of the run rather than of an attempt. A caller may
+    supply one already carrying spend — nothing in the deployment does, and a test does, to
+    place a run mid-budget and show that a retry does not refill it.
     """
     run_repo = runs or RunRepository()
     document_repo = documents or DocumentRepository()
+    policy = retry_policy or RetryPolicy()
+    # Resolved once, here, rather than once per attempt inside the stage: the ceiling the
+    # meter is built against and the configuration the attempts run under must be the same
+    # object, or a re-read of the environment mid-run could move one and not the other.
+    config = provider_config or load_provider_config()
+    meter = cost_meter or CostMeter(ceiling_usd=config.run_cost_ceiling_usd)
 
     run = run_repo.get(session, run_id)
 
@@ -499,15 +616,21 @@ def execute_run(
             break
 
     # -- the AI stage ---------------------------------------------------------
+    # A halted chain never reaches the provider, so it has no attempts rather than one
+    # failed attempt. The two are different claims and the tally says which.
+    attempts = not_attempted(policy)
     if not halted:
-        text_result, observations_document = _run_text_analysis_stage(
+        text_result, observations_document, attempts = _run_text_analysis_stage(
             session,
             run_id=run_id,
             version_uid=run.version_uid,
             outputs=outputs,
             blob_store=blob_store,
             adapter=adapter,
-            provider_config=provider_config,
+            provider_config=config,
+            cost_meter=meter,
+            policy=policy,
+            sleep=sleep,
             clock=clock,
         )
         _persist(session, run_repo, run_id, text_result)
@@ -558,7 +681,8 @@ def execute_run(
         ),
         diagnostic_count=(0 if publication is None else publication.diagnostic_count),
         gate_ran=gate_ran,
+        model_attempts=attempts,
     )
 
 
-__all__ = ["Clock", "ExecutionResult", "execute_run"]
+__all__ = ["Clock", "ExecutionResult", "Sleep", "execute_run"]
