@@ -101,20 +101,71 @@ directly. Two reasons, both recorded:
 
 ## Gaps between the frozen document and the modules that must feed it
 
-Reported to the integrator; none is repaired here.
+Ten were reported here by `B6`, none repaired at the time. Two were ruled Gate C blockers
+in `GATE_B2_CLOSURE.md` §5.1 and closed by the seam repair; eight were carried forward by
+§5.3. **All eight are now closed.** The table records each one and what closed it, because
+a gap that vanishes without a record is a gap nobody can re-check.
 
-| # | Gap | Owner |
+Four of the eight were this boundary's own — the query surface, the `listProjects`
+ordering, and the two claims in the frozen document itself. Session `W2-API` closed those.
+The other four sat in `B1`'s and `B4`'s public surfaces and were closed by the seam repair
+before `W2-API` began; they are restated here as they now stand, and they are **verified**
+statements, not inherited ones: each was re-read in the tree this README ships with.
+
+| # | Gap as reported | Owner | Now |
+|---|---|---|---|
+| 1 | `DocumentVersion.version_ordinal` is required by the frozen schema and is not on `B1`'s `DocumentVersionRecord` | `B1` / seam owner | **Closed.** `DocumentVersionRecord.version_ordinal` exists and `bootstrap.adapters._version_view` reads it. `GATE_B2_CLOSURE.md` §5.1 ruled that foundation invariant 3 makes a display ordinal a non-identity, not a non-field |
+| 2 | `DocumentVersion.display_title` is declared and nothing returns it | seam owner | **Closed.** `DocumentVersionRecord.display_title` exists and is emitted |
+| 3 | `Finding` requires `project_uid`, `version_uid` and `run_id`; `B4`'s `FindingRow` carries none of the three | `B4` | **Closed.** All three are on `FindingRow` and are selected by `published_findings` |
+| 4 | There is no by-`finding_uid` query at all, so `getFinding` has no read path | `B4` | **Closed.** `auditmanager.findings.finding_by_uid` |
+| 5 | **No query surface accepts a cursor, a limit, or a category or verdict filter**, but §7 says growing lists are cursor-paginated and the document declares all four | `B4` / `B1` — **and this boundary** | **Closed by `W2-API`.** All four are implemented; see the section below. None was removed from the contract |
+| 6 | `listProjects` is declared "newest first"; `B1`'s `list_projects` is `ORDER BY created_at, project_uid`, which is oldest first | `B1` | **Closed.** The repository query is `ORDER BY created_at DESC, project_uid DESC`. `W2-API` removed the reversal the API suite's own test adapter still applied on top of it — a compensation for the old query that had turned into a defect — and `tests/integration/api/test_query_surface.py` asserts the order over timestamps proved distinct and deliberately out of step with the identity order |
+| 7 | `createProject` requires an `Idempotency-Key` and `B1` publishes no key-accepting project command | `B1` | **Closed.** `IngestService.create_project_under_key` claims the key |
+| 8 | `appendDecision` requires the key reach the owning command handler, and nothing in `auditmanager.decisions` claimed a command record from one | `B4` | **Closed.** `append_decision_under_key` claims through `ingest.CommandRepository`, the same primitive `start_run` uses |
+| 9 | `DocumentVersion.source_filename` is declared as an optional display field and the `B6` brief forbids any filename crossing the boundary; the two documents disagree | contract owner — **this boundary** | **Closed by `W2-API`, as a non-disagreement.** The property is optional and nullable, so omitting it is conformant: the contract permits the field, PC-01's policy is not to emit it, and `test_the_uploaded_filename_never_comes_back` pins that policy. Nothing to repair in either document; what was missing was the sentence saying so |
+| 10 | The frozen `DependencyUnavailable` description calls `dependency_unavailable` "the one retryable code in this surface", while `idempotency_key_in_progress` is also retryable | contract owner — **this boundary** | **Closed.** Corrected in `contracts/api/v1/openapi.json` and resealed in `web/FRONTEND_LOCK.json` on 2026-09-11; the description now names both codes and tells a caller to read `retryable` from the envelope. `W2-API` re-read the document and confirms the wrong claim is gone |
+
+### The four declared query parameters
+
+`cursor`, `limit`, `category` and `verdict`. Every one is **implemented**; none was removed
+from the contract.
+
+| Parameter | Where | How |
 |---|---|---|
-| 1 | `DocumentVersion.version_ordinal` is **required** by the frozen schema and is not on `B1`'s `DocumentVersionRecord`. `getDocumentVersion` and `uploadDocument` cannot produce a valid body from `B1`'s public surface | `B1` / seam owner |
-| 2 | `DocumentVersion.display_title` is declared and nothing returns it — `GATE_B1_CLOSURE.md` item 4. Optional, so it is omitted rather than fabricated | seam owner |
-| 3 | `Finding` requires `project_uid`, `version_uid` and `run_id`; `B4`'s `FindingRow` carries none of the three. The query joins `finding` and selects nothing from it | `B4` |
-| 4 | There is **no by-`finding_uid` query at all**. `getFinding` has no read path in `auditmanager.findings` | `B4` |
-| 5 | No query surface accepts a cursor, a limit, or a category or verdict filter, but §7 says growing lists are cursor-paginated and the document declares all four parameters. The edge pages over an ordered sequence | `B4` / `B1` |
-| 6 | `listProjects` is declared "newest first"; `B1`'s `list_projects` is `ORDER BY created_at, project_uid`, which is oldest first | `B1` |
-| 7 | `createProject` requires an `Idempotency-Key` and `B1` publishes no key-accepting project command, so the key is validated at the edge and stops there | `B1` |
-| 8 | `appendDecision` requires the key be passed to the owning command handler; `record_decision` accepts a `command_id` and nothing in `auditmanager.decisions` claims a command record from a key. `expert_decision_event.command_id` is a foreign key into `command_record`, so the key must be *claimed*, not hashed | `B4` |
-| 9 | `DocumentVersion.source_filename` is declared as an optional display field, and the `B6` brief forbids any filename crossing the boundary. It is never emitted, and the two documents disagree | contract owner |
-| 10 | The frozen `DependencyUnavailable` description calls `dependency_unavailable` "the one retryable code in this surface". `idempotency_key_in_progress` is also `retryable: true` in the catalog and is reachable on every write | contract owner |
+| `limit` | `listProjects`, `listRunFindings`, `listDecisionHistory` | `schemas.common.parse_limit`, against the frozen `1..200 default 50`. Out of range or not an integer is `validation_failed`, never a clamp — a silently clamped page is a page the caller is wrong about |
+| `cursor` | the same three | `schemas.common.encode_cursor` / `paginate`. Base64url of the **last sort key emitted**, and nothing else |
+| `category` | `listRunFindings` | validated against `FindingCategory` and passed to the port; the shipped `FindingAdapter` filters |
+| `verdict` | `listRunFindings` | validated against `Verdict` and passed to the port; filtered on the **projection** over the decision ledger, not on a column |
+
+Three things about the cursor are worth stating, because each is a claim a test has to
+carry rather than a property of the code anyone can see by reading it:
+
+* **It carries no position.** `P02_SEAMS.md` §2.2 lists a row number or a sequence value
+  among the things that are never an identity, and §5.3 repeats it for the decision ledger.
+  The token holds the sort key — for projects the `project_uid` the page already returned,
+  for decisions the declared `(recorded_at, decision_id)` pair. It is opaque because a
+  client has no reason to read it, not because reading it would reveal anything.
+* **It resumes by locating its key, not by comparing against it.** A comparison assumes an
+  ascending order and returns the wrong page for a descending one — and `listProjects` is
+  descending, so the assumption would be wrong on the first operation. Locating works in
+  either direction and survives an insert anywhere in the sequence.
+* **A token that does not decode is refused.** Restarting the listing from the top would
+  read to a caller as data loss.
+
+`limit` and `cursor` are applied at the edge, over the ordered sequence a port returns, and
+`category` and `verdict` are applied by the adapter behind `FindingPort`. For PC-01 — a run
+publishes a handful of findings — that is the right place: a predicate pushed into SQL adds
+a second home for the ordering contract to drift from. The port signature does not change
+when that stops being true, which is the point of it being a port.
+
+**The suite that proves this runs on the shipped adapters.** `tests/integration/api`
+otherwise wires three test adapters, for the seams that had no producer when it was
+written, and a filter asserted through a fixture that filters proves only that the fixture
+filters — which is precisely how the shipped `FindingAdapter` came to take `**_` and drop
+both filters while every filter test here stayed green. `conftest.shipped_router` wires
+`auditmanager.bootstrap.adapters` for the three ports that carry a query parameter, and
+`test_this_suite_really_drives_the_shipped_adapters` asserts that wiring, so re-pointing it
+at the fixtures to make a failure go away is itself a failure.
 
 ## Reading the bytes
 
@@ -137,3 +188,17 @@ set against the frozen document itself, never against a list in the test. Respon
 are validated with the pinned `jsonschema` in the **governance** environment, driven
 through `tests/contract/api_v1/schema_validation_check.py`; the runtime lock carries no
 validator.
+
+`test_query_surface.py` covers the four query parameters, and two of its guards are
+structural rather than behavioural, because a behavioural test only catches the parameters
+somebody remembered to write one for:
+
+* **every query parameter the frozen document declares is watched being read** by the
+  handler that declares it. The request carries a query mapping that records which names
+  were looked up, so a parameter added to the document and read by nothing fails here
+  without anyone writing a test for that parameter;
+* **the committed client cannot drift from the contract unnoticed in this suite either.**
+  `web/tests/guards/frontend-lock.guard.test.ts` already checks the digests, in the
+  frontend suite — but the contract and the routers change in one commit and the frontend
+  suite is a separate command, so an unregenerated client now reddens the suite sitting
+  next to the edit.
