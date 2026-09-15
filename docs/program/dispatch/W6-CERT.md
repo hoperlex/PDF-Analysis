@@ -3,7 +3,7 @@
 Base `c0d7dafab33a47e62050ba7c1c6916fae96ff98a` on `planning/prototype-roadmap`, published as
 `origin/dev`. If your `HEAD` is one or two commits *ahead* of this and
 `git diff ef5b8bf..HEAD --stat` touches only `docs/program/dispatch/**`, that is this brief
-being committed — harmless, carry on. Anything else is the provisioning defect below. Gate at that commit: 793 passed / 5 skipped / 116 subtests, `make foundation`
+being committed — harmless, carry on. Anything else is the provisioning defect below. Gate at that commit: 803 passed / 5 skipped / 116 subtests, `make foundation`
 35 passed, `git diff --check` clean.
 
 You are the only session in this wave. Nothing runs beside you.
@@ -37,12 +37,10 @@ finding in this programme has held up.
 
 ## Provisioning — read this first, it will fire
 
-The harness seeds an agent worktree from `origin/main`. **`origin/main` is deliberately
-still at `6d3c0f3` — the commit PC-01 already certified.** It has not moved, because moving
-it is what re-certification decides.
-
-So unless you check, you will certify the old code and conclude, correctly and uselessly,
-that nothing changed.
+The harness seeds an agent worktree from `origin/main`. **`origin/main` now carries the
+`beaa7f7` certification** (it advanced to `8f418e9` on 2026-09-15), so an ordinarily-seeded
+worktree lands on recent code rather than on the W0.2-era commit that caught nineteen
+sessions. Verify anyway; the fix is one owner decision old.
 
 Your first action is `git rev-parse HEAD`. If it is not
 `c0d7dafab33a47e62050ba7c1c6916fae96ff98a`, fetch and check out the base before anything
@@ -103,8 +101,15 @@ operations:
 - **`ungrounded_model_item`** — unreachable by design; the stage drops unresolvable
   quotations before the grounding gate sees them. Owner-accepted 2026-09-11.
 
-Both were true at `6d3c0f3`. **Neither is a fact you may inherit.** `stage.py` and
-`provenance.py` both moved, and the second limit is a claim about exactly that code. Check
+Both were true at `6d3c0f3` and re-established at `beaa7f7`. **Neither is a fact you may
+inherit**, and the reason is *not* that the code moved — it did not. `W5-CERT` checked and
+found `_ground` byte-identical to `6d3c0f3` and `findings/grounding.py` unchanged; the
+W5-CERT brief had claimed otherwise and was corrected in its own report. **That correction
+was then carried into this brief unaltered, which is how a fixed record un-fixes itself.**
+
+The real reason to re-establish them is that an inherited limit is an unmeasured one. A
+claim about unreachability is exactly the kind that stays true until some unrelated change
+makes it false, and nothing announces the day it does. Check
 whether either is now inducible. If one is, that is a finding of the first importance — it
 means a criterion the owner accepted as unreachable has become reachable and was never
 scored.
