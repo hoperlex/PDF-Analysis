@@ -14,10 +14,12 @@ Why ports at all, rather than importing the modules directly:
   ``docs/program/P02_SEAMS.md`` section 6 -- the same frozen declarations ``B5``'s
   public surface is being built against -- so if both sides hold to them the wiring is
   a Gate C formality.
-* **Three shapes the frozen document requires have no producer today.** They are listed
-  in ``src/auditmanager/api/README.md`` and reported to the integrator. Declaring them
-  on a port states the requirement precisely without widening another module's
-  projection, which is not this session's to widen.
+* **Some shapes the frozen document required had no producer when this was written.**
+  They were listed in ``src/auditmanager/api/README.md`` and reported to the integrator
+  rather than patched into another module; that table now records all eight as closed.
+  Declaring a required shape on a port states the requirement precisely without widening
+  another module's projection, and it is what let the requirement be met later without
+  the routers changing at all.
 
 Every method takes and returns plain values or the view types of
 :mod:`auditmanager.api.schemas`. A port never takes a ``Session``: whether a call is
@@ -81,11 +83,18 @@ class ProjectPort(Protocol):
         """Create a project, or replay the recorded outcome of an identical request."""
 
     def list_projects(self) -> Sequence[ProjectView]:
-        """Every project, newest first.
+        """Every project, **newest first**.
 
-        The router pages this. See the pagination note in
-        ``src/auditmanager/api/README.md``: no query surface in this tree accepts a
-        cursor, so the edge cuts pages out of an ordered sequence.
+        The order is part of this declaration, not a detail of the implementation: the
+        router pages the sequence and never re-sorts it, so a port that returned oldest
+        first would page correctly through the wrong listing. `listProjects` says newest
+        first and `tests/integration/api/test_query_surface.py` asserts it over
+        timestamps whose order is deliberately not the identity order.
+
+        The edge cuts pages out of what this returns. No query surface in this tree
+        accepts a cursor, and for PC-01 that is the right trade: see the query-surface
+        section of ``src/auditmanager/api/README.md``. The signature does not change on
+        the day it stops being the right trade.
         """
 
 
@@ -159,7 +168,18 @@ class FindingPort(Protocol):
         category: str | None,
         verdict: str | None,
     ) -> Sequence[FindingView]:
-        """The published findings of one run, in a stable total order."""
+        """The published findings of one run, in a stable total order.
+
+        ``category`` and ``verdict`` are ``None`` when the caller supplied no filter, and
+        otherwise a value the router has already checked against the frozen enum -- an
+        implementation never re-validates them and never widens them.
+
+        **An implementation that accepts these and ignores them is the defect this
+        signature exists to prevent**, and it is not hypothetical: the shipped adapter
+        once took ``**_`` and dropped both, so `?category=explicit_placeholder` returned
+        every finding and looked like it had worked. A filter accepted and ignored is
+        worse than one refused, because the refusal is visible.
+        """
 
     def get_finding(self, *, finding_uid: str) -> FindingDetailView:
         """One finding with its observation, evidence, provenance and projection."""
