@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import type { OperationId } from '@/shared/api';
 import {
   DECISION_EVENT_TYPE_VALUES,
   ERROR_CODE_VALUES,
@@ -87,6 +88,52 @@ describe('the twelve seam operations', () => {
     for (const id of ['listProjects', 'listRunFindings', 'listDecisionHistory'] as const) {
       expect(OPERATIONS[id].queryParams).toContain('cursor');
       expect(OPERATIONS[id].queryParams).toContain('limit');
+    }
+  });
+
+  it('lets a reviewer filter findings by category and by verdict', () => {
+    // Paging and filtering is the first thing a reviewer reaches for, and the two
+    // filters were the half of the query surface no guard mentioned: `cursor` and
+    // `limit` were checked above from the day this file was written, `category` and
+    // `verdict` were not checked anywhere on this side.
+    expect(OPERATIONS.listRunFindings.queryParams).toContain('category');
+    expect(OPERATIONS.listRunFindings.queryParams).toContain('verdict');
+  });
+
+  it('sends every query parameter the contract declares, and no other', () => {
+    // The generator is what keeps these in step, so this asserts the *result* of that
+    // rather than trusting it: a parameter the document declares and the descriptor
+    // omits cannot be sent at all, and `buildQuery` iterates the descriptor, so a
+    // caller that passes it has it dropped before the request is built.
+    const paths = (
+      JSON.parse(readText(CONTRACT_PATH)) as {
+        paths: Record<string, Record<string, unknown>>;
+        components: { parameters: Record<string, { name: string; in: string }> };
+      }
+    );
+    const resolve = (node: { $ref?: string; name?: string; in?: string }) => {
+      if (!node.$ref) return node as { name: string; in: string };
+      const key = node.$ref.split('/').pop() as string;
+      const found = paths.components.parameters[key];
+      expect(found, `#/components/parameters/${key} does not resolve`).toBeDefined();
+      return found as { name: string; in: string };
+    };
+
+    for (const [path, operations] of Object.entries(paths.paths)) {
+      for (const operation of Object.values(operations)) {
+        const typed = operation as {
+          operationId?: string;
+          parameters?: Array<{ $ref?: string; name?: string; in?: string }>;
+        };
+        if (!typed.operationId) continue;
+        const declared = (typed.parameters ?? [])
+          .map(resolve)
+          .filter((parameter) => parameter.in === 'query')
+          .map((parameter) => parameter.name)
+          .sort();
+        const exposed = [...(OPERATIONS[typed.operationId as OperationId].queryParams ?? [])].sort();
+        expect(exposed, `${typed.operationId} (${path})`).toEqual(declared);
+      }
     }
   });
 });
