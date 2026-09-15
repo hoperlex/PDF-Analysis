@@ -49,5 +49,37 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Refuse rather than destroy provenance that cannot be recovered.
+
+    Dropping the column loses which calls were measured, and re-upgrading does not restore
+    it: the new column takes the `estimated` default, so every measured call comes back
+    relabelled as derived. That is the mirror of what `upgrade`'s own comment forbids -
+    it invents provenance rather than erasing it, and this erases it - and it cannot be
+    repaired afterwards, because `trg_model_call_immutable` refuses UPDATE on these rows.
+
+    `W5-ADV` found it by running head -> 0004 -> 0003 -> head against a populated database.
+    So a downgrade is allowed only while nothing would be lost. An operator who genuinely
+    wants the column gone must first decide what happens to the measurements, which is a
+    decision and not a side effect.
+    """
+    op.execute(
+        """
+        DO $$
+        DECLARE measured_rows bigint;
+        BEGIN
+            SELECT count(*) INTO measured_rows FROM model_call WHERE cost_basis = 'measured';
+            IF measured_rows > 0 THEN
+                RAISE EXCEPTION
+                    'refusing to drop model_call.cost_basis: % row(s) record a measured '
+                    'cost and dropping the column loses that permanently',
+                    measured_rows
+                    USING HINT = 'Re-upgrading restores the column with the estimated '
+                                 'default, so the measurements come back relabelled as '
+                                 'derivations, and the append-only trigger refuses to '
+                                 'correct them. Export or delete those rows first.';
+            END IF;
+        END $$;
+        """
+    )
     op.execute("ALTER TABLE model_call DROP CONSTRAINT IF EXISTS ck_model_call_cost_basis;")
     op.execute("ALTER TABLE model_call DROP COLUMN IF EXISTS cost_basis;")
