@@ -39,6 +39,7 @@ from auditmanager.api.routers.http import Request, Response
 from auditmanager.api.schemas.common import DEFAULT_LIMIT, MAX_LIMIT, MIN_LIMIT
 from auditmanager.api.schemas.findings import FINDING_CATEGORIES, VERDICTS
 from auditmanager.findings import TextLayer
+from auditmanager.shared.identity import ProjectUid
 
 from .conftest import (
     PAGE_ONE,
@@ -181,6 +182,69 @@ def head(page: Mapping[str, Any], ladder: Ladder) -> list[str]:
     return [p for p in uids(page, "project_uid") if p in mine]
 
 
+def _listing_keys(session: Session) -> dict[str, Any]:
+    """Every project and its ``created_at``, read from the rows rather than the API.
+
+    The oracle a paging test needs has to come from somewhere other than the paging
+    code. A second call to the listing is not an independent answer to "what should the
+    walk have returned", and a single maximal call cannot be one at all once the table
+    passes the frozen maximum of 200.
+
+    It deliberately does **not** restate the query's ``ORDER BY``. The caller sorts these
+    keys itself and compares, so this returns *which rows exist* and leaves *what order
+    they belong in* to the assertion -- and to
+    ``test_the_listing_is_newest_first_and_not_highest_identity_first``, which is where
+    the declared order is proved.
+    """
+    return dict(
+        session.execute(text("SELECT project_uid, created_at FROM project")).all()
+    )
+
+
+@pytest.fixture
+def crowd(session: Session) -> int:
+    """A listing longer than one maximal request can return, on any database.
+
+    Two populations have to give the same answer here: a lane database created a minute
+    ago, and the shared checkout's, which held 495 projects accumulated across sessions
+    and days. `project` is append-only by design, so that accumulation is the steady
+    state rather than residue -- a suite that only works below some size is a suite that
+    stops working, on a date nobody chose.
+
+    So the size is neither assumed nor inherited: this tops the table up to more than
+    **twice** the frozen maximum, adding nothing when it is already bigger. Twice,
+    specifically, because the assumption that broke was a loop bound of 400 rows, and a
+    fixture that reproduces the failing population is what keeps the repair honest.
+
+    The rows are written inside the suite's rollback transaction, so this lane's own
+    database does not grow by one project per run.
+    """
+    wanted = 2 * MAX_LIMIT + 11
+    held = session.execute(text("SELECT count(*) FROM project")).scalar_one()
+    missing = max(0, wanted - held)
+    if missing:
+        session.execute(
+            text(
+                "INSERT INTO project (project_uid, name, created_at) "
+                "VALUES (:p, :n, now() - make_interval(secs => :s))"
+            ),
+            [
+                # Stamped into the past, and distinct, so these sort below the ladder's
+                # six and leave its head of the listing where the other tests expect it.
+                {"p": str(ProjectUid.new()), "n": f"Толпа {i}", "s": float(i) + 0.5}
+                for i in range(1, missing + 1)
+            ],
+        )
+        session.flush()
+
+    total = session.execute(text("SELECT count(*) FROM project")).scalar_one()
+    assert total > 2 * MAX_LIMIT, (
+        f"the crowd fixture left {total} projects, which is not more than a maximal "
+        "request can return twice over"
+    )
+    return int(total)
+
+
 # ---------------------------------------------------------------------------
 # listProjects: order, limit, cursor
 # ---------------------------------------------------------------------------
@@ -213,24 +277,117 @@ def test_limit_bounds_the_page_and_the_listing_is_longer_than_the_page(
     assert uids(page, "project_uid") == uids(whole, "project_uid")[:2]
 
 
-def test_the_cursor_walks_the_whole_listing_without_losing_or_repeating(
-    shipped_router: Router, ladder: Ladder
+def test_the_cursor_walks_a_live_listing_without_losing_or_repeating(
+    shipped_router: Router, ladder: Ladder, crowd: int, session: Session
 ) -> None:
+    """The walk enumerates the listing exactly once, on a table of any size.
+
+    The first version of this test could not do that, and the way it failed is worth
+    keeping written down. It walked `for _ in range(200)` at `limit=2`, so it could
+    cross at most 400 rows, and it compared the walk against a single
+    ``/projects?limit=200`` request. Both are assumptions about the population. `project`
+    is append-only and projects accumulate across sessions and days, so the steady state
+    of a long-lived database is a table larger than either number: at 495 projects the
+    loop ran out before the listing did, and the single maximal request could not have
+    been the whole listing anyway, because 200 is the frozen maximum. The test was
+    asserting a property of a small table.
+
+    So nothing here is a constant. The loop bound comes from the measured population,
+    the expected sequence comes from the rows themselves, and `crowd` guarantees the
+    table is larger than a maximal request can return -- larger than 400 rows, the
+    number the old bound broke on -- whether this runs against a database somebody
+    has been accumulating in for days or against one created a minute ago.
+
+    Scoping the walk to the six `ladder` projects would also have made it pass, and
+    would have been the wrong repair: a cursor that restarts, or repeats, or silently
+    resumes by position still serves those six, so that test would pass against every
+    defect this one exists to catch.
+
+    The listing is **live** while the walk runs, which is the realistic case and the
+    discriminating one: a project is created at the head partway through, and a token
+    the walk did not produce is offered partway through. An offset cursor re-serves a
+    project after the insert shifts the listing under it; a cursor that answers a
+    forged token instead of refusing it hands the caller a page from somewhere else.
+    Neither survives the assertions below.
+    """
+    before = _listing_keys(session)
+    assert len(before) == crowd
+
+    # A maximal request is itself a page. If it were the whole listing, this test would
+    # prove nothing a single call could not, so that is asserted rather than assumed.
+    capped = ok(get(shipped_router, f"/projects?limit={MAX_LIMIT}"))
+    assert len(capped["items"]) == MAX_LIMIT
+    assert capped["page"]["next_cursor"] is not None, (
+        f"the listing fits in one maximal request ({len(before)} projects); "
+        "a cursor walk over it would demonstrate nothing"
+    )
+
+    limit = 3
+    midpoint = len(before) // 2
     collected: list[str] = []
     cursor: str | None = None
-    for _ in range(200):
-        target = "/projects?limit=2" + (f"&cursor={cursor}" if cursor else "")
+    pages = 0
+    inserted: str | None = None
+    forged_probed = False
+
+    for _ in range(len(before) // limit + 8):
+        target = f"/projects?limit={limit}" + (f"&cursor={cursor}" if cursor else "")
         page = ok(get(shipped_router, target))
+        assert len(page["items"]) <= limit, "a page came back longer than the limit"
         collected.extend(uids(page, "project_uid"))
+        pages += 1
         cursor = page["page"]["next_cursor"]
         if cursor is None:
             break
-    assert cursor is None, "the listing never reported a last page"
 
-    whole = ok(get(shipped_router, "/projects?limit=200"))
-    assert collected == uids(whole, "project_uid")
-    assert len(collected) == len(set(collected)), "a project appeared on two pages"
-    assert set(ladder.created) <= set(collected)
+        if not forged_probed:
+            # A token this walk did not produce must be refused, and refusing it must
+            # not disturb the walk that is in progress. Answering it -- with a restart,
+            # or with an empty page -- hands the caller rows from somewhere else while
+            # they believe they are still paging.
+            refused = get(shipped_router, "/projects?cursor=not-a-token")
+            assert refused.status == 422, (
+                "a forged cursor was answered rather than refused, mid-walk: "
+                f"{refused.status}"
+            )
+            forged_probed = True
+
+        if inserted is None and len(collected) >= midpoint:
+            inserted = ladder.insert_at_the_head()
+    else:
+        raise AssertionError(
+            f"the walk did not reach the end of {len(before)} projects in "
+            f"{len(before) // limit + 8} pages of {limit}"
+        )
+
+    assert cursor is None, "the listing never reported a last page"
+    assert pages > 1, "the whole listing came back in one page, so limit was ignored"
+    assert forged_probed and inserted is not None, "the walk was never disturbed"
+    assert len(collected) > MAX_LIMIT, (
+        "the walk crossed no more rows than a single request could return"
+    )
+
+    # Nothing lost, nothing repeated, and nothing served that sorted above the cursor:
+    # the project created at the head mid-walk belongs to the pages already behind it.
+    assert set(collected) == before.keys(), "the walk lost or invented a project"
+    assert len(collected) == len(before), (
+        f"the walk served {len(collected)} rows for {len(before)} projects, so one "
+        "appeared on two pages -- which is what resuming by position does when the "
+        "listing grows at the head under a live walk"
+    )
+    assert inserted not in collected, (
+        "a project created above the resume point was served below it"
+    )
+
+    # And in the declared order, over the total key rather than over created_at alone,
+    # because two projects committed in one transaction share a created_at exactly.
+    keys = [(before[uid], uid) for uid in collected]
+    assert keys == sorted(keys, reverse=True), (
+        "the walk did not follow the declared newest-first order"
+    )
+    assert collected[:MAX_LIMIT] == uids(capped, "project_uid"), (
+        "the walk and a single maximal request disagree about the head of the listing"
+    )
 
 
 def test_the_cursor_is_stable_across_an_insert_at_the_head(
@@ -581,6 +738,60 @@ def test_an_in_vocabulary_value_that_matches_nothing_is_an_empty_page_not_a_refu
     page = ok(get(shipped_router, f"/runs/{mixed_run.run_id}/findings?verdict=accepted"))
     assert page["items"] == []
     assert page["page"]["next_cursor"] is None
+
+
+def test_a_cursor_whose_key_is_not_in_this_listing_gives_an_empty_page_not_a_restart(
+    shipped_router: Router, mixed_run: MixedRun
+) -> None:
+    """A token that decodes but does not belong here must not reopen the listing.
+
+    Found by a mutation that came back green. Replacing `paginate`'s
+    ``start = len(rows)`` with ``start = 0`` -- the difference between "the key is not
+    here, so there is nothing after it" and "the key is not here, so start again" --
+    reddened nothing, because every other test walks keys that are present.
+
+    The case is reachable on the shipped surface even though `finding` is append-only:
+    a cursor minted on one **filtered** listing carries a key that a differently
+    filtered listing does not contain. `paginate`'s own docstring says a key that is no
+    longer present must yield an empty page "rather than a page from the wrong end",
+    and until now nothing held it to that.
+
+    The discrimination is the last assertion: unfiltered, that other listing has
+    exactly one finding to hand back, so a restart is visible as that finding
+    reappearing under a cursor that never pointed at it.
+    """
+    filtered = ok(
+        get(
+            shipped_router,
+            f"/runs/{mixed_run.run_id}/findings?category=internal_contradiction&limit=1",
+        )
+    )
+    cursor = filtered["page"]["next_cursor"]
+    assert cursor, "no cursor to carry across"
+
+    elsewhere = ok(
+        get(
+            shipped_router,
+            f"/runs/{mixed_run.run_id}/findings"
+            f"?category=explicit_placeholder&cursor={cursor}",
+        )
+    )
+    assert elsewhere["items"] == [], (
+        "a cursor from another listing restarted this one: it returned "
+        f"{uids(elsewhere)}"
+    )
+    assert elsewhere["page"]["next_cursor"] is None
+
+    without = ok(
+        get(
+            shipped_router,
+            f"/runs/{mixed_run.run_id}/findings?category=explicit_placeholder",
+        )
+    )
+    assert len(without["items"]) == 1, (
+        "the listing the cursor was carried into is empty anyway, so an empty page "
+        "proves nothing"
+    )
 
 
 # ---------------------------------------------------------------------------
