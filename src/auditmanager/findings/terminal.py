@@ -74,6 +74,7 @@ def select_terminal(
     *,
     required_stages: Sequence[str],
     gate_ran: bool = True,
+    stage_errors: Mapping[str, str | None] | None = None,
 ) -> TerminalSelection:
     """Choose the terminal from the required stages' statuses.
 
@@ -107,7 +108,7 @@ def select_terminal(
         return TerminalSelection(
             state="failed",
             degradation_set=tuple(failed + skipped),
-            terminal_reason="analysis_failed",
+            terminal_reason=_reason_for(failed + skipped, stage_errors),
         )
 
     if not gate_ran:
@@ -124,3 +125,34 @@ def select_terminal(
         return TerminalSelection(state="partial", degradation_set=tuple(degraded))
 
     return TerminalSelection(state="published")
+
+
+def _reason_for(
+    stages: Sequence[str], stage_errors: Mapping[str, str | None] | None
+) -> str:
+    """The run's terminal reason: the stages' own code when they agree on one.
+
+    ``audit_run.terminal_reason`` is CHECK-constrained to the frozen error catalog, so the
+    only values this may return are catalog members; an unrecognised code from a stage is
+    ignored rather than passed through to be refused by the database.
+
+    One reason cannot represent two different causes, so a run whose stages failed for
+    different reasons keeps the generic ``analysis_failed``. That is a deliberate loss:
+    naming one of several causes would be a guess, and the stage rows carry all of them.
+
+    Without this the run row said ``analysis_failed`` whatever killed it, which matters
+    because the catalog marks ``analysis_failed`` not retryable and ``dependency_unavailable``
+    retryable -- so an operator reading the run could not tell a model that answered badly
+    from a provider that never answered.
+    """
+    if not stage_errors:
+        return ErrorCode.ANALYSIS_FAILED.value
+    codes = {stage_errors.get(stage) for stage in stages}
+    codes.discard(None)
+    if len(codes) != 1:
+        return ErrorCode.ANALYSIS_FAILED.value
+    code = codes.pop()
+    try:
+        return ErrorCode(code).value
+    except ValueError:
+        return ErrorCode.ANALYSIS_FAILED.value
