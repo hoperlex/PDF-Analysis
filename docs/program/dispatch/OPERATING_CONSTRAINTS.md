@@ -87,3 +87,49 @@ behind. Run only your own suite.
 
 If you must run several, expect cross-suite interference and say so in your report rather
 than filing a failure as a code defect. This is a known open item, not news.
+
+## 7. There is one battery command, and it is this one
+
+`GATE_C_DEFERRED.md` claims the backend suites run under "one battery command". No document
+named it, so the three Gate W2 sessions each invented their own and reported three different
+totals — 708, 718 and 729 — none of them comparable with another. Each said so in its report,
+which is the only reason it was noticed.
+
+The canonical command is:
+
+```
+.venv/bin/pytest tests --ignore=tests/contract --ignore=tests/checkpoint
+```
+
+Prefer it over naming the suites positively. It picks up a directory a later wave adds, and
+it excludes exactly the two quarantined trees named in `PROTOTYPE_PROFILE.md` §6.3 and
+nothing else. A positive list silently stops covering whatever is created after it is
+written.
+
+Quote the count with the command that produced it and the commit it ran on. A bare test
+count is not a measurement.
+
+## 8. Freeze the tree before the battery, not during it
+
+`tests/integration/foundation/conftest.py` carries an autouse session-scoped guard from
+`P1-QA-00` that snapshots the tracked checkout before the suite and compares it afterwards,
+failing if they differ — "a test that writes into the repository belongs in a `tmp_path`".
+
+It does what it was built for, and it also fires when **you** edit a tracked file while a
+run is in flight. `W2-PROV` lost two battery runs that way and both were green once re-run
+against a committed tree. Commit first, then run. A red from this guard names the checkout
+diff, so it is distinguishable from a real failure if you read it.
+
+## 9. §6 is about residue, not about population
+
+§6 tells you to report a cross-suite failure as interference rather than as a code defect.
+That is right, and it is narrower than it looks.
+
+The database is long-lived and the schema is append-only by design, so rows accumulate
+across sessions and days: at the Gate W2 convergence the shared instance held 495 projects
+that no suite in that run had created. A test that assumes a small table fails against that
+population **on its own**, with nothing else running, and that is a defect in the test, not
+interference.
+
+The way to tell them apart costs one command: run your suite alone against the same
+database. If it still fails, §6 does not cover it.
