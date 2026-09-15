@@ -173,3 +173,65 @@ def test_the_listing_follows_the_same_order_as_the_export(divergent_run, session
         "api/routers/findings.py says they cannot: P02_SEAMS section 6 makes the CSV "
         f"order canonical.\n  listing: {listing}\n  export:  {export}"
     )
+
+
+#: A second grounded observation under one ``finding_uid``. PC-01 allocates one finding per
+#: observation, so this state is not reachable through the publish path today — and nothing
+#: in the schema forbids it, there is no unique constraint, and ADR-0010 makes the finding
+#: the identity that survives across runs, which is exactly how a second observation would
+#: arrive. The tiebreaker in the listing's ORDER BY is what keeps that case deterministic.
+SECOND_OBSERVATION = "fobs_" + "0" * 26
+
+
+def test_two_observations_under_one_finding_still_order_deterministically(
+    divergent_run, session
+):
+    """Guards the secondary key. Without it the order within one finding is unspecified.
+
+    Added because mutation M2 — dropping ``o.finding_observation_id`` from the listing's
+    ORDER BY — reddened nothing: every finding in this corpus carries exactly one grounded
+    observation, so the tiebreaker never decided anything and could have been deleted
+    unnoticed.
+    """
+    session.execute(
+        text(
+            "INSERT INTO finding_observation (finding_observation_id, run_id, finding_uid, "
+            "    stage_id, category, finding_text, recommendation_text, grounded, "
+            "    analysis_profile_id, prompt_bundle_id, provider_mode) "
+            "SELECT :oid, run_id, finding_uid, stage_id, category, 'W3 second observation', "
+            "       recommendation_text, TRUE, analysis_profile_id, prompt_bundle_id, "
+            "       provider_mode "
+            "FROM finding_observation WHERE finding_observation_id = :template"
+        ),
+        {"oid": SECOND_OBSERVATION, "template": LAST_OBSERVATION},
+    )
+    session.execute(
+        text(
+            "INSERT INTO finding_evidence (finding_observation_id, evidence_ordinal, "
+            "    page_number, quote, char_start, char_end) "
+            "VALUES (:oid, 1, 1, :quote, 0, 5)"
+        ),
+        {"oid": SECOND_OBSERVATION, "quote": "проба"},
+    )
+    session.flush()
+
+    sharing = [
+        row[0]
+        for row in session.execute(
+            text(
+                "SELECT finding_observation_id FROM finding_observation "
+                "WHERE finding_uid = :uid AND grounded ORDER BY finding_observation_id"
+            ),
+            {"uid": FIRST_UID},
+        )
+    ]
+    assert sharing == [SECOND_OBSERVATION, LAST_OBSERVATION], (
+        "the two observations do not share one finding, so the tiebreaker is not exercised"
+    )
+
+    listing = [str(row.finding_observation_id) for row in published_findings(session, divergent_run)]
+    export = _first_seen(str(row.finding_observation_id) for row in export_rows(session, divergent_run))
+    assert listing == export, (
+        "with two observations under one finding the listing and the CSV disagree: the "
+        f"secondary sort key is not deciding.\n  listing: {listing}\n  export:  {export}"
+    )
