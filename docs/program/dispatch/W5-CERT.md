@@ -101,13 +101,35 @@ compared, and let the registry row say which is current.
 - `git diff --check` — expect exit `0`.
 - The ten criteria of `PROTOTYPE_PROFILE.md` §8, by the runbook in
   `docs/manual-tests/PC-01_prototype.md`, from a clean clone on your own instance.
-- **One live `text_analysis`.** Criterion 4 requires it and a recorded adapter does not
-  satisfy it. `OD-03`'s ceiling is machine-readable as `AUDITMANAGER_RUN_COST_CEILING_USD`,
-  default USD 1.00, and it now binds across retry attempts rather than per call — confirm
-  that is true rather than assuming it.
+- **One real `text_analysis`, through the proxy.** Criterion 4 requires a model to actually
+  answer; a recorded adapter does not satisfy it.
+
+  **The mode is `proxy`, not `live`.** `OD-02` was revised to the proxy on 2026-09-14 —
+  `bootstrap/settings.py:33` records the date. `proxy` is a *transport*, not a provenance
+  mode: a proxied call is recorded in the run as `live`, because a model really answered it.
+  The credentials are already on disk in `.env.provider` (mode 600, git-ignored via
+  `.gitignore` line 2, `PROXY_LLM_BASE_URL` / `PROXY_LLM_TOKEN` / `PROXY_LLM_MODEL =
+  anthropic/claude-opus-5`). You do not need to obtain a key and you must not print one.
+
+  Follow `docs/manual-tests/PC-01_prototype.md`, which is current — step 3 expects
+  `wired, provider_mode=proxy`. **Do not follow `docs/program/LIVE_RUN_INSTRUCTIONS.md`**:
+  it describes an `ANTHROPIC_API_KEY` / `live` path that predates the `OD-02` revision and
+  does not mention the proxy at all. It is annotated as superseded; it is named here because
+  it is the document you would otherwise reach for, and it would send you hunting for a
+  credential that is not what this system uses.
+
+  `OD-03`'s ceiling is machine-readable as `AUDITMANAGER_RUN_COST_CEILING_USD`, default USD
+  1.00, and it now binds across retry attempts rather than per call — confirm that rather
+  than assuming it. One run over the eight-page synthetic corpus cost roughly $0.20 at the
+  rates in `P02_LOCK.json`.
 
 `tests/contract` and `tests/checkpoint` are CP-00 historical evidence, red before you start,
 quarantined by `PROTOTYPE_PROFILE.md` §6.3. Not your gate.
+
+Check the wiring before you spend anything. `PYTHONPATH=src .venv/bin/python -m
+auditmanager.api.app` with `.env` and `.env.provider` sourced builds the application and
+stops: it prints `wired, provider_mode=proxy` and `operations=12`, makes no API call, and a
+missing or misnamed variable is refused at startup with exit 2 naming the variable.
 
 ## The two accepted limits — re-examine, do not inherit
 

@@ -21,7 +21,7 @@ That is the stop trigger the owner named, reached in its stated form.
 
 | Session | Asks | Instance | Live provider |
 |---|---|---|---|
-| `W5-CERT` | do the ten `PROTOTYPE_PROFILE.md` §8 criteria still hold, at the journey level, after 915 lines changed under them | `gate-w5` — 55560 / 59160 / 59161, `audit_w5` | **yes**, criterion 4 requires one |
+| `W5-CERT` | do the ten `PROTOTYPE_PROFILE.md` §8 criteria still hold, at the journey level, after 915 lines changed under them | `gate-w5` — 55560 / 59160 / 59161, `audit_w5` | **yes** — criterion 4 needs a model to answer, through the **proxy** (`OD-02` revised 2026-09-14); credentials already on disk |
 | `W5-ADV` | is the new code correct, and are the guards the integrator wrote for it real | `gate-w5a` — 55570 / 59170 / 59171, `audit_w5a` | no |
 
 Owned paths are disjoint. `W5-CERT` writes `artifacts/checkpoints/PC-01/**`, the PC-01
@@ -71,6 +71,25 @@ the other, and neither's verdict overrides the other's.
 Defects go back to the tree that owns them. Whether `origin/main` advances to carry a new
 PC-01 acceptance is the owner's decision, informed by `W5-CERT`'s verdict — not the
 integrator's and not the session's.
+
+## A premise this plan got wrong, caught before dispatch
+
+The first version of `W5-CERT` said "one **live** `text_analysis`" and left the session to
+find the credential. Checking that premise against the tree before starting — rule 6 of both
+briefs, applied to my own brief — showed it was wrong twice over: the configured mode is
+`proxy`, not `live`, and `LIVE_RUN_INSTRUCTIONS.md`, the document a session would reach for,
+describes an `ANTHROPIC_API_KEY` path that predates the `OD-02` revision and does not mention
+the proxy at all.
+
+Both are fixed: the brief now names the proxy path and points at
+`docs/manual-tests/PC-01_prototype.md`, which is current, and `LIVE_RUN_INSTRUCTIONS.md`
+carries a superseded header.
+
+**This is the fourth instance of the same failure mode** — `W2_CLOSURE.md` §2 (two briefs),
+`W4_CLOSURE.md` §3 (an entirely obsolete register), and now a dispatch brief written by the
+integrator who wrote the other three post-mortems. The lesson is not that people should try
+harder. It is that the check has to happen at a fixed point — here, immediately before
+dispatch — because intending to remember is what keeps failing.
 
 ## Still owner-blocked, and untouched by this wave
 

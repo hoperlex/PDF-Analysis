@@ -1,5 +1,26 @@
 # Supplying the provider credential, and closing Gate C
 
+> **Superseded for the provider path, 2026-09-15.** This document describes an
+> `ANTHROPIC_API_KEY` credential and `AUDITMANAGER_PROVIDER_MODE=live`. **`OD-02` was
+> revised to the proxy on 2026-09-14** — `src/auditmanager/bootstrap/settings.py:33` records
+> the date and the reason — and the configured path is now `AUDITMANAGER_PROVIDER_MODE=proxy`
+> with `PROXY_LLM_BASE_URL`, `PROXY_LLM_TOKEN` and `PROXY_LLM_MODEL`. `P4-RUN-01` ran the
+> PC-02 corpus through that proxy the same day.
+>
+> `proxy` is a **transport**, not a provenance mode: a proxied call is recorded in the run as
+> `live`, because a model really answered it. Both modes remain implemented, and the `live`
+> path below is still accurate *if* a first-party key is supplied — it is simply not what
+> this installation uses.
+>
+> **The current instructions are `docs/manual-tests/PC-01_prototype.md`**, which expects
+> `wired, provider_mode=proxy` at step 3. Sections 1 and 2 below are kept because they are
+> still the right advice about where a credential goes and where it must never go.
+>
+> Found on 2026-09-15 while checking the premises of the `W5-CERT` dispatch before starting
+> it. The brief had said "one live `text_analysis`" and would have sent that session looking
+> for a key this system does not use.
+
+
 One value is missing and nothing else. This is how to supply it.
 
 ## 1. What the key is
