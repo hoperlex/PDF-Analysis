@@ -1,8 +1,12 @@
 # `W5-CERT` dispatch prompt — PC-01 re-certification
 
-Base `3412fb2cb1bcf3fc4ad926c82dae8c7f5c640b65` on `planning/prototype-roadmap`, published as
+Base `463a53a4cbc82a258507523a16845d47168cb473` on `planning/prototype-roadmap`, published as
 `origin/dev`. Gate at that commit: 793 passed / 5 skipped / 116 subtests, `make foundation`
 35 passed, `git diff --check` clean.
+
+Runs **in parallel** with `W5-ADV` (`docs/program/dispatch/W5-ADV.md`), on a different
+instance. You do not coordinate with it and you do not read its output; §"How your report
+combines" says how the two results meet.
 
 **This dispatch needs the owner's go-ahead before it is started.** Whether to re-certify is
 the owner's decision, not the integrator's. Everything below is ready for when that decision
@@ -12,7 +16,7 @@ is taken.
 
 You are session `W5-CERT`. Repository: /root/projects/PDF-Analysis.
 
-BASE COMMIT: `3412fb2cb1bcf3fc4ad926c82dae8c7f5c640b65`. Branch `agent/w5-cert`.
+BASE COMMIT: `463a53a4cbc82a258507523a16845d47168cb473`. Branch `agent/w5-cert`.
 
 ## What you are for
 
@@ -41,14 +45,14 @@ So unless you check, you will certify the old code and conclude, correctly and u
 that nothing changed.
 
 Your first action is `git rev-parse HEAD`. If it is not
-`3412fb2cb1bcf3fc4ad926c82dae8c7f5c640b65`, fetch and check out the base before anything
+`463a53a4cbc82a258507523a16845d47168cb473`, fetch and check out the base before anything
 else, and **say in your report what your `HEAD` was on arrival.** The same applies to a
 clean clone: `git clone` gives you `main`, which is the wrong commit for this work. Clone
 and then `git checkout` the base SHA explicitly.
 
 ## What changed, and which criteria it touches
 
-Derived from `git diff 6d3c0f3..3412fb2 -- src/ db/`. This is a map for planning your
+Derived from `git diff 6d3c0f3..463a53a -- src/ db/`. This is a map for planning your
 attention, **not a list of what to test** — you test all ten criteria. Treat the mapping
 itself as a claim to check, not as given.
 
@@ -61,6 +65,12 @@ itself as a claim to check, not as given.
 | 7 `csv_resolving_to_exact_aggregates` | the CSV itself is **unchanged**; what changed is that the listing now agrees with it. Verify the CSV bytes still resolve to the exact project/version/run |
 | 9 `idempotency_creates_no_duplicates` | `runs/executor.py` (+236 lines) and the new `runs/retry.py`. **Look hardest here.** A retry that reuses a key must not duplicate, and a retry that suffixes one must not orphan |
 | 10 `explicit_failures` | `findings/terminal.py` and `runs/retry.py`. An unavailable provider now retries in-process before failing, and the run row names `dependency_unavailable` rather than the generic `analysis_failed` PC-01 recorded |
+
+**Criterion 10 must include the retry-exhausted path.** A provider that never answers now
+costs the run three attempts with pinned backoffs before the run fails. Nothing in the suite
+asserts what `audit_run.terminal_reason` says at the end of that path — `W5-ADV` is attacking
+the same seam from inside, and you should reach it from outside, through the journey. If your
+two answers disagree, that disagreement is the most valuable thing either session produces.
 
 Criterion 10 is where the certified artifact is most visibly stale, and it is the one to
 approach with the most suspicion in **both** directions: the new behaviour is arguably
@@ -158,10 +168,11 @@ A venv holds absolute paths: if you move the worktree, re-bootstrap.
    four sessions because each held its work uncommitted.
 2. **Never add a root dependency.** `docs/program/P02_LOCK.json` is the pinned set.
 3. Stay inside your owned paths. You repair nothing.
-4. Do not measure while another session runs against the same services; your ports are
-   yours alone. `OPERATING_CONSTRAINTS.md` §9 is worth reading first — §6 covers residue,
-   not accumulated population, and telling the two apart means running your suite alone
-   against the same database.
+4. Do not measure while `W5-ADV` runs against its services; your ports are yours alone.
+   `W5-ADV` is on `gate-w5a` / 55570 / 59170 / 59171 — never touch those.
+   `OPERATING_CONSTRAINTS.md` §9 is worth reading first: §6 covers residue, not accumulated
+   population, and telling the two apart means running your suite alone against the same
+   database.
 5. **Do not create a tag, and do not push or merge to `main`.** Whether `main` advances to
    carry a new PC-01 acceptance is the owner's decision, informed by your report.
 6. **Check every premise in this brief against the tree before building on it.** Two of the
@@ -169,6 +180,19 @@ A venv holds absolute paths: if you move the worktree, re-bootstrap.
    rather than from the code — `W2_CLOSURE.md` §2. The table above was built from a diff,
    which is better, but it is still a claim. If something here is wrong, say so in the
    report; that is a useful finding, not an inconvenience.
+
+## How your report combines with `W5-ADV`
+
+You ask whether the ten §8 criteria still hold at the journey level. `W5-ADV` asks whether
+the new code is correct and whether its guards are real. Different failure modes,
+deliberately.
+
+If `W5-ADV` finds a defect that is visible through the twelve journey operations, you should
+have found it too, and a gap there is a finding about the certification itself. If it finds
+one that is not journey-visible, your verdict stands and the defect is repaired separately.
+
+**Your verdict is not subordinate to its report and you do not wait for it.** Both go to the
+integrator, who reconciles them.
 
 ## Report
 
@@ -182,6 +206,6 @@ A venv holds absolute paths: if you move the worktree, re-bootstrap.
   as absolute numbers, comparable to PC-01's 3 of 3 and 0 of 6.
 - Every defect found, described precisely, **left unrepaired**, naming the tree that owns
   it.
-- A plain verdict: does PC-01 still hold at `3412fb2`, hold with named exceptions, or not
+- A plain verdict: does PC-01 still hold at `463a53a`, hold with named exceptions, or not
   hold. If you cannot reach one, say what would let you.
 - Elapsed wall-clock.
