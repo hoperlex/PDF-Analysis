@@ -50,6 +50,9 @@ proved to be the imported tree, and reverted afterwards.
  M15  the router filters **after** ``paginate`` rather than before  walk-under-a-filter
  M16  ``paginate``'s exhaustion test becomes ``>`` instead of       last-page-no-cursor
       ``>=``
+ M19  ``_finding_sort_key`` returns ``(category,)`` -- a key that   cursor-key-total-order,
+      is no longer a total order over the run                       one-per-page walk,
+                                                                    cursor-stable
 ==== ============================================================ ==========================
 
 ``test_the_population_is_not_a_fixture_of_three_rows`` guards this module's premise rather
@@ -512,3 +515,62 @@ def test_the_last_page_carries_no_continuation_cursor(corpus, router):
     items, more = _page(_get(router, f"/runs/{corpus['run_id']}/findings?limit={count - 1}"))
     assert len(items) == count - 1
     assert more is not None, "a page that left an item behind offered no way to reach it"
+
+
+def test_the_cursor_key_is_a_total_order_over_the_run_even_though_the_sequence_is_not_sorted_by_it(
+    corpus, router, session
+):
+    """What actually makes the page walk safe, asserted for the first time.
+
+    ``paginate`` **locates** the cursor's key in the sequence rather than comparing
+    against it, so the sequence need not be sorted by that key -- but the key must be
+    unique within the sequence, or a resumption lands on the wrong row and the walk
+    silently skips or repeats. Nothing asserted that uniqueness, and it is the load-
+    bearing property: the listing is ordered by ``finding_observation_id`` alone while the
+    cursor key is ``(finding_uid, finding_observation_id)``.
+
+    Recorded here because those two are **not** the same order, contrary to the docstring
+    on ``_finding_sort_key``:
+
+        "The same key family the CSV sorts on (P02_SEAMS.md section 6), so a page
+        boundary and a CSV row order cannot disagree about what 'next' means."
+
+    They do disagree. ``published_findings`` orders by ``o.finding_observation_id``; the
+    CSV query orders by ``f.finding_uid COLLATE "C", o.finding_observation_id COLLATE
+    "C"``; and ``finding_uid`` and ``finding_observation_id`` are independently allocated
+    ULIDs, so within one millisecond their random tails disagree. Measured on this
+    instance at 4182b44: 31 of 416 runs list their grounded observations in a different
+    order through the API than through the CSV, with collation ruled out as the cause (0
+    runs differ on collation alone). It is a presentation inconsistency and not a paging
+    defect -- which is precisely why the uniqueness below is what needs guarding, and is
+    reported rather than repaired. Owned by the ``api`` and ``findings`` trees.
+    """
+    listing, _ = _page(_get(router, f"/runs/{corpus['run_id']}/findings?limit=200"))
+
+    # The cursors the surface itself emits, not a key this test re-derives: each is the
+    # encoded sort key of one row, so their uniqueness is a property of
+    # `_finding_sort_key` over this run's data rather than of a tuple assembled here.
+    cursors: list[str] = []
+    cursor: str | None = None
+    for _ in range(len(listing) + 2):
+        suffix = f"&cursor={cursor}" if cursor else ""
+        _, cursor = _page(
+            _get(router, f"/runs/{corpus['run_id']}/findings?limit=1{suffix}")
+        )
+        if cursor is None:
+            break
+        cursors.append(cursor)
+    assert len(set(cursors)) == len(cursors), (
+        f"the surface emitted the same cursor for two different rows: {cursors}. "
+        "paginate locates the key rather than comparing it, so a repeated key resumes at "
+        "the first match and the walk skips every row between them"
+    )
+    assert len(cursors) == len(listing) - 1, (
+        f"a run of {len(listing)} findings paged one at a time emitted {len(cursors)} "
+        "continuation cursors; it should emit one fewer than it has rows"
+    )
+
+    walked = _walk(router, f"/runs/{corpus['run_id']}/findings?", limit=1)
+    assert walked == [item["finding_uid"] for item in listing], (
+        "the walk and the listing disagree, which is what a non-unique cursor key causes"
+    )
