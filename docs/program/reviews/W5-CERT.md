@@ -35,3 +35,47 @@ from the primary worktree, mode 600.
 | `pytest tests/e2e/pc01` (recorded) | 0 | **49 passed, 5 skipped** |
 
 Gate matches the brief exactly.
+
+## The live run — criteria 4 and 5
+
+**Blocked first by a defect, in a tree I do not own.** See DEF-1 below. The run was
+then performed from a second, deeper checkout of the same commit, with the canonical
+suite unmodified.
+
+| Command | Exit | Observed |
+|---|---|---|
+| `C2_PC01_LIVE=1 pytest tests/e2e/pc01/test_live_text_analysis.py` (from `/root/w5cert`) | 1 | **5 errors**, `IndexError: 2` at `test_live_text_analysis.py:84` |
+| same, from `/root/certrun/w5deep` (depth 3) | 0 | **5 passed** |
+
+Figures, read from the database rather than from the suite's own output:
+
+* run `run_01M2JNSEFQ4N9GFV5BYK4606E6`, state `published`, `provider_mode` **`live`**,
+  `terminal_reason` null, `degradation_set` empty.
+* `model_call` ledger row: provider `anthropic`, model identity **`claude-opus-5`**,
+  status `succeeded`, `input_tokens` 3895, `output_tokens` 750, `latency_ms` 12229,
+  `cost_micros` 38225, **`cost_basis` `measured`**.
+* **Cost USD 0.038225 against the USD 1.00 `OD-03` ceiling** (`cost_ceiling_usd: 1.0`
+  recorded in the stage metrics).
+* **Seeded issues found: 3 of 3** (`SI-01`, `SI-02`, `SI-03`).
+* **Near-miss controls flagged: 0 of 6.**
+* Every published quotation verified present on its declared page, against the corpus's
+  own extractor (`tools/fixtures/ar_corpus/pdfextract.py`), not the product's.
+* `evidence_emitted` 5, `observations_emitted` 3, `evidence_unresolved` 0,
+  `observations_dropped_unresolved` 0.
+* Retry provenance on the stage: `attempts` 1, `attempt_budget` 3,
+  `attempt_budget_exhausted` false, `retry_waited_seconds` 0.0,
+  `retried_on_error_code` null.
+* `output_tokens_source: "provider"` — the wave-2/3 change reaching the metrics, as the
+  brief's map claimed.
+
+**Identical to PC-01 on both product numbers: 3 of 3 and 0 of 6.** Cost is lower
+(0.0382 against the accepted report's 0.1147).
+
+What would have made this fail: the suite pins `PROXY_LLM_MODEL` to
+`anthropic/claude-opus-5` rather than reading it from the file, and asserts
+`settings.proxy_model == LIVE_MODEL` before spending, so a run routed to the proxy's
+small default model fails at the fixture. `page_texts` pins the extractor against the
+manifest's `page_text_sha256` before any quotation is compared, so a quotation check
+cannot pass by measuring the extractor. `provider_mode` is asserted to read `live`, and
+`cost_basis` reads `measured` rather than `estimated` — an unreached provider could
+produce neither.
