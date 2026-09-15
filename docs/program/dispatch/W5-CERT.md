@@ -1,7 +1,9 @@
 # `W5-CERT` dispatch prompt — PC-01 re-certification
 
-Base `463a53a4cbc82a258507523a16845d47168cb473` on `planning/prototype-roadmap`, published as
-`origin/dev`. Gate at that commit: 793 passed / 5 skipped / 116 subtests, `make foundation`
+Base `ef5b8bf6cbef240fe6b63043455545fb4bdf12b8` on `planning/prototype-roadmap`, published as
+`origin/dev`. If your `HEAD` is one or two commits *ahead* of this and
+`git diff ef5b8bf..HEAD --stat` touches only `docs/program/dispatch/**`, that is this brief
+being committed — harmless, carry on. Anything else is the provisioning defect below. Gate at that commit: 793 passed / 5 skipped / 116 subtests, `make foundation`
 35 passed, `git diff --check` clean.
 
 Runs **in parallel** with `W5-ADV` (`docs/program/dispatch/W5-ADV.md`), on a different
@@ -16,7 +18,7 @@ is taken.
 
 You are session `W5-CERT`. Repository: /root/projects/PDF-Analysis.
 
-BASE COMMIT: `463a53a4cbc82a258507523a16845d47168cb473`. Branch `agent/w5-cert`.
+BASE COMMIT: `ef5b8bf6cbef240fe6b63043455545fb4bdf12b8`. Branch `agent/w5-cert`.
 
 ## What you are for
 
@@ -45,14 +47,14 @@ So unless you check, you will certify the old code and conclude, correctly and u
 that nothing changed.
 
 Your first action is `git rev-parse HEAD`. If it is not
-`463a53a4cbc82a258507523a16845d47168cb473`, fetch and check out the base before anything
+`ef5b8bf6cbef240fe6b63043455545fb4bdf12b8`, fetch and check out the base before anything
 else, and **say in your report what your `HEAD` was on arrival.** The same applies to a
 clean clone: `git clone` gives you `main`, which is the wrong commit for this work. Clone
 and then `git checkout` the base SHA explicitly.
 
 ## What changed, and which criteria it touches
 
-Derived from `git diff 6d3c0f3..463a53a -- src/ db/`. This is a map for planning your
+Derived from `git diff 6d3c0f3..ef5b8bf -- src/ db/`. This is a map for planning your
 attention, **not a list of what to test** — you test all ten criteria. Treat the mapping
 itself as a claim to check, not as given.
 
@@ -228,6 +230,6 @@ integrator, who reconciles them.
   as absolute numbers, comparable to PC-01's 3 of 3 and 0 of 6.
 - Every defect found, described precisely, **left unrepaired**, naming the tree that owns
   it.
-- A plain verdict: does PC-01 still hold at `463a53a`, hold with named exceptions, or not
+- A plain verdict: does PC-01 still hold at `ef5b8bf`, hold with named exceptions, or not
   hold. If you cannot reach one, say what would let you.
 - Elapsed wall-clock.

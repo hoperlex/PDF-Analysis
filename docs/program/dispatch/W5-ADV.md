@@ -1,7 +1,9 @@
 # `W5-ADV` dispatch prompt — adversarial QA of what waves 2 and 3 changed
 
-Base `463a53a4cbc82a258507523a16845d47168cb473` on `planning/prototype-roadmap`, published as
-`origin/dev`. Gate at that commit: 793 passed / 5 skipped / 116 subtests, `make foundation`
+Base `ef5b8bf6cbef240fe6b63043455545fb4bdf12b8` on `planning/prototype-roadmap`, published as
+`origin/dev`. If your `HEAD` is one or two commits *ahead* of this and
+`git diff ef5b8bf..HEAD --stat` touches only `docs/program/dispatch/**`, that is this brief
+being committed — harmless, carry on. Anything else is the provisioning defect below. Gate at that commit: 793 passed / 5 skipped / 116 subtests, `make foundation`
 35 passed, `git diff --check` clean.
 
 Runs **in parallel** with `W5-CERT` (`docs/program/dispatch/W5-CERT.md`), on a different
@@ -12,7 +14,7 @@ combines" says how the two results meet.
 
 You are session `W5-ADV`. Repository: /root/projects/PDF-Analysis.
 
-BASE COMMIT: `463a53a4cbc82a258507523a16845d47168cb473`. Branch `agent/w5-adv`.
+BASE COMMIT: `ef5b8bf6cbef240fe6b63043455545fb4bdf12b8`. Branch `agent/w5-adv`.
 
 ## What you are for
 
@@ -48,7 +50,7 @@ Do not stop there. That is the seam I can see; you are here for the ones I canno
 
 ## What changed, and where to look
 
-`git diff 6d3c0f3..463a53a -- src/ db/` — 915 lines. Read the diff, not the closures.
+`git diff 6d3c0f3..ef5b8bf -- src/ db/` — 915 lines. Read the diff, not the closures.
 
 | Area | What to doubt |
 |---|---|
@@ -103,7 +105,7 @@ has not moved because moving it is what re-certification decides.
 So unless you check, you will attack the old code and find nothing, correctly and uselessly.
 
 Your first action is `git rev-parse HEAD`. If it is not
-`463a53a4cbc82a258507523a16845d47168cb473`, fetch and check out the base before anything
+`ef5b8bf6cbef240fe6b63043455545fb4bdf12b8`, fetch and check out the base before anything
 else, and **say in your report what your `HEAD` was on arrival.**
 
 ## The gate you run
