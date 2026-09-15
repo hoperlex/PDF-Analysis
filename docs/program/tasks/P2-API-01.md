@@ -31,8 +31,12 @@ is accepted and integrated:
 ## Allowed paths
 
 - `contracts/api/v1/**`
-- `src/auditmanager/api/routers/**`, `src/auditmanager/api/schemas/**`,
-  `src/auditmanager/api/errors.py`, `src/auditmanager/api/idempotency.py`
+- `src/auditmanager/api/routers/**`, `src/auditmanager/api/schemas/**`
+  <!-- Corrected 2026-09-15. This line also named `src/auditmanager/api/errors.py` and
+  `src/auditmanager/api/idempotency.py`. Neither was ever created: the delivered code put
+  both inside the package this line already allows, as `routers/errors.py` and
+  `routers/idempotency.py`. The entries were redundant and pointed at nothing, so a reader
+  checking the task's paths against the tree found two misses that were never defects. -->
 - `src/auditmanager/api/README.md` — the code-adjacent README ADR-0019 item 6 requires
 - `tests/contract/api_v1/**`
 - `docs/navigation/incidents/p2-api-01.jsonl` — created only if this task actually records an
