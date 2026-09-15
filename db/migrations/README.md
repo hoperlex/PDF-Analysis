@@ -7,7 +7,10 @@ One migration head owner per wave. Use forward migrations and expand→backfill�
 | Revision | Parent | What it creates |
 |---|---|---|
 | `0001_baseline` | — | nothing. The empty, migrated P01 baseline (FF-01 §4 approves no product table) |
-| `0002_pc01_schema` | `0001_baseline` | **head** — the complete PC-01 schema: 15 tables, 1 view, 5 trigger functions |
+| `0002_pc01_schema` | `0001_baseline` | the complete PC-01 schema: 15 tables, 1 view, 5 trigger functions |
+| `0003_open_items` | `0002_pc01_schema` | three owner-ruled corrections: the blob index comment, `model_call.status` widened to admit `truncated`, a CHECK on `ungrounded_reason` |
+| `0004_cost_basis` | `0003_open_items` | `model_call.cost_basis` — whether `cost_micros` was measured or derived |
+| `0005_truncated_call_status` | `0004_cost_basis` | **head** — the two invariants that give `truncated` content: it carries a response checksum and no error code |
 
 **One head, one owner.** `A1` owns it until Gate A closes, then the integrator. No
 Gate B session writes DDL. A schema need is submitted as a test plus the constraint it

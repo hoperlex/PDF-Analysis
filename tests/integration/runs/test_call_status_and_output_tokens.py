@@ -36,6 +36,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from auditmanager.analysis.text.config import ProviderMode
 from auditmanager.analysis.text.provenance import (
     CALL_STATUSES,
     CALL_SUCCEEDED,
@@ -517,9 +518,7 @@ def _record(**overrides: Any) -> ModelCallRecord:
         "model_call_id": ModelCallId.new(),
         "provider": "anthropic",
         "model_id": "claude-opus-5",
-        "provider_mode": __import__(
-            "auditmanager.analysis.text.config", fromlist=["ProviderMode"]
-        ).ProviderMode.RECORDED,
+        "provider_mode": ProviderMode.RECORDED,
         "parameters": {},
         "request_sha256": "a" * 64,
         "response_sha256": "b" * 64,

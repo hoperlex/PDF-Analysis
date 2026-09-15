@@ -508,10 +508,10 @@ def classify_call_status(
             "truncated",
             "parameters.call_status",
             (
-                f"written before migration 0005: the column could not hold truncated, so "
+                "written before migration 0005: the column could not hold truncated, so "
                 f"the executor persisted {stored} and kept the provider stop reason in "
-                f"parameters.call_status. The call answered and was cut short at the "
-                f"output ceiling"
+                "parameters.call_status. The call answered and was cut short at the "
+                "output ceiling"
             ),
         )
     if stored in CALL_STATUSES:
@@ -1280,11 +1280,10 @@ def build_gap_register(
             "probe": {
                 "failures_found": len(extraction.failures),
                 "surfaces": sorted({f["surface"] for f in extraction.failures}),
+                # The same condition collect_failures applies, so the probe cannot
+                # drift from the ledger it is describing.
                 "model_call_failure_rows": sum(
-                    1
-                    for c in calls
-                    if c["call_status"] != "truncated"
-                    and (c["call_status"] == "failed" or c["error_code"])
+                    1 for c in calls if c["call_status"] == "failed" or c["error_code"]
                 ),
                 # Reported next to the failure count because the two were one number
                 # until migration 0005 and a reader needs to see them separated.
