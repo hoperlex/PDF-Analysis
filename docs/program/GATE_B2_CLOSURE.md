@@ -103,16 +103,48 @@ unreachable. This is the clearest example so far of what only a chain test can s
 
 ### 5.3 Carried forward
 
-* `model_call.status` admits `succeeded|failed`; `B3`'s provenance emits a third value
+> **Reconciled 2026-09-15 and now empty: all six items below are closed.** Checked against
+> the tree at `ea3c8f3`, item by item, not against any closure record. This block is kept
+> as written, with the disposition beside each item, because a register that is silently
+> deleted teaches nothing about how long it stayed wrong.
+>
+> It had been **entirely obsolete for some time** while still reading as the list of what
+> is open. `W2_CLOSURE.md` §2 records two wave-2 briefs built from stale records; this is
+> the register that class of mistake comes from, and the reconciliation commit `80ff9d8`
+> did not reach it. The cheap defence is the one wave 2 named: check the premise against
+> the tree before building on it.
+
+* ~~`model_call.status` admits `succeeded|failed`; `B3`'s provenance emits a third value
   `truncated`, exactly the case that yields a `partial` stage. `B5` maps it to `succeeded`
-  and keeps the stop reason in `parameters`; the contract supplies no mapping.
-* `details` **values** are not screened by `auditmanager.shared.errors`, only keys and types.
-  `B6` closed all four of its own sites; the kernel hole is open.
-* Eight further seam mismatches tabled in `src/auditmanager/api/README.md` — query surface,
-  `listProjects` ordering, `createProject` idempotency, `appendDecision`'s unclaimed key, and
-  a wrong claim in the document about which codes are retryable.
-* From wave `B-I`, still open: `ungrounded_reason` has no CHECK (and per §5.2 is also never
-  written); blob identity against `rejected`; `OD-03` has no machine-readable ceiling.
+  and keeps the stop reason in `parameters`; the contract supplies no mapping.~~
+  **Closed by `W2-PROV`.** `truncated` is a first-class `model_call` status with migration
+  `0005` and two invariants giving it content. Note the direction: the mapping was onto
+  `succeeded`, not `failed` — the wave-2 brief had it backwards, so the ledger had been
+  filing truncated answers as clean successes.
+* ~~`details` **values** are not screened by `auditmanager.shared.errors`, only keys and
+  types. `B6` closed all four of its own sites; the kernel hole is open.~~
+  **Closed.** `shared/errors/envelope.py` screens detail *values* with the same `_FORBIDDEN`
+  patterns as a message and raises a dedicated `UnsafeDetailValue`, distinct from
+  `UnsafeDetailKey` because the remedies differ. The code comment records the `B6` case that
+  motivated it — a property named `/etc/passwd` echoed back inside `details.field`.
+* ~~Eight further seam mismatches tabled in `src/auditmanager/api/README.md` — query
+  surface, `listProjects` ordering, `createProject` idempotency, `appendDecision`'s
+  unclaimed key, and a wrong claim in the document about which codes are retryable.~~
+  **Closed.** That table now has ten rows and every one reads **Closed**, five of them by
+  `W2-API`. The retryable claim was corrected in `contracts/api/v1/openapi.json` and
+  resealed in `web/FRONTEND_LOCK.json` on 2026-09-11.
+* ~~From wave `B-I`, still open: `ungrounded_reason` has no CHECK (and per §5.2 is also
+  never written); blob identity against `rejected`; `OD-03` has no machine-readable
+  ceiling.~~ **All three closed.** `ungrounded_reason` got its CHECK in migration
+  `0003_open_items` and is written and selected (`findings/queries.py`). Blob identity
+  against `rejected` was ruled accept-the-consequence by the owner — `GATE_B1_CLOSURE.md`
+  item 2 — with the index kept and only the false comment changed; the consequence is
+  stated at `ingest/reconciliation.py:251`. `OD-03`'s ceiling is machine-readable as
+  `AUDITMANAGER_RUN_COST_CEILING_USD`, parsed in `bootstrap/settings.py` with a
+  `ConfigurationError` on anything unparseable or non-positive.
+
+**Where the open items actually live now.** `W2_CLOSURE.md` §3 and `P4_CLOSURE.md` are the
+current registers; the owner-blocked set is `OD-17`, `OD-18` and the 21st error code.
 
 ## 6. What comes next, and why the order matters
 
