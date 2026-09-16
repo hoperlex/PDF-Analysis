@@ -887,3 +887,22 @@ change their outcome.
 After the harness fix each verification also ran in its own `MUT_COPY`, so source isolation
 holds too. The screening batches that *do* touch infrastructure — `analysis_engine` in batches
 5 and 6 — are the ones whose concurrent results were discarded and re-run.
+
+## Close
+
+`make gate`, run **alone** against `gate-w10a` with no other process touching the instance:
+
+    35 passed in 29.45s                                   (foundation)
+    1050 passed, 5 skipped, 116 subtests passed in 206.00s (battery)
+    Test Files  24 passed (24) / Tests 289 passed (289)    (frontend)
+    GATE OK: battery, foundation, frontend and whitespace all pass
+
+Baseline was **816 passed / 5 skipped / 116 subtests**; this wave adds **234 tests** and
+816 + 234 = 1050. Skips and subtests are unchanged, so nothing was turned off to get here.
+The B5 corpus run inside the battery reports the same 3 findings, 0 ungrounded diagnostics
+and 4251 CSV bytes as at baseline — the guards observe the surface and do not move it.
+
+`git diff --name-status e08da85..HEAD` is 12 files, all additions, all inside the two paths
+this session owns. `git diff --check` clean. No tag, no push, no merge.
+
+Elapsed wall-clock: **48 minutes**.
