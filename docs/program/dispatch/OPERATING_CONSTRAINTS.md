@@ -144,3 +144,45 @@ interference.
 
 The way to tell them apart costs one command: run your suite alone against the same
 database. If it still fails, §6 does not cover it.
+
+## 10. The mutation copy is a command, and the prose recipe was wrong
+
+Every anti-vacuity proof here runs against a copy of `src/` outside the worktree, so that no
+tracked file is ever edited to mutate. From wave 3 to wave 10 the recipe for building that
+copy was carried as prose in dispatch briefs:
+
+> symlink `contracts/`, `docs/` and `fixtures/` into that copy
+
+**It was incomplete, and incompleteness here does not merely lose coverage — it manufactures
+reds.** `db/` and `tools/` are also resolved from the copy's root, and a copy without
+`tools/` fails four `tests/integration/p02_journey` tests **unmutated**. A sweep that went
+straight to mutating would have filed four guards over a tree it never broke. Found by
+`W10-FND` in wave 10 and reproduced independently by the integrator.
+
+Since wave 10:
+
+```
+make mutation-copy MUT=/root/<name>-mut
+```
+
+It builds the copy, refuses a destination under `/tmp` (snap-confined docker cannot see it)
+or inside the worktree, links all five directories, and **proves the copy is the tree that
+will be imported** by printing `auditmanager.__file__` and asserting it resolves under the
+copy. Shown to catch the old recipe: against a copy carrying only the three, it exits 1 with
+`unreachable from the copy: ['db', 'tools']`.
+
+Each link is derived from the tree, not from a brief:
+
+| Directory | Why the copy needs it |
+|---|---|
+| `contracts/` | `exports/policy.py`, `documents/models.py`, `shared/errors/catalog.py`, `analysis/engine/registry.py` all resolve it from `parents[3]`/`[4]` |
+| `docs/` | `analysis/text/lock.py` → `docs/program/P02_LOCK.json` |
+| `fixtures/` | `analysis/text/recorded.py` → `fixtures/recorded/text_analysis` |
+| `db/` | `shared/db/migrations.py` → `db/migrations/alembic.ini` |
+| `tools/` | resolved **test-side** from `auditmanager.__file__` on purpose, so a mutation run gets the copy's ledger tool rather than silently reading the pristine one |
+
+**The part that matters more than the list:** run your suites against the **unmutated** copy
+and confirm they are green before you trust a single red. The target prints that instruction
+and it is not decoration — a red from a copy you never baselined is not evidence. No list of
+directories is safe against the next path someone resolves from the root; a baseline is.
+

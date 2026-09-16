@@ -140,7 +140,7 @@ override DB_CHECK := src/auditmanager/shared/db/check.py
 override STO_CHECK := src/auditmanager/storage/check.py
 override QA_SUITE := tests/integration/foundation
 
-.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate foundation
+.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate mutation-copy foundation
 
 # --- shared guards -----------------------------------------------------------------
 # Expanded verbatim into each recipe that needs them. No guard has a success path that
@@ -503,11 +503,73 @@ run_frontend() {
   npm --prefix web test || fail "GATE: the frontend suite failed."
 }
 
+# --- the mutation copy -------------------------------------------------------------
+# Every anti-vacuity proof in this programme runs against a copy of `src/` outside the
+# worktree, so that no tracked file is ever edited to mutate. The recipe for building that
+# copy has been carried as prose in dispatch briefs since wave 3, and in wave 10 it turned
+# out to be **incomplete**: it named `contracts/`, `docs/` and `fixtures/` and omitted `db/`
+# and `tools/`. A copy without `tools/` fails four `p02_journey` tests *unmutated*, so the
+# recipe did not merely miss coverage -- it manufactured reds.
+#
+# Each entry below is derived from the tree, not from the brief:
+#   contracts/ exports/policy.py, documents/models.py, shared/errors/catalog.py,
+#              analysis/engine/registry.py -- all resolve it from parents[3] or [4]
+#   docs/      analysis/text/lock.py -> docs/program/P02_LOCK.json
+#   fixtures/  analysis/text/recorded.py -> fixtures/recorded/text_analysis
+#   db/        shared/db/migrations.py -> db/migrations/alembic.ini
+#   tools/     resolved test-side from `auditmanager.__file__` on purpose, so a mutation run
+#              gets the copy's ledger tool rather than silently reading the pristine one
+#
+mutation_copy() {
+  local dest="$$1"
+  [ -n "$$dest" ] || fail "mutation_copy: no destination given."
+  case "$$dest" in /root/*|/home/*) ;; *) fail \
+    "mutation_copy: refusing to build under $$dest." \
+    "Docker here is snap-confined and cannot see /tmp; use a path under /root/." ;; esac
+  case "$$dest" in "$$PWD"|"$$PWD"/*) fail \
+    "mutation_copy: $$dest is inside the worktree." \
+    "The whole point is that no tracked file is ever edited to mutate." ;; esac
+  rm -rf "$$dest"
+  mkdir -p "$$dest"
+  cp -a src "$$dest/src"
+  local name
+  for name in contracts docs fixtures db tools; do
+    [ -e "$$name" ] || fail "mutation_copy: $$name is not in this checkout."
+    ln -s "$$PWD/$$name" "$$dest/$$name"
+  done
+  printf '%s\n' "mutation copy at $$dest"
+}
+
+probe_mutation_copy() {
+  # Proves the copy is the tree that will be imported, and that every root-resolved path
+  # reaches it. A mutation result from a copy that was not imported proves nothing, and a
+  # red from a copy missing a directory proves less than nothing.
+  scrubbed_run PYTHONUNBUFFERED=1 -- "$$RUNTIME_PY" -c "$$MUTATION_COPY_PROBE" "$$1"
+}
+
 check_whitespace() {
   git diff --check || fail \
     "GATE: git diff --check reports whitespace errors in the working tree."
 }
 endef
+
+# --- the mutation-copy probe -------------------------------------------------------
+define MUTATION_COPY_PROBE
+import sys, pathlib
+dest = pathlib.Path(sys.argv[1]).resolve()
+sys.path.insert(0, str(dest / "src"))
+import auditmanager
+here = pathlib.Path(auditmanager.__file__).resolve()
+if dest not in here.parents:
+    raise SystemExit("MUTATION-COPY FAIL: auditmanager imported from %s, not under %s" % (here, dest))
+missing = [n for n in ("contracts", "docs", "fixtures", "db", "tools") if not (dest / n).exists()]
+if missing:
+    raise SystemExit("MUTATION-COPY FAIL: unreachable from the copy: %s" % missing)
+from auditmanager.analysis.text import lock as _lock
+from auditmanager.shared.errors import catalog as _catalog
+print("MUTATION-COPY OK %s" % here)
+endef
+export MUTATION_COPY_PROBE
 
 # --- probe programs ----------------------------------------------------------------
 # Exported so recipes pass them to python as a single argument. Each probe asserts that
@@ -821,6 +883,26 @@ foundation: up check-services migrate check-db check-storage test-foundation
 # The composition is now reviewable in a diff instead of recalled from a closure, which
 # is the same correction this programme has made to registers, to briefs and to its own
 # schema assumptions.
+# --- a proved mutation copy --------------------------------------------------------
+# Usage: make mutation-copy MUT=/root/<name>-mut
+# Then:  .venv/bin/pytest <suite> -o pythonpath=/root/<name>-mut/src -p no:randomly
+#
+# Build the copy, then run your suites against it **unmutated** and confirm they are green
+# before you trust a single red. That baseline is the part the prose recipe never had.
+MUT ?=
+mutation-copy:
+	@$(GUARDS)
+	[ -n "$(MUT)" ] || fail \
+	  "make mutation-copy needs a destination: make mutation-copy MUT=/root/<name>-mut"
+	freeze_paths
+	require_runtime_env
+	mutation_copy "$(MUT)"
+	probe_mutation_copy "$(MUT)"
+	printf '%s\n' \
+	  "Next: run your suites against the UNMUTATED copy and confirm green." \
+	  "  .venv/bin/pytest <suite> -o pythonpath=$(MUT)/src -p no:randomly" \
+	  "A red from a copy you never baselined is not evidence."
+
 gate: foundation
 	@$(GUARDS)
 	freeze_paths
