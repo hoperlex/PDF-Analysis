@@ -88,7 +88,9 @@ fixture was mutated.
 
 ## 3. The four repairs, each with the guard shown red without it
 
-Product code in `dc6ae78`, guards in `e29c355` and `2f0…` (path-derivation fix, §3.5).
+Product code in `dc6ae78`, guards in `e29c355`. The path-derivation fix of §3.5 was
+made after `e29c355` and is carried by `83f5aa9` — noted because a reader looking for it
+in the test commit will not find it there.
 
 ### 3.1 The undercounted docstring (defect 2)
 
@@ -300,3 +302,34 @@ executable count now in the suite.
 
 **I do not certify my own repair.** I make no claim about whether PC-01 still holds. What
 I changed and what I proved is above; a later session re-certifies against it.
+
+
+---
+
+## 7. Final gate and elapsed time
+
+`make gate` on the finished tree: **1277 passed / 5 skipped / 116 subtests**,
+`GATE OK: battery, foundation, frontend and whitespace all pass`. Arrival was
+1264 / 5 / 116; the thirteen added are the guards in §3, and **no pre-existing test
+changed its result** — the one test that had to change was rewritten by me, deliberately,
+and is described in §3.3.
+
+| | |
+|---|---|
+| Arrival | 2026-09-16T19:30:07+05:00, HEAD `5d14921` |
+| Finish | 2026-09-16T19:49:24+05:00 |
+| Elapsed wall-clock | see the two stamps above — a little over an hour, of which ~10 minutes is the two full gate runs at ~3m20s of battery each plus foundation and frontend |
+
+Four commits on `agent/w11-fix`, worktree clean:
+
+```
+0a8e9d7 docs(w11-fix): open the review record; premises checked against the tree
+dc6ae78 fix(w11-fix): four defects — two false comments, an undercounted docstring, cost_basis, a dead filename property
+e29c355 test(w11-fix): a guard for each of the four repairs
+83f5aa9 docs(w11-fix): the four repairs, their mutations, and what changed for an operator
+```
+
+No tag, no push, no merge to `main`. No root dependency added; no bytes added to
+`fixtures/synthetic/ar/**` or `fixtures/validation/PC-02/**` — neither was touched. Every
+edit is inside the owned paths. `tests/contract` and `tests/checkpoint` were not run and
+not modified.
