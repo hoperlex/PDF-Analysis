@@ -401,3 +401,54 @@ that produce the same refusal, which it cannot.
 **Product note for the owner of `src/auditmanager/analysis/`:** the branch is harmless but
 misleading, since it reads as the enforcement of a rule that is actually enforced ten lines
 earlier. Left unrepaired.
+
+## Guard 5 — `tests/integration/analysis/test_observations_artifact_rules.py`
+
+23 tests. **The largest single finding of this sweep.** `analysis.text.artifact` is `B4`'s
+only input — the grounding gate takes no model input of any other kind — and every one of the
+seven refusals standing between the model and that gate was unreddenable:
+
+| id | rule | screen |
+|----|------|--------|
+| AR-01 | `pages_analysed_unknown` | GREEN |
+| AR-02 | `observation_without_evidence` | GREEN |
+| AR-03 | `category_not_declared` | GREEN |
+| AR-04 | `evidence_page_unknown` | GREEN |
+| AR-05 | `evidence_span_length_mismatch` | GREEN |
+| AR-06 | `evidence_span_outside_page` | GREEN |
+| AR-07 | `evidence_quotation_mismatch` | GREEN |
+| AR-08 | **`_validate_anchor(...)` call deleted outright** — removes four at once | GREEN |
+| AR-10 | `block_id` written as `null` instead of omitted | GREEN |
+| AR-11 | `pages_analysed` neither sorted nor deduplicated | GREEN |
+| AR-09 | `ARTIFACT_ROLE` changed | RED |
+| TL-13 / TL-14 | `Page.contains` bounds loosened | GREEN |
+
+**Why the existing suites miss all of it.** They pass a well-formed run end to end and assert
+the artifact that comes out. That exercises these checks' happy path only. The anchors
+`resolve_anchor` produces are correct by construction, so no real run ever hands
+`_validate_anchor` a bad one — which is precisely why deleting the call is invisible. The
+guards are reached here by constructing `ResolvedAnchor` directly; it is a public frozen
+dataclass, so no private surface is touched and no other tree is reached into.
+
+Literals pinned — every offset is hand-checkable against the two page strings:
+
+| literal | value |
+|---------|-------|
+| page one | `"Отчёт за год.\n"`, code points 0..14 |
+| page two | `"Выручка выросла.\n"`, code points 14..31 |
+| `"Отчёт"` | 5 code points at document-global 0..5 on page 1 |
+| `"Выручка"` | 7 code points at document-global 14..21, on page **2** |
+| artifact role / version | `"analysis.text_observations"` / `"1.0.0"` |
+
+The page-boundary tests are the off-by-one the dispatch asked for, in the place where it is
+actually unguarded. `"Выручка"` at 14..21 cited as page **one** is off the end of its declared
+page by exactly the amount that matters; a span at 13..20 cited as page **two** begins one
+code point inside page one. Those two cases pin `Page.contains` from both sides, and both
+`TL-13` and `TL-14` now redden.
+
+`test_the_four_anchor_refusals_are_distinguishable_from_one_another` exists because all four
+`_validate_anchor` refusals share `ANALYSIS_INPUT_INVALID` and the same `stage_id`. It
+asserts the four `reason` values form exactly the expected set, so no one of them can be
+deleted and covered by another firing.
+
+All 14 mutations RED against this file, each on the test that names the rule.
