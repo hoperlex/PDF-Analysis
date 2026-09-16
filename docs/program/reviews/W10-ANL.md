@@ -771,3 +771,104 @@ PostgreSQL or S3 must not run concurrently with anything else on the same instan
 your own gate. Offline batches — `analysis_text`, `replay`, and every guard in
 `tests/integration/analysis` except none of them — are safe to parallelise; `analysis_engine`,
 `ingest`, `foundation` and `p02_journey` are not.
+
+## Product defects, precise and left unrepaired
+
+`W10-ANL` writes tests. Each of these is reported to the tree that owns it.
+
+### 1. `cost_basis` reaches the record on success but not the success-path metrics
+
+**Tree:** `src/auditmanager/analysis/text/stage.py`.
+`run_text_analysis` builds two metrics dicts. The budget-overrun path includes
+`"cost_basis": ("measured" if response.reported_cost_usd is not None else "estimated")`; the
+success path does not, and the basis reaches only the `ModelCallRecord`. A consumer reading
+`metrics["cost_basis"]` gets a value on a failed run and a `KeyError` on a successful one.
+The comment beside the success-path `_record` call shows the record half was deliberately
+fixed after an earlier attempt put it only on the error path; the metrics asymmetry looks like
+the other half of that same repair, not left undone on purpose.
+Pinned as found by `test_cost_basis_reaches_the_record_but_not_the_success_path_metrics`.
+
+### 2. Dead branch in `textlayer.load_text_layer`
+
+**Tree:** `src/auditmanager/analysis/text/textlayer.py`.
+```python
+if pages[0].char_start != 0:
+    raise _invalid("page_offsets_discontiguous", "the first text layer page does not start at zero")
+```
+`expected_start` is `0` before the loop, so the in-loop `page.char_start != expected_start`
+already refuses this with the same `reason`, and `raw_pages` is checked non-empty first. The
+branch cannot execute. Harmless, but it reads as the enforcement of a rule that is enforced
+ten lines earlier — a later reader deleting the loop check would find this one "covering" it
+and be wrong about why.
+
+### 3. `config.py` says the lock records no ceiling; the lock records one
+
+**Tree:** `src/auditmanager/analysis/text/config.py`.
+```python
+#: ``OD-03`` owns the figure and has not recorded a machine-readable number in either
+#: lock, so this is a deliberately conservative stand-in and not the owner's decision
+DEFAULT_RUN_COST_CEILING_USD: Final[float] = 1.00
+```
+`docs/program/P02_LOCK.json` → `models.run_cost_ceiling_usd` is `1.0`. The two agree today, so
+nothing is wrong at run time, but the comment is false and it is the reason the constant is
+not read from the lock the way every rate is. Pinned by
+`test_the_default_ceiling_matches_the_figure_the_lock_records`, so a future edit to either one
+without the other reddens.
+
+### 4. A test that does not test what it is named for
+
+**Tree:** `tests/integration/analysis_text/` — not mine.
+`test_profile_and_artifact.py::test_the_profile_is_resolved_by_a_pinned_identity` pins no
+identity: it passes `AR_TEXT_PROFILE.analysis_profile_id` into `resolve_profile` and asserts
+the result is `AR_TEXT_PROFILE`, so both sides move together, and `startswith("ap_")` holds
+for any ULID. `test_the_identities_are_stable_across_resolutions` compares `resolve_profile()`
+with itself. Changing the pinned ULID is green across every suite. This is the wave-9 failure
+mode already in the tree, found by mutation rather than by reading.
+Guard 2 covers the rule; the misleading test is left as found.
+
+## Rules unreddenable by construction, with the argument
+
+1. **`registry._definition_from` `status_policy` defaults** (RG-06, RG-07, RG-08) — all nine
+   stages in the frozen contract declare all four keys, so `policy.get(key, default)` never
+   takes the default. Verified by reading `contracts/analysis/v1/stage-registry.json`.
+2. **`textlayer.load_text_layer` first-page branch** (TL-08) — dead, argument above.
+3. **`anchors.resolve_anchor`'s two post-find checks** (AN-05, AN-06) — with the arithmetic
+   as written, `page.text.find` plus `load_text_layer`'s contiguity and length invariants make
+   both conditions necessarily false. They are live defence against a *future* edit to the
+   arithmetic, and every mutation representing such an edit (AN-01 to AN-04, AN-09b) is red.
+4. **`extraction` and `page_geometry_extraction` re-extraction cross-checks** (EX-03, EX-04,
+   EX-05, PG-01, PG-03) — each compares two derivations of the same bytes by the same pinned
+   libraries. Reaching them needs a stubbed extractor (product code) or a fixture chosen to
+   break pdfplumber's self-consistency (a bet on a library bug, not a test of a rule).
+5. **`response._coerce` non-dict early return** as I first mutated it (RP-10) — coercing to
+   `{}` is caught by the very next check. The *guard itself* is reachable and is now guarded;
+   only that particular mutation was inert.
+
+Nothing in this list was given a test that would have had to misdescribe what it checks.
+
+## What the brief got wrong
+
+1. **"stable character offsets … the subtle one is an off-by-one, and nobody has tried it."**
+   False. Five offset mutations — `char_start +1`, `char_end +1`, `char_end -1`, dropping the
+   page base, and `TextLayer.slice` off by one — all redden
+   `test_corpus_acceptance.py::test_recorded_run_surfaces_every_seeded_issue`. The offset
+   *arithmetic* is among the best-guarded code in the tree. The unguarded off-by-one is one
+   layer up, in `Page.contains` and the `artifact.py` span checks that use it (guard 5).
+2. **"`tests/integration/analysis/**` — create it; there is no such directory today, which is
+   itself worth noting."** Literally true and misleading as framing. There is no directory of
+   that exact name, but `tests/integration/analysis_engine/` (47 tests) and
+   `tests/integration/analysis_text/` (96 tests) both exist and cover this tree substantially.
+   The absence of the directory is not evidence of absent coverage, and reading it that way
+   would misdirect a sweep.
+3. **"the fail-closed status mapping … is every status now mapped by something that would
+   notice a changed mapping?"** Half right. The mappings the runner *produces* are well
+   guarded, `reason` and catalog code included. The boundary guard behind them
+   (`assert_status_allowed`) was guarded by nothing.
+4. **Base commit.** The brief names `fb30e96`; the worktree arrived at `e08da85`, one commit
+   later on the same line. Not an error, but the dispatch's own provisioning block would have
+   had me re-create a worktree that was already correct.
+
+Everything else in the brief checked out: the instance and ports were free and correct, the
+`816 passed / 5 skipped / 116 subtests` figure was exact, `analysis.text.lock` really does
+resolve `P02_LOCK.json` from `parents[4]` so the copy needs `docs/` symlinked, 5005 lines
+across 32 files is right, and no live provider was needed.
