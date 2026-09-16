@@ -192,3 +192,192 @@ running two mutation streams at once against one MinIO bucket and one PostgreSQL
 and the results were full of unrelated failures. Everything above was re-run serially. The
 lesson is the one already on record — never measure during a fan-out — and it applies to a
 session's own parallelism, not only to subagents.
+
+---
+
+## The guards written
+
+Fifteen rules, five files, 45 new tests. Every one was watched red under its own mutation
+and green without it, on the corrected copy, serially.
+
+`tests/integration/runs/test_retry_policy_refusals.py` — 18 tests
+
+| rule | literal pinned | authority | red under |
+|---|---|---|---|
+| `RetryPolicy` refuses a budget below 1 | `"at least one attempt"`, budgets `0` and `-1` | the constructor's stated contract | M14 (2 failed) |
+| a ladder of length ≠ `budget - 1` does not construct | the message's three numbers, at four budget/ladder pairs | the module's "exactly `ATTEMPT_BUDGET - 1` entries, checked at construction" | M15 (4 failed) |
+| a negative wait does not construct | `"a backoff cannot be negative"`; `0.0` is accepted | the boundary is `< 0`, not `<= 0` | M16 (2 failed) |
+| an attempt past the budget is refused | `"attempt 4 is past a budget of 3"` (full equality) | `ATTEMPT_BUDGET == 3`, re-pinned in the same file | M17 (3 failed) |
+| `not_attempted` reports `attempts: 0` | the whole `metrics()` mapping, every value written out | "a stage that never reached the provider" | M21 (1 failed) |
+| `retry_waited_seconds` keeps sub-second precision | waits `0.0 / 0.25 / 0.125`, total `0.375` | — | M22 (1 failed) |
+
+`tests/integration/ingest/test_reconciliation_rules_with_no_guard.py` — 6 tests
+
+| rule | literal pinned | authority | red under |
+|---|---|---|---|
+| a stored digest disagreeing with the manifest is refused | both digests, computed from bytes the test built; impostor is the **same length** so only the digest half can fire | the manifest row, which is immutable | M1 (2 failed) |
+| a stored **size** disagreeing is refused | digests asserted *equal*, so the refusal is the size comparison alone | same | M1 (2 failed) |
+| an `available` blob no manifest references is an orphan | `recorded_state == "available"`, `describe()` string in full | the `blob` state machine's declared edges | M2 (1 failed) |
+| an unreachable store is an outage, not missing bytes | `dependency_unavailable` + `retryable is True`, against `storage_integrity_error` + `False` | the frozen catalog, read off the envelope | M4 (1 failed) |
+| `report()`'s default threshold is one hour | 59 minutes not stale, 61 minutes stale | — | M5 (1 failed) |
+| `abandon_stale_commands()` carries the same default | same boundary, plus the resulting states | — | M5 |
+
+`tests/integration/ingest/test_service_refusals_with_no_guard.py` — 7 tests
+
+| rule | literal pinned | authority | red under |
+|---|---|---|---|
+| a document owned by another project is `not_found` | `details["aggregate_type"] == "Document"` | distinguishes it from the unknown-*project* refusal three lines above | M6 (1 failed) |
+| an upload replay naming no `version_uid` is `idempotency_key_stale` | `details["command_type"] == "upload_source_document"` | the catalog's meaning of the code | M7 (1 failed) |
+| the same on `createProject` | `"create_project"` | same | M8 (1 failed) |
+| a version with no source manifest entry is `storage_integrity_error` | `details["role"] == ROLE_SOURCE_DOCUMENT`, and **no** `blob_id` key | the blob-role spelling, which differs from the manifest-entry spelling and so names this fault and not the other two | M10 (1 failed) |
+| a failure after staging discards the staged bytes | the `temporary/` prefix is empty before and after | the same prefix `tests/integration/storage` asserts on | M11 (1 failed) |
+
+`tests/integration/db/test_every_immutable_table_refuses_a_write.py` — 7 tests
+
+| rule | literal pinned | authority | red under |
+|---|---|---|---|
+| `model_call` refuses UPDATE and DELETE | `AM003`, and the row's `provider_mode`/`cost_micros`/`input_tokens` unchanged | `SQLSTATE_IMMUTABLE_ROW_VIOLATION` from the shared kernel | D8 (3 failed) |
+| `finding_evidence` refuses DELETE as well as UPDATE | `AM003` | same | D9 (1 failed) |
+| `audit_event` refuses UPDATE as well as DELETE | `AM002`, and `"append-only ledger"` in the message | `SQLSTATE_APPEND_ONLY_VIOLATION` | D10 (1 failed) |
+
+`test_schema_shape.py` stayed **green** under all three, which is the finding.
+
+`tests/integration/runs/test_the_interruption_vocabulary_is_pinned.py` — 4 tests
+
+| rule | literal pinned | authority | red under |
+|---|---|---|---|
+| the interrupted reason | `"executor_process_ended_before_terminal"`, written out | `OD-10`; also asserted *not* to be a declared state, with the eight-name `audit_run` vocabulary written out | R31 (2 failed), R30 (2 failed) |
+| the terminal reason | `"analysis_failed"`, written out | cross-checked against `ErrorCode`, generated from `contracts/domain/v1/error-codes.json` | R32 (2 failed) |
+
+`tests/integration/runs/test_a_halted_chain_reaches_a_terminal.py` — 3 tests
+
+| rule | literal pinned | authority | red under |
+|---|---|---|---|
+| a failed preparation stage halts the chain | exactly one `stage_result` row, zero `model_call` rows, provider never asked | the executor's own stated reason | E2 (2 failed) |
+| the stages that never ran are named | the three stage names written out, in the result *and* in `audit_run.degradation_set` | `PC01_STAGES` re-spelled as a literal | E1 (3 errored: `select_terminal` raises `validation_failed` and the run is left `running`) |
+
+## Rules unreddenable by construction
+
+| rule | argument |
+|---|---|
+| `AttemptSummary.budget_exhausted`'s `bool(self.records)` | `attempts` is `len(records)` or `0`; the clause is reached only when `len(records) >= attempt_budget`, which needs `attempt_budget <= 0`, which `__post_init__` refuses. Dead for every admissible policy. Guarding M14 is the useful move. |
+| `AttemptLedger.close`'s `records[-2]` | `RETRYABLE_STAGE_ERRORS` has exactly one member, so every retried attempt carries the identical code. `records[0]`, `records[-2]` and every other retried index are indistinguishable by value. Making them distinguishable is a product decision. |
+| `executor._record_model_calls`' `error_code` for a `failed` call | nothing in `src/` ever builds a `ModelCallRecord` with `status="failed"`. A transport failure raises out of `complete()` and records no row — `model_call_rows: 0`, which is `P4_CLOSURE.md` §1's own evidence. |
+| `executor`'s `cost_basis` `.get(..., "estimated")` fallback | `ModelCallRecord.as_dict()` always emits the key. The live default is a dataclass field in another tree. |
+| `_text_stage_result`'s scalar filter | every value `analysis/text/stage.py` puts in `metrics` is already a scalar. Prospective defence for a stage that does not exist. |
+| `_run_text_analysis_stage`'s missing-required-input refusal | called only when `halted` is `False`, which means all three deterministic stages succeeded, which means the runner's required-output guard already published both roles. Defence behind E2's halt, which is now guarded. |
+
+## Product defects, left unrepaired
+
+**1. `read_source_bytes` returns bytes the manifest does not describe, silently.**
+Owning trees: `src/auditmanager/storage/s3.py` (`S3BlobStore.read`) and
+`src/auditmanager/ingest/service.py` (`IngestService.read_source_bytes`). Not repaired.
+
+`read(blob_id, verify=True)` re-hashes what it read and compares the hash to the **object's
+own** recorded `content-sha256` metadata. An object whose bytes and whose recorded digest
+were both replaced is internally consistent, so the read succeeds. `read_source_bytes`
+already holds the `ManifestEntry` — it calls `require_source_entry(version_uid)` to get the
+`blob_id` — and never compares `entry.sha256` to what came back.
+
+Consequence: for the exact fault `Reconciler.verify_version` exists to detect, the read path
+returns the wrong document with no error. A reviewer opening the source of a published
+version sees the impostor; reconciliation over the same version raises
+`storage_integrity_error`. The two disagree about the same row.
+
+Reproduced in
+`tests/integration/ingest/test_reconciliation_rules_with_no_guard.py::test_a_version_whose_stored_checksum_disagrees_with_its_manifest_is_refused`,
+which pins the behaviour **as it is** with a comment pointing here, so the defect cannot be
+closed silently: if the read starts refusing, that assertion fails and names this note.
+
+Suggested shape of the fix, for the owning tree and not applied here: `read_source_bytes`
+compares `sha256_of(returned)` — or the store's recorded digest — against `entry.sha256`
+and raises `storage_integrity_error` with `expected_sha256`/`actual_sha256`, which is what
+`verify_version` already does.
+
+**2. Three dead branches**, listed in the table above (`bool(self.records)`, the
+`failed`-call `error_code`, the `cost_basis` `.get` default). Not defects — each is
+defence — but each is currently unreachable, so none of them is doing anything today, and a
+reader could take any of them for a live rule. Owning trees: `src/auditmanager/runs/`.
+
+## Existing assertions encoding the implementation rather than the contract
+
+1. **`tests/integration/runs/test_reconciliation_and_terminals.py:297`** —
+   `assert row["interrupted_reason"] == INTERRUPTED_REASON`, with the constant imported
+   from the module under test at line 29. Both sides move together; the constant was
+   changed to `"something_went_wrong"` and 154 tests passed. Now covered by literals in
+   `test_the_interruption_vocabulary_is_pinned.py`. **The original line is left as it is —
+   it is not wrong, it is just not evidence — and changing it is not this session's to do.**
+2. **`tests/integration/runs/test_reconciliation_and_terminals.py:298`** —
+   `assert row["terminal_reason"] is not None`. Field, not reason: any of the catalog's
+   codes satisfies it. Now covered.
+3. **`tests/integration/db/test_schema_shape.py:127,145`** —
+   `test_exactly_the_declared_tables_are_append_only` and `..._are_immutable` read
+   `pg_trigger` for the attached *function name*. That is a catalog claim standing where a
+   reachability claim is needed: three trigger arms could be removed with both tests green.
+   Now covered by `test_every_immutable_table_refuses_a_write.py`.
+4. **`tests/integration/runs/test_retry_policy.py`** and
+   **`test_exhausted_budget_run_row.py`** — fourteen assertions of the form
+   `adapter.calls == ATTEMPT_BUDGET`, `waits == list(BACKOFF_SECONDS)`. These import the
+   constants and so move with them. **They are safe, and the reason is worth recording:**
+   `test_retry_policy.py::test_the_attempt_budget_and_backoff_are_pinned_and_agree` pins
+   `3` and `(2.0, 8.0)` as literals, so a drift in either constant reddens there. The
+   pattern is load-bearing on that one test, and `test_retry_policy_refusals.py` now
+   re-pins both independently.
+5. **`tests/integration/ingest/test_publication.py:61,70,83`** —
+   `== ACCEPTED_MEDIA_TYPE`, imported from `ingest.envelope`. Also safe, and checked rather
+   than assumed: mutating `ACCEPTED_MEDIA_TYPE` to `"application/x-pdf"` reddens 23 tests,
+   because the migration's `ck_document_version_media_type CHECK (media_type =
+   'application/pdf')` is an independent authority and refuses the row. The database is
+   doing the pinning.
+
+## Anything false in the brief
+
+1. **The symlink list is incomplete.** The brief says to symlink `contracts/`, `docs/` and
+   `fixtures/`. `db/` is also needed — `auditmanager.shared.db.check` resolves
+   `db/migrations/alembic.ini` from its own module's parents, and without it three
+   `tests/integration/db` tests fail on `MigrationStateError` against an *unmutated* copy.
+   `tools/` is also needed; the integrator relayed that mid-wave from `W10-FND` and it
+   accounts for four `tests/integration/p02_journey` failures I had initially and wrongly
+   attributed to database population. With `db/` and `tools/` both present the clean copy
+   is green everywhere. **My first-pass reds for batches 1 and 2 were all re-run against
+   the corrected copy and are unchanged (416 passed, 0 failed under every mutation).**
+2. **A `src/`-only copy cannot mutate the migrations at all.**
+   `tests/integration/db` applies them by running the literal `alembic` command as a
+   subprocess with `cwd` set to the repository root derived from *the test file*, so the
+   real `db/` is always used no matter what `pythonpath` says. Batch 6 needed a full copy
+   of the tree at `/root/w10mutdb`. The brief's method section does not mention this and it
+   is the difference between measuring the migrations and appearing to.
+3. **Base commit.** The brief names `fb30e96`. `HEAD` on arrival was `e08da85`, one commit
+   later on the same line (`fb30e96` is its parent) — the dispatch commit itself. Not an
+   error, but the stated base is not what a correctly-seeded worktree lands on.
+4. **The baseline count.** `816 passed / 5 skipped / 116 subtests` was exactly right, and
+   `make gate` returned `GATE OK` before any change.
+5. **Everything else held**: the instance and ports were free and correct, `make gate` runs
+   as described, `npm --prefix web ci` was already done by the killed first attempt, and no
+   live provider was needed.
+
+## Two things about the environment, for whoever runs the next wave
+
+1. **The scratchpad log path is shared between the wave-10 sessions.** My first
+   `make gate` log, written to this session's own scratchpad directory, came back
+   interleaved with `rootdir: /root/w10anl` and `/root/w10api/web` — other streams' output
+   in my file. `ps` showed `/root/w10api/.venv/bin/python -m pytest -o
+   pythonpath=/root/w10api-mut/src …` running in the same container. The parallel streams
+   are not as isolated as "disjoint trees on their own instances" suggests. Every
+   measurement in this report was re-taken with logs under `/root/w10mut/logs/`.
+2. **Two mutation streams at once corrupt each other even on one instance**, because
+   `tests/integration/ingest` and `tests/integration/storage` share one MinIO bucket and
+   `make foundation` needs the lane's own database. I did this to myself once and threw the
+   results away. Everything reported here was measured serially.
+
+## Gate
+
+```
+make gate  →  GATE OK: battery, foundation, frontend and whitespace all pass
+861 passed, 5 skipped, 116 subtests passed in 267.84s
+```
+
+Baseline was 816 / 5 / 116; this wave adds **45 tests** and removes none.
+
+**Elapsed wall-clock: 2 h 27 min** (14:40:30 to 17:07:17, 2026-09-16), including the
+killed first attempt's bootstrap, which this session inherited rather than repeated.
