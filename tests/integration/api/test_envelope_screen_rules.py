@@ -30,6 +30,8 @@ from pathlib import Path
 
 import pytest
 
+import auditmanager
+
 from auditmanager.shared.errors import (
     ErrorCode,
     UnsafeDetailKey,
@@ -208,3 +210,148 @@ class TestTheDefaultMessageIsTheSummaryTheFrozenContractDeclares:
     def test_a_supplied_message_still_replaces_the_summary(self) -> None:
         text = "No document version has that identity."
         assert build(ErrorCode.NOT_FOUND, "cid-fixed-0001", message=text).message == text
+
+
+class TestTheScreenHasSixShapesAndTheDocstringSaysSo:
+    """`W11-FIX`. The module docstring named **five** forbidden shapes; there are six.
+
+    It omitted the S3-style object key -- the one shape whose pattern is the hardest to
+    reconstruct from a name, and the one a reader is therefore most likely to re-add by
+    hand. A count in prose is exactly the kind of claim that survives being false,
+    because nothing executes it. This executes it.
+
+    The wave-10 brief that commissioned the suite above said "seven" twice and was also
+    wrong, which is the second reason the number is pinned here rather than counted by
+    whoever next reads the tuple.
+
+    **On importing ``_FORBIDDEN``.** The suite above deliberately does not, because a
+    test that *builds its expectation* from a constant moves with the constant. These
+    tests do the opposite: the expectation is the literal tuple below, written out by
+    hand, and ``_FORBIDDEN`` is the thing under test. A drift in either the tuple or the
+    docstring reddens against a fixed authority.
+    """
+
+    #: The six shapes, in the tuple's own order, as literals. Not derived from anything.
+    SIX_SHAPES: tuple[str, ...] = (
+        "a URL",
+        "a filesystem path",
+        "an S3-style object key",
+        "a credential",
+        "SQL",
+        "a stack frame",
+    )
+
+    def test_the_screen_carries_exactly_six_shapes_in_this_order(self) -> None:
+        from auditmanager.shared.errors import envelope as module
+
+        labels = tuple(label for label, _ in module._FORBIDDEN)
+        assert labels == self.SIX_SHAPES, (
+            f"the screen carries {len(labels)} shapes {labels!r}, not the six this suite "
+            f"pins {self.SIX_SHAPES!r}. A shape added without a case below is a rule no "
+            "test can tell from a deleted one; a shape removed is a hole."
+        )
+
+    def test_the_module_docstring_names_every_shape_the_screen_carries(self) -> None:
+        """The defect itself: a docstring that enumerated five of six.
+
+        Reverting the docstring to its five-shape sentence reddens this and nothing
+        else, which is what makes the prose claim a guarded one.
+        """
+        from auditmanager.shared.errors import envelope as module
+
+        # Whitespace-collapsed: the docstring is wrapped at 90 columns and "an S3-style
+        # object key" straddles a line break. A naive substring check reports that shape
+        # missing from a docstring that names it -- a false red, which is as bad as a
+        # false green because the next reader "fixes" it by unwrapping prose.
+        docstring = " ".join((module.__doc__ or "").split())
+        missing = [shape for shape in self.SIX_SHAPES if shape not in docstring]
+        assert not missing, (
+            f"the envelope docstring does not name {missing!r}. It tells a reader what "
+            "the screen forbids, and a reader who trusts an undercount will add a check "
+            "that already exists or route around one they did not know was there."
+        )
+
+    def test_the_docstring_does_not_claim_a_count_other_than_six(self) -> None:
+        """A docstring may enumerate correctly and still state the wrong total."""
+        from auditmanager.shared.errors import envelope as module
+
+        docstring = " ".join((module.__doc__ or "").split()).lower()
+        for wrong in ("five", "seven", "four", "eight"):
+            assert f"{wrong}**" not in docstring and f"**{wrong}" not in docstring, (
+                f"the envelope docstring emphasises the count {wrong!r}; the screen "
+                "carries six shapes"
+            )
+        assert "six" in docstring, (
+            "the envelope docstring no longer states how many shapes the screen carries"
+        )
+
+    def test_every_one_of_the_six_is_reachable_by_a_real_refusal(self) -> None:
+        """A count is worth nothing if a pattern can never fire.
+
+        ``ONE_SHAPE_EACH`` above drives seven values through both screens and asserts
+        each names its own rule. This asserts that the reasons those cases exercise are
+        *exactly* the six -- so a seventh shape added to the tuple without a case here
+        reddens rather than passing untested, and a shape that no value can reach
+        reddens too.
+        """
+        exercised = {reason for _, _, reason in ONE_SHAPE_EACH}
+        assert exercised == set(self.SIX_SHAPES), (
+            f"the cases above reach {sorted(exercised)!r}, not the six shapes "
+            f"{sorted(self.SIX_SHAPES)!r}"
+        )
+
+
+class TestNoCallSiteClaimsDetailsAreUnscreened:
+    """`W11-FIX`. Two comments said the screen this suite exercises does not exist.
+
+    `api/routers/multipart.py` and `api/schemas/projects.py` each stated that ``details``
+    values "are not screened the way ``message`` is". They are, and have been since
+    `B6`. Both comments sat beside a *correct* refusal and gave a *false* reason for it,
+    which is the dangerous direction: a later reader who believes the screen is absent
+    either adds a second one or, worse, concludes the value must be sanitised at the
+    call site and echoes it "safely".
+
+    Wave 10's finding was that a stale comment on a security surface outlives a stale
+    test because nothing executes it. So this executes it, in two halves: the screen is
+    demonstrably live at the exact text those two sites refuse, and no source file in
+    the boundary asserts the negative.
+    """
+
+    #: Derived from the imported package, never from this file's own location. A path
+    #: built from ``__file__`` here would read the checkout even when the suite is run
+    #: against a mutation copy on ``pythonpath`` -- so the guard would be green against
+    #: a tree that still carries the defect, which is the one way it must not fail.
+    API_TREE = Path(auditmanager.__file__).resolve().parent / "api"
+
+    #: The caller-controlled text each of the two sites is refusing when its comment
+    #: speaks. `/etc/passwd` is `B6`'s own property name; `file` is the repeated part.
+    CALLER_TEXT = "/etc/passwd"
+
+    def test_the_screen_refuses_the_very_text_those_sites_decline_to_echo(self) -> None:
+        """If either site did echo, the envelope would refuse rather than ship it."""
+        with pytest.raises(UnsafeDetailValue) as caught:
+            build(
+                ErrorCode.VALIDATION_FAILED,
+                "cid-fixed-0001",
+                details={"field": self.CALLER_TEXT},
+            )
+        assert "a filesystem path" in str(caught.value)
+
+    def test_no_api_source_file_claims_details_are_unscreened(self) -> None:
+        """The defect, made executable. Restoring either comment reddens this.
+
+        A phrase check is a blunt instrument and is used here only because the claim
+        itself is a phrase. It is paired with the test above, which proves the thing the
+        phrase denied.
+        """
+        offenders: list[str] = []
+        for path in sorted(self.API_TREE.rglob("*.py")):
+            text = path.read_text(encoding="utf-8")
+            if "not screened" in text or "are not screened the way" in text:
+                offenders.append(str(path.relative_to(self.API_TREE.parents[1])))
+        assert not offenders, (
+            f"{offenders!r} state that details values are not screened. "
+            "`shared/errors/envelope.py` runs every string detail value through the "
+            "same six `_FORBIDDEN` patterns as a message and raises UnsafeDetailValue; "
+            "the test above proves it on the exact text these sites refuse."
+        )

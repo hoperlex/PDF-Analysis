@@ -297,8 +297,10 @@ def run_text_analysis(
         status=call_status,
         cost_usd=cost,
         # The response is in scope here and nowhere below, so this is where the basis is
-        # known. My first attempt set it on the error path's own dict, which the executor
-        # never reads - the figure reached the row and the provenance did not.
+        # known. My first attempt set it only on the error path's own metrics dict, so
+        # the provenance reached the `model_call` row on both paths but reached the
+        # stage metrics on the overrun path alone. `W11-FIX` finished that: the success
+        # metrics dict below now carries the same expression.
         cost_basis="measured" if response.reported_cost_usd is not None else "estimated",
     )
     parsed = parse_response(response.output_text, truncated=response.truncated)
@@ -340,6 +342,17 @@ def run_text_analysis(
         "evidence_unresolved": len(grounding.unresolved),
         "proposals_malformed": parsed.malformed_count,
         "cost_usd": round(cost_meter.spent_usd, 8),
+        # Beside `cost_usd` on every path, not only the overrun one. The figure above is
+        # a provider-reported number or a figure computed from the lock's per-token
+        # pins, and a consumer cannot tell which from the number. The overrun branch
+        # carried this and the success branch did not, so `metrics["cost_basis"]`
+        # answered on the one run that failed its budget and raised `KeyError` on the
+        # run that succeeded - backwards from useful. The response is the only thing
+        # that knows, and it is in scope here as it is there. Same expression, same
+        # values, and the schema admits a string under `metrics`.
+        "cost_basis": (
+            "measured" if response.reported_cost_usd is not None else "estimated"
+        ),
         "cost_ceiling_usd": cost_meter.ceiling_usd,
         "latency_ms": response.latency_ms,
     }

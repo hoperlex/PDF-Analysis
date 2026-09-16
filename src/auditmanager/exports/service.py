@@ -13,7 +13,6 @@ logic of its own, and ``P3-WEB-04`` only downloads the response.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
 
 from sqlalchemy.orm import Session
 
@@ -24,24 +23,36 @@ from auditmanager.exports.serializer import CONTENT_TYPE, render_csv
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId
 
-#: What a browser should call the downloaded file. Derived from the run identity, which
-#: is opaque: no filesystem path, no bucket and no object key is involved, and none of
-#: those is an identity in the first place (P02 §2.2).
-_FILENAME_TEMPLATE: Final[str] = "audit_run_{run_id}.csv"
-
 
 @dataclass(frozen=True, slots=True)
 class CsvExport:
-    """The rendered export. A value, not a record of anything."""
+    """The rendered export. A value, not a record of anything.
+
+    **It carries no download name, deliberately.** It used to expose a ``filename``
+    property over a template of its own that nothing read - not the router, not the
+    frontend, not a test - while reading, from here, as though it were the name the
+    system serves. It was not. A dead spelling of the name is worse than none, because
+    it is the first answer a reader looking for the download name finds: it sits on the
+    object the export produces.
+
+    The name the system serves is built by ``api/routers/export.py:_disposition`` and
+    nowhere else, and this docstring does not restate it - restating it here is how the
+    dead one came to exist. The frontend suggests a different one
+    (``web/src/shared/api/csv-columns.ts``) and says in its own docstring that the
+    server's header wins. The two differing is **permitted**: the frozen
+    ``openapi.json`` declares that header on ``exportRunCsv``'s 200 as "presentation
+    only and is never an identity" and pins no value - no enum, no pattern, no example.
+    Reconciling them is not a repair, it is inventing a contract nobody wrote.
+
+    Serving a name is a transport concern and belongs at the transport. A value computed
+    from canonical data has no business naming a download.
+    ``tests/integration/exports/test_the_download_name_has_one_source.py`` holds this.
+    """
 
     run_id: str
     run_state: str
     content: bytes
     content_type: str = CONTENT_TYPE
-
-    @property
-    def filename(self) -> str:
-        return _FILENAME_TEMPLATE.format(run_id=self.run_id)
 
     @property
     def byte_size(self) -> int:
