@@ -105,14 +105,25 @@ def test_empty_payload_is_refused(service, project, key, engine, bucket_keys) ->
     assert counts(engine)["blob"] == 0
 
 
-@pytest.mark.parametrize(
-    "source_filename",
-    ["../../etc/passwd", "nested/report.pdf", "back\\slash.pdf", "..", "   "],
-)
+#: name -> the rule that must refuse it. The constraint is part of the case, not an
+#: afterthought: asserting only ``field == "source_filename"`` passes whichever of the three
+#: name rules fired, which is how deleting the ``non_empty`` check survived a mutation sweep
+#: -- a blank name still reached ``plain_base_name``, because the pattern requires at least
+#: one character, and the test could not tell the two answers apart.
+TRAVERSAL_CASES = [
+    ("../../etc/passwd", "plain_base_name"),
+    ("nested/report.pdf", "plain_base_name"),
+    ("back\\slash.pdf", "plain_base_name"),
+    ("..", "plain_base_name"),
+    ("   ", "non_empty"),
+]
+
+
+@pytest.mark.parametrize(("source_filename", "constraint"), TRAVERSAL_CASES)
 def test_traversal_shaped_file_names_are_refused_without_being_echoed(
-    service, project, baseline_pdf, key, engine, bucket_keys, source_filename
+    service, project, baseline_pdf, key, engine, bucket_keys, source_filename, constraint
 ) -> None:
-    """``GJ-01-FC-03``. The name is refused and never appears in the answer."""
+    """``GJ-01-FC-03``. The name is refused by its own rule and never appears in the answer."""
     before = set(bucket_keys())
     with pytest.raises(DomainError) as raised:
         service.upload_single_pdf(
@@ -126,6 +137,10 @@ def test_traversal_shaped_file_names_are_refused_without_being_echoed(
     envelope = raised.value.envelope("corr_traversal")
     assert raised.value.code is ErrorCode.VALIDATION_FAILED
     assert envelope.details["field"] == "source_filename"
+    assert envelope.details["constraint"] == constraint, (
+        "the refusal names a different rule than the one this name breaks; field alone "
+        f"does not distinguish them: {envelope.details}"
+    )
     screen_message(envelope.message)
     if source_filename.strip():
         assert source_filename.strip() not in envelope.message
