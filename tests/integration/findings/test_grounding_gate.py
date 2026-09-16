@@ -679,14 +679,19 @@ class TestTheDatabaseEnforcesThePairing:
 class TestTheUngroundedVocabularyIsClosed:
     """The five reasons of §5.1, and where that closure is actually enforced.
 
-    A note for whoever reads this next: at the P02 migration head,
-    ``finding_observation.ungrounded_reason`` carries **no CHECK constraint** limiting it
-    to the five declared values — the column is plain nullable ``text`` and the database
-    accepts any string, including ``'looked_wrong'``. ``db/migrations/**`` is not this
-    session's to change, so the gap is reported rather than repaired, and closure is
-    asserted at the only place this session owns: the vocabulary the gate can produce,
-    and the values publication actually writes. Both assertions stay correct whether or
-    not the constraint is added later.
+    A note for whoever reads this next, corrected by `W10-FND`: this class was written
+    when ``finding_observation.ungrounded_reason`` carried **no CHECK constraint** — the
+    column was plain nullable ``text`` and the database accepted any string, including
+    ``'looked_wrong'``. `B4` reported that gap and could not repair it, ``db/migrations/**``
+    not being its tree. **Migration `0003_open_items` has since added
+    ``ck_finding_observation_ungrounded_reason``, and the database now refuses that
+    string.** The paragraph that said otherwise stood here for two waves and was still
+    being read as current.
+
+    ``test_ungrounded_vocabulary_is_enforced.py`` asserts the constraint exists, that it
+    bites, and that its vocabulary is the one the gate produces. The two assertions below
+    are unchanged and still cover the half a constraint cannot: the vocabulary the gate
+    can produce, and the values publication actually writes.
     """
 
     def test_the_enum_is_exactly_the_five_declared_reasons(self) -> None:

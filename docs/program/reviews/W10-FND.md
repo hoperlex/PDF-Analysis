@@ -193,3 +193,65 @@ the guard asserts the constraint's name.
 | the header is written for an empty row list | `if rows:` around `writer.writerow` | 1 failed | `BOM + header + b"\r\n"`, whole | `render_csv`'s stated reason |
 | `SORT_KEY` names the frozen three-part key | `("evidence_ordinal",)` | 2 failed | the three names | `P02_SEAMS.md` §6 "Sort key", plus a behavioural check that real rows ascend on it |
 
+## Rules unreddenable *by construction* — reported, not faked
+
+* **E07 — the `publishes_result` default.** `publishes_result_by_state()` reads
+  `bool(body.get("publishes_result", False))`. The default can only fire for a terminal of
+  `audit_run` that declares no `publishes_result` key. All four terminals in
+  `contracts/domain/v1/state-machines.json` declare it, and the contract is frozen, so no
+  input reaches the default. Flipping it to `True` changes nothing observable. Guarding it
+  would mean asserting the behaviour of an unreachable branch.
+
+* **E10 — `LEFT JOIN finding_current_verdict` versus `JOIN`.** The view is defined in
+  `0002_pc01_schema` as `FROM finding f LEFT JOIN LATERAL (...)`, so it emits exactly one
+  row per `finding` row and never fewer. `_EXPORT_ROWS` has already inner-joined `finding`,
+  so `cv` matches for every row that reaches the clause. The two joins are
+  indistinguishable from outside the database. Making the difference observable would
+  require changing the view, which is `db/migrations`' tree, not a test's.
+
+* **E04 / T02 — `SORT_KEY` and `TERMINALS_FROM_VALIDATING` have no consumer.** No
+  behavioural mutation can redden a constant that nothing reads. These are *not* the same
+  as E07 and E10: the constants are public, exported, and describe rules that really do
+  hold elsewhere, so a cross-check against an outside authority is meaningful and both got
+  one. Recorded here so the distinction is not lost — an unread constant is guardable, an
+  unreachable branch is not.
+
+## Product defects, precise and left unrepaired
+
+**1. Three download-name rules, all different, none of them agreeing.** Naming the owning
+trees; no repair attempted.
+
+| where | value | consumer |
+|---|---|---|
+| `src/auditmanager/exports/service.py` — `_FILENAME_TEMPLATE`, surfaced as `CsvExport.filename` | `audit_run_{run_id}.csv` | **none anywhere** in `src/`, `tests/` or `web/` |
+| `src/auditmanager/api/routers/export.py` — `_disposition()` | `attachment; filename="{run_id}.csv"` | the live `Content-Disposition` header |
+| `web/src/shared/api/csv-columns.ts` — `csvFileName()` | `{runId}-findings.csv` | the download panel |
+
+`CsvExport.filename` is documented as "what a browser should call the downloaded file",
+and it is not what any browser is told to call it. Mutating `_FILENAME_TEMPLATE` to
+`export-{run_id}.txt` left all 319 tests green, which is how three answers to one question
+have coexisted. Owning trees: `src/auditmanager/exports/` (`P2-EXP-01`),
+`src/auditmanager/api/routers/` (`P2-API-01`), `web/` (`P3-WEB-04`). A test in this
+session's tree can only pin one of the three, so pinning it would assert a value the system
+does not use; the disagreement is reported instead and `CsvExport.filename` is left
+unasserted.
+
+**2. `TERMINALS_FROM_VALIDATING` and `SORT_KEY` are exported public surface with no
+reader.** Both are in `__all__`. `SORT_KEY` in particular restates, in
+`exports/serializer.py`, an order that is actually fixed by the `ORDER BY` in
+`exports/query.py` — two places for one rule, with nothing making them agree until the
+guard added here. Owning trees: `src/auditmanager/findings/`, `src/auditmanager/exports/`.
+Not repaired: deleting or wiring up a public constant is a product change.
+
+## Corrected in this session's own tree
+
+`tests/integration/findings/test_grounding_gate.py`,
+`TestTheUngroundedVocabularyIsClosed`, carried a docstring stating that
+`finding_observation.ungrounded_reason` "carries **no CHECK constraint**" and that "the
+database accepts any string, including `'looked_wrong'`". Migration `0003_open_items`
+added `ck_finding_observation_ungrounded_reason` and the database refuses that exact
+string — verified directly. The claim was true when written and has been false since
+`0003`. The docstring is corrected in place, and the correction is backed by a test rather
+than asserted in prose. This is a comment in a path this session owns; no assertion in that
+class was touched.
+

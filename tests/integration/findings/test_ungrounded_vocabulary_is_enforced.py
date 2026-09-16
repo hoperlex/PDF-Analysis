@@ -14,9 +14,8 @@ The second matters because the docstring on ``TestTheUngroundedVocabularyIsClose
 carries no CHECK constraint ... the database accepts any string, including
 ``'looked_wrong'``". That was true at `0002_pc01_schema`. Migration
 `0003_open_items` added ``ck_finding_observation_ungrounded_reason`` and the database now
-refuses exactly that string. The claim is left in place in the file that makes it — this
-session does not own the correction of another test's prose any more than it owns the
-migration — and is asserted false here instead.
+refuses exactly that string. The docstring has been corrected in place — it is in this
+session's own tree — and what it used to claim is asserted false here.
 
 The migration is the independent authority. The five values below are read out of
 `db/migrations/versions/20260911_0003_open_items.py` and also written as literals, so a
