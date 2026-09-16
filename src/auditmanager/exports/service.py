@@ -29,23 +29,24 @@ class CsvExport:
     """The rendered export. A value, not a record of anything.
 
     **It carries no download name, deliberately.** It used to expose a ``filename``
-    property over an ``audit_run_{run_id}.csv`` template that nothing read - not the
-    router, not the frontend, not a test - while reading, from here, as though it were
-    the name the system serves. It was not, and a third unserved spelling of the name is
-    worse than none: a reader looking for the answer found it here first.
+    property over a template of its own that nothing read - not the router, not the
+    frontend, not a test - while reading, from here, as though it were the name the
+    system serves. It was not. A dead spelling of the name is worse than none, because
+    it is the first answer a reader looking for the download name finds: it sits on the
+    object the export produces.
 
-    The name the system actually serves is the HTTP header, and only that:
-    ``api/routers/export.py:_disposition`` emits
-    ``attachment; filename="{run_id}.csv"``. The frontend's ``csvFileName``
-    (``web/src/shared/api/csv-columns.ts``) suggests ``{runId}-findings.csv`` and says
-    in its own docstring that the server's header wins. The two differing is
-    **permitted**: the frozen ``openapi.json`` declares the ``Content-Disposition`` of
-    ``exportRunCsv``'s 200 as "presentation only and is never an identity" and pins no
-    value - no enum, no pattern, no example. Reconciling them is not a repair, it is an
-    invention of a contract nobody wrote.
+    The name the system serves is built by ``api/routers/export.py:_disposition`` and
+    nowhere else, and this docstring does not restate it - restating it here is how the
+    dead one came to exist. The frontend suggests a different one
+    (``web/src/shared/api/csv-columns.ts``) and says in its own docstring that the
+    server's header wins. The two differing is **permitted**: the frozen
+    ``openapi.json`` declares that header on ``exportRunCsv``'s 200 as "presentation
+    only and is never an identity" and pins no value - no enum, no pattern, no example.
+    Reconciling them is not a repair, it is inventing a contract nobody wrote.
 
-    Serving a name is a transport concern and belongs at the transport. A value object
-    computed from canonical data has no business naming a download.
+    Serving a name is a transport concern and belongs at the transport. A value computed
+    from canonical data has no business naming a download.
+    ``tests/integration/exports/test_the_download_name_has_one_source.py`` holds this.
     """
 
     run_id: str

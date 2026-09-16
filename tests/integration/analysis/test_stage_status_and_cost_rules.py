@@ -273,22 +273,34 @@ def test_cost_basis_is_measured_when_the_transport_reported_a_figure() -> None:
     assert outcome.model_calls[0].cost_basis == "measured"
 
 
-def test_cost_basis_reaches_the_record_but_not_the_success_path_metrics() -> None:
-    """An asymmetry in the product, pinned as found rather than repaired.
+def test_cost_basis_is_in_the_stage_metrics_on_the_success_path_and_the_overrun_path() -> None:
+    """`W11-FIX` repairs the asymmetry `W10-ANL` pinned as found.
 
-    `run_text_analysis` puts `cost_basis` in the metrics dict it returns on the
-    **budget-overrun** path, and does not put it in the metrics dict it returns on the
-    success path — where it reaches the `ModelCallRecord` instead. This test records the
-    behaviour as it is today so that changing it is a deliberate act. It is reported in
-    the review record for the owner of `src/auditmanager/analysis/`; `W10-ANL` writes
-    tests, not product code.
+    This test previously asserted ``"cost_basis" not in outcome.metrics`` — it recorded
+    the defect so that changing it would be a deliberate act, because `W10-ANL` wrote
+    tests and not product code. This is that deliberate act, and the assertion is now
+    its inverse.
+
+    The defect: `run_text_analysis` put `cost_basis` in the metrics dict it returns on
+    the **budget-overrun** path and not in the one it returns on the success path. A
+    consumer reading ``metrics["cost_basis"]`` got an answer on the run that blew its
+    budget and a ``KeyError`` on the run that succeeded — backwards from useful, and the
+    module's own comment beside `_record` showed it was the unfinished half of a repair
+    already begun.
+
+    Both halves are asserted together and in one test on purpose: the failure this
+    guards against is a *difference between two paths*, and two tests that each pass
+    alone cannot express it. Reverting either branch reddens this.
     """
     outcome = _run(
         _response(_reply(_observation(1, "Выручка выросла")), reported_cost_usd=0.02)
     )
     assert outcome.status == STATUS_SUCCEEDED
     assert outcome.model_calls[0].cost_basis == "measured"
-    assert "cost_basis" not in outcome.metrics
+    assert outcome.metrics["cost_basis"] == "measured", (
+        "the success path returned metrics without `cost_basis`; the overrun path "
+        "carries it, so a consumer can read the provenance only when the run failed"
+    )
 
     overrun = run_text_analysis(
         run_id=RunId.new(),
@@ -302,6 +314,44 @@ def test_cost_basis_reaches_the_record_but_not_the_success_path_metrics() -> Non
     assert overrun.status == STATUS_FAILED
     assert overrun.error.code is ErrorCode.COST_BUDGET_EXCEEDED
     assert overrun.metrics["cost_basis"] == "measured"
+
+    # The two paths agree on the key and on the value it can take. Pinned as literals:
+    # deriving either side from the other is how a shared defect reads as agreement.
+    assert set(outcome.metrics) >= {"cost_usd", "cost_basis", "cost_ceiling_usd"}
+    assert set(overrun.metrics) >= {"cost_usd", "cost_basis", "cost_ceiling_usd"}
+
+
+def test_cost_basis_in_the_metrics_says_estimated_when_the_transport_reported_nothing() -> None:
+    """The other value, on the success path. Hard-coding ``"measured"`` in the metrics
+    dict would satisfy the test above and be wrong; this is what stops that.
+
+    A replay reports no cost, so the figure is computed from the lock's per-token pins.
+    The number alone cannot say so, which is the whole reason the basis is emitted.
+    """
+    outcome = _run(_response(_reply(_observation(1, "Выручка выросла"))))
+    assert outcome.status == STATUS_SUCCEEDED
+    assert outcome.metrics["cost_basis"] == "estimated"
+    assert outcome.model_calls[0].cost_basis == "estimated"
+
+
+def test_every_metrics_value_the_stage_emits_is_a_scalar_the_contract_admits() -> None:
+    """`contracts/analysis/v1/stage-result.schema.json` admits only scalars under
+    ``metrics``. ``cost_basis`` is a string, which the schema allows — but the guard
+    belongs here rather than in a comment, because the next figure added to this dict
+    will be added by someone reading the dict and not the schema.
+
+    The admitted types are written out as literals, not read from the schema file: a
+    schema that loosened would otherwise loosen this test with it.
+    """
+    outcome = _run(
+        _response(_reply(_observation(1, "Выручка выросла")), reported_cost_usd=0.02)
+    )
+    assert outcome.status == STATUS_SUCCEEDED
+    for key, value in outcome.metrics.items():
+        assert isinstance(value, (str, int, float, bool)) or value is None, (
+            f"metrics[{key!r}] is a {type(value).__name__}; the frozen stage-result "
+            "schema admits number, integer, string, boolean and null and nothing else"
+        )
 
 
 def test_cost_basis_is_estimated_when_the_transport_reported_nothing() -> None:
