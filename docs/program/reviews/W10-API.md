@@ -358,3 +358,79 @@ supplied id must still win.
 
 *(sweep of `schemas`, `errors`, `http`, `identity`, `bootstrap`, `db`, `statemachine`
 continues)*
+
+
+## The guards, and the check that they are not decorative
+
+Nine files, **120 tests**, all inside this session's owned paths.
+
+| file | tests | rules it makes reddenable |
+|---|---|---|
+| `tests/integration/api/test_envelope_screen_rules.py` | 24 | E2 E3 E4 E6 E8 E9 E11 E13 E15 |
+| `tests/integration/api/test_multipart_rules.py` | 19 | M1 M2 M3 M4 M5 M6 M7 M8 |
+| `tests/integration/api/test_header_rules.py` | 9 | I3 C3 |
+| `tests/integration/api/test_schema_bounds.py` | 10 | L4 P1 P3 P4 |
+| `tests/integration/api/test_range_rules.py` | 10 | D1 |
+| `tests/integration/api/test_router_and_body_rules.py` | 11 | H4 R4 |
+| `tests/integration/api/test_identity_rules.py` | 23 | U3 U4 U6 U7 U8 |
+| `tests/integration/composition/test_settings_defaults.py` | 10 | S2 S8 S9 |
+| `tests/integration/composition/test_transition_guard_reasons.py` | 5 | T1 |
+
+**Every one of the 35 reachable greens was re-run against its mutation with the guards in
+place, and all 35 are now red.** Not one was assumed. The remaining green, `_MAX_DETAILS`,
+is unreachable by construction and no test was faked for it.
+
+### What was pinned against an independent authority
+
+| rule | literal | authority |
+|---|---|---|
+| default message, all twenty codes | each code's `summary` | `contracts/domain/v1/error-codes.json` |
+| the catalog has twenty codes | `20` | same |
+| `Idempotency-Key` length | 128 / 129 | `openapi.json` `IdempotencyKey.maxLength` |
+| `CorrelationId` pattern | the pattern string | `openapi.json` `CorrelationId` |
+| cursor length | 512 / 514 | `openapi.json` `Cursor.maxLength` |
+| project name length | 200 / 201 | `openapi.json` `CreateProjectRequest.name` |
+| ULID length | 26 | `contracts/domain/v1/identifiers.json` `ulid.length` |
+| Crockford alphabet | the 32 characters | same, `ulid.alphabet` |
+| `IDENTIFIER_PATTERN`, `PREFIX_PATTERN` | the pattern strings | same, `id_pattern` / `prefix_pattern` |
+| default cost ceiling | `1.0` | `docs/program/P02_LOCK.json` `models.run_cost_ceiling_usd` (`OD-03`) |
+| default model id | `claude-opus-5` | same, `models.primary.model_id` |
+
+Each authority is read from the **test file's** own location, never through the module
+under test, so a module drifting from the contract is a red test rather than a private
+agreement.
+
+Where no authority exists the number is written out and that is said plainly, not implied:
+`_MAX_MESSAGE` (512), `_MAX_DETAIL_VALUE` (256), `MAX_BODY` (26 MiB — the frozen document
+declares the *document* maximum, which is the envelope's 25 MiB `ENV-SIZE`, a different
+limit) and `proxy_model`'s `"proxy"` sentinel.
+
+Nothing imports a constant from the module and builds its expected value from it. No bytes
+were added to `fixtures/synthetic/ar/**` or `fixtures/validation/PC-02/**`; every multipart
+body, oversize payload and cursor is built inside its test.
+
+## Gate
+
+```
+make gate  →  GATE OK: battery, foundation, frontend and whitespace all pass
+936 passed, 5 skipped, 116 subtests passed in 265.13s
+foundation 35 passed · frontend 24 files / 289 tests
+```
+
+816 → 936. No product code was changed: `git diff --stat e08da85..HEAD -- src/ db/ contracts/ web/`
+is empty.
+
+
+## Elapsed
+
+**3 h 33 min** of wall clock on this run, 14:38 to 18:11 on 2026-09-16, plus roughly 50
+minutes in the attempt that was killed with its parent session — which produced the
+provisioning commit, the 77-mutation plan and the copy harness this run resumed from, and
+no measurements.
+
+Most of it was the sweep itself. A green verdict costs a full canonical battery, about
+4 minutes, and 36 of the 77 mutations were green; the reds mostly abort in under 10
+seconds under `-x`. Two runs were lost to the same mistake — `pgrep -f "<pattern>"` in a
+wait loop matching the shell whose own command line contains that pattern, so the loop
+never exits. It cost about 25 minutes across two occurrences and is worth knowing about:
+in this harness a background job's full command line is visible to `pgrep`.
