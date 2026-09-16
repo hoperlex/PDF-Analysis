@@ -243,3 +243,9 @@ tests/integration/ingest/test_the_read_path_answers_the_manifest.py   (new)
 tests/integration/storage/test_an_object_the_store_cannot_vouch_for.py (new)
 docs/program/reviews/W11-RD.md
 ```
+
+## Elapsed
+
+Arrival `19:29:40+05:00`, last commit `19:50+05:00` — **≈20 minutes** wall-clock, of which the
+two full `make gate` runs are ~7 minutes and `make bootstrap` plus `npm ci` ~2. The session did
+not restart; every step above is nevertheless committed separately.
