@@ -557,8 +557,17 @@ def execute_run(
     # `assert_consistent_mode` in analysis.text.provenance already guards the stage's own
     # provenance and its docstring names this exact failure - "a recorded run published
     # with provider_mode: live, and nothing downstream could detect that afterwards". It
-    # holds where it stands. The refusal it names happens one level above it, which is
-    # here, and this is the only place that holds both the run row and the adapter.
+    # holds where it stands. This is the only place that holds both the run row and the
+    # adapter — but it is **not** where the API path refuses, and the comment used to imply
+    # that it was. `bootstrap/adapters.py` rejects a request for a mode the deployment does
+    # not provide before a run row is written, so the twelve operations never reach here:
+    # `W6-CERT` removed this branch and the whole criterion-4 suite stayed green.
+    #
+    # It is defence in depth behind that one, and it guards a different thing: `adapters.py`
+    # compares a *request* against a *deployment*, while this compares a persisted *row*
+    # against the object about to write under it. A composition that wired the wrong adapter
+    # is refused here and nowhere else. `tests/integration/runs/test_mode_crosscheck_is_
+    # reachable.py` reaches it through `execute_run`, which is where it lives.
     #
     # PROTOTYPE_PROFILE section 8 criterion 4 requires live and recorded outcomes to be
     # distinguishable, and section 4 forbids presenting a recorded result as a live one.
