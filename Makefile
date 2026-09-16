@@ -535,9 +535,29 @@ mutation_copy() {
   local name
   for name in contracts docs fixtures db tools; do
     [ -e "$$name" ] || fail "mutation_copy: $$name is not in this checkout."
-    ln -s "$$PWD/$$name" "$$dest/$$name"
+    if [ -n "$$MUTATION_COPY_FULL" ]; then
+      cp -a "$$name" "$$dest/$$name"
+    else
+      ln -s "$$PWD/$$name" "$$dest/$$name"
+    fi
   done
   printf '%s\n' "mutation copy at $$dest"
+  if [ -z "$$MUTATION_COPY_FULL" ]; then
+    # Said out loud because a symlinked directory silently turns a mutation into a no-op,
+    # and a no-op mutation and a covered rule produce identical evidence. `W10-RUN` hit
+    # exactly this: `tests/integration/db` applies migrations by running the literal
+    # `alembic` command as a subprocess whose cwd is the repository root derived from the
+    # *test file*, so the real `db/` is used whatever `pythonpath` says. A src-only copy
+    # cannot mutate a migration at all -- it can only appear to.
+    printf '%s\n' \
+      "NOTE: contracts, docs, fixtures, db and tools are SYMLINKS to this checkout." \
+      "      Mutating anything inside them has no effect, and anything that reaches them" \
+      "      by a path not derived from auditmanager.__file__ reads the pristine tree." \
+      "      To mutate a contract, a fixture or the ledger tool: make mutation-copy FULL=1" \
+      "      A MIGRATION cannot be mutated by any copy: tests/integration/db derives the" \
+      "      repository root from the TEST FILE and runs alembic with that cwd. Mutating" \
+      "      one means copying the whole worktree, tests included, and running there."
+  fi
 }
 
 probe_mutation_copy() {
@@ -884,12 +904,21 @@ foundation: up check-services migrate check-db check-storage test-foundation
 # is the same correction this programme has made to registers, to briefs and to its own
 # schema assumptions.
 # --- a proved mutation copy --------------------------------------------------------
-# Usage: make mutation-copy MUT=/root/<name>-mut
+# Usage: make mutation-copy MUT=/root/<name>-mut [FULL=1]
+#   FULL=1 copies contracts/docs/fixtures/db/tools instead of symlinking them, so code that
+#   resolves them from `auditmanager.__file__` reads the copy's version and a mutation to
+#   one of them actually takes.
+#
+#   It does NOT make a migration mutable. `tests/integration/db/conftest.py` derives
+#   REPOSITORY_ROOT from its own file and runs alembic with that cwd, so the worktree's
+#   migrations are used whatever any copy contains. Mutating a migration means copying the
+#   whole worktree, tests included, and running pytest from there.
 # Then:  .venv/bin/pytest <suite> -o pythonpath=/root/<name>-mut/src -p no:randomly
 #
 # Build the copy, then run your suites against it **unmutated** and confirm they are green
 # before you trust a single red. That baseline is the part the prose recipe never had.
 MUT ?=
+mutation-copy: export MUTATION_COPY_FULL = $(FULL)
 mutation-copy:
 	@$(GUARDS)
 	[ -n "$(MUT)" ] || fail \

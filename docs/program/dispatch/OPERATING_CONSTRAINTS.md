@@ -186,3 +186,20 @@ and confirm they are green before you trust a single red. The target prints that
 and it is not decoration — a red from a copy you never baselined is not evidence. No list of
 directories is safe against the next path someone resolves from the root; a baseline is.
 
+### 10.1 What no copy can mutate
+
+`FULL=1` copies the five directories instead of symlinking them, so a mutation to a
+contract, a fixture or the ledger tool takes effect for code that resolves them from
+`auditmanager.__file__`.
+
+**It does not make a migration mutable, and neither does any other copy.**
+`tests/integration/db/conftest.py` derives `REPOSITORY_ROOT` from *its own file* and runs
+`alembic` as a subprocess with that `cwd`, so the worktree's `db/migrations` is what applies
+regardless of `pythonpath` or what the copy holds. Mutating a migration means copying the
+**whole worktree, tests included**, and running pytest from there — `W10-RUN` did this for
+its trigger sweep and it is the difference between measuring the migrations and appearing to.
+
+The target says so on every run. It was written claiming the opposite for one commit, which
+is the same false-affordance class this wave exists to find: a facility that looks like it
+works, produces no error, and yields a no-op mutation indistinguishable from a covered rule.
+
