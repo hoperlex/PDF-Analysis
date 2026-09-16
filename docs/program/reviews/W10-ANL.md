@@ -548,3 +548,55 @@ I wrote this wave. Coercing a non-dict to `{}` leaves `raw.get("category")` retu
 which fails the very next check, so the drop-and-count outcome is identical. Replaced with
 two mutations that do change behaviour — deleting the `isinstance` guard outright (RP-10b)
 and having it return a fabricated observation (RP-10c) — and both are RED.
+
+## Guard 8 — `tests/integration/analysis/test_stage_status_and_cost_rules.py`
+
+25 tests. The stage-level rules the recorded corpus cannot reach, and the cost meter's two
+boundaries.
+
+`test_partial_and_status.py` and `test_cost_ceiling.py` drive the stage through the recorded
+adapter and its `variants/` directory, which covers whatever those recordings contain. The
+rules below need replies the recordings do not have. This file uses a small scripted adapter
+built in the test: `ModelAdapter` is a `runtime_checkable` `Protocol` on the public seam, the
+dispatch names scripted adapters as in scope, and nothing is added to `fixtures/recorded/**`.
+
+| mutation | this file |
+|----------|-----------|
+| ST-01 truncated-with-no-usable-observation branch disabled | RED |
+| ST-04 strict-subset clamp disabled | RED |
+| ST-05 frontier clamp removed (`analysed = list(pages)`) | RED |
+| ST-08 `check_before_call()` moved after `adapter.complete()` | RED |
+| ST-11 graph `artifact_role` refusal disabled | RED |
+| ST-11b graph role `reason` changed | RED |
+| ST-12 graph `artifact_version` refusal disabled | RED |
+| ST-16 `_check_graph_version(...)` call deleted | RED |
+| ST-14 `cost_basis` hard-coded to `"estimated"` | RED |
+| CM-03 `check_before_call` `>=` → `>` | RED |
+| CM-04 `charge` `>` → `>=` | RED |
+| CM-07 spend checked before being recorded | RED |
+| CM-06 `BUDGET_SCOPE_RUN` literal changed | RED |
+| CF-01 `DEFAULT_RUN_COST_CEILING_USD` `1.00` → `2.00` | RED |
+
+**CM-04 is the one the dispatch's cost-meter question was pointing at.** The two checks use
+different comparisons on purpose — `check_before_call` halts at `>=`, `charge` halts at `>` —
+and swapping either was green. The guard pins both directions: a meter charged *exactly* its
+ceiling does not halt on that charge (the call is recorded, the run continues) and *does*
+halt at the next `check_before_call`. Collapsing the two operators to the same one breaks one
+or the other.
+
+ST-08 is asserted by `adapter.calls == 0` — the adapter counts its own invocations — so
+"issues no call" is measured rather than inferred from the outcome status.
+
+### A defect found while writing this guard, left unrepaired
+
+`run_text_analysis` puts `cost_basis` in the metrics dict it returns on the **budget-overrun**
+path and omits it from the metrics dict it returns on the **success** path, where the basis
+reaches the `ModelCallRecord` instead. The code comment beside the success-path `_record`
+call says the author's "first attempt set it on the error path's own dict, which the executor
+never reads — the figure reached the row and the provenance did not", so the record was fixed;
+the metrics asymmetry was not. A consumer reading `metrics["cost_basis"]` gets a value on a
+failed run and a `KeyError` on a successful one.
+
+Owning tree: `src/auditmanager/analysis/text/stage.py`. Not repaired — `W10-ANL` writes tests.
+`test_cost_basis_reaches_the_record_but_not_the_success_path_metrics` pins the behaviour as
+found, so a change to it is deliberate.
