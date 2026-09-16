@@ -120,8 +120,9 @@ All three are unreddenable-and-reachable → guards written in batch 4.
 `p02_journey/test_journey_figures.py`. A sweep that had screened on the owned suites alone
 would have filed it as a finding and written a guard for something already guarded.
 
-Four of the five greens are **unreddenable by construction** or a dead constant; one is the
-wave-9 mistake still live in the tree.
+Six of the thirteen went green. Two are **unreddenable by construction** (E07, E10), one is
+a dead constant (E04), one is a reachable rule with no test (E03), one is a product defect
+(E12) — and one is the wave-9 mistake still live in the tree (E01).
 
 * **E01 — the frozen column list had no literal pin in Python.** The export contract test
   asserts `header == list(COLUMNS)`, which moves with the mutation, and its `_parse` helper
