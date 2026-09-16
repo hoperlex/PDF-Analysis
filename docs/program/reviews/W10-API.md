@@ -164,4 +164,66 @@ present and the old text gone, and the guard run against it:
 Each mutation reddens exactly the cases written for it and no others, and the suite is green
 on unmutated source.
 
-*(sweep of the remaining surface in progress)*
+## Sweep table — `shared/errors/envelope.py`, all 14 rules
+
+Every mutation applied to a fresh copy, read back, then Phase A
+(`tests/integration/{api,composition,shared_kernel}`, `-x`) and, if Phase A was green,
+Phase B — the **whole canonical battery**, `tests --ignore=tests/contract
+--ignore=tests/checkpoint`. A green line below means all 816 tests passed with the rule
+neutered.
+
+| # | rule mutated | mutation | result | what reddened |
+|---|---|---|---|---|
+| E1 | `_FORBIDDEN` *a URL* | pattern → never-matching | **RED** | `test_error_envelope.py::test_a_message_carrying_an_address_is_refused_by_the_screen` |
+| E2 | `_FORBIDDEN` *a filesystem path* | pattern → never-matching | **GREEN** | nothing — 816 passed |
+| E3 | `_FORBIDDEN` *an S3-style object key* | pattern → never-matching | **GREEN** | nothing — 816 passed |
+| E4 | `_FORBIDDEN` *a credential* | pattern → never-matching | **GREEN** | nothing — 816 passed |
+| E5 | `_FORBIDDEN` *SQL* | pattern → never-matching | **RED** | `…::test_a_message_carrying_an_address_is_refused_by_the_screen` |
+| E6 | `_FORBIDDEN` *a stack frame* | pattern → never-matching | **GREEN** | nothing — 816 passed |
+| E8 | `_MAX_MESSAGE = 512` | → `100000` | **GREEN** | nothing — 816 passed |
+| E9 | `_MAX_DETAIL_VALUE = 256` | → `100000` | **GREEN** | nothing — 816 passed |
+| E10 | `_MAX_DETAILS = 16` | → `100000` | **GREEN** | nothing — **unreachable by construction**, see Finding 3 |
+| E11 | detail-**value** screen | `for … in ()` | **GREEN** | nothing — 816 passed |
+| E12 | `safe_detail_keys` allowlist | `if False:` | **RED** | `…::test_a_domain_error_detail_outside_the_catalog_is_refused_not_dropped` |
+| E13 | detail scalar check | `if False:` | **GREEN** | nothing — 816 passed |
+| E14 | `retryable` from catalog | `return not …` | **RED** | `test_database_refusals.py::test_am001_a_non_initial_insert_becomes_the_typed_code` |
+| E15 | default message = `code.summary` | → a constant | **GREEN** | nothing — 816 passed |
+
+**Four of the fourteen reddened. Nine are unguarded and reachable. One is unreachable.**
+
+### Finding 5 — the path rule and the S3 rule mask each other
+
+This is why E2 and E3 are *both* green, and it is the thing worth carrying forward. The
+one gate test sends `could not read /var/lib/audit/objects/ab/cd.pdf`, which matches **both**
+patterns. The screen raises on the first match, so:
+
+* delete the path rule → the S3 rule still matches that sentence → `UnsafeMessage` still
+  raised → green;
+* delete the S3 rule → the path rule matches first anyway → green.
+
+Either rule can be removed from a security screen with the full battery passing. Only
+removing *both* would be noticed. A value matching exactly one pattern is the only kind that
+can tell them apart, which is why the guard uses one.
+
+**Answering the brief's question directly** — *which of the forbidden shapes can no test
+redden?* Four of the six: **a filesystem path, an S3-style object key, a credential, a stack
+frame**. Only *a URL* and *SQL* were reddenable. (`tests/contract` covers five of six, but it
+is quarantined out of `make gate` and is red before any wave starts, so it guards nothing
+the gate would catch.)
+
+### The guard, extended
+
+`test_envelope_screen_rules.py` now carries 24 tests and covers **all nine reachable greens**:
+E2, E3, E4, E6 (one-shape-per-value, reason phrase asserted), E8, E9 (boundary literals),
+E11 (the whole detail-value screen), E13 (scalar), E15 (default message).
+
+E15's guard is pinned against `contracts/domain/v1/error-codes.json`, read from the **test
+file's** own location rather than the module's — the independent authority
+`shared/errors/catalog.py` itself names ("the contract is the authority … never restates a
+value the contract owns"). It also pins the catalog at **20 codes**, so a code added or
+removed reddens rather than quietly narrowing the loop. E15 reddens
+`test_every_code_defaults_to_its_declared_summary`.
+
+E12 and E14 already redden against the existing suite, so no test was added for them.
+
+*(sweep of `api/`, `bootstrap/`, `shared/identity`, `shared/db`, `shared/statemachine` continues)*
