@@ -462,15 +462,32 @@ probe_runtime_env() {
 # whoever happened to remember them.
 
 run_battery() {
-  # OPERATING_CONSTRAINTS.md section 7. `tests/contract` and `tests/checkpoint` are CP-00
-  # historical evidence, red before any wave starts and quarantined by
-  # PROTOTYPE_PROFILE.md section 6.3, so they are excluded here rather than left to each
-  # caller to remember -- the reason this target exists at all.
+  # OPERATING_CONSTRAINTS.md section 7, narrowed in wave 11.
+  #
+  # PROTOTYPE_PROFILE.md section 6.3 quarantines *CP-00 ratification mechanics*. Until wave
+  # 11 that rule was implemented by excluding the whole `tests/contract` directory, which
+  # swept up five subdirectories of contract tests over **live** rules: the error kernel,
+  # the identifier catalog, the API v1 shapes, the P02 domain and the AR fixtures.
+  #
+  # `W10-API` found what that cost. Those tests exercise five of the six forbidden shapes in
+  # the error screen and both identifier catalogs -- rules its sweep reported as unguarded,
+  # because the gate does not run them. They are findable by grep and they read as evidence,
+  # so a reviewer asking "is this rule covered?" was told yes by tests that protect nothing.
+  # It was the single largest systematic reason that surface yielded 36 unreddenable rules
+  # from 77.
+  #
+  # Measured before narrowing: all five subdirectories are green and take 2.5 s in total,
+  # with no dependency the runtime venv lacks. The three top-level files really are red --
+  # 33, 3 and 28 failures -- and they are the CP-00 and clean-clone-bootstrap material
+  # section 6.3 actually means. So the ignore now names those files, not the directory.
   local status
   set +e
   scrubbed_run PYTHONUNBUFFERED=1 -- \
     "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q \
-    tests --ignore=tests/contract --ignore=tests/checkpoint
+    tests --ignore=tests/checkpoint \
+    --ignore=tests/contract/test_cp00_candidate.py \
+    --ignore=tests/contract/test_cp00_final_state.py \
+    --ignore=tests/contract/test_validate_bootstrap.py
   status=$$?
   set -e
   if [ "$$status" -eq 5 ]; then

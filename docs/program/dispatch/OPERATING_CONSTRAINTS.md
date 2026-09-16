@@ -98,8 +98,14 @@ which is the only reason it was noticed.
 The canonical command is:
 
 ```
-.venv/bin/pytest tests --ignore=tests/contract --ignore=tests/checkpoint
+.venv/bin/pytest tests --ignore=tests/checkpoint \
+  --ignore=tests/contract/test_cp00_candidate.py \
+  --ignore=tests/contract/test_cp00_final_state.py \
+  --ignore=tests/contract/test_validate_bootstrap.py
 ```
+
+**Narrowed in wave 11.** It used to read `--ignore=tests/contract --ignore=tests/checkpoint`,
+and that is the form quoted in every dispatch brief up to wave 10. See §11.
 
 **Since wave 7 it is also `make gate`, and that is the one to prefer.** The battery is one
 of four things a wave must pass, and until wave 7 only `make foundation` was a target while
@@ -202,4 +208,45 @@ its trigger sweep and it is the difference between measuring the migrations and 
 The target says so on every run. It was written claiming the opposite for one commit, which
 is the same false-affordance class this wave exists to find: a facility that looks like it
 works, produces no error, and yields a no-op mutation indistinguishable from a covered rule.
+
+## 11. The quarantine was by directory and should have been by file
+
+`PROTOTYPE_PROFILE.md` §6.3 quarantines **CP-00 ratification mechanics**. Until wave 11 that
+rule was implemented by excluding the whole `tests/contract` directory — which swept up five
+subdirectories of contract tests over **live** rules: the error kernel, the identifier
+catalog, the API v1 shapes, the P02 domain, the AR fixtures.
+
+**`W10-API` found what that cost.** Those tests exercise five of the six forbidden shapes in
+the error screen, and both identifier catalogs — rules its sweep reported as unguarded,
+because the gate does not run them. They are findable by grep and they read as evidence, so a
+reviewer asking "is this rule covered?" was told **yes** by tests that protect nothing. It
+was the single largest systematic reason that surface yielded 36 unreddenable rules from 77.
+
+Measured before narrowing, in a linked worktree:
+
+| Path | Result |
+|---|---|
+| `tests/contract/shared_kernel/` | 16 passed, 25 subtests |
+| `tests/contract/api_v1/` | 11 passed |
+| `tests/contract/domain_p02/` | 110 passed |
+| `tests/contract/analysis_packages/` | 35 passed |
+| `tests/contract/fixtures_ar/` | 40 passed, 22 subtests |
+| `tests/contract/test_cp00_candidate.py` | **33 failed**, 126 errors |
+| `tests/contract/test_cp00_final_state.py` | **3 failed** |
+| `tests/contract/test_validate_bootstrap.py` | **28 failed** |
+
+The five subdirectories total **2.5 seconds** and need no dependency the runtime venv lacks.
+The three files really are red, and they are the CP-00 and clean-clone-bootstrap material
+§6.3 actually means. `W6-CERT`'s finding that `tests/contract` cannot run from a linked
+worktree applies to those files; the five subdirectories run green in one, which is where the
+figures above were taken.
+
+So the ignore names the files. **§6.3 is unchanged and was never wrong** — the rule said
+CP-00 mechanics, and only the implementation said *directory*. The battery goes 1264 → 1476
+passed and 116 → 163 subtests, and none of those 212 tests is new.
+
+**The general lesson is not about this directory.** An exclusion written as a path is a claim
+about everything that will ever live under that path, and nothing re-checks it when something
+new is added there. Where a quarantine must be broad, say in the same breath what it costs,
+so the next reader can tell coverage from the appearance of it.
 
