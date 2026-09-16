@@ -737,3 +737,37 @@ bet on a library bug rather than a test of a rule. Reported, not faked.
 `test_fail_closed.py`, but nothing asserts the catalog code, so changing
 `ANALYSIS_INPUT_INVALID` to `ANALYSIS_FAILED` is invisible. Recorded; not guarded, because the
 path is already covered and the marginal value is low next to the rest of this sweep.
+
+## A second self-inflicted fault: mutation runs share the instance with the gate
+
+The first full gate after the guards landed came back **2 failed, 1029 passed, 5 skipped,
+116 subtests**, failing:
+
+- `tests/integration/ingest/test_negative_envelope.py::test_negative_fixture_is_refused_by_its_own_rule_and_publishes_nothing[image_only.pdf-page_text-every_page_has_extractable_text]`
+- `tests/integration/ingest/test_publication.py::test_baseline_publishes_one_version_and_one_available_blob`
+
+Neither is in my tree and neither is one of my tests. The cause is mine all the same: **batch
+6 was running concurrently**, and although its *code* lives in an isolated copy, its *tests*
+run against the same PostgreSQL and MinIO instance the gate uses — `gate-w10a`. Batch 6's
+mutations included `SP-01` (`page.char_count == 0` refusal disabled) and `SP-03`
+(`has_text_layer` forced false), which are precisely the rules
+`test_negative_fixture_is_refused_by_its_own_rule_and_publishes_nothing[image_only.pdf-page_text-...]`
+exercises. A mutated run that *accepted* `image_only.pdf` publishes rows the unmutated ingest
+test then finds.
+
+So the mutation harness isolates the source tree but **not the database**, and a mutation that
+disables a refusal writes rows that should not exist. That is a different failure from the
+shared-copy fault earlier and it needs a different fix: an isolated `src/` is not an isolated
+run.
+
+Per `OPERATING_CONSTRAINTS.md` §9 this is exactly the case §6 does *not* cover, and the way to
+tell interference from an accumulated-population defect "costs one command: run your suite
+alone against the same database". All mutation processes were killed and `make gate` was
+re-run with nothing else touching the instance. **That result is the one recorded below**, and
+it is the only gate figure in this report that was measured alone.
+
+**Guidance for the next session running this method:** a mutation batch whose suites write to
+PostgreSQL or S3 must not run concurrently with anything else on the same instance, including
+your own gate. Offline batches — `analysis_text`, `replay`, and every guard in
+`tests/integration/analysis` except none of them — are safe to parallelise; `analysis_engine`,
+`ingest`, `foundation` and `p02_journey` are not.
