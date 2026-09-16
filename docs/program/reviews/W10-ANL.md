@@ -668,3 +668,21 @@ refuse. I did not write (b): it would assert behaviour over a shape the loader f
 is the same category as the registry `status_policy` defaults. The checks earn their keep as
 defence against a future edit to the arithmetic, and the mutations that represent that edit
 are all red. Reported, not faked.
+
+## Guards summary
+
+| file | tests | rules guarded that nothing could redden before |
+|------|-------|-----------------------------------------------|
+| `test_provider_lock_refusals.py` | 14 | 8 |
+| `test_profile_identity_is_pinned.py` | 11 | 7 |
+| `test_model_call_record_rules.py` | 22 | 9 |
+| `test_text_layer_validation.py` | 29 | 8 |
+| `test_observations_artifact_rules.py` | 23 | 12 |
+| `test_status_policy_and_result_shape.py` | 43 | 14 |
+| `test_response_parsing_rules.py` | 29 | 11 |
+| `test_stage_status_and_cost_rules.py` | 25 | 14 |
+| `test_ungrounded_reason_vocabulary.py` | 19 | 11 |
+| **total** | **215** | **94** |
+
+Every one of the 94 was mutated red against its new guard and green at baseline, each run in
+an isolated copy with `auditmanager.__file__` proved to resolve under that copy.
