@@ -40,6 +40,7 @@ from auditmanager.shared.identity import (
     is_valid_ulid,
     new_ulid,
 )
+from auditmanager.shared.identity.ids import OpaqueId
 from auditmanager.shared.identity.ulid import ULID_LENGTH, alphabet
 
 CONTRACT = Path(__file__).resolve().parents[3] / "contracts/domain/v1/identifiers.json"
@@ -133,3 +134,47 @@ class TestAWrongPrefixIsADifferentFaultFromAWrongShape:
     def test_a_valid_identity_of_its_own_type_is_accepted(self) -> None:
         value = str(ProjectUid.new())
         assert str(ProjectUid(value)) == value
+
+
+class TestAPrefixIsBoundToExactlyOneEntity:
+    """`__init_subclass__` refuses a prefix already bound to another type. Removing the
+    check left all 816 tests green, and the consequence is not a raise that did not
+    happen: `_REGISTRY[prefix] = cls` **overwrites**, so the second type silently takes
+    the prefix and `pattern_for` starts answering for the wrong entity.
+
+    Every case here reuses a prefix the catalog already binds, so the refusal happens
+    before registration and the global registry is never mutated by this suite.
+    """
+
+    def test_a_prefix_already_bound_is_refused(self) -> None:
+        with pytest.raises(TypeError, match="already bound"):
+
+            class Duplicate(OpaqueId, prefix="prj", entity="SomethingElse"):
+                pass
+
+    def test_the_refusal_names_the_type_that_holds_the_prefix(self) -> None:
+        with pytest.raises(TypeError) as caught:
+
+            class Duplicate(OpaqueId, prefix="ver", entity="SomethingElse"):
+                pass
+
+        assert "VersionUid" in str(caught.value)
+
+    def test_a_subclass_without_a_prefix_is_refused(self) -> None:
+        with pytest.raises(TypeError, match="must declare a contract prefix"):
+
+            class NoPrefix(OpaqueId, entity="SomethingElse"):
+                pass
+
+    def test_a_subclass_without_an_entity_is_refused(self) -> None:
+        with pytest.raises(TypeError, match="must declare its contract entity name"):
+
+            class NoEntity(OpaqueId, prefix="zzq"):
+                pass
+
+    def test_the_bound_types_still_answer_for_their_own_prefixes(self) -> None:
+        """The registry was not disturbed by the refusals above."""
+        assert ProjectUid.prefix == "prj"
+        assert VersionUid.prefix == "ver"
+        assert str(ProjectUid.new()).startswith("prj_")
+        assert str(VersionUid.new()).startswith("ver_")
