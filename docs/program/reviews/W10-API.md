@@ -226,4 +226,78 @@ removed reddens rather than quietly narrowing the loop. E15 reddens
 
 E12 and E14 already redden against the existing suite, so no test was added for them.
 
-*(sweep of `api/`, `bootstrap/`, `shared/identity`, `shared/db`, `shared/statemachine` continues)*
+## Sweep table — `api/routers/multipart.py`
+
+| # | rule mutated | mutation | result | what reddened |
+|---|---|---|---|---|
+| M1 | `MAX_BODY = 26 MiB` | → 26 GiB | **see below** | nothing asserted — the run was killed |
+| M2 | `multipart/form-data` media-type check | `if False:` | **GREEN** | nothing — 816 passed |
+| M3 | `parsed.is_multipart()` boundary check | `if False:` | **GREEN** | nothing — 816 passed |
+| M4 | part carries a name | `if False:` | **GREEN** | nothing — 816 passed |
+| M5 | part is not repeated | `if False:` | **GREEN** | nothing — 816 passed |
+| M6 | undeclared part refused | `raise …` → `pass` | **GREEN** | nothing — 816 passed |
+| M7 | a `file` part is required | `if False:` | **GREEN** | nothing — 816 passed |
+| M8 | the `file` part needs a filename | `if False:` | **GREEN** | nothing — 816 passed |
+
+**All seven refusing branches of the multipart reader are unguarded.** The module's own
+docstring calls it "deliberately strict, because a lenient multipart reader is a security
+surface" — and every one of those refusals could be deleted with the battery green. The
+three tests that mention multipart (`test_journey`, `test_schema_conformance`,
+`test_no_internal_identifiers`) all send *well-formed* bodies; they exercise the happy path
+and never a refusal.
+
+### Finding 6 — M1 is not a red, it is an out-of-memory kill
+
+`tests/integration/ingest/test_size_guard_boundary.py` is the one test that names `MAX_BODY`,
+and it sizes its payload from the constants it is testing:
+
+```python
+BODY_TARGET = (MAX_BYTES + MAX_BODY) // 2
+```
+
+With `MAX_BODY` mutated to 26 GiB that is ≈ 13 GiB, so the suite tries to allocate 13 GiB and
+the process dies at 70 % of the battery with no failure and no summary line. The harness saw
+a non-zero exit and recorded RED; there is no assertion behind it.
+
+This is wave 9's mistake in a new form. The file is careful — `test_the_window_between_the_two_guards_is_open`
+asserts `MAX_BYTES < BODY_TARGET < MAX_BODY`, which genuinely catches the limit being
+*lowered* to the envelope's. But because the payload is derived from the limit, the limit
+being *raised* is not a red test; it is an unbounded allocation. **`MAX_BODY` itself has no
+test pinning it.** Not a product defect — a measurement artefact and a gap, reported as both.
+
+## The second guard — `tests/integration/api/test_multipart_rules.py`
+
+19 tests, one per refusing branch, asserting **`details["constraint"]`** — the rule — rather
+than `details["field"]`. The field cannot identify the rule here: `file` is the field for
+four different rules (`part_name`, `required`, `filename`, `max_bytes`) and `Content-Type`
+for two (`media_type`, `boundary`). All bodies are built in the test; nothing is read from
+either frozen corpus.
+
+| mutation | guard tests that reddened |
+|---|---|
+| `MAX_BODY` → 26 GiB | `…_one_byte_over_the_limit_is_refused_as_max_bytes`, `…_checked_before_the_body_is_parsed` |
+| media-type check off | both `…_refused_as_media_type` cases |
+| boundary check off | `…_with_no_boundary_is_refused_as_boundary` |
+| part-name check off | both `…_refused_as_part_name` cases |
+| repeated-part check off | `…_refused_as_unique_part`, `…_absent_from_the_envelope[repeated_part_name]` |
+| undeclared part → `pass` | `…_refused_as_additional_properties`, `…_absent_from_the_envelope[unknown_part_name]` |
+| file part required off | `…_no_file_part_is_refused_as_required` |
+| filename required off | both `…_refused_as_filename` cases |
+
+The transport limit is pinned as the literal **27262976** and exercised at
+`TRANSPORT_LIMIT + 1`, so the mutated run allocates 27 MB rather than 13 GiB and **fails as a
+test instead of dying as a process**. No independent authority declares 26 MiB — the frozen
+OpenAPI declares the *document* maximum, which is the envelope's 25 MiB `ENV-SIZE`, a
+different limit — so the number is pinned here and that is stated rather than implied.
+
+Two branches that read as defensive programming turned out to be reachable and are now
+covered: a `file` part that is itself `multipart/mixed` decodes to `None` rather than to
+bytes (`constraint: encoding`), and a `display_title` part carrying invalid UTF-8 (also
+`constraint: encoding`, distinguished by `field`).
+
+The suite also pins the thing `B6` paid for from this end: an `additionalProperties` refusal
+over a part named `/etc/passwd`, and a `unique_part` refusal over a repeated filename, must
+not reflect that text back inside the envelope. Nothing checked that before.
+
+*(sweep of `idempotency`, `correlation`, `schemas`, `identity`, `bootstrap`, `db`,
+`statemachine` continues)*
