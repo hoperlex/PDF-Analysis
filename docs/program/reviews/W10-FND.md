@@ -12,8 +12,11 @@ rather than a wave.
 
 ## Method
 
-Every mutation is applied to a copy of `src/` outside the worktree, with `contracts/`,
-`docs/` and `fixtures/` symlinked in, and run with `pytest -o pythonpath=<copy>/src`. Every
+Every mutation is applied to a copy of `src/` at `/root/w10fnd-mut`, outside the worktree,
+with **five** root directories symlinked in — `contracts/`, `docs/`, `fixtures/`, `tools/`
+and `db/`. The brief names the first three; `tools/` and `db/` are also resolved from the
+copy's own tree and without them four `p02_journey` tests fail on an **unmutated** copy (see
+"What in the brief turned out to be false"). Runs use `pytest -o pythonpath=<copy>/src`. Every
 run prints `auditmanager.__file__` and the result is discarded unless it resolves under the
 copy. Every mutated line is read back after the edit and quoted in the table below, so a
 mutation that does not mutate is visible rather than assumed.
