@@ -63,3 +63,34 @@ Three did not:
 
 All three are unreddenable-and-reachable → guards written in batch 4.
 
+### Batch 2 — the vocabulary, and `findings/terminal.py`
+
+| id | rule mutated | mutation (line read back) | result |
+|----|--------------|---------------------------|--------|
+| G15 | `UNGROUNDED_REASONS` is exactly the five declared values | a sixth value `"quotation_hallucinated"` added | **red** — 3 failed |
+| G16 | each reason's wire value | `QUOTATION_ABSENT = "quotation_missing"` | **red** — 5 failed, 31 errors |
+| G17 | omitting `block_index` does **not** disable check 3 | `run_grounding_gate` returns all-resolved when `block_index is None` | **GREEN(broad)** — 302 passed |
+| T01 | `STAGE_STATUSES` is exactly the four declared statuses | two extra statuses added | **red** — 1 failed |
+| T02 | `TERMINALS_FROM_VALIDATING` names the reachable terminals | `{"published", "cancelled"}` | **GREEN(broad)** — 302 passed |
+| T03 | `codes.discard(None)` — a stage with no code does not veto a shared one | `codes.discard(None)` → `pass` | **GREEN(broad)** — 302 passed |
+
+* **G15 / G16 reddened on a literal pin already present.**
+  `test_the_enum_is_exactly_the_five_declared_reasons` writes the five strings out rather
+  than deriving them from the enum, which is why renaming a value reddens. That is the
+  wave-9 lesson already applied correctly here.
+* **G17 — no test calls `run_grounding_gate` without a `block_index`.** Every one of the
+  21 call sites in `tests/` and `src/` passes one. The fail-closed behaviour §5.1 requires
+  of an omitted index is therefore asserted nowhere. Reachable: the parameter is optional
+  on the public function.
+* **T02 — `TERMINALS_FROM_VALIDATING` has no consumer.** It is defined in `terminal.py`,
+  re-exported from `findings/__init__.py`, and read by nothing in `src/`, `tests/` or
+  `web/`. No behavioural mutation can redden a constant nothing reads; a guard pinning it
+  against `contracts/domain/v1/state-machines.json` is the only thing that can.
+* **T03 — the correction `_reason_for` was written for is undefended.** Its docstring says
+  the generic `analysis_failed` hid the difference between "a model that answered badly"
+  and "a provider that never answered". `codes.discard(None)` is what lets a *shared* code
+  survive when one of the failing stages reported no code at all; without it
+  `codes == {None, "dependency_unavailable"}`, `len(codes) != 1`, and the run falls back to
+  `analysis_failed`. Every existing case in `TestTheReasonNamesTheCause` supplies a code for
+  **every** failing stage, so `None` is never in the set and `discard` never does anything.
+
