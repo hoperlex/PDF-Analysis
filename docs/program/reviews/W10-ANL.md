@@ -872,3 +872,18 @@ Everything else in the brief checked out: the instance and ports were free and c
 `816 passed / 5 skipped / 116 subtests` figure was exact, `analysis.text.lock` really does
 resolve `P02_LOCK.json` from `parents[4]` so the copy needs `docs/` symlinked, 5005 lines
 across 32 files is right, and no live provider was needed.
+
+### Why the guard verifications are unaffected by the instance-sharing fault
+
+Several per-guard red/green verifications ran while a screening batch was in flight. They are
+sound anyway, and the reason is checkable rather than asserted: **every one of the ten guard
+files is pure in-process Python.** None of them imports a blob store, an S3 client, a database
+session or either suite `conftest`; they exercise `load_text_layer`, `parse_response`,
+`resolve_anchor`, `build_text_observations`, `ModelCallRecord`, `ProviderLock`,
+`assert_status_allowed`, `ArtifactRef`, `CostMeter`, `normalize` and `canonical_bytes`
+directly, and drive the stage with a scripted adapter. Shared PostgreSQL or MinIO state cannot
+change their outcome.
+
+After the harness fix each verification also ran in its own `MUT_COPY`, so source isolation
+holds too. The screening batches that *do* touch infrastructure — `analysis_engine` in batches
+5 and 6 — are the ones whose concurrent results were discarded and re-run.
