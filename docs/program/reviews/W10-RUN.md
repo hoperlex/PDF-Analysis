@@ -106,3 +106,89 @@ admissible policy therefore carries the identical code `dependency_unavailable`,
 `records[0]`, `records[-2]` and every other retried index are indistinguishable by value.
 Making them distinguishable would mean widening `RETRYABLE_STAGE_ERRORS`, which is a
 product decision and not mine. Not faked as a test.
+
+### Batch 4 — `src/auditmanager/runs/executor.py`
+
+First pass `tests/integration/runs tests/integration/ingest` (154 with this wave's new
+tests); second pass `api`, `e2e`, `composition`, `p02_journey`, `storage`, `exports`,
+`db`, `findings`, `decisions` (498 passed, 5 skipped).
+
+| # | rule mutated | mutation | first | second | verdict |
+|---|---|---|---|---|---|
+| E1 | a stage that never ran is recorded failed-by-absence, so the run reaches a terminal | `missing = [...]` → `missing = []` | green | green | **UNREDDENED** |
+| E2 | a failed preparation stage halts the chain | `if result.status is not StageStatus.SUCCEEDED:` → `if False:` | green | green | **UNREDDENED** |
+| E4 | the run's declared `provider_mode` is cross-checked against the adapter | `if False:` | 2 failed | — | reddened — `test_mode_crosscheck_is_reachable` |
+| E5 | `cost_basis` defaults to `estimated`, not to the flattering value | `.get(..., "measured")` | green | green | **unreddenable by construction** |
+| E6 | a `failed` model call records `analysis_failed` as its `error_code` | → always `None` | green | green | **unreddenable by construction** |
+| E7 | the `metrics` scalar filter, which the frozen stage-result schema requires | filter removed | green | green | **unreddenable by construction** |
+| E9 | `_run_text_analysis_stage` refuses a missing required input | `if False:` | green | green | **unreddenable by construction** |
+| E10 | `parameters.call_status` is still written for pre-`0005` legibility | key removed | 3 failed | — | reddened — `test_call_status_and_output_tokens` |
+
+**E5.** `ModelCallRecord.as_dict()` always emits a `"cost_basis"` key, and `cost_basis` is
+a dataclass field whose own default is `"estimated"`. `document.get("cost_basis",
+"estimated")` therefore never falls back — the `.get` default is dead code. The live
+default is in `analysis/text/provenance.py`, another tree, and it is set from the response
+(`"measured" if response.reported_cost_usd is not None else "estimated"`).
+
+**E6.** No code path in `src/` ever constructs a `ModelCallRecord` with `status="failed"`.
+`CALL_FAILED` is defined in `provenance.py` and appears only in the `CALL_STATUSES` set;
+every `status=` site in `analysis/text/stage.py` is the *stage* status, a different
+vocabulary. The executor's own comment says why: a transport failure raises out of
+`complete()`, "so there is no response to record one from", and `model_call_rows: 0` is
+exactly the evidence `P4_CLOSURE.md` §1 cites. The branch is reachable only by a stage that
+does not exist. Not faked as a test.
+
+**E7.** Every value `analysis/text/stage.py` puts in `metrics` is a `str`, `int`, `float`
+or `bool`. The filter is prospective defence for a stage that returns a structured metric —
+the wave-3 "removing it makes something *unspecified* rather than wrong" shape. Writing
+such a stage is product code in another tree.
+
+**E9.** Unreachable through `execute_run`. The branch fires when `ROLE_TEXT_LAYER` or
+`ROLE_DOCUMENT_GRAPH` is absent, but `_run_text_analysis_stage` is called only when
+`halted` is `False`, which means all three deterministic stages succeeded, which means the
+runner's required-output guard already published both roles. It is defence behind E2's
+halt, and E2 is now guarded, which is the useful move.
+
+### Batch 5 — `src/auditmanager/runs/reconciliation.py` and `scope.py`
+
+| # | rule mutated | mutation | result | verdict |
+|---|---|---|---|---|
+| R30 | `RECONCILIATION_TERMINAL` is the declared terminal `failed` | → `"cancelled"` | 3 failed | reddened — `test_reconciliation_and_terminals` |
+| R31 | `INTERRUPTED_REASON` is `executor_process_ended_before_terminal` | → `"something_went_wrong"` | 154 passed | **UNREDDENED** |
+| R32 | `INTERRUPTED_TERMINAL_REASON` is `analysis_failed` | → `internal_error` | 154 passed | **UNREDDENED** |
+
+### Batch 6 — `db/migrations/**`
+
+Mutated on a **full copy of the tree** at `/root/w10mutdb`, not on a copy of `src/` alone:
+`tests/integration/db` applies migrations by running the literal `alembic` command as a
+subprocess with `cwd` set to the repository root *derived from the test file*, so a
+`src/`-only copy never reaches the mutated migration. `auditmanager.__file__` was checked
+to resolve under `/root/w10mutdb/src` on every run. Clean-copy baseline: 95 passed.
+
+| # | rule mutated | mutation | `tests/integration/db` | verdict |
+|---|---|---|---|---|
+| D1 | `model_call` carries the immutability trigger | dropped from the table list | 1 failed | reddened — `test_exactly_the_declared_tables_are_immutable` |
+| D2 | the append-only trigger fires on UPDATE as well as DELETE | template → `BEFORE DELETE` | 1 failed | reddened — `test_the_decision_ledger_refuses_update_and_delete` |
+| D3 | `am_append_only` raises `AM002` | → `AM001` | 2 failed | reddened |
+| D4 | `am_immutable_row` raises `AM003` | → `AM001` | 7 failed | reddened |
+| D5 | the write-once guard refuses a rewrite of a non-NULL column | `IF false THEN` | 1 failed | reddened |
+| D6 | the state guard refuses an INSERT in a non-initial state | `IF false AND NOT EXISTS` | 1 failed | reddened |
+| D7 | the frozen-column guard refuses an edit | `IF false THEN` | 1 failed | reddened |
+| D8 | **`model_call`'s trigger fires on UPDATE** | re-declared `BEFORE DELETE` only | green | **UNREDDENED** |
+| D9 | **`finding_evidence`'s trigger fires on DELETE** | re-declared `BEFORE UPDATE` only | green | **UNREDDENED** |
+| D10 | **`audit_event`'s trigger fires on UPDATE** | re-declared `BEFORE DELETE` only | green | **UNREDDENED** |
+
+D8/D9/D10 were run against `tests/integration/db`, `findings`, `decisions` and `runs`
+together — 235 passed under each. **The SQLSTATEs themselves are well guarded; the gap is
+per-table, per-arm reachability**, which `test_schema_shape.py` cannot see because it reads
+`pg_trigger` for the attached *function name* and never asks what the trigger fires on.
+
+Of the eight tables carrying one of these triggers, `model_call` had **no** write attempt
+anywhere in the repository. `finding_evidence` had UPDATE only (the grounding-gate suite's
+nudged anchor); `audit_event` had DELETE only.
+
+A wide (whole-battery) second pass of D8/D9/D10 was started and had to be discarded: I was
+running two mutation streams at once against one MinIO bucket and one PostgreSQL instance,
+and the results were full of unrelated failures. Everything above was re-run serially. The
+lesson is the one already on record — never measure during a fan-out — and it applies to a
+session's own parallelism, not only to subagents.
