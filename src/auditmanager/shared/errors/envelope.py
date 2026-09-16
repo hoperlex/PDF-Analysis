@@ -9,8 +9,17 @@ remember is a rule that eventually is not remembered:
   Anything else raises rather than being dropped, so a caller learns at once instead of
   shipping a redaction that silently did nothing.
 * ``message`` defaults to the catalog summary. A custom message is screened for the
-  shapes the catalog's safety rules forbid - paths, URLs, credentials, SQL, stack
-  frames. The screen is a floor, not a proof: it cannot read intent, only shape.
+  shapes the catalog's safety rules forbid. There are **six**, and they are the six
+  entries of ``_FORBIDDEN`` below, in its order: a URL, a filesystem path, an S3-style
+  object key, a credential, SQL, a stack frame. The screen is a floor, not a proof: it
+  cannot read intent, only shape.
+
+  Since ``B6``, **string ``details`` values are screened by those same six patterns**,
+  raising :class:`UnsafeDetailValue`. A key being declared safe says nothing about what
+  a call site puts under it, so the value screen is not optional and is not weaker than
+  the message screen. Any comment elsewhere in the tree claiming details are unscreened
+  is stale; ``tests/integration/api/test_envelope_screen_rules.py`` holds both counts
+  and the enumeration above to this docstring.
 """
 
 from __future__ import annotations

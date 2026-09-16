@@ -50,10 +50,15 @@ def parse_create_project_request(payload: Mapping[str, Any]) -> str:
     """
     if set(payload) - {"name"}:
         # The offending property name is **not** echoed. It is caller-controlled text,
-        # and `details` values are not screened the way `message` is, so echoing one
-        # would reflect whatever the caller sent -- a path, a URL -- straight back out
-        # inside the envelope. `tests/integration/api/test_no_internal_identifiers.py`
-        # found exactly that here.
+        # and `details` values ARE screened -- by exactly the six `_FORBIDDEN` patterns
+        # that screen `message`, since `B6`, raising `UnsafeDetailValue`. This site is
+        # what `B6` was: it echoed the caller's property name, so one named
+        # `/etc/passwd` came back inside the envelope. The value screen now refuses that
+        # rather than shipping it, which means echoing here would convert this caller's
+        # 422 into an unhandled `UnsafeDetailValue`, and a property name carrying no
+        # forbidden shape would still be the caller's raw input reflected back. Details
+        # carry classifiers; `constraint` below is the classifier for this refusal.
+        # `tests/integration/api/test_no_internal_identifiers.py` found the leak here.
         raise DomainError(
             ErrorCode.VALIDATION_FAILED,
             message="The request body carries a property the schema does not declare.",

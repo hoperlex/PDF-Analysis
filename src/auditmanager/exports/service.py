@@ -13,7 +13,6 @@ logic of its own, and ``P3-WEB-04`` only downloads the response.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
 
 from sqlalchemy.orm import Session
 
@@ -24,24 +23,35 @@ from auditmanager.exports.serializer import CONTENT_TYPE, render_csv
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId
 
-#: What a browser should call the downloaded file. Derived from the run identity, which
-#: is opaque: no filesystem path, no bucket and no object key is involved, and none of
-#: those is an identity in the first place (P02 §2.2).
-_FILENAME_TEMPLATE: Final[str] = "audit_run_{run_id}.csv"
-
 
 @dataclass(frozen=True, slots=True)
 class CsvExport:
-    """The rendered export. A value, not a record of anything."""
+    """The rendered export. A value, not a record of anything.
+
+    **It carries no download name, deliberately.** It used to expose a ``filename``
+    property over an ``audit_run_{run_id}.csv`` template that nothing read - not the
+    router, not the frontend, not a test - while reading, from here, as though it were
+    the name the system serves. It was not, and a third unserved spelling of the name is
+    worse than none: a reader looking for the answer found it here first.
+
+    The name the system actually serves is the HTTP header, and only that:
+    ``api/routers/export.py:_disposition`` emits
+    ``attachment; filename="{run_id}.csv"``. The frontend's ``csvFileName``
+    (``web/src/shared/api/csv-columns.ts``) suggests ``{runId}-findings.csv`` and says
+    in its own docstring that the server's header wins. The two differing is
+    **permitted**: the frozen ``openapi.json`` declares the ``Content-Disposition`` of
+    ``exportRunCsv``'s 200 as "presentation only and is never an identity" and pins no
+    value - no enum, no pattern, no example. Reconciling them is not a repair, it is an
+    invention of a contract nobody wrote.
+
+    Serving a name is a transport concern and belongs at the transport. A value object
+    computed from canonical data has no business naming a download.
+    """
 
     run_id: str
     run_state: str
     content: bytes
     content_type: str = CONTENT_TYPE
-
-    @property
-    def filename(self) -> str:
-        return _FILENAME_TEMPLATE.format(run_id=self.run_id)
 
     @property
     def byte_size(self) -> int:

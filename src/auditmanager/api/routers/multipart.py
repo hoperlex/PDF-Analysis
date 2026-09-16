@@ -92,9 +92,15 @@ def parse_multipart_upload(body: bytes, content_type: str | None) -> MultipartUp
                 constraint="part_name",
             )
         if name in seen:
-            # The part name is caller-controlled and is not echoed: `details` values
-            # are not screened the way `message` is, so echoing one would reflect
-            # whatever the caller sent back out inside the envelope.
+            # The part name is caller-controlled and is not echoed. `details` values
+            # ARE screened, by exactly the six `_FORBIDDEN` patterns that screen
+            # `message` -- `shared/errors/envelope.py` has run them since `B6` and
+            # raises `UnsafeDetailValue`. That is the reason not to echo, not a reason
+            # it would be safe to: a part name carrying one of those shapes would turn
+            # this caller's 422 into an unhandled `UnsafeDetailValue` at envelope
+            # construction, and one carrying none would still reflect the caller's own
+            # text back out. A classifier is reported instead, and the constraint name
+            # below is that classifier.
             raise _refuse(
                 "A multipart part is repeated.", field="body", constraint="unique_part"
             )
