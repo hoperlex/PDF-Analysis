@@ -28,7 +28,13 @@ import json
 import os
 from pathlib import Path
 
-from auditmanager.bootstrap.settings import COST_CEILING_ENV, load
+from auditmanager.bootstrap.settings import (
+    COST_CEILING_ENV,
+    MODEL_ID_ENV,
+    PROVIDER_MODE_ENV,
+    PROXY_MODEL_ENV,
+    load,
+)
 
 LOCK = Path(__file__).resolve().parents[3] / "docs/program/P02_LOCK.json"
 
@@ -74,3 +80,64 @@ def test_an_explicit_ceiling_still_wins() -> None:
     """The default must not be applied over a configured value."""
     env = _base_env() | {COST_CEILING_ENV: "0.25"}
     assert load(env).run_cost_ceiling_usd == 0.25
+
+
+class TestTheModelDefaults:
+    """Two more defaults the sweep found unreachable.
+
+    Changing `model_id`'s default from `"claude-opus-5"` to another name, and
+    `proxy_model`'s from `"proxy"` to a real model id, each left all 816 tests green.
+    Both are set by `env.get(NAME, "").strip() or <default>`, and no test runs `load`
+    without those names present or asserts what comes back when they are absent.
+    """
+
+    def test_the_model_id_default_is_the_model_the_lock_pins(self) -> None:
+        """`P02_LOCK.json` records `models.primary.model_id` together with the rates
+        `run_cost_ceiling_usd` was sized against -- USD 5.00 and 25.00 per million
+        tokens. A default that drifted from the pinned model would price runs against a
+        table that no longer describes them, which is the ceiling's whole basis."""
+        pinned = json.loads(LOCK.read_text(encoding="utf-8"))["models"]["primary"]
+        assert pinned["model_id"] == "claude-opus-5"
+        env = _base_env()
+        env.pop(MODEL_ID_ENV, None)
+        assert load(env).model_id == pinned["model_id"]
+
+    def test_an_explicit_model_id_still_wins(self) -> None:
+        env = _base_env() | {MODEL_ID_ENV: "claude-sonnet-5"}
+        assert load(env).model_id == "claude-sonnet-5"
+
+    def test_an_empty_model_id_falls_back_rather_than_being_sent_empty(self) -> None:
+        env = _base_env() | {MODEL_ID_ENV: "  "}
+        assert load(env).model_id == "claude-opus-5"
+
+    def test_the_proxy_model_default_is_the_stub_not_a_model_name(self) -> None:
+        """`"proxy"` is a sentinel, not a model. The module says so: it is "the stub the
+        proxy reads as 'I am not choosing a model', so the operator's default and its
+        fallback chain apply. Any other value is a real choice that changes routing and
+        billing and switches the fallback chain off."
+
+        No external authority declares this string -- it is an agreement with the proxy
+        -- so the literal is written here. That a real model id must **not** be the
+        default is the property, and it is asserted as well as the value.
+        """
+        env = _base_env() | {
+            PROVIDER_MODE_ENV: "proxy",
+            "PROXY_LLM_BASE_URL": "https://proxy.example",
+            "PROXY_LLM_TOKEN": "t",
+        }
+        env.pop(PROXY_MODEL_ENV, None)
+        settings = load(env)
+        assert settings.proxy_model == "proxy"
+        assert settings.proxy_model != settings.model_id, (
+            "the proxy default names a real model, so the operator's fallback chain is "
+            "switched off for every run that did not choose one"
+        )
+
+    def test_an_explicit_proxy_model_still_wins(self) -> None:
+        env = _base_env() | {
+            PROVIDER_MODE_ENV: "proxy",
+            "PROXY_LLM_BASE_URL": "https://proxy.example",
+            "PROXY_LLM_TOKEN": "t",
+            PROXY_MODEL_ENV: "claude-sonnet-5",
+        }
+        assert load(env).proxy_model == "claude-sonnet-5"
