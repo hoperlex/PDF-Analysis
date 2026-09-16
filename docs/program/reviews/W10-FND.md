@@ -94,3 +94,56 @@ All three are unreddenable-and-reachable → guards written in batch 4.
   `analysis_failed`. Every existing case in `TestTheReasonNamesTheCause` supplies a code for
   **every** failing stage, so `None` is never in the set and `discard` never does anything.
 
+### Batch 3 — `exports/**`
+
+| id | rule mutated | mutation (line read back) | result |
+|----|--------------|---------------------------|--------|
+| E01 | the seventeen frozen columns, **in order** | columns 7 and 8 swapped in `COLUMNS` | **GREEN(broad)** — 302 passed |
+| E02 | `CONTENT_TYPE` is `text/csv; charset=utf-8` | `application/octet-stream` | green(fast), **red(broad)** — 1 failed in `p02_journey` |
+| E03 | the header is written even when there are no rows | `if rows: writer.writerow(COLUMNS)` | **GREEN(broad)** — 302 passed |
+| E04 | `SORT_KEY` names the frozen three-part key | `("finding_observation_id",)` | **GREEN(broad)** — 302 passed |
+| E05 | a null projection column is the empty string | `return "null"` | **red** — 2 failed |
+| E06 | a state absent from the mapping does not export | `.get(state, True)` | **red** — 6 failed |
+| E07 | a terminal that omits `publishes_result` does not export | `body.get("publishes_result", True)` | **GREEN(broad)** — 302 passed |
+| E08 | the refusal is `state_transition_not_allowed` | `PARTIAL_RESULT_NOT_PUBLISHABLE` | **red** — 6 failed |
+| E09 | the export is scoped to one run | `WHERE (o.run_id = :run_id OR TRUE)` | **red** — 10 failed |
+| E10 | `LEFT JOIN finding_current_verdict` | `JOIN` | **GREEN(broad)** — 319 passed |
+| E11 | CRLF line endings | `_LINE_TERMINATOR = "\n"` | **red** — 1 failed |
+| E12 | `_FILENAME_TEMPLATE` is `audit_run_{run_id}.csv` | `export-{run_id}.txt` | **GREEN(broad)** — 319 passed |
+| E13 | `MACHINE` is `audit_run` | `document_version` | **red** — 24 failed |
+
+**E02 is the reason step 2 of the method is not optional.** It is invisible to
+`tests/integration/{findings,exports,decisions}` and reddens only in
+`p02_journey/test_journey_figures.py`. A sweep that had screened on the owned suites alone
+would have filed it as a finding and written a guard for something already guarded.
+
+Four of the five greens are **unreddenable by construction** or a dead constant; one is the
+wave-9 mistake still live in the tree.
+
+* **E01 — the frozen column list had no literal pin in Python.** The export contract test
+  asserts `header == list(COLUMNS)`, which moves with the mutation, and its `_parse` helper
+  builds every row dict by zipping the file's **own** header against its own cells — so
+  `row["finding_uid"]` follows a reordered header and every later assertion keeps passing.
+  The same file pins `BOM` against a literal, with a comment saying mutation M1 caught
+  exactly this phrasing for the BOM; the lesson was applied to the BOM and not to the
+  columns. Guard written.
+* **E03 — reachable and unguarded.** `render_csv` is a pure exported function; `render_csv(())`
+  is one call. Guard written.
+* **E04 — `SORT_KEY` has no consumer.** `render_csv` deliberately does not sort, and the
+  order is fixed by the `ORDER BY` in `exports/query.py`. Nothing in `src/`, `tests/` or
+  `web/` reads the constant. Guarded by a literal pin plus a behavioural check that real
+  rows are ascending on the key it names — the pin alone would be a tautology.
+* **E07 — unreddenable by construction.** The default in
+  `bool(body.get("publishes_result", False))` can only fire for a terminal that declares no
+  `publishes_result` key. All four terminals of `audit_run` in
+  `contracts/domain/v1/state-machines.json` declare it explicitly, and the contract is
+  frozen. No input reaches the default. **No test written.**
+* **E10 — unreddenable by construction.** `finding_current_verdict` is defined in
+  `0002_pc01_schema` as `FROM finding f LEFT JOIN LATERAL (...)`, so every `finding` row
+  produces exactly one view row. `LEFT JOIN cv ON cv.finding_uid = f.finding_uid` therefore
+  matches for every `f` the outer query already joined, and `LEFT JOIN` and `JOIN` are
+  indistinguishable. Making it observable would need the *view* changed, which is
+  `db/migrations`' tree. **No test written.**
+* **E12 — see the product defect below.** `_FILENAME_TEMPLATE` and `CsvExport.filename` have
+  no consumer, and the live download name disagrees with them.
+
