@@ -173,3 +173,73 @@ or either certification still holds; wave 12 re-certifies. Consistent with the b
 way to reach either fault through the twelve operations — both guards had to write behind the
 adapter with an independent boto3 client — but that is an observation from three tests, not a
 certification of the inducibility limit.
+## Not repaired: `verify_version` compares two declarations, never bytes
+
+Outside my owned paths (`src/auditmanager/ingest/reconciliation.py`), so it goes back as a
+report, unrepaired. It is the **mirror** of the defect I was sent to fix, and finding it
+required checking the brief's premise rather than believing it.
+
+`verify_version` resolves `published = self._store.inspect(entry.blob_id)` — a `head_object`,
+which reads *metadata* and never a byte of the body — and compares `published.sha256` to
+`entry.sha256`. So the fault it cannot see is an out-of-band replacement that **preserves the
+object's metadata and its length**: the recorded digest still agrees with the manifest, the
+recorded size still agrees, and reconciliation reports the version as sound.
+
+Measured, not read (`/root/w11rd-logs/probe_mirror.py`, real MinIO on `gate-w11a`, a published
+object whose body was replaced by `put_object` with `Metadata` copied verbatim and the same
+length):
+
+```
+recorded metadata: {'blob-id': ..., 'blob-role': 'source_document',
+                    'content-sha256': 'e8c6e0e5...d9b1', 'content-size': '32'}
+inspect().sha256 == manifest digest ? True
+inspect().size   == manifest size   ? True
+-> verify_version's comparison would fire: False
+store.read refused: ChecksumMismatchError storage_integrity_error
+   {'expected_sha256': 'e8c6e0e5...d9b1', 'actual_sha256': '1e4cdb3e...2dd4'}
+```
+
+Two paths over one row, two answers — with the roles the other way round from the brief's. The
+repair is small (`inspect` → hash the body, or call `read`), but reconciliation is a
+`head`-only scan by design: its module docstring makes a point of "never lists, never reads
+bytes", and turning `verify_version` into a full-body read is a cost and a design decision for
+whoever owns that file, not a line I should slip in from an adjacent lane.
+
+There is a second, smaller thing in the same file and also unrepaired: against an object with
+**no** metadata, `inspect` yields `sha256=""` and `role=""` (`BlobRole` is a `NewType`, so the
+empty string passes), and `verify_version` therefore refuses with
+`actual_sha256=""` — an empty digest in an operator-facing envelope, where the real statement
+is "the object records no digest".
+
+## Premises in the brief, checked against the tree
+
+| Premise | Verdict |
+|---|---|
+| `read_source_bytes` never compares `entry.sha256` to the bytes | **True.** It used `entry.sha256` in exactly one place: as a detail on the *absent-object* error |
+| `s3.read` compares against the object's own metadata under `if recorded is not None and recorded != actual` | **True**, verbatim |
+| Gate is 1264 passed / 5 skipped / 116 subtests before any change | **True**, exact |
+| `W10-RUN` pinned the behaviour with a comment naming its report | **True**; found, replaced, and no other test asserted it |
+| `make mutation-copy MUT=...` works and links `db/` and `tools/` | **True**; the unmutated copy baselined 141 passed on both my suites |
+| A linked worktree has no `web/node_modules` | **True**; `npm --prefix web ci` was needed |
+| "Check `verify_version` first — it may already hold the comparison you need, in which case the repair is smaller than it looks" | **False, and worth stating as false.** It holds a comparison of the manifest against the object's *recorded metadata*, from a `head_object`. It never hashes stored bytes. Nothing in the tree did, before this repair. Had I taken the hint and delegated to it, the repair would have inherited the mirror gap above |
+| "the read path hands a reviewer the wrong document silently, while reconciliation raises `storage_integrity_error`" | **True for the shapes it was verified on, and reversed on a third.** For an object replaced with its metadata preserved and its length unchanged, it is reconciliation that is silent and the read path that refuses. The sentence describes a real pair of shapes, not the whole of the fault |
+| The fault is not inducible through the twelve operations | **Consistent with everything I could build.** Both guards had to write behind the adapter with an independent client. Stated as an observation; I do not certify it |
+
+Bucket/port/DB instance `gate-w11a` as assigned, no collision: `gate-w3`, `gate-w11b` and
+`gate-w10c` containers were up alongside and untouched.
+
+## Constraints
+
+No root dependency added (`requirements/` untouched). No byte added to `fixtures/synthetic/ar/**`
+or `fixtures/validation/PC-02/**` — both guards build their bytes in-process, and the ingest one
+appends a random comment to the baseline the way `_unique_pdf` does, which keeps `blob_id`
+unique without writing anything. No tag, no push, no merge to `main`. Files changed, all owned:
+
+```
+src/auditmanager/ingest/service.py
+src/auditmanager/storage/s3.py
+tests/integration/ingest/test_reconciliation_rules_with_no_guard.py   (the pin replaced)
+tests/integration/ingest/test_the_read_path_answers_the_manifest.py   (new)
+tests/integration/storage/test_an_object_the_store_cannot_vouch_for.py (new)
+docs/program/reviews/W11-RD.md
+```
