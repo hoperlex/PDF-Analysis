@@ -199,8 +199,14 @@ mutation that would settle it belongs to whoever owns `tests/integration/decisio
 
 ## Guards written
 
-All nine mutations below were applied to a copy of `src/` outside the worktree, with
-`contracts/`, `docs/`, `fixtures/`, `tools/` and `db/` symlinked in, and every run printed
+Eleven rules are guarded below. **Nine** of them are the nine green mutations of the sweep
+tables (G12, G13, G14, G17, T02, T03, E01, E03, E04). The remaining two came from reading
+rather than from a green: the gate-versus-migration vocabulary agreement, and the database's
+own refusal of a sixth reason — neither had an assertion anywhere, and the second cannot be
+reddened by mutating `src/` at all.
+
+Every `src/` mutation below was applied to the copy at `/root/w10fnd-mut`, with `contracts/`,
+`docs/`, `fixtures/`, `tools/` and `db/` symlinked in, and every run printed
 `auditmanager.__file__` resolving under the copy before the result was read.
 
 `tests/integration/findings/test_gate_rules_are_load_bearing.py` — 10 tests
