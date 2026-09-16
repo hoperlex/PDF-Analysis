@@ -299,5 +299,62 @@ The suite also pins the thing `B6` paid for from this end: an `additionalPropert
 over a part named `/etc/passwd`, and a `unique_part` refusal over a repeated filename, must
 not reflect that text back inside the envelope. Nothing checked that before.
 
-*(sweep of `idempotency`, `correlation`, `schemas`, `identity`, `bootstrap`, `db`,
-`statemachine` continues)*
+## Sweep table — `routers/idempotency.py`, `routers/correlation.py`
+
+| # | rule mutated | mutation | result | what reddened |
+|---|---|---|---|---|
+| I1 | `Idempotency-Key` required | `if False:` | **RED** | `test_journey.py::test_a_write_without_the_header_is_refused_before_anything_happens` |
+| I2 | key character class | pattern → `^[\s\S]*$` | **RED** | `test_no_internal_identifiers.py::test_an_error_envelope_leaks_nothing_either` |
+| I3 | key **length** `{0,127}` | → `{0,100000}` | **GREEN** | nothing — 816 passed |
+| I4 | bad path identity → `not_found` | → `validation_failed` | **RED** | `test_error_envelope.py::test_an_unknown_identity_is_not_found_and_reveals_nothing` |
+| I5 | header name | → `X-Idempotency` | **RED** | `test_journey.py::test_the_ingest_path_publishes_an_immutable_version` |
+| C1 | correlation pattern | → `^[\s\S]*$` | **RED** | `test_error_envelope.py::test_an_unusable_correlation_id_is_replaced_not_reflected` |
+| C2 | honour a supplied id | `if False:` | **RED** | `test_error_envelope.py::test_a_supplied_correlation_id_is_echoed` |
+| C3 | assigned id is **unique** | `token_hex(16)` → a constant | **GREEN** | nothing — 816 passed |
+
+This layer is in much better shape than the two before it: six of eight reddened. The
+brief's steer — *"wave 8 found the rest of criterion 9 lives in a `UNIQUE` constraint rather
+than in a pre-read; ask the same question of this layer"* — did not reproduce here. The
+header rules themselves are guarded.
+
+### Finding 7 — the key's character class is guarded, its length is not
+
+`_KEY_PATTERN` is `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`, and the module says it is "exactly
+`#/components/schemas/IdempotencyKey`". Widening the repetition bound to `{0,100000}` leaves
+the battery green: no test sends a key longer than the bound. The frozen document declares
+`"maxLength": 128`, so an authority exists and the guard pins against it.
+
+### Finding 8 — an assigned correlation id was never required to be different
+
+Every existing assertion — the header is present on every response, the body matches the
+header, a supplied id is echoed, an unusable one is replaced — holds exactly as well when
+`new_correlation_id()` returns the same constant for every request. Replacing
+`secrets.token_hex(16)` with `"cid-constant"` leaves all 816 tests green. A correlation id
+addresses one diagnostic record; if two requests share one, it addresses neither.
+
+## The third guard — `tests/integration/api/test_header_rules.py`
+
+9 tests.
+
+| mutation | guard tests that reddened |
+|---|---|
+| key length `{0,127}` → `{0,100000}` | `…_129_characters_is_refused_by_the_pattern_rule`, `…_never_echoed_back` |
+| `token_hex(16)` → a constant | `…_two_hundred_generated_ids_are_all_distinct`, `…_assigned_different_ones` |
+| key required off | `…_refused_as_required_not_as_pattern` |
+| key character class widened | `…_129_characters_is_refused_by_the_pattern_rule`, `…_never_echoed_back` |
+| supplied id ignored | `…_a_supplied_id_is_still_preferred_over_an_assigned_one` |
+
+The length case is pinned at **128 accepted / 129 refused** against
+`contracts/api/v1/openapi.json`, read from the test file's own location — the frozen document
+declares `maxLength: 128`, `minLength: 1` and the pattern, and the suite asserts all three, so
+the module drifting away from the contract is a red test rather than a private agreement.
+The refusal asserts `constraint == "pattern"` rather than the field: `require_idempotency_key`
+answers `field: "Idempotency-Key"` for **both** its branches, and `required` and `pattern` are
+only distinguishable by the constraint.
+
+The uniqueness guard also pins the two ways it could be satisfied dishonestly — an assigned id
+must still match the frozen `CorrelationId` pattern and stay within 128 characters, and a
+supplied id must still win.
+
+*(sweep of `schemas`, `errors`, `http`, `identity`, `bootstrap`, `db`, `statemachine`
+continues)*
