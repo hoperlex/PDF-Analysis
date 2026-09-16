@@ -380,10 +380,11 @@ use.
 | `decisions/**` | 0 — read only; no owned write path | — | — | — | — | — |
 | **total** | **37** | **24** | **13** | **9** | **3** | **1** |
 
-A tenth guard was added that no mutation produced: nothing asserted that the **database**
-refuses a reason outside the five-value vocabulary, or that the gate's vocabulary and the
-migration's CHECK still agree. That came from reading, and from the stale docstring that
-claimed the constraint did not exist.
+**Two further guards** were added that no green mutation produced, both on the
+`ungrounded_reason` vocabulary: nothing asserted that the gate's five values and the
+migration's CHECK still agree, and nothing asserted that the **database** refuses a sixth.
+Those came from reading — and from the stale docstring that claimed the constraint did not
+exist. Eleven rules are guarded in total.
 
 **33 tests added** across four files, every one of them mutated red and green, with expected
 values written as literals and cross-checked against an authority outside the module under
