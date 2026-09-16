@@ -137,3 +137,54 @@ artifact; `DomainError` has no `_artifacts`, so it evaluates to `()` — the ori
 readback showed the new line faithfully and the run was green, and the green meant nothing.
 Caught by re-reading my own mutation for *semantics* after the readback confirmed its *text*.
 Re-run as RN-06b.
+
+### Batch 4 — `engine/registry.py`, `engine/result.py`, `text/config.py`, `text/lock.py`, `text/cost.py`, `text/profile.py`
+
+| id | rule mutated | result | reddened by |
+|----|--------------|--------|-------------|
+| RN-06b | failed result carries an artifact — *mutation raised `NameError`, no `ArtifactRef` import* | invalid | re-run as RN-06c |
+| RG-01 | `_EXPECTED_CONTRACT` identity refusal disabled | **GREEN** | — |
+| RG-02 | unknown-stage refusal disabled | RED | `test_fail_closed.py::test_an_unknown_stage_is_refused_by_the_registry` |
+| RG-03 | `reason="unknown_stage"` → `"stage_not_found"` | **GREEN** | — |
+| RG-04 | `required_inputs` filter ignores the `required` flag | RED | `test_fail_closed.py` |
+| RG-05 | `required_outputs` filter yields nothing | RED | `test_fail_closed.py` |
+| RG-06 | `skip_allowed` default `False` → `True` | **GREEN** (by construction) | — |
+| RG-07 | `partial_allowed` default `False` → `True` | **GREEN** (by construction) | — |
+| RG-08 | `succeeded_requires_all_required_outputs` default `True` → `False` | **GREEN** (by construction) | — |
+| RG-09 | `_EXPECTED_CONTRACT` literal changed | RED | collection-time refusal |
+| RS-01 | `_METRIC_KEY` pattern → `^.*$` | **GREEN** | — |
+| RS-02 | `_ARTIFACT_ROLE` pattern → `^.*$` | **GREEN** | — |
+| RS-03 | `_SHA256` pattern → `^.*$` | **GREEN** | — |
+| RS-04 | `_BLOB_ID` pattern → `^.*$` | **GREEN** | — |
+| RS-05 | `size_bytes >= 0` refusal disabled | **GREEN** | — |
+| RS-06 | `CONTRACT_VERSION` `1.0.0-draft.1` → `2.0.0` | **GREEN** | — |
+| CF-01 | `DEFAULT_RUN_COST_CEILING_USD` 1.00 → 1000.00 | RED | `test_cost_ceiling.py::test_an_expensive_recording_halts_against_the_default_ceiling` |
+| CF-02 | ceiling-must-be-positive refusal disabled | RED | `test_cost_ceiling.py::test_a_ceiling_that_is_not_a_positive_number_is_refused` |
+
+**RG-06/07/08 are unreddenable by construction.** They are the `default` argument of
+`policy.get(key, default)`. All nine stages in `contracts/analysis/v1/stage-registry.json`
+declare all four `status_policy` keys explicitly — verified by reading the contract — so the
+default is never taken and changing it changes nothing that runs. A test could only redden it
+by constructing a synthetic registry document with the key omitted, which asserts a shape the
+frozen contract does not have. I did not write one.
+
+**RG-01 vs RG-09 is the asymmetry this wave is looking for.** Changing the constant reddens
+(the real document stops matching, so the refusal fires everywhere). *Disabling the refusal*
+reddens nothing, because no test ever hands `StageRegistry` a document with a wrong
+`contract` field. The guard is reachable — `StageRegistry(document)` takes a mapping
+directly — and unguarded.
+
+### Independent authorities located for pinning
+
+- `db/migrations/versions/20260911_0003_open_items.py` — `ck_model_call_status` CHECK:
+  `status IN ('succeeded','failed','truncated')`.
+- `db/migrations/versions/20260915_0005_truncated_call_status.py` —
+  `ck_model_call_truncated_has_response`: `status <> 'truncated' OR response_sha256 IS NOT NULL`.
+- `db/migrations/versions/20260910_0002_pc01_schema.py` — `ck_model_call_tokens`:
+  `input_tokens >= 0 AND output_tokens >= 0`.
+- `db/migrations/versions/20260911_0003_open_items.py` —
+  `ck_finding_observation_ungrounded_reason`, the five-value vocabulary.
+- `docs/program/P02_SEAMS.md` §5.1 line 484 — the same five values in prose.
+
+`db/` is not my tree, which is exactly what makes these authorities independent of the module
+under test.
