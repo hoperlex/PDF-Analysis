@@ -188,3 +188,41 @@ directly — and unguarded.
 
 `db/` is not my tree, which is exactly what makes these authorities independent of the module
 under test.
+
+## Guard 1 — `tests/integration/analysis/test_provider_lock_refusals.py`
+
+14 tests. Answers the dispatch's first named question: **the `analysis.text.lock` unpinned-model
+refusal is reachable, and before this file nothing asserted it at all** — not its firing, not
+its reason.
+
+Literals pinned, and the authority each is checked against:
+
+| literal | value | authority |
+|---------|-------|-----------|
+| primary model id | `"claude-opus-5"` | `docs/program/P02_LOCK.json` → `models.primary.model_id` |
+| cheaper tier id | `"claude-sonnet-5"` | same, `models.cheaper_tier.model_id` |
+| primary input rate | `5.0` USD/Mtok | same, `models.primary.input_per_mtok_usd` |
+| primary output rate | `25.0` USD/Mtok | same, `models.primary.output_per_mtok_usd` |
+| cost of 1M in + 1M out | `30.0` USD | arithmetic on the two rates above, written out |
+| refusal reason | `"model_not_pinned"` | the rule itself; asserted as a literal string |
+| refusal stage id | `"text_analysis"` | contract stage identity |
+
+`test_the_lock_document_still_says_what_this_file_pins` reads `P02_LOCK.json` and compares it
+against the literals, so a lock edit that is not mirrored here reddens rather than passing
+quietly. No constant is imported from the module under test and reused as an expected value.
+
+Red/green, each mutation run against this file alone with the copy proven imported:
+
+| mutation | this file |
+|----------|-----------|
+| LK-01 `ProviderLock.model` `except KeyError` branch disabled | RED — `test_an_unpinned_model_identity_is_refused_by_model_not_pinned` |
+| LK-02 `reason="model_not_pinned"` → `"model_unknown"` | RED — same test |
+| LK-03 no-primary-model refusal disabled | RED — `test_a_lock_declaring_no_primary_model_is_refused` |
+| LK-04 `cost_usd` negative-token refusal disabled | RED — `test_a_negative_token_count_is_refused_by_cost_usd` |
+| LK-05 rate divisor `1_000_000.0` → `1_000.0` | RED — `test_cost_is_the_pinned_rate_per_million_tokens` |
+| LK-07 annotation-key skip disabled | RED — `test_the_loaded_lock_carries_exactly_the_two_pinned_identities` |
+| LK-08 unreadable-lock message interpolates the path | RED — `test_an_unreadable_lock_document_names_no_path` |
+| CF-04 `resolved_lock.model(model_id)` deleted from `load_provider_config` | RED — `test_configuration_refuses_an_unpinned_model_before_the_run_starts` |
+
+LK-05 and LK-06 already reddened under the pre-existing suites; LK-05 is kept because it also
+pins the rate arithmetic against the lock. LK-07 and LK-08 were green everywhere before.
