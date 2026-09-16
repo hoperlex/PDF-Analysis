@@ -102,3 +102,38 @@ redden, each caught by `test_recorded_run_surfaces_every_seeded_issue`, which re
 seeded quotations against the real corpus text layer. The offset arithmetic is guarded. What
 is *not* guarded is the validation of the text layer the offsets are computed against
 (batch 1) and the `ungrounded_reason` vocabulary (AN-12, AN-13).
+
+### Batch 3 — `analysis/text/provenance.py` and `analysis/engine/runner.py`
+
+| id | rule mutated | result | reddened by |
+|----|--------------|--------|-------------|
+| PV-01 | `ModelCallRecord` closed-status-vocabulary refusal disabled | **GREEN** | — |
+| PV-02 | answered-status-must-carry-a-response-checksum refusal disabled | **GREEN** | — |
+| PV-03 | negative-token refusal disabled | **GREEN** | — |
+| PV-04 | `_STATUSES_THAT_ANSWERED` loses `truncated` | **GREEN** | — |
+| PV-05 | `CALL_STATUSES` widened with a fourth member `"partial"` | **GREEN** | — |
+| PV-06 | `CALL_TRUNCATED` literal `"truncated"` → `"cut_short"` | RED | `test_partial_and_status.py::test_the_truncated_call_is_recorded_as_truncated` |
+| PV-07 | `assert_consistent_mode` refusal disabled | RED | `test_provider_modes.py::test_publishing_refuses_a_mode_that_disagrees_with_its_calls` |
+| PV-08 | `cost_usd` rounded to 2dp instead of 8 | **GREEN** | — |
+| PV-09 | `cost_basis` default `"estimated"` → `"reported"` | **GREEN** | — |
+| RN-01 | `skip_not_allowed` refusal disabled | **GREEN** | — |
+| RN-02 | `partial_not_allowed` refusal disabled | **GREEN** | — |
+| RN-03 | missing-required-input branch disabled | RED | `test_fail_closed.py::test_a_missing_required_input_fails_before_the_stage_runs` |
+| RN-04 | missing-required-output branch disabled | RED | `test_fail_closed.py::test_a_stage_that_omits_a_required_output_is_failed_not_succeeded` |
+| RN-05 | handler-must-return-`StageProduction` refusal disabled | **GREEN** | — |
+| RN-06 | *(mutation was semantically inert — see RN-06b, batch 4)* | n/a | n/a |
+| RN-07 | `assert_status_allowed(...)` call removed from `_result_for` | **GREEN** | — |
+| RN-08 | `reason="missing_required_input"` → `"inputs_incomplete"` | RED | `test_fail_closed.py::test_a_missing_required_input_fails_before_the_stage_runs` |
+| RN-09 | missing-output code `ANALYSIS_FAILED` → `ANALYSIS_INPUT_INVALID` | RED | `test_fail_closed.py::test_a_stage_that_omits_a_required_output_is_failed_not_succeeded` |
+| RN-10 | `_elapsed_ms` zero clamp removed | **GREEN** | — |
+
+RN-08 and RN-09 are the good news the brief asked for: `test_fail_closed.py` asserts the
+*rule* that refused, not merely that something refused. Changing the reason string or the
+catalog code reddens it. That is the discipline wave 9 found missing elsewhere.
+
+**RN-06 is a mutation that did not mutate**, the exact failure the brief warns about. I wrote
+`artifacts=tuple(getattr(error, "_artifacts", ()) or ())` to make a failed result carry an
+artifact; `DomainError` has no `_artifacts`, so it evaluates to `()` — the original value. The
+readback showed the new line faithfully and the run was green, and the green meant nothing.
+Caught by re-reading my own mutation for *semantics* after the readback confirmed its *text*.
+Re-run as RN-06b.
