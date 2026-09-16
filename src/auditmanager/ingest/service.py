@@ -69,6 +69,7 @@ from auditmanager.storage import (
     TemporaryBlob,
     VerifiedBlob,
     parse_blob_role,
+    sha256_of,
 )
 from auditmanager.storage.blob_repository import BlobMetadataRepository
 
@@ -191,10 +192,27 @@ class IngestService:
         knows a bucket or a key. A missing object is
         ``storage_integrity_error`` -- the same answer reconciliation gives -- rather
         than an empty result that a caller might mistake for an empty document.
+
+        **The bytes are hashed and compared to the digest the manifest promised**, and
+        that comparison is made here rather than left to the adapter. The adapter can
+        only establish that an object agrees with *its own* recorded metadata, which is
+        self-consistency: an object replaced out of band together with its metadata
+        satisfies it and is still not the document this version names. Only the manifest
+        entry is independent of the object, so only a comparison against
+        ``entry.sha256`` can refuse the wrong document. On a disagreement this raises
+        the same ``storage_integrity_error``, with the same details, that
+        :meth:`Reconciler.verify_version` raises over the same row -- one fault, one
+        answer, whichever path reaches it.
+
+        Only the digest is compared. The manifest also records ``size_bytes``, but bytes
+        whose SHA-256 is ``entry.sha256`` and whose length is not ``entry.size_bytes``
+        are not constructible, so a size clause here would be a branch no test could
+        redden. ``verify_version`` compares both because it compares two *declarations*,
+        where the size is recorded independently of the digest.
         """
         entry = self.require_source_entry(version_uid)
         try:
-            return self._store.read(entry.blob_id)
+            data = self._store.read(entry.blob_id)
         except BlobNotFoundError:
             # Not ``not_found``: the version exists and its manifest promised these
             # bytes. Bytes a published manifest names and the store does not hold are
@@ -207,6 +225,17 @@ class IngestService:
             ) from None
         except StorageError as exc:
             raise domain_error_from_storage(exc, role=entry.role) from None
+
+        actual_sha256 = sha256_of(data)
+        if actual_sha256 != entry.sha256:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=str(entry.blob_id),
+                role=entry.role,
+                expected_sha256=entry.sha256,
+                actual_sha256=actual_sha256,
+            )
+        return data
 
     def require_source_entry(self, version_uid: VersionUid) -> ManifestEntry:
         with session_scope(self._factory) as session:
