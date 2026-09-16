@@ -302,3 +302,53 @@ an empty `author_label`, an unknown finding, an observation that is not the find
 each have a named test. Those names are evidence of intent, not of load-bearingness; the
 mutation that would settle it belongs to whoever owns `tests/integration/decisions/**`.
 
+## What in the brief turned out to be false or incomplete
+
+**1. The symlink list is incomplete, and the omission manufactures false reds.** The method
+says to symlink `contracts/`, `docs/` and `fixtures/` into the copy. Two more root
+directories are resolved from the copy's own tree:
+
+* **`tools/`** — `tests/integration/p02_journey/test_truncated_end_to_end.py` resolves
+  `tools/validation/ledger_report.py` relative to `auditmanager.__file__`. Without the
+  symlink, **4 tests fail on an unmutated copy**.
+* **`db/`** — `src/auditmanager/shared/db/migrations.py` takes the repository root from
+  `parents[4]` of its own module file.
+
+Both were found by running the unmutated copy against the wider suites before trusting a
+single result, which is the only reason they did not read as mutation kills. A sweep that
+symlinked the three named directories and went straight to mutating would have reported four
+guards that do not guard, in a tree it never broke. The brief is right that `docs/` is needed
+for `analysis.text.lock`; it is the completeness of the list that is wrong.
+
+**2. `OPERATING_CONSTRAINTS.md` is not at the repository root.** The brief cites it twice as
+a bare filename. It lives at `docs/program/dispatch/OPERATING_CONSTRAINTS.md`; there is no
+copy at the root. Minor, but it cost a search at the one moment the document was needed —
+deciding whether two storage failures were interference.
+
+**3. The brief is right about the CHECK, and the tree contradicted it.** "`ungrounded_reason`
+has a CHECK since migration `0003` and a five-value vocabulary" is **true**. The stale claim
+was in the tree, not the brief: `TestTheUngroundedVocabularyIsClosed` asserted the opposite
+in its docstring. Corrected, with a test.
+
+**4. Two of the "where to look first" questions already have answers in the tree.**
+
+* "Is the projection's *agreement with the stream* asserted, or only its shape?" — asserted,
+  twice, and in a form that cannot compare a cache with itself.
+* "`finding_uid` allocation — fresh per publication. What notices if it is not?" — the
+  `finding` primary key, plus 25 tests. Both are covered; neither needed a guard.
+
+**5. An ownership gap.** `src/auditmanager/decisions/**` is in the read scope and the ledger
+is named as a place to look first, but `tests/integration/decisions/**` is not in the write
+scope. A ledger rule found unguarded would have had nowhere to go.
+
+**Not re-verified, and recorded as such:** the brief's claim that wave 5 found the CSV
+tiebreaker reddenable only at 20 tied rows and not at two. That measurement was not repeated
+here and nothing in this sweep bears on it.
+
+**A gap in this session's own method, not the brief's.** The baseline gate was never run
+*before* the new tests were added; the worktree arrived already bootstrapped from the killed
+attempt and the first full gate ran with all 33 new tests present. The 816 figure is
+therefore **inferred**, not measured here: the final gate reports 849 passed, and 849 − 33
+new tests = 816, which agrees with the brief. A directly measured baseline would have been
+better and cost four minutes.
+
