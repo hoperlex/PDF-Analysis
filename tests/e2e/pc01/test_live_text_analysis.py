@@ -293,8 +293,18 @@ def test_live_the_near_miss_controls_are_reported(live_run, manifest) -> None:
     """The six controls the corpus plants to catch a model that flags anything similar.
 
     Not a gate: a flagged control is a precision result, and the brief asks for it to be
-    reported rather than to stop the run. So this test records what happened and asserts
-    only that the answer was computable -- the number itself goes in the session report.
+    reported rather than to stop the run. The count itself therefore goes in the session
+    report and nothing here fails on it.
+
+    But "0 of 6 flagged" and "compared against nothing" produce the same number, and the
+    assertion that stood here was ``isinstance(flagged, list)`` -- which ``flagged`` is by
+    construction, two lines above. `W6-CERT` had to confirm the zero from the published
+    evidence by hand because the test could not tell it anything.
+
+    So the measurement's *preconditions* are asserted instead, which keeps it out of the
+    way of the result: there were controls to compare against, there was published text to
+    compare, and anything reported as flagged is a real control. A zero that survives those
+    is a zero that means something.
     """
     quotes = {
         item["quote"]
@@ -306,8 +316,26 @@ def test_live_the_near_miss_controls_are_reported(live_run, manifest) -> None:
         quotation = control["quotation"]
         if any(quotation in q or q in quotation for q in quotes):
             flagged.append(control["id"])
-    print(f"\nnear-miss controls flagged: {flagged or 'none'}")
-    assert isinstance(flagged, list)
+    print(
+        f"\nnear-miss controls flagged: {flagged or 'none'} "
+        f"({len(flagged)} of {len(manifest['controls'])}, "
+        f"compared against {len(quotes)} published quotation(s))"
+    )
+
+    # The universe being compared against, not the answer. Each of these failing would
+    # produce an empty `flagged` that reads as a clean precision result.
+    assert manifest["controls"], (
+        "the manifest declares no near-miss controls, so a zero here means nothing was "
+        "checked rather than nothing was flagged"
+    )
+    assert quotes, (
+        "the run published no quotations at all, so no control could have been matched "
+        "however badly the model behaved -- that is a failed run, not a clean one"
+    )
+    known = {control["id"] for control in manifest["controls"]}
+    assert set(flagged) <= known, (
+        f"flagged ids that are not controls: {sorted(set(flagged) - known)}"
+    )
 
 
 def test_live_the_findings_are_exportable_and_resolve_to_this_run(live_run) -> None:
