@@ -55,4 +55,113 @@ Before any run, all 77 mutations were checked to apply exactly once and to chang
 text — the `frozenset() or frozenset({...})` mistake, which evaluates to the real set and
 mutates nothing — and each was read back against its intended meaning.
 
-*(sweep in progress)*
+## Finding 1 — the brief says seven forbidden shapes. There are six.
+
+`_FORBIDDEN` in `shared/errors/envelope.py` is a six-tuple: *a URL*, *a filesystem path*,
+*an S3-style object key*, *a credential*, *SQL*, *a stack frame*. The module docstring lists
+five (it omits the S3 key). The brief says seven, twice. **Six.** Nothing depends on the
+count, but a sweep briefed to find seven rules will look for one that is not there.
+
+## Finding 2 — the detail-value screen, which `B6` paid for, had no test at all
+
+`build()` screens `details` **values** against the same six patterns as a message. The
+comment on that loop records why it exists: `B6`'s `additionalProperties` refusal echoed the
+caller's own property name into `details.field`, so a property named `/etc/passwd` came back
+inside the envelope. The key was declared safe; the value was raw caller input.
+
+Neutering the loop — iterating `()` instead of `_FORBIDDEN`, so no value is ever screened —
+leaves the canonical battery at **816 passed, 5 skipped**. `UnsafeDetailValue` appears
+nowhere in `tests/` at all; the only references in the repository are its own definition,
+its `raise`, and its export.
+
+This is the finding the wave exists for: a screening loop on a security surface, reading as
+coverage, that no test in the gate can distinguish from a deleted one.
+
+## Finding 3 — `_MAX_DETAILS = 16` is unreddenable *by construction*
+
+No test is owed here and none was written. `checked` is built only from keys that passed
+`key not in allowed`, so it can never hold more keys than the reported code declares in
+`safe_detail_keys`. Measured across all twenty codes:
+
+| code | declared safe keys |
+|---|---|
+| `storage_integrity_error` | 4 |
+| `required_norm_unavailable` | 4 |
+| `validation_failed`, `state_transition_not_allowed`, `unsupported_contract_version`, `stale_attempt` | 3 |
+| the other fourteen | 0–2 |
+
+The maximum is **4**. `len(checked) > 16` cannot be true for any code in the closed enum, so
+the branch is unreachable without editing the catalog — which is product code this session
+does not write. The mutation `_MAX_DETAILS = 100000` is green for that reason and not
+because a guard is missing.
+
+(The check also sits *after* the loop rather than inside it, so even a catalog that declared
+seventeen safe keys would screen all seventeen values before counting them. Noted, not a
+defect: nothing can reach it.)
+
+## Finding 4 — the message screen could not say which rule refused
+
+The one gate test over the message screen,
+`tests/integration/api/test_error_envelope.py::test_a_message_carrying_an_address_is_refused_by_the_screen`,
+asserts `pytest.raises(UnsafeMessage)` over three sentences and nothing more. Two of the
+three match two patterns each:
+
+| sentence | patterns it matches |
+|---|---|
+| `could not read /var/lib/audit/objects/ab/cd.pdf` | *a filesystem path*, *an S3-style object key* |
+| `GET https://minio.internal/audit-b6 failed` | *a URL* |
+| `SELECT blob_id FROM blob WHERE state = 'available'` | *SQL* |
+
+The screen iterates in order and raises on the first match, so the S3 rule is never the
+rule that fires and could be deleted with the suite still green. *Credential* and *stack
+frame* are not exercised by any gate test. (`tests/contract/shared_kernel/test_error_kernel.py`
+does cover five of the six, but `make gate` runs
+`tests --ignore=tests/contract --ignore=tests/checkpoint` — it is quarantined CP-00 evidence
+and not part of the gate.)
+
+## The guard written
+
+`tests/integration/api/test_envelope_screen_rules.py`, 20 tests. Each forbidden shape gets a
+value checked to match **exactly one** pattern, asserted through both the message screen and
+the detail-value screen, and the assertion is on **the phrase naming the rule**, not on the
+exception class — `UnsafeMessage` is raised by all six rules and by the length rule alike.
+
+| shape | value pinned | reason phrase pinned |
+|---|---|---|
+| a URL | `https://minio.internal/audit-b6` | `a URL` |
+| a filesystem path | `the object at /var/lib/audit/ was refused` | `a filesystem path` |
+| a filesystem path (Windows) | `C:\Windows\System32` | `a filesystem path` |
+| an S3-style object key | `bucket/prefix/object.pdf` | `an S3-style object key` |
+| a credential | `api_key=sk-ant-abc123` | `a credential` |
+| SQL | `SELECT id FROM blob` | `SQL` |
+| a stack frame | `File "s3.py", line 3` | `a stack frame` |
+
+Nothing imports `_FORBIDDEN`, `_MAX_MESSAGE` or `_MAX_DETAIL_VALUE`. The length ceilings are
+asserted at the boundary against written numbers — 512 accepted / 513 refused, 256 accepted /
+257 refused. **No independent authority declares either number**: the frozen OpenAPI document
+carries no length for `message`, and the error catalog carries none for a detail value. That
+is stated rather than papered over; the literals still redden when a constant drifts, which is
+the property that matters.
+
+### Red and green, per mutation
+
+Each mutation applied to `/root/w10api-mut2/src`, **read back** to confirm the new text is
+present and the old text gone, and the guard run against it:
+
+| mutation | guard tests that reddened |
+|---|---|
+| `_FORBIDDEN` *a URL* → never-matching | `…_and_named[url]`, `…_under_a_declared_key[url]` |
+| *a filesystem path* → never-matching | both `[posix_path]` and both `[windows_path]` — 4 |
+| *an S3-style object key* → never-matching | `…_and_named[s3_key]`, `…_under_a_declared_key[s3_key]` |
+| *a credential* → never-matching | `…_and_named[credential]`, `…_under_a_declared_key[credential]` |
+| *SQL* → never-matching | `…_and_named[sql]`, `…_under_a_declared_key[sql]` |
+| *a stack frame* → never-matching | `…_and_named[stack_frame]`, `…_under_a_declared_key[stack_frame]` |
+| `_MAX_MESSAGE` 512 → 100000 | `test_a_message_of_512_characters_is_accepted_and_513_is_not` |
+| `_MAX_DETAIL_VALUE` 256 → 100000 | `test_a_detail_value_of_256_characters_is_accepted_and_257_is_not` |
+| detail-value screen → `for … in ()` | all **7** `…_under_a_declared_key[*]` cases, and no message case |
+| scalar check → `if False:` | `test_a_non_scalar_detail_value_is_refused` |
+
+Each mutation reddens exactly the cases written for it and no others, and the suite is green
+on unmutated source.
+
+*(sweep of the remaining surface in progress)*
