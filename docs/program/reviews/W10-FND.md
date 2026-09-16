@@ -366,9 +366,9 @@ here and nothing in this sweep bears on it.
 **A gap in this session's own method, not the brief's.** The baseline gate was never run
 *before* the new tests were added; the worktree arrived already bootstrapped from the killed
 attempt and the first full gate ran with all 33 new tests present. The 816 figure is
-therefore **inferred**, not measured here: the final gate reports 849 passed, and 849 − 33
-new tests = 816, which agrees with the brief. A directly measured baseline would have been
-better and cost four minutes.
+therefore **inferred here, not measured**: the battery now reports **849 passed, 5 skipped,
+116 subtests**, and 849 − 33 new tests = 816, which agrees with the brief and with the
+5/116 unchanged. A directly measured baseline would have been better and cost four minutes.
 
 ## Summary
 
@@ -419,3 +419,38 @@ above gives 37, 24 and 7. The figures here are derived from the per-batch rows a
 memory; the earlier ones were written from memory and were wrong in three places. Recorded
 rather than quietly amended, because a wave that files a number it did not recount is the
 thing this programme keeps finding.
+
+## Gate
+
+```
+make gate   ->   GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+Measured on `bfaf172`, the commit before this section was written, with the worktree clean:
+
+| component | result | how |
+|---|---|---|
+| canonical battery | **849 passed, 5 skipped, 116 subtests** in 249.86s | `pytest -c pyproject.toml --rootdir=. -q tests --ignore=tests/contract --ignore=tests/checkpoint`, run alone |
+| foundation | pass | `make foundation`, instance `gate-w10b` |
+| frontend | 24 files, 289 tests passed in 3.69s | `npm --prefix web test` |
+| whitespace | clean | `git diff --check` |
+
+816 expected before this session + 33 added = 849. Skips and subtests are unchanged at 5
+and 116.
+
+**The first gate run of this session reported 2 failures, and they were mine.** Both were in
+`tests/integration/storage` — `test_publication_leaves_no_temporary_object` and its repeated
+twin — asserting that no object remains under the bucket's `temporary/` prefix. Following
+`OPERATING_CONSTRAINTS.md` §9, the suite was re-run **alone** and failed identically, so §6
+interference did not cover it. The object was
+`temporary/982a0691e34e89fa1277a084d16b42cb`, last modified `10:09:15Z` — the exact minute a
+duplicate `make gate` was killed mid-publication after two gate runs were found racing on
+one instance. One stranded object from a SIGTERM'd writer makes that assertion permanently
+red until the bucket is cleaned. It was deleted from this lane's own bucket
+(`auditmanager-gate-w10b`), the storage suite went green alone, and the full gate then
+passed. No product or test change was involved, and nothing outside this lane's storage was
+touched.
+
+Recorded because it is the cheapest possible illustration of §9's rule: the difference
+between "another session is interfering" and "this lane left something behind" cost one
+command, and guessing either way would have been wrong.
