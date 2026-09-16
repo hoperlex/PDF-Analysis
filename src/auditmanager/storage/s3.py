@@ -308,6 +308,19 @@ class S3BlobStore:
         Available bytes are immutable, so a read that does not hash what it
         returns is trusting that nothing ever bypassed this adapter. Re-hashing
         is cheap at prototype sizes and turns that assumption into a check.
+
+        An object carrying **no** recorded digest is refused rather than
+        returned. ``publish`` writes ``content-sha256`` onto every canonical
+        object, so an object without it was not published through this adapter,
+        and returning it from a call named ``verify`` would be a claim this
+        adapter cannot support. That refusal is
+        :class:`BlobMetadataInvalidError` -- ``validation_failed``, the
+        declaration itself is absent -- and is deliberately **not** the
+        ``storage_integrity_error`` a disagreeing digest raises: "this store
+        cannot vouch for this object" and "these bytes are not the declared
+        bytes" are two different faults with two different answers, and an
+        operator reading an envelope must be able to tell which one happened.
+        ``verify=False`` remains the explicit opt-out and is unchanged.
         """
         key = layout.canonical_key(blob_id)
         try:
@@ -326,8 +339,13 @@ class S3BlobStore:
 
         if verify:
             recorded = _metadata_value(response, _META_SHA256)
+            if recorded is None:
+                raise BlobMetadataInvalidError(
+                    field=_META_SHA256,
+                    constraint="recorded on every object this adapter publishes",
+                )
             actual = hashlib.sha256(data).hexdigest()
-            if recorded is not None and recorded != actual:
+            if recorded != actual:
                 raise ChecksumMismatchError(
                     expected_sha256=recorded, actual_sha256=actual
                 )

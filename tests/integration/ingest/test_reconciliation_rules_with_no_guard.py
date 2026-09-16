@@ -201,20 +201,27 @@ def test_a_version_whose_stored_checksum_disagrees_with_its_manifest_is_refused(
     # source file is a new ``version_uid``.
     assert service.get_version(outcome.version.version_uid).source.sha256 == honest_sha256
 
-    # ``read_source_bytes`` does **not** answer this one, and that is recorded as a
-    # product defect in ``docs/program/reviews/W10-RUN.md`` rather than asserted here as
-    # if it were the contract. The adapter re-hashes what it read and compares it to the
-    # object's *own* recorded digest, which agrees; the manifest's digest is never
-    # consulted on the read path. So a caller receives the impostor bytes with no error,
-    # while reconciliation over the same version refuses. This assertion pins the
-    # behaviour that exists so the defect cannot be closed silently: the day the read
-    # path starts consulting the manifest, this line fails and points at the note.
-    returned = service.read_source_bytes(outcome.version.version_uid)
-    assert sha256_of(returned) == impostor_sha256, (
-        "read_source_bytes returns whatever the store holds under the blob_id; see "
-        "W10-RUN's defect note. If this line fails because the read now refuses, the "
-        "defect has been fixed and this expectation should become a pytest.raises"
-    )
+    # ``read_source_bytes`` answers this one **the same way**, which is the repair
+    # ``W11-RD`` made and the reason this is no longer the pinned defect ``W10-RUN``
+    # recorded. It used to return the impostor bytes with no error: the adapter re-hashes
+    # what it read and compares it to the object's *own* recorded digest, which agrees
+    # here, and the manifest's digest was never consulted on the read path. Two paths
+    # over one row gave two answers. This is the assertion that reddens if that
+    # comparison is ever removed again.
+    with pytest.raises(DomainError) as read_raised:
+        service.read_source_bytes(outcome.version.version_uid)
+
+    read_failure = read_raised.value
+    read_envelope = read_failure.envelope("corr_read_disagree")
+    assert read_failure.code is ErrorCode.STORAGE_INTEGRITY_ERROR
+    assert read_envelope.retryable is False
+    # The same details reconciliation gives, and they are what distinguishes this fault
+    # from the two other ``storage_integrity_error`` causes: both digests are present.
+    assert read_envelope.details["blob_id"] == str(blob_id)
+    assert read_envelope.details["role"] == MANIFEST_ROLE_SOURCE_DOCUMENT
+    assert read_envelope.details["expected_sha256"] == honest_sha256
+    assert read_envelope.details["actual_sha256"] == impostor_sha256
+    screen_message(read_envelope.message)
 
 
 def test_a_version_whose_stored_size_disagrees_with_its_manifest_is_refused(
