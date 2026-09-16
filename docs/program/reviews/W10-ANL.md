@@ -686,3 +686,54 @@ are all red. Reported, not faked.
 
 Every one of the 94 was mutated red against its new guard and green at baseline, each run in
 an isolated copy with `auditmanager.__file__` proved to resolve under that copy.
+
+## Guard 10 — `tests/integration/analysis/test_normalization_and_serialization.py`
+
+19 tests. Two pins that decide whether an offset means the same thing twice.
+
+**EX-08 is the sharpest single finding after the `artifact.py` cluster.** Changing the
+declared normalization from **NFC to NFKC** in `extraction.normalize` was green everywhere.
+NFKC is a *compatibility* normalization: it rewrites ligatures, superscripts, non-breaking
+spaces, Roman numerals and full-width forms, changing the code-point length of text NFC leaves
+untouched. Every offset in the system indexes the sequence this function produces and `B4`
+compares "after that one declared normalization and nothing else", so the swap moves anchors
+while `normalization.id` still reads `nfc_v1`.
+
+The corpus contains no character where NFC and NFKC differ, which is exactly why an
+end-to-end run over it cannot detect the change. The five strings here are built in the test
+— `ﬁ`, `²`, a non-breaking space, `Ⅱ`, `Ａ` — and each is compared against
+`unicodedata.normalize("NFC", text)`, **the standard's own answer rather than the module's**,
+so the two cannot agree by moving together.
+
+Authorities: `P02_SEAMS.md` §4.3 for `nfc_v1`, `P02_LOCK.json` → `pins.pdfplumber` for the
+extractor identity. All 9 mutations RED (EX-06, EX-07, EX-08, EX-09, SZ-01 to SZ-05).
+
+### Batch 6 — the preparation stages and ports
+
+`tests/integration/analysis_engine/test_preparation_stages.py` is thorough and most of this
+tree reddens properly: EX-01, EX-02, EX-07, SP-01, SP-02, SP-03, SP-04, SP-06, SP-07, PG-02,
+PG-04, PG-05, PG-06, PG-07, PG-08, PG-09 all RED.
+
+Green, and all of them cross-checks over re-extraction consistency:
+
+| id | rule | why it is green |
+|----|------|-----------------|
+| EX-03 | `page_count_disagreement` — pdfplumber vs the pypdf probe | the two libraries agree on every real PDF |
+| EX-04 | `line_traversal_disagreement` — `extract_text_lines()` vs `extract_text()` | pdfplumber is self-consistent |
+| EX-05 | `normalization_disagreement` — NFC applied to the join vs to the lines | NFC distributes over the join for this corpus |
+| PG-01 | `text_layer_page_count_mismatch` | the geometry stage re-extracts the *same bytes* |
+| PG-03 | `text_layer_text_mismatch` | same |
+| PG-10 | `missing_source_reference` | the inventory always carries `source_blob_id` |
+| SP-05 | `source_unreadable` catalog code | reached, but no test asserts *which* code |
+
+EX-03, EX-04, EX-05, PG-01 and PG-03 are **unreddenable by construction through the stage
+seam**: they compare two derivations of the same bytes by the same pinned libraries, and the
+libraries do not disagree with themselves. This is the same shape as the wave-8 finding "a
+cross-check the twelve operations cannot reach". Reaching them needs a stubbed extractor —
+product code, or a fixture PDF chosen to break pdfplumber's internal consistency, which is a
+bet on a library bug rather than a test of a rule. Reported, not faked.
+
+`SP-05` is a real but narrow gap: `source_unreadable` is reached by
+`test_fail_closed.py`, but nothing asserts the catalog code, so changing
+`ANALYSIS_INPUT_INVALID` to `ANALYSIS_FAILED` is invisible. Recorded; not guarded, because the
+path is already covered and the marginal value is low next to the rest of this sweep.
