@@ -64,7 +64,7 @@ Three did not:
   `test_an_incoherent_selection_cannot_be_constructed`. The one on `EvidenceVerdict` is not,
   although `EvidenceVerdict` is exported from `auditmanager.findings`.
 
-All three are unreddenable-and-reachable → guards written in batch 4.
+All three are unreddenable-and-reachable → guards written, see "Guards written" below.
 
 ### Batch 2 — the vocabulary, and `findings/terminal.py`
 
@@ -72,7 +72,7 @@ All three are unreddenable-and-reachable → guards written in batch 4.
 |----|--------------|---------------------------|--------|
 | G15 | `UNGROUNDED_REASONS` is exactly the five declared values | a sixth value `"quotation_hallucinated"` added | **red** — 3 failed |
 | G16 | each reason's wire value | `QUOTATION_ABSENT = "quotation_missing"` | **red** — 5 failed, 31 errors |
-| G17 | omitting `block_index` does **not** disable check 3 | `run_grounding_gate` returns all-resolved when `block_index is None` | **GREEN(broad)** — 302 passed |
+| G17 | omitting `block_index` does **not** disable check 3 | `run_grounding_gate` returns all-resolved when `block_index is None` — a blunt probe, re-run faithfully for the red proof with a *permissive* default index | **GREEN(broad)** — 302 passed |
 | T01 | `STAGE_STATUSES` is exactly the four declared statuses | two extra statuses added | **red** — 1 failed |
 | T02 | `TERMINALS_FROM_VALIDATING` names the reachable terminals | `{"published", "cancelled"}` | **GREEN(broad)** — 302 passed |
 | T03 | `codes.discard(None)` — a stage with no code does not veto a shared one | `codes.discard(None)` → `pass` | **GREEN(broad)** — 302 passed |
