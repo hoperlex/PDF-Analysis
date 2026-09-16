@@ -496,3 +496,55 @@ checks the three preparation stages, since those have both flags false.
 
 RN-11 is there because a guard that refuses *everything* would also pass every
 refusal-side test. The `SUCCEEDED`/`FAILED` cases pin the other side.
+
+### Batch 5 — `text/artifact.py`, `text/response.py`, `text/stage.py`, `engine/runner.py`
+
+Re-run in an isolated copy after the shared-copy fault. `analysis/text/response.py` results:
+
+| id | rule mutated | result |
+|----|--------------|--------|
+| RP-01 | category-in-closed-set check disabled | **GREEN** |
+| RP-02 | `finding_text` non-blank-string check disabled | **GREEN** |
+| RP-03 | `recommendation_text` non-blank-string check disabled | **GREEN** |
+| RP-04 | evidence-non-empty-list check disabled | **GREEN** |
+| RP-05 | `page_number` int-and-not-bool check disabled | **GREEN** |
+| RP-06 | `quote` non-empty-string check disabled | **GREEN** |
+| RP-07 | unfinished tail appended as `{}` instead of discarded | **GREEN** |
+| RP-08 | `salvaged = truncated` → `salvaged = False` | **GREEN** |
+| RP-09 | `malformed += 1` removed | **GREEN** |
+| RP-10 | non-dict coerced to `{}` | **GREEN — inert, see below** |
+
+`analysis/text/stage.py`: ST-02, ST-03, ST-06, ST-07, ST-09, ST-10, ST-15 RED; ST-01, ST-04,
+ST-05, ST-08, ST-11, ST-12, ST-13, ST-14 GREEN. `analysis/text/artifact.py`: see guard 5.
+`RN-06c` (a failed result carrying an artifact, with the import added) RED.
+
+## Guard 7 — `tests/integration/analysis/test_response_parsing_rules.py`
+
+29 tests. **Not one rule in `analysis.text.response` could be reddened by anything.** All ten
+sweep rows green.
+
+This is the module that decides what survives a truncated reply. `RP-07` is the one that
+matters most: making `_salvage_array` append `{}` for the tail it could not decode — the
+closest thing to guessing at a half-written element — changed no test anywhere, and the
+module's docstring is explicit that "a half-written contradiction reads exactly like a whole
+one".
+
+The existing `test_the_incomplete_tail_of_a_truncated_reply_is_discarded` replays one
+recorded truncated variant end to end and asserts the stage's outcome. `parse_response` is a
+pure function of a string and a flag, so this file reaches the rules directly with replies
+built in the test. No recording is added to any frozen fixture directory.
+
+`test_a_proposal_that_does_not_satisfy_the_shape_is_dropped_and_counted` is parametrised over
+17 malformed shapes and asserts **both** halves — the proposal does not appear *and*
+`malformed_count == 1`. A rule that dropped without counting passes a test that checks only
+the first, which is why RP-09 is caught by the same case as RP-01.
+
+`test_a_page_number_of_true_is_not_read_as_page_one` is stated separately because
+`isinstance(True, int)` is `True` in Python: without the explicit bool exclusion, `True`
+becomes page 1 and a proposal that named no page acquires one.
+
+9 of 10 RED against this file. **RP-10 was a mutation that did not mutate** — the second one
+I wrote this wave. Coercing a non-dict to `{}` leaves `raw.get("category")` returning `None`,
+which fails the very next check, so the drop-and-count outcome is identical. Replaced with
+two mutations that do change behaviour — deleting the `isinstance` guard outright (RP-10b)
+and having it return a fabricated observation (RP-10c) — and both are RED.
