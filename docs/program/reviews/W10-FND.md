@@ -352,3 +352,37 @@ therefore **inferred**, not measured here: the final gate reports 849 passed, an
 new tests = 816, which agrees with the brief. A directly measured baseline would have been
 better and cost four minutes.
 
+## Summary
+
+**27 rules mutated across `findings/**`, `decisions/**` and `exports/**`. 18 reddened. 9
+did not.** Of the nine: **6 were unreddenable and reachable and now have guards**, and
+**3 are unreddenable by construction and were reported with the argument rather than
+given a test.**
+
+| module | mutated | reddened | guarded now | by construction |
+|---|---|---|---|---|
+| `findings/grounding.py` | 17 | 13 | 4 | — |
+| `findings/terminal.py` | 3 | 1 | 2 | — |
+| `findings/publication.py` | 2 | 2 | — | — |
+| `findings/queries.py` | 2 | 1 | — | 1 (Q01) |
+| `exports/**` | 13 | 9 | 3 | 2 (E07, E10) |
+| `decisions/**` | 0 — read only; no owned write path | — | — | — |
+
+**33 tests added** across four files, every one of them mutated red and green, with expected
+values written as literals and cross-checked against an authority outside the module under
+test: the frozen state-machine contract, `P02_SEAMS.md` §6, migration `0003`'s CHECK, and
+the frontend's own column list.
+
+The single most consequential finding is **E01**. The seventeen-column CSV is the deliverable
+`OD-11` freezes and `B8` downloads, and its column *order* had no literal pin anywhere in the
+Python tree. The assertion meant to hold it — `header == list(COLUMNS)` — is the exact wave-9
+failure mode, in the file whose own comment records that the same phrasing once let the BOM
+be deleted. The lesson had been learned for one constant in that file and not applied to the
+one next to it.
+
+The second is that **the grounding gate itself is in good shape**. Thirteen of its seventeen
+rules redden, most of them on a single named test, and the three that did not are about the
+*determinism of the diagnostic* rather than about whether an ungrounded row can be written.
+`W5-CERT` and `W6-CERT` were right about the conclusion they drew; what they could not say is
+now said rule by rule.
+
