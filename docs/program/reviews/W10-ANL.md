@@ -318,3 +318,86 @@ pass because a different one of the three checks fired.
 
 PV-05 and PV-05b redden in opposite directions — widening the vocabulary and narrowing it are
 caught by different tests — so the set is pinned, not merely bounded on one side.
+
+## A harness fault that produced two false greens, and how it was caught
+
+Midway through I started a screening batch detached in the background and then ran guard
+verifications in the foreground. **Both used the same mutation copy at
+`/root/w10anl-mut/src`**, so one run's `reset` + mutate raced the other's pytest. Two rows
+came back GREEN that are in fact RED: `TL-09` (`total_char_count_mismatch`) against my own
+new test file, and — less visibly — the whole of the first `v3` provenance verification and
+the first `b1`-against-guard-4 verification ran inside that window.
+
+It was caught because `TL-09` *should* have reddened my own test and did not, and the
+isolated re-run disagreed with the batch. A result that contradicts a result I could derive
+by hand is the cheapest possible detector; had the corrupted row been one I had no
+expectation about, it would have gone into the report as a finding.
+
+**Fix:** `batch.py` now takes `MUT_COPY`, creates a per-run copy directory with its own
+symlinks and its own `mutprobe.py`, and the probe asserts `auditmanager.__file__` starts with
+*that run's* copy path (`MUT_EXPECT`) rather than a hard-coded one. Concurrent batches are
+now isolated.
+
+**Everything measured inside the overlap window was re-run in an isolated copy.** The
+re-runs are what this report contains:
+
+- `b1` vs guard 4 — 12 RED / 3 GREEN (`TL-09` flipped to RED).
+- `v1` vs guard 1 — 8/8 RED.
+- `v2` vs guard 2 — 7/7 RED.
+- `v3` vs guard 3 — 9/9 RED.
+- batch 5 — discarded and re-run from scratch.
+
+This is worth recording beyond this wave: the mutation method's whole weight rests on the
+copy being the thing under test, and two sessions sharing one copy breaks that silently,
+with no error and a plausible-looking pass.
+
+## Guard 4 — `tests/integration/analysis/test_text_layer_validation.py`
+
+29 tests. `load_text_layer` makes nine refusals. Exactly one — `artifact_version_unsupported`
+— could be reddened by any existing test.
+
+Every document is built in the test; nothing is added to any frozen corpus. Literals pinned:
+page one is `"Отчёт за год.\n"` at **14 code points / 24 UTF-8 bytes**, page two
+`"Выручка выросла.\n"` at **17 / 31**, the document **31 code points / 55 bytes**. The
+Russian text is deliberate: a byte-offset implementation misplaces every anchor while looking
+plausible in English, and `55` is exactly the `total_char_count` a byte-counting producer
+would write, so it is one of the parametrised refusal cases.
+
+Writing the counts as literals caught **my own** arithmetic twice — I wrote 30 and 56, and
+the tests failed until I computed 31 and 55. An implementation-derived expectation would have
+agreed with itself.
+
+| mutation | this file |
+|----------|-----------|
+| TL-01 `artifact_role_unexpected` disabled | RED |
+| TL-02 `artifact_version_unsupported` disabled | RED |
+| TL-03 `normalization_undeclared` disabled | RED |
+| TL-04 `text_layer_empty` disabled | RED |
+| TL-05 `page_sequence_broken` disabled | RED |
+| TL-06 `page_offsets_discontiguous` (per-page) disabled | RED |
+| TL-07 `page_span_length_mismatch` disabled | RED |
+| TL-08 first-page-starts-at-zero disabled | **GREEN — dead code, see below** |
+| TL-09 `total_char_count_mismatch` disabled | RED |
+| TL-10 `SUPPORTED_ARTIFACT_VERSION` changed | RED |
+| TL-11 `ARTIFACT_ROLE` changed | RED |
+| TL-12 page separator `""` → `"\n"` | RED |
+| TL-13 / TL-14 `Page.contains` bounds loosened | GREEN — guarded in guard 5 |
+| TL-15 `TextLayer.slice` off-by-one | RED |
+
+### Unreddenable by construction: `textlayer.py` first-page check
+
+```python
+if pages[0].char_start != 0:
+    raise _invalid("page_offsets_discontiguous", "the first text layer page does not start at zero")
+```
+
+`expected_start` is initialised to `0` before the loop, so on the first iteration the in-loop
+`if page.char_start != expected_start` **is** `if pages[0].char_start != 0` and has already
+refused with the same `reason`. `raw_pages` is checked non-empty above, so the loop always
+runs. The post-loop branch cannot execute. The *rule* is enforced and is tested; the *line*
+is dead. Reported, not guarded — a test for it would have to claim to distinguish two lines
+that produce the same refusal, which it cannot.
+
+**Product note for the owner of `src/auditmanager/analysis/`:** the branch is harmless but
+misleading, since it reads as the enforcement of a rule that is actually enforced ten lines
+earlier. Left unrepaired.
