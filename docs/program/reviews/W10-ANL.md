@@ -278,3 +278,43 @@ docstring rather than left implicit.
 Writing the categories as a literal caught **my own** wrong guess: I wrote
 `("internal_contradiction", "unsupported_claim")` from memory and the test failed. Had I
 imported `CATEGORIES` from the module, it would have passed and checked nothing.
+
+## Guard 3 — `tests/integration/analysis/test_model_call_record_rules.py`
+
+22 tests. `ModelCallRecord.__post_init__` makes three refusals and its docstring explains why
+duplicating the database's CHECKs at this layer earns its keep. **Nothing tested that any of
+the three fires.** All five sweep rows were green everywhere.
+
+This answers the dispatch's `truncated` question for the record layer. PV-04 is the sharp
+case: dropping `truncated` out of `_STATUSES_THAT_ANSWERED` lets a truncated call be recorded
+with no response checksum — precisely the row migration `0005` added
+`ck_model_call_truncated_has_response` to forbid — and it was green.
+
+Literals pinned, and the authority each is read against inside the file:
+
+| literal | value | authority |
+|---------|-------|-----------|
+| `CALL_STATUSES` | `{"succeeded","truncated","failed"}` | `20260911_0003_open_items.py` → `ck_model_call_status`, parsed out of the SQL and compared |
+| `STATUSES_THAT_ANSWERED` | `{"succeeded","truncated"}` | `20260915_0005_truncated_call_status.py` → `ck_model_call_truncated_has_response`, asserted as an exact SQL string |
+| non-negative tokens | `>= 0` | `20260910_0002_pc01_schema.py` → `ck_model_call_tokens`, asserted as exact SQL strings |
+| cost rendering | `0.00000123` stays `0.00000123` | 246 input tokens at the lock's 5.0 USD/Mtok; at 2dp it renders `0.0` and the call looks free |
+| `cost_basis` default | `"estimated"` | the rule itself |
+
+Each refusal is asserted by the text of *its own* message — `"succeeded|truncated|failed"`,
+`"claims the provider answered but carries no"`, `"negative token count"` — so a test cannot
+pass because a different one of the three checks fired.
+
+| mutation | this file |
+|----------|-----------|
+| PV-01 closed-vocabulary refusal disabled | RED — `test_a_status_outside_the_closed_vocabulary_is_refused[partial]` |
+| PV-02 answered-needs-checksum refusal disabled | RED — `...must_carry_a_response_checksum[succeeded]` |
+| PV-03 negative-token refusal disabled | RED — `test_a_negative_token_count_is_refused[-1-200]` |
+| PV-04 `truncated` dropped from `_STATUSES_THAT_ANSWERED` | RED — `...must_carry_a_response_checksum[truncated]` |
+| PV-05 `CALL_STATUSES` widened with `"partial"` | RED — `...outside_the_closed_vocabulary_is_refused[partial]` |
+| PV-05b `CALL_STATUSES` narrowed, dropping `truncated` | RED — `test_each_status_the_database_admits_is_constructible[truncated]` |
+| PV-08 `round(cost, 8)` → `round(cost, 2)` | RED — `test_the_record_renders_cost_to_eight_decimal_places` |
+| PV-09 `cost_basis` default → `"reported"` | RED — `test_cost_basis_defaults_to_estimated_not_reported` |
+| PV-10 `as_dict` hard-codes `"succeeded"` | RED — `test_the_rendered_record_carries_the_status_verbatim` |
+
+PV-05 and PV-05b redden in opposite directions — widening the vocabulary and narrowing it are
+caught by different tests — so the set is pinned, not merely bounded on one side.
