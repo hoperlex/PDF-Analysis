@@ -452,3 +452,47 @@ asserts the four `reason` values form exactly the expected set, so no one of the
 deleted and covered by another firing.
 
 All 14 mutations RED against this file, each on the test that names the rule.
+
+## Guard 6 — `tests/integration/analysis/test_status_policy_and_result_shape.py`
+
+43 tests. Covers the dispatch's "fail-closed status mapping" question, the registry's
+contract-identity refusal, and the `ArtifactRef` contract shape.
+
+**The status mapping answer is split.** `test_fail_closed.py` covers the two mappings the
+runner *produces* — a missing input and a missing output are both `failed` — and it asserts
+the catalog code *and* the `reason`, so RN-03, RN-04, RN-08 and RN-09 all redden. That half
+is in good order. What nothing covered is `assert_status_allowed`, which the runner's own
+docstring says exists "so that anything that ever tries to is refused at the boundary rather
+than trusted because the runner is believed not to". Disabling either branch, or deleting the
+call from `_result_for` entirely, was green.
+
+Literals pinned against `contracts/analysis/v1/stage-registry.json`, read in the file:
+`contract` = `"auditmanager.analysis.stage_registry"`, `contract_version` =
+`"1.0.0-draft.1"`, and the three preparation stages' `skip_allowed`/`partial_allowed` both
+`false` while `text_analysis` is `partial_allowed: true`, `skip_allowed: false`.
+
+That last asymmetry is load-bearing: `test_text_analysis_may_report_partial_but_still_may_not_be_skipped`
+is what makes the two branches distinguishable. Two mutations that cross-wire them —
+the skip branch reading `partial_allowed` (RN-01b) and the partial branch reading
+`skip_allowed` (RN-02b) — are both caught by it, and neither is caught by a test that only
+checks the three preparation stages, since those have both flags false.
+
+| mutation | this file |
+|----------|-----------|
+| RN-01 skip branch disabled | RED |
+| RN-02 partial branch disabled | RED |
+| RN-01b skip branch reads `partial_allowed` | RED |
+| RN-02b partial branch reads `skip_allowed` | RED |
+| RN-01c `reason` → `"status_not_allowed"` | RED |
+| RN-02c `reason` → `"status_not_allowed"` | RED |
+| RN-11 guard also refuses `SUCCEEDED` | RED (the negative half) |
+| RG-01 contract-identity refusal disabled | RED |
+| RG-03 `reason="unknown_stage"` changed | RED |
+| RS-02 artifact role pattern → `^.*$` | RED |
+| RS-03 sha256 pattern → `^.*$` | RED |
+| RS-04 blob id pattern → `^.*$` | RED |
+| RS-05 `size_bytes >= 0` disabled | RED |
+| RS-07 `to_document` grows a `bucket` field | RED |
+
+RN-11 is there because a guard that refuses *everything* would also pass every
+refusal-side test. The `SUCCEEDED`/`FAILED` cases pin the other side.
