@@ -454,3 +454,10 @@ touched.
 Recorded because it is the cheapest possible illustration of §9's rule: the difference
 between "another session is interfering" and "this lane left something behind" cost one
 command, and guessing either way would have been wrong.
+
+## Elapsed
+
+**48 minutes wall-clock**, 2026-09-16 09:39:53Z to 10:28:27Z, on a host running five wave
+sessions in parallel. Of that, roughly 20 minutes is `make gate` and the battery re-run: the
+targeted screen suite is 12s and the escalation suite 40s, which is what made 37 mutations
+affordable. Constraint: `rm -rf /root/w10fnd-mut` when this branch is done with.
