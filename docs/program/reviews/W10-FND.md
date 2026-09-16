@@ -354,19 +354,27 @@ better and cost four minutes.
 
 ## Summary
 
-**27 rules mutated across `findings/**`, `decisions/**` and `exports/**`. 18 reddened. 9
-did not.** Of the nine: **6 were unreddenable and reachable and now have guards**, and
-**3 are unreddenable by construction and were reported with the argument rather than
-given a test.**
+**37 rules mutated across `findings/**`, `decisions/**` and `exports/**`. 24 reddened. 13
+did not.** Of the thirteen: **9 were unreddenable and reachable and now have guards**, **3
+are unreddenable by construction** and were reported with the argument rather than given a
+test, and **1** is a green that is really a product defect (E12, the download name) and is
+deliberately left unguarded because a test here could only pin a value the system does not
+use.
 
-| module | mutated | reddened | guarded now | by construction |
-|---|---|---|---|---|
-| `findings/grounding.py` | 17 | 13 | 4 | — |
-| `findings/terminal.py` | 3 | 1 | 2 | — |
-| `findings/publication.py` | 2 | 2 | — | — |
-| `findings/queries.py` | 2 | 1 | — | 1 (Q01) |
-| `exports/**` | 13 | 9 | 3 | 2 (E07, E10) |
-| `decisions/**` | 0 — read only; no owned write path | — | — | — |
+| module | mutated | reddened | green | guarded now | by construction | reported as defect |
+|---|---|---|---|---|---|---|
+| `findings/grounding.py` | 17 | 13 | 4 | 4 | — | — |
+| `findings/terminal.py` | 3 | 1 | 2 | 2 | — | — |
+| `findings/publication.py` | 2 | 2 | 0 | — | — | — |
+| `findings/queries.py` | 2 | 1 | 1 | — | 1 (Q01) | — |
+| `exports/**` | 13 | 7 | 6 | 3 | 2 (E07, E10) | 1 (E12) |
+| `decisions/**` | 0 — read only; no owned write path | — | — | — | — | — |
+| **total** | **37** | **24** | **13** | **9** | **3** | **1** |
+
+A tenth guard was added that no mutation produced: nothing asserted that the **database**
+refuses a reason outside the five-value vocabulary, or that the gate's vocabulary and the
+migration's CHECK still agree. That came from reading, and from the stale docstring that
+claimed the constraint did not exist.
 
 **33 tests added** across four files, every one of them mutated red and green, with expected
 values written as literals and cross-checked against an authority outside the module under
@@ -381,8 +389,14 @@ be deleted. The lesson had been learned for one constant in that file and not ap
 one next to it.
 
 The second is that **the grounding gate itself is in good shape**. Thirteen of its seventeen
-rules redden, most of them on a single named test, and the three that did not are about the
-*determinism of the diagnostic* rather than about whether an ungrounded row can be written.
-`W5-CERT` and `W6-CERT` were right about the conclusion they drew; what they could not say is
-now said rule by rule.
+rules redden, most of them on a single named test, and the four that did not are about the
+*determinism of the diagnostic* and the *default block index* rather than about whether an
+ungrounded row can be written. `W5-CERT` and `W6-CERT` were right about the conclusion they
+drew; what they could not say is now said rule by rule.
 
+**A correction made in the course of writing this.** The first version of this summary said
+27 mutations, 18 red, and credited `exports/**` with 9 reds. Recounting from the batch tables
+above gives 37, 24 and 7. The figures here are derived from the per-batch rows and not from
+memory; the earlier ones were written from memory and were wrong in three places. Recorded
+rather than quietly amended, because a wave that files a number it did not recount is the
+thing this programme keeps finding.
