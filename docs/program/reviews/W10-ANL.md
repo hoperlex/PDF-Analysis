@@ -600,3 +600,71 @@ failed run and a `KeyError` on a successful one.
 Owning tree: `src/auditmanager/analysis/text/stage.py`. Not repaired — `W10-ANL` writes tests.
 `test_cost_basis_reaches_the_record_but_not_the_success_path_metrics` pins the behaviour as
 found, so a change to it is deliberate.
+
+## Guard 9 — `tests/integration/analysis/test_ungrounded_reason_vocabulary.py`
+
+19 tests. The `ungrounded_reason` vocabulary and the unresolved-reason rules.
+
+The offset arithmetic in `anchors.py` is well guarded. The **vocabulary is not**: `REASON_ABSENT`
+and `REASON_DIFFERENT_PAGE` could be changed to any string at all and nothing noticed, even
+though the module's docstring says they are "the `ungrounded_reason` vocabulary of
+`P02_SEAMS.md` section 5.1, reused so a diagnostic written here reads the same as one written
+by the grounding gate".
+
+Authority: migration `0003_open_items`'s `ck_finding_observation_ungrounded_reason` CHECK,
+parsed out of the SQL and compared against the pinned five-value literal set, plus the same
+five values asserted present in `P02_SEAMS.md`. The migration's own comment records that the
+field "declared a five-value vocabulary and enforced none of it" until that constraint was
+added — so a reason string this module invents outside the set cannot be persisted.
+
+| mutation | this file |
+|----------|-----------|
+| AN-05 slice-back check disabled | **GREEN — but see AN-09b** |
+| AN-06 `page.contains` check disabled | **GREEN — by construction, below** |
+| AN-07 unknown page → `DIFFERENT_PAGE` | RED |
+| AN-09 case-folded candidate added to the retry list | **GREEN — inert, below** |
+| AN-09b resolution made case-insensitive | RED |
+| AN-09c NFKC normalization applied to model output | RED |
+| AN-09d whitespace collapsed in the candidate | RED |
+| AN-10 `BlockIndex` ambiguity returns a block | RED |
+| AN-11 `BlockIndex` containment upper bound dropped | RED |
+| AN-12 `REASON_DIFFERENT_PAGE` value changed | RED |
+| AN-13 `REASON_ABSENT` value changed | RED |
+| AN-16 `REASON_SPAN_OUTSIDE_PAGE` value changed | RED |
+| AN-17 `REASON_LENGTH_MISMATCH` value changed | RED |
+| AN-01, AN-02, AN-08, AN-14, AN-15 | RED (already guarded elsewhere too) |
+
+**AN-09 was a third inert mutation of mine.** Adding `lowered = quote.strip().lower()` to the
+candidate list yields nothing new for an already-lowercase quote, and for an upper-cased one
+the lowered form still is not in the page text. Replaced with AN-09b/c/d, which change the
+search itself; all three redden.
+
+**AN-09b is why the file asserts the `reason` and not just "did not resolve".** A
+case-insensitive `find` *does* locate the quotation — and is then caught by the slice-back
+check, which returns `span_length_mismatch` rather than `quotation_absent`. Asserting only
+`isinstance(outcome, UnresolvedAnchor)` passed under that mutation. Asserting
+`reason == "quotation_absent"` distinguishes "never found it" from "found it and then
+noticed", and that is the whole difference. **This also shows AN-05 is not dead code**: the
+slice-back check is what stands between a loosened search and a fabricated anchor.
+
+### Unreddenable by construction: `anchors.resolve_anchor`'s two post-find checks
+
+```python
+if text_layer.slice(char_start, char_end) != candidate:   # AN-05
+    return UnresolvedAnchor(..., reason=REASON_LENGTH_MISMATCH)
+if not page.contains(char_start, char_end):               # AN-06
+    return UnresolvedAnchor(..., reason=REASON_SPAN_OUTSIDE_PAGE)
+```
+
+With the arithmetic *as written*, neither can fire. `offset_in_page = page.text.find(candidate)`
+means the candidate sits at `page.char_start + offset_in_page` in the document-global
+sequence, and `load_text_layer` has already proved the pages are contiguous, gapless,
+zero-based and that each span's length equals its text's length in code points — so the slice
+is the candidate and the interval is inside the page, necessarily.
+
+They are reachable only by (a) breaking the arithmetic, which AN-01 to AN-04 and AN-09b
+already redden, or (b) constructing a `TextLayer` directly with pages `load_text_layer` would
+refuse. I did not write (b): it would assert behaviour over a shape the loader forbids, which
+is the same category as the registry `status_policy` defaults. The checks earn their keep as
+defence against a future edit to the arithmetic, and the mutations that represent that edit
+are all red. Reported, not faked.
