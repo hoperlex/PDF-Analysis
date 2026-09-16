@@ -226,3 +226,55 @@ Red/green, each mutation run against this file alone with the copy proven import
 
 LK-05 and LK-06 already reddened under the pre-existing suites; LK-05 is kept because it also
 pins the rate arithmetic against the lock. LK-07 and LK-08 were green everywhere before.
+
+## Guard 2 — `tests/integration/analysis/test_profile_identity_is_pinned.py`
+
+11 tests. The profile and prompt-bundle lock the dispatch named.
+
+**A pre-existing instance of the wave-9 defect, in a tree I do not own.**
+`tests/integration/analysis_text/test_profile_and_artifact.py::test_the_profile_is_resolved_by_a_pinned_identity`
+does not pin the identity:
+
+```python
+resolved = resolve_profile(AR_TEXT_PROFILE.analysis_profile_id)
+assert resolved is AR_TEXT_PROFILE
+assert str(AR_TEXT_PROFILE.analysis_profile_id).startswith("ap_")
+```
+
+It feeds the module's own constant back into the module and asserts the answer is the
+module's own object — both sides move together — and `startswith("ap_")` holds for any ULID.
+`test_the_identities_are_stable_across_resolutions` compares `resolve_profile()` with itself
+and has the same property. Changing the pinned ULID (PR-01) is green across all three
+suites. Left unrepaired; it belongs to whoever owns `tests/integration/analysis_text/`.
+
+Literals pinned, and their authority:
+
+| literal | value | authority |
+|---------|-------|-----------|
+| `ANALYSIS_PROFILE_ID` | `"ap_01M25P3TH08VVTTGJRXYBZZ7RP"` | **this file** — see below |
+| `PROMPT_BUNDLE_ID` | `"pb_01M25P3TH0PDQYVKTRQFEM0CYS"` | **this file** |
+| `PROFILE_VERSION` | `"1.0.0"` | this file |
+| `DISCIPLINE` | `"AR"` | this file |
+| `STAGE_ID` | `"text_analysis"` | `contracts/analysis/v1/stage-registry.json` |
+| `CATEGORIES` | `("internal_contradiction", "explicit_placeholder")` | `db/migrations/versions/20260910_0002_pc01_schema.py` → `FINDING_CATEGORIES`, read and compared in `test_the_pinned_categories_are_the_migration_s_finding_categories` |
+
+There is **no external authority for the two ULIDs**. `P02_SEAMS.md` §4.7 shows
+`pb_01M2545JSD15ETSNNV904X991R`, which is an illustrative example in a document body and not
+this bundle, and no fixture carries either identity. `ADR-0011` requires the identity to be
+immutable, so the literal written in the test *is* the pin: the value may never change, and a
+change to it must now be a deliberate edit to this file. That is stated in the file's
+docstring rather than left implicit.
+
+| mutation | this file |
+|----------|-----------|
+| PR-01 `ANALYSIS_PROFILE_ID` one character off | RED — `test_the_profile_identity_is_the_pinned_literal` |
+| PR-02 `resolve_profile` unknown-identity refusal disabled | RED — `test_an_unregistered_profile_identity_is_refused` |
+| PR-04 `PROFILE_VERSION` → `"2.0.0"` | RED — `test_the_profile_declares_the_pinned_version_discipline_and_stage` |
+| PR-05 `DISCIPLINE` → `"XX"` | RED — same |
+| PR-06 `PROMPT_BUNDLE_ID` one character off | RED — `test_the_prompt_bundle_identity_is_the_pinned_literal` |
+| PR-07 `CATEGORIES` widened with a third member | RED — `test_the_profile_declares_exactly_the_two_pinned_categories` |
+| PR-08 profile bound to `"block_analysis"` instead of `"text_analysis"` | RED — `test_the_profile_declares_the_pinned_version_discipline_and_stage` |
+
+Writing the categories as a literal caught **my own** wrong guess: I wrote
+`("internal_contradiction", "unsupported_claim")` from memory and the test failed. Had I
+imported `CATEGORIES` from the module, it would have passed and checked nothing.
