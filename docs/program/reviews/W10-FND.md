@@ -147,6 +147,53 @@ wave-9 mistake still live in the tree.
 * **E12 — see the product defect below.** `_FILENAME_TEMPLATE` and `CsvExport.filename` have
   no consumer, and the live download name disagrees with them.
 
+### Batch 4 — `findings/publication.py`, `findings/queries.py`, `decisions/**`
+
+| id | rule mutated | mutation (line read back) | result |
+|----|--------------|---------------------------|--------|
+| PUB01 | `finding_uid` is fresh per published observation (§5.2) | one uid allocated before the loop and reused for every grounded observation | **red** — 25 failed, 36 errors |
+| PUB02 | evidence rows are written only for a grounded observation | `if verdict.grounded:` → `if True:` | **red** — 3 failed, 31 errors |
+| Q01 | `finding_by_uid` filters on `o.grounded` | `AND o.grounded` → `AND TRUE` | **GREEN(broad)** — 335 passed |
+| Q02 | `diagnostics()` selects only `finding_uid IS NULL` rows | the predicate dropped | **red** — 2 failed |
+
+* **PUB01 answers the brief's question directly.** "`finding_uid` allocation — fresh per
+  publication. What notices if it is not?" The `finding` table's primary key notices first,
+  on the second `INSERT INTO finding`, and the suite reddens in 25 places besides. Nothing
+  needs to be added. The first attempt at this mutation referenced an undefined name and
+  reddened by `NameError`, which would have been a worthless green-to-red: the faithful
+  two-line version, allocating one real uid before the loop, is what the row above records.
+
+* **Q01 — unreddenable by construction, and the module's own docstring overstates it.**
+  `finding_by_uid`'s docstring says the `grounded` predicate "is the same one
+  `published_findings` applies, so a diagnostic observation is unreachable here". But
+  `_FINDING_BY_UID` also reads `JOIN finding f ON f.finding_uid = o.finding_uid`, and the
+  migration's CHECK pins `grounded = (finding_uid IS NOT NULL)`. Any row surviving that join
+  has a non-null `finding_uid`, so the CHECK makes `grounded` true for it; the predicate can
+  never exclude a row the join admits. This is the same over-determination
+  `exports/query.py` already documents for its own joins, and it is worth recording in the
+  same terms: a reviewer should not read `AND o.grounded` as the point of enforcement. **No
+  test written** — making the predicate observable would require violating the CHECK, which
+  is `db/migrations`' tree.
+
+**The decisions ledger and projection were swept by reading, not by mutation, and here is
+why.** The brief names the ledger and the projection among the places to look first, and
+puts `src/auditmanager/decisions/**` in the read scope — but the owned write paths are
+`tests/integration/findings/**` and `tests/integration/exports/**` only.
+`tests/integration/decisions/**` is **not** owned, so a guard for a ledger rule has no home
+in this session. That is an ownership gap in the dispatch, not a licence to widen scope.
+
+What reading establishes: the brief asks "Is the projection's *agreement with the stream*
+asserted, or only its shape?" — it is asserted.
+`tests/integration/decisions/test_decision_ledger.py:157`
+(`test_the_rebuild_from_the_ledger_equals_the_stored_projection`) and `:304` both compare
+`rebuild_current_verdict(...).comparable()` against the view's own row, and
+`rebuild_current_verdict` folds `expert_decision_event` while the view is computed by
+PostgreSQL, so the comparison cannot pass by comparing a cache with itself. The ledger's
+refusing branches — `revoke`, an event type outside the journey, a comment with no comment,
+an empty `author_label`, an unknown finding, an observation that is not the finding's own —
+each have a named test. Those names are evidence of intent, not of load-bearingness; the
+mutation that would settle it belongs to whoever owns `tests/integration/decisions/**`.
+
 ## Guards written
 
 All nine mutations below were applied to a copy of `src/` outside the worktree, with
@@ -254,53 +301,6 @@ string — verified directly. The claim was true when written and has been false
 `0003`. The docstring is corrected in place, and the correction is backed by a test rather
 than asserted in prose. This is a comment in a path this session owns; no assertion in that
 class was touched.
-
-### Batch 4 — `findings/publication.py`, `findings/queries.py`, `decisions/**`
-
-| id | rule mutated | mutation (line read back) | result |
-|----|--------------|---------------------------|--------|
-| PUB01 | `finding_uid` is fresh per published observation (§5.2) | one uid allocated before the loop and reused for every grounded observation | **red** — 25 failed, 36 errors |
-| PUB02 | evidence rows are written only for a grounded observation | `if verdict.grounded:` → `if True:` | **red** — 3 failed, 31 errors |
-| Q01 | `finding_by_uid` filters on `o.grounded` | `AND o.grounded` → `AND TRUE` | **GREEN(broad)** — 335 passed |
-| Q02 | `diagnostics()` selects only `finding_uid IS NULL` rows | the predicate dropped | **red** — 2 failed |
-
-* **PUB01 answers the brief's question directly.** "`finding_uid` allocation — fresh per
-  publication. What notices if it is not?" The `finding` table's primary key notices first,
-  on the second `INSERT INTO finding`, and the suite reddens in 25 places besides. Nothing
-  needs to be added. The first attempt at this mutation referenced an undefined name and
-  reddened by `NameError`, which would have been a worthless green-to-red: the faithful
-  two-line version, allocating one real uid before the loop, is what the row above records.
-
-* **Q01 — unreddenable by construction, and the module's own docstring overstates it.**
-  `finding_by_uid`'s docstring says the `grounded` predicate "is the same one
-  `published_findings` applies, so a diagnostic observation is unreachable here". But
-  `_FINDING_BY_UID` also reads `JOIN finding f ON f.finding_uid = o.finding_uid`, and the
-  migration's CHECK pins `grounded = (finding_uid IS NOT NULL)`. Any row surviving that join
-  has a non-null `finding_uid`, so the CHECK makes `grounded` true for it; the predicate can
-  never exclude a row the join admits. This is the same over-determination
-  `exports/query.py` already documents for its own joins, and it is worth recording in the
-  same terms: a reviewer should not read `AND o.grounded` as the point of enforcement. **No
-  test written** — making the predicate observable would require violating the CHECK, which
-  is `db/migrations`' tree.
-
-**The decisions ledger and projection were swept by reading, not by mutation, and here is
-why.** The brief names the ledger and the projection among the places to look first, and
-puts `src/auditmanager/decisions/**` in the read scope — but the owned write paths are
-`tests/integration/findings/**` and `tests/integration/exports/**` only.
-`tests/integration/decisions/**` is **not** owned, so a guard for a ledger rule has no home
-in this session. That is an ownership gap in the dispatch, not a licence to widen scope.
-
-What reading establishes: the brief asks "Is the projection's *agreement with the stream*
-asserted, or only its shape?" — it is asserted.
-`tests/integration/decisions/test_decision_ledger.py:157`
-(`test_the_rebuild_from_the_ledger_equals_the_stored_projection`) and `:304` both compare
-`rebuild_current_verdict(...).comparable()` against the view's own row, and
-`rebuild_current_verdict` folds `expert_decision_event` while the view is computed by
-PostgreSQL, so the comparison cannot pass by comparing a cache with itself. The ledger's
-refusing branches — `revoke`, an event type outside the journey, a comment with no comment,
-an empty `author_label`, an unknown finding, an observation that is not the finding's own —
-each have a named test. Those names are evidence of intent, not of load-bearingness; the
-mutation that would settle it belongs to whoever owns `tests/integration/decisions/**`.
 
 ## What in the brief turned out to be false or incomplete
 
