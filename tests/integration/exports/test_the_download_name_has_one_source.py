@@ -33,9 +33,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import auditmanager
 from auditmanager.exports import CsvExport
 
-SRC = Path(__file__).resolve().parents[3] / "src/auditmanager"
+#: Derived from the imported package, never from this file's own location. Resolving
+#: the source tree from ``__file__`` here would read the checkout even when the suite
+#: runs against a mutation copy on ``pythonpath``, so a tree that still carried the dead
+#: property would pass. ``make mutation-copy`` says this in as many words: anything that
+#: reaches a directory by a path not derived from ``auditmanager.__file__`` reads the
+#: pristine tree.
+SRC = Path(auditmanager.__file__).resolve().parent
 
 #: The template the dead property used, as a literal. Not imported -- it no longer
 #: exists, and a test that imported it could not fail by it coming back.

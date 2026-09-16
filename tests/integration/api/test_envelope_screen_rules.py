@@ -30,6 +30,8 @@ from pathlib import Path
 
 import pytest
 
+import auditmanager
+
 from auditmanager.shared.errors import (
     ErrorCode,
     UnsafeDetailKey,
@@ -315,7 +317,11 @@ class TestNoCallSiteClaimsDetailsAreUnscreened:
     the boundary asserts the negative.
     """
 
-    API_TREE = Path(__file__).resolve().parents[3] / "src/auditmanager/api"
+    #: Derived from the imported package, never from this file's own location. A path
+    #: built from ``__file__`` here would read the checkout even when the suite is run
+    #: against a mutation copy on ``pythonpath`` -- so the guard would be green against
+    #: a tree that still carries the defect, which is the one way it must not fail.
+    API_TREE = Path(auditmanager.__file__).resolve().parent / "api"
 
     #: The caller-controlled text each of the two sites is refusing when its comment
     #: speaks. `/etc/passwd` is `B6`'s own property name; `file` is the repeated part.
