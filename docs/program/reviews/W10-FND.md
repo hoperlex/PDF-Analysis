@@ -147,3 +147,49 @@ wave-9 mistake still live in the tree.
 * **E12 — see the product defect below.** `_FILENAME_TEMPLATE` and `CsvExport.filename` have
   no consumer, and the live download name disagrees with them.
 
+## Guards written
+
+All nine mutations below were applied to a copy of `src/` outside the worktree, with
+`contracts/`, `docs/`, `fixtures/`, `tools/` and `db/` symlinked in, and every run printed
+`auditmanager.__file__` resolving under the copy before the result was read.
+
+`tests/integration/findings/test_gate_rules_are_load_bearing.py` — 10 tests
+
+| rule | mutation | red | literal pinned | authority |
+|------|----------|-----|----------------|-----------|
+| `ObservationVerdict.reason` is the first failing item's, in evidence order | `for verdict in reversed(self.evidence_verdicts)` | 1 failed | `"span_length_mismatch"` / `"span_outside_page"`, asserted for both orderings of the same two items | P02 §5.1 |
+| `failing_evidence_ordinal` is the first failing item's | same, on the other property | 1 failed | `failing_evidence_ordinal == 0` with both items failing; `== 1` with the first item resolving | P02 §5.1 |
+| `EvidenceVerdict` is resolved exactly when it carries no reason | `__post_init__` body → `return` | 2 failed | the message string, written out | the migration's `grounded = (ungrounded_reason IS NULL)` CHECK |
+| an omitted `block_index` still fails check 3 closed | `BlockIndex.empty()` → an index admitting every block | 1 failed, both controls green | `reason_counts() == {"span_outside_block": 1}` | P02 §5.1 fail-closed |
+
+`tests/integration/findings/test_terminal_rules_are_load_bearing.py` — 7 tests
+
+| rule | mutation | red | literal pinned | authority |
+|------|----------|-----|----------------|-----------|
+| `TERMINALS_FROM_VALIDATING` names the three terminals PC-01 can reach | `{"published", "cancelled"}` | 3 failed | `{"published", "partial", "failed"}` | `contracts/domain/v1/state-machines.json`, read from the test's own path, plus all 128 status combinations of `select_terminal` |
+| `codes.discard(None)` — a silent stage does not veto a reported code | `codes.discard(None)` → `pass` | 2 failed | `"dependency_unavailable"` | the error catalog's retryable/not-retryable split, which is the stated reason for the line |
+
+`tests/integration/findings/test_ungrounded_vocabulary_is_enforced.py` — 8 tests
+
+| rule | mutation | red | literal pinned | authority |
+|------|----------|-----|----------------|-----------|
+| the gate's vocabulary is the migration's vocabulary | a sixth enum value | 1 failed | the five strings | the `IN (...)` list of `ck_finding_observation_ungrounded_reason` in `0003_open_items`, parsed from the migration |
+| the database refuses a value outside it | *(see below)* | — | the constraint **name** in the refusal, not merely `IntegrityError` | the constraint itself |
+
+The database half cannot be reddened by mutating `src/`, so it was shown to discriminate
+directly: with the constraint installed the row is refused and the refusal names
+`ck_finding_observation_ungrounded_reason`; with the constraint dropped inside a
+rolled-back transaction the **identical** row is accepted. Nothing was committed and the
+constraint was verified present afterwards. A first attempt at that probe was itself
+refused — by the `finding_observation_id` format check, because the probe used a
+hand-written identifier. That is the "field is not reason" trap in miniature, and it is why
+the guard asserts the constraint's name.
+
+`tests/integration/exports/test_frozen_column_list.py` — 8 tests
+
+| rule | mutation | red | literal pinned | authority |
+|------|----------|-----|----------------|-----------|
+| the seventeen columns, in order | columns 7 and 8 swapped | 4 failed | all 17 names, and the header line as one string | `P02_SEAMS.md` §6 table, parsed; `web/src/shared/api/csv-columns.ts`, parsed |
+| the header is written for an empty row list | `if rows:` around `writer.writerow` | 1 failed | `BOM + header + b"\r\n"`, whole | `render_csv`'s stated reason |
+| `SORT_KEY` names the frozen three-part key | `("evidence_ordinal",)` | 2 failed | the three names | `P02_SEAMS.md` §6 "Sort key", plus a behavioural check that real rows ascend on it |
+
