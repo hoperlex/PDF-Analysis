@@ -258,6 +258,14 @@ the guard asserts the constraint's name.
   input reaches the default. Flipping it to `True` changes nothing observable. Guarding it
   would mean asserting the behaviour of an unreachable branch.
 
+* **Q01 — `finding_by_uid`'s `AND o.grounded` predicate.** `_FINDING_BY_UID` also reads
+  `JOIN finding f ON f.finding_uid = o.finding_uid`, and migration `0002` pins
+  `grounded = (finding_uid IS NOT NULL)` with a CHECK. Every row surviving that join has a
+  non-null `finding_uid`, so the CHECK makes `grounded` true for it: the predicate cannot
+  exclude a row the join admits. Replacing it with `AND TRUE` left 335 tests green. Making
+  it observable would require violating the CHECK, which the database forbids. Worth noting
+  because the function's own docstring presents the predicate as the thing doing the work.
+
 * **E10 — `LEFT JOIN finding_current_verdict` versus `JOIN`.** The view is defined in
   `0002_pc01_schema` as `FROM finding f LEFT JOIN LATERAL (...)`, so it emits exactly one
   row per `finding` row and never fewer. `_EXPORT_ROWS` has already inner-joined `finding`,
