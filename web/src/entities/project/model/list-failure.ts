@@ -8,11 +8,20 @@
  */
 
 import type { ErrorCode } from '@/shared/api';
-import { ApiError, ApiFailure, TransportError, UnrecognizedApiError } from '@/shared/api';
+import {
+  AUTHENTICATION_REQUIRED_DETAIL,
+  ApiError,
+  ApiFailure,
+  PERMISSION_DENIED_DETAIL,
+  TransportError,
+  UnrecognizedApiError,
+} from '@/shared/api';
 
 export type ProjectListFailureKind =
   | 'request_invalid'
   | 'dependency_unavailable'
+  | 'not_authenticated'
+  | 'not_permitted'
   | 'server_error'
   | 'unrecognized'
   | 'transport'
@@ -44,6 +53,20 @@ export function classifyProjectListFailure(error: unknown): ProjectListFailure {
           ...base,
           kind: 'dependency_unavailable',
           title: 'A dependency the project list needs is unavailable.',
+        };
+      case 'authentication_required':
+        return {
+          ...base,
+          kind: 'not_authenticated',
+          title: 'Reading the project list is not authorized.',
+          detail: AUTHENTICATION_REQUIRED_DETAIL,
+        };
+      case 'permission_denied':
+        return {
+          ...base,
+          kind: 'not_permitted',
+          title: 'You are not permitted to read the project list.',
+          detail: PERMISSION_DENIED_DETAIL,
         };
       default:
         return { ...base, kind: 'server_error', title: 'The project list could not be read.' };

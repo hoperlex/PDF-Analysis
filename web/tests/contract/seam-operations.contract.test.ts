@@ -180,10 +180,38 @@ describe('the error catalog', () => {
     expect(ERROR_CODE_VALUES).toContain('permission_denied');
   });
 
-  it('narrows to the ten codes a PC-01 screen must render, all of them in the catalog', () => {
-    expect(PC01_ERROR_CODES).toHaveLength(10);
+  it('narrows to the twelve codes a PC-01 screen must render, all of them in the catalog', () => {
+    expect(PC01_ERROR_CODES).toHaveLength(12);
     for (const code of PC01_ERROR_CODES) {
       expect(ERROR_CODE_VALUES as readonly string[]).toContain(code);
+    }
+  });
+
+  it('includes both authorization codes, because the document declares 401 and 403 on every operation', () => {
+    expect(PC01_ERROR_CODES).toContain('authentication_required');
+    expect(PC01_ERROR_CODES).toContain('permission_denied');
+    // Read off the frozen document rather than asserted from memory: if a later reseal
+    // dropped the security scheme, this would stop agreeing with the list above. The
+    // document is re-read here in the same style the parameter check below uses, because
+    // an operation is identified by carrying an `operationId`, not by its HTTP verb.
+    const contract = JSON.parse(readText(CONTRACT_PATH)) as {
+      paths: Record<string, Record<string, unknown>>;
+    };
+    const withResponses: Array<[string, string[]]> = [];
+    for (const operations of Object.values(contract.paths)) {
+      for (const operation of Object.values(operations)) {
+        const typed = operation as {
+          operationId?: string;
+          responses?: Record<string, unknown>;
+        };
+        if (!typed.operationId) continue;
+        withResponses.push([typed.operationId, Object.keys(typed.responses ?? {})]);
+      }
+    }
+    expect(withResponses).toHaveLength(12);
+    for (const [operationId, statuses] of withResponses) {
+      expect(statuses, `${operationId} declares no 401`).toContain('401');
+      expect(statuses, `${operationId} declares no 403`).toContain('403');
     }
   });
 

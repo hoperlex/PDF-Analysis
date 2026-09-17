@@ -19,13 +19,22 @@
  */
 
 import type { ErrorCode } from '@/shared/api';
-import { ApiError, ApiFailure, TransportError, UnrecognizedApiError } from '@/shared/api';
+import {
+  AUTHENTICATION_REQUIRED_DETAIL,
+  ApiError,
+  ApiFailure,
+  PERMISSION_DENIED_DETAIL,
+  TransportError,
+  UnrecognizedApiError,
+} from '@/shared/api';
 
 /** The distinguishable outcomes of a failed upload. */
 export type UploadFailureKind =
   | 'unsupported_input'
   | 'checksum_mismatch'
   | 'dependency_unavailable'
+  | 'not_authenticated'
+  | 'not_permitted'
   | 'duplicate_intent'
   | 'in_progress'
   | 'stale_intent'
@@ -140,6 +149,24 @@ function fromApiError(error: ApiError): UploadFailure {
           error.envelope.message +
           classifiers(error.details, ['command_type']) +
           ' It is not guessed. Choose the file again to start a new upload.',
+      };
+    case 'authentication_required':
+      return {
+        ...base,
+        kind: 'not_authenticated',
+        presentation: 'error',
+        title: 'Uploading is not authorized.',
+        detail: AUTHENTICATION_REQUIRED_DETAIL,
+      };
+    case 'permission_denied':
+      return {
+        ...base,
+        kind: 'not_permitted',
+        presentation: 'error',
+        title: 'You are not permitted to upload to this project.',
+        detail:
+          PERMISSION_DENIED_DETAIL +
+          classifiers(error.details, ['aggregate_type', 'required_capability']),
       };
     case 'not_found':
       return {

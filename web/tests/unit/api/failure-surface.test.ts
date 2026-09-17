@@ -81,15 +81,19 @@ describe('a code outside the catalog is not a catalog code', () => {
 });
 
 describe('the PC-01 subset is a subset, not the catalog', () => {
-  it('has ten codes and does not include a code with no PC-01 producer', () => {
-    expect(PC01_ERROR_CODES).toHaveLength(10);
+  it('has twelve codes and does not include a code with no PC-01 producer', () => {
+    expect(PC01_ERROR_CODES).toHaveLength(12);
     expect(isPc01ErrorCode('validation_failed')).toBe(true);
     expect(isPc01ErrorCode('dependency_unavailable')).toBe(true);
+    // The two `R-3` added. Since the seam went in front of all twelve operations, every
+    // PC-01 screen can receive either, so every PC-01 screen has to be able to render it.
+    expect(isPc01ErrorCode('authentication_required')).toBe(true);
+    expect(isPc01ErrorCode('permission_denied')).toBe(true);
     // `storage_integrity_error` is in the catalog and outside the PC-01 render subset.
     expect(isPc01ErrorCode('storage_integrity_error')).toBe(false);
   });
 
-  it('names a code the catalog also names, for each of its ten', () => {
+  it('names a code the catalog also names, for each of its twelve', () => {
     for (const code of PC01_ERROR_CODES) {
       expect([...ERROR_CODE_VALUES], `${code} is not a catalog code`).toContain(code);
     }

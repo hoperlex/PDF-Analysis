@@ -19,7 +19,13 @@
  * Gate A commit and is not `B8`'s to edit.
  */
 
-import { ApiError, ApiFailure, UnrecognizedApiError } from '@/shared/api';
+import {
+  ApiError,
+  ApiFailure,
+  UnrecognizedApiError,
+  authorizationDetail,
+  isAuthorizationErrorCode,
+} from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 
 export interface PresentFailureOptions {
@@ -39,6 +45,18 @@ export function presentFailure(error: unknown, options: PresentFailureOptions): 
       detail:
         'The server returned an error code this client does not recognize. Nothing was ' +
         'retried. Report the correlation id below.',
+      correlationId: error.correlationId,
+    };
+  }
+
+  if (error instanceof ApiError && isAuthorizationErrorCode(error.errorCode)) {
+    // No `onRetry`, whatever the caller passed. Both codes are `retryable: false` in the
+    // catalog, and the guard below would already drop the button — this branch states it
+    // rather than relying on that, because the reviewer reading this file should not have
+    // to derive "no retry" from a value fetched at runtime.
+    return {
+      title,
+      detail: authorizationDetail(error.errorCode),
       correlationId: error.correlationId,
     };
   }
