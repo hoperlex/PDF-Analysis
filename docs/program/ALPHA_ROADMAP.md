@@ -12,6 +12,11 @@ prerequisites, and nothing below is dispatchable until they exist.
 > because a decision whose objection has been deleted cannot be re-examined later — it can
 > only be re-argued from scratch.
 >
+> **Standing:** the ADRs are the primary source of truth. This file is a draft and a
+> recommendation, and where it conflicts with an ADR the ADR wins — a conflict found here is a
+> finding to report, never a licence to proceed. `T-1` is the example: it was written against
+> `ADR-0002` and lost.
+>
 > Two questions the owner answered with it: the frozen document stays the contract authority
 > and FastAPI conforms to it (**contract-first**), and the twelve operations are converted
 > **natively before the deploy**, not behind a shell that would have to be certified twice.
@@ -29,8 +34,10 @@ records verdicts, downloads the CSV; PostgreSQL and the S3 bucket live on that s
 containers with persistent volumes; one command wipes both, safely and reversibly, so the
 pilot's throwaway data does not become the production data by accident.
 
-**Not in this road:** multiple tenants, in-app authorization, retention, legal hold, HA, DR,
-backup rotation, job/attempt framework, remote workers, OCR. Every one stays where
+**Not in this road:** multiple tenants, user management and roles, retention, legal hold, HA,
+DR, backup rotation, job/attempt framework, remote workers, OCR. **Authorization is no longer
+on that list** — see `T-6`: the destination is a public application, so the seam lands now and
+only its implementation is deferred. Every one stays where
 `PROTOTYPE_PROFILE.md` §7 put it.
 
 The purpose is stated plainly, because it decides every trade-off below: **we stop judging
@@ -132,11 +139,40 @@ bucket names match the configured alpha instance, so it cannot be pointed at som
 a stale environment. `--dry-run` prints what it would delete. Each refusal gets a test that is
 shown able to fail — the rule this programme has paid for four times.
 
-**T-6 — authentication for the alpha is the proxy's job.** TLS plus one shared credential at
-the reverse proxy, no in-app AuthZ, no user model, no session. The assumption on record is a
-trusted internal network (`PROTOTYPE_PROFILE.md` §2), and an application-level identity model
-built before we know who the users are is the kind of guess this programme exists to avoid.
-This is written into the debt register the day it ships, not left implicit.
+**T-6 — the authorization seam lands in wave 13; the alpha's implementation of it is a static
+token.** Revised 2026-09-17 after the owner stated the destination: **a public application over
+HTTPS with authorization tokens.** Revision 1 put a shared secret at the proxy and no in-app
+authorization, reasoning from `PROTOTYPE_PROFILE.md` §2's trusted-internal-network assumption.
+That assumption is superseded — it describes a waypoint, not the shape — and the §2.5 rule
+about seams decides the rest.
+
+**Measured, not assumed** (`contracts/api/v1/openapi.json`, `contracts/domain/v1/error-codes.json`):
+
+- the contract declares **no `securitySchemes`**, no top-level `security`, and no operation
+  carries its own. Tokens are a contract change and a reseal of the frozen document;
+- but the catalog already carries `authentication_required` (401) and `permission_denied`
+  (403) in an `authorization` category, with `safe_detail_keys` of `aggregate_type` and
+  `required_capability`, and `not_found`'s own summary says a response "never reveals the
+  existence of a resource the caller may not see". **This contract was designed for an
+  authorized, multi-subject system and had that part left unfilled.** Adding it is completing a
+  design, not extending one.
+
+Therefore: **one reseal, while the API layer is already open.** Wave 13 adds `securitySchemes`
+to the contract, puts a single authorization dependency in front of all twelve operations, and
+wires the two codes that have been waiting. The alpha satisfies that dependency with one static
+token; the public version replaces the dependency's implementation with OIDC and touches
+neither the twelve operations nor the contract again. Doing it after wave 13 means reopening
+the API layer, reopening the contract, and regenerating the frontend client a second time.
+
+**One snag the reseal must settle, found in the tree rather than in a document:**
+`StoragePermissionDeniedError` already emits `permission_denied` when *our* S3 credentials are
+refused (`storage/errors.py:153`). If API authorization reuses that code, one 403 means two
+unrelated things — the caller lacks rights, or the server's own credential to the bucket was
+rejected — and an operator cannot tell them apart from the envelope. That is a code-catalog
+decision and it belongs to the contract's owner, not to this file.
+
+Still out of scope here: user management, roles, multi-tenancy. One subject with one token is
+not an identity model, and pretending otherwise is the guess §2.5 refuses.
 
 ## 4. Three waves and one certification
 
@@ -159,6 +195,12 @@ test client requires — note that this lock already carries an httpx-family pac
 stream reports what is actually resolvable rather than assuming a name. Every pin's licence
 is named in the diff; `OD-01` blocks copyleft, and nothing in this set should come close.
 FF-01 §2.8 makes this a single-owner task; §9 R-2 is the ruling it needs.
+
+**Stage 0b — the contract reseal, one writer, the contract's owner and not this wave's
+sessions.** `securitySchemes` and the operations' `security` per `T-6`, and the
+`permission_denied` collision settled. It lands before stage 2 declares its dependency and
+before `W13-CONF` can compare anything, and it moves `web/openapi/openapi.json` and the
+generated client with it. §9 R-3 is the ruling it needs.
 
 **Stage 1 — `W13-GOLD`, tests only, starts now, needs no pin.** Capture a **golden corpus**
 of request/response pairs through the *current, certified* implementation at `e6eae1e`: all
@@ -186,7 +228,11 @@ moved.
   (`max_bytes` at the transport, `byte_size <= 26214400` in the envelope — `P4_CLOSURE.md` §5
   explains why both exist and `tests/integration/ingest/test_size_guard_boundary.py` pins it),
   the Range response and the CSV's exact bytes and headers;
-- the health plane of `T-3` on its own port;
+- **the authorization dependency of `T-6`** in front of all twelve operations, raising
+  `authentication_required`, with the alpha's static-token implementation behind it and
+  nothing about roles or subjects beyond that;
+- the health plane of `T-3` on its own port, outside the authorized surface so a health check
+  needs no credential;
 - the 21 coupled test files migrated. `tests/e2e/pc01/driver.py` is cheap — it funnels every
   call through one `request()` method, so the driver becomes an ASGI test client in one place
   — but `tests/integration/api/*` tests helpers like `require_idempotency_key` and
@@ -250,7 +296,9 @@ head:
 1. `deploy.sh` brings the stack up from a clean clone on a machine that has never run it, and the schema the
    running app serves conforms to the frozen `contracts/api/v1/openapi.json` — the same check the gate runs,
    re-run against the deployed process rather than against a build artifact;
-2. the browser reaches the app over TLS, and an unauthenticated request does not;
+2. the browser reaches the app over TLS, and a request carrying no token is refused with
+   `authentication_required` **from the application**, not by the proxy — shown for an operation of each
+   kind, so the dependency is proved to be in front of all twelve rather than in front of the one that was tried;
 3. a project is created and a real AR PDF is uploaded through the browser, producing an
    immutable version and a verified private object;
 4. a live `text_analysis` run completes, with its provider mode and cost visible, and the UI
@@ -337,8 +385,12 @@ live run.** No row here is a commitment, and the first one to be revised will be
   ASGI test client needs, with each licence named in the diff. A `pyproject.toml` change is a
   single-owner task under FF-01 §2.8. Blocks stage 2 of wave 13 — not stage 1, which captures
   the golden corpus against the tree as it stands today and can start immediately.
-- **R-3 — the alpha credential.** One shared secret at the proxy, and who holds it. Blocks
-  PA-01 criterion 2.
+- **R-3 — the authorization seam and its reseal.** Confirm `T-6`: the contract gains
+  `securitySchemes` in wave 13, all twelve operations sit behind one dependency, and the alpha
+  satisfies it with a static token. The reseal has an owner (`P2-API-01`'s successor), ripples
+  into `web/openapi/openapi.json` and the generated client, and carries the `permission_denied`
+  collision above. Also: who holds the alpha token. Blocks stage 2 of wave 13 and PA-01
+  criterion 2.
 - **R-4 — the documents.** Whether real client PDFs may be uploaded to this server, by whom, and
   what happens to them at the end of the pilot. Nothing in this repository may hold them, and
   `reset.sh` is the answer to the last part — but the first two are not the integrator's call.
@@ -375,17 +427,27 @@ live run.** No row here is a commitment, and the first one to be revised will be
    ~133 s each — an 18% attempt-failure rate with **no retry in the executor**. On a desk that
    is an annoyance; in front of an operator it reads as a broken product. The retry policy
    recommended in `P4_CLOSURE.md` §6 becomes a candidate the moment a real user sees it.
-5. **A wipe that runs against the wrong thing.** Addressed by T-5, and the guards get tests
+5. **The reseal ripples further than the backend.** `securitySchemes` in the contract means
+   `web/openapi/openapi.json`, the generated client and its drift test all move in the same
+   wave, and `transport.ts` — the single place the frontend makes a request — has to carry the
+   token. It is one file, which is why this is ranked fifth rather than first, but it is a
+   second tree changing under one contract change.
+6. **A wipe that runs against the wrong thing.** Addressed by T-5, and the guards get tests
    that fail.
-6. **Scope creep into the security gate.** An internal alpha on a trusted network is an
-   assumption on record. The first request for external access is a different checkpoint, and it
-   should be refused here rather than half-built.
+7. **Scope creep through the seam `T-6` opens.** One token in front of twelve operations is a
+   gate. Roles, tenants, user management and a session model are an identity system, and the
+   distance between them is one afternoon of good intentions. The rule for wave 13: the
+   dependency resolves a subject and refuses, and it decides nothing about *what* a subject may
+   do. Anything richer waits for the release line, where it will be cheap because the seam
+   exists.
 
 ## 11. What this plan will not do, and why that is deliberate
 
-No multi-tenancy, no in-app authorization, no retention or legal hold, no HA or DR, no backup
-rotation beyond the dump the wipe takes, no job/attempt framework, no remote workers, no OCR,
-no second discipline. Each is either waiting on evidence this deployment is meant to produce,
+No multi-tenancy, no user management or roles, no retention or legal hold, no HA or DR, no
+backup rotation beyond the dump the wipe takes, no job/attempt framework, no remote workers, no
+OCR, no second discipline. **Authorization was on this list in revision 1 and has moved into
+`T-6`**, because the owner named a public destination and the cheap moment to open that seam is
+the one wave that has the API layer open anyway. Each is either waiting on evidence this deployment is meant to produce,
 or belongs to the security gate that external use requires. Building any of them now would
 delay the only thing on this road that can still tell us the product is wrong.
 
@@ -404,7 +466,7 @@ right thing and a library would be the regression.
 | `bootstrap/composition.py` | manual wiring, one place | **now, partially** — the composition root stays the single place adapters are built; FastAPI dependencies expose them, and dependency overrides replace the bespoke test wiring | keeps the seam, drops the parallel mechanism |
 | `bootstrap/settings.py` | hand-read environment with typed refusals | **release** | it is certified, its refusals are pinned by tests, and `pydantic-settings` would buy uniformity rather than capability. Worth doing when something else opens the file |
 | `runs/executor.py` | one sequential in-process executor | **release, evidence-driven** | PC-02 measured an 18% attempt-failure rate with no retry; a task runner is a P05 candidate the moment a live user meets it, and picking one before that is guessing |
-| no authentication | proxy-level for the alpha (`T-6`) | **release** — OIDC/JWT through FastAPI dependencies | the alpha's assumption is a trusted network; an identity model built before we know the users is the guess this programme exists to avoid |
+| no authorization on the API | one dependency and a static token in wave 13, per `T-6` | **now** (the seam and the reseal) / **release** (OIDC behind the same dependency) | the catalog has carried 401 and 403 with an `authorization` category since CP-00 and nothing has ever raised them from the API; the destination is public, and reopening the contract twice costs more than opening it once |
 | `shared/db/**`, `storage/s3.py` | SQLAlchemy, Alembic, boto3 | **keep** | already the relevant stack |
 | `web/**` | Next.js, TanStack Query, a generated client | **keep** | already the relevant stack, and the client is generated from the contract rather than hand-written |
 | the error catalog and `ErrorEnvelope` | 20 frozen codes, one renderer | **keep** | a domain contract, not a framework substitute. FastAPI is made to answer around it; §10 risk 2 is about exactly that |
