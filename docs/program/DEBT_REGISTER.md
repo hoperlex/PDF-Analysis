@@ -94,6 +94,72 @@ Against an unstamped object, `inspect` yields `sha256=""` and `verify_version` e
 reachable path narrowed, but the envelope can still carry an empty string where a digest is
 expected. Found by `W11-RD`.
 
+### D-5 — the first browser-driven run answered 500, twice
+
+On 2026-09-16 a manual harness outside the repository put a stdlib server in front of
+`create_app()` and drove the UI against it. `GET /projects` 200, `POST /projects` 201,
+`POST /projects/{uid}/documents` **201**, then `POST /api/v1/runs` **500 — twice — and the
+session ends there.** Provider mode `proxy`, `operations=12`.
+
+**`startRun` is green in every suite and in three certifications, all of which drive it in
+process.** The first time a browser asked, it answered 500.
+
+Two readings with different owners and **nothing in the evidence distinguishes them**: a real
+defect on the run path that only a socket exposes, or an artefact of how that harness hands a
+body to `Request.build`. The harness logged status lines only, so the envelope behind the 500
+was not kept.
+
+The part worth flagging hardest is not the 500. **The only live-transport evidence this
+programme has ever produced sits outside the tree**, at `/root/pdf-prototype/bridge.log`, and
+`grep -rln "pdf-prototype\|bridge.py" docs artifacts` returns nothing. Reported by
+`pdf-analysis-d9`; the harness is explicitly not a deliverable.
+
+Check: the log named above, while it exists. **It is untracked and outside the repository, so
+this row may outlive its own evidence** — which is the argument for reproducing it under a
+real server rather than preserving a log.
+
+### D-6 — the contract has no security scheme at all, and the alpha now needs one
+
+The owner has ruled that this is ultimately a **public application requiring HTTPS and
+authorization tokens**. Measured against the frozen contract at `2593862`:
+
+- `contracts/api/v1/openapi.json` declares **no `securitySchemes`**, no top-level `security`,
+  and **zero** operations carrying their own — the twelve operations are unauthenticated by
+  construction;
+- `authentication_required` and `permission_denied` **are** in the frozen 20-code catalog and
+  are **used nowhere in `src/`**.
+
+So the codes were reserved and the transport was never given a way to raise them. Adding
+tokens is therefore a **contract change** — a reseal of the frozen document and of
+`web/FRONTEND_LOCK.json`, not a lane decision.
+
+Note what this is *not*: the current alpha draft's §11 excludes "no in-app authorization" and
+its `R-3` proposes **one shared secret at the proxy**. A shared secret is a gate; a token is an
+identity. They are different deliverables and only the second answers the owner's statement.
+
+Check: the `python3 -c` one-liner over `openapi.json` in this row's history, and
+`grep -rn "AUTHENTICATION_REQUIRED\|PERMISSION_DENIED" src/`.
+
+## 1.9 — the authority order, ruled 2026-09-17
+
+**The ADRs and the architecture corpus are the primary source of truth. A roadmap is a draft
+and a recommendation.** Ruled by the owner; recorded here because a register that cites the
+wrong authority produces confident wrong rows.
+
+The concrete instance that prompted it: `src/auditmanager/api/README.md` opened *"There is no
+HTTP framework, and that is deliberate"* and justified it from `docs/program/P02_LOCK.json` —
+a lane-level dependency pin. Against that stand **`ADR-0002`** ("one deployable Python/FastAPI
+backend"), `TECHNOLOGY_BASELINE.md` ("Backend — Python, FastAPI/ASGI"), `ARCHITECTURE_BIBLE.md`
+P-05 and `PROTOTYPE_PROFILE.md` §2 ("FastAPI remains the backend/control-plane direction"). The
+same file admits its earlier version said *"FastAPI transport adapters only"*.
+
+**A pin set records what a lane may install. It cannot overrule an ADR**, and the absence that
+followed from it was described as a decision. Corrected in that file at this commit.
+
+This is the programme's most-repeated failure in its sharpest form yet — a claim written at one
+scope and read as authority at another. `W12_CLOSURE.md` §4 records me doing it with a private
+helper's docstring; this one shaped what got built.
+
 ## 2. Owner-blocked, and not mine
 
 | # | Item | Blocks |
