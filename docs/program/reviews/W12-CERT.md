@@ -389,3 +389,133 @@ the import closure, so nothing could have observed it.
 ### 6.3 Tests read rather than trusted
 Four acceptance tests were read and judged against what the criterion requires rather than
 against their names. Three of them assert less than their name promises; each is in §7.
+
+## 7. Defects found, all left unrepaired
+
+None is in a path I own, and I repaired none of them. Four defects and two observations.
+
+### W12CERT-DEF-1 — the criterion-2 acceptance test cannot fail on a wrong migration head
+**Tree:** `tests/`. **Location:** `tests/e2e/pc01/test_acceptance.py::
+test_c2_the_application_is_serving_against_the_migrated_head`.
+
+It asserts `listProjects` answers 200 with a list. Its docstring says `make migrate` and
+`make check-db` assert the head itself and that what this adds is that the *application* is
+talking to that database. That is true, and the test is named for the head anyway.
+
+**Measured, not argued.** A scratch database was migrated to head, downgraded one step to
+`0004_cost_basis`, and a client composed against it:
+
+```
+scratch database head: 0004_cost_basis
+listProjects against a database ONE MIGRATION BEHIND: 200 | items is a list: True
+```
+
+The `project` table exists at `0002`, so every head from `0002` onwards passes this test. It also
+goes red when `listProjects` is merely removed from the router (M-C1b), which is the shape of the
+problem: it reddens on the wrong thing. Criterion 2 holds because `make check-db` refuses a
+database off head with exit 2 — proved above — and that is where the whole weight sits.
+
+**Not repaired:** `tests/` is not mine.
+
+### W12CERT-DEF-2 — a criterion-5 test survives a systematic page shift
+**Tree:** `tests/`. **Location:** `…::test_c5_the_findings_name_pages_the_corpus_seeds_issues_on`.
+
+Under M-C5b, where every evidence item is reported one page later than it was resolved,
+`test_c5_every_published_quotation_exists_on_its_declared_page` reddens and **this test stays
+green**. It asks whether the seeded issues' page sets *intersect* the published pages, and the
+manifest's seeded issues span pairs of pages (2 and 6, 3 and 7), so a uniform shift still
+intersects at least two of them. Its docstring says it matches on pages "rather than on free text"
+because "a run that published three findings about the wrong pages would pass a bare count" — and
+a run that published three findings about pages one off passes this one.
+
+**Impact:** low. The criterion is guarded, by the stronger sibling. Recorded because a test that
+reads as a page check and is a set-intersection check is the shape wave 10 found 157 of.
+
+### W12CERT-DEF-3 — criterion 4's and criterion 10's UI clause rests on unreached code
+**Tree:** `web/`. Reported by `W12-WEB` §4 and §10; **re-measured here** (§6.2) and confirmed
+independently: 34 of 110 modules, 1352 of 7604 lines, reached by no test.
+
+`PROTOTYPE_PROFILE.md` §8 criterion 4 requires that **"the UI distinguishes the contract run
+states … and the live or recorded provider mode"**, and criterion 10 requires failures shown
+explicitly. The presentation *mapping* (`run-presentation.ts`, `run-state.ts`) is well guarded —
+`W12-WEB`'s sweep killed 121 of 183 and its eleven new suites killed 63 of the 64 survivors. The
+*component that renders it* is not reached at all, and `terminal_reason` reaches a user in exactly
+one line inside it. Six more delivered screens are in the same set.
+
+This is the one place where I cannot say a criterion is established end to end, and I state it as
+an exception rather than certify around it. `W12-WEB` recommends sweeping those seven components
+as the next wave; I agree and it is not mine.
+
+**Not repaired:** `web/` is not mine, and `W12-WEB` was told not to repair it either.
+
+### W12CERT-DEF-4 — the criterion-6 append-only test asserts the route set, not the ledger
+**Tree:** `tests/`. **Location:** `…::test_c6_the_decision_ledger_admits_no_update_or_delete`.
+
+It asserts that `PUT`, `PATCH` and `DELETE` are absent from `/findings/{finding_uid}/decisions` in
+the router's route set. That is a real property and it is not the one the name claims: an
+append-only *ledger* is a database guarantee, and this test would pass unchanged against a table
+with no trigger on it.
+
+The guarantee is in fact held — by `tests/integration/decisions/test_decision_ledger.py` and
+`test_schema_invariants.py`, which the gate runs, and `W12-DEC` §6 verified both trigger arms are
+exercised with the SQLSTATE asserted. I established it directly as well (criterion 6 above):
+`AM002` on both statements, ledger intact at 41 rows.
+
+**Impact:** none on the verdict; the criterion holds. Recorded because the manual runbook §6 points
+a reviewer at this claim and the acceptance suite is where a reviewer would look for it.
+
+### W12CERT-OBS-1 — "17 tables" in the `c0d7daf` record is a view counted as a table
+`recertification-c0d7daf.json` records "head 0005_truncated_call_status, 17 tables"; the manual
+runbook §8 says "all sixteen tables". Measured at `e6eae1e` from
+`information_schema.tables`: **16 `BASE TABLE`s** (15 domain tables plus `alembic_version`) and
+**1 `VIEW`** (`finding_current_verdict`). Both earlier figures are countable; neither says which
+things it counted. The runbook is corrected in this pass — it is a path I own. The `c0d7daf`
+record is **not** edited: it records a certification that really happened.
+
+### W12CERT-OBS-2 — this lane's bucket holds 561 canonical objects against 2 `blob` rows
+Measured while purging my own probe residue. The suites truncate the database between runs and do
+not purge the object store, so a lane bucket accumulates canonical objects whose rows are gone —
+exactly `Reconciler.report()`'s `orphan_objects`. Harmless in a disposable lane and not a product
+defect; recorded because it means an object count is never evidence about a lane's canonical state,
+and because a future session measuring storage in a shared lane should know.
+
+### Not defects, checked and cleared
+
+- **`W6CERT-DEF-1`** (the criterion-10 docstring recording `error_code: null` and
+  `terminal_reason: analysis_failed`) — **repaired**. Both are assertions now, and the test says so.
+- **`W6CERT-DEF-2`** (`',live,' in text or text.count('live') >= 1`) — **repaired**. The live export
+  test now parses the `provider_mode` column and asserts `modes == {"live"}`.
+- **`test_live_the_near_miss_controls_are_reported`** — `W6-CERT` had to confirm the zero by hand
+  because the assertion was `isinstance(flagged, list)`. It now asserts the *preconditions* of the
+  measurement (there were controls; there were published quotations; anything flagged is a real
+  control) and leaves the count as a reported result. That is the right shape and I confirmed the
+  zero from the published evidence anyway: 5 quotations compared against 6 controls, none matched.
+- **`CsvExport.filename`'s removal** — breaks nothing: no reference survives anywhere in `src/`,
+  `tests/`, `tools/` or `web/src`, and the frozen contract pins no value for the header.
+
+## 8. Anything false in the brief
+
+| premise | verdict |
+|---|---|
+| base `2be71b9` on `origin/dev` | **True as a floor.** `origin/dev` is at `e6eae1e`, two docs-only commits later; the brief says "or later" |
+| gate `1505 passed / 5 skipped / 167 subtests`, frontend `440`, foundation `35` | **True, all four exact** |
+| `exports/service.py`: `CsvExport.filename` and `_FILENAME_TEMPLATE` removed, the one source-compatible break | **True**, and it has no consumer anywhere in the tree |
+| `ingest/service.py`: `read_source_bytes` hashes returned bytes against the manifest digest | **True** |
+| `storage/s3.py`: `read(verify=True)` refuses an object with no recorded digest | **True**, and it answers `validation_failed`, not the integrity code |
+| `analysis/text/stage.py`: `cost_basis` added to the success path's metrics | **True**, and certified against a real live success, not read off the diff |
+| `ingest/reconciliation.py`: three ordered questions, unstamped object refused first | **True**, verbatim |
+| `envelope.py` docstring only; `multipart.py`, `projects.py`, `executor.py` comments only, zero code lines | **True** — every changed line in all four is a comment or docstring |
+| "Nothing in `src/` calls `verify_version`" | **True** — one `def`, four docstring mentions, no `Reconciler(...)` outside the module |
+| `W11-RD` and `W12-RCN` reported their limits as observations, not certifications | **True**, and both say so in their own reviews |
+| "A linked worktree has no `web/node_modules`; `npm --prefix web ci` once" | **True**, 184 packages |
+| `make gate` refuses a checkout that changed during the run; commit then gate | **True**, and followed: no edit was made while a gate ran |
+| the mode is `proxy`, not `live`; `_provider_file` locates `.env.provider` through `git rev-parse --git-common-dir` | **True** — the suite printed `live provider configuration read from /root/projects/PDF-Analysis/.env.provider` from a linked worktree, and no credential was printed at any point |
+| "A run costs about $0.038" | **True** — $0.0387 measured |
+| `DEBT_REGISTER.md` D-1: "`src/` has moved by 126 lines across 8 files" | **Stale rather than false.** Measured at `5c84f43`, before stage A. At `e6eae1e` it is **9 files, 232 insertions / 33 deletions**; the ninth is `ingest/reconciliation.py`, which stage A moved after the register was written |
+| dispatch: "**Ten** stale premises are on record in this programme" / my launch brief: "**twelve** stale premises" | **The two disagree by two.** Neither is checkable from the tree — no document enumerates them — so I record the disagreement rather than a verdict. `W12-RCN` and `W12-WEB` each found one more, which is plausibly the difference |
+
+One thing **not** in the brief that the next session should know: `PROTOTYPE_PROFILE.md` §9 carries
+a **duplicated and truncated bullet** — "agent navigation friction: the search and rework incidents
+tasks recorded, reported as" appears immediately above the complete version of the same bullet. It
+is in the document that defines the checkpoint, it is not in §8 and it changes no criterion, and
+`docs/program/PROTOTYPE_PROFILE.md` is not a path I own. **Reported, unrepaired.**
