@@ -441,6 +441,31 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
 
     json_headers = {"Content-Type": "application/json"}
 
+    # -- setup, deliberately not a record ---------------------------------------------
+    # One project created before case 01, so that case 16's `limit=1` listing has a second
+    # row behind it and `next_cursor` is non-null **by construction**.
+    #
+    # `W13-CONF` found case 16 failing inside the battery and passing alone. The cause was
+    # not its own code: `next_cursor` is non-null only when a second project exists, the
+    # journey guarded the assertion with `if cursor is not None:`, and the record froze
+    # whichever branch the shared database happened to produce at capture time. So the
+    # wave's safety net contained one record that was a function of residue -- and it is
+    # the safety net stage 2 will be judged by, which makes it the record most likely to be
+    # argued past at the end of a long wave.
+    #
+    # `OPERATING_CONSTRAINTS.md` §9 is the standing form of this: §6 covers residue, not
+    # accumulated population, and telling them apart means running the suite alone. Wave 2
+    # lost time to the same shape in a paging test.
+    #
+    # Created *before* case 01 so that case 01's project is still the newest and case 16's
+    # `items[0]` assertion is unchanged.
+    api.send(
+        "POST",
+        "/projects",
+        headers={"Idempotency-Key": f"w13base-{tag}-cursor-setup", **json_headers},
+        body=b'{"name": "W13 baseline cursor setup"}',
+    )
+
     # 1 -- createProject ------------------------------------------------------------
     t = Tokens()
     project = record(
@@ -864,17 +889,23 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     )
     cursor = listing["page"]["next_cursor"]
     t.add("project_uid", project_uid, "the identity case 01 allocated")
-    if cursor is not None:
-        assert _decode_cursor(cursor) == [project_uid], (
-            f"the cursor decodes to {_decode_cursor(cursor)!r}, not to the page's last "
-            "project_uid; it is not the sort key the frozen Cursor schema promises"
-        )
-        t.add(
-            "next_cursor",
-            cursor,
-            "base64url of the page's last sort key; asserted to decode to exactly "
-            "[project_uid] before being tokenised",
-        )
+    # Unconditional. The setup project above guarantees a second row, so a null cursor here
+    # is a defect in the listing rather than a property of the database -- which is exactly
+    # the distinction the conditional used to hide.
+    assert cursor is not None, (
+        "next_cursor is null although a second project exists; a bounded page with more "
+        "rows behind it must carry a continuation token"
+    )
+    assert _decode_cursor(cursor) == [project_uid], (
+        f"the cursor decodes to {_decode_cursor(cursor)!r}, not to the page's last "
+        "project_uid; it is not the sort key the frozen Cursor schema promises"
+    )
+    t.add(
+        "next_cursor",
+        cursor,
+        "base64url of the page's last sort key; asserted to decode to exactly "
+        "[project_uid] before being tokenised",
+    )
     t.timestamps(listing)
     correlation(listed, t)
     content_length(listed, t)
