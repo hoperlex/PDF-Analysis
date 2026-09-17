@@ -32,7 +32,7 @@ many words, to promise what the two records were relying on:
 So two findings published in the same millisecond are separated by 80 bits of `os.urandom`,
 and which comes first is a coin flip. **Measured rather than argued.**
 `/root/w13ord-logs/ties.log`, 200 journeys driven through `journey.run_journey` against this
-lane at HEAD `4e2d5ad`, 191 completed (§6.2 on the other nine):
+lane at HEAD `3db62d6`, 191 completed (§6.2 on the other nine):
 
 | | |
 |---|---|
@@ -316,7 +316,7 @@ It does not damage the diagnosis: the tiebreaker orders observations *within* a 
 the flake is *between* findings, where the key is a single ULID. But it is a retracted line
 offered as support, and read straight it argues for shape 1 when the standing text argues for
 shape 3. I removed the same quotation from my own `journey.py` comment after finding it
-(`4e2d5ad`) — citing a retracted line while reporting it as retracted is not a thing to leave
+(`3db62d6`) — citing a retracted line while reporting it as retracted is not a thing to leave
 in a file stage 2 will read.
 
 **5.3 — record 31 is named wrongly and has not been spent on this branch.**
@@ -380,6 +380,9 @@ reader who sees the same shape knows it has been seen, and under what conditions
 | `2041106` | open the review at `cf6861c` |
 | `ad2f901` | `O1` — the tokens, the declaration, the comparison, 15 tests |
 | `a58b25d` | the README meets `O1` where a reader meets the exception |
-| `4e2d5ad` | cite the standing wave-3 measurement, not the struck-through M2 |
+| `3db62d6` | cite the standing wave-3 measurement, not the struck-through M2 |
+| `ee6303e` | this review |
+| `46f689a` | the measured numbers |
+| `5th` | this correction — three references above carried a commit hash I had written down before reading it back. They are `3db62d6`. Recorded rather than amended away: a figure that travels by being repeated is the failure `OPERATING_CONSTRAINTS.md` §12 names, and a hash is a figure. |
 
 **Elapsed wall-clock:** 50 minutes — `2026-09-18T01:14:49+05:00` to `2026-09-18T02:05:06+05:00`. Roughly half of it is the 341 live journeys and the five full battery drives; the measurements are the expensive part, and §4 says which of them was worth the time.
