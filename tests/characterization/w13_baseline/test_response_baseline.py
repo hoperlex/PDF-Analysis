@@ -118,6 +118,25 @@ def test_exactly_one_record_is_marked_as_the_permitted_exception() -> None:
     assert "R-3" in only["ruling"]
 
 
+def _authorization_claims(record: dict[str, Any]) -> list[str]:
+    """Every way a record could start saying something about authorization.
+
+    One function, used by the guard and by the test that proves the guard can fail, so
+    the proof exercises the rule rather than a second copy of it that could drift.
+    """
+    found: list[str] = []
+    if not record.get("pre_authorization"):
+        found.append("no pre_authorization declaration")
+    for name, _value in record["request"]["headers"]:
+        if name.lower() in ("authorization", "proxy-authorization"):
+            found.append(f"the request carries {name}")
+    # 401 is unreachable before the dependency exists; a 403 in this corpus would have
+    # to mean a caller's rights, and no case here exercises any.
+    if record["response"]["status"] in (401, 403):
+        found.append(f"pins {record['response']['status']}, an authorization answer")
+    return found
+
+
 def test_the_baseline_makes_no_authorization_claim() -> None:
     """The corpus must stay unreadable as an authorization expectation.
 
@@ -128,9 +147,7 @@ def test_the_baseline_makes_no_authorization_claim() -> None:
     mistake for the surface's intended unauthenticated behaviour.
 
     `README.md` says the baseline has nothing to say about authorization. This is the
-    test that keeps that sentence true instead of merely old. Three ways it could stop
-    being true, all checked: a record that authenticates, a record that pins a refusal,
-    and a record that drops the declaration saying which era it comes from.
+    test that keeps that sentence true instead of merely old.
 
     If stage 2 makes the journey authenticate, this test and that paragraph are changed
     together, deliberately -- which is the point of writing it down.
@@ -138,57 +155,36 @@ def test_the_baseline_makes_no_authorization_claim() -> None:
     offenders: list[str] = []
     for path in RECORD_FILES:
         record = json.loads(path.read_text(encoding="utf-8"))
-        if not record.get("pre_authorization"):
-            offenders.append(f"{path.stem}: no pre_authorization declaration")
-        for name, _value in record["request"]["headers"]:
-            if name.lower() in ("authorization", "proxy-authorization"):
-                offenders.append(f"{path.stem}: the request carries {name}")
-        # 401 is unreachable before the dependency exists; a 403 in this corpus would
-        # have to mean a caller's rights, and no case here exercises any.
-        if record["response"]["status"] in (401, 403):
-            offenders.append(
-                f"{path.stem}: pins {record['response']['status']}, an authorization answer"
-            )
+        offenders.extend(f"{path.stem}: {claim}" for claim in _authorization_claims(record))
     assert offenders == [], (
         "the baseline has started making an authorization claim:\n" + "\n".join(offenders)
     )
 
 
 def test_the_no_authorization_claim_check_can_fail() -> None:
-    """The same rule, run against three planted records. A guard nobody has seen reject
-    anything accepts anything -- `OPERATING_CONSTRAINTS.md` and this corpus's own
-    `test_the_comparison_reddens_on_a_planted_difference`.
+    """The same rule, run against three planted records.
 
-    The rule is applied to in-memory dictionaries rather than to a rewritten file,
-    because a test that edits `records/` would trip the gate's changed-during-the-run
-    check.
+    A guard nobody has seen reject anything accepts anything -- the rule this corpus
+    already applies to itself in
+    :func:`test_the_comparison_reddens_on_a_planted_difference`.
+
+    The plants are in-memory copies rather than rewritten files, because a test that
+    edits `records/` would trip the gate's changed-during-the-run check.
     """
-
-    def offenders_for(record: dict[str, Any]) -> list[str]:
-        found: list[str] = []
-        if not record.get("pre_authorization"):
-            found.append("no pre_authorization declaration")
-        for name, _value in record["request"]["headers"]:
-            if name.lower() in ("authorization", "proxy-authorization"):
-                found.append(f"the request carries {name}")
-        if record["response"]["status"] in (401, 403):
-            found.append(f"pins {record['response']['status']}, an authorization answer")
-        return found
-
     clean = json.loads(RECORD_FILES[0].read_text(encoding="utf-8"))
-    assert offenders_for(clean) == [], "the unperturbed record is already reported"
+    assert _authorization_claims(clean) == [], "the unperturbed record is already reported"
 
     authenticated = json.loads(json.dumps(clean))
     authenticated["request"]["headers"].append(["Authorization", "Bearer w13-static"])
-    assert offenders_for(authenticated) == ["the request carries Authorization"]
+    assert _authorization_claims(authenticated) == ["the request carries Authorization"]
 
     refused = json.loads(json.dumps(clean))
     refused["response"]["status"] = 401
-    assert offenders_for(refused) == ["pins 401, an authorization answer"]
+    assert _authorization_claims(refused) == ["pins 401, an authorization answer"]
 
     undeclared = json.loads(json.dumps(clean))
     del undeclared["pre_authorization"]
-    assert offenders_for(undeclared) == ["no pre_authorization declaration"]
+    assert _authorization_claims(undeclared) == ["no pre_authorization declaration"]
 
 
 @pytest.mark.parametrize("path", RECORD_FILES, ids=lambda p: p.stem)
