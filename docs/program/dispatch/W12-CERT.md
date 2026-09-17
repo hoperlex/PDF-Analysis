@@ -1,9 +1,12 @@
 # `W12-CERT` dispatch prompt — re-certify PC-01 after waves 11 and 12
 
-**Do not start until `W12-RCN` has landed and the integrator has published the merge.** The
-base below is a placeholder; the integrator replaces it with the convergence commit. Starting
-early certifies a tree that is about to change, which is the debt this staging exists to
-avoid.
+**Stage A has landed.** Base `2be71b9` on `planning/prototype-roadmap`, published as
+`origin/dev`. Gate there: **1505 passed / 5 skipped / 167 subtests**, frontend **440 passed**,
+foundation 35, `GATE OK`.
+
+Three stage-A streams merged: one changed `src/` (`W12-RCN`, reconciliation) and two wrote
+tests only (`W12-WEB` on the frontend, `W12-DEC` on the decision ledger). Read all three
+reviews in `docs/program/reviews/` before you read their code.
 
 ---
 
@@ -44,7 +47,7 @@ to test** — and a claim to check, not a given.
 | `ingest/service.py` | `read_source_bytes` hashes returned bytes against the manifest digest. Criteria 3, 10 |
 | `storage/s3.py` | `read(verify=True)` refuses an object with no recorded digest. Criteria 3, 10 |
 | `analysis/text/stage.py` | `cost_basis` added to the success path's metrics. Criterion 4 |
-| `ingest/reconciliation.py` | whatever `W12-RCN` landed — **read its review before you read its code** |
+| `ingest/reconciliation.py` | `verify_version` now **hashes the bytes** and compares them to the manifest digest, after a cheaper declaration check that runs first; an object recording no digest is refused as `validation_failed` before either. `W12-RCN` measured the cost on live MinIO: 2.08 → 4.11 ms on the AR baseline, 2.23 → 50.10 ms on a 25 MiB object. **Nothing in `src/` calls this method**, so no in-tree path pays that cost today. Criteria 3, 10 |
 | `shared/errors/envelope.py` | docstring only; six shapes named |
 | `multipart.py`, `projects.py`, `executor.py` | comments only, zero code lines |
 
@@ -130,7 +133,7 @@ the opposite case.
 make gate
 ```
 
-Expect the figure the integrator gives you with the base commit; it was 1492 before stage A. That count rose by 212 in wave 11 without
+Expect **1505 passed / 5 skipped / 167 subtests** and frontend **440 passed**. The frontend rose from 289 in stage A: `W12-WEB` added 151 tests and found that **18% of `web/src` — 34 of 110 modules — is reached by no test at all**, including the only place `terminal_reason` is rendered. That is reported, not repaired, and it is not yours to repair either. That count rose by 212 in wave 11 without
 a single new test: `PROTOTYPE_PROFILE.md` §6.3's quarantine had been implemented as a
 directory exclusion and was narrowed to the three CP-00 files it actually means. A linked
 worktree has no `web/node_modules`; run `npm --prefix web ci` once.
