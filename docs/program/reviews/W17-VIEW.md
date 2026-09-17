@@ -3,7 +3,9 @@
 **Session `W17-VIEW`, wave 17. HEAD on arrival: `ebf06ad`** (`origin/dev`,
 *"feat: the mutation copy carries the tests, and a migration is mutable at last"*).
 Worktree `/root/w17view`, branch `agent/w17-view`. Logs in `/root/w17view-logs/`.
-Instance `gate-w17a`. Elapsed **1 h 12 min** wall-clock (04:32 → 05:44 +05:00).
+Instance `gate-w17a`. Elapsed **20 min 27 s** wall-clock (04:32:41 → 04:53:08 +05:00),
+measured as `date +%s` on arrival against `date +%s` at the close, not estimated. Of that,
+the gate is **3 min 24 s** of battery plus foundation, frontend and whitespace.
 
 **Gate: `make gate` → exit status `0`**, read from `$?` and never through a pipe.
 
