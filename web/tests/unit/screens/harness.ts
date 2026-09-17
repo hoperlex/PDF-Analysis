@@ -33,7 +33,21 @@ import { render } from '../review/fixtures';
  */
 export function newClient(): QueryClient {
   return new QueryClient({
-    defaultOptions: { queries: { retry: false, refetchOnMount: false, gcTime: Infinity } },
+    defaultOptions: {
+      queries: {
+        retry: false,
+        refetchOnMount: false,
+        gcTime: Infinity,
+        // `retryOnMount: false` is what makes a seeded error observable. React Query
+        // computes an *optimistic* result for an unmounted observer, and `fetchState()`
+        // forces `status: 'pending'` and clears `error` whenever the query has no data
+        // and a fetch would start on mount. A single server pass is always an unmounted
+        // observer, so without this every errored query renders as a spinner. In the
+        // browser the error branch is reached the same way this reaches it: by rendering
+        // a query that has already settled, not by refetching.
+        retryOnMount: false,
+      },
+    },
   });
 }
 
@@ -51,7 +65,11 @@ export function renderWith(client: QueryClient, element: ReactElement): string {
  * a private field.
  */
 export function seedError(client: QueryClient, queryKey: readonly unknown[], error: unknown): void {
-  const query = client.getQueryCache().build(client, { queryKey: [...queryKey] });
+  // `defaultQueryOptions` is what computes the `queryHash`; building without it files the
+  // entry under a hash no observer will look for, and the component renders as pending.
+  const query = client
+    .getQueryCache()
+    .build(client, client.defaultQueryOptions({ queryKey: [...queryKey] }));
   query.setState({
     status: 'error',
     error: error as Error,
