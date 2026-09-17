@@ -1,8 +1,11 @@
 # Debt register
 
 Written 2026-09-17 by the integrator. **Re-measured against the tree at `315de25` on
-2026-09-18**: D-6, D-7 and D-10 close, D-12 and D-13 open, D-14 opens and closes in the
-same pass, and §3's own figure turned out to be three waves stale.
+2026-09-18**: D-2, D-3, D-4, D-6, D-7 and D-10 close, D-12, D-13 and D-15 open, D-14
+opens and closes in the same pass, and §3's own figure turned out to be three waves
+stale. **Two of those closes — D-2 and D-4 — had been true for a day**: they were fixed
+thirty-nine minutes after this file was created and nobody carried it back. A row is
+closed in the same commit as its fix, or this register lies.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records
 a register that had been entirely obsolete while still reading as the list of what was open,
@@ -63,40 +66,95 @@ worth a behaviour change.
 
 Check: `python3 -c "import json;d=json.load(open('contracts/domain/v1/error-codes.json'));print(len(d['codes']))"` and grep for the name.
 
-### D-2 — `verify_version` compares two declarations and never hashes bytes
+### D-2 — `verify_version` compares two declarations and never hashes bytes — **CLOSED**
 
-Found by `W11-RD`, verified by me at `ingest/reconciliation.py:203-232`. It calls
-`self._store.inspect(...)`, which is a `head_object` returning **recorded metadata**, and
-compares that against the manifest. A replacement that leaves the metadata and length intact
-is therefore reported **sound** by reconciliation while the read path — repaired in wave 11 —
-refuses it. `W11-RD` measured this on real MinIO rather than reading it off the source.
+**Closed 2026-09-17 by `1b2549b`, thirty-nine minutes after this register was written, and
+the row then sat open for a day.** The register was committed at 11:00:29; the fix landed at
+11:39:47, in the same wave, by a stream dispatched to make it.
 
-The docstring's second sentence is accurate about what the code does. **The first sentence,
-"Prove one published version is still readable", is not** — it proves neither readability nor
-byte integrity. Same class as the comments wave 11 repaired: a promise stronger than the code.
+`verify_version` now asks three questions, cheapest first, and question 3 is the one this row
+asked for: when the two declarations agree — *which is precisely the state in which nothing
+has yet looked at the object* — the body is read and hashed against `entry.sha256`. The
+manifest entry is the digest independent of the object, so it is the one compared, and the
+read is `verify=False` deliberately, because the adapter's own check is the object against
+its **own** record — which question 2 has already tied to the manifest — and leaving it on
+would make the comparison a branch no test could redden.
 
-Not simply a bug to fix: `reconciliation.py`'s own docstring makes "never lists, never reads
-bytes" a deliberate property, so changing it is a design call and is written up as one in the
-wave-12 brief.
+Guarded by `tests/integration/ingest/test_reconciliation_reads_the_bytes.py`, whose first
+case is this row's scenario verbatim: *a version whose bytes were replaced under intact
+metadata is refused*.
 
-Check: read the method; or `grep -n "def inspect" src/auditmanager/storage/s3.py` and see
-what it returns.
+**The failure here is this register's, not the code's.** The knowledge was in the tree the
+whole time — that test file names `D-2` in its third line. Nobody carried it back. **A row is
+closed in the same commit as its fix, or the register lies**, which is the exact thing
+`W4_CLOSURE.md` §3 found and this file was created to avoid being.
 
-### D-3 — `_record`'s `cost_basis` default is a defaulted provenance field
+Check: `sed -n '245,255p' src/auditmanager/ingest/reconciliation.py`.
 
-`analysis/text/stage.py`: `cost_basis: str = "estimated"`. A forgetful call site would
-silently record a provenance it never established. **Latent, not live** — one call site
-exists and passes it explicitly. Flagged by `W11-FIX`, which correctly declined to change
-behaviour with no defect behind it.
+### D-3 — `_record`'s `cost_basis` default is a defaulted provenance field — **CLOSED**
 
-Check: `grep -n "_record(" src/auditmanager/analysis/text/stage.py`.
+**Closed 2026-09-18 by the integrator, by removing the default.** The row said it was latent
+because *"one call site exists and passes it explicitly"*. Re-measured at `315de25` that had
+stopped being true: there were **two**, and the cost-overrun path passed nothing.
 
-### D-4 — an empty digest reaches an operator-facing envelope
+**The recorded value was right, and that was the problem.** The overrun figure is
+`pin.cost_usd(input_tokens, output_tokens)` — the lock's per-token rates — and never consults
+`response.reported_cost_usd`, so `"estimated"` was the true provenance. But it was true by
+coincidence of the default rather than because the call site had decided it, on the one path
+an operator reads when a budget broke. Change `overrun` to prefer the reported cost and the
+provenance would have gone on saying `estimated` in silence.
 
-Against an unstamped object, `inspect` yields `sha256=""` and `verify_version` emits
-`actual_sha256=""`. Wave 11 made that object unreadable through `read(verify=True)`, so the
-reachable path narrowed, but the envelope can still carry an empty string where a digest is
-expected. Found by `W11-RD`.
+`_record` now takes `cost_basis` with **no default**, so a third call site cannot be silent by
+accident, and the overrun site passes `"estimated"` with the reason beside it. Two guards,
+both shown able to fail: restoring the default reddens
+`test_cost_basis_cannot_be_omitted_by_a_call_site`; making the overrun site copy the success
+path's expression reddens `test_the_overrun_path_records_the_basis_of_the_figure_it_actually_recorded`,
+which constructs the discriminating case — a response that **did** report a cost, recorded
+against a figure that did not use it.
+
+Check: `python3 -c "import inspect;from auditmanager.analysis.text.stage import _record;print(inspect.signature(_record).parameters['cost_basis'].default)"`.
+
+### D-4 — an empty digest reaches an operator-facing envelope — **CLOSED**
+
+Closed by `1b2549b` alongside D-2, and stale here for the same day and the same reason. An
+object recording no digest is now `validation_failed` carrying `aggregate_type="Blob"`,
+`field="sha256"`, `constraint="recorded on every published object"` — not an integrity verdict
+with `actual_sha256=""`, which the code's own comment calls *"an empty string where a digest
+is expected, and a claim about bytes nothing has looked at"*. It is also the same answer
+`BlobStore.read` gives over the same row, so the two do not disagree about one object.
+
+**Wave 14 produced this state on a real host by accident, which is the best evidence the
+choice was right.** `mc mirror` restored an object whose bytes were intact and whose
+`X-Amz-Meta-Content-Sha256` was gone. Under the repaired code an operator is told the store
+has compared nothing to anything — not that their bytes are corrupt, and not sent to restore
+a backup they do not need.
+
+Check: `sed -n '286,300p' src/auditmanager/ingest/reconciliation.py`.
+
+### D-15 — one `cost_basis` describes a figure summed over several attempts
+
+Found 2026-09-18 while closing D-3. **Measured, not repaired, and the repair is a design call
+rather than a fix.**
+
+`runs/executor.py:402` calls `run_text_analysis` in a **retry loop with one meter for the
+whole run** — deliberately, so a retry cannot buy a fresh USD 1.00 ceiling (`OD-03`). So a run
+can make several model calls. On both the success and the overrun path the stage then emits:
+
+* `metrics["cost_usd"] = round(cost_meter.spent_usd, 8)` — the sum **across attempts**;
+* `metrics["cost_basis"] = "measured" if response.reported_cost_usd is not None else …` —
+  the provenance of the **last response only**.
+
+A run whose first attempt replayed and whose second reported a cost therefore publishes a sum
+over both with one attempt's provenance attached to it. The model-call **records** are exact —
+each carries its own basis — so nothing is lost, and this is about a summary field.
+
+Not repaired here for the reason `W11-FIX` gave about this same field: wave 11 made the two
+paths symmetric on purpose and changing what the key means is not a lane decision. The options
+are to say `estimated` when **any** attempt was, or to drop the key from the metrics and leave
+the records as the only answer. Both change what a consumer reads.
+
+Check: `grep -n "spent_usd\|cost_basis" src/auditmanager/analysis/text/stage.py` against
+`grep -n "CostMeter(\|run_text_analysis(" src/auditmanager/runs/executor.py`.
 
 ### D-5 — the first browser-driven run answered 500, twice
 

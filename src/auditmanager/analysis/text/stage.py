@@ -264,6 +264,12 @@ def run_text_analysis(
                     mode=mode,
                     status=call_status,
                     cost_usd=overrun,
+                    # `overrun` above is `pin.cost_usd(...)` -- the pin's own rates over
+                    # the token counts. It does not consult `response.reported_cost_usd`,
+                    # so this basis is estimated whatever the provider reported, and the
+                    # success path below can legitimately say `measured` for the very same
+                    # response. Spelled out rather than defaulted: see `_record`.
+                    cost_basis="estimated",
                 ),
             ),
             error=error,
@@ -414,8 +420,22 @@ def _record(
     mode: ProviderMode,
     status: str,
     cost_usd: float,
-    cost_basis: str = "estimated",
+    cost_basis: str,
 ) -> ModelCallRecord:
+    """`cost_basis` has no default, and that is `D-3`.
+
+    It used to default to ``"estimated"``. `W11-FIX` flagged the shape and declined to
+    change behaviour with no defect behind it, which was right at the time: there was one
+    call site and it passed the value. There are two now, and the second -- the
+    cost-overrun path -- took the default. The value it recorded was *true*, because the
+    overrun figure is computed from the pin's own rates; but it was true by coincidence of
+    the default rather than because the call site established it, on the one path an
+    operator reads when a budget broke.
+
+    A provenance field is a claim about how a number was arrived at. The call site is the
+    only place that knows, so it is the only place allowed to say, and a third call site
+    cannot now be silent by accident.
+    """
     return ModelCallRecord(
         model_call_id=model_call_id,
         provider=PROVIDER,

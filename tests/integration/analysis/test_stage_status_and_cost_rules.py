@@ -442,3 +442,65 @@ def test_the_default_ceiling_matches_the_figure_the_lock_records() -> None:
     assert inherited.run_cost_ceiling_usd == 1.00
     assert inherited.ceiling_is_explicit is False
     assert provider_lock().primary_model_id == MODEL_ID
+
+
+# --- D-3: the provenance field the call site has to establish -------------------------
+
+
+def test_the_overrun_path_records_the_basis_of_the_figure_it_actually_recorded() -> None:
+    """`DEBT_REGISTER.md` D-3, and it is about *which* figure, not which value.
+
+    The overrun path records ``cost_usd=pin.cost_usd(input_tokens, output_tokens)`` -- the
+    lock's per-token rates over the token counts. It never consults
+    ``response.reported_cost_usd``, so that figure is estimated **even when the provider
+    reported one**, which is the case constructed here: the response carries
+    ``reported_cost_usd`` and the record still says ``estimated``.
+
+    That is what makes this more than a spelling change. Until now the value arrived from
+    ``_record``'s default and nothing said the call site had decided it, so the two paths
+    agreeing on a response that reported a cost would have looked like agreement rather
+    than like one path not having been asked.
+
+    The metrics dict deliberately says something different -- see the test below it -- and
+    the difference is the point: one describes the number on the record, the other
+    describes the response.
+    """
+    overrun = run_text_analysis(
+        run_id=RunId.new(),
+        text_layer_document=_text_layer_document(),
+        adapter=_ScriptedAdapter(
+            _response(_reply(_observation(1, "Выручка выросла")), reported_cost_usd=5.0)
+        ),
+        config=_config(),
+        meter=CostMeter(ceiling_usd=0.01),
+    )
+    assert overrun.status == STATUS_FAILED
+    assert overrun.error.code is ErrorCode.COST_BUDGET_EXCEEDED
+    assert overrun.model_calls[0].cost_basis == "estimated", (
+        "the overrun record's cost came from the pin's rates, so its basis is estimated "
+        "whatever the provider reported alongside it"
+    )
+    # The discriminator. Without it the assertion above passes just as happily on a build
+    # where the success path is also hard-wired to `estimated`, which would be wrong.
+    success = _run(
+        _response(_reply(_observation(1, "Выручка выросла")), reported_cost_usd=0.02)
+    )
+    assert success.model_calls[0].cost_basis == "measured"
+
+
+def test_cost_basis_cannot_be_omitted_by_a_call_site() -> None:
+    """The guard that makes the test above hold for a call site nobody has written yet.
+
+    `W11-FIX` flagged the default and correctly declined to act with no defect behind it;
+    the second call site, added later, is the defect. Removing the default is what closes
+    the row -- an argument in a docstring does not stop a third call site being silent.
+    """
+    from inspect import Parameter, signature
+
+    from auditmanager.analysis.text.stage import _record
+
+    parameter = signature(_record).parameters["cost_basis"]
+    assert parameter.default is Parameter.empty, (
+        "`_record` gives `cost_basis` a default again. A provenance field states how a "
+        "number was arrived at; only the call site knows, so only the call site may say."
+    )
