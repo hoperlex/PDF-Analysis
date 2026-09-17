@@ -28,3 +28,127 @@ It is not under `tests/integration/api/`, because those suites assert *rules*; t
 *bytes*, it is deleted the moment wave 13 ends, and mixing the two would leave a reader unsure
 which failures are contract failures.
 
+## 2. What is captured
+
+33 records, `tests/characterization/w13_baseline/records/*.json`. Each carries the request,
+the status, **every** response header, and the body — bytes for the binary ones, text for the
+JSON ones — plus the enumerated list of substitutions that record used and why each was
+allowed.
+
+**`startRun` is case 03**, as early as its own prerequisites (a project, a document) allow.
+`D-5` records `POST /api/v1/runs` answering **500 twice** to the only browser that has ever
+driven this system, while every in-process suite and every certification had it green.
+Capturing it first means a wrong in-process capture shows up at the start of the run.
+
+| Group | Cases |
+|---|---|
+| the twelve operations, success | `01` createProject, `02` uploadDocument, `03` startRun, `06` getRunStatus, `08` listRunFindings, `09` getFinding, `10` appendDecision, `11` listDecisionHistory, `12` exportRunCsv, `13` getDocumentVersion, `14` streamDocumentVersionContent, `16` listProjects |
+| the five negative-envelope refusals | `17` `pdf_magic_bytes`, `18` `byte_size <= 26214400`, `19` `not_encrypted`, `20` `1 <= page_count <= 30`, `21` `every_page_has_extractable_text` |
+| `additionalProperties`, every write body | `23` createProject, `24` startRun, `25` appendDecision, `26` uploadDocument (an undeclared **part**) |
+| idempotency | `04` startRun replay, `05` startRun replay under a normalised property, `05b` key-reuse **conflict**, `05c` createProject replay |
+| the 26 MiB boundary, both sides | `18` framed body of exactly 27 262 976 bytes → the **envelope** answers; `22` one byte more → the **transport** answers with `max_bytes` |
+| Range | `15` `bytes=100-163` → 206, `Content-Range`, a 64-byte window |
+| the CSV | `12`, bytes: BOM `ef bb bf` and CRLF, compared as bytes |
+| `X-Correlation-Id` | `07` supplied and echoed (the supplied value is a literal, so the echo is pinned exactly); assigned in the other 32 |
+| the layer's own refusals | `27` missing `Idempotency-Key`, `28` no route, `29` **404 and not 405** for a declared path under an undeclared method, `30` a malformed identity → `not_found` |
+| **the D-7 exception** | `31`, and only `31` |
+
+**What is not captured**, said plainly so nobody reads an absence as a pin:
+
+- **anything about authorization.** The contract carried no `securitySchemes` when this was
+  taken (`D-6`), so every request here is unauthenticated **and is answered**. `T-6` changes
+  every operation's unauthenticated behaviour and this baseline has nothing to say about that.
+  It is the first thing the corpus's own `README.md` says;
+- **any `live` or `proxy` provider path.** Recorded mode throughout; no live provider is
+  needed and the capture asserts it cannot spend;
+- **pagination past the first page.** `16` pins the page envelope and asserts the cursor
+  decodes to exactly the page's last sort key, but no second page is fetched;
+- **the query filters** on `listRunFindings` (`category`, `verdict`) and the `limit`/`cursor`
+  refusals. `tests/integration/api/test_query_surface.py` covers those as rules; this is a
+  baseline of bytes and it does not duplicate them;
+- **the database-refusal paths** (`AM001`/`AM002`/`AM003` → `state_transition_not_allowed`).
+  `tests/integration/api/test_database_refusals.py` owns them;
+- **`dependency_unavailable`,** which needs the store to be down rather than to refuse a
+  credential.
+
+## 3. How generated values were made comparable
+
+A value may be replaced by a `{{token}}` in exactly two ways, and the record names every one
+it used:
+
+1. **the journey already knows it** — it supplied the value or read it from an **earlier**
+   response in the same journey. Substitution is by **exact value**, never by pattern;
+2. **it sits under a field named one at a time in `journey.py`** — `TIMESTAMP_FIELDS`,
+   `GENERATED_ID_FIELDS` — **and matches a pinned format** (`TIMESTAMP_FORMAT`,
+   `CORRELATION_FORMAT`, the per-field identity shapes). The value is checked against its
+   pattern *first*, then replaced by exact value.
+
+Nothing is substituted by scanning a body for things that look generated. A changed key
+order, a changed separator, a renamed property, a dropped field, a different message, a moved
+constraint, a different status or a missing header is a byte difference.
+
+Two values get a rule rather than a literal, and both say so in the record:
+
+- **`Content-Length`** is tokenised unconditionally. It is a function of the body, the body is
+  compared byte for byte, and the comparison separately asserts
+  `Content-Length == str(len(body))` — `test_a_content_length_that_does_not_describe_the_body_is_reported`
+  proves that half can fail. Pinning the number as well would restate the body comparison and
+  would go red for a token whose replacement is a different length, which is noise;
+- **`X-Correlation-Id` when the request supplies none.** Checked against the pinned
+  `^cid-[0-9a-f]{32}$` before it is tokenised. Case `07` supplies one and pins the echo as a
+  literal.
+
+**Nothing was silently normalised, and the harness proved it twice.** The first capture left
+`model_call_id` untokenised; the comparison went red against a second journey and named the
+byte. It is now a declared `GENERATED_ID_FIELDS` entry with its own pinned shape rather than
+an unexplained exclusion. The same run found identities leaking into the *request* targets of
+seven records, which are now tokenised too.
+
+Every expectation is a literal. Not one is imported from the module it checks —
+`docs/program/dispatch/OPERATING_CONSTRAINTS.md` §12, three instances on record.
+
+## 4. The demonstration that the comparison can fail
+
+Two layers, both required, because a baseline nobody has seen reject anything will accept
+anything.
+
+**In the tree, permanently.** `test_the_comparison_reddens_on_a_planted_difference` plants a
+moved status, a dropped `X-Correlation-Id`, a renamed body property, a body whose keys were
+re-ordered and re-separated by `json.dumps`, a CSV with its BOM removed, a CSV with LF for
+CRLF, and a fixture whose pinned digest no longer matches — and requires each to be reported.
+It asserts the unperturbed record matches first, so the test cannot pass by being broken.
+
+**By hand, against the committed records.** Log: `/root/w13gold-logs/perturbation-demo.log`.
+Four committed records were edited — `03` status `202`→`200`, `18`'s constraint
+`byte_size <= 26214400`→`max_bytes`, `12`'s first CRLF→LF, `31`'s
+`permission_denied`→`storage_credential_refused` — and the suite went
+
+```
+5 failed, 33 passed
+```
+
+failing exactly those four cases plus the planted-difference test (whose precondition is
+record `03`). `git checkout` restored them and the suite returned `38 passed`. **The D-7
+record is compared like any other**: being the permitted exception does not make it
+unwatched, it makes the change require a citation.
+
+## 5. The D-7 path, marked
+
+`records/31-streamDocumentVersionContent.storage_permission_denied.json`, and it is the only
+record carrying an `exception` block. Today it is:
+
+```
+403  error_code "permission_denied"
+     details {"required_capability": "blob_storage_rw", "aggregate_type": "Blob"}
+     message "The authenticated subject is not permitted to perform this operation
+              on this resource. Authorization is decided server-side."
+```
+
+— for a refusal in which **there is no authenticated subject at all**: the application's own
+S3 credential was rejected by the store. Reached by building a second application through the
+composition root's own `environ` parameter with a wrong `S3_SECRET_ACCESS_KEY`; nothing under
+`src/` is touched and no module is patched.
+
+`test_exactly_one_record_is_marked_as_the_permitted_exception` requires the marked set to be
+exactly this one case, so the exception is countable rather than arguable at the end of a long
+wave. **Every other difference is a failure of the wave, whatever argument accompanies it.**
