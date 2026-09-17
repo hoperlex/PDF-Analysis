@@ -233,6 +233,42 @@ cost this programme a session each, which is why it is here before the task exis
 Check: `python3 -c "import json;d=json.load(open('.local/norms/corpus/MANIFEST.json'));print(len(d['documents']))"`
 and the key set of `blocks['blocks'][0]` in any document's `blocks.json`.
 
+### D-10 — `make mutation-copy` cannot serve a tests-only stream
+
+The target copies `src/` and links `contracts/`, `docs/`, `fixtures/`, `db/`, `tools/`. It
+does **not** carry `tests/`, so a stream whose deliverable *is* a test module — an assertion
+engine, a comparison harness — cannot mutate its own code with it. `W13-CONF` hit this and
+worked around it with a hand-built scratch tree copy, which worked because its engine resolves
+paths from `__file__`.
+
+Not urgent: the workaround holds and the stream reported it rather than skipping the proof.
+But the target exists so that anti-vacuity work does not need a bespoke harness each time, and
+three of the last four waves had a tests-only stream.
+
+Check: `grep -n "for name in" -A 2 Makefile` at the `mutation_copy` helper.
+
+### D-11 — `certifi` is MPL-2.0, and `OD-01` is narrower than the programme quotes it
+
+`W13-PIN` added six pins; the resolution added three transitives, one of them **`certifi`
+2026.7.22, MPL-2.0** — weak, file-level copyleft.
+
+Two things bound it, and both are measured rather than reassuring:
+
+- **`OD-01` is about the PDF text-extraction library specifically.** Its own words
+  (`PROTOTYPE_EXECUTION_PLAN.md` line 574): *"a permissively licensed extractor giving
+  per-character boxes… a copyleft library is blocked until the owner rules on its licence"*.
+  `ALPHA_ROADMAP.md` §4 quotes it as "`OD-01` blocks copyleft", which **widens a decision past
+  what it says** — the same scope inflation as D-1.9.
+- **`certifi` reaches the tree only through `httpx` → `httpcore`, and `httpx` is in the test
+  group.** The runtime closure stays entirely permissive.
+
+So nothing is blocked today. It is registered because the *next* pin request will be argued
+against whichever reading of `OD-01` is at hand, and the narrow one is the one the decision
+supports.
+
+Check: `python3 -c "import tomllib;print(tomllib.load(open('uv.lock','rb')))"` for the
+provenance chain, and line 574 of `PROTOTYPE_EXECUTION_PLAN.md` for the wording.
+
 ## 1.9 — the authority order, ruled 2026-09-17
 
 **The ADRs and the architecture corpus are the primary source of truth. A roadmap is a draft
