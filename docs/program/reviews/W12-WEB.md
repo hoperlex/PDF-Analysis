@@ -168,3 +168,36 @@ written by `W10-FND`, pins seventeen literals and asserts
 | UE-18 | the `too_large` message offers a retry | KILLED | *gives every problem a message that offers no retry* |
 | UE-19 | `formatBytes` uses decimal units | KILLED | *formats in binary units* |
 | UE-20 | `formatBytes` invents a size for a negative input | KILLED | *does not invent a size for a nonsense input* |
+
+### 2.3 Batch 3 — the evidence surface (`quotation.ts`, `pages.ts`, `admission.ts`, `grouping.ts`)
+
+This is criterion 6's surface and it is where the sweep found most of what it found.
+
+| # | Mutation | Result | What refused |
+|---|---|---|---|
+| QT-01 | `quotationText` trims the quotation | KILLED | `review/evidence-viewer` — *renders "  leading and trailing whitespace  " byte-for-byte* |
+| QT-02 | `quotationText` collapses interior whitespace | KILLED | `review/evidence-viewer` ×4 |
+| **QT-03** | **`quotationText` NFC-normalizes the quotation** | **SURVIVED** | — |
+| **QT-04** | **code-point length becomes UTF-16 length** | **SURVIVED** | — |
+| **QT-05** | **`anchorMatchesQuotation` always true** | **SURVIVED** | — |
+| **QT-06** | **`anchorLabel` drops the character range** | **SURVIVED** | — |
+| **QT-07** | **`anchorLabel` reports `page_number + 1`** | **SURVIVED** | — |
+| **PG-01** | **`declaredPages` sorts lexicographically** | **SURVIVED** | — |
+| PG-02 | `declaredPages` stops de-duplicating | KILLED | `review/evidence-viewer` — *offers navigation only to the declared pages* |
+| **PG-03** | **`firstDeclaredPage` returns the last page** | **SURVIVED** | — |
+| **PG-04** | **`isDeclaredPage` admits every page** | **SURVIVED** | — |
+| **PG-05** | **`evidenceOnPage` stops filtering by page** | **SURVIVED** | — |
+| PG-06 | `evidenceOnPage` orders by descending ordinal | KILLED | `review/evidence-viewer` — *renders every quotation on the page, not only the first* |
+| **PG-07** | **`orderedEvidence` ignores the page** | **SURVIVED** | — |
+| PG-08 | `observationProviderMode` hardcodes `live` | KILLED | `review/provider-mode` ×2 |
+| AD-01 | admission stops refusing a diagnostic row | KILLED | `review/finding-admission` |
+| **AD-02** | **the diagnostic-field check ignores `grounded: true`** | **SURVIVED** | — |
+| **AD-03** | **`DIAGNOSTIC_FIELDS` loses `ungrounded_reason`** | **SURVIVED** | — |
+| **AD-04** | **`DIAGNOSTIC_FIELDS` loses `grounded`** | **SURVIVED** | — |
+| AD-05 | an empty `finding_uid` is admitted | KILLED | `review/finding-admission` |
+| AD-06 | a finding with no evidence is admitted | KILLED | `review/finding-admission` |
+| AD-07 | `admitFindings` drops the integrity fault | KILLED | `review/finding-admission` |
+| AD-08 | `admitFindings` counts nothing as refused | KILLED | `review/finding-admission` |
+| GR-01 | grouping renders empty categories | KILLED | `review/finding-admission` |
+| GR-02 | grouping follows the reversed contract order | KILLED | `review/finding-admission` |
+| **GR-03** | **`countGrouped` counts groups, not findings** | **SURVIVED** | — |
