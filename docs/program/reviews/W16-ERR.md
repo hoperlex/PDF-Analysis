@@ -279,3 +279,103 @@ Those four prose accounts match what I measured in the tree line for line. Both 
 each with a test that goes red when the mapping is put back. The prior reviews are historical
 records and were **not** rewritten.
 
+## 6 — the gate, and a measurement I corrupted myself
+
+**I ran the gate twice. The first run is void, and the reason is mine.**
+
+When the first `make gate` was already running I still had an earlier
+`PYTHONPATH=src .venv/bin/python -m pytest tests -q` alive in the background, started before
+the gate and never stopped. **Both were pointed at this lane** — the same `audit_w16b`
+database and the same `auditmanager-gate-w16b` bucket. The gate's battery produced one
+failure and a long cascade of setup errors in a single band around 71%, which is what two
+pytest sessions competing for one Postgres and one MinIO look like. I killed the stray run and
+the contaminated gate rather than read anything off it. **No figure from that run is reported
+here.** The log is kept at `/root/w16err-logs/gate1.log` as evidence of the mistake.
+
+Two things worth recording with it:
+
+- this is `MEMORY.md`'s *"never measure during a fan-out"* in a form the note does not cover —
+  not a subagent fan-out, just my own second process on my own lane. The rule generalises:
+  **one measurement at a time, per lane**;
+- the other session live at the time (`W15`'s integrator gate in `/root/projects/PDF-Analysis`)
+  was **not** the cause and was not interfered with. Lane isolation held exactly as `FF-01`
+  section 5 intends — `gate-b0` / `audit_b0` / ports 55460/59060 against my `gate-w16b` /
+  `audit_w16b` / ports 55780/59380. I verified that before touching anything, and left its run
+  alone.
+
+I also broke **"commit, then gate"** on that first run by appending to this review while it was
+in flight. The second run was launched from a tree with `git status --porcelain` empty and
+nothing was written to the checkout until it finished.
+
+### The gate, with its real exit code
+
+Read from the log with `grep -n "GATE_EXIT" /root/w16err-logs/gate3.log`, **never through
+`| tail`** — a pipe returns the last stage's status, and this programme has already pushed a red
+gate that way. My own `make bootstrap` wrapper made exactly that mistake early in this session
+(a trailing `tail` reported success over `BOOTSTRAP_EXIT=2`), which is why every figure below
+is grepped out of the file by name rather than eyeballed off the end of a pipeline.
+
+```
+$ make gate            # /root/w16err, tree committed-clean, nothing else of mine running
+...
+GATE OK: battery, foundation, frontend and whitespace all pass
+GATE_EXIT=0
+```
+
+| measured | value | brief's expectation |
+| --- | --- | --- |
+| **exit code** | **0** | — |
+| battery | **1728 passed, 5 skipped, 168 subtests** in 214.53s | 1726 / 5 / 168 |
+| foundation | **35 passed** in 30.54s | 35 |
+| frontend | **498 passed**, 39 files, 4.21s | 498 |
+| whitespace | pass | — |
+
+**1728 rather than 1726 is exactly this wave's two new tests** — the proxy envelope guard and
+the bucket envelope guard — and nothing else. Skips, subtests, foundation and frontend are all
+unchanged, which is the evidence that two repairs to live error mappings moved no other count.
+
+**Three runs, and only the third is the reported one.** `gate2` was clean and green on the
+Python side with the same 1728 / 5 / 168 and foundation 35, but exited **2** at the frontend
+step: `web/node_modules is absent in this checkout` — a linked worktree does not inherit it and
+the gate refuses to borrow another checkout's modules. That is a **provisioning step the brief
+omits**: a fresh worktree needs `npm --prefix web ci` before `make gate` can finish. I ran it
+(`NPM_EXIT=0`, 184 packages) and re-ran the gate whole rather than resuming it.
+
+Logs: `/root/w16err-logs/` — `gate1.log` (void, self-contaminated), `gate2.log` (green battery,
+red on the missing modules), `gate3.log` (**the reported run**), plus `bootstrap2.log` and
+`npm-ci.log`.
+
+## 7 — what a reviewer should carry forward
+
+1. **`D-7`'s shape had three instances, not one.** `R-3` settled the blob store's. This wave
+   settled the model proxy's (2.1) and the missing bucket's (2.2). Worth stating as a pattern
+   rather than three tickets: **a class that borrows another meaning's code**. A cheap sweep
+   for the rest would be to diff each `StorageError`/`DomainError` subclass's `code` against
+   that code's catalog `summary` and read the two side by side.
+2. **A 22nd code is a live candidate and is the owner's.** *Dependency misconfigured* — a
+   dependency that is reachable, answered, and is not set up correctly. It would cover the
+   missing bucket honestly, where `internal_error` merely covers it truthfully. Not proposed
+   as a reseal; recorded as a candidate, per `internal_mapping` rule 4.
+3. **`D-4` should be re-scoped, not closed.** Its stated path is closed and guarded; the live
+   text now misdescribes the tree. The `or ""` at `blob_repository.py:260` is the remaining
+   instance and is latent behind a DB constraint.
+4. **`D-3`'s row needs its count corrected** (two call sites, one defaulting) even though the
+   verdict stands.
+5. **The characterization corpus does not cover either repaired path.** If these envelopes are
+   meant to be byte-pinned, that is a record to add — and it is a decision, not an oversight to
+   fix quietly.
+
+## 8 — boundaries observed
+
+- **No `contracts/` byte changed.** No reseal, no catalog change, no owner decision taken.
+- **No `web/`, no `infra/`, no `Makefile`.** `W16-WEB` and `W15-RUN` paths untouched; the
+  `W15` integrator's concurrent gate in the main worktree was left strictly alone.
+- **No tag, no push to `main`, no merge.** Branch `agent/w16-err` only.
+- Files changed: `src/auditmanager/analysis/text/proxy.py`,
+  `src/auditmanager/storage/errors.py`,
+  `tests/integration/analysis_text/test_proxy_adapter.py`,
+  `tests/integration/storage/test_unavailable.py`, and this review. `web/node_modules/` is
+  git-ignored and is provisioning, not a change.
+- **Elapsed wall clock:** ~24 minutes by the machine's own clock
+  (`date -u`, 2026-09-17T23:03:37Z on arrival → 23:27:42Z after the green gate); the gate's own
+  internal durations are battery 214.53s, foundation 30.54s, frontend 4.21s.
