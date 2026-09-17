@@ -202,3 +202,61 @@ Two further notes so the row can be judged without re-deriving this:
 **No change made**, for two reasons that are each sufficient: there is no defect behind it, and
 `analysis/text/stage.py` is not a file this session owns.
 
+## 3 — the standard: characterization, and where the brief's premise did not hold
+
+The brief's STEP 3 says: *"Every repair changes bytes a caller sees, so **every one is a
+characterization change**"*, and directs me to record 31's `purpose` / `permitted_change` form
+for anything I change.
+
+**Measured: neither repair changes a single byte in `tests/characterization/w13_baseline/`.**
+Record 31 was read first, as instructed, and its form is the right one — it simply had nothing
+to apply to here:
+
+- the 33 records were enumerated and none exercises the model proxy at all (no record reaches
+  a `401` from it) and none exercises a missing bucket. The only storage failure in the corpus
+  is record 31 itself, a refused **credential**, which is `StorageCredentialRefusedError` and
+  is not a class this wave touched;
+- `PYTHONPATH=src .venv/bin/python -m pytest tests/characterization -q` → **55 passed**, before
+  and after both repairs, with no record edited;
+- the `validation_failed` records that do exist (17, 18, 19, 23–27) are upload and request-body
+  refusals — genuine caller-side validation, and none of them routes through
+  `StorageBucketMissingError`.
+
+So **no record was edited and no `permitted_change` was written**, because writing one would
+have claimed a change that did not happen. Stating it here instead. The corollary is worth the
+register's attention: **the two envelopes this wave repaired were not pinned by the byte-for-byte
+corpus at all** — they were pinned only by the integration tests named above, which is why the
+mutation proofs had to come from there.
+
+### On `D-10` and the mutation method
+
+`D-10` is accurate about the Makefile — `mutation_copy` (`Makefile:551-559`) does `cp -a src`
+and symlinks `contracts docs fixtures db tools`; `tests` is absent. But **it did not actually
+bind this wave**, and I would rather say so than imply the workaround was forced: both of my
+mutations were in `src/`, and the target's own recipe (`Makefile:~933`) covers exactly that case
+by running the worktree's tests with `-o pythonpath=<copy>/src`. I mutated **in place** anyway,
+from a committed-clean tree, reverting with `git checkout -- <file>` and confirming
+`git status --porcelain` empty afterwards each time. `D-10` blocks a *tests-only* mutation; that
+is not what either of these was.
+
+## 4 — anything false in this brief
+
+Checked every premise against the tree, as instructed. **The brief is accurate on every line
+number and every flag** — `proxy.py:222`, `storage/errors.py:112` and `:107`, the `retryable`
+flags, the class hierarchy, and the whole of STEP 1's account of `R-3` and the 21st code. That
+is a change from the pattern the brief warns about. Three things are nonetheless off:
+
+1. **"Every one is a characterization change" is false**, as measured above. Zero of the 33
+   records change. The repairs are real; the corpus simply never covered these two paths.
+2. **STEP 2.3 and STEP 4 contradict each other.** `D-3` lives in
+   `src/auditmanager/analysis/text/stage.py` and `D-4`'s residual in
+   `src/auditmanager/storage/blob_repository.py`. STEP 4 grants this session `proxy.py`,
+   `storage/errors.py`, their tests, the records and this review — **neither file is owned**.
+   As it happens both rows measured out to "no change warranted", so nothing was blocked; had
+   either been live, I would have had to stop at the ownership line and report.
+3. **The expected gate figure is pre-change.** The brief says *1726 passed*. This wave adds two
+   tests, so the arithmetic target is **1728**; see below for what was actually measured.
+
+One stale item in the register rather than the brief: **`D-3`'s own text says "one call site
+exists and passes it explicitly"; there are two, and the second does not.** Detail in 2.3.
+
