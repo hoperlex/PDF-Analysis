@@ -431,7 +431,81 @@ unswept region. That region is still unswept and this wave did not sweep it.
 
 ## 9. The gate
 
-<!--GATE-->
+`make gate` on instance `gate-w15a` (POSTGRES_PORT 55750, S3 59350/59351, database
+`audit_w15a`, bucket `auditmanager-gate-w15a`), at `19ca6f5`:
+
+```
+1726 passed, 5 skipped, 1 warning, 168 subtests passed in 204.92s
+ Test Files  39 passed (39)
+      Tests  498 passed (498)
+foundation: 35 passed
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+Battery, foundation and subtests are exactly the figures the dispatch names. The frontend
+is 39 files / 498 tests against the expected 440, which is this wave's 58 new tests.
+`/root/w15auth-logs/gate2.log`.
+
+### 9.1 The first `make gate` failed, and the cause is not mine — it is a live defect
+
+The **first** run on this lane came back `1679 passed, 5 skipped, 47 errors` — 1679 + 47 =
+1726, so the deficit is exactly these 47, all of them setup errors in one session-scoped
+fixture in `tests/characterization/w13_baseline/test_response_baseline.py`:
+
+```
+E   AssertionError: next_cursor is null although a second project exists; a bounded page
+    with more rows behind it must carry a continuation token
+tests/characterization/w13_baseline/journey.py:1101
+```
+
+**It is not this wave's.** `git diff --stat origin/dev..HEAD -- src/ tests/ contracts/ db/
+pyproject.toml Makefile infra/` is empty: this branch changes no Python, no contract, no
+migration and no infrastructure, and the battery never reads `web/`.
+
+**It is a real, reproducible defect in wave 13's tree**, not flakiness. Measured on a
+database created and migrated for the purpose:
+
+```
+DROP DATABASE / CREATE DATABASE audit_w15a_probe; alembic upgrade head
+project rows: 0
+RUN 1   →  8 passed, 47 errors   ← the assertion above
+project rows after run 1: 1
+RUN 2   →  55 passed
+```
+
+**The cause, read off the source.** `journey.py:654` creates a "cursor setup" project so
+that case 16's `GET /projects?limit=1` has a second row behind it — the comment says
+`next_cursor` is then non-null "**by construction**". That call is `api.send(...)` and does
+**not** go through `record()`. `record()` is the only thing that attaches the credential,
+and the `Caller` docstring states the rule outright: *"it sends exactly the headers it is
+given, and adds none. The `T-6` credential is added by `record()`, not here."*
+
+So since `T-6` the setup call is answered `401 authentication_required` and **creates
+nothing**. Its response is discarded, so nothing notices. The count confirms it: after the
+failing run the table holds **one** project — case 01's — not two.
+
+The assertion at line 1101 therefore holds only on a lane whose `project` table already
+contains a row from an earlier run. That is precisely the "function of residue" `W13-CONF`
+added the setup call to eliminate: the conditional was removed, but the setup it was
+replaced by had already been broken by the authorization dependency landing in the same
+wave. `OPERATING_CONSTRAINTS.md` §9 is about exactly this shape.
+
+**Consequence for the programme, which is the part worth acting on: `make gate` is red on
+any lane whose database is fresh.** It has been green for wave 13 and wave 14 only because
+those lanes had been run before. A clean-clone reviewer, or any new session that
+provisions a new instance, sees 47 errors on the first run and a pass on the second.
+
+**Stopped at the boundary.** `tests/characterization/**` and `src/auditmanager/api/**` are
+wave 13's. The repair is one line — give that `api.send` the header `record()` gives
+everything else:
+
+```python
+headers={AUTHORIZATION_HEADER: f"Bearer {STATIC_TOKEN}",
+         "Idempotency-Key": f"w13base-{tag}-cursor-setup", **json_headers},
+```
+
+and it wants a check that the setup call's status was 201, because a silently discarded
+response is what let this sit. I did not make the change.
 
 ---
 
