@@ -10,6 +10,9 @@ later"; `3ebe34d` is four commits later on the same line.
 
 I make **no claim about PC-01 or any criterion.** `W12-CERT` follows.
 
+**Elapsed: 11:29:20 to 11:48 +05:00, about 19 minutes wall-clock**, of which the
+two full gate runs are roughly 8 and the four mutation-copy suite runs about 1.
+
 ---
 
 ## 1. The defect, confirmed against the tree
