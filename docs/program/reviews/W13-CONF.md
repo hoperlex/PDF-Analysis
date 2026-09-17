@@ -400,10 +400,13 @@ on arrival and `import fastapi` works; the contract is OpenAPI 3.1.0 with 12 ope
 `--ignore` list; `make mutation-copy` does symlink `contracts/` without `FULL=1`; both
 existing drift guards exist and say what the brief says they say.
 
-**Two brief premises that were simply not yet true, stated so they are not read as claims:**
-`W13-SEAL` is described as "running now", and stage 2 as building the app beside me. At the
-last fetch neither had landed on `origin/dev` — no `securitySchemes` in the contract, no
-FastAPI application in `src/`. The comparison was built to handle the resealed contract
+**Two brief premises that are true of the sessions but not yet of the tree**, stated so
+they are not read as claims about what I compared against. `W13-SEAL` is described as
+"running now" and stage 2 as building the app beside me. Both sessions are indeed live —
+`W13-SEAL` was observed running its suites out of `/root/w13seal` while this gate ran, which
+is also why the final `make gate` took far longer than the baseline. But neither had
+**landed** on `origin/dev` at the last fetch: no `securitySchemes` in the contract, still 43
+schemas, and no FastAPI application in `src/auditmanager/api/`. The comparison was built to handle the resealed contract
 anyway (`N7`, and `TestN7EffectiveSecurity` runs every case against a synthetic resealed
 copy), and it re-reads the contract from disk on every run rather than caching it, which is
 what the brief asked for.
@@ -423,4 +426,45 @@ instead, and the engine is resolved from `__file__` so that this works.
 | New dependencies | **none** — FastAPI and pydantic were pinned by `W13-PIN` |
 | Files touched outside my ownership | **none** |
 | `make gate` on arrival, `6c4b236` | 1 failed, 1542 passed, 5 skipped, 167 subtests; foundation 35; exit 2 |
-| `make gate` with this work | recorded in §10 |
+| `make gate` with this work, `73e855f` | **GATE OK**, exit 0: **1628 passed, 5 skipped, 167 subtests**; foundation **35**; frontend **35 files, 440 tests**; whitespace clean |
+
+1628 = the brief's 1543 plus this stream's 85. The brief's figure is what the tree gives
+when `16-listProjects.success` lands on the side of the residue it was recorded against.
+
+**And that is the closing piece of evidence for §8.** The same battery, at the same commit
+set apart from 85 tests that touch nothing it reads, was **red on arrival and green here**.
+The only thing that changed between the two runs is the contents of the `project` table: the
+first run found one project and got `next_cursor: null`, the second found the residue of the
+first and got a token. A safety net that answers differently on the second run is not yet a
+safety net, and stage 2 is about to be judged by it.
+
+## 10. Wall clock, and one caveat about the figure
+
+**Elapsed: 29 minutes**, arrival to this line (2026-09-18 00:22 to 00:51, +05:00).
+
+The caveat, per `OPERATING_CONSTRAINTS.md` §12's rule that a measured figure is worth what
+its query is worth: **the two `make gate` runtimes in this record are not comparable to each
+other.** The baseline took 196 s for the battery; the final run took 303 s for a battery 85
+tests larger, but it ran with a load average near 16 against three other live sessions
+(`/root/w13seal`, `/root/w13seal-base` and one more) driving their own suites on the same
+box. The 107 s difference is contention, not this stream's tests — which take **0.85 s**
+measured alone:
+
+```
+.venv/bin/python -m pytest -c pyproject.toml --rootdir=. -q   tests/contract/api_v1/test_openapi_conformance.py -p no:randomly
+→ 85 passed in 0.85s
+```
+
+## 11. What the integrator inherits
+
+* Four commits on `agent/w13-conf`, based on `6c4b236`. Not pushed, not tagged, not merged.
+* **The wiring is one file and is deliberately not written.** When `W13-API` lands, the
+  remaining step is a new `tests/contract/api_v1/test_openapi_conformance_live.py` holding
+  `differences(surface(json.loads(CONTRACT_PATH.read_text())), surface(app.openapi()))` and
+  asserting it empty. **No skipping placeholder was left behind**: a `pytest.importorskip` on
+  a module that does not exist yet is a green that means nothing, and it would sit in the
+  gate looking like coverage until somebody read it. There is nothing to delete and nothing
+  to remember — the wiring is absent, visibly.
+* The three stage-2 findings in §6 are the useful part of that absence: they were measured
+  from a real generated document and each has a test waiting for it.
+
