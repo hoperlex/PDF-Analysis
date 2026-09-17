@@ -37,6 +37,24 @@ dependencies = [
     "pypdf==6.18.0",
     # Model provider SDK (OD-02). Anthropic first-party API. MIT.
     "anthropic==1.4.0",
+    # --- Alpha transport pins, owner-ruled 2026-09-17 (R-2). ---
+    # `ADR-0002`, `TECHNOLOGY_BASELINE.md`, `ARCHITECTURE_BIBLE.md` P-05 and
+    # `PROTOTYPE_PROFILE.md` §2 have named FastAPI since the bootstrap; the lock never
+    # carried it, and `api/README.md` described that absence as a decision until the owner
+    # corrected it. A pin set records what a lane may install; it cannot overrule an ADR.
+    #
+    # The addition is five distributions because `anthropic` already pulled this family's
+    # cores into the closure: pydantic 2.13.5 (fastapi needs >=2.9.0), typing_extensions
+    # 4.16.0 (>=4.8.0), anyio 4.15.1 (starlette needs <5,>=3.6.2) and h11 0.16.0
+    # (uvicorn needs >=0.8) are all already present and are not additions.
+    #
+    # Licences read from each wheel's own METADATA, not recalled. OD-01 blocks copyleft;
+    # all five are permissive and none comes close.
+    "fastapi==0.141.1",       # MIT
+    "starlette==1.6.0",       # BSD-3-Clause — fastapi's ASGI toolkit
+    "uvicorn==0.53.0",        # BSD-3-Clause — the ASGI server
+    "click==8.5.0",           # BSD-3-Clause — uvicorn's only unmet requirement
+    "python-multipart==0.0.32",  # Apache-2.0 — FastAPI's multipart parser for uploadDocument
 ]
 
 [dependency-groups]
@@ -44,6 +62,18 @@ dependencies = [
 # it is not a default group, so no lane can pull it in implicitly.
 test = [
     "pytest==9.1.1",
+    # The ASGI test client, owner-ruled 2026-09-17 (R-2, "full set").
+    #
+    # `starlette.testclient` does `import httpx`, and httpx is NOT importable in this
+    # environment: what the closure carries is `httpx2` 2.12.0, a *different* distribution
+    # providing a different module name. The alpha plan's stage 0 anticipated exactly this
+    # and told the stream to report what is resolvable rather than assume a name. Measured
+    # rather than assumed, so it is a real sixth pin and it is named here.
+    #
+    # It lives in the test group, not in runtime dependencies: nothing under `src/` imports
+    # it, and a client library in the runtime closure of a deployed application is surface
+    # for no purpose.
+    "httpx==0.28.1",          # BSD-3-Clause
 ]
 
 [tool.pytest.ini_options]
