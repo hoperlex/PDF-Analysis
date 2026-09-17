@@ -25,7 +25,7 @@ from auditmanager.storage import (
     S3StorageSettings,
     StorageBucketMissingError,
     StorageConfigurationError,
-    StoragePermissionDeniedError,
+    StorageCredentialRefusedError,
     StorageUnavailableError,
     derive_blob_id,
     sha256_of,
@@ -113,7 +113,7 @@ def test_the_package_ships_no_filesystem_adapter() -> None:
     assert adapters == {"BlobStore", "S3BlobStore"}
 
 
-def test_refused_credentials_are_typed_permission_denied(
+def test_refused_credentials_are_typed_dependency_credential_refused(
     settings: S3StorageSettings,
 ) -> None:
     wrong = S3BlobStore(
@@ -123,9 +123,11 @@ def test_refused_credentials_are_typed_permission_denied(
             secret_access_key="a3-wrong-secret-key",
         )
     )
-    with pytest.raises(StoragePermissionDeniedError) as raised:
+    with pytest.raises(StorageCredentialRefusedError) as raised:
         wrong.check_access()
-    assert raised.value.code == "permission_denied"
+    assert raised.value.code == "dependency_credential_refused"
+    # The keys that made the two 403s indistinguishable are gone with the code.
+    assert dict(raised.value.details) == {"dependency": "blob_storage"}
 
 
 def test_publishing_with_refused_credentials_publishes_nothing(
@@ -139,7 +141,7 @@ def test_publishing_with_refused_credentials_publishes_nothing(
             secret_access_key="a3-wrong-secret-key",
         )
     )
-    with pytest.raises(StoragePermissionDeniedError):
+    with pytest.raises(StorageCredentialRefusedError):
         wrong.put_blob(
             PAYLOAD,
             declared_sha256=sha256_of(PAYLOAD),
@@ -198,7 +200,7 @@ def test_failure_text_never_names_the_bucket_or_a_credential(
             secret_access_key="a3-wrong-secret-key",
         )
     )
-    with pytest.raises(StoragePermissionDeniedError) as raised:
+    with pytest.raises(StorageCredentialRefusedError) as raised:
         wrong.check_access()
     error = raised.value
     rendered = "\n".join(

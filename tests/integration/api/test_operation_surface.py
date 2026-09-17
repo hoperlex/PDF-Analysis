@@ -109,11 +109,19 @@ def test_no_thirteenth_operation_answers(router: Router) -> None:
 def test_the_document_declares_no_operation_outside_the_twelve_capabilities(
     openapi_document: dict[str, Any],
 ) -> None:
-    """No authentication, tenancy, WebSocket, export resource or polling endpoint.
+    """No tenancy, WebSocket, export resource or polling endpoint, and no auth *endpoint*.
 
     The frozen document's own description says the surface deliberately has none of
     these. This asserts the absence rather than trusting the prose, so a later widening
     of the document is visible here too.
+
+    Until the wave-13 reseal this also asserted that `components.securitySchemes` was
+    absent, with the reason "PC-01 has no authentication and no role model". Owner
+    ruling `R-3` of 2026-09-17 reversed the premise, so the assertion is inverted rather
+    than deleted: the scheme must now be there, and `/auth`, `/login` and `/token` must
+    still not be, because the seam is a header the deployment satisfies and never a
+    thirteenth operation. `tests/contract/domain_p02/test_openapi_document.py` owns the
+    shape of the scheme itself.
     """
     paths = set(openapi_document["paths"])
     forbidden = ("/auth", "/login", "/token", "/tenants", "/exports", "/jobs", "/imports")
@@ -122,6 +130,12 @@ def test_the_document_declares_no_operation_outside_the_twelve_capabilities(
             f"the document declares a path under {fragment}, which PC-01 excludes"
         )
     assert "components" in openapi_document
-    assert "securitySchemes" not in openapi_document["components"], (
-        "PC-01 has no authentication and no role model"
+    assert list(openapi_document["components"]["securitySchemes"]) == ["bearerAuth"], (
+        "the authorization seam is one bearer scheme declared once, per R-3"
     )
+    assert len(paths) == 10 and sum(
+        1
+        for item in openapi_document["paths"].values()
+        for method in item
+        if method in {"get", "put", "post", "delete", "options", "head", "patch"}
+    ) == 12, "the seam added an operation; it is a header, not a thirteenth endpoint"

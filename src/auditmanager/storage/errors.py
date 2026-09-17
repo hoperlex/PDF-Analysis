@@ -34,7 +34,6 @@ from typing import ClassVar, Final, Mapping
 # never be rendered into an error message.
 SAFE_DETAIL_KEYS: Final[frozenset[str]] = frozenset(
     {
-        "aggregate_type",
         "actual_sha256",
         "actual_size",
         "blob_id",
@@ -44,7 +43,6 @@ SAFE_DETAIL_KEYS: Final[frozenset[str]] = frozenset(
         "expected_size",
         "field",
         "media_type",
-        "required_capability",
         "role",
     }
 )
@@ -142,20 +140,36 @@ class StorageUnavailableError(StorageError):
         super().__init__(**details)
 
 
-class StoragePermissionDeniedError(StorageError):
+class StorageCredentialRefusedError(StorageError):
     """The configured application credentials were refused by the store.
 
     Raised for a rejected, missing or unsigned request against the private
     bucket. It is deliberately distinct from :class:`StorageUnavailableError`:
     a refused credential is not retryable and is not a degraded service.
+
+    It is equally distinct from the caller's rights. Until the wave-13 reseal
+    this class carried ``permission_denied`` -- the catalog code whose own
+    summary describes *"the authenticated subject"* -- for a scenario with no
+    authenticated subject in it at all. Owner ruling ``R-3`` of 2026-09-17
+    settled that collision (``DEBT_REGISTER.md`` ``D-7``): ``permission_denied``
+    keeps its contract meaning and this case took a code of its own. The class
+    was renamed with the code, because a class called *PermissionDenied* that
+    raises something else is the same confusion one layer down.
+
+    The detail vocabulary moved with it. ``aggregate_type`` and
+    ``required_capability`` are gone: they describe a subject's rights over the
+    addressed aggregate, they are what made the two 403s indistinguishable in
+    the envelope, and neither is true here. What is left is ``dependency``, the
+    stable class name :class:`StorageUnavailableError` already uses, so an
+    operator reads *which* credential was refused from the same vocabulary.
     """
 
-    code = "permission_denied"
+    code = "dependency_credential_refused"
     summary = "Object storage refused the configured application credentials."
-    allowed_details = frozenset({"aggregate_type", "required_capability"})
+    allowed_details = frozenset({"dependency"})
 
     def __init__(self, **details: object) -> None:
-        details.setdefault("aggregate_type", "Blob")
+        details.setdefault("dependency", BLOB_STORAGE_DEPENDENCY)
         super().__init__(**details)
 
 
@@ -285,7 +299,7 @@ __all__ = [
     "StorageBucketMissingError",
     "StorageConfigurationError",
     "StorageError",
-    "StoragePermissionDeniedError",
+    "StorageCredentialRefusedError",
     "StorageUnavailableError",
     "TemporaryBlobLostError",
 ]

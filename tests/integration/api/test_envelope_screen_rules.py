@@ -188,8 +188,10 @@ class TestTheDefaultMessageIsTheSummaryTheFrozenContractDeclares:
 
     def _declared(self) -> dict[str, dict[str, object]]:
         raw = json.loads(self.CONTRACT.read_text(encoding="utf-8"))
-        assert len(raw["codes"]) == 20, (
-            f"the frozen catalog declares {len(raw['codes'])} codes, not 20; this suite "
+        # Twenty-one since the wave-13 reseal: owner ruling `R-3` added
+        # `dependency_credential_refused` so one 403 stopped meaning two things (`D-7`).
+        assert len(raw["codes"]) == 21, (
+            f"the frozen catalog declares {len(raw['codes'])} codes, not 21; this suite "
             "pins the count so a code added or removed is a red test rather than a "
             "silently narrower sweep"
         )

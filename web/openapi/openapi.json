@@ -4,7 +4,7 @@
     "title": "AuditManager PC-01 API",
     "version": "1.0.0-draft.1",
     "summary": "The exact PC-01 journey: one project, one AR PDF, one text-consistency run, one CSV.",
-    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nWhat this surface deliberately does not have: authentication, tenancy, roles, rate limiting, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.",
+    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, roles, rate limiting, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-one-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.",
     "contact": {
       "name": "docs/program/P02_SEAMS.md - seam S8"
     },
@@ -17,6 +17,11 @@
     {
       "url": "/api/v1",
       "description": "Version-prefixed base path. A breaking change is a new contract version, never an edit here."
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
     }
   ],
   "tags": [
@@ -87,6 +92,12 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
           "409": {
             "$ref": "#/components/responses/IdempotencyConflict"
           },
@@ -133,6 +144,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -198,6 +215,12 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -248,6 +271,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -328,6 +357,12 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -385,6 +420,12 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -436,6 +477,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -495,6 +542,12 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -542,6 +595,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -602,6 +661,12 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -652,6 +717,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -709,6 +780,12 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -726,6 +803,13 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The authorization seam. Every operation in this document requires a bearer credential presented as `Authorization: Bearer <token>`.\n\n**This declares the seam, not its implementation.** No issuer, no discovery URL, no flow, no token format, no role, subject or capability vocabulary appears here, and none may be added: the deployment decides all of them and the same operations must keep working when it does. `bearerFormat` is deliberately absent for that reason -- an opaque deployment token and an OIDC-issued JWT are both bearer credentials, and naming the format would pin the document to whichever one is current.\n\nA request with no credential, or one the deployment does not accept, is `401 authentication_required`. A credential the deployment accepts, for a subject not permitted this operation on this resource, is `403 permission_denied`; authorization is decided server-side and the response never reveals the existence of a resource the caller may not see, so absence and refusal are reported as this surface's `404 not_found` where revealing them would leak.\n\nNothing outside `/api/v1` is covered. The operational liveness and readiness plane answers on its own port, carries no product meaning and needs no credential."
+      }
+    },
     "parameters": {
       "IdempotencyKey": {
         "name": "Idempotency-Key",
@@ -827,6 +911,36 @@
       }
     },
     "responses": {
+      "AuthenticationRequired": {
+        "description": "`authentication_required`. No valid authenticated subject was presented: the request carried no bearer credential, or one this deployment does not accept. The response carries no hint about the addressed resource, so it is the same answer whether or not the resource exists.",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "PermissionDenied": {
+        "description": "`permission_denied`. The authenticated subject is not permitted to perform this operation on this resource. Authorization is decided server-side. This is the caller's rights and nothing else: a dependency that refuses the *application's* own credential is `dependency_credential_refused` on the 500 response, which is a server fault and not this one.",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
       "NotFound": {
         "description": "The addressed aggregate does not exist or is not visible. The response never reveals the existence of a resource the caller may not see.",
         "headers": {
@@ -933,7 +1047,7 @@
         }
       },
       "InternalError": {
-        "description": "An unclassified server fault, or a declared run failure. The original internal code stays in protected diagnostics and never reaches this envelope.",
+        "description": "An unclassified server fault, a declared run failure, or `dependency_credential_refused` -- a dependency refusing the application's own credential, which is a server-side configuration fault with no authenticated subject in it. The original internal code stays in protected diagnostics and never reaches this envelope.",
         "headers": {
           "X-Correlation-Id": {
             "$ref": "#/components/headers/CorrelationId"
@@ -1089,6 +1203,7 @@
           "unsupported_contract_version",
           "storage_integrity_error",
           "dependency_unavailable",
+          "dependency_credential_refused",
           "required_norm_unavailable",
           "analysis_input_invalid",
           "analysis_failed",

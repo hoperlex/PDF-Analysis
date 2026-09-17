@@ -256,6 +256,117 @@ def test_every_operation_can_report_not_found_or_validation(openapi_document: di
         assert "500" in codes, f"{name} cannot report an internal fault"
 
 
+# ---------------------------------------------------------------------------
+# The authorization seam (R-3, D-6)
+# ---------------------------------------------------------------------------
+
+#: Written out rather than read from the document under test. A guard that took the
+#: scheme's name from the file it is checking would pass on a renamed scheme, which is
+#: `OPERATING_CONSTRAINTS.md` section 12's shape and is on record three times.
+BEARER_SCHEME = "bearerAuth"
+
+#: Keys that would put an implementation inside the contract. `bearerFormat` names the
+#: token format; `flows` and `openIdConnectUrl` name an issuer and a deployment URL;
+#: `name` and `in` belong to an apiKey scheme, which carries a secret rather than an
+#: identity. The public version replaces the implementation and must not need to touch
+#: this document, so none of them may appear.
+FORBIDDEN_SCHEME_KEYS = ("bearerFormat", "flows", "openIdConnectUrl", "name", "in")
+
+
+def _effective_security(document: dict, operation: dict) -> list:
+    """What OpenAPI 3.1 says applies to this operation.
+
+    An operation's own `security` overrides the root one, and `security: []` removes the
+    requirement entirely. Resolving it here rather than asserting a literal document
+    shape means the guard holds however the requirement is expressed -- and catches an
+    operation that opts itself out.
+    """
+    if "security" in operation:
+        return operation["security"]
+    return document.get("security", [])
+
+
+def test_the_document_declares_exactly_one_security_scheme(openapi_document: dict) -> None:
+    schemes = openapi_document["components"]["securitySchemes"]
+    assert list(schemes) == [BEARER_SCHEME]
+    scheme = schemes[BEARER_SCHEME]
+    assert scheme["type"] == "http"
+    assert scheme["scheme"] == "bearer"
+
+
+def test_the_scheme_declares_the_seam_and_not_its_implementation(
+    openapi_document: dict,
+) -> None:
+    """No issuer, no flow, no token format, no role or subject vocabulary.
+
+    `T-6`: the alpha satisfies this seam with one static token and the public version
+    replaces it with OIDC behind the same dependency. That is only true if nothing here
+    describes either of them.
+    """
+    scheme = openapi_document["components"]["securitySchemes"][BEARER_SCHEME]
+    assert set(scheme) == {"type", "scheme", "description"}, sorted(scheme)
+    for key in FORBIDDEN_SCHEME_KEYS:
+        assert key not in scheme, f"the scheme declares {key}, which is deployment detail"
+    rendered = json.dumps(scheme)
+    assert "http://" not in rendered and "https://" not in rendered
+
+
+def test_every_declared_scheme_is_required_somewhere(openapi_document: dict) -> None:
+    """The reachability rule `test_no_component_is_unreachable` applies by `$ref`.
+
+    A security scheme is referenced by name instead, so it needs its own guard, in both
+    directions: no orphaned scheme, and no requirement naming a scheme that is not
+    declared.
+    """
+    declared = set(openapi_document["components"]["securitySchemes"])
+    required: set[str] = set()
+    for requirement in openapi_document.get("security", []):
+        required |= set(requirement)
+    for operation in _operations(openapi_document).values():
+        for requirement in operation.get("security", []):
+            required |= set(requirement)
+    assert required == declared, f"declared={sorted(declared)} required={sorted(required)}"
+
+
+def test_every_operation_requires_the_bearer_scheme(openapi_document: dict) -> None:
+    """All twelve, and not by counting the ones that happen to be listed.
+
+    `security: []` on an operation, or a root requirement containing an empty
+    alternative, makes that operation unauthenticated. Both are checked, because both
+    are how an operation quietly leaves the authorized surface.
+    """
+    operations = _operations(openapi_document)
+    assert set(operations) == REQUIRED_OPERATIONS
+    for name, operation in operations.items():
+        effective = _effective_security(openapi_document, operation)
+        assert effective, f"{name} requires no credential"
+        for alternative in effective:
+            assert alternative, f"{name} accepts an unauthenticated alternative"
+            assert BEARER_SCHEME in alternative, f"{name} does not require {BEARER_SCHEME}"
+
+
+def test_every_operation_can_report_401_and_403(openapi_document: dict) -> None:
+    """A scheme with no declared refusal leaves a generated client no typed shape."""
+    for name, operation in _operations(openapi_document).items():
+        responses = operation["responses"]
+        assert responses["401"]["$ref"] == "#/components/responses/AuthenticationRequired", name
+        assert responses["403"]["$ref"] == "#/components/responses/PermissionDenied", name
+
+
+def test_the_document_no_longer_says_it_has_no_authentication(
+    openapi_document: dict,
+) -> None:
+    """The prose and the declaration have to agree.
+
+    Until the reseal `info.description` read "this surface deliberately does not have:
+    authentication, ...". A document that declares a scheme and denies having one is
+    exactly the shape `D-8` records: a sentence repeated until nobody opens the file.
+    """
+    description = openapi_document["info"]["description"]
+    assert "does not have: authentication" not in description
+    assert "twenty-code catalog" not in description
+
+
 def test_the_envelope_schema_mirrors_the_frozen_one(
     openapi_document: dict, error_envelope_schema: dict
 ) -> None:
@@ -279,7 +390,7 @@ def test_the_error_code_enum_equals_the_frozen_catalog(
 ) -> None:
     declared = openapi_document["components"]["schemas"]["ErrorCode"]["enum"]
     assert set(declared) == set(error_codes_contract["codes"])
-    assert len(declared) == len(set(declared)) == 20
+    assert len(declared) == len(set(declared)) == 21
 
 
 # ---------------------------------------------------------------------------

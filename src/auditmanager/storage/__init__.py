@@ -36,7 +36,7 @@ from .errors import (
     StorageBucketMissingError,
     StorageConfigurationError,
     StorageError,
-    StoragePermissionDeniedError,
+    StorageCredentialRefusedError,
     StorageUnavailableError,
     TemporaryBlobLostError,
 )
@@ -84,7 +84,7 @@ __all__ = [
     "StorageBucketMissingError",
     "StorageConfigurationError",
     "StorageError",
-    "StoragePermissionDeniedError",
+    "StorageCredentialRefusedError",
     "StorageUnavailableError",
     "TemporaryBlob",
     "TemporaryBlobLostError",

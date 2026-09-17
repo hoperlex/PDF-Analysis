@@ -100,18 +100,30 @@ BASELINE_BYTE_SIZE = 58978
 ANALYSIS_PROFILE_ID = "ap_01M25P3TH08VVTTGJRXYBZZ7RP"
 PROMPT_BUNDLE_ID = "pb_01M25P3TH0PDQYVKTRQFEM0CYS"
 
-#: The one path wave 13 is allowed to change, named before the baseline existed.
-#: ``OWNER_RULINGS_2026-09-17.md`` R-3 and ``DEBT_REGISTER.md`` D-7: the contract reseal
-#: gives the storage credential refusal a code of its own, so this record's
-#: ``error_code`` and status may move. Nothing else in this directory may.
+#: The one path wave 13 is allowed to change, named before the baseline existed and
+#: **taken** by W13-SEAL at the stage-0b reseal.
+#: ``OWNER_RULINGS_2026-09-17.md`` R-3 and ``DEBT_REGISTER.md`` D-7: the storage
+#: credential refusal got a code of its own, so this record's status, ``error_code``,
+#: message and details moved. Nothing else in this directory did, and nothing else may.
 EXCEPTION_D7 = {
     "debt": "D-7",
     "ruling": "OWNER_RULINGS_2026-09-17.md R-3 -- tokens *and* the storage code",
+    "status": "taken",
+    "decided_by": "e6d0a6a",
+    "decided_by_subject": (
+        "feat(errors): a 21st code for a refused dependency credential, settling D-7"
+    ),
+    "decided_on": "2026-09-18",
     "permitted_change": (
-        "StoragePermissionDeniedError currently emits `permission_denied` with the "
-        "catalog's authenticated-subject message. The reseal moves it to a code of its "
-        "own, so this record's status, error_code, message and details may all change. "
-        "The commit that decides it is cited beside the new expectation."
+        "Before e6d0a6a this path answered 403 `permission_denied`, carrying the "
+        "catalog's authenticated-subject message and the details {aggregate_type: Blob, "
+        "required_capability: blob_storage_rw} -- for a refusal with no authenticated "
+        "subject in it. It now answers 500 `dependency_credential_refused` with "
+        "{dependency: blob_storage}. 500 because the fault is the server's: the store "
+        "refused the application's own credential and the caller can do nothing about "
+        "it. The two subject-shaped detail keys went with the meaning they carried. "
+        "This is the whole of the permitted change; the record is compared byte for "
+        "byte against the new expectation like every other."
     ),
     "everything_else": (
         "Every other difference in this directory is a failure of the wave, whatever "
@@ -1156,21 +1168,32 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     # --- the one path allowed to change --------------------------------------------
     t = Tokens()
     storage = record(
-        "31-streamDocumentVersionContent.storage_permission_denied",
+        "31-streamDocumentVersionContent.storage_credential_refused",
         "streamDocumentVersionContent",
-        "**THE D-7 EXCEPTION.** The application's own storage credential is refused by "
-        "the store, and StoragePermissionDeniedError emits `permission_denied` -- the "
-        "catalog code whose summary describes an *authenticated subject*. There is no "
-        "subject in this scenario at all. R-3 settles it at the reseal by giving the "
-        "storage case a code of its own, so this record's bytes change on purpose",
+        "**THE D-7 EXCEPTION, TAKEN.** The application's own storage credential is "
+        "refused by the store. Until e6d0a6a this emitted `permission_denied` -- the "
+        "catalog code whose summary describes an *authenticated subject* -- for a "
+        "scenario with no subject in it at all. R-3 settled it at the stage-0b reseal: "
+        "StorageCredentialRefusedError now emits `dependency_credential_refused`, 500, "
+        "not retryable, carrying only the stable dependency class name. These are the "
+        "bytes that changed on purpose, and they are the only ones",
         "GET",
         f"/versions/{version_uid}/content",
         caller=denied,
         tokens=t,
         exception=EXCEPTION_D7,
     )
-    assert storage.status == 403, storage.status
-    assert json_of(storage)["error_code"] == "permission_denied", json_of(storage)
+    # Literals, not values read from the catalog this reseal moved: an expectation
+    # computed from the file the change also touches would agree with any change.
+    assert storage.status == 500, storage.status
+    body = json_of(storage)
+    assert body["error_code"] == "dependency_credential_refused", body
+    assert body["retryable"] is False, body
+    assert body["details"] == {"dependency": "blob_storage"}, body
+    # The old summary's distinguishing phrase. The new one says "no authenticated
+    # subject ... involved", so testing for the two words alone would pass on the very
+    # message this record exists to stop carrying.
+    assert "is not permitted to perform this operation" not in body["message"], body
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     correlation(storage, t)
     content_length(storage, t)

@@ -33,7 +33,7 @@
       "const": "1.0.0-draft.0"
     },
     "candidate_revision": {
-      "const": 5,
+      "const": 6,
       "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
     },
     "revision_note": {
@@ -203,6 +203,7 @@
         "authentication_required",
         "conflict",
         "cost_budget_exceeded",
+        "dependency_credential_refused",
         "dependency_unavailable",
         "execution_token_invalid",
         "idempotency_key_in_progress",
@@ -219,7 +220,7 @@
         "unsupported_contract_version",
         "validation_failed"
       ],
-      "minProperties": 20,
+      "minProperties": 21,
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]{2,63}$"
       },

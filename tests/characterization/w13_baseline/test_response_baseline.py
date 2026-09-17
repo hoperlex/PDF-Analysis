@@ -111,11 +111,80 @@ def test_exactly_one_record_is_marked_as_the_permitted_exception() -> None:
     }
     exceptions = {case: value for case, value in marked.items() if value}
     assert list(exceptions) == [
-        "31-streamDocumentVersionContent.storage_permission_denied"
+        "31-streamDocumentVersionContent.storage_credential_refused"
     ], f"the permitted-exception set is {sorted(exceptions)}"
     only = next(iter(exceptions.values()))
     assert only["debt"] == "D-7"
     assert "R-3" in only["ruling"]
+
+
+def _authorization_claims(record: dict[str, Any]) -> list[str]:
+    """Every way a record could start saying something about authorization.
+
+    One function, used by the guard and by the test that proves the guard can fail, so
+    the proof exercises the rule rather than a second copy of it that could drift.
+    """
+    found: list[str] = []
+    if not record.get("pre_authorization"):
+        found.append("no pre_authorization declaration")
+    for name, _value in record["request"]["headers"]:
+        if name.lower() in ("authorization", "proxy-authorization"):
+            found.append(f"the request carries {name}")
+    # 401 is unreachable before the dependency exists; a 403 in this corpus would have
+    # to mean a caller's rights, and no case here exercises any.
+    if record["response"]["status"] in (401, 403):
+        found.append(f"pins {record['response']['status']}, an authorization answer")
+    return found
+
+
+def test_the_baseline_makes_no_authorization_claim() -> None:
+    """The corpus must stay unreadable as an authorization expectation.
+
+    `W13-SEAL` added the contract half of `T-6` at `a5f4001`: the document now declares a
+    bearer scheme at its root and `401`/`403` on all twelve operations. The
+    implementation half is stage 2's, so every request here is still unauthenticated and
+    still answered -- and 33 records of exactly that is a thing a later reader can
+    mistake for the surface's intended unauthenticated behaviour.
+
+    `README.md` says the baseline has nothing to say about authorization. This is the
+    test that keeps that sentence true instead of merely old.
+
+    If stage 2 makes the journey authenticate, this test and that paragraph are changed
+    together, deliberately -- which is the point of writing it down.
+    """
+    offenders: list[str] = []
+    for path in RECORD_FILES:
+        record = json.loads(path.read_text(encoding="utf-8"))
+        offenders.extend(f"{path.stem}: {claim}" for claim in _authorization_claims(record))
+    assert offenders == [], (
+        "the baseline has started making an authorization claim:\n" + "\n".join(offenders)
+    )
+
+
+def test_the_no_authorization_claim_check_can_fail() -> None:
+    """The same rule, run against three planted records.
+
+    A guard nobody has seen reject anything accepts anything -- the rule this corpus
+    already applies to itself in
+    :func:`test_the_comparison_reddens_on_a_planted_difference`.
+
+    The plants are in-memory copies rather than rewritten files, because a test that
+    edits `records/` would trip the gate's changed-during-the-run check.
+    """
+    clean = json.loads(RECORD_FILES[0].read_text(encoding="utf-8"))
+    assert _authorization_claims(clean) == [], "the unperturbed record is already reported"
+
+    authenticated = json.loads(json.dumps(clean))
+    authenticated["request"]["headers"].append(["Authorization", "Bearer w13-static"])
+    assert _authorization_claims(authenticated) == ["the request carries Authorization"]
+
+    refused = json.loads(json.dumps(clean))
+    refused["response"]["status"] = 401
+    assert _authorization_claims(refused) == ["pins 401, an authorization answer"]
+
+    undeclared = json.loads(json.dumps(clean))
+    del undeclared["pre_authorization"]
+    assert _authorization_claims(undeclared) == ["no pre_authorization declaration"]
 
 
 @pytest.mark.parametrize("path", RECORD_FILES, ids=lambda p: p.stem)

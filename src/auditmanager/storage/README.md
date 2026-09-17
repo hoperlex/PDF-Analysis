@@ -78,7 +78,7 @@ name; a closed enum here would make each of those a rewrite of this package.
 | `StorageConfigurationError` | `validation_failed` | A frozen `S3_*` name is missing or empty. |
 | `StorageBucketMissingError` | `validation_failed` | The configured bucket does not exist. |
 | `StorageUnavailableError` | `dependency_unavailable` | The endpoint cannot be reached. |
-| `StoragePermissionDeniedError` | `permission_denied` | Credentials were refused. |
+| `StorageCredentialRefusedError` | `dependency_credential_refused` | The store refused the application's own credentials. Not the caller's rights: `permission_denied` means an authenticated subject, and there is none here. Renamed with its code at the wave-13 reseal, owner ruling `R-3`, `D-7`. |
 | `ChecksumMismatchError` | `storage_integrity_error` | Stored SHA-256 ≠ declared. |
 | `SizeMismatchError` | `storage_integrity_error` | Stored byte count ≠ declared. |
 | `BlobIntegrityError` | `storage_integrity_error` | Base of the two above. |

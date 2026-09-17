@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "88120361fc86843632f06880675ca5a85ba72357c3ac26b055c8f5b9693c4d18",
-    "content_commit": "2662ec2",
-    "content_commit_subject": "fix(api-v1): restate FindingDetail as a closed object, not an allOf",
-    "dispatch_named_commit": "9924d32",
-    "commit_note": "Resealed 2026-09-11 after the DependencyUnavailable description was corrected: it called dependency_unavailable the one retryable code in this surface, while idempotency_key_in_progress is also retryable and is reachable on every write.",
+    "sha256": "17ece21beb295c0f0893c5f16956401b5a349e4ebfa5f7c9cd2c4260a08611e1",
+    "content_commit": "a5f4001",
+    "content_commit_subject": "feat(api-v1): the authorization seam, declared once at the document root",
+    "dispatch_named_commit": "876e095",
+    "commit_note": "Resealed 2026-09-18 by W13-SEAL under owner ruling R-3 (docs/program/OWNER_RULINGS_2026-09-17.md). Two changes: the document gained one http/bearer security scheme, declared once at the root so all twelve operations require a credential, with 401 and 403 response components on each; and the ErrorCode enum gained dependency_credential_refused, the 21st code, which settles DEBT_REGISTER.md D-7 -- permission_denied had meant both an authenticated subject's rights and the store refusing the application's own credential, indistinguishably. Paths, operations and component schemas are unchanged at 10 / 12 / 43: the seam is a header, not a thirteenth endpoint.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
     "paths": 10,
     "operations": 12,
     "component_schemas": 43,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "88120361fc86843632f06880675ca5a85ba72357c3ac26b055c8f5b9693c4d18",
+    "snapshot_sha256": "17ece21beb295c0f0893c5f16956401b5a349e4ebfa5f7c9cd2c4260a08611e1",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "46b8280de453364414b2355ab5924ded8a86601057bc8378053820d2605dfd1d",
-      "index.ts": "ab01715356b7507c8c692ea22caa6ed61349411081558b827d4a33ecb08a0ed8",
-      "operations.gen.ts": "4fcf8767222846d4f754ebf27ec13693388b732aa9ce149e5e610f5f48d4c67b",
-      "types.gen.ts": "5e575af5ef8651662bcce275893eafb4545609c9109fced53e86fde3e097ae1d"
+      "client.gen.ts": "0a198228de453978d3d1cdd92c448ff34486f40077dfa5798a4200d72c8e040b",
+      "index.ts": "1f3f366ea597a5e51abb0554dde2a93be0396fbd5591e12917ce6b8b7450f787",
+      "operations.gen.ts": "f30666e4dc5abd4781cc54d71b870bbb343fbeb5e78c013994871144d00badd0",
+      "types.gen.ts": "48124e22f102c0d3e232990109c6afb32e952695418f14d6c120ca1b57352a92"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
