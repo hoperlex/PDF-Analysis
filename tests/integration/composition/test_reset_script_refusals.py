@@ -258,6 +258,47 @@ class TestTheTwoGuardsThatNeedTheirOwnStaging:
         assert "compose.server.yml is missing" in completed.stderr, completed.stderr
         assert not log.exists()
 
+    def test_a_dump_directory_that_is_not_one_of_ours_is_refused(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """A restore is three files or it is nothing.
+
+        Bytes without their `content-sha256` restore into an instance that lists a document
+        and refuses to serve it, which is worse than an empty one because it looks
+        recovered. Measured against the running stack before this guard was written.
+        """
+        staged = tmp_path / "staged"
+        staged.mkdir()
+        (staged / "compose.server.yml").write_text("# stub\n", encoding="utf-8")
+        script = staged / "reset.sh"
+        script.write_text(RESET.read_text(encoding="utf-8"), encoding="utf-8")
+        half = tmp_path / "half-a-dump"
+        half.mkdir()
+        (half / "database.dump").write_bytes(b"PGDMP")  # the objects half is absent
+
+        completed, log = _run(
+            script,
+            ("--database", DATABASE, "--bucket", BUCKET, "--restore", str(half)),
+            tmp_path=tmp_path,
+            env_file=env_file,
+        )
+        assert completed.returncode == REFUSED
+        assert "is not one of this script's dumps" in completed.stderr, completed.stderr
+        assert not log.exists(), "it refused, but only after running docker"
+
+    def test_that_guard_is_shown_able_to_fail(self, tmp_path: Path, env_file: Path) -> None:
+        mutant = _mutant(tmp_path / "mutant", "restore-complete")
+        half = tmp_path / "half-a-dump"
+        half.mkdir()
+        (half / "database.dump").write_bytes(b"PGDMP")
+        completed, _ = _run(
+            mutant,
+            ("--database", DATABASE, "--bucket", BUCKET, "--restore", str(half)),
+            tmp_path=tmp_path,
+            env_file=env_file,
+        )
+        assert "is not one of this script's dumps" not in completed.stderr
+
     def test_a_missing_compose_file_guard_is_shown_able_to_fail(
         self, tmp_path: Path, env_file: Path
     ) -> None:
@@ -318,11 +359,12 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", RESET.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 10, markers
+    assert len(markers) == 11, markers
     covered = {guard for guard, _, _ in CASES} | {
         "env-file-present",
         "instance-configured",
         "compose-file-present",
         "dump-verified",
+        "restore-complete",
     }
     assert set(markers) == covered, set(markers) ^ covered

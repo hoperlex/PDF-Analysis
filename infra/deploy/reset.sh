@@ -45,6 +45,7 @@ DATABASE=""
 BUCKET=""
 DESTROY=no
 DRY_RUN=no
+RESTORE=""
 
 refuse() {
     printf 'reset.sh: REFUSED: %s\n' "$1" >&2
@@ -55,12 +56,14 @@ refuse() {
 
 usage() {
     cat >&2 <<'USAGE'
-usage: reset.sh --database <name> --bucket <name> (--dry-run | --yes-destroy-everything)
+usage: reset.sh --database <name> --bucket <name>
+                (--dry-run | --yes-destroy-everything | --restore <dump directory>)
 
-  --database <name>          the database this wipe is FOR. Must equal the configured one.
-  --bucket <name>            the bucket this wipe is FOR. Must equal the configured one.
+  --database <name>          the database this acts on. Must equal the configured one.
+  --bucket <name>            the bucket this acts on. Must equal the configured one.
   --dry-run                  print what would be deleted. Touches nothing.
   --yes-destroy-everything   actually do it, after dumping and verifying the dump.
+  --restore <dir>            put one of this script's own dumps back, both halves.
   --env-file <path>          default: infra/deploy/env/alpha.env
 USAGE
     exit 2
@@ -76,6 +79,7 @@ while [ "$#" -gt 0 ]; do
         --env-file) ENV_FILE="${2:-}"; shift 2 ;;
         --dry-run) DRY_RUN=yes; shift ;;
         --yes-destroy-everything) DESTROY=yes; shift ;;
+        --restore) RESTORE="${2:-}"; shift 2 ;;
         -h|--help) usage ;;
         *) refuse "unrecognised option: $1" \
                   "Nothing was read and nothing was touched. Run --help." ;;
@@ -85,7 +89,7 @@ done
 
 # >>> guard: destructive-flag
 # Neither flag means no intent was expressed. The default of a wipe is to do nothing.
-if [ "$DESTROY" = no ] && [ "$DRY_RUN" = no ]; then
+if [ "$DESTROY" = no ] && [ "$DRY_RUN" = no ] && [ -z "$RESTORE" ]; then
     refuse "no --yes-destroy-everything and no --dry-run." \
            "This script drops a schema and empties a bucket. It will not infer that from" \
            "an absent argument. Rehearse with --dry-run first."
@@ -94,9 +98,13 @@ fi
 
 # >>> guard: one-mode
 # Both flags at once is an operator who does not know which one they are getting.
-if [ "$DESTROY" = yes ] && [ "$DRY_RUN" = yes ]; then
-    refuse "--dry-run and --yes-destroy-everything were both given." \
-           "One of them is a rehearsal and one of them is not. Choose."
+modes=0
+[ "$DESTROY" = yes ] && modes=$((modes + 1))
+[ "$DRY_RUN" = yes ] && modes=$((modes + 1))
+[ -n "$RESTORE" ] && modes=$((modes + 1))
+if [ "$modes" -gt 1 ]; then
+    refuse "--dry-run, --yes-destroy-everything and --restore were both given." \
+           "They are three different things to do to one instance. Choose one."
 fi
 # <<< guard: one-mode
 
@@ -180,6 +188,41 @@ echo "reset.sh: instance   $CONFIGURED_INSTANCE"
 echo "reset.sh: database   $DATABASE"
 echo "reset.sh: bucket     $BUCKET"
 
+if [ -n "$RESTORE" ]; then
+# >>> guard: restore-complete
+    # Both halves or neither. A restore that put the rows back and left the bytes behind
+    # would leave an instance that lists a document and cannot serve it, which is worse
+    # than one that is empty: it looks recovered.
+    for required in "$RESTORE/database.dump" "$RESTORE/objects.attrs" "$RESTORE/objects"; do
+        if [ ! -e "$required" ]; then
+            refuse "$RESTORE is not one of this script's dumps." \
+                   "  missing: $required" \
+                   "A dump is a database dump, an object mirror and the object metadata" \
+                   "that goes with it. Nothing has been changed."
+        fi
+    done
+# <<< guard: restore-complete
+    echo "reset.sh: restoring from $RESTORE"
+    compose exec -T postgres pg_restore --clean --if-exists --no-owner \
+        --username "$CONFIGURED_USER" --dbname "$DATABASE" < "$RESTORE/database.dump"
+    # `mc mirror` alone is NOT a restore, and this was measured rather than assumed: the
+    # bytes come back with no user metadata and `Content-Type: application/octet-stream`,
+    # and the storage adapter then refuses the object with `validation_failed` on
+    # `content-sha256` -- "recorded on every object this adapter publishes"
+    # (`storage/s3.py`, `_META_SHA256`). An instance restored that way lists a document
+    # and 422s on its bytes. So each object goes back with its attributes reattached.
+    restore_objects='
+        while IFS="	" read -r key sha ctype; do
+            [ -n "$key" ] || continue
+            mc --quiet cp --attr "content-sha256=$sha;Content-Type=$ctype" \
+                "/dump/objects/$key" "local/$S3_BUCKET/$key" >/dev/null
+        done < /dump/objects.attrs
+        echo "  reset.sh: restored $(wc -l < /dump/objects.attrs) objects"'
+    mc_run -v "$RESTORE:/dump:ro" s3-init -c "$MC_ALIAS; $restore_objects"
+    echo "reset.sh: restored. Verify with a read of one document version through the API."
+    exit 0
+fi
+
 if [ "$DRY_RUN" = yes ]; then
     echo
     echo "reset.sh: --dry-run. NOTHING BELOW IS DELETED."
@@ -212,6 +255,12 @@ LIVE_OBJECTS="$(mc_run s3-init -c "$MC_ALIAS; mc --quiet ls --recursive \"local/
 mc_run -v "$DUMP_DIR/objects:/out" s3-init \
     -c "$MC_ALIAS; mc --quiet mirror --overwrite \"local/$BUCKET\" /out >/dev/null; chmod -R a+rX /out" \
     >/dev/null
+# The bytes are only two thirds of an object. See object_attrs.py for the third.
+mc_run s3-init -c "$MC_ALIAS; mc --json stat --recursive \"local/$BUCKET\"" \
+    > "$DUMP_DIR/objects.stat.json"
+compose run --rm --no-deps --user root \
+    -v "$DUMP_DIR:/dump" -v "$HERE/object_attrs.py:/object_attrs.py:ro" \
+    --entrypoint python api /object_attrs.py /dump
 
 # --- 3. verify the dump BEFORE anything is destroyed --------------------------------
 # >>> guard: dump-verified
@@ -222,9 +271,22 @@ fi
 # Read back through the STACK'S OWN postgres image, not a host `pg_restore`: the host may
 # have none, or a version too old for this dump's format, and "the tool was missing" must
 # never be indistinguishable from "the dump is fine".
-if ! compose exec -T postgres pg_restore --list /dev/stdin < "$DUMP_DIR/database.dump" >/dev/null 2>&1; then
+# `pg_restore --list` with NO filename, reading stdin. Not `--list /dev/stdin`: that is
+# what this was written as first, and against a dump `file(1)` calls a valid "PostgreSQL
+# custom database dump - v1.16-0" it answered "did not find magic string in file header"
+# and refused a wipe that should have proceeded. A guard that refuses a good backup is
+# still a bug, and it was found by running this, not by reading it.
+if ! compose exec -T postgres pg_restore --list < "$DUMP_DIR/database.dump" >/dev/null 2>&1; then
     refuse "the dump at $DUMP_DIR/database.dump could not be read back." \
            "Nothing has been dropped. A dump nobody read is not a backup."
+fi
+RECORDED="$(grep -c . "$DUMP_DIR/objects.attrs" 2>/dev/null || echo 0)"
+if [ "$RECORDED" != "${LIVE_OBJECTS:-x}" ] || grep -q '^[^\t]*\t\t' "$DUMP_DIR/objects.attrs" 2>/dev/null; then
+    refuse "the object metadata sidecar is incomplete." \
+           "  objects in $BUCKET  : ${LIVE_OBJECTS:-<unknown>}" \
+           "  attributes recorded : $RECORDED" \
+           "Nothing has been purged. Bytes without their content-sha256 restore into an" \
+           "instance that lists a document and refuses to serve it."
 fi
 MIRRORED="$(find "$DUMP_DIR/objects" -type f | wc -l | tr -d '[:space:]')"
 if [ "${LIVE_OBJECTS:-x}" != "$MIRRORED" ]; then
@@ -252,7 +314,5 @@ compose run --rm s3-init
 
 echo
 echo "reset.sh: done. The dump is at $DUMP_DIR"
-echo "reset.sh: restore with"
-echo "  docker compose --env-file $ENV_FILE --file $COMPOSE_FILE exec -T postgres \\"
-echo "    pg_restore --clean --if-exists --no-owner --username $CONFIGURED_USER \\"
-echo "    --dbname $DATABASE < $DUMP_DIR/database.dump"
+echo "reset.sh: put it back -- BOTH halves, with the object attributes -- with"
+echo "  $0 --database $DATABASE --bucket $BUCKET --restore $DUMP_DIR"
