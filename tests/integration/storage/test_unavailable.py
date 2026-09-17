@@ -30,6 +30,8 @@ from auditmanager.storage import (
     derive_blob_id,
     sha256_of,
 )
+from auditmanager.ingest.failures import domain_error_from_storage
+from auditmanager.shared.errors import ErrorCode
 from auditmanager.storage.errors import BLOB_STORAGE_DEPENDENCY
 
 PAYLOAD = b"bytes that must never reach anywhere but the object store"
@@ -160,9 +162,46 @@ def test_a_missing_bucket_is_a_typed_configuration_failure(
     absent = S3BlobStore(replace(settings, bucket=f"{settings.bucket}-absent-a3"))
     with pytest.raises(StorageBucketMissingError) as raised:
         absent.check_access()
-    assert isinstance(raised.value, StorageConfigurationError)
+    # It is NOT a StorageConfigurationError any more, and that is the repair: that class
+    # carries `validation_failed`, which would answer a deployment fault as the caller's
+    # own malformed payload. `W16-ERR` reparented it.
+    assert not isinstance(raised.value, StorageConfigurationError)
     assert raised.value.details["field"] == "S3_BUCKET"
     assert settings.bucket not in str(raised.value)
+
+
+def test_a_missing_bucket_is_never_answered_as_the_callers_validation_error(
+    settings: S3StorageSettings,
+) -> None:
+    """The envelope, not the class -- because the envelope is what told the lie.
+
+    A missing bucket is the deployment's fault. Until `W16-ERR` this class inherited
+    `validation_failed` from :class:`StorageConfigurationError` and so answered **422
+    with "The request or payload violates a declared schema"**, naming `S3_BUCKET` as
+    the offending `field` -- for a caller who sent nothing wrong and can do nothing
+    about it. It is now `internal_error`: 500, not retryable, an unclassified server
+    fault, which is the destination `internal_mapping` rule 1 declares for an adapter
+    code the catalog does not map.
+    """
+    absent = S3BlobStore(replace(settings, bucket=f"{settings.bucket}-absent-a3"))
+    with pytest.raises(StorageBucketMissingError) as raised:
+        absent.check_access()
+
+    envelope = domain_error_from_storage(raised.value, role=ROLE_SOURCE_DOCUMENT).envelope(
+        "11111111-1111-4111-8111-111111111111"
+    )
+    assert envelope.error_code is ErrorCode.INTERNAL_ERROR, (
+        "a deployment fault is being attributed to the caller"
+    )
+    assert envelope.http_status == 500, "422 blames the caller for a missing bucket"
+    assert envelope.retryable is False
+    # `internal_error` declares no safe detail keys, so the variable at fault stays out
+    # of the caller's response and reaches an operator through `correlation_id` -- the
+    # same place `R-3` put it for a refused credential.
+    assert dict(envelope.details) == {}
+    assert "S3_BUCKET" not in envelope.message
+    # The operator still gets it: it is on the raised exception, which is what logs.
+    assert raised.value.details["field"] == "S3_BUCKET"
 
 
 def test_missing_configuration_is_explicit_and_names_the_variable() -> None:
