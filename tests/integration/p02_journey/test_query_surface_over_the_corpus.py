@@ -77,9 +77,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.api.routers import build_router, dispatch
-from auditmanager.api.routers.http import Request
-from auditmanager.api.schemas.findings import FINDING_CATEGORIES, VERDICTS
+from auditmanager.api.routers import build_router
+from auditmanager.api.schemas.models import FindingCategory, Verdict
 from auditmanager.bootstrap.adapters import (
     CsvExportAdapter,
     DecisionAdapter,
@@ -155,9 +154,47 @@ def corpus(journey_harness, session_factory, blob_store, recorded_adapter, provi
 
 
 def _get(router: Any, target: str) -> dict[str, Any]:
-    response = dispatch(router, Request.build("GET", target))
-    assert response.status == 200, (target, response.status, response.body)
-    return json.loads(response.body)
+    response = _request(router, target)
+    assert response.status_code == 200, (target, response.status_code, response.content)
+    return json.loads(response.content)
+
+#: `T-6`. The credential this module configures and presents, as a literal.
+_STATIC_TOKEN = "p02-journey-static-token"
+
+
+class _Built:
+    """Just enough of ``Application`` for ``create_asgi_app`` to take a router as given."""
+
+    __slots__ = ("router",)
+
+    def __init__(self, router: Any) -> None:
+        self.router = router
+
+
+def _client(router: Any) -> Any:
+    """An ASGI client over the real application, wrapping the shipped-adapter router.
+
+    Re-pointed by `W13-API`: ``Request.build`` plus ``dispatch`` are gone with
+    ``routers/http.py``. This module's question is unchanged -- does the *shipped* adapter
+    answer the same thing the suite adapters do -- and it is now asked over the transport
+    that actually serves.
+    """
+    from starlette.testclient import TestClient
+
+    from auditmanager.api.app import create_asgi_app
+    from auditmanager.api.security import API_TOKEN_VARIABLE
+
+    app = create_asgi_app(
+        environ={API_TOKEN_VARIABLE: _STATIC_TOKEN}, application=_Built(router)
+    )
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def _request(router: Any, target: str) -> Any:
+    return _client(router).get(
+        target, headers={"Authorization": f"Bearer {_STATIC_TOKEN}"}
+    )
+
 
 
 def _ids(body: dict[str, Any]) -> list[str]:
@@ -280,7 +317,7 @@ def test_the_verdict_filter_narrows_and_is_exactly_the_matching_subset(
         "filter can discriminate on this data and the test would be vacuous"
     )
 
-    for verdict in sorted(VERDICTS):
+    for verdict in sorted(member.value for member in Verdict):
         items, _ = _page(
             _get(router, f"/runs/{corpus['run_id']}/findings?limit=200&verdict={verdict}")
         )
@@ -296,7 +333,7 @@ def test_the_verdict_filter_narrows_and_is_exactly_the_matching_subset(
                 f"?verdict={verdict} did not narrow: it returned the whole run"
             )
 
-    absent = next(v for v in sorted(VERDICTS) if v not in by_verdict)
+    absent = next(v for v in sorted(member.value for member in Verdict) if v not in by_verdict)
     items, cursor = _page(
         _get(router, f"/runs/{corpus['run_id']}/findings?limit=200&verdict={absent}")
     )
@@ -316,7 +353,7 @@ def test_the_category_filter_narrows_and_is_exactly_the_matching_subset(corpus, 
     present = sorted(by_category)
     assert present, "the run published nothing; there is no category to filter on"
 
-    for category in sorted(FINDING_CATEGORIES):
+    for category in sorted(member.value for member in FindingCategory):
         items, _ = _page(
             _get(router, f"/runs/{corpus['run_id']}/findings?limit=200&category={category}")
         )
@@ -327,7 +364,7 @@ def test_the_category_filter_narrows_and_is_exactly_the_matching_subset(corpus, 
         assert all(item["category"] == category for item in items)
 
     if len(present) == 1:
-        absent = next(c for c in sorted(FINDING_CATEGORIES) if c != present[0])
+        absent = next(c for c in sorted(member.value for member in FindingCategory) if c != present[0])
         items, _ = _page(
             _get(router, f"/runs/{corpus['run_id']}/findings?limit=200&category={absent}")
         )
@@ -380,12 +417,15 @@ def test_a_value_outside_the_enum_is_refused_rather_than_answered_empty(corpus, 
 
     expected_status = ErrorCode.VALIDATION_FAILED.http_status
     for parameter, value in (("category", "not_a_category"), ("verdict", "not_a_verdict")):
-        response = dispatch(
-            router,
-            Request.build("GET", f"/runs/{corpus['run_id']}/findings?{parameter}={value}"),
+        response = _request(
+            router, f"/runs/{corpus['run_id']}/findings?{parameter}={value}"
         )
-        assert response.status == expected_status, (parameter, response.status, response.body)
-        body = json.loads(response.body)
+        assert response.status_code == expected_status, (
+            parameter,
+            response.status_code,
+            response.content,
+        )
+        body = json.loads(response.content)
         assert body["error_code"] == "validation_failed", body
         assert body["details"]["field"] == parameter, body
         assert body["retryable"] is False, body

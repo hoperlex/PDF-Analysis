@@ -24,16 +24,37 @@ from typing import Any
 
 import pytest
 
-from auditmanager.api.app import create_app
-from auditmanager.api.routers import dispatch
-from auditmanager.api.routers.http import Request
+from starlette.testclient import TestClient
+
+from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
+from auditmanager.api.security import API_TOKEN_VARIABLE
+
+#: `T-6`. This suite configures the seam and presents its credential, as a literal.
+STATIC_TOKEN = "composition-static-token"
+
+
+class Composed:
+    """The built application, and an ASGI client over the application that serves it."""
+
+    __slots__ = ("application", "client")
+
+    def __init__(self, application: Any, client: TestClient) -> None:
+        self.application = application
+        self.client = client
+
+    @property
+    def router(self) -> Any:
+        return self.application.router
 
 
 @pytest.fixture(scope="module")
-def app() -> Any:
+def app() -> Composed:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
-    return create_app()
+    environ = dict(os.environ) | {API_TOKEN_VARIABLE: STATIC_TOKEN}
+    application = create_app(environ=environ)
+    asgi = create_asgi_app(environ=environ, application=application)
+    return Composed(application, TestClient(asgi, raise_server_exceptions=False))
 
 
 def _key(label: str) -> str:
@@ -41,7 +62,7 @@ def _key(label: str) -> str:
 
 
 def call(
-    app: Any,
+    app: Composed,
     method: str,
     path: str,
     *,
@@ -49,23 +70,33 @@ def call(
     key: str | None = None,
     query: dict[str, list[str]] | None = None,
 ) -> tuple[int, Any]:
-    headers: dict[str, str] = {}
+    """One request over the real transport.
+
+    Re-pointed by `W13-API`: ``Request.build`` plus ``dispatch`` became a
+    ``starlette.testclient.TestClient`` over ``create_asgi_app()``. This suite asks one
+    question -- does the wiring carry from the edge to the module and back -- and that
+    question is now asked of the application that actually serves, middlewares and all.
+    """
+    from urllib.parse import urlencode
+
+    headers: dict[str, str] = {"Authorization": f"Bearer {STATIC_TOKEN}"}
     payload = b""
     if body is not None:
         headers["content-type"] = "application/json"
         payload = json.dumps(body).encode()
     if key is not None:
         headers[IDEMPOTENCY_HEADER] = key
-    response = dispatch(
-        app.router,
-        Request(method=method, path=path, headers=headers, query=query or {}, body=payload),
-    )
+    target = path
+    if query:
+        pairs = [(name, value) for name, values in query.items() for value in values]
+        target = f"{path}?{urlencode(pairs)}"
+    response = app.client.request(method, target, headers=headers, content=payload)
     decoded: Any
     try:
-        decoded = json.loads(response.body) if response.body else None
+        decoded = json.loads(response.content) if response.content else None
     except ValueError:
-        decoded = response.body
-    return response.status, decoded
+        decoded = response.content
+    return response.status_code, decoded
 
 
 class TestEveryOperationReachesItsModule:
@@ -127,10 +158,10 @@ class TestNoOperationAnswersWithAServerFault:
 
         probes: list[tuple[str, str]] = []
         for route in app.router.routes:
-            method = getattr(route, "method", "GET")
-            template = getattr(route, "template", getattr(route, "path", ""))
-            if method != "GET" or not template:
+            template = getattr(route, "path", "")
+            if "GET" not in getattr(route, "methods", ()) or not template:
                 continue
+            method = "GET"
             # Fill each path template with a well-formed but absent identity, so the answer
             # is 404 if the wiring carries and 500 if it does not.
             filled = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)

@@ -478,8 +478,7 @@ def test_the_api_run_body_reports_partial_through_the_shipped_adapter(
     shipped one reports the same thing. This dispatches a real request at the adapter
     the composition root wires.
     """
-    from auditmanager.api.routers import build_router, dispatch
-    from auditmanager.api.routers.http import Request
+    from auditmanager.api.routers import build_router
     from auditmanager.bootstrap.adapters import (
         DecisionAdapter,
         CsvExportAdapter,
@@ -503,12 +502,50 @@ def test_the_api_run_body_reports_partial_through_the_shipped_adapter(
         decisions=DecisionAdapter(session_factory),
         exports=CsvExportAdapter(session_factory),
     )
-    response = dispatch(router, Request.build("GET", f"/runs/{truncated_run['run_id']}"))
-    assert response.status == 200, response.body
-    body = json.loads(response.body)
+    response = _request(router, f"/runs/{truncated_run['run_id']}")
+    assert response.status_code == 200, response.content
+    body = json.loads(response.content)
     assert body["state"] == "partial", (
         f"the API reports {body['state']!r} for a run whose model reply was cut short"
     )
     assert "text_analysis" in body.get("degradation_set", []), body
     stages = {stage["stage_id"]: stage["status"] for stage in body["stages"]}
     assert stages["text_analysis"] == "partial", stages
+
+
+#: `T-6`. The credential this module configures and presents, as a literal.
+_STATIC_TOKEN = "p02-journey-static-token"
+
+
+class _Built:
+    """Just enough of ``Application`` for ``create_asgi_app`` to take a router as given."""
+
+    __slots__ = ("router",)
+
+    def __init__(self, router: Any) -> None:
+        self.router = router
+
+
+def _client(router: Any) -> Any:
+    """An ASGI client over the real application, wrapping the shipped-adapter router.
+
+    Re-pointed by `W13-API`: ``Request.build`` plus ``dispatch`` are gone with
+    ``routers/http.py``. This module's question is unchanged -- does the *shipped* adapter
+    answer the same thing the suite adapters do -- and it is now asked over the transport
+    that actually serves.
+    """
+    from starlette.testclient import TestClient
+
+    from auditmanager.api.app import create_asgi_app
+    from auditmanager.api.security import API_TOKEN_VARIABLE
+
+    app = create_asgi_app(
+        environ={API_TOKEN_VARIABLE: _STATIC_TOKEN}, application=_Built(router)
+    )
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def _request(router: Any, target: str) -> Any:
+    return _client(router).get(
+        target, headers={"Authorization": f"Bearer {_STATIC_TOKEN}"}
+    )
