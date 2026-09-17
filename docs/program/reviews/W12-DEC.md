@@ -321,4 +321,8 @@ dependency. No byte added to `fixtures/synthetic/ar/**` or `fixtures/validation/
 every fixture the new tests need is built inside the test. No tag, no push, no merge to
 `main`. Committed incrementally, six commits, the review opened before the first edit.
 
-**Elapsed wall-clock: 11:30 → 12:30 (+05:00), 60 minutes.**
+**Elapsed wall-clock: 34 minutes** — `date -Iseconds` at worktree creation
+(`2026-09-17T11:30:09+05:00`) and at the final commit (`2026-09-17T12:04:19+05:00`).
+Of that, roughly 20 minutes is machine time: three full-battery runs at ~3.5 minutes
+each (the M1 confirmation, its baseline, and the closing `make gate`), plus bootstrap,
+foundation and `npm ci`. The 25 single-suite mutation runs cost under a second each.
