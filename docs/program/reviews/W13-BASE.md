@@ -1,6 +1,6 @@
 # W13-BASE — the pre-FastAPI response baseline
 
-Session `W13-BASE`, wave 13 stage 1. **The branch is `agent/w13-gold` and the worktree is
+Session `W13-BASE`, wave 13 stage 1. Rebased onto `7399d65`; captured against `85aaa24`, which differs from it only in `docs/`. **The branch is `agent/w13-gold` and the worktree is
 `/root/w13gold`**: the session was dispatched as `W13-GOLD` and renamed to `W13-BASE` after
 launch, because the owner's direction to carry the normative document corpus into PostgreSQL
 would have made "golden corpus" name two different things in one programme (`D-1.6`, `D-8`).
@@ -156,16 +156,20 @@ wave. **Every other difference is a failure of the wave, whatever argument accom
 
 Checked against the tree at `85aaa24`, with the query beside each.
 
-**6.1 — `23076e0` is not on `dev`, so the rename is not where stage 2 will read it.**
-The coordinator's correction says the plan was updated at `23076e0`.
-`git merge-base --is-ancestor 23076e0 HEAD` → **false**: that commit lives on
-`planning/prototype-roadmap`, not on `origin/dev`. In this worktree
-`docs/program/ALPHA_ROADMAP.md` still reads `Stage 1 — W13-GOLD` and `golden corpus` at lines
-210, 268, 270, 400, 423 and 435. A stage-2 session branching from `dev` — which is what the
-provisioning block in my own brief told me to do — will read the **old** name and look for a
-"golden corpus" that is not there. The rename needs to reach `dev` before stage 2 is
-dispatched. My review file and the corpus use the new name; the branch keeps the old one
-deliberately (§1).
+**6.1 — the rename was not on `dev` when I was dispatched; it is now. Withdrawn, with the
+measurement kept.**
+When I checked at my base commit, `git merge-base --is-ancestor 23076e0 85aaa24` was **false**
+— `23076e0` was on `planning/prototype-roadmap` only, and `ALPHA_ROADMAP.md` in my worktree
+still read `Stage 1 — W13-GOLD` and `golden corpus` at six places. I wrote it up as a finding.
+It has since stopped being one: `origin/dev` advanced from `85aaa24` to `7399d65` during this
+session and now carries the rename, so §4 reads `W13-BASE` and `response baseline`. I rebased
+onto `7399d65` and re-ran the suite before saying so. **A stage-2 session branching from `dev`
+now reads the new name.** Recorded rather than deleted, because the window in which a dispatch
+and its plan disagreed was real, and because withdrawing a finding is cheaper than a stage-2
+session hunting a corpus under the wrong name. The three commits `dev` gained
+(`f240f86`, `054c329`, `7399d65`, plus `06d32bd`) touch `docs/` only —
+`git diff --name-only 85aaa24..origin/dev | grep -E '^(src|contracts|db|web|fixtures)/'` is
+empty — so nothing under this baseline moved.
 
 **6.2 — "the 26 MiB boundary" is the *transport's*, and `26214400` is 25 MiB.**
 Measured: `multipart.MAX_BODY` = `26 * 1024 * 1024` = **27 262 976**;
