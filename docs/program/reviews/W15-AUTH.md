@@ -3,7 +3,9 @@
 **Session** `W15-AUTH` · **branch** `agent/w15-auth` · **worktree** `/root/w15auth`
 **HEAD on arrival** `700022f` (`merge(W14-PKG): the image, the single origin and the wipe`),
 the tip of `origin/dev` at provisioning.
-**Elapsed** 03:20 → 03:52 +05:00, 2026-09-18. **32 minutes wall-clock.**
+**Elapsed** 03:20 → 03:54 +05:00, 2026-09-18. **34 minutes wall-clock.** Roughly: 12
+minutes to the green frontend suite, 4 to the mutation sweep, 4 to the live drive, and
+14 to two `make gate` runs and the fresh-database diagnosis in section 9.1.
 
 ---
 
