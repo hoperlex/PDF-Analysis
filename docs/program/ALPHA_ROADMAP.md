@@ -207,7 +207,7 @@ addition to a candidate, not the unfreezing of a freeze. It lands before stage 2
 before `W13-CONF` can compare anything, and it moves `web/openapi/openapi.json` and the
 generated client with it. §9 R-3 is the ruling it needs.
 
-**Stage 1 — `W13-GOLD`, tests only, starts now, needs no pin.** Capture a **golden corpus**
+**Stage 1 — `W13-BASE`, tests only, starts now, needs no pin.** *Renamed 2026-09-17: this was the "golden corpus", which collided with the owner's normative corpus — see `ROADMAP.md`, "Normative corpus". Two things under one name is `D-1.6` and `D-8`; the older claim on the word wins.* Capture a **response baseline**
 of request/response pairs through the *current, certified* implementation at `e6eae1e`: all
 twelve operations, the five refusals with their distinct `details.constraint` values, the
 `additionalProperties` refusal, the idempotency replay and conflict, the 26 MiB boundary on
@@ -265,9 +265,9 @@ headers, and schema shapes.
 difference proving the comparison still fails.** A conformance test that has never been shown
 to fail is the most expensive kind of green in this programme's history.
 
-**Acceptance for the wave:** the golden corpus reproduced byte-for-byte; the conformance gate
+**Acceptance for the wave:** the response baseline reproduced byte-for-byte; the conformance gate
 green and shown able to fail; `make gate` at or above 1505/5/167 with the migrated and new
-suites; and the app serving its own schema at a documented path. **If the golden corpus does
+suites; and the app serving its own schema at a documented path. **If the response baseline does
 not hold, the wave does not end** — that, and not a certification, is what lets wave 15 treat
 the transport as solved. The full certification comes at `PA-01`, on the server, where it is
 worth paying for once.
@@ -390,24 +390,28 @@ things in it are not agent-paced:
 So: **the engineering is small and the schedule risk is entirely in the server and in the first
 live run.** No row here is a commitment, and the first one to be revised will be wave 15's.
 
-## 9. What the owner must rule before dispatch
+## 9. What the owner has ruled, and what is still owed
 
-- **R-1 — the server.** Host, who has root, a DNS name, a TLS certificate (internal CA or Let's
-  Encrypt), open ports, and whether the provider proxy is reachable from it. Blocks wave 14.
-- **R-2 — the FastAPI pin set.** FastAPI, an ASGI server, the multipart parser and whatever the
-  ASGI test client needs, with each licence named in the diff. A `pyproject.toml` change is a
-  single-owner task under FF-01 §2.8. Blocks stage 2 of wave 13 — not stage 1, which captures
-  the golden corpus against the tree as it stands today and can start immediately.
-- **R-3 — the authorization seam and its reseal.** Confirm `T-6`: the contract gains
-  `securitySchemes` in wave 13, all twelve operations sit behind one dependency, and the alpha
-  satisfies it with a static token. The reseal has an owner (`P2-API-01`'s successor), ripples
-  into `web/openapi/openapi.json` and the generated client, and carries the `permission_denied`
-  collision above. It may also carry a **catalog addition** for the storage case (`D-7`), which
-  `D-8` shows to be an approval against a draft candidate rather than a freeze-break. Also: who
-  holds the alpha token. Blocks stage 2 of wave 13 and PA-01 criterion 2.
-- **R-4 — the documents.** Whether real client PDFs may be uploaded to this server, by whom, and
-  what happens to them at the end of the pilot. Nothing in this repository may hold them, and
-  `reset.sh` is the answer to the last part — but the first two are not the integrator's call.
+**All four were answered on 2026-09-17** and are recorded in
+`docs/program/OWNER_RULINGS_2026-09-17.md` at `3f97e33`. Wave 13 is unblocked; wave 14 waits
+only on host details.
+
+| | Ruling | What it does to this plan |
+|---|---|---|
+| **R-1** | the owner's own VPS | TLS, DNS and hosting are **in scope**, not assumed away. `T-2`'s single origin and `T-6`'s public destination are now the literal deployment, and wave 14's proxy terminates a real certificate for a real name |
+| **R-2** | the full FastAPI pin set, each licence named | stage 0 of wave 13 can commit. One question is open below |
+| **R-3** | tokens **and** the storage code | stage 0b reseals the contract with `securitySchemes` *and* settles `D-7` in the same pass, which is the cheap ordering |
+| **R-4** | real client documents, wiped at the end of the pilot | **`T-5` stops being hygiene and becomes load-bearing.** PA-01 criterion 10 is no longer a nice property of the wipe — it is the pilot's exit condition, and the dump-before-drop is what makes "wiped" a claim somebody can check |
+
+**Open, and named in the rulings record rather than buried:** `starlette.testclient` imports
+`httpx`, and this environment has `httpx2` — a different distribution providing a different
+module. Pinning `httpx` buys `TestClient` and `ASGITransport`, which is what gives the
+transport seam automated tests at all; `D-5` is a 500 on exactly that seam, found by hand
+because nothing automated could reach it. The recommendation on record is to pin it, and the
+decision is the pin task's.
+
+**Still owed on the operational side, and not blocking:** host details for R-1 (name,
+certificate, who has root), who holds the alpha token, and who may upload under R-4.
 
 ## 10. Risks, ranked by what they would cost
 
@@ -420,7 +424,7 @@ live run.** No row here is a commitment, and the first one to be revised will be
 
    Nothing in `docs/` or `artifacts/` mentions this: `grep -rln "pdf-prototype\|bridge.py\|3101" docs artifacts`
    returns nothing. The bridge logs only status lines, so the envelope behind those two 500s
-   was not kept — **the first thing wave 13's golden corpus must do is reproduce that request
+   was not kept — **the first thing wave 13's response baseline must do is reproduce that request
    and find out**, because it is either a real defect on the run path or an artefact of how the
    bridge passes a body, and the two have different owners.
 
@@ -432,7 +436,7 @@ live run.** No row here is a commitment, and the first one to be revised will be
    and `HTTPException` have their own JSON bodies, and a single unhandled path lets one escape
    with a shape no client of this API has ever been written against — while every suite that
    only checks a status code stays green. The five pinned `details.constraint` values and the
-   `additionalProperties` refusal are the specific things to watch. The golden corpus is the
+   `additionalProperties` refusal are the specific things to watch. The response baseline is the
    instrument: it compares bytes, not codes.
 3. **The UI is the least-tested surface we have.** `D-1.5`: 34 of 110 modules reached by no
    test, and the one line that renders `terminal_reason` is among them. The browser journey is
@@ -454,6 +458,15 @@ live run.** No row here is a commitment, and the first one to be revised will be
    dependency resolves a subject and refuses, and it decides nothing about *what* a subject may
    do. Anything richer waits for the release line, where it will be cheap because the seam
    exists.
+
+## 10.5 One thing this plan is deliberately not the home of
+
+The **normative corpus** — 674 documents, 28 251 pages, outside git at `.local/norms/corpus/`
+— is to be carried into PostgreSQL at paragraph granularity with vectors laid over it
+afterwards. That is owner direction of 2026-09-17 and it lives in `ROADMAP.md` under
+"Normative corpus", because it is a P05-and-later scope change at ADR level rather than
+anything the alpha deploys. It blocks no wave here and moves no date here. It is named only so
+that a reader of this file does not conclude the programme has forgotten it.
 
 ## 11. What this plan will not do, and why that is deliberate
 

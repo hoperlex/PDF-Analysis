@@ -244,6 +244,79 @@ Use P04 evidence to choose, reject or simplify the old backlog. Candidate work i
 
 The output is a new beta/v1 roadmap with estimates based on actual P01–P04 throughput.
 
+## Normative corpus — into PostgreSQL at paragraph granularity, then vectors
+
+**Owner direction, 2026-09-17.** The normative-document corpus is to be carried into
+PostgreSQL in later stages, **split to paragraph granularity**, so that vector embeddings can
+be laid over it afterwards. It is recorded here rather than in `ALPHA_ROADMAP.md`: nothing in
+it belongs to the alpha deployment, and putting it there would make the alpha look like it
+waits on this. It does not.
+
+### Where the corpus is today, because git cannot show you
+
+`.local/norms/corpus/`, on this machine, **outside version control** — no diff, grep or clone
+of this repository will reveal it, which is why it is named here. `MANIFEST.json` beside it is
+the index. Measured 2026-09-17 from that manifest:
+
+| | |
+|---|---|
+| documents | **674**, none with a missing file |
+| kinds | ГОСТ 492, СП 101, Приказ 20, Постановление 18, МДС 7, Решение 6, СНиП 5, and seventeen more |
+| pages | **28 251** |
+| on disk | 5.1 GB — 712 MB source PDF, 122 MB recognised text (`results.md`), 154 MB HTML, 16 MB block geometry |
+| recognition | 28 246 blocks recognised, **3 failed** |
+
+Layout per document: `corpus/<slug>/{document.pdf, blocks.json, stamp_audit.json, results.md,
+results.html}`.
+
+### What the corpus is not yet, and it is the whole of the work
+
+**Its granularity today is a page, not a paragraph.** There are 28 249 blocks over 28 251
+pages — approximately one per page — and every one is `block_type: text`. Worse for planning
+purposes: `blocks.json` carries **geometry and a crop URL and no text at all**
+(`block_id`, `ordinal`, `page_index`, `coords_norm`, `polygon_points`, `crop_url`). The
+recognised text exists only inside `results.md` and `results.html`, as markdown under a
+`### BLOCK #n [TEXT]` heading per page.
+
+Two consequences a later task should not rediscover:
+
+- **paragraph segmentation is work that does not exist yet**, and its input is markdown that
+  has to be parsed, not a structured text field that can be read;
+- **a paragraph cannot be given a bounding box from what is stored.** Page-level polygons are
+  all there is. A paragraph anchored as *page plus character offset in the recognised text* is
+  derivable today; a paragraph anchored *visually* requires re-segmenting the page images, and
+  those images are `crop_url` values pointing at an external service rather than bytes in the
+  corpus. The recognised text is self-contained; the page images are not.
+
+### The stages this implies, and what each one must decide
+
+1. **Custody.** Bring the corpus under the immutable-version model the product already has —
+   `DocumentVersion`, `Blob`, `InputManifest` — so a norm has an identity, a digest and a
+   version instead of being a directory on one machine. *Decision:* what a version of a norm
+   means. The corpus already holds `Изменение` and `Поправка` as separate documents, which is
+   the versioning question arriving in disguise.
+2. **Segmentation.** Paragraphs with stable identity and an anchor. *Decision:* textual anchor
+   or visual one — see above; the first reuses the evidence model unchanged, the second opens
+   a new pipeline.
+3. **Persistence.** Paragraph rows in PostgreSQL under the same append-only discipline.
+   *Decision, and it is new for this system:* 28 251 pages become some hundreds of thousands
+   of paragraphs, and that is **the first table here whose row count is not bounded by one
+   audit run**. Every query and index assumption in the product predates it.
+4. **Vectors.** Embeddings per paragraph. *Decisions:* provider and cost at that volume,
+   in-database (`pgvector`) against an external index, and the re-embedding policy when a norm
+   gains a new edition.
+
+### Why this is P05+ and not sooner
+
+It is not a storage task. The prototype's analysis checks **internal** contradictions and
+literal placeholders and is explicitly forbidden from judging external normative compliance
+(P02 outline above). A normative corpus in the database exists to enable exactly that
+judgement, so adopting it is a **scope change at ADR level**, not an ingestion job — and it
+should be taken on the evidence live use produces about what experts actually need, which is
+what P04 and the alpha are for.
+
+The corpus's existence changes none of the alpha's dates and blocks none of its waves.
+
 ## Existing work retained
 
 | Existing material | Role in the prototype programme |
