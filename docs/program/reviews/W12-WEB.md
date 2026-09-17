@@ -313,3 +313,31 @@ they hide it: each of them re-decides `retryable` itself for the non-`ApiError` 
 over a full copy of the web tree rebuilt per mutation, vitest 3.2.7, node 22.23.1, at
 `3ebe34d` with no test files added. The four hangs are `RS-01`, `RS-05`, `PO-01` and
 `PO-03`, all of them in `pollRunStatus`; §3 explains why a hang and not a red.
+
+## 3. Four mutations that hung instead of reddening, and why
+
+`RS-01`, `RS-05`, `PO-01` and `PO-03` all change when `pollRunStatus` stops. None of them
+turned the suite red; all four made it **run forever**, at rising memory, until the
+harness killed it at 150 s. Two independent things had to be wrong for that:
+
+1. **The script's own safety net is absorbed.** `polling.test.ts`'s `scripted()` fetch
+   throws `polled more times than the script allows` once the script runs out. That throw
+   is raised inside the fetch implementation, and `transport.request` catches anything the
+   fetch throws and rethrows it as a `TransportError` with **`retryable: !aborted`** —
+   that is, retryable. `pollRunStatus` absorbs a retryable failure and continues. So the
+   guard against over-polling is converted, by the code under test, into a reason to keep
+   polling.
+
+2. **`testTimeout` cannot fire.** The injected `sleep` is `async () => {}`, which resolves
+   in a microtask. A loop of `await sleep(...)` never yields to the macrotask queue, so
+   vitest's 120 s timer never runs. The process grows until something kills it.
+
+A hang is not a green, so the gate would not have *passed* with the defect — but it would
+not have named it either, and on a shared machine a hang reads as a slow lane. The fix is
+in a path this session owns: the bound now lives in the injected `sleep`, which the loop
+calls **outside** that `try`, so it escapes.
+
+- Red: with `TERMINAL_RUN_STATES` missing `cancelled`, `the loop stops on every terminal
+  state > stops on 'cancelled' after one reading` now fails with *the poll loop asked for
+  more than 3 readings and did not stop* in 13 ms instead of hanging.
+- Green: unmutated, `tests/unit/run/polling.test.ts` — 14 passed, 13 ms.
