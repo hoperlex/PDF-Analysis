@@ -311,3 +311,155 @@ and both call the **same** `_authorization_claims` function — the first versio
 re-implemented the rule, which proves only that a copy can fail. The README is amended with the
 reseal commit, the before/after table, and the sentence that if stage 2 makes the journey
 authenticate, that test and that paragraph change together.
+
+## 5. Every guard, shown red without the change
+
+Log: `/root/w13seal-logs/perturbation-demo.log`. Each case plants one difference in the tracked
+file, runs the single test that should object, and restores with `git checkout`. The unmutated
+tree is run first — **a red from a tree you never baselined is not evidence** — and
+`git status --porcelain` is empty at the end of the run, which the script asserts.
+
+| # | Planted | Guard | Result |
+|---|---|---|---|
+| 1 | `securitySchemes` removed entirely — the state `D-6` measured | `test_the_document_declares_exactly_one_security_scheme` | **red** |
+| 2 | scheme gains `bearerFormat: "JWT"` | `test_the_scheme_declares_the_seam_and_not_its_implementation` | **red** |
+| 3 | scheme becomes `openIdConnect` with an issuer URL | same | **red** |
+| 4 | root `security` dropped — every operation open again | `test_every_operation_requires_the_bearer_scheme` | **red** |
+| 5 | `exportRunCsv` opts itself out with `security: []` | same | **red** |
+| 6 | root requirement gains an empty alternative `{}` | same | **red** |
+| 7 | a requirement names an undeclared `apiKeyAuth` | `test_every_declared_scheme_is_required_somewhere` | **red** |
+| 8 | `createProject` loses its `401` | `test_every_operation_can_report_401_and_403` | **red** |
+| 9 | `info.description` goes back to denying authentication exists | `test_the_document_no_longer_says_it_has_no_authentication` | **red** |
+| 10 | the 21st code removed from the catalog | `tests/contract/shared_kernel/test_error_kernel.py` | **red** (import-time `RuntimeError`) |
+| 11 | the new code given back `aggregate_type`/`required_capability`, and the class made to emit them | `test_refused_credentials_are_typed_dependency_credential_refused` | **red** |
+| 12 | the storage class put back on `permission_denied` — the `D-7` collision restored | the baseline suite | **red**, 33 errors |
+| 13 | `web/openapi/openapi.json` loses the scheme — snapshot ≠ contract | `openapi-drift.contract.test.ts` | **red** |
+| 14 | record `01` starts carrying an `Authorization` header | `test_the_baseline_makes_no_authorization_claim` | **red** |
+| 15 | `FRONTEND_LOCK.json`'s `openapi.sha256` goes stale | `frontend-lock.guard.test.ts` | **red** |
+
+Cases 4, 5 and 6 are three different ways to leave the authorized surface and they are three
+cases on purpose: a guard that asserted the literal document shape would catch only the first.
+
+Case 11 needed two attempts and the first one is worth recording. Widening the code's
+`safe_detail_keys` and the class's `allowed_details` alone left the test **green** — because
+nothing *sets* `aggregate_type`, so the rendered details did not change. The mutation was
+ineffective, not the guard weak. Making the class `setdefault` the key too reddened it. A
+mutation that does not reach the observable is a green that means nothing, which is the same
+family as `OPERATING_CONSTRAINTS.md` §12.
+
+**On `make mutation-copy`.** The brief says to use it with `FULL=1` for contract mutations. I
+made the copy (`/root/w13seal-mut`) and it does copy `contracts/` as a real directory rather
+than a symlink — but the copy contains **no `tests/`**, and the contract suites resolve
+`contracts/` from the test file's own location, i.e. the real worktree. So mutating the copy's
+contract cannot reach the guard that reads it. The copy works for `src/` mutations through
+`-o pythonpath=<mut>/src`; for a contract document the technique is the one `W13-BASE` used —
+mutate the tracked file, run, `git checkout`, and assert the tree is clean afterwards. Recorded
+in §6.
+
+## 6. What is false or imprecise in the brief
+
+Each with the query beside it, against `876e095`.
+
+**6.1 — Step 0's base commit does not contain the artefact Step 4 requires me to edit.**
+Already §0. `git worktree add ... origin/dev` lands on `7399d65`, where
+`tests/characterization/` holds a `README.md` and nothing else. `W13-BASE`'s merge `876e095`
+was never pushed and lives only on the local branch `agent/w13-pin`.
+`git merge-base --is-ancestor 876e095 origin/dev` → false. The brief's own gate expectation
+(1543/5/167, "the response baseline added 38") describes `876e095`, not `7399d65`, so the two
+halves of the brief disagree and the gate figure is the half that is right. **This is the
+fourth wave-13 document to be written against a `dev` that had not caught up** — `W13-BASE`
+§6.1 records the same shape from the other direction.
+
+**6.2 — the Step 6 ownership list is not the set of files this change requires.**
+Step 6 grants `contracts/**`, `web/openapi/**`, `web/FRONTEND_LOCK.json`, the generated client,
+`src/auditmanager/shared/errors/**`, `tests/characterization/w13_baseline/**` and the review.
+Settling `D-7` is impossible inside that set. Five trees outside it had to move, and none is
+the API layer:
+
+- `src/auditmanager/storage/**` — the class that raises the code. Step 3 names
+  `storage/errors.py:153` explicitly, so this is a gap in Step 6 rather than a disagreement
+  between them;
+- `db/migrations/**` — `ERROR_CODES` builds three `CHECK` constraints, and a test requires set
+  equality with the catalog;
+- `tests/contract/**` — three literal `20`s;
+- `tests/integration/api/test_operation_surface.py` — asserted `securitySchemes` **not** in
+  `components`. The brief's own premise ("the contract declares no `securitySchemes`") had a
+  guard behind it and the brief does not mention it;
+- `tests/integration/storage/**` and `web/tests/contract/**` — the same, one each.
+
+I made all of them. A reseal that stopped at the granted paths would have left a red gate and a
+half-settled debt.
+
+**6.3 — `openapi-drift.contract.test.ts` does not say the contract has twelve operations.**
+`grep -c "twelve\|12" web/tests/contract/openapi-drift.contract.test.ts` → **0**. That file
+checks the snapshot, the four generated files and regeneration determinism. The twelve is
+asserted by `web/tests/contract/seam-operations.contract.test.ts` ("the twelve seam
+operations"), by `tests/contract/domain_p02/test_openapi_document.py::test_the_surface_is_exactly_the_declared_capabilities`
+and by `tests/integration/api/test_operation_surface.py`. The instruction was right and I obeyed
+it; the citation was wrong, and a stage-2 session told to check the count there would find
+nothing.
+
+**6.4 — "`authentication_required` (401) and `permission_denied` (403) … with `safe_detail_keys`
+`aggregate_type` and `required_capability`" is true of one of them.**
+Measured: `authentication_required.safe_detail_keys` is **`[]`**, and its summary says why —
+*"The response carries no hint about the addressed resource."* Only `permission_denied` carries
+the two. This matters more than a footnote: the empty set is a deliberate design, and a reader
+who took the brief literally would have "completed" the design by giving 401 detail keys it must
+not have.
+
+**6.5 — `dependency_unavailable`'s rejection is argued in the other class's docstring.**
+Step 3 says *"it is not retryable and it is not a degraded service, which is why
+`dependency_unavailable` was rejected for it; see that class's own docstring"*. That sentence is
+in `StoragePermissionDeniedError`'s docstring. `StorageUnavailableError`'s says something else
+("the type that exists so that 'storage is down' is never a silent fallback"). The argument is
+correct and I used it; it is one class along.
+
+**6.6 — `make mutation-copy FULL=1` does not let you mutate a contract *against its guards*.**
+§5. `FULL=1` does make `contracts/` real rather than a symlink, so half the sentence holds, but
+the copy has no `tests/` and the contract suites read the contract relative to their own
+location. Anyone briefed to prove a contract guard this way will get a green from a mutation the
+guard never saw.
+
+**6.7 — the gate figure moves, and by more than the change itself.**
+The brief expects 1543/5/167. This session adds two tests to the baseline suite, so the figure
+is **1545**. §7 has the run.
+
+**6.8 — everything else held.** The contract's three measured absences (no `securitySchemes`,
+no top-level `security`, zero operations carrying their own); `not_found`'s summary verbatim;
+`D-8`'s `"frozen": false, "status": "draft_candidate"`; `storage/errors.py:153` carrying
+`code = "permission_denied"` as a string on a `ClassVar`; that both sides declared exactly
+`aggregate_type` and `required_capability` with no discriminator; `T-3`'s health plane outside
+`/api/v1`; `OPERATING_CONSTRAINTS.md` §12 and its three instances; the instance values; and
+`W13-BASE`'s single marked exception and the test that counts it.
+
+## 7. One finding for the integrator, not settled here
+
+**`proxy.py:222` is a second `D-7`, and it is the worse of the two.**
+
+```python
+if exc.code == 401:
+    return DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE,
+                       message="the model proxy refused the token")
+```
+
+A refused provider credential reported as `dependency_unavailable`, which the catalog pins
+**`retryable: true`**, and with no `dependency` detail at all. The storage instance at least had
+a code whose status was merely misattributed; this one tells the caller to retry a condition
+that will not clear, and the catalog's own rule is that `retryable` is authoritative and a
+caller never second-guesses it from the status.
+
+`dependency_credential_refused` is deliberately shaped to take it: generic name, `dependency`
+detail key, `retryable: false`. I did not take it, because `R-3` ruled on the storage collision
+and this is an unruled behaviour change in the analysis lane touching a flag callers act on.
+**It wants a `D-` row and an owner's eye, not a session's initiative.**
+
+Found by `grep -rn "401" src/auditmanager/analysis/` while checking whether a generic name had a
+second consumer — which is the whole reason the name is generic.
+
+### Smaller, and also not mine
+
+`StorageBucketMissingError` carries `validation_failed` (**422**, category `validation`,
+`field`/`constraint`) for *"the configured private bucket does not exist"* — a server
+configuration fault reported to the caller as a validation failure on their request. It is the
+same misattribution `D-7` describes, one class along in the same file, and it is **not** a
+precedent for the choice in §2; I noticed it while reading and left it alone.
