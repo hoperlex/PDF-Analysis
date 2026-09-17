@@ -25,7 +25,9 @@ bucket `auditmanager-gate-w15b`.
   or runs**, so a published version is unreachable the moment the browser tab is reloaded.
   Four certifications did not surface it because no certification ever reloaded a page.
 - **Three premises of the dispatch are wrong or incomplete** (§8).
-- **Elapsed 03:56 → 04:31 +05:00, 2026-09-18. 35 minutes.**
+- **Elapsed 03:56 → 04:27 +05:00, 2026-09-18. 31 minutes.** Roughly: 8 minutes to read
+  the tree and bring the stack up, 4 to the first journey and the 409 diagnosis, 6 to the
+  clean instance and the second journey, 6 to the browser, 4 to the gate.
 
 ---
 
@@ -440,8 +442,9 @@ Instance `gate-w15b`, at the commit this document is in, after `git status --por
 empty:
 
 ```
-1726 passed, 5 skipped, 168 subtests passed
-foundation 35 passed · frontend 39 files, 498 passed
+1726 passed, 5 skipped, 1 warning, 168 subtests passed in 228.45s (0:03:48)
+35 passed in 31.56s                  (foundation)
+Test Files  39 passed (39) · Tests  498 passed (498)
 GATE OK: battery, foundation, frontend and whitespace all pass
 ```
 
