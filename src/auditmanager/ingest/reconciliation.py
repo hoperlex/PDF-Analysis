@@ -45,6 +45,26 @@ asks the store about each specific ``blob_id``. That is exactly why
 :mod:`auditmanager.storage.blob_repository` commits the ``verifying`` row *before* the
 object is published: without that breadcrumb an orphan would be unfindable through a
 port that offers no ``list``.
+
+What is cheap here and what is not
+----------------------------------
+The two entrypoints are deliberately priced differently, and the difference is the
+answer to "should reconciliation read bytes".
+
+:meth:`Reconciler.report` is the **sweep**. It touches every unsettled blob, every
+available blob and every blob any manifest references, and it asks each question with
+:meth:`Reconciler._object_exists` -- one ``head_object``, never a list and never a body.
+Its cost must stay proportional to the number of rows and independent of how large the
+objects are, so it establishes *presence* and nothing more. That is unchanged.
+
+:meth:`Reconciler.verify_version` is the **verdict**, on one version an operator named.
+It is not part of the sweep, it does not call ``_object_exists``, and nothing in this
+repository calls it on a loop. It is the method whose whole reason to exist is to settle
+whether a published version is still the version that was published, and a verdict that
+never looks at the bytes cannot settle that. It therefore reads and hashes each manifest
+entry's body, and pays one full transfer per entry to do it. Wave 12 made that change;
+before it, both entrypoints were ``head``-only and the verdict was worth no more than
+the sweep.
 """
 
 from __future__ import annotations
@@ -59,7 +79,7 @@ from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import CommandId, VersionUid
 from auditmanager.storage import BlobId, BlobNotFoundError, BlobStore, StorageError
-from auditmanager.storage import parse_blob_id
+from auditmanager.storage import parse_blob_id, sha256_of
 from auditmanager.storage.blob_repository import BlobMetadataRepository
 
 from .commands import CommandRepository
@@ -201,12 +221,54 @@ class Reconciler:
         )
 
     def verify_version(self, version_uid: VersionUid) -> None:
-        """Prove one published version is still readable, or fail it.
+        """Prove one published version is still the bytes it was published as, or fail it.
 
-        Raises ``storage_integrity_error`` when a manifest entry's bytes are absent, and
-        also when the store's recorded checksum disagrees with the manifest's. The
-        version is never repaired: it is immutable, and a corrected source file is a new
-        ``version_uid``.
+        Three questions per manifest entry, asked in this order because each is cheaper
+        than the next and each can settle the verdict on its own.
+
+        **1. Does the store hold anything at all?** An absent object is
+        ``storage_integrity_error`` carrying ``expected_sha256`` and no
+        ``actual_sha256`` -- there is nothing to have hashed. This is the module
+        docstring's ``missing_objects``, and it is unchanged.
+
+        **2. Can the store vouch for the object, and does its record agree with the
+        manifest?** ``inspect`` is a ``head_object``: it returns what the object
+        *records*, never what it holds. An object recording **no** digest is
+        ``validation_failed`` -- the store has compared nothing to anything and has no
+        evidence about these bytes, which is the same answer and the same code
+        ``BlobStore.read`` gives over the same row, and is not the integrity verdict that
+        would send an operator to restore a backup they may not need. A record that
+        *disagrees* with the manifest's digest or length is ``storage_integrity_error``
+        with the record as ``actual_sha256``, and is refused here without pulling a body:
+        the verdict is already settled and the transfer would buy nothing.
+
+        **3. Are the bytes the document the manifest names?** Reached only when the two
+        declarations agree, which is precisely the state in which nothing has yet looked
+        at the object. The body is read and hashed and compared against ``entry.sha256``.
+
+        Question 3 is what wave 12 added, and the reason is that questions 1 and 2 are
+        both comparisons between *declarations*. A replacement that preserved the
+        object's recorded metadata and its length satisfied both and was reported sound
+        here, while :meth:`auditmanager.ingest.service.IngestService.read_source_bytes`
+        refused the same row -- reconciliation, the tool an operator uses to decide a
+        version is fine, being the permissive one. The manifest entry is the only digest
+        that is independent of the object, so it is the one compared, and the read is
+        ``verify=False`` deliberately: the adapter's own check is the object against its
+        *own* record, which question 2 has already tied to the manifest, and leaving it
+        on would make the comparison below a branch no test could redden.
+
+        Both integrity refusals are ``storage_integrity_error``. That is not the two
+        causes flattened into one answer: they are two comparisons, each separately
+        guarded, and ``actual_sha256`` names the strongest fact the method established --
+        the store's record when nothing was read, the bytes' own digest when they were.
+        The catalog declares ``blob_id``, ``expected_sha256``, ``actual_sha256`` and
+        ``role`` for this code and no discriminator, so the only way to give the two
+        causes two codes would be to move one to ``validation_failed``, which would put
+        this method and the read path back to two answers over one row -- the condition
+        wave 11 removed.
+
+        The version is never repaired: it is immutable, and a corrected source file is a
+        new ``version_uid``.
         """
         with session_scope(self._factory) as session:
             version = self._documents.get_version(session, version_uid)
@@ -222,6 +284,19 @@ class Reconciler:
                 ) from None
             except StorageError as exc:
                 raise domain_error_from_storage(exc, role=entry.role) from None
+            if not published.sha256:
+                # An object with no recorded digest. Reporting this as an integrity
+                # failure would put ``actual_sha256=""`` into an operator's envelope --
+                # an empty string where a digest is expected, and a claim about bytes
+                # nothing has looked at. ``field`` is the port's own spelling: this
+                # method holds a ``BlobStore`` and reads ``PublishedBlob.sha256``, and it
+                # has no business naming an S3 metadata key.
+                raise DomainError(
+                    ErrorCode.VALIDATION_FAILED,
+                    aggregate_type="Blob",
+                    field="sha256",
+                    constraint="recorded on every published object",
+                )
             if published.sha256 != entry.sha256 or published.size != entry.size_bytes:
                 raise DomainError(
                     ErrorCode.STORAGE_INTEGRITY_ERROR,
@@ -229,6 +304,30 @@ class Reconciler:
                     role=entry.role,
                     expected_sha256=entry.sha256,
                     actual_sha256=published.sha256,
+                )
+            try:
+                # ``verify=False`` is not a weaker check, it is a different and stronger
+                # one: the adapter would compare the body against the object's own
+                # record, and the comparison that follows is against the manifest.
+                data = self._store.read(entry.blob_id, verify=False)
+            except BlobNotFoundError:
+                # The object was there for the ``head`` and gone for the ``get``.
+                raise DomainError(
+                    ErrorCode.STORAGE_INTEGRITY_ERROR,
+                    blob_id=str(entry.blob_id),
+                    role=entry.role,
+                    expected_sha256=entry.sha256,
+                ) from None
+            except StorageError as exc:
+                raise domain_error_from_storage(exc, role=entry.role) from None
+            actual_sha256 = sha256_of(data)
+            if actual_sha256 != entry.sha256:
+                raise DomainError(
+                    ErrorCode.STORAGE_INTEGRITY_ERROR,
+                    blob_id=str(entry.blob_id),
+                    role=entry.role,
+                    expected_sha256=entry.sha256,
+                    actual_sha256=actual_sha256,
                 )
 
     def abandon_stale_commands(
