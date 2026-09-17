@@ -301,8 +301,9 @@ purpose:
 ## 8. The gate
 
 Instance `gate-w16a`, `POSTGRES_PORT=55770`, `S3_API_PORT=59370`, `S3_CONSOLE_PORT=59371`,
-`POSTGRES_DB=audit_w16a`, bucket `auditmanager-gate-w16a`. Run at `188cacc` on a **clean,
-fully committed tree** — `git status --porcelain` empty before the run, as
+`POSTGRES_DB=audit_w16a`, bucket `auditmanager-gate-w16a`. Run twice: at `188cacc`, and again at the tip `e73fce7` so the recorded
+gate is the gate of the commit a reviewer reads. Both on a **clean, fully committed
+tree** — `git status --porcelain` empty before the run, as
 `tests/integration/foundation/conftest.py:542` requires.
 
 ```
@@ -316,12 +317,13 @@ tail's status.
 
 | component | expected by the dispatch | measured |
 |---|---|---|
-| battery | 1726 passed / 5 skipped / 168 subtests | **1726 passed, 5 skipped, 168 subtests** in 229.67 s |
-| foundation | 35 | **35 passed** in 31.31 s |
+| battery | 1726 passed / 5 skipped / 168 subtests | **1726 passed, 5 skipped, 168 subtests** in 217.42 s |
+| foundation | 35 | **35 passed** in 32.90 s |
 | frontend | 498 at base | **592 passed / 44 files** |
 | whitespace | — | clean |
 
-`GATE_EXIT=0`. Full log `/root/w16web-logs/gate.log`; `npm run typecheck` and
+`GATE_EXIT=0` on both runs. Full logs `/root/w16web-logs/gate.log` (at `188cacc`) and
+`/root/w16web-logs/gate-final.log` (at `e73fce7`, the figures above); `npm run typecheck` and
 `npm run lint` both exit 0, logs beside it.
 
 The battery figure is unchanged, as it must be: nothing outside `web/tests` and this file
@@ -342,10 +344,11 @@ is a second tree a later session can mistake for the real one.
 
 ## 10. Elapsed
 
-Start `2026-09-18T04:03:03+05:00` (worktree created), gate green `04:24`. **~25 minutes**
+Start `2026-09-18T04:03:03+05:00` (worktree created), second gate green `04:32`.
+**~30 minutes**
 wall-clock, on a host at 92% disk with two other wave-16 lanes live. No subagent was
 dispatched at any point: `make gate` copies the working tree, and a fan-out during a
 measurement is how this programme has corrupted sandbox runs before.
 
-Branch `agent/w16-web`, 7 commits, changing `web/tests/**` and this file only. Not pushed,
+Branch `agent/w16-web`, 8 commits, changing `web/tests/**` and this file only. Not pushed,
 not tagged, not merged.
