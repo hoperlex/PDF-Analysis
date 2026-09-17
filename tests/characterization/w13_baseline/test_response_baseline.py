@@ -112,23 +112,84 @@ def test_every_one_of_the_twelve_operations_is_covered() -> None:
     )
 
 
-def test_exactly_one_record_is_marked_as_the_permitted_exception() -> None:
-    """The D-7 path, and nothing else.
+#: The permitted-exception set, case by case with the debt that moved it. Written out as a
+#: literal, never derived from the records: an expectation computed from the files it
+#: checks cannot report that a sixth, seventh or eighth record quietly acquired a block.
+#:
+#: **`W17-VIEW` added the second entry**, and it is the second era of this guard exactly as
+#: `W13-API` was the second era of `test_the_baseline_records_the_authenticated_era`. What
+#: changed is the *count*, not the rule: every marked record still has to name a debt, cite
+#: the commit that moved it, carry a `permitted_change` describing the whole of the move,
+#: and be compared byte for byte against the new expectation like every other record.
+PERMITTED_EXCEPTIONS = {
+    "03-startRun.success": "D-19",
+    "04-startRun.replay": "D-19",
+    "05-startRun.replay_with_normalised_property": "D-19",
+    "06-getRunStatus.success": "D-19",
+    "07-getRunStatus.correlation_supplied": "D-19",
+    "31-streamDocumentVersionContent.storage_credential_refused": "D-7",
+}
+
+
+def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
+    """The D-7 path and the D-19 path, and nothing else.
 
     A safety net with an unnamed exception is one somebody talks their way past at the
-    end of a long wave. This is the assertion that makes the exception countable.
+    end of a long wave. This is the assertion that makes the exceptions countable.
+
+    `D-7` is record 31: the storage credential refusal got a code of its own at `e6d0a6a`
+    under owner ruling `R-3`. `D-19` is the five records carrying a `RunStatus` body: a
+    published run reported no stage timings, no finding count, and one instant for its
+    creation and its terminal. **Those five records had pinned the second of those as the
+    expectation** -- `created_at` and `terminal_at` shared the token `{{ts_5}}`, because
+    substitution is by exact value and the two values were identical to the microsecond.
+    A record that reproduces a defect byte for byte is protecting it.
     """
     marked = {
         path.stem: json.loads(path.read_text(encoding="utf-8"))["exception"]
         for path in RECORD_FILES
     }
     exceptions = {case: value for case, value in marked.items() if value}
-    assert list(exceptions) == [
+    assert sorted(exceptions) == sorted(PERMITTED_EXCEPTIONS), (
+        f"the permitted-exception set is {sorted(exceptions)}"
+    )
+    for case, block in exceptions.items():
+        assert block["debt"] == PERMITTED_EXCEPTIONS[case], (case, block["debt"])
+        assert block["permitted_change"], f"{case} is marked but describes no change"
+        assert block["decided_by"], f"{case} cites no commit"
+    assert "R-3" in exceptions[
         "31-streamDocumentVersionContent.storage_credential_refused"
-    ], f"the permitted-exception set is {sorted(exceptions)}"
-    only = next(iter(exceptions.values()))
-    assert only["debt"] == "D-7"
-    assert "R-3" in only["ruling"]
+    ]["ruling"]
+
+
+def test_the_five_run_status_records_no_longer_pin_one_instant_for_the_whole_run() -> None:
+    """The defect this corpus had frozen, asserted against the records themselves.
+
+    `W15RUN-5` was readable in this directory before it was found in a browser: a run
+    that took eleven seconds recorded the same token for the instant it was created and
+    the instant it terminated. Re-capturing alone would have erased that without anyone
+    having to say it had been there, so it is asserted here rather than left to a diff.
+    """
+    for case in (
+        "03-startRun.success",
+        "04-startRun.replay",
+        "05-startRun.replay_with_normalised_property",
+        "06-getRunStatus.success",
+        "07-getRunStatus.correlation_supplied",
+    ):
+        record = json.loads(
+            (journey.RECORDS / f"{case}.json").read_text(encoding="utf-8")
+        )
+        # The tokens sit inside the body's own quoting, so the recorded text parses as
+        # JSON as it stands: `created_at` reads back as the string `{{ts_9}}`, and two
+        # fields sharing one instant read back as the *same* token.
+        body = json.loads(record["response"]["body"]["text"])
+        assert body["created_at"] != body["terminal_at"], (
+            f"{case} pins the same value for created_at and terminal_at, which is the "
+            "D-19 defect recorded as the expectation"
+        )
+        for stage in body["stages"]:
+            assert "started_at" in stage and "finished_at" in stage, (case, stage)
 
 
 def _authorization_claims(record: dict[str, Any]) -> list[str]:

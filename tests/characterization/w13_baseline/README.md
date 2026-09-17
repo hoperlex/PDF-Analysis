@@ -56,10 +56,49 @@ transport is reached, which is why the rewrite touched one class in this directo
 nothing else. Nothing imports `IngestService`, `execute_run` or `export_run_csv`; everything
 here is learned from a response.
 
-## The one path allowed to change
+## The paths allowed to change
+
+**Two, as of `W17-VIEW` on 2026-09-18.** Record 31 (`D-7`) and the five records carrying a
+`RunStatus` body (`D-19`). `test_exactly_the_named_records_are_marked_as_permitted_exceptions`
+names them one at a time with the debt that moved each, and
+`PERMITTED_EXCEPTIONS` in that file is the countable list.
+
+### `D-19` — records 03, 04, 05, 06 and 07
+
+**Moved at `aae0209`**, cited in each record's `exception.decided_by`. `W15-RUN` drove the
+product through a browser and read *"Published findings: not reported"* and *"Started —
+Finished —"* on a run that had published three findings, and *"Created 23:07:31 / Terminal
+at 23:07:31"* on a run that took 9.9 seconds.
+
+| | before `aae0209` | after |
+|---|---|---|
+| `StageState.started_at` / `finished_at` | absent on every stage | the real per-stage spans |
+| `published_finding_count` | absent | the number of findings the same run serves |
+| `diagnostic_observation_count` | absent | the ungrounded items the gate rejected |
+| `created_at` vs `terminal_at` | **the same token, `{{ts_5}}`** | two values, a real duration |
+
+All four names are declared by the frozen `RunStatus` and `StageState` and were already
+serialised by `api/schemas/runs.py`; they had no producer. **Nothing was renamed, removed or
+re-typed, and no status or header moved** — which is why this is a repair inside the contract
+and not a reseal.
+
+**This corpus had pinned the timestamp defect as the expectation.** Substitution is by exact
+value, `created_at` and `terminal_at` *were* identical to the microsecond, and so they earned
+one token between them. A record that reproduces a defect byte for byte is protecting it, and
+a re-capture alone would have erased the evidence silently — so
+`test_the_five_run_status_records_no_longer_pin_one_instant_for_the_whole_run` asserts against
+the records that it is gone.
+
+**The re-capture was checked for vacuity.** `capture.py` rewrites all 33 files. Measured at
+`aae0209` with `git diff --stat`: **28 came back byte-identical and exactly the 5 above
+moved**, +110/-20 lines, evenly split five ways because the five bodies changed the same way.
+Re-running the capture is the one thing that can make this directory vacuous, so the diff is
+the evidence that it did not: a repair that had moved a sixth record would have shown here.
+
+### `D-7` — record 31
 
 `records/31-streamDocumentVersionContent.storage_credential_refused.json` carries an
-`exception` block and is the **only** record that does. **It has been taken.**
+`exception` block. **It has been taken.**
 
 As captured, `StoragePermissionDeniedError` emitted `permission_denied` when *our own* S3
 credential was refused by the store — the catalog code whose summary describes *"the
@@ -81,9 +120,10 @@ file name with it — `31-` is unchanged, so "record 31" still finds it.
 The record is compared byte for byte against the new expectation exactly as before: being the
 permitted exception never made it unwatched, it made the change require a citation.
 
-`test_exactly_one_record_is_marked_as_the_permitted_exception` makes that countable:
-the marked set must be exactly this one case. **Every other difference is a failure of the
-wave, whatever argument accompanies it.**
+`test_exactly_the_named_records_are_marked_as_permitted_exceptions` makes that countable:
+the marked set must be exactly the six cases `PERMITTED_EXCEPTIONS` names, each with its
+debt, its citing commit and its `permitted_change`. **Every other difference is a failure of
+the wave, whatever argument accompanies it.**
 
 ## The one order not pinned
 
