@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.errors",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 5,
-  "revision_note": "Fifth review round of the unreleased 1.0.0-draft.1 candidate. Round 5 completes owner decision ID-01 for the domain family: the deprecated bare version mirror and the deprecated_fields block that declared it are removed from this catalog, and both names are removed from the owning schema's root required and properties, so the root additionalProperties false now rejects either key instead of pinning it. The removal gate recorded in round 4 is satisfied: W0-QA-03 taught scripts/validate_bootstrap.py to read contract_version and is integrated, so nothing requires the mirror any longer. Nothing else changed: the 20 codes and every http status, retryable flag, category, summary, safe detail key list and evidence list are exactly those of rounds 2, 3 and 4, and the envelope declaration, safety rules, internal_mapping, categories and the open decision and question registers are untouched. contract_version stays 1.0.0-draft.1 and its value is unchanged; the mirror carried no independent meaning, was pinned to the same const and no consumer was ever permitted to read it, so no code generator, runtime type or other contract family loses a value. No alias, shim or coercion replaces it: a catalog carrying version is now invalid, not tolerated. The family carries one candidate_revision, so all three catalogs and all three schemas move to 5; identifiers.json and state-machines.json carry only that integer in this round and their revision notes still describe round 4, because W0-DOM-02 permits no other byte in those files.",
+  "candidate_revision": 6,
+  "revision_note": "Sixth review round of the unreleased 1.0.0-draft.1 candidate. Round 6 carries owner ruling R-3 of 2026-09-17 (OWNER_RULINGS_2026-09-17.md) and settles DEBT_REGISTER.md D-7. One code is added: dependency_credential_refused, 500, not retryable, category dependency, safe_detail_keys exactly [dependency]. It exists because permission_denied meant two unrelated things that no envelope could separate -- the catalog defines it as an authenticated subject's rights, while the blob-store adapter raised it when the store refused the application's own credential, a scenario with no subject in it, and both declared exactly aggregate_type and required_capability with no discriminator. permission_denied keeps the contract's meaning and is otherwise untouched. The dependency category description is widened to admit a refused credential alongside a transient outage and an unresolvable reference; the category set is unchanged. This is an addition to a draft candidate, not a freeze-break: status is draft_candidate and frozen is false, and D-8 records that the programme's prose had been calling this catalog frozen. contract_version stays 1.0.0-draft.1: the candidate is unreleased, so the addition does not supersede a released version. Nothing else changed -- the other twenty codes and every http status, retryable flag, category, summary, safe detail key list and evidence list are exactly those of round 5, and the envelope declaration, safety rules, internal_mapping and the open decision and question registers are untouched. The family carries one candidate_revision, so all three catalogs and all three schemas move to 6; identifiers.json and state-machines.json carry only that integer in this round and their revision notes still describe round 4, as in round 5, because W0-DOM-02 permits no other byte in those files.",
   "status": "draft_candidate",
   "frozen": false,
   "envelope": {
@@ -91,7 +91,7 @@
     "not_found": "The addressed aggregate does not exist or is not visible to this caller.",
     "state_conflict": "The requested transition or command conflicts with durable state, including idempotency-key conflicts.",
     "stale_authority": "The caller no longer holds execution or publication authority for the addressed work.",
-    "dependency": "A required dependency is transiently unavailable or a required authoritative reference cannot be resolved.",
+    "dependency": "A required dependency is transiently unavailable, refused the application's own credential, or a required authoritative reference cannot be resolved.",
     "integrity": "Stored or delivered bytes, checksums or manifests do not match their declared identity.",
     "execution": "A run, job or attempt terminated in a declared failure state.",
     "policy": "An explicit product or operational policy refused the operation.",
@@ -263,6 +263,26 @@
       ],
       "notes": [
         "The dependency detail carries a stable dependency class name only, never a host, URL, credential or vendor endpoint."
+      ]
+    },
+    "dependency_credential_refused": {
+      "http": 500,
+      "retryable": false,
+      "category": "dependency",
+      "summary": "A required dependency refused the application's own credential. This is a server-side configuration fault with no authenticated subject of this API involved: nothing was created, and retrying does not change the outcome until an operator repairs the credential.",
+      "safe_detail_keys": [
+        "dependency"
+      ],
+      "evidence": [
+        "D-7",
+        "OWNER_RULINGS_2026-09-17.md R-3"
+      ],
+      "notes": [
+        "Distinct from permission_denied, which is about an authenticated subject's rights over the addressed resource. This code carries no subject and no capability, because there is no subject in the scenario: the caller did nothing wrong and can do nothing about it.",
+        "Distinct from dependency_unavailable, which is transient and retryable. The dependency answered, promptly and correctly, and refused us. Retrying repeats the refusal.",
+        "The status is 5xx because the fault is the server's. A 4xx would attribute a rejected application credential to the caller, which is the confusion D-7 records; giving the case its own code but leaving it on 403 would settle only half of it.",
+        "The dependency detail carries a stable dependency class name only, never a host, URL, credential, bucket or vendor endpoint. It is the vocabulary dependency_unavailable already uses, so the pair is read the same way.",
+        "safe_detail_keys is deliberately just that one key. aggregate_type and required_capability are not carried: they describe a subject's rights over the addressed aggregate, they are exactly what made the two 403s indistinguishable, and the addressed aggregate is not what failed. The environment variable at fault is not carried either; the catalog's own safety rule puts operator diagnostics behind correlation_id."
       ]
     },
     "required_norm_unavailable": {

@@ -50,7 +50,7 @@ from .errors import (
     SizeMismatchError,
     StorageBucketMissingError,
     StorageError,
-    StoragePermissionDeniedError,
+    StorageCredentialRefusedError,
     StorageUnavailableError,
     TemporaryBlobLostError,
 )
@@ -420,7 +420,7 @@ class S3BlobStore:
         if code in _NO_BUCKET_CODES:
             return StorageBucketMissingError(field=BUCKET_VAR, constraint="must_exist")
         if code in _DENIED_CODES:
-            return StoragePermissionDeniedError(required_capability="blob_storage_rw")
+            return StorageCredentialRefusedError()
         status = (
             exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
             if isinstance(getattr(exc, "response", None), dict)
@@ -436,7 +436,7 @@ class S3BlobStore:
 
     def _translate_transport(self, exc: Exception) -> StorageError:
         if isinstance(exc, NoCredentialsError):
-            return StoragePermissionDeniedError(required_capability="blob_storage_rw")
+            return StorageCredentialRefusedError()
         if isinstance(exc, (EndpointConnectionError, BotoConnectionError, OSError)):
             return StorageUnavailableError()
         return StorageUnavailableError()

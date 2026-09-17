@@ -85,6 +85,7 @@ ERROR_CODES = (
     "unsupported_contract_version",
     "storage_integrity_error",
     "dependency_unavailable",
+    "dependency_credential_refused",
     "required_norm_unavailable",
     "analysis_input_invalid",
     "analysis_failed",

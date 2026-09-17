@@ -2,7 +2,7 @@
   "contract": "auditmanager.domain.identifiers",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 5,
+  "candidate_revision": 6,
   "revision_note": "Fourth review round of the unreleased 1.0.0-draft.1 candidate. Round 4 is a correction round: it adds, removes and renames nothing and changes no rule. The one substantive change in the family is in state-machines.json and README.md, where a stale statement about another lane's ledger is corrected: U-06 is resolved, not open, and every part of the FS-04 fail-soft policy has an assigned encoder. This catalog is unchanged apart from candidate_revision and this note: no identifier, prefix, entity binding, distinct-identity rule, command key or authority capability was added, removed or renamed, and the 25 declared identifiers are exactly those of rounds 2 and 3. The optional branch reference the new policy names is allocated by the contract family that owns the branch and is deliberately not declared as an identifier here. The family carries one candidate_revision, so this catalog moves with the round. contract_version stays 1.0.0-draft.1 because the round redefined no meaning, and round-to-round distinguishability is carried by candidate_revision rather than by the version string.",
   "status": "draft_candidate",
   "frozen": false,

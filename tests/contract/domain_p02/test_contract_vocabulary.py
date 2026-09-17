@@ -20,7 +20,7 @@ def test_error_code_domain_equals_the_frozen_catalog(
     migration_module: ModuleType, error_codes_contract: dict
 ) -> None:
     assert set(migration_module.ERROR_CODES) == set(error_codes_contract["codes"])
-    assert len(migration_module.ERROR_CODES) == 20
+    assert len(migration_module.ERROR_CODES) == 21
 
 
 def test_stage_ids_equal_the_analysis_registry(

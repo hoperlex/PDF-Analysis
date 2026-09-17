@@ -47,7 +47,7 @@ class BlobStore(Protocol):
         """Prove the configured credentials can reach the private bucket.
 
         Returns ``None`` on success and raises otherwise:
-        :class:`StoragePermissionDeniedError` when the credentials are refused,
+        :class:`StorageCredentialRefusedError` when the credentials are refused,
         :class:`StorageBucketMissingError` when the configured bucket does not
         exist, :class:`StorageUnavailableError` when the endpoint cannot be
         reached at all.

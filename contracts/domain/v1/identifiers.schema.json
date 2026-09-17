@@ -41,7 +41,7 @@
       "const": "1.0.0-draft.0"
     },
     "candidate_revision": {
-      "const": 5,
+      "const": 6,
       "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
     },
     "revision_note": {
