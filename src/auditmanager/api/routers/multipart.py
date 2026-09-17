@@ -1,152 +1,115 @@
-"""A strict ``multipart/form-data`` reader for the one upload the surface declares.
+"""The transport's body limit -- the outer of the two size guards.
 
-``uploadDocument`` is the only multipart operation in the frozen document, and its
-schema declares exactly two parts: a required binary ``file`` and an optional
-``display_title``. This reader accepts that and refuses everything else.
+Two guards refuse an oversized upload and they are independently breakable:
 
-It is written on the standard library's ``email`` parser rather than on a form-parsing
-dependency, because ``docs/program/P02_LOCK.json`` pins no such dependency and a Gate B
-session may not add one.
+* **this one**, :data:`MAX_BODY` = 26 MiB, which reads the request and is outermost. It
+  answers ``details.constraint: "max_bytes"``;
+* **the envelope's** ``ENV-SIZE``, ``auditmanager.ingest.MAX_BYTES`` = 25 MiB, which judges
+  the document. It answers ``details.constraint: "byte_size <= 26214400"``.
 
-Deliberately strict, because a lenient multipart reader is a security surface: a missing
-boundary, a part with no name, a repeated part and an unknown part are each a refusal
-rather than a best guess.
+``P4_CLOSURE.md`` section 5 explains why both exist and
+``tests/integration/ingest/test_size_guard_boundary.py`` pins the window between them: a
+body inside it passes the transport so that ``ENV-SIZE`` is the guard that speaks. The two
+numbers are 26 MiB and 25 MiB respectively and **26214400 is the 25 MiB one** -- the phrase
+"the 26 MiB boundary" names the transport's limit, which `W13-BASE` section 6.2 had to
+correct in its own brief.
+
+**What changed under `T-1`.** The hand-rolled ``email``-parser reader this module used to
+be is gone: FastAPI parses ``multipart/form-data`` with ``python-multipart``, and
+``UploadDocumentRequest`` -- a closed Pydantic model -- decides which parts are declared, so
+an undeclared part is an ``extra_forbidden`` that
+:func:`~auditmanager.api.routers.handlers.on_request_validation_error` renders as
+``additionalProperties``. What could **not** move into the framework is the limit: a reader
+that will happily materialise an unbounded body is a denial-of-service surface of its own,
+and FastAPI has no equivalent. So the limit stays here, in front of the parser, as ASGI.
 """
 
 from __future__ import annotations
 
-import email.parser
-import email.policy
-from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
+from auditmanager.api.routers.correlation import current_correlation_id
+from auditmanager.api.routers.errors import envelope_response
 from auditmanager.shared.errors import DomainError, ErrorCode
 
-__all__ = ["MultipartUpload", "parse_multipart_upload"]
+__all__ = ["MAX_BODY", "BodyCapMiddleware"]
 
-#: The upload envelope refuses anything larger long before this, but a reader that will
-#: happily materialise an unbounded body is a denial-of-service surface of its own.
+#: The upload envelope refuses anything larger long before this, but see the module note.
 #: 25 MiB is the declared maximum; the slack covers part headers and the boundary.
 MAX_BODY: Final[int] = 26 * 1024 * 1024
 
-_FILE_PART: Final[str] = "file"
-_TITLE_PART: Final[str] = "display_title"
+#: ``records/22-uploadDocument.refusal.max_bytes.json``, byte for byte.
+_UPLOAD_TOO_LARGE: Final[str] = "The upload exceeds the maximum accepted size."
+#: The same guard, for a body that is not an upload. A different sentence because
+#: ``field: "file"`` would be a lie about a JSON body, and a refusal that names the wrong
+#: part of the request is worse than one that names none.
+_BODY_TOO_LARGE: Final[str] = "The request body exceeds the maximum accepted size."
 
 
-@dataclass(frozen=True, slots=True)
-class MultipartUpload:
-    """The two declared parts of ``UploadDocumentRequest``."""
-
-    content: bytes
-    filename: str
-    display_title: str | None
+class _BodyTooLarge(Exception):
+    """Raised out of ``receive`` when the running total passes the limit."""
 
 
-def _refuse(message: str, *, field: str, constraint: str) -> DomainError:
+def _refusal(is_upload: bool) -> DomainError:
     return DomainError(
-        ErrorCode.VALIDATION_FAILED, message=message, field=field, constraint=constraint
+        ErrorCode.VALIDATION_FAILED,
+        message=_UPLOAD_TOO_LARGE if is_upload else _BODY_TOO_LARGE,
+        field="file" if is_upload else "body",
+        constraint="max_bytes",
     )
 
 
-def parse_multipart_upload(body: bytes, content_type: str | None) -> MultipartUpload:
-    """Read the ``file`` and optional ``display_title`` parts, or refuse.
+class BodyCapMiddleware:
+    """Refuse a body over :data:`MAX_BODY`, before anything materialises it.
 
-    The returned ``filename`` is the client's own and is passed to the ingest command,
-    which records it. It is **never** rendered into a response: see the note in
-    :mod:`auditmanager.api.schemas.documents`.
+    Two checks, and both are needed. ``Content-Length`` is refused up front so an oversized
+    body is never read at all -- but a client may omit it, or lie, so the stream is counted
+    as well and the request is refused the moment the running total passes the limit. A
+    guard that trusted the declared length would be a guard a client can switch off.
     """
-    if not content_type or "multipart/form-data" not in content_type.lower():
-        raise _refuse(
-            "This operation expects a multipart/form-data body.",
-            field="Content-Type",
-            constraint="media_type",
-        )
-    if len(body) > MAX_BODY:
-        raise _refuse(
-            "The upload exceeds the maximum accepted size.",
-            field="file",
-            constraint="max_bytes",
-        )
 
-    # `email` wants the content-type header alongside the body to find the boundary.
-    raw = b"Content-Type: " + content_type.encode("latin-1", "replace") + b"\r\n\r\n" + body
-    parsed = email.parser.BytesParser(policy=email.policy.HTTP).parsebytes(raw)
-    if not parsed.is_multipart():
-        raise _refuse(
-            "The multipart body could not be read; the boundary may be missing.",
-            field="Content-Type",
-            constraint="boundary",
-        )
+    __slots__ = ("app", "limit")
 
-    content: bytes | None = None
-    filename: str | None = None
-    display_title: str | None = None
-    seen: set[str] = set()
+    def __init__(self, app: Any, limit: int = MAX_BODY) -> None:
+        self.app = app
+        self.limit = limit
 
-    for part in parsed.iter_parts():
-        name = part.get_param("name", header="content-disposition")
-        if not isinstance(name, str) or not name:
-            raise _refuse(
-                "A multipart part carries no name.",
-                field="file",
-                constraint="part_name",
-            )
-        if name in seen:
-            # The part name is caller-controlled and is not echoed. `details` values
-            # ARE screened, by exactly the six `_FORBIDDEN` patterns that screen
-            # `message` -- `shared/errors/envelope.py` has run them since `B6` and
-            # raises `UnsafeDetailValue`. That is the reason not to echo, not a reason
-            # it would be safe to: a part name carrying one of those shapes would turn
-            # this caller's 422 into an unhandled `UnsafeDetailValue` at envelope
-            # construction, and one carrying none would still reflect the caller's own
-            # text back out. A classifier is reported instead, and the constraint name
-            # below is that classifier.
-            raise _refuse(
-                "A multipart part is repeated.", field="body", constraint="unique_part"
-            )
-        seen.add(name)
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        if name == _FILE_PART:
-            payload = part.get_payload(decode=True)
-            if not isinstance(payload, bytes):
-                raise _refuse(
-                    "The file part could not be decoded.",
-                    field="file",
-                    constraint="encoding",
-                )
-            content = payload
-            candidate = part.get_filename()
-            filename = candidate if isinstance(candidate, str) and candidate else None
-        elif name == _TITLE_PART:
-            payload = part.get_payload(decode=True)
-            if not isinstance(payload, bytes):
-                raise _refuse(
-                    "The display_title part could not be decoded.",
-                    field="display_title",
-                    constraint="encoding",
-                )
-            try:
-                display_title = payload.decode("utf-8")
-            except UnicodeDecodeError:
-                raise _refuse(
-                    "The display_title part is not valid UTF-8.",
-                    field="display_title",
-                    constraint="encoding",
-                ) from None
-        else:
-            # `UploadDocumentRequest` is closed. An unknown part is refused rather than
-            # ignored, for the same reason an unknown JSON property is.
-            # Not echoed, for the same reason as above.
-            raise _refuse(
-                "The upload carries a part the schema does not declare.",
-                field="body",
-                constraint="additionalProperties",
-            )
+        is_upload = False
+        declared: int | None = None
+        for name, value in scope.get("headers", ()):
+            lowered = name.lower()
+            if lowered == b"content-type":
+                is_upload = b"multipart/form-data" in value.lower()
+            elif lowered == b"content-length":
+                try:
+                    declared = int(value)
+                except ValueError:
+                    declared = None
 
-    if content is None:
-        raise _refuse("The upload requires a file part.", field="file", constraint="required")
-    if filename is None:
-        raise _refuse(
-            "The file part requires a filename.", field="file", constraint="filename"
-        )
-    return MultipartUpload(content=content, filename=filename, display_title=display_title)
+        if declared is not None and declared > self.limit:
+            response = envelope_response(_refusal(is_upload), current_correlation_id())
+            await response(scope, receive, send)
+            return
+
+        read = 0
+        limit = self.limit
+
+        async def counted() -> Any:
+            nonlocal read
+            message = await receive()
+            if message["type"] == "http.request":
+                read += len(message.get("body", b""))
+                if read > limit:
+                    raise _BodyTooLarge
+            return message
+
+        try:
+            await self.app(scope, counted, send)
+        except _BodyTooLarge:
+            response = envelope_response(_refusal(is_upload), current_correlation_id())
+            await response(scope, receive, send)

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Final
+from typing import Any
 
 from auditmanager.api.schemas.common import timestamp
 
@@ -30,17 +30,6 @@ __all__ = [
     "finding_body",
     "finding_detail_body",
 ]
-
-#: ``#/components/schemas/FindingCategory`` -- the only two questions PC-01 answers.
-FINDING_CATEGORIES: Final[frozenset[str]] = frozenset(
-    {"internal_contradiction", "explicit_placeholder"}
-)
-
-#: ``#/components/schemas/Verdict``.
-VERDICTS: Final[frozenset[str]] = frozenset(
-    {"pending", "accepted", "rejected", "needs_manual_review"}
-)
-
 
 @dataclass(frozen=True, slots=True)
 class EvidenceView:

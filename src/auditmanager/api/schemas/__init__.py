@@ -1,18 +1,31 @@
 """Wire shapes for ``contracts/api/v1/openapi.json``.
 
-Every view type here restates one frozen schema's property set exactly, and every
-``*_body`` function renders one. Nothing in this package reaches a database, a service,
-an environment variable or a clock: given a view it produces the same body every time.
+Two layers, and the split is the point.
 
-The view types are also the **seam**. A router never receives a domain record; it
-receives one of these, built by whatever the composition root wired behind the ports in
-:mod:`auditmanager.api.routers.ports`. That is what lets this session build the run and
-export routers against shapes ``B5`` is producing in parallel: the two sides agree on
-the frozen document rather than on each other's code.
+**:mod:`~auditmanager.api.schemas.models`** holds the 43 Pydantic models named exactly as
+the contract's ``components.schemas`` keys. They declare the **document** FastAPI serves and
+they validate the four request bodies. `T-1` makes the generated document a second authority
+and `W13-CONF`'s conformance gate is the machine that stops it drifting from the frozen one.
+
+**The ``*View`` dataclasses and the ``*_body`` functions** in the modules beside it are the
+**seam and the bytes**. A handler never receives a domain record; it receives one of these
+views, built by whatever the composition root wired behind the ports in
+:mod:`auditmanager.api.routers.ports`, and renders it with a ``*_body`` function. Those
+functions produce the exact dictionaries the response baseline's 33 records contain, and
+nothing in this package reaches a database, a service, an environment variable or a clock:
+given a view they produce the same body every time.
+
+**Why the bodies are not rendered by the Pydantic models.** A handler returns a
+``WireResponse``, which FastAPI passes through untouched, so ``response_model`` describes the
+response without serializing it. That is deliberate: ``model_dump_json`` would emit compact
+separators and its own key order, and every one of the 33 recorded bodies would differ from
+the record in a way that means nothing -- inside the one safety net the wave has for
+differences that mean something.
 """
 
 from __future__ import annotations
 
+from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
@@ -22,15 +35,13 @@ from auditmanager.api.schemas.common import (
     encode_cursor,
     page_body,
     paginate,
-    parse_limit,
     timestamp,
 )
 from auditmanager.api.schemas.decisions import (
-    AppendDecisionCommand,
     DecisionEventView,
     append_decision_body,
+    check_comment_is_present_for_a_comment_event,
     decision_event_body,
-    parse_append_decision_request,
 )
 from auditmanager.api.schemas.documents import (
     DocumentVersionView,
@@ -46,16 +57,10 @@ from auditmanager.api.schemas.findings import (
     finding_body,
     finding_detail_body,
 )
-from auditmanager.api.schemas.projects import (
-    ProjectView,
-    parse_create_project_request,
-    project_body,
-)
+from auditmanager.api.schemas.projects import ProjectView, project_body
 from auditmanager.api.schemas.runs import (
     RunStatusView,
     StageStateView,
-    StartRunCommand,
-    parse_start_run_request,
     run_status_body,
 )
 
@@ -63,7 +68,6 @@ __all__ = [
     "DEFAULT_LIMIT",
     "MAX_LIMIT",
     "MIN_LIMIT",
-    "AppendDecisionCommand",
     "DecisionEventView",
     "DocumentVersionView",
     "EvidenceView",
@@ -76,20 +80,17 @@ __all__ = [
     "ProvenanceView",
     "RunStatusView",
     "StageStateView",
-    "StartRunCommand",
     "append_decision_body",
+    "check_comment_is_present_for_a_comment_event",
     "decision_event_body",
     "decode_cursor",
     "document_version_body",
     "encode_cursor",
     "finding_body",
     "finding_detail_body",
+    "models",
     "page_body",
     "paginate",
-    "parse_append_decision_request",
-    "parse_create_project_request",
-    "parse_limit",
-    "parse_start_run_request",
     "project_body",
     "run_status_body",
     "timestamp",

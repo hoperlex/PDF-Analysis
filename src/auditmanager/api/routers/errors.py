@@ -34,36 +34,30 @@ correlation id addresses.
 
 from __future__ import annotations
 
-import json
-from typing import Any, Callable, Final, Mapping
+from typing import Any, Callable, Final
 
 from sqlalchemy.exc import DBAPIError
 
 from auditmanager.documents import sqlstate_of
 from auditmanager.shared.db.schema import SQLSTATE_TO_CATALOG_CODE
 from auditmanager.shared.errors import DomainError, ErrorCode, build
-from auditmanager.api.routers.correlation import CORRELATION_HEADER, resolve_correlation_id
-from auditmanager.api.routers.http import (
-    MethodNotAllowed,
-    NoRoute,
-    Request,
-    Response,
-    Router,
-    json_response,
-)
+from auditmanager.api.routers.correlation import CORRELATION_HEADER
+from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 
 __all__ = [
     "CORRELATION_HEADER",
-    "dispatch",
+    "METHOD_NOT_ALLOWED_CODE",
     "envelope_response",
     "error_code_for",
+    "guarded",
     "to_domain_error",
 ]
 
 #: 405 has no catalog code of its own. The surface declares twelve operations and no
 #: other method on any of their paths, so a method the document does not declare is
-#: simply not a resource here.
-_METHOD_NOT_ALLOWED_CODE: Final[ErrorCode] = ErrorCode.NOT_FOUND
+#: simply not a resource here -- and answering 405 would make the API an oracle for which
+#: paths exist. ``records/29-dispatch.method_not_allowed.json`` pins the 404.
+METHOD_NOT_ALLOWED_CODE: Final[ErrorCode] = ErrorCode.NOT_FOUND
 
 
 def error_code_for(exc: BaseException) -> ErrorCode | None:
@@ -100,7 +94,7 @@ def to_domain_error(exc: BaseException) -> DomainError:
     return DomainError(ErrorCode.INTERNAL_ERROR)
 
 
-def envelope_response(error: DomainError, correlation_id: str) -> Response:
+def envelope_response(error: DomainError, correlation_id: str) -> WireResponse:
     """Render a typed failure as the frozen ``ErrorEnvelope``.
 
     ``retryable`` comes from the catalog through
@@ -108,50 +102,13 @@ def envelope_response(error: DomainError, correlation_id: str) -> Response:
     from :attr:`ErrorCode.http_status`. Neither is derived from the other.
     """
     envelope = error.envelope(correlation_id)
-    payload = json.dumps(envelope.as_dict(), ensure_ascii=False).encode("utf-8")
-    return json_response(envelope.http_status, payload)
-
-
-def dispatch(
-    router: Router,
-    request: Request,
-    *,
-    correlation_id: str | None = None,
-) -> Response:
-    """Resolve one request through ``router`` and guarantee a typed answer.
-
-    Every path out of this function -- a match, a miss, a handler's typed refusal, a
-    database refusal, an unclassified fault -- produces a response carrying
-    ``X-Correlation-Id``. There is no route through it that returns an untyped body.
-    """
-    resolved = correlation_id or resolve_correlation_id(request)
-    try:
-        route, bound = router.match(request)
-    except MethodNotAllowed:
-        return envelope_response(
-            DomainError(_METHOD_NOT_ALLOWED_CODE), resolved
-        ).with_header(CORRELATION_HEADER, resolved)
-    except NoRoute:
-        return envelope_response(DomainError(ErrorCode.NOT_FOUND), resolved).with_header(
-            CORRELATION_HEADER, resolved
-        )
-
-    try:
-        response = route.handler(bound)
-    except BaseException as exc:  # noqa: BLE001 - the edge classifies everything
-        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-            raise
-        response = envelope_response(to_domain_error(exc), resolved)
-
-    if response.header(CORRELATION_HEADER) is None:
-        response = response.with_header(CORRELATION_HEADER, resolved)
-    return response
+    return json_response(envelope.http_status, encode_json(envelope.as_dict()))
 
 
 def guarded(
-    handler: Callable[[Request], Response],
+    handler: Callable[[], Any],
     **details: Any,
-) -> Callable[[Request], Response]:
+) -> Callable[[], Any]:
     """Wrap a handler so its database refusals carry the caller's own ``details``.
 
     The middleware itself adds no details, because it does not know what the handler
@@ -160,9 +117,9 @@ def guarded(
     envelope screens each key against the reported code's ``safe_detail_keys``.
     """
 
-    def run(request: Request) -> Response:
+    def run() -> Any:
         try:
-            return handler(request)
+            return handler()
         except DomainError:
             raise
         except DBAPIError as exc:
@@ -172,25 +129,3 @@ def guarded(
             raise DomainError(code, **details) from exc
 
     return run
-
-
-def decode_json_object(body: bytes) -> Mapping[str, Any]:
-    """Parse a request body that must be one JSON object.
-
-    Anything else -- malformed bytes, a bare array, a string, ``null`` -- is
-    ``validation_failed``. The parse error itself never reaches the caller: a JSON
-    decoder's message quotes the offending input.
-    """
-    try:
-        parsed = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="The request body is not valid JSON.",
-        ) from exc
-    if not isinstance(parsed, dict):
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="The request body must be a JSON object.",
-        )
-    return parsed

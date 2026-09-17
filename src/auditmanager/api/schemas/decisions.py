@@ -13,35 +13,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Final, Mapping
+from typing import Any, Final
 
 from auditmanager.api.schemas.common import timestamp
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
-    "DECLARED_EVENT_TYPES",
-    "PC01_EVENT_TYPES",
-    "AppendDecisionCommand",
     "DecisionEventView",
     "append_decision_body",
+    "check_comment_is_present_for_a_comment_event",
     "decision_event_body",
-    "parse_append_decision_request",
 ]
-
-#: ``#/components/schemas/DecisionEventType``.
-DECLARED_EVENT_TYPES: Final[frozenset[str]] = frozenset(
-    {"accept", "reject", "comment", "revoke"}
-)
-
-#: What PC-01 actually emits. `revoke` is declared so PD-01 revocation stays
-#: implementable without a schema change; no PC-01 client offers it, and
-#: `auditmanager.decisions.record_decision` refuses it.
-PC01_EVENT_TYPES: Final[frozenset[str]] = frozenset({"accept", "reject", "comment"})
-
-MAX_COMMENT: Final[int] = 4000
-
-_OBSERVATION_PREFIX: Final[str] = "fobs_"
-
 
 @dataclass(frozen=True, slots=True)
 class DecisionEventView:
@@ -77,55 +59,23 @@ def append_decision_body(view: DecisionEventView, current_verdict: str) -> dict[
     return {"event": decision_event_body(view), "current_verdict": current_verdict}
 
 
-@dataclass(frozen=True, slots=True)
-class AppendDecisionCommand:
-    """A validated ``AppendDecisionRequest``."""
-
-    event_type: str
-    finding_observation_id: str
-    comment: str | None
+#: ``#/components/schemas/AppendDecisionRequest.properties.comment.maxLength``, named for a
+#: reader of this module. The bound itself is enforced by
+#: :class:`auditmanager.api.schemas.models.AppendDecisionRequest`.
+MAX_COMMENT: Final[int] = 4000
 
 
-def parse_append_decision_request(payload: Mapping[str, Any]) -> AppendDecisionCommand:
-    """Validate ``AppendDecisionRequest``."""
-    if set(payload) - {"event_type", "finding_observation_id", "comment"}:
-        # The property name is not echoed; see the note in `schemas/projects.py`.
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="The request body carries a property the schema does not declare.",
-            field="body",
-            constraint="additionalProperties",
-        )
+def check_comment_is_present_for_a_comment_event(
+    *, event_type: str, comment: str | None
+) -> None:
+    """A ``comment`` event must carry a comment.
 
-    event_type = payload.get("event_type")
-    if not isinstance(event_type, str) or event_type not in DECLARED_EVENT_TYPES:
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="event_type must be one of: accept, comment, reject, revoke.",
-            field="event_type",
-            constraint="enum",
-        )
-
-    observation_id = payload.get("finding_observation_id")
-    if not isinstance(observation_id, str) or not observation_id.startswith(
-        _OBSERVATION_PREFIX
-    ):
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="finding_observation_id is required and must be an observation identity.",
-            field="finding_observation_id",
-            constraint="pattern",
-        )
-
-    comment = payload.get("comment")
-    if comment is not None:
-        if not isinstance(comment, str) or not 1 <= len(comment) <= MAX_COMMENT:
-            raise DomainError(
-                ErrorCode.VALIDATION_FAILED,
-                message=f"comment must be 1 to {MAX_COMMENT} characters.",
-                field="comment",
-                constraint="length",
-            )
+    The one rule of ``AppendDecisionRequest`` that no JSON Schema keyword expresses -- it is
+    a dependency between two properties, and the frozen document states it in prose. It is
+    checked at the edge, against the already-validated model, rather than left to the
+    command layer, because it is a request-shape refusal and the caller needs to be told
+    *which property* is missing.
+    """
     if event_type == "comment" and not comment:
         raise DomainError(
             ErrorCode.VALIDATION_FAILED,
@@ -133,9 +83,3 @@ def parse_append_decision_request(payload: Mapping[str, Any]) -> AppendDecisionC
             field="comment",
             constraint="required_for_comment",
         )
-
-    return AppendDecisionCommand(
-        event_type=event_type,
-        finding_observation_id=observation_id,
-        comment=comment,
-    )

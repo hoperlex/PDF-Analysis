@@ -16,40 +16,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Final, Mapping, Sequence
+from typing import Any
 
 from auditmanager.api.schemas.common import timestamp
-from auditmanager.shared.errors import DomainError, ErrorCode
 
-__all__ = [
-    "PROVIDER_MODES",
-    "RUN_STATES",
-    "RunStatusView",
-    "StageStateView",
-    "parse_start_run_request",
-    "run_status_body",
-]
-
-#: ``#/components/schemas/RunState``. `succeeded` is deliberately absent.
-RUN_STATES: Final[frozenset[str]] = frozenset(
-    {
-        "created",
-        "queued",
-        "running",
-        "validating",
-        "published",
-        "partial",
-        "failed",
-        "cancelled",
-    }
-)
-
-#: ``#/components/schemas/ProviderMode``.
-PROVIDER_MODES: Final[frozenset[str]] = frozenset({"live", "recorded"})
-
-#: ``#/components/schemas/VersionUid``.
-_VERSION_PREFIX: Final[str] = "ver_"
-
+__all__ = ["RunStatusView", "StageStateView", "run_status_body", "stage_state_body"]
 
 @dataclass(frozen=True, slots=True)
 class StageStateView:
@@ -128,44 +99,3 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
     if view.terminal_at is not None:
         body["terminal_at"] = timestamp(view.terminal_at)
     return body
-
-
-@dataclass(frozen=True, slots=True)
-class StartRunCommand:
-    """A validated ``StartRunRequest``."""
-
-    version_uid: str
-    provider_mode: str | None
-
-
-def parse_start_run_request(payload: Mapping[str, Any]) -> StartRunCommand:
-    """Validate ``StartRunRequest``.
-
-    Refusals here are ``analysis_input_invalid`` only where the *declared analysis
-    inputs* are what is wrong. A malformed body is ``validation_failed``: the frozen
-    ``RunInputInvalid`` response describes exactly that split.
-    """
-    if set(payload) - {"version_uid", "provider_mode"}:
-        # The property name is not echoed; see the note in `schemas/projects.py`.
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="The request body carries a property the schema does not declare.",
-            field="body",
-            constraint="additionalProperties",
-        )
-    version_uid = payload.get("version_uid")
-    if not isinstance(version_uid, str) or not version_uid.startswith(_VERSION_PREFIX):
-        raise DomainError(
-            ErrorCode.ANALYSIS_INPUT_INVALID,
-            message="The run must declare the version_uid of a published version.",
-        )
-    provider_mode = payload.get("provider_mode")
-    if provider_mode is not None:
-        if not isinstance(provider_mode, str) or provider_mode not in PROVIDER_MODES:
-            raise DomainError(
-                ErrorCode.VALIDATION_FAILED,
-                message="provider_mode must be one of: live, recorded.",
-                field="provider_mode",
-                constraint="enum",
-            )
-    return StartRunCommand(version_uid=version_uid, provider_mode=provider_mode)

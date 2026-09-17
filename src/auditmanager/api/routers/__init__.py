@@ -1,46 +1,55 @@
 """The twelve operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles the operation table from the six router modules. It
-takes its dependencies as arguments and constructs none of them: choosing what sits
-behind each port is the composition root's job (``api/composition.py``, owned by the
-integrator in Gate C), and a factory that reached for a concrete implementation would
-have taken that decision away from it.
+:func:`build_router` assembles one ``APIRouter`` from the six router modules. It takes its
+dependencies as arguments and constructs none of them: choosing what sits behind each port
+is the composition root's job (``api/composition.py``), and a factory that reached for a
+concrete implementation would have taken that decision away from it.
 
-``tests/integration/api`` asserts this table's ``(operationId, method, template)`` set
-against the frozen document itself, so a thirteenth operation fails the suite and a
-missing one cannot be overlooked.
+``tests/contract/api_v1/test_openapi_conformance.py`` asserts the generated document's
+``(operationId, method, path)`` set against the frozen document itself, so a thirteenth
+operation fails the suite and a missing one cannot be overlooked. ``web/tests/contract/
+openapi-drift.contract.test.ts`` counts twelve from the other side.
+
+**The signature is the one the composition root already calls.** ``build_router`` took six
+keyword-only ports before `T-1` and takes the same six now; ``Router`` is still the name of
+what it returns. That is what let the transport change without ``bootstrap/composition.py``
+-- another session's file -- moving a line.
 """
 
 from __future__ import annotations
 
 from typing import Final
 
+from fastapi import APIRouter
+
 from auditmanager.api.routers.correlation import (
     CORRELATION_HEADER,
+    CorrelationMiddleware,
+    current_correlation_id,
     new_correlation_id,
     resolve_correlation_id,
 )
 from auditmanager.api.routers.decisions import build_decision_routes
+from auditmanager.api.routers.declarations import declare_correlation_id
 from auditmanager.api.routers.documents import build_document_routes
 from auditmanager.api.routers.errors import (
-    dispatch,
+    METHOD_NOT_ALLOWED_CODE,
     envelope_response,
     error_code_for,
+    guarded,
     to_domain_error,
 )
 from auditmanager.api.routers.export import build_export_routes
 from auditmanager.api.routers.findings import build_finding_routes
-from auditmanager.api.routers.http import (
-    Headers,
-    Request,
-    Response,
-    Route,
-    Router,
+from auditmanager.api.routers.handlers import (
+    FailureEnvelopeMiddleware,
+    install_exception_handlers,
 )
 from auditmanager.api.routers.idempotency import (
     IDEMPOTENCY_HEADER,
     require_idempotency_key,
 )
+from auditmanager.api.routers.multipart import MAX_BODY, BodyCapMiddleware
 from auditmanager.api.routers.ports import (
     CsvExportPort,
     DecisionPort,
@@ -51,36 +60,49 @@ from auditmanager.api.routers.ports import (
 )
 from auditmanager.api.routers.projects import build_project_routes
 from auditmanager.api.routers.runs import build_run_routes
+from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
+
+#: What ``build_router`` returns. The name the composition root's type annotation uses.
+Router = APIRouter
 
 __all__ = [
     "BASE_PATH",
-    "CORRELATION_HEADER",
     "CONTRACT_VERSION",
+    "CORRELATION_HEADER",
     "IDEMPOTENCY_HEADER",
+    "MAX_BODY",
+    "METHOD_NOT_ALLOWED_CODE",
+    "BodyCapMiddleware",
+    "CorrelationMiddleware",
     "CsvExportPort",
     "DecisionPort",
     "DocumentPort",
+    "FailureEnvelopeMiddleware",
     "FindingPort",
-    "Headers",
     "ProjectPort",
-    "Request",
-    "Response",
-    "Route",
     "Router",
     "RunPort",
+    "WireResponse",
     "build_router",
-    "dispatch",
+    "current_correlation_id",
+    "declare_correlation_id",
+    "encode_json",
     "envelope_response",
     "error_code_for",
+    "guarded",
+    "install_exception_handlers",
+    "json_response",
     "new_correlation_id",
     "require_idempotency_key",
     "resolve_correlation_id",
     "to_domain_error",
 ]
 
-#: ``servers[0].url`` of the frozen document. A breaking change is a new contract
-#: version, never an edit here. Stripping it from an inbound path is the composition
-#: root's business; the routes below are relative to it.
+#: ``servers[0].url`` of the frozen document. A breaking change is a new contract version,
+#: never an edit here. The twelve paths are declared **relative to it** and the prefix is
+#: not pushed into them: `W13-CONF`'s ``test_a_changed_base_path_is_caught`` compares
+#: ``servers``, and a document whose paths carried ``/api/v1`` would declare a different
+#: surface from the one the contract does.
 BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
@@ -102,13 +124,14 @@ def build_router(
     Keyword-only, because six same-shaped dependencies passed positionally is a wiring
     defect waiting to happen and the type checker cannot see it.
     """
-    return Router(
-        (
-            *build_project_routes(projects),
-            *build_document_routes(documents),
-            *build_run_routes(runs),
-            *build_finding_routes(findings),
-            *build_decision_routes(decisions),
-            *build_export_routes(exports),
-        )
-    )
+    router = APIRouter()
+    for built in (
+        build_project_routes(projects),
+        build_document_routes(documents),
+        build_run_routes(runs),
+        build_finding_routes(findings),
+        build_decision_routes(decisions),
+        build_export_routes(exports),
+    ):
+        router.include_router(built)
+    return router

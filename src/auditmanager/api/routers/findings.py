@@ -2,87 +2,85 @@
 
 from __future__ import annotations
 
-import json
-from typing import Sequence
+from typing import Annotated
 
-from auditmanager.api.routers.http import Request, Response, Route, json_response
-from auditmanager.api.routers.idempotency import require_path_identity
-from auditmanager.api.routers.ports import FindingPort
-from auditmanager.api.schemas.common import page_body, paginate, parse_limit
-from auditmanager.api.schemas.findings import (
-    FINDING_CATEGORIES,
-    VERDICTS,
-    finding_body,
-    finding_detail_body,
+from fastapi import APIRouter, Path
+
+from auditmanager.api.routers.declarations import (
+    CategoryFilterParam,
+    CursorParam,
+    LimitParam,
+    VerdictFilterParam,
+    envelope_responses,
+    success,
 )
-from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import FindingUid, RunId
+from auditmanager.api.routers.ports import FindingPort
+from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
+from auditmanager.api.schemas import models
+from auditmanager.api.schemas.common import page_body, paginate
+from auditmanager.api.schemas.findings import finding_body, finding_detail_body
 
 __all__ = ["build_finding_routes"]
 
 
-def build_finding_routes(findings: FindingPort) -> Sequence[Route]:
-    def list_run_findings(request: Request) -> Response:
-        run_id = require_path_identity(
-            request.path_params["run_id"], parse=RunId, aggregate_type="AuditRun"
-        )
-        limit = parse_limit(request.query_one("limit"))
-        cursor = request.query_one("cursor")
-        category = _enum_filter(request.query_one("category"), FINDING_CATEGORIES, "category")
-        verdict = _enum_filter(request.query_one("verdict"), VERDICTS, "verdict")
+def build_finding_routes(findings: FindingPort) -> APIRouter:
+    router = APIRouter(tags=["findings"])
 
+    @router.get(
+        "/runs/{run_id}/findings",
+        operation_id="listRunFindings",
+        status_code=200,
+        response_model=models.FindingPage,
+        responses={
+            **success(200, "One page of this run's published findings."),
+            **envelope_responses(401, 403, 404, 422, 500, 503),
+        },
+    )
+    def list_run_findings(
+        run_id: Annotated[models.RunId, Path()],
+        cursor: CursorParam = None,  # type: ignore[assignment]
+        limit: LimitParam = 50,
+        category: CategoryFilterParam = None,  # type: ignore[assignment]
+        verdict: VerdictFilterParam = None,  # type: ignore[assignment]
+    ) -> WireResponse:
+        # The filters reach the port as the contract's own values or as `None`. A value
+        # outside either enum never gets here: the parameter is typed with the frozen enum,
+        # so FastAPI refuses it and `on_request_validation_error` renders `constraint:
+        # enum`. An empty page would read as "this run has no findings of that kind",
+        # which is a different and wrong answer to "that kind does not exist".
         rows = findings.list_run_findings(
-            run_id=str(run_id), category=category, verdict=verdict
+            run_id=run_id,
+            category=category.value if category else None,
+            verdict=verdict.value if verdict else None,
         )
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_finding_sort_key)
         body = page_body([finding_body(view) for view in page.items], page.next_cursor)
-        return json_response(200, _encode(body))
+        return json_response(200, encode_json(body))
 
-    def get_finding(request: Request) -> Response:
-        finding_uid = require_path_identity(
-            request.path_params["finding_uid"],
-            parse=FindingUid,
-            aggregate_type="Finding",
-        )
-        view = findings.get_finding(finding_uid=str(finding_uid))
-        return json_response(200, _encode(finding_detail_body(view)))
-
-    return (
-        Route("listRunFindings", "GET", "/runs/{run_id}/findings", list_run_findings),
-        Route("getFinding", "GET", "/findings/{finding_uid}", get_finding),
+    @router.get(
+        "/findings/{finding_uid}",
+        operation_id="getFinding",
+        status_code=200,
+        response_model=models.FindingDetail,
+        responses={
+            **success(200, "One finding with its observation, evidence and provenance."),
+            **envelope_responses(401, 403, 404, 500, 503),
+        },
     )
+    def get_finding(finding_uid: Annotated[models.FindingUid, Path()]) -> WireResponse:
+        view = findings.get_finding(finding_uid=finding_uid)
+        return json_response(200, encode_json(finding_detail_body(view)))
 
-
-def _enum_filter(raw: str | None, allowed: frozenset[str], field: str) -> str | None:
-    """Validate a closed-enum query filter.
-
-    A value outside the enum is ``validation_failed`` rather than an empty page. An
-    empty page would read as "this run has no findings of that kind", which is a
-    different and wrong answer to "that kind does not exist".
-    """
-    if raw is None or raw == "":
-        return None
-    if raw not in allowed:
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message=f"The {field} filter must be one of: {', '.join(sorted(allowed))}.",
-            field=field,
-            constraint="enum",
-        )
-    return raw
+    return router
 
 
 def _finding_sort_key(view: object) -> tuple[str, ...]:
     """``(finding_uid, finding_observation_id)`` -- opaque identifiers, a total order.
 
-    The same key family the CSV sorts on (``P02_SEAMS.md`` section 6), so a page
-    boundary and a CSV row order cannot disagree about what "next" means.
+    The same key family the CSV sorts on (``P02_SEAMS.md`` section 6), so a page boundary
+    and a CSV row order cannot disagree about what "next" means.
     """
     return (
         getattr(view, "finding_uid"),
         getattr(getattr(view, "observation"), "finding_observation_id"),
     )
-
-
-def _encode(body: object) -> bytes:
-    return json.dumps(body, ensure_ascii=False).encode("utf-8")

@@ -26,11 +26,15 @@ __all__ = [
     "decode_cursor",
     "encode_cursor",
     "page_body",
-    "parse_limit",
+    "paginate",
     "timestamp",
 ]
 
-#: ``#/components/parameters/Limit``: minimum 1, maximum 200, default 50.
+#: ``#/components/parameters/Limit``: minimum 1, maximum 200, default 50. The bounds are
+#: enforced by the declared ``limit`` query parameter -- see
+#: :data:`auditmanager.api.routers.declarations.LimitParam`, which is also what puts them in
+#: the served document. These are the same three numbers, named, for a reader of this
+#: module: nothing here computes a bound from them.
 MIN_LIMIT: Final[int] = 1
 MAX_LIMIT: Final[int] = 200
 DEFAULT_LIMIT: Final[int] = 50
@@ -48,29 +52,6 @@ def timestamp(value: datetime) -> str:
     """
     aware = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
     return aware.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def parse_limit(raw: str | None) -> int:
-    """Validate the ``limit`` query parameter against the frozen bounds."""
-    if raw is None or raw == "":
-        return DEFAULT_LIMIT
-    try:
-        value = int(raw)
-    except ValueError:
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="The limit parameter must be an integer.",
-            field="limit",
-            constraint="integer",
-        ) from None
-    if not MIN_LIMIT <= value <= MAX_LIMIT:
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message=f"The limit parameter must be between {MIN_LIMIT} and {MAX_LIMIT}.",
-            field="limit",
-            constraint="range",
-        )
-    return value
 
 
 def encode_cursor(sort_key: Sequence[str]) -> str:

@@ -1,77 +1,154 @@
 """``uploadDocument``, ``getDocumentVersion`` and ``streamDocumentVersionContent``.
 
-The streaming operation is the one with a rule worth restating: **the server streams
-the bytes itself**. There is no redirect and no presigned link. A URL into object
-storage is the internal address the contract forbids in a response, and it would
-outlive the request that authorised it. The bytes arrive here as ``bytes`` from
-:meth:`DocumentPort.read_content`, having been resolved from a ``blob_id``; nothing on
-this path knows a bucket or a key.
+The streaming operation is the one with a rule worth restating: **the server streams the
+bytes itself**. There is no redirect and no presigned link. A URL into object storage is the
+internal address the contract forbids in a response, and it would outlive the request that
+authorised it. The bytes arrive here as ``bytes`` from :meth:`DocumentPort.read_content`,
+having been resolved from a ``blob_id``; nothing on this path knows a bucket or a key.
 """
 
 from __future__ import annotations
 
-import json
 import re
-from typing import Final, Sequence
+from typing import Annotated, Any, Final
 
-from auditmanager.api.routers.http import Request, Response, Route, json_response
-from auditmanager.api.routers.idempotency import (
-    require_idempotency_key,
-    require_path_identity,
-)
-from auditmanager.api.routers.multipart import parse_multipart_upload
+from fastapi import APIRouter, Form, Header, Path, Response
+
+from auditmanager.api.routers.declarations import envelope_responses, success
+from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.ports import DocumentPort
+from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
+from auditmanager.api.schemas import models
 from auditmanager.api.schemas.documents import document_version_body
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import ProjectUid, VersionUid
 
 __all__ = ["build_document_routes"]
 
 _PDF: Final[str] = "application/pdf"
 
-#: ``bytes=<first>-<last>`` with an optional open end. A multi-range request is not
-#: served: the frozen 206 declares one ``application/pdf`` body, and a multipart/byteranges
-#: response would not be that shape.
+#: The contract declares this body as ``multipart/form-data`` and only that. FastAPI would
+#: otherwise declare ``application/x-www-form-urlencoded`` for a Pydantic form model -- a
+#: second media type the contract does not accept, and one that cannot carry a PDF.
+_MULTIPART: Final[str] = "multipart/form-data"
+
+#: The contract declares the ``file`` part as ``application/pdf``, in
+#: ``requestBody.content.multipart/form-data.encoding.file.contentType``. **FastAPI does not
+#: emit it** -- `W13-CONF` measured that on a real generated document -- and it is a declared
+#: constraint on the part, so it is restored with ``openapi_extra``.
+#: ``test_a_dropped_multipart_encoding_is_caught`` is the case that keeps it restored.
+_MULTIPART_ENCODING: Final[dict[str, Any]] = {
+    "requestBody": {
+        "content": {
+            "multipart/form-data": {"encoding": {"file": {"contentType": _PDF}}}
+        }
+    }
+}
+
+#: ``bytes=<first>-<last>`` with an optional open end. A multi-range request is not served:
+#: the frozen 206 declares one ``application/pdf`` body, and a multipart/byteranges response
+#: would not be that shape.
 _RANGE: Final[re.Pattern[str]] = re.compile(r"^bytes=(\d*)-(\d*)$")
 
+#: ``#/paths./versions/{version_uid}/content.get.parameters`` -- a plain string, optional.
+RangeParam = Annotated[
+    str,
+    Header(
+        alias="Range",
+        json_schema_extra=models.optional_property,
+        description="Byte range, so the viewer can page a large document without "
+        "fetching all of it.",
+    ),
+]
 
-def build_document_routes(documents: DocumentPort) -> Sequence[Route]:
-    def upload_document(request: Request) -> Response:
-        key = require_idempotency_key(request)
-        project_uid = require_path_identity(
-            request.path_params["project_uid"],
-            parse=ProjectUid,
-            aggregate_type="Project",
-        )
-        upload = parse_multipart_upload(request.body, request.headers.get("Content-Type"))
+
+def build_document_routes(documents: DocumentPort) -> APIRouter:
+    router = APIRouter(tags=["documents"])
+
+    @router.post(
+        "/projects/{project_uid}/documents",
+        operation_id="uploadDocument",
+        status_code=201,
+        response_model=models.DocumentVersion,
+        openapi_extra=_MULTIPART_ENCODING,
+        responses={
+            **success(201, "The version was published, or an identical upload replayed."),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+    )
+    def upload_document(
+        project_uid: Annotated[models.ProjectUid, Path()],
+        body: Annotated[models.UploadDocumentRequest, Form(media_type=_MULTIPART)],
+        idempotency_key: RequiredIdempotencyKey,
+    ) -> WireResponse:
+        # `UploadDocumentRequest` is closed, so an undeclared part is an `extra_forbidden`
+        # that `on_request_validation_error` renders as `additionalProperties` -- the same
+        # answer a JSON body's undeclared property gets, which is the point.
+        filename = body.file.filename
+        if not filename:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message="The file part requires a filename.",
+                field="file",
+                constraint="filename",
+            )
+        content = body.file.file.read()
         outcome = documents.upload_document(
-            project_uid=str(project_uid),
-            content=upload.content,
-            source_filename=upload.filename,
-            display_title=upload.display_title,
-            idempotency_key=key,
+            project_uid=project_uid,
+            content=content,
+            source_filename=filename,
+            display_title=body.display_title,
+            idempotency_key=idempotency_key,
         )
-        return json_response(201, _encode(document_version_body(outcome.version)))
+        return json_response(201, encode_json(document_version_body(outcome.version)))
 
-    def get_document_version(request: Request) -> Response:
-        version_uid = require_path_identity(
-            request.path_params["version_uid"],
-            parse=VersionUid,
-            aggregate_type="DocumentVersion",
-        )
-        view = documents.get_version(version_uid=str(version_uid))
-        return json_response(200, _encode(document_version_body(view)))
+    @router.get(
+        "/versions/{version_uid}",
+        operation_id="getDocumentVersion",
+        status_code=200,
+        response_model=models.DocumentVersion,
+        responses={
+            **success(200, "One published version and its input manifest."),
+            **envelope_responses(401, 403, 404, 500, 503),
+        },
+    )
+    def get_document_version(
+        version_uid: Annotated[models.VersionUid, Path()],
+    ) -> WireResponse:
+        view = documents.get_version(version_uid=version_uid)
+        return json_response(200, encode_json(document_version_body(view)))
 
-    def stream_content(request: Request) -> Response:
-        version_uid = require_path_identity(
-            request.path_params["version_uid"],
-            parse=VersionUid,
-            aggregate_type="DocumentVersion",
-        )
-        content = documents.read_content(version_uid=str(version_uid))
-        requested = request.headers.get("Range")
-        if requested is None:
-            return Response(
+    @router.get(
+        "/versions/{version_uid}/content",
+        operation_id="streamDocumentVersionContent",
+        status_code=200,
+        response_class=Response,
+        responses={
+            **success(
+                200,
+                "The complete PDF.",
+                content={_PDF: {"schema": {"type": "string", "format": "binary"}}},
+                headers={
+                    "Content-Length": {
+                        "schema": {"type": "integer", "minimum": 0},
+                        "description": "Byte size of the published version.",
+                    }
+                },
+            ),
+            **success(
+                206,
+                "The requested byte range.",
+                content={_PDF: {"schema": {"type": "string", "format": "binary"}}},
+            ),
+            **envelope_responses(401, 403, 404, 422, 500, 503),
+        },
+    )
+    def stream_document_version_content(
+        version_uid: Annotated[models.VersionUid, Path()],
+        range_header: RangeParam = None,  # type: ignore[assignment]
+    ) -> WireResponse:
+        content = documents.read_content(version_uid=version_uid)
+        if range_header is None:
+            return WireResponse(
                 200,
                 (
                     ("Content-Type", _PDF),
@@ -80,9 +157,9 @@ def build_document_routes(documents: DocumentPort) -> Sequence[Route]:
                 ),
                 content,
             )
-        start, end = _resolve_range(requested, len(content))
+        start, end = _resolve_range(range_header, len(content))
         window = content[start : end + 1]
-        return Response(
+        return WireResponse(
             206,
             (
                 ("Content-Type", _PDF),
@@ -93,67 +170,41 @@ def build_document_routes(documents: DocumentPort) -> Sequence[Route]:
             window,
         )
 
-    return (
-        Route(
-            "uploadDocument", "POST", "/projects/{project_uid}/documents", upload_document
-        ),
-        Route("getDocumentVersion", "GET", "/versions/{version_uid}", get_document_version),
-        Route(
-            "streamDocumentVersionContent",
-            "GET",
-            "/versions/{version_uid}/content",
-            stream_content,
-        ),
-    )
+    return router
 
 
 def _resolve_range(header: str, size: int) -> tuple[int, int]:
     """Resolve one byte range against a known size.
 
-    An unsatisfiable or malformed range is ``validation_failed`` rather than a silent
-    full body: a viewer that asked for page 40 of a 30-page document has a bug, and
-    answering with the whole file hides it behind a much larger download.
+    An unsatisfiable or malformed range is ``validation_failed`` rather than a silent full
+    body: a viewer that asked for page 40 of a 30-page document has a bug, and answering
+    with the whole file hides it behind a much larger download.
     """
     match = _RANGE.match(header.strip())
     if match is None:
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="The Range header is not a single satisfiable byte range.",
-            field="Range",
-            constraint="format",
-        )
+        raise _unsatisfiable("format")
     first, last = match.group(1), match.group(2)
     if first == "" and last == "":
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="The Range header is not a single satisfiable byte range.",
-            field="Range",
-            constraint="format",
-        )
+        raise _unsatisfiable("format")
     if first == "":
         # A suffix range: the final `last` bytes.
         length = int(last)
         if length == 0:
-            raise DomainError(
-                ErrorCode.VALIDATION_FAILED,
-                message="The Range header is not a single satisfiable byte range.",
-                field="Range",
-                constraint="unsatisfiable",
-            )
+            raise _unsatisfiable("unsatisfiable")
         start = max(0, size - length)
         end = size - 1
     else:
         start = int(first)
         end = size - 1 if last == "" else min(int(last), size - 1)
     if size == 0 or start >= size or start > end:
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="The Range header is not a single satisfiable byte range.",
-            field="Range",
-            constraint="unsatisfiable",
-        )
+        raise _unsatisfiable("unsatisfiable")
     return start, end
 
 
-def _encode(body: object) -> bytes:
-    return json.dumps(body, ensure_ascii=False).encode("utf-8")
+def _unsatisfiable(constraint: str) -> DomainError:
+    return DomainError(
+        ErrorCode.VALIDATION_FAILED,
+        message="The Range header is not a single satisfiable byte range.",
+        field="Range",
+        constraint=constraint,
+    )
