@@ -1,8 +1,12 @@
 # Debt register
 
-Written 2026-09-17 by the integrator, revised the same day. **Measured against the tree at `e6eae1e`, not compiled
-from closure records** — `W4_CLOSURE.md` §3 records a register that had been entirely obsolete
-while still reading as the list of what was open, and this file exists to not become that.
+Written 2026-09-17 by the integrator. **Re-measured against the tree at `315de25` on
+2026-09-18**: D-6 and D-7 close, D-12 and D-13 open, D-14 opens and closes in the same pass,
+and §3's own figure turned out to be three waves stale.
+
+**Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records
+a register that had been entirely obsolete while still reading as the list of what was open,
+and this file exists to not become that.
 
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
@@ -118,71 +122,52 @@ Check: the log named above, while it exists. **It is untracked and outside the r
 this row may outlive its own evidence** — which is the argument for reproducing it under a
 real server rather than preserving a log.
 
-### D-6 — the contract has no security scheme at all, and the alpha now needs one
+### D-6 — the contract has no security scheme at all — **CLOSED**
 
-The owner has ruled that this is ultimately a **public application requiring HTTPS and
-authorization tokens**. Measured against the frozen contract at `2593862`:
+**Closed 2026-09-18. `W13-SEAL` sealed `bearerAuth` at the document root at `e6eae1e`;
+`W14-PKG` gave the deployment a token channel; `W15-AUTH` gave the browser a way to send
+one.** Measured at `315de25`:
 
-- `contracts/api/v1/openapi.json` declares **no `securitySchemes`**, no top-level `security`,
-  and **zero** operations carrying their own — the twelve operations are unauthenticated by
-  construction;
-- `authentication_required` is in the catalog and is **raised nowhere**;
-- `permission_denied` **is raised** — corrected below.
+```
+python3 -c "import json;o=json.load(open('contracts/api/v1/openapi.json'));\
+print(o.get('security'), list(o['components']['securitySchemes']))"
+-> [{'bearerAuth': []}] ['bearerAuth']
+```
 
-So the transport was never given a way to raise `authentication_required`. Adding tokens is
-therefore a **contract change** — a reseal of the document and of `web/FRONTEND_LOCK.json`,
-not a lane decision.
+A top-level `security` means all twelve operations carry it rather than each declaring its
+own. `authentication_required` is now raised — by `api/security.py`, driven live through the
+deployed stack by `W14-PKG` §2 (no credential → 401, wrong credential → 401) and again by
+`W15-AUTH` §6.
 
-**Correction, 2026-09-17.** This row first said both codes were "used nowhere in `src/`". That
-was wrong for `permission_denied`, and wrong for a reason worth keeping: I grepped for the enum
-constant `PERMISSION_DENIED`, and `storage/errors.py:153` carries the **string**
-`code = "permission_denied"` on a `ClassVar`. Found by `pdf-analysis-d9` checking the row
-against the tree. **A row that says "measured" is only as good as the query behind it**, and
-mine matched one of the two spellings the codebase uses.
+**What the row got right and what it missed.** It said correctly that adding tokens is a
+contract change rather than a lane decision, and it was resealed as one. It did not see that
+the frontend had no way to *send* a credential — that was `W14-PKG` §7.2, and it cost wave 15.
 
-Note what this is *not*: the current alpha draft's §11 excludes "no in-app authorization" and
-its `R-3` proposes **one shared secret at the proxy**. A shared secret is a gate; a token is an
-identity. They are different deliverables and only the second answers the owner's statement.
+Check: the one-liner above, and `grep -rn "AUTHENTICATION_REQUIRED" src/`.
 
-Check: the `python3 -c` one-liner over `openapi.json` in this row's history, and
-`grep -rn "AUTHENTICATION_REQUIRED\|PERMISSION_DENIED" src/`.
+### D-7 — one code, two situations — **CLOSED, and it recurred elsewhere**
 
-### D-7 — one code, two situations, and they cannot be told apart in the envelope
+**Closed 2026-09-17 by owner ruling `R-3`, sealed by `W13-SEAL` at `e6eae1e`.** The 21st
+code, `dependency_credential_refused`: 500, `retryable: false`, category `dependency`,
+`safe_detail_keys` exactly `["dependency"]`. `permission_denied` keeps the contract's meaning
+— an authenticated subject's rights — and the blob store's refused-credential case, which has
+no subject in it at all, moved to the new code.
 
-**This collision exists today, before any token work.** It is the thing to settle at the
-reseal, and the settlement is the owner's because it touches the catalog.
+Measured at `315de25`: 21 codes in the catalog; `storage/errors.py:167` carries it;
+`tests/integration/storage/test_unavailable.py:116` guards it; and record 31 of the
+characterization baseline states the permitted change and its reasoning in its own
+`permitted_change` field rather than in a commit message.
 
-The catalog defines `permission_denied` as: *"The **authenticated subject** is not permitted to
-perform this operation on this resource. Authorization is decided server-side."*
+**The recommendation this row made was taken, and the alternative it offered was refused for
+the right reason.** It said that if no code were added the storage case must at least become
+distinguishable on the declared keys — and that it could not, which was the argument that a
+code was the answer. That argument held.
 
-`StoragePermissionDeniedError` raises it for *"the configured application credentials were
-refused by the store"* — our own credentials against the private bucket. **There is no
-authenticated subject in that scenario at all.** So the API meaning is the one the contract's
-own text describes, and the storage use is the borrowed one.
+**It recurred.** The same shape — a code borrowed for a scenario its own summary does not
+describe — is live in a second place, and there it is worse. See **D-12**.
 
-**They are indistinguishable in the envelope by construction.** Both declare exactly
-`aggregate_type` and `required_capability`; neither carries a discriminator. So once API
-authorization also raises it, one 403 means either *"you lack rights"* — the caller's problem —
-or *"our S3 credential was rejected"*, which is an operator being paged. **Nothing in the
-response separates them.**
-
-That is the shape wave 3 had to undo: `terminal_reason` flattened every failure to
-`analysis_failed`, and an operator could not tell a model that answered badly from a provider
-that never answered. `W11-RD` refused the same flattening again and said so.
-
-**Recommendation, and it is a recommendation.** At the reseal, `permission_denied` keeps the
-contract's meaning — the caller. The storage case needs its own code: it is not retryable and
-not a degraded service (which is why `dependency_unavailable` was avoided, per that class's own
-docstring), and it is not about a subject's rights. **This is a second, independent candidate
-for the 21st code**, alongside "usable output over a strict subset of the input" — and unlike
-`checksum_mismatch` (D-1.6), which turned out to be a class name rather than a missing code,
-this is a real gap.
-
-If no code is added, the storage case must at least become distinguishable in the envelope —
-and it cannot, on the declared keys, which is itself the argument that a code is the answer.
-
-Check: the `summary` of `permission_denied` in `contracts/domain/v1/error-codes.json`, against
-the docstring of `StoragePermissionDeniedError`.
+Check: the `summary` of `permission_denied` against the docstring of
+`StorageCredentialRefusedError`.
 
 ### D-8 — the catalog is not frozen, and the whole programme says it is
 
@@ -269,6 +254,66 @@ supports.
 Check: `python3 -c "import tomllib;print(tomllib.load(open('uv.lock','rb')))"` for the
 provenance chain, and line 574 of `PROTOTYPE_EXECUTION_PLAN.md` for the wording.
 
+### D-12 — a refused model-proxy credential is pinned retryable
+
+**This is D-7's shape in a second place, and it is worse.** Measured at `315de25`:
+
+```python
+# src/auditmanager/analysis/text/proxy.py:222
+    if exc.code == 401:
+        return DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            message="the model proxy refused the token",
+        )
+```
+
+The catalog pins `dependency_unavailable` **`retryable: true`**. So when the model proxy
+rejects our credential, the envelope tells the caller to **retry a rejected credential** — an
+operation that cannot succeed until an operator changes something.
+
+D-7's collision made one 403 ambiguous between two readings. This one is not ambiguous; it is
+**wrong in the single field a client automates against**. A retry loop built on `retryable`
+will spin against a 401 forever.
+
+`dependency_credential_refused` — `retryable: false`, `safe_detail_keys` exactly
+`["dependency"]` — already exists and fits exactly. **No catalog change, no reseal, no owner
+decision.** It is a mapping, not a contract.
+
+Why it is likely rather than theoretical: `R-1`'s open items include whether the model proxy
+is reachable from the alpha host at all, and `R-4` puts real client documents on that host. A
+misconfigured proxy credential is a plausible first failure there, and this is what the
+operator would be shown.
+
+Dispatched to `W16-ERR`, wave 16.
+
+Check: `sed -n '222,226p' src/auditmanager/analysis/text/proxy.py`, against
+`codes.dependency_unavailable.retryable` in `contracts/domain/v1/error-codes.json`.
+
+### D-13 — a deployment fault answers as the caller's validation error
+
+`StorageBucketMissingError` (`src/auditmanager/storage/errors.py:112`) inherits
+`StorageConfigurationError`, whose `code = "validation_failed"` (line 107). A missing bucket
+is the **deployment's** fault: the caller sent nothing wrong and can do nothing about it, and
+`validation_failed` says the opposite in both its status and its summary.
+
+Smaller than D-12 — it does not mislead an automated client about retrying — but it is on
+criterion 10's surface and it is a one-line change if a code fits.
+
+**Whether one fits is the open part.** Dispatched to `W16-ERR` with an explicit instruction to
+stop at the boundary and report if none of the 21 does, rather than force a bad fit to close a
+row. A 22nd code is an owner decision.
+
+Check: `sed -n '99,125p' src/auditmanager/storage/errors.py` against the catalog summaries.
+
+### D-14 — `PROTOTYPE_PROFILE.md` §9 carried a duplicated, truncated bullet — **CLOSED**
+
+Line 261 was the first half of line 262, cut off mid-sentence at *"reported as"* — two
+bullets, one incomplete, in the list that defines what the learning gate measures. Closed by
+the integrator at this commit; the complete bullet is the one that survived.
+
+Reported by a reviewing session rather than found by a reader of the document, which is the
+part worth keeping: §9 is quoted into briefs and nobody quoting it had opened it.
+
 ## 1.9 — the authority order, ruled 2026-09-17
 
 **The ADRs and the architecture corpus are the primary source of truth. A roadmap is a draft
@@ -309,9 +354,9 @@ gets a register with one row per instance and where it was found, or briefs stop
 number and say "several, most of them mine". **Until one of those happens, no brief should
 quote a count.**
 
-## 3. `origin/main` has been five waves behind, and that is a decision not a backlog
+## 3. `origin/main` is eight waves behind, and that is a decision not a backlog
 
-`main` is at `8f418e9`, carrying the `beaa7f7` certification. `dev` is at `5c84f43`.
+**Re-measured 2026-09-18.** `main` is at `8f418e9`, carrying the `beaa7f7` certification. `dev` is at `315de25` — the previous figure in this line, `5c84f43`, was three waves stale, in the register whose own header says a row nobody re-measures will rot.
 
 The integrator has recommended advancing it after each of waves 7, 8, 9 and 10, when `src/`
 was byte-identical to a certified commit and the only question was whether `main` should
@@ -320,7 +365,12 @@ carry the evidence as well as the behaviour. That window closed when wave 11 cha
 certification exists for a commit on this line" — **is met**.
 
 `main` can advance to `e6eae1e` or later, carrying certified behaviour for the first time in
-six waves. It is the owner's decision and the integrator does not take it. The one thing a
+six waves. **What has landed since that recommendation makes the gap matter more, not less:**
+the FastAPI transport (wave 13), the deployable stack (wave 14) and the credential path
+(wave 15). A reader who trusts `main` today is reading a prototype with no HTTP server in
+it. `315de25` is gated green — `1726 passed / 5 skipped / 168 subtests`, foundation 35,
+frontend 498 — but a green gate is not a certification, and this line does not pretend it
+is one. It is the owner's decision and the integrator does not take it. The one thing a
 decision-maker should weigh: the certification holds **with a named exception**, D-1.5, and
 that exception is about what a user sees rather than about what the system does.
 

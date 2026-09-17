@@ -258,7 +258,6 @@ measures:
 - which missing stage or capability prevents real use;
 - whether audit depth or document comparison is the next highest-value investment;
 - which failures actually require retry, Attempt fencing or remote execution;
-- agent navigation friction: the search and rework incidents tasks recorded, reported as
 - agent navigation friction: the search and rework incidents tasks recorded, read with the status-aware rule in `PROTOTYPE_EXECUTION_PLAN.md` §3.3 — **zero** when every in-scope task returned `recorded` or `none_observed`, and **absent** when any returned `practice_not_exercised` or no status at all. An empty incident directory alone is evidence of neither.
 
 P05 architecture work starts from this report. It does not defend an earlier solution
