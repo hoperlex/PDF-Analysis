@@ -266,7 +266,7 @@ The test asserts the defect directly: `"actual_sha256" not in envelope.details` 
 | `verify_version` is "a cheap sweep over many versions" (dispatch STEP 3) | **False.** It takes one `version_uid` and walks that version's manifest — one entry in P01/P02. `report()` is the sweep. And `grep` finds **no caller of `verify_version` and no `Reconciler(...)` anywhere in `src/` or `tools/`**: it is reached only from tests, so no in-tree loop pays this cost |
 | `inspect` yields `sha256=""` against an unstamped object (D-4) | **True** — `sha256=recorded_sha or ""` |
 | Gate is 1492 passed / 5 skipped / 163 subtests | **True**, exact, measured on arrival |
-| Frontend 289 | **True**, measured |
+| Frontend 289 | **True**, measured: 289 passed across 24 files |
 | A linked worktree has no `web/node_modules`; `npm --prefix web ci` once | **True**; 184 packages |
 | `make mutation-copy MUT=…` works and links five directories | **True**; the unmutated copy baselined 82 on my suite |
 | Base `3ebe34d` or later; `origin/dev` carries the brief | **True** |
@@ -280,7 +280,19 @@ because I created the file while the gate was running. It is not a dirty-tree ch
 a "the suite must not change the checkout" check, and a session editing its own tree
 mid-run trips it. **Do not edit while the gate runs.** Commit, then gate.
 
-## 8. Constraints
+## 8. The gate
+
+| | Result |
+|---|---|
+| on arrival, `3ebe34d` | **1492 passed / 5 skipped / 163 subtests**, frontend **289** — exactly the brief's figure |
+| at `d1bcace`, after the repair | **`GATE OK`** — 1495 passed / 5 skipped / 163 subtests in 205.87 s, frontend 289 passed (24 files) |
+
+`1495 = 1492 + 3`: the three new guards, and no existing test changed its verdict. I
+changed no existing test — the two wave-10 assertions on the declaration comparison pass
+verbatim under the repair, which is itself part of the argument for the ordering (§4, M3).
+Logs: `/root/w12rcn-logs/gate-baseline.log`, `/root/w12rcn-logs/gate-final.log`.
+
+## 9. Constraints
 
 Files changed, all owned:
 
