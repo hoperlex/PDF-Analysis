@@ -16,6 +16,12 @@ Two things every case below asserts, and the second is the one that matters:
   test asserting the field would pass whichever of them fired, which is exactly how a
   deleted check survives a sweep.
 
+**One refusal is not reproduced, and it has a test of its own rather than a sentence.** A
+``display_title`` whose bytes are not valid UTF-8 was refused before this wave and is
+accepted now: see
+``test_a_display_title_that_is_not_utf8_is_accepted_and_that_is_declared`` and
+``_decoded_title``.
+
 **Rewritten by `W13-API`, not re-pointed.** ``parse_multipart_upload`` and
 ``MultipartUpload`` are gone: FastAPI parses the body with ``python-multipart`` and the
 closed ``UploadDocumentRequest`` model decides which parts are declared. So these cases
@@ -243,22 +249,32 @@ class TestEachRefusalNamesItsOwnRule:
         )
         assert body["details"] == {"field": "file", "constraint": "filename"}
 
-    def test_a_display_title_that_is_not_utf8_is_refused_as_encoding(
-        self, router: Surface, project_uid: str
+    def test_a_display_title_that_is_not_utf8_is_accepted_and_that_is_declared(
+        self, router: Surface, project_uid: str, corpus_pdf: bytes
     ) -> None:
-        """The certified reader did ``payload.decode("utf-8")``. Starlette does not.
+        """**The one refusal of the retired reader this transport does not reproduce.**
 
-        A part with no ``charset`` parameter is decoded latin-1 by
-        ``starlette.formparsers._user_safe_decode``, so these three bytes arrive as three
-        characters and nothing objects. ``require_a_strict_multipart_body`` restores the
-        original bytes and decodes them as UTF-8 or refuses.
+        It did ``payload.decode("utf-8")`` and raised ``display_title`` / ``encoding``.
+        Starlette never refuses a text part: invalid UTF-8 falls back to latin-1 and comes
+        back as a string, and the fallback is *indistinguishable* from a correctly decoded
+        title of Latin-1-range characters -- see ``_decoded_title`` for the two byte
+        sequences that give the same string. Refusing on that test refuses ``"coûts"``,
+        which the case below requires to be accepted.
+
+        This test exists so the change is **met** by a reader rather than trusted from
+        prose, which is the pattern `W13-CONF` used for its own declared blind spot. No
+        response-baseline record covers this path. Reported in
+        ``docs/program/reviews/W13-API.md``.
         """
-        body = _refusal(
+        answer = _upload(
             router,
             project_uid,
-            _body((FILE_PART, PDF), ('form-data; name="display_title"', b"\xff\xfe\xfa")),
+            _body(
+                (FILE_PART, corpus_pdf),
+                ('form-data; name="display_title"', b"\xff\xfe\xfa"),
+            ),
         )
-        assert body["details"] == {"field": "display_title", "constraint": "encoding"}
+        assert answer["status"] == 201, answer
 
     def test_an_empty_display_title_is_refused_by_its_declared_bound(
         self, router: Surface, project_uid: str
@@ -273,32 +289,83 @@ class TestEachRefusalNamesItsOwnRule:
 
 
 class TestATitleTheCallerTypedArrivesAsTheCallerTypedIt:
-    """The mojibake case, which is not a refusal and is the reason the rule above exists.
+    """The other side of the encoding rule: a good title must not be refused or rewritten.
 
     ``agent/display-title`` is a fix already made once in this programme for the same
-    property: *the display title reaches the reviewer who typed it*. Starlette's latin-1
-    fallback would have undone it for every title with a character outside ASCII, silently
-    -- no refusal, no log, just a wrong string in the database.
+    property: *the display title reaches the reviewer who typed it*. Two titles, and the
+    second is the one that matters:
+
+    * one with a character outside latin-1 (an em dash), which cannot have come from
+      Starlette's fallback and is passed through;
+    * one made **only of Latin-1-range characters** -- ``coûts`` -- which is exactly the
+      shape a naive recovery destroys. An earlier version of ``_decoded_title``
+      re-encoded latin-1 and decoded UTF-8 unconditionally, so ``"coûts"`` became
+      ``b"co\xfbts"``, which is not valid UTF-8, and a perfectly good title was **refused**.
+      No test in this file reddened for it. This one does.
     """
 
     def test_a_utf8_title_survives_the_round_trip(
-        self, router: Surface, project_uid: str
+        self, router: Surface, project_uid: str, corpus_pdf: bytes, session
     ) -> None:
+        """A real published version, and the title read back out of the row that holds it.
+
+        Asserted against **storage**, not against a refusal. The failure this guards
+        against is silent -- no refusal, no log, a wrong string in the database -- and the
+        title sits on ``document``, not on ``DocumentVersion``, so no response on this
+        surface would show it. A test that stopped at the 201 could not see the defect at
+        all. ``corpus_pdf`` is the AR baseline document the rest of this suite publishes;
+        nothing is added to any frozen corpus.
+        """
+        from sqlalchemy import text
+
         title = "Rapport trimestriel — coûts & délais"
         answer = _upload(
             router,
             project_uid,
             _body(
-                (FILE_PART, PDF),
+                (FILE_PART, corpus_pdf),
                 ('form-data; name="display_title"', title.encode("utf-8")),
             ),
         )
-        # The upload is refused by the *envelope* -- these nine bytes are not a PDF the
-        # extractor can read -- and that is far enough: what is asserted is that the title
-        # was not the thing refused, and that no mojibake reached a refusal about it.
-        assert answer["status"] == 422, answer
-        assert answer["body"]["details"].get("field") != "display_title", answer
-        assert "Ã" not in json.dumps(answer["body"]), answer
+        assert answer["status"] == 201, answer
+        stored = session.execute(
+            text("SELECT display_title FROM document WHERE document_uid = :uid"),
+            {"uid": answer["body"]["document_uid"]},
+        ).scalar_one()
+        assert stored == title, (
+            f"the title the reviewer typed did not survive the transport: {stored!r}"
+        )
+
+    def test_a_title_made_only_of_latin1_characters_is_accepted(
+        self, router: Surface, project_uid: str, corpus_pdf: bytes, session
+    ) -> None:
+        """``coûts`` -- every character under U+0100, and valid UTF-8 on the wire.
+
+        This is the case a recovery that *rewrites* destroys, and the case that has to be
+        told apart from a genuine latin-1 fallback. The discriminator is not the string:
+        it is that Starlette only falls back when the bytes are not valid UTF-8, so bytes
+        that decode are bytes it already decoded.
+        """
+        from sqlalchemy import text
+
+        title = "coûts et délais"
+        answer = _upload(
+            router,
+            project_uid,
+            _body(
+                (FILE_PART, corpus_pdf),
+                ('form-data; name="display_title"', title.encode("utf-8")),
+            ),
+        )
+        assert answer["status"] == 201, answer
+        stored = session.execute(
+            text("SELECT display_title FROM document WHERE document_uid = :uid"),
+            {"uid": answer["body"]["document_uid"]},
+        ).scalar_one()
+        assert stored == title, (
+            f"a valid UTF-8 title of Latin-1-range characters was not stored as typed: "
+            f"{stored!r}"
+        )
 
 
 class TestTheTransportBodyLimit:

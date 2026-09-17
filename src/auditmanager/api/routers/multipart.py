@@ -201,12 +201,9 @@ async def require_a_strict_multipart_body(request: Request) -> CheckedUpload:
       value, so ``file`` sent twice would be *silently accepted* and the second one
       published. A lenient multipart reader is a security surface; this is the case that
       makes it strict.
-    * **the text part's encoding.** Starlette decodes a part with no ``charset`` parameter
-      as latin-1 (``formparsers._user_safe_decode``), so a UTF-8 ``display_title`` with any
-      character outside ASCII arrives as mojibake and a non-UTF-8 one arrives silently. The
-      certified reader did ``payload.decode("utf-8")`` and refused what did not. The
-      round-trip below restores exactly that: latin-1 gives back the bytes the client sent,
-      and they are then decoded as UTF-8 or refused.
+    * **a text part that is not text at all.** See :func:`_decoded_title`, which also
+      records the one refusal of the retired reader that this transport cannot reconstruct
+      and does not pretend to.
 
     The part name and the filename are **never echoed**. They are caller-controlled text,
     and ``details`` values are screened by the six ``_FORBIDDEN`` patterns in
@@ -256,26 +253,44 @@ async def require_a_strict_multipart_body(request: Request) -> CheckedUpload:
 
 
 def _decoded_title(value: Any) -> str | None:
-    """The ``display_title`` part as the client encoded it: UTF-8, or refused."""
+    """The ``display_title`` part as Starlette decoded it.
+
+    **The certified reader's UTF-8 refusal is not reconstructible here, and this says so
+    rather than approximating it.** ``MultiPartParser.parse`` reads ``charset`` off the
+    request's Content-Type and defaults it to ``utf-8``, so a correctly encoded title
+    arrives correctly decoded. What Starlette does not do is *refuse*: for bytes that are
+    not valid UTF-8, ``_user_safe_decode`` falls back to latin-1 and returns a string. The
+    retired reader did ``payload.decode("utf-8")`` and raised
+    ``display_title`` / ``encoding`` instead.
+
+    **Why the refusal is not recovered from the decoded string.** Two different requests
+    produce the *same* string:
+
+    * ``b"co\xc3\xbbts"`` -- valid UTF-8 -- decodes to ``"coûts"``;
+    * ``b"co\xfbts"`` -- not valid UTF-8 -- *falls back* and also gives ``"coûts"``.
+
+    Every character is under ``U+0100`` in both, so re-encoding as latin-1 gives back
+    ``b"co\xfbts"`` in both, and that is not valid UTF-8 in both. The two are
+    indistinguishable, and an earlier version of this function that refused on that test
+    **refused the first one** -- every UTF-8 title made only of Latin-1-range characters,
+    which is most titles in French, German or Spanish. That is a far worse regression than
+    the one it was trying to prevent, and it is the property ``agent/display-title`` has
+    already been fixed for once: *the display title reaches the reviewer who typed it*.
+
+    So the refusal is dropped, deliberately and once, and recorded in
+    ``docs/program/reviews/W13-API.md``. The bytes a client sent are no longer available at
+    this point -- Starlette has consumed the stream -- and recovering them would mean
+    parsing the multipart body a second time in front of the framework, which is a large
+    amount of machinery for a malformed title.
+    """
     if value is None:
         return None
     if not isinstance(value, str):
+        # A part that is itself multipart, or a file part sent under this name. Not a
+        # title, and not something to hand to the ingest command.
         raise _refuse(
             "The display_title part could not be decoded.",
             field=_TITLE_PART,
             constraint="encoding",
         )
-    try:
-        original = value.encode("latin-1")
-    except UnicodeEncodeError:
-        # Starlette decoded it with a real charset from the part's own header, so the
-        # string is already the client's text and there are no bytes to recover.
-        return value
-    try:
-        return original.decode("utf-8")
-    except UnicodeDecodeError:
-        raise _refuse(
-            "The display_title part is not valid UTF-8.",
-            field=_TITLE_PART,
-            constraint="encoding",
-        ) from None
+    return value
