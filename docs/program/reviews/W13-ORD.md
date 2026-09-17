@@ -383,6 +383,6 @@ reader who sees the same shape knows it has been seen, and under what conditions
 | `3db62d6` | cite the standing wave-3 measurement, not the struck-through M2 |
 | `ee6303e` | this review |
 | `46f689a` | the measured numbers |
-| `5th` | this correction — three references above carried a commit hash I had written down before reading it back. They are `3db62d6`. Recorded rather than amended away: a figure that travels by being repeated is the failure `OPERATING_CONSTRAINTS.md` §12 names, and a hash is a figure. |
+| `023b203` | this correction — three references above carried a commit hash I had written down before reading it back. They are `3db62d6`. Recorded rather than amended away: a figure that travels by being repeated is the failure `OPERATING_CONSTRAINTS.md` §12 names, and a hash is a figure. |
 
 **Elapsed wall-clock:** 50 minutes — `2026-09-18T01:14:49+05:00` to `2026-09-18T02:05:06+05:00`. Roughly half of it is the 341 live journeys and the five full battery drives; the measurements are the expensive part, and §4 says which of them was worth the time.
