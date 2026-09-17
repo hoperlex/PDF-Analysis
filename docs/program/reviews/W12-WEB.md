@@ -537,3 +537,49 @@ construction (§5): `U-06`, `U-07` and `U-08` replace the stability condition wi
   `globalThis.React` shim beside the comment is redundant. Left in place: removing it is a
   behaviour change to a working suite with no defect behind it, and it is cheap to drop
   when someone is next in that file.
+
+## 8. Anything false in the brief
+
+**1. "wave 11 added `cost_basis`" — not to anything `web/` can see.**
+The dispatch's first pointer says `run-presentation.ts` maps run state to what a user sees
+and that "wave 3 changed what `terminal_reason` carries and wave 11 added `cost_basis`".
+`cost_basis` exists in the backend — `db/migrations/versions/20260914_0004_cost_basis.py`,
+`src/auditmanager/runs/executor.py` and eight documents — and appears **nowhere** in the
+API contract, in `web/openapi/openapi.json`, or in `web/src`:
+
+```
+$ grep -c cost_basis contracts/api/v1/openapi.json   -> 0
+$ grep -rn cost_basis web/                            -> (nothing)
+$ RunStatus properties: analysis_profile_id, created_at, degradation_set,
+  diagnostic_observation_count, interrupted_reason, project_uid, prompt_bundle_id,
+  provider_mode, published_finding_count, run_id, stages, state, terminal_at,
+  terminal_reason, version_uid
+```
+
+There is no frontend mapping for `cost_basis` to have changed, and none was swept. The
+other half of the sentence is right: `terminal_reason` is carried raw, by
+`runOutcome`'s `failed` arm into `run-progress.tsx:112`.
+
+**2. "ask the same question here" about `csv-columns.ts` — the answer is no, twice.**
+The frontend's column check does **not** have the wave-9 defect. It parses the column
+table out of `docs/program/P02_SEAMS.md` §6 and compares `CSV_COLUMNS` against that, so
+every reorder, rename, drop and addition reddened (`CSV-01`..`CSV-05`). And the brief's
+second question — "whether anything notices if the two copies disagree" — was already
+answered by `W10-FND`: `tests/integration/exports/test_frozen_column_list.py` reads
+`web/src/shared/api/csv-columns.ts` from the repository root and asserts
+`_web_columns() == FROZEN_COLUMNS == tuple(COLUMNS)` against seventeen written-out
+literals. That gap is closed and the brief does not know it.
+
+**3. Two counts are close but not exact.** `web/src` is **7 604 lines** as stated. It has
+**45** `export const` declarations, not 47 (`grep -rhn '^export const ' web/src | wc -l`);
+the "17 files that refuse something" is defensible on a narrow reading — 20 files contain
+a `throw`, a refusal type or a refusal value, of which 5 throw. Neither number changed
+anything about the sweep; recorded so the next brief can use measured ones.
+
+**4. The wave-12 plan and this dispatch disagree about parallelism.** `W12-PLAN.md` §1
+argues at length that wave 12 "cannot" run streams in parallel and its table lists two
+sequential sessions. `W12-WEB.md` opens "One of three parallel streams in wave 12's stage
+A". The reconciliation is in the history — `9f3a90d docs: two tests-only streams for wave
+12 stage A, restoring the parallelism` — and the argument holds, because the two added
+streams write tests only and so cannot stale a certification. The plan document was not
+updated to say so. Not a defect in the work; a stale document that reads as a contradiction.
