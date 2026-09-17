@@ -10,6 +10,7 @@
     "permitted_change": "StoragePermissionDeniedError currently emits `permission_denied` with the catalog's authenticated-subject message. The reseal moves it to a code of its own, so this record's status, error_code, message and details may all change. The commit that decides it is cited beside the new expectation.",
     "everything_else": "Every other difference in this directory is a failure of the wave, whatever argument accompanies it."
   },
+  "unordered": null,
   "request": {
     "method": "GET",
     "target": "/versions/{{version_uid}}/content",
