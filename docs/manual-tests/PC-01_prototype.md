@@ -26,10 +26,21 @@ make foundation
 
 **Observe:** both bootstraps exit 0 and the second changes no tracked file; `make foundation`
 exits 0 and prints three `FOUNDATION-CHECK OK` sentinels — services, database, storage.
+
+**`check-db` is the only thing that holds the migration head**, and it is worth knowing that
+before you rely on anything else. The acceptance suite's
+`test_c2_the_application_is_serving_against_the_migrated_head` asserts that `listProjects`
+answers 200 with a list — which it does against **any** head from `0002` onwards, measured.
+`check-db` compares the head and exits 2 on a mismatch, naming both the current revision and
+the expected one.
 A sentinel is the evidence, not the exit code: a checker that exits 0 without printing one is
 refused by the command surface on purpose.
 
 **Observe the migration head is `0005_truncated_call_status`**, not merely "a head".
+Measured at `e6eae1e` from `information_schema`: **16 `BASE TABLE`s** — fifteen domain tables plus
+`alembic_version` — and **one `VIEW`**, `finding_current_verdict`. An earlier record said "17
+tables" and §8 below said "sixteen"; both were counting, neither said what. Count the two kinds
+separately or the number means nothing.
 It was `0003_open_items` when PC-01 was first accepted; migrations `0004_cost_basis` and
 `0005_truncated_call_status` landed in waves 2 and 3.
 
@@ -118,8 +129,16 @@ an audit tool.
 Record what happened and move on.
 
 **Observe the cost.** The per-run ceiling is USD 1.00 under `OD-03` and the proxy reports the
-measured spend of each call. A corpus run costs a few cents: `W5-CERT` measured USD 0.038225
-and `W6-CERT` USD 0.038125, both against the USD 1.00 ceiling.
+measured spend of each call. A corpus run costs a few cents: `W5-CERT` measured USD 0.038225,
+`W6-CERT` USD 0.038125 and `W12-CERT` USD 0.0387, all against the USD 1.00 ceiling.
+
+**Read the spend out of the database, not out of the test's print.** A run that had silently fallen
+back to the recorded adapter would print a plausible number and leave no row: the evidence is
+exactly one `model_call` with `provider_mode = 'live'` and `cost_basis = 'measured'`. At
+`e6eae1e` that row also carries `cost_micros = 38700`, and the `text_analysis` stage's own
+`metrics` carry `cost_basis` on the **success** path — before wave 11 that key appeared only on
+the branch where the budget overran, so it answered on the run that failed and raised `KeyError`
+on the run that succeeded.
 
 ## 6. Evidence, decisions and export
 
@@ -127,6 +146,15 @@ and `W6-CERT` USD 0.038125, both against the USD 1.00 ceiling.
 page it came from; accepting one and rejecting another each answer 201; a later comment
 appended to the accepted finding **leaves the verdict and the earlier events intact** — the
 ledger is append-only and the database refuses an UPDATE with SQLSTATE `AM002`.
+
+**Run the UPDATE and the DELETE yourself.** The acceptance suite's
+`test_c6_the_decision_ledger_admits_no_update_or_delete` asserts that no `PUT`, `PATCH` or
+`DELETE` route exists on `/findings/{finding_uid}/decisions` — a real property, and not the
+one its name promises: it would pass unchanged against a table carrying no trigger. The
+guarantee itself is held by `tests/integration/decisions/**`, which the gate runs. From a
+`psql` session, `UPDATE expert_decision_event SET comment = 'tampered'` and
+`DELETE FROM expert_decision_event` are each refused with **SQLSTATE `AM002`**, and the row
+count is unchanged before and after.
 
 **Observe the CSV:** 17 columns, one row per evidence item, UTF-8 with a byte-order mark,
 CRLF. For this corpus: **5 rows**, and **4251 bytes on a run carrying no decisions**
@@ -148,7 +176,7 @@ its findings and its decisions are all still readable through the API.
 
 **Observe:** repeating the upload and the run under the same idempotency keys creates no
 second version, no second run, no second observation and no second decision. Row counts
-across all sixteen tables are unchanged.
+across all fifteen domain tables are unchanged.
 
 ## 9. Explicit failures
 
@@ -163,8 +191,12 @@ across all sixteen tables are unchanged.
 | `negative/oversize.pdf` | 26 MiB against the 25 MiB envelope |
 | provider unreachable | `dependency_unavailable`, **retryable**, with the run failing rather than publishing |
 
-`W6-CERT` measured the five refusals rather than trusting the table, because the acceptance
-suite pins only the error-code class and not which rule refused. All five answer **HTTP 422
+`W6-CERT` and `W12-CERT` each measured the five refusals rather than trusting the table,
+because the acceptance suite still pins only the error-code class — and a three-way class at
+that (`validation_failed`, `analysis_input_invalid`, `storage_integrity_error`) — and asserts
+nothing about which rule refused. Measure `details.constraint` and check that you get **five
+distinct values from five fixtures**; five refusals sharing one constraint would satisfy the
+suite and would mean four of the five rules were not exercised. All five answer **HTTP 422
 `validation_failed`** with a distinct `details.constraint`: `pdf_magic_bytes`,
 `not_encrypted`, `every_page_has_extractable_text`, `1 <= page_count <= 30` and `max_bytes`.
 The unreachable provider fails the run at `terminal_reason dependency_unavailable` after
@@ -175,11 +207,33 @@ is a known limit rather than an untested path:
 
 * **a checksum mismatch** is proved at the storage layer, where a corrupt upload is refused
   and nothing canonical is written — the API offers no way to hand the store bytes that
-  disagree with their own declared digest;
+  disagree with their own declared digest. Check that for yourself rather than taking it:
+  expand every operation's request surface out of `contracts/api/v1/openapi.json`, following
+  each `$ref` through `components`. At `e6eae1e` the twelve accept **thirteen distinct input
+  names** in total and **none is digest-shaped**. Then try to inject one — an extra multipart
+  part named `sha256`, or an extra `"sha256"` property on `startRun` — and observe **422
+  `validation_failed`** with `details.constraint = additionalProperties`.
+
+  **Since wave 11 the limit is narrower than it was, and it is worth seeing why.** The failure
+  is still not *inducible*, but it is now *detected*. Replace a published object's bytes out of
+  band with a body of the **same length**, copying its recorded metadata verbatim — the one
+  case that used to slip through both checks — and then call the twelve again:
+  `streamDocumentVersionContent` answers **422 `storage_integrity_error`**, while
+  `getDocumentVersion` still answers 200 with the declared digest, because that is a
+  declaration and not the bytes. `Reconciler.verify_version` gives the same verdict over the
+  same row, with the **body's** digest as `actual_sha256`; an object recording no digest at all
+  is `validation_failed`, not an integrity verdict, so an operator is never sent to restore a
+  backup they do not need. Restore the bytes and the same call returns 200 again;
 * **an ungrounded model item** is unreachable by design. The analysis stage resolves each
   quotation against the text layer and drops what does not resolve *before* the grounding
   gate sees it, so no `grounded = false` row is ever written. The owner accepted this on
-  2026-09-11; the gate was proved still load-bearing by mutation.
+  2026-09-11; the gate has been proved still load-bearing by mutation at every certification
+  since, and the proof has two halves rather than one. Make nothing resolve: the run publishes
+  **0** findings and `finding_observation` gains **no row at all**, so the drop happens before
+  anything reaches the database. Then remove the drop as well, so evidence-free observations
+  must reach the gate: the run **fails** with `terminal_reason analysis_input_invalid` and
+  there are still **no** `grounded = false` rows. The second half is the one that matters — it
+  shows the gate refuses the run rather than recording a diagnostic.
 
 ## 10. What this runbook does not establish
 
@@ -192,3 +246,28 @@ is a known limit rather than an untested path:
 * **Professional usefulness.** The findings are grounded and the controls are clean. Whether
   a practising reviewer would have raised them is the question P04 asks, and nothing here
   answers it.
+
+## 11. What this runbook does not reach, as of `e6eae1e`
+
+Added by `W12-CERT`, because a reviewer following §1–§9 will believe they have exercised the
+UI and they will not have.
+
+**Every step above drives the API.** Criterion 4 in `PROTOTYPE_PROFILE.md` §8 asks for more
+than that: *"while the UI distinguishes the contract run states … and the live or recorded
+provider mode"*. At `e6eae1e`, **34 of the 110 modules under `web/src` — 1352 of 7604 lines —
+are imported by no test**, and that set includes every screen this runbook's journey would be
+driven through if it were driven through a browser: the run progress widget, the upload form,
+the create-project form, the start-run control, the project list, the upload panel and the
+project-detail page.
+
+`widgets/run-progress/ui/run-progress.tsx` is the one to know about: it is the **only place in
+the application where `terminal_reason` is rendered**, and `W12-WEB` showed that line can be
+made to print a constant with all 440 frontend tests green.
+
+What *is* guarded, and well, is the presentation mapping underneath it — `run-presentation.ts`
+and `run-state.ts`, where the run-state vocabulary, the provider-mode narrowing and the
+terminal and interrupted rules all redden under mutation. So the rules are held; the rendering
+of them is not.
+
+Reproduce the figure from `web/` with the import-closure script in
+`docs/program/reviews/W12-WEB.md` §11; it prints `110 76 34`.
