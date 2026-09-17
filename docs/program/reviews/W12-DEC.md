@@ -120,3 +120,73 @@ and it fires before anything else can paper over it. **No guard needed; none wri
 
 `W10-FND` read the tree correctly on both counts. The one thing reading could not give it
 was how *wide* the first claim is, which is the difference the brief asked me to measure.
+
+## 3. The guards, with their red and their green
+
+All in `tests/integration/decisions/test_rules_are_load_bearing.py`. Each was checked to
+redden under **its own** mutation and only its own: in every run below exactly one test
+failed and the other 39 passed, so no guard is a blanket that would have caught anything.
+
+| guard | closes | red | green | literal pinned |
+|---|---|---|---|---|
+| `TestRevokeIsRefusedByItsOwnRule::test_revoke_is_refused_even_when_the_vocabulary_would_admit_it` | M1 | 1 failed / 39 passed | 42 passed | `{"accept","reject","comment","revoke"}` written out as the widened vocabulary; the true `PC01_EVENT_TYPES` pinned separately |
+| `TestTheVocabularyIsWhatItSays::test_the_two_event_vocabularies_are_exactly_these_values` | M20 | 7 failed | 42 passed | `{"accept","reject","comment"}` and `{"accept","reject","comment","revoke"}` |
+| `TestAnUnknownFindingIsRefusedByTheFindingRule::test_a_missing_finding_is_refused_before_any_row_is_attempted` | M14 | 1 failed / 39 passed | 42 passed | `ErrorCode.NOT_FOUND`, and explicitly not `CONFLICT` |
+| `TestTheRebuildComparisonIsWideEnoughToMeanSomething::test_comparable_carries_every_field_the_projection_declares` | M5 | 1 failed / 39 passed | 42 passed | the full 7-tuple of distinct sentinels, written out |
+| `…::test_the_projection_declares_exactly_the_fields_the_comparison_covers` | drift | — | 42 passed | the seven compared field names and the one excluded one |
+| `TestCriterionSixOrdering::test_a_comment_appended_last_is_visible_in_both_the_view_and_the_rebuild` | M8 | 1 failed / 39 passed | 42 passed | `"rejected"`, `"Замечание после отклонения."`, counts `2` and `1` |
+| `TestAStaleCommandRecordIsRefused::test_an_outcome_with_no_decision_id_is_stale_even_when_the_event_exists` | M17 | 1 failed / 39 passed | 42 passed | `ErrorCode.IDEMPOTENCY_KEY_STALE` |
+| `…::test_an_outcome_naming_a_decision_the_ledger_does_not_hold_is_stale` | M18 | 1 failed / 39 passed | 42 passed | `ErrorCode.IDEMPOTENCY_KEY_STALE` |
+| `TestTheVerdictMapAgreesWithTheSchema::test_the_map_is_exactly_this` | M23 | 2 failed | 42 passed | the whole four-entry map, written out |
+| `…::test_every_declared_event_type_is_storable_with_the_verdict_the_map_gives_it` | M23 | 2 failed | 42 passed + 4 subtests | expectation supplied by PostgreSQL, not by the map |
+
+**How each guard makes the refusal attributable to one rule.** This was the point of the
+exercise, because four of `record_decision`'s refusals share `VALIDATION_FAILED` and two
+share `NOT_FOUND`:
+
+* **M1.** `revoke` is refused twice over — once by the deliberate rule the module docstring
+  argues for, once because `revoke ∉ PC01_EVENT_TYPES` — and both raise
+  `VALIDATION_FAILED`. The guard monkeypatches `ledger.PC01_EVENT_TYPES` to *include*
+  `revoke`, removing the incidental rule's reach, and asserts the patch took before
+  relying on it. With the deliberate rule deleted the event is appended (its verdict,
+  `pending`, satisfies the table's CHECK), so the guard fails on `DID NOT RAISE` rather
+  than on a code. It also asserts, scoped to the finding, that no `revoke` row exists.
+* **M14.** `observation_belongs_to_finding` subsumes `finding_exists` for *every* input a
+  test can supply, because an observation cannot belong to a finding that does not exist.
+  The guard suppresses the second check for one call and aims an absent `finding_uid` at a
+  real observation. With `finding_exists` deleted the INSERT is attempted and the foreign
+  key refuses it, which this module reports as `CONFLICT` — so the guard's assertion of
+  `NOT_FOUND` is what distinguishes the two rules, and it says so in a comment.
+* **M17 / M18** both raise `IDEMPOTENCY_KEY_STALE`, so the two scenarios are built to be
+  each other's complement: arm 1's fixture has an event under the command and an outcome
+  without a `decision_id` (with arm 1 gone, arm 2 finds the event and returns it — nothing
+  raises); arm 2's has an outcome naming a `decision_id` and no event (arm 1 is satisfied
+  by the string, so only arm 2 can fire). Each reddens under its own deletion only —
+  confirmed by running both mutations.
+
+**No fingerprint or payload shape is duplicated in a test.** The stale-arm fixtures make
+one honest `append_decision_under_key` call and read the `payload_fingerprint` back off the
+`command_record` row the module itself wrote, so this suite does not carry a second copy of
+what the module hashes. The planted `command_record` is inserted at `in_progress` and moved
+with the product's own `CommandRepository.succeed`, so the state guard and the
+frozen-column guard see what they would in production.
+
+**The four ways a green goes meaningless, and how each was avoided.**
+
+1. *Importing the constant under test.* Every pinned value — both vocabularies, the whole
+   `VERDICT_FOR_EVENT` map, the seven-field `comparable()` tuple, the compared field names
+   — is written out in the test and compared against the module's value.
+2. *Deriving the input from the constant.* Only one guard does this, deliberately and with
+   the reason stated: `test_every_declared_event_type_is_storable_…` feeds
+   `VERDICT_FOR_EVENT[event_type]` into a real INSERT, because the claim *is* that what the
+   map says is what the table accepts. The **expectation** comes from PostgreSQL, so the two
+   sides cannot move together — which M23 confirms by reddening it.
+3. *A mutation that does not mutate.* Every mutation printed its before and after and was
+   read for meaning. M9 was caught this way and **discarded**: reordering the fold by
+   `recorded_at` instead of `sequence_no` is not a reordering, because `clock_timestamp()`
+   is strictly increasing within a transaction — which the suite's own
+   `test_events_inside_one_transaction_are_distinguishable` establishes. It was re-run as
+   M9b (`DESC`), which is a real mutation and reddens.
+4. *Reading source text from the test's own location.* No guard here reads source text at
+   all. The schema facts the guards rely on are read from the **live database**
+   (`pg_trigger`, `pg_constraint`) or exercised against it, never scraped from a file.
