@@ -352,7 +352,7 @@ Measured, not estimated, by resolving the `@/` alias and every relative import f
 test file and taking the transitive closure:
 
 ```
-cd /root/w12web/web && python3 -              # the script is in §8 of this file
+cd /root/w12web/web && python3 -              # the script is in the appendix, §11
 src modules: 110   reachable from tests: 76   unreached: 34   unreached lines: 1352
 ```
 
@@ -656,3 +656,62 @@ the cache in a `useState` initialiser, before any effect.
 delivered PC-01 surface, roughly 700 lines, each carrying criteria 3, 5, 6, 7 or 10. The
 sweep swept the 76 modules `web/tests` reaches; it did not sweep the 34 it does not, and
 saying so is the result.
+
+## 11. Appendix — reproducing this
+
+### The harness
+
+```
+/root/w12web-mut/rebuild.sh                 # full copy of web/ + contracts + P02_SEAMS
+/root/w12web-mut/provenance.probe.test.ts   # the `auditmanager.__file__` equivalent
+/root/w12web-mut/sweep.py <batch>.json      # one substitution per mutation, read back, run
+/root/w12web-mut/b1..b8.json                # the 257 mutations, as data
+/root/w12web-logs/b1..b8.log                # every run, with the diff and the failing tests
+```
+
+The harness lives outside the worktree on purpose: nothing about it is committed, because
+committing it would put a second, competing copy of `web/src` where a later session could
+mistake it for the tree.
+
+### The reachability measurement
+
+```python
+import os, re
+def resolve(spec, frm):
+    if spec.startswith('@/'):   base = os.path.join('src', spec[2:])
+    elif spec.startswith('.'):  base = os.path.normpath(os.path.join(os.path.dirname(frm), spec))
+    else:                       return None
+    for c in (base+'.ts', base+'.tsx', os.path.join(base,'index.ts'), os.path.join(base,'index.tsx')):
+        if os.path.isfile(c): return c
+    return None
+
+def imports_of(path):
+    txt = open(path, encoding='utf-8').read()
+    specs = re.findall(r"""(?:from|import)\s+['"]([^'"]+)['"]""", txt)
+    return [r for r in (resolve(s, path) for s in specs) if r]
+
+seeds = [os.path.join(d, f) for d, _, fs in os.walk('tests') if 'fixtures' not in d
+         for f in fs if f.endswith('.ts')]
+seen, stack = set(), [i for s in seeds for i in imports_of(s)]
+while stack:
+    p = stack.pop()
+    if p in seen: continue
+    seen.add(p); stack += imports_of(p)
+allsrc = [os.path.join(d, f) for d, _, fs in os.walk('src') for f in fs
+          if f.endswith(('.ts', '.tsx'))]
+print(len(allsrc), len(seen & set(allsrc)), len(set(allsrc) - seen))
+```
+
+Run from `web/`. At `3ebe34d` it prints `110 76 34`.
+
+### Figures, with the command and the tree
+
+| figure | command | tree |
+|---|---|---|
+| `web/src` = 7 604 lines | `find web/src -name '*.ts*' \| xargs wc -l` | `3ebe34d` |
+| 45 `export const` | `grep -rhn '^export const ' web/src \| wc -l` | `3ebe34d` |
+| frontend 289 passed | `npx vitest run` in `web/` | `3ebe34d` |
+| frontend 440 passed | `npx vitest run` in `web/` | this branch, HEAD |
+| 183 mutations / 121 killed | `sweep.py b1..b6` | `3ebe34d` + harness |
+| 64 re-runs / 63 killed | `sweep.py b7` | this branch after the guards |
+| 10 unreached / 10 survived | `sweep.py b8` | this branch after the guards |
