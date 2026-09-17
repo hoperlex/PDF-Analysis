@@ -1,0 +1,52 @@
+{
+  "case": "05b-createProject.idempotency_key_reuse",
+  "operation": "createProject",
+  "purpose": "the same key with a genuinely different payload: idempotency_key_reuse, and nothing is created",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "POST",
+    "target": "/projects",
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Idempotency-Key",
+        "w13base-{{session_tag}}-project"
+      ]
+    ],
+    "body_length": 51,
+    "body_note": "the key of case 01 with a different name"
+  },
+  "response": {
+    "status": 409,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 356,
+      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"idempotency_key_reuse\", \"message\": \"The idempotency key was already used with a different payload fingerprint. Nothing was created or changed and no duplicate aggregate exists.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"command_type\": \"create_project\"}}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key"
+  }
+}

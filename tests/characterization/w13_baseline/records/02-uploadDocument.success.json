@@ -1,0 +1,56 @@
+{
+  "case": "02-uploadDocument.success",
+  "operation": "uploadDocument",
+  "purpose": "the only multipart operation on the surface, and startRun's second prerequisite",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "POST",
+    "target": "/projects/{{project_uid}}/documents",
+    "headers": [
+      [
+        "Content-Type",
+        "multipart/form-data; boundary=w13baselineboundary"
+      ],
+      [
+        "Idempotency-Key",
+        "w13base-{{session_tag}}-upload"
+      ]
+    ],
+    "body_length": 59226,
+    "body_note": "multipart/form-data: the file part is fixtures/synthetic/ar/ar_baseline.pdf (sha256 6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f), plus display_title"
+  },
+  "response": {
+    "status": 201,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 578,
+      "text": "{\"version_uid\": \"{{version_uid}}\", \"document_uid\": \"{{document_uid}}\", \"project_uid\": \"{{project_uid}}\", \"version_ordinal\": 1, \"media_type\": \"application/pdf\", \"byte_size\": 58978, \"sha256\": \"6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f\", \"page_count\": 8, \"published_at\": \"{{ts_5}}\", \"input_manifest\": [{\"role\": \"source.document\", \"sha256\": \"6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f\", \"size_bytes\": 58978, \"media_type\": \"application/pdf\"}], \"display_title\": \"AR baseline\"}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{document_uid}}": "the identity this request allocated",
+    "{{project_uid}}": "the identity case 01 allocated",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
+    "{{ts_5}}": "a timestamp the database stamped, read from the declared field 'published_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{version_uid}}": "the identity this request allocated"
+  }
+}

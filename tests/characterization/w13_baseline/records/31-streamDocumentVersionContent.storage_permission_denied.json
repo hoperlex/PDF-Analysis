@@ -1,0 +1,49 @@
+{
+  "case": "31-streamDocumentVersionContent.storage_permission_denied",
+  "operation": "streamDocumentVersionContent",
+  "purpose": "**THE D-7 EXCEPTION.** The application's own storage credential is refused by the store, and StoragePermissionDeniedError emits `permission_denied` -- the catalog code whose summary describes an *authenticated subject*. There is no subject in this scenario at all. R-3 settles it at the reseal by giving the storage case a code of its own, so this record's bytes change on purpose",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": {
+    "debt": "D-7",
+    "ruling": "OWNER_RULINGS_2026-09-17.md R-3 -- tokens *and* the storage code",
+    "permitted_change": "StoragePermissionDeniedError currently emits `permission_denied` with the catalog's authenticated-subject message. The reseal moves it to a code of its own, so this record's status, error_code, message and details may all change. The commit that decides it is cited beside the new expectation.",
+    "everything_else": "Every other difference in this directory is a failure of the wave, whatever argument accompanies it."
+  },
+  "request": {
+    "method": "GET",
+    "target": "/versions/{{version_uid}}/content",
+    "headers": [],
+    "body_length": 0,
+    "body_note": ""
+  },
+  "response": {
+    "status": 403,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 370,
+      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"permission_denied\", \"message\": \"The authenticated subject is not permitted to perform this operation on this resource. Authorization is decided server-side.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"required_capability\": \"blob_storage_rw\", \"aggregate_type\": \"Blob\"}}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
+    "{{version_uid}}": "the identity case 02 allocated"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "case": "29-dispatch.method_not_allowed",
+  "operation": null,
+  "purpose": "a declared path under an undeclared method. **404, not 405** -- the surface declares twelve operations and no other method on any of their paths, so this is simply not a resource here. A framework's default 405 would be a difference",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "DELETE",
+    "target": "/projects",
+    "headers": [],
+    "body_length": 0,
+    "body_note": ""
+  },
+  "response": {
+    "status": 404,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 308,
+      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"not_found\", \"message\": \"The addressed aggregate does not exist or is not visible to this caller. The response never reveals the existence of a resource the caller may not see.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key"
+  }
+}

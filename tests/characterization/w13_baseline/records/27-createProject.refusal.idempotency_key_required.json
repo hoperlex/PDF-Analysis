@@ -1,0 +1,48 @@
+{
+  "case": "27-createProject.refusal.idempotency_key_required",
+  "operation": "createProject",
+  "purpose": "a write with no Idempotency-Key: validation_failed with field and constraint, not a framework's own 422 body",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "POST",
+    "target": "/projects",
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ]
+    ],
+    "body_length": 33,
+    "body_note": ""
+  },
+  "response": {
+    "status": 422,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 282,
+      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"validation_failed\", \"message\": \"This operation requires an Idempotency-Key header.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"Idempotency-Key\", \"constraint\": \"required\"}}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key"
+  }
+}

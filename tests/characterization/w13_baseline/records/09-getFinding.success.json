@@ -1,0 +1,49 @@
+{
+  "case": "09-getFinding.success",
+  "operation": "getFinding",
+  "purpose": "the composed finding detail",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "GET",
+    "target": "/findings/{{finding_uid}}",
+    "headers": [],
+    "body_length": 0,
+    "body_note": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 1672,
+      "text": "{\"finding_uid\": \"{{finding_uid}}\", \"project_uid\": \"{{project_uid}}\", \"version_uid\": \"{{version_uid}}\", \"run_id\": \"{{run_id}}\", \"category\": \"internal_contradiction\", \"observation\": {\"finding_observation_id\": \"{{finding_observation_id}}\", \"run_id\": \"{{run_id}}\", \"category\": \"internal_contradiction\", \"finding_text\": \"Степень огнестойкости одного и того же здания указана по-разному: II в разделе общих данных и III в разделе противопожарных мероприятий.\", \"recommendation_text\": \"Согласовать степень огнестойкости здания между разделом общих данных и разделом противопожарных мероприятий, оставив одно значение.\", \"evidence\": [{\"evidence_ordinal\": 0, \"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\", \"char_start\": 712, \"char_end\": 746, \"block_id\": \"b_000019\"}, {\"evidence_ordinal\": 1, \"page_number\": 6, \"quote\": \"Степень огнестойкости здания — III.\", \"char_start\": 2623, \"char_end\": 2658, \"block_id\": \"b_000056\"}], \"provenance\": {\"stage_id\": \"text_analysis\", \"analysis_profile_id\": \"ap_01M25P3TH08VVTTGJRXYBZZ7RP\", \"prompt_bundle_id\": \"pb_01M25P3TH0PDQYVKTRQFEM0CYS\", \"provider_mode\": \"recorded\", \"model_call_id\": \"{{gid_7}}\"}}, \"current_verdict\": \"pending\", \"latest_decision_id\": null, \"decision_recorded_at\": null, \"latest_comment\": null, \"decision_event_count\": 0}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{finding_observation_id}}": "the identity case 08 read",
+    "{{finding_uid}}": "the identity case 08 read",
+    "{{gid_7}}": "an identity this run allocated, read from the declared field 'model_call_id' and checked against the pinned shape ^mc_[0-9A-HJKMNP-TV-Z]{26}$",
+    "{{project_uid}}": "the identity case 01 allocated",
+    "{{run_id}}": "the identity case 03 allocated",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
+    "{{version_uid}}": "the identity case 02 allocated"
+  }
+}

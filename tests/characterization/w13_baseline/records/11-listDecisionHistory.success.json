@@ -1,0 +1,48 @@
+{
+  "case": "11-listDecisionHistory.success",
+  "operation": "listDecisionHistory",
+  "purpose": "the ledger read back, ordered by (recorded_at, decision_id) and carrying no sequence number",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "GET",
+    "target": "/findings/{{finding_uid}}/decisions",
+    "headers": [],
+    "body_length": 0,
+    "body_note": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 366,
+      "text": "{\"items\": [{\"decision_id\": \"{{decision_id}}\", \"finding_uid\": \"{{finding_uid}}\", \"finding_observation_id\": \"{{finding_observation_id}}\", \"event_type\": \"accept\", \"verdict\": \"accepted\", \"comment\": \"W13 response baseline\", \"author_label\": \"local-reviewer\", \"recorded_at\": \"{{ts_6}}\"}], \"page\": {\"next_cursor\": null}}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{decision_id}}": "the identity case 10 allocated",
+    "{{finding_observation_id}}": "the identity case 08 read",
+    "{{finding_uid}}": "the identity case 08 read",
+    "{{run_id}}": "the identity case 03 allocated",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
+    "{{ts_6}}": "a timestamp the database stamped, read from the declared field 'recorded_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+  }
+}
