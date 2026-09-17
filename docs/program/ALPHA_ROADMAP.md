@@ -57,6 +57,33 @@ OpenAPI and a generated client against it. `envelope_response()` in
 Under `T-1` the work is not to invent that — it is to make sure FastAPI never answers around
 it.
 
+## 2.5 The principle these decisions are taken under
+
+**Owner, 2026-09-17.** The point of this stage is to stand the system up on the **stack it will
+keep**, even while the things running on it are still specimens. Sample corpora, sample
+documents, a sample operator, placeholder content — all fine at this stage. **The structure is
+not a specimen.** By the release version the code must be free of high coupling and open to
+fast modification, and that is not a property that gets added later: it is decided by what we
+choose now and by what we refuse to write.
+
+Two rules follow, and they decide the trade-offs in §3 and the table in §12:
+
+1. **Where the relevant stack has a mechanism, use it rather than write a parallel one.** This
+   is what settles `T-1`. The programme has already paid for the alternative: `B6` found no
+   HTTP framework in the lock and wrote about a hundred stdlib lines of `Request`/`Response`/
+   `Router` (`GATE_B2_CLOSURE.md` §3). It was the right call for that session, under that
+   lock, and it is a hundred lines plus a multipart parser plus a wire-shape package that a
+   new contributor has to learn instead of reading FastAPI's documentation. That is precisely
+   the coupling this stage is meant to end.
+2. **Keep the seams that make replacement cheap, and replace what sits on them.** The six
+   `Port` protocols are why `T-1` is a transport change and not a rewrite of the application:
+   the handlers change, the services do not. Every future swap named in §12 is affordable for
+   the same reason. A decision that widens a seam to save an afternoon is refused here.
+
+What this principle does **not** license: replacing something bespoke that is already
+contract-shaped, certified and stable, merely because a library exists. §12 gives each such
+piece a disposition and an argument, not a preference.
+
 ## 3. Six decisions this plan makes, with the argument for each
 
 **T-1 — FastAPI, natively, with the frozen contract built under it.** Owner decision,
@@ -118,10 +145,13 @@ serializes before a certification.** Tests-only and infrastructure-only streams 
 
 ### Wave 13 — FastAPI, and the contract built under it
 
-The largest wave in this road, and the only one that rewrites a certified surface: about
-1 800 lines under `src/auditmanager/api/` and **21 test files that drive the router
-directly** (`grep -rln "api.routers\|Request.build" tests/`). It runs in four stages, and
-stage 1 exists so that the rewrite has something to be wrong against.
+The largest wave in this road, and the only one that rewrites a certified surface. Measured at
+`c96ccf3` with `wc -l src/auditmanager/api/routers/*.py src/auditmanager/api/schemas/*.py`:
+**2 525 lines in the API layer, of which roughly 1 950 are replaced** — everything but
+`ports.py`, the envelope renderer in `errors.py` and the package `__init__`. Plus **21 test
+files that drive the router directly** (`grep -rln "api.routers\|Request.build" tests/`). It
+runs in four stages, and stage 1 exists so that the rewrite has something to be wrong
+against.
 
 **Stage 0 — `W13-PIN`, owner-ruled, one writer.** `pyproject.toml` pins: FastAPI, an ASGI
 server, and the multipart parser FastAPI needs for `uploadDocument`. Also whatever the ASGI
@@ -345,3 +375,28 @@ rotation beyond the dump the wipe takes, no job/attempt framework, no remote wor
 no second discipline. Each is either waiting on evidence this deployment is meant to produce,
 or belongs to the security gate that external use requires. Building any of them now would
 delay the only thing on this road that can still tell us the product is wrong.
+
+## 12. What is bespoke today, and where each piece lands
+
+Measured against §2.5. **Now** means inside this road; **release** means the line that ends in
+a clean v1 and is scheduled by evidence, not by taste; **keep** means the bespoke thing is the
+right thing and a library would be the regression.
+
+| Piece | Today | Disposition | Argument |
+|---|---|---|---|
+| `api/routers/http.py` — `Request`/`Response`/`Route`/`Router` | ~260 hand-written lines | **now** — retired by `T-1` | a parallel framework nobody else knows, over a contract a real one can serve |
+| `api/routers/multipart.py` | `email.parser` over a buffered body | **now** — FastAPI + its multipart parser, with the two-guard size rule preserved | the same code exists, tested, in the stack |
+| `api/schemas/**` | 922 lines building wire dicts by hand | **now** — Pydantic models named after the contract's schemas | this is the single largest bespoke surface, and it is exactly what Pydantic is |
+| `tests/e2e/pc01/driver.py` | a bespoke in-process client | **now** — ASGI test client; the driver funnels every call through one method, so it is a small change | a test harness that models the transport is a second implementation of it |
+| `bootstrap/composition.py` | manual wiring, one place | **now, partially** — the composition root stays the single place adapters are built; FastAPI dependencies expose them, and dependency overrides replace the bespoke test wiring | keeps the seam, drops the parallel mechanism |
+| `bootstrap/settings.py` | hand-read environment with typed refusals | **release** | it is certified, its refusals are pinned by tests, and `pydantic-settings` would buy uniformity rather than capability. Worth doing when something else opens the file |
+| `runs/executor.py` | one sequential in-process executor | **release, evidence-driven** | PC-02 measured an 18% attempt-failure rate with no retry; a task runner is a P05 candidate the moment a live user meets it, and picking one before that is guessing |
+| no authentication | proxy-level for the alpha (`T-6`) | **release** — OIDC/JWT through FastAPI dependencies | the alpha's assumption is a trusted network; an identity model built before we know the users is the guess this programme exists to avoid |
+| `shared/db/**`, `storage/s3.py` | SQLAlchemy, Alembic, boto3 | **keep** | already the relevant stack |
+| `web/**` | Next.js, TanStack Query, a generated client | **keep** | already the relevant stack, and the client is generated from the contract rather than hand-written |
+| the error catalog and `ErrorEnvelope` | 20 frozen codes, one renderer | **keep** | a domain contract, not a framework substitute. FastAPI is made to answer around it; §10 risk 2 is about exactly that |
+
+The row that matters most for §2.5's second rule is the last one in the **now** group: the
+composition root. It is the only place in this tree that knows how the application is
+assembled, and every swap above is cheap because that knowledge is in one file. Whatever wave
+13 does to it, it does not scatter it.
