@@ -617,3 +617,42 @@ rule.
 than slicing the array — and is **KILLED** by
 `unit/run/polling.test.ts > stops on 'cancelled' after one reading`, in milliseconds,
 where the original hung for 150 s.
+
+## 10. The unreached 34, confirmed by mutation
+
+§4's reachability figure is static analysis. Ten mutations inside those modules make it
+empirical — `/root/w12web-logs/b8.log`, run against the tree **with all eleven new guards
+in place**:
+
+| # | Mutation | Result |
+|---|---|---|
+| U-01 | `run-progress.tsx` stops rendering `terminal_reason` (replaced by `redacted`) | SURVIVED |
+| U-02 | `run-progress.tsx` keeps the activity indicator on a stopped run | SURVIVED |
+| U-03 | `run-progress.tsx` offers the review link for every run, including `failed` | SURVIVED |
+| U-04 | the upload form stops pre-checking the chosen file | SURVIVED |
+| U-05 | the upload form submits a file the pre-check refused | SURVIVED |
+| U-06 | the upload intent key is re-minted on every render | SURVIVED |
+| U-07 | the create-project intent key is re-minted on every render | SURVIVED |
+| U-08 | the start-run intent key is re-minted on every render | SURVIVED |
+| U-09 | the upload panel stops stating the envelope before the file picker | SURVIVED |
+| U-10 | the run-status hook stops seeding from the cache | SURVIVED |
+
+**Ten for ten.** `U-01` is the one to look at: `terminal_reason` is rendered in exactly one
+place in this application, and that place can be made to print a constant with 440 tests
+green. `U-03` is the same shape on criterion 7's surface — the review entry point. `U-05`
+is criterion 10's: the browser pre-check exists, is well guarded as a function, and the
+form is free to ignore it.
+
+Of these ten, `U-06`, `U-07` and `U-08` are unreddenable **by construction** (§5). The
+other seven are unreddenable **as the suite is shaped**: `run-progress.tsx`,
+`upload-panel.tsx`, `project-list.tsx` and the three form components are ordinary
+components that `renderToStaticMarkup` can render exactly as this suite already renders
+the evidence viewer, the decision panel and the finding list. `RunProgress` additionally
+needs a `QueryClientProvider` around it and a seeded `queryKeys.runs.detail(runId)` entry,
+both of which are available — `@tanstack/react-query` is a dependency and the hook reads
+the cache in a `useState` initialiser, before any effect.
+
+**This is the recommended next wave and it is not this one.** Seven components on the
+delivered PC-01 surface, roughly 700 lines, each carrying criteria 3, 5, 6, 7 or 10. The
+sweep swept the 76 modules `web/tests` reaches; it did not sweep the 34 it does not, and
+saying so is the result.
