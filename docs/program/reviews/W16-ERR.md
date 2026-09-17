@@ -260,3 +260,22 @@ is a change from the pattern the brief warns about. Three things are nonetheless
 One stale item in the register rather than the brief: **`D-3`'s own text says "one call site
 exists and passes it explicitly"; there are two, and the second does not.** Detail in 2.3.
 
+## 5 — both defects were already known, and repaired by nobody
+
+Neither of these is a new discovery by this session, and the record of who saw them is worth
+keeping beside the repair:
+
+- `docs/program/W13_CLOSURE.md:101` — *"`StorageBucketMissingError` still carries
+  `validation_failed` for a server fault — **noticed independently by two streams, repaired by
+  neither**"*;
+- `docs/program/W13_CLOSURE.md:103` — *"**A second `D-7` in a second adapter**:
+  `analysis/text/proxy.py` maps a **401 from the model proxy** onto `dependency_unavailable`,
+  which the catalog pins **retryable** — it tells a caller to retry a rejected credential"*;
+- `docs/program/reviews/W13-SEAL.md:492` saw the bucket case while resealing and left it
+  explicitly: *"I noticed it while reading and left it alone"*;
+- `docs/program/reviews/W13-API.md:510` met it a second time and left it too.
+
+Those four prose accounts match what I measured in the tree line for line. Both are now closed,
+each with a test that goes red when the mapping is put back. The prior reviews are historical
+records and were **not** rewritten.
+
