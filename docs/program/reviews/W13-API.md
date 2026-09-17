@@ -415,9 +415,9 @@ other, and the tree settled it.
 
 ```
 wc -l src/auditmanager/api/routers/*.py src/auditmanager/api/schemas/*.py
-  before: 2 511      after: 3 626
-git diff --numstat 49899df..HEAD -- src/auditmanager/api/
-  +2 507  -1 117 across 25 files
+  at 49899df: 2 511      at HEAD: 3 655
+git diff --stat 49899df..HEAD -- src/
+  26 files changed, 2 765 insertions(+), 1 158 deletions(-)
 ```
 
 `ports.py` (233) and `schemas/documents.py` (88) are **byte-identical** — `git diff` reports
@@ -433,7 +433,26 @@ them would have been a change to another session's file wearing this session's d
 **8.4 — `W13-CONF`'s finding 1 is incomplete, not wrong.** §4. Four operations declare no
 422 and cannot displace one.
 
-**8.5 — the order flake.** The coordinator has already withdrawn this: `pytest-randomly` is
+**8.5 — `make gate` has no changed-during-the-run check, and the brief's warning names a
+mechanism that does not exist.** The brief says:
+
+> `make gate` compares `git status --porcelain` before and after and refuses any difference
+> — a *changed-during-the-run* check. Two sessions have already tripped it by editing their
+> review while the gate ran.
+
+Measured: `grep -rn porcelain Makefile scripts/ tools/` returns **nothing**. The `gate`
+recipe is `freeze_paths; require_runtime_env; load_env; require_env_coherence; run_battery;
+run_frontend; check_whitespace`, and `check_whitespace()` is `git diff --check` — a
+*whitespace* check over the working tree, not a before/after comparison. It does fail on an
+uncommitted edit, but only if that edit has trailing whitespace or a space before a tab,
+and the fix is to fix the whitespace rather than to stop editing. This session edited its
+review while the gate ran (once, correcting a figure) and `git diff --check` exits 0.
+
+Worth correcting rather than shrugging at, because a warning that names the wrong mechanism
+teaches the wrong habit: two sessions were told the tree must be frozen when what actually
+bit them was whitespace.
+
+**8.5b — the order flake.** The coordinator has already withdrawn this: `pytest-randomly` is
 not installed and `-p no:randomly` was a no-op. Recorded here because this session did pass
 that flag for several hours on the brief's say-so, which cost nothing and proved nothing.
 `W13-ORD` had landed by the time the two records were driven, and both pass.
@@ -500,7 +519,39 @@ pass through as `DomainError`s), record 31 being spent, `W13-BASE` §7's warning
    changed**, and nothing under `bootstrap/**`. `git diff --numstat 49899df..HEAD -- src/`
    touches `src/auditmanager/api/**` only.
 
-## 10. Scope kept
+## 10. The gate
+
+`make gate` on `agent/w13-api` at `/root/w13api`, instance `gate-w13d`, on the committed
+tree at `7808731`. Log: `/root/w13api-logs/gate.log`.
+
+```
+foundation:  35 passed
+battery:     1 failed, 1691 passed, 5 skipped, 168 subtests passed in 205.17s (0:03:25)
+frontend:    35 files, 440 tests passed
+whitespace:  git diff --check -> exit 0
+GATE: the canonical battery failed with pytest exit status 1.
+```
+
+**`GATE OK` is not printed, and the one red is not this session's.** It is
+`tests/contract/api_v1/test_openapi_conformance.py::TestN7EffectiveSecurity::
+test_an_unsealed_contract_still_compares`, which fails identically in a pristine worktree
+of `origin/dev` — §9 item 0 has the diagnosis, the query and the proof. `make gate` stops at
+`run_battery`, so `run_frontend` and `check_whitespace` never ran under it; both were run
+directly and are recorded above with their own logs
+(`/root/w13api-logs/frontend.log`).
+
+**1691 passed against `W13-SEAL`'s 1551** at the last `GATE OK` in this programme, and
+against `1505/5/167` as the wave's stated floor. The 5 skips and the subtest count are
+unchanged. The difference is this session's new and rewritten suites plus `W13-ORD`'s.
+
+**Elapsed wall clock: 1 h 19 min**, `2026-09-17T20:14:11Z` to `2026-09-17T21:32:46Z`,
+measured as the span from the first command of the session to the last measurement in this
+section. That is the orchestration span and not a sum of the commands inside it: the two
+`make gate`-class runs, `make bootstrap`, `npm ci` and the 21-mutation sweep account for
+roughly half of it, and they overlapped with writing wherever writing did not touch a file
+a run was reading.
+
+## 11. Scope kept
 
 Written: `src/auditmanager/api/**`, the 21 coupled test files and four new ones under
 `tests/integration/api/`, `tests/characterization/w13_baseline/**` (the recapture, its
