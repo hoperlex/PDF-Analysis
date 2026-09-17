@@ -23,6 +23,20 @@ Read a record as: *this is what the operation answered when it was allowed to an
 comparison suite drives the journey through whatever satisfies the dependency at the time;
 what it pins is the answer, not the absence of a gate in front of it.
 
+**Amended 2026-09-18, `W13-SEAL`, stage 0b.** The contract half of `T-6` has now landed:
+`contracts/api/v1/openapi.json` declares one `http`/`bearer` scheme at its root and all
+twelve operations declare `401` and `403` (`a5f4001`). The *implementation* half has not —
+stage 2 (`W13-API`) writes the dependency — so the records below are unchanged and every
+request in them is still unauthenticated and still answered.
+
+The paragraph above therefore stayed true, and it is now the kind of true that has to be
+kept rather than assumed: a reader arriving after the seam exists could take 33 records of
+answered unauthenticated requests as the surface's *expected* unauthenticated behaviour,
+which is exactly backwards. `test_the_baseline_makes_no_authorization_claim` is what keeps
+it honest — no record carries an `Authorization` header, none answers `401`, and every one
+declares `pre_authorization`. If stage 2 makes the journey authenticate, that test is the
+one that must be changed deliberately, and this paragraph with it.
+
 ## What is here
 
 | | |
@@ -39,15 +53,28 @@ response.
 
 ## The one path allowed to change
 
-`records/31-streamDocumentVersionContent.storage_permission_denied.json` carries an
-`exception` block and is the **only** record that does.
+`records/31-streamDocumentVersionContent.storage_credential_refused.json` carries an
+`exception` block and is the **only** record that does. **It has been taken.**
 
-`StoragePermissionDeniedError` emits `permission_denied` when *our own* S3 credential is
-refused by the store — the catalog code whose summary describes *"the **authenticated
-subject** is not permitted"*. There is no authenticated subject in that scenario at all
-(`DEBT_REGISTER.md` D-7). The owner ruled at `R-3` that the reseal gives the storage case a
-code of its own, so this record's status, `error_code`, `message` and `details` all change on
-purpose. **The commit that decides it is cited beside the new expectation.**
+As captured, `StoragePermissionDeniedError` emitted `permission_denied` when *our own* S3
+credential was refused by the store — the catalog code whose summary describes *"the
+**authenticated subject** is not permitted"*. There is no authenticated subject in that
+scenario at all (`DEBT_REGISTER.md` D-7). The owner ruled at `R-3` that the reseal gives the
+storage case a code of its own, and `W13-SEAL` did so at **`e6d0a6a`**, cited in the record's
+`exception.decided_by`:
+
+| | before `e6d0a6a` | after |
+|---|---|---|
+| status | `403` | `500` — the fault is the server's, and a 4xx blamed the caller |
+| `error_code` | `permission_denied` | `dependency_credential_refused` |
+| `details` | `aggregate_type`, `required_capability` | `dependency` |
+| `retryable` | `false` | `false` |
+
+The class was renamed to `StorageCredentialRefusedError` with its code, and this record's
+file name with it — `31-` is unchanged, so "record 31" still finds it.
+
+The record is compared byte for byte against the new expectation exactly as before: being the
+permitted exception never made it unwatched, it made the change require a citation.
 
 `test_exactly_one_record_is_marked_as_the_permitted_exception` makes that countable:
 the marked set must be exactly this one case. **Every other difference is a failure of the
