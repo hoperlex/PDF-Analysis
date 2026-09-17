@@ -245,7 +245,28 @@ comparisons.
 
 ## 4. How many battery runs — and why that is the weaker number
 
-BATTERY_BLOCK
+**Five full drives of the canonical battery: `make gate` once, and the battery itself four
+more times with the gate's own `--ignore` list. All five green, all five identical.**
+Logs: `/root/w13ord-logs/gate-1.log`, `battery-1..4.log`, `battery-runs.log`.
+
+```
+make gate     GATE OK  1643 passed, 5 skipped, 167 subtests in 195.91s
+                       frontend 35 files / 440 tests; foundation 35; whitespace clean
+battery 1     exit=0   1643 passed, 5 skipped, 167 subtests in 211.45s
+battery 2     exit=0   1643 passed, 5 skipped, 167 subtests in 216.75s
+battery 3     exit=0   1643 passed, 5 skipped, 167 subtests in 214.03s
+battery 4     exit=0   1643 passed, 5 skipped, 167 subtests in 216.57s
+```
+
+A sixth run is not in that table and is worth having in this one. The first attempt at
+`battery 1` came back `1643 passed, 5 skipped, 1 error` — every test green and a **teardown**
+error from `tests/integration/foundation/conftest.py`'s session-scoped
+`checkout_is_unchanged`, because I wrote this review file while the battery was running. The
+brief warns that three sessions have tripped that guard by editing their review mid-gate; I am
+the fourth, one layer down, in a plain `pytest` run rather than in `make gate`. I stopped the
+batch, committed the review, and restarted all four on a frozen checkout — which is what the
+table above is. Recorded rather than quietly re-run, because a `1 error` beside `1643 passed`
+is exactly the shape somebody skims past.
 
 **Said plainly: green battery runs are weak evidence here, and the brief's method rests on a
 premise that is false in this tree.** A battery run drives the journey **once**, and a
@@ -361,4 +382,4 @@ reader who sees the same shape knows it has been seen, and under what conditions
 | `a58b25d` | the README meets `O1` where a reader meets the exception |
 | `4e2d5ad` | cite the standing wave-3 measurement, not the struck-through M2 |
 
-**Elapsed wall-clock:** ELAPSED.
+**Elapsed wall-clock:** 50 minutes — `2026-09-18T01:14:49+05:00` to `2026-09-18T02:05:06+05:00`. Roughly half of it is the 341 live journeys and the five full battery drives; the measurements are the expensive part, and §4 says which of them was worth the time.
