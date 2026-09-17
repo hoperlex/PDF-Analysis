@@ -519,3 +519,81 @@ a **duplicated and truncated bullet** — "agent navigation friction: the search
 tasks recorded, reported as" appears immediately above the complete version of the same bullet. It
 is in the document that defines the checkpoint, it is not in §8 and it changes no criterion, and
 `docs/program/PROTOTYPE_PROFILE.md` is not a path I own. **Reported, unrepaired.**
+
+## 9. What I wrote
+
+Four owned paths, and nothing else:
+
+```
+artifacts/checkpoints/PC-01/recertification-e6eae1e.json   (new, beside the other three)
+docs/program/CHECKPOINT_REGISTRY.md                        (one PC-01 row appended)
+docs/manual-tests/PC-01_prototype.md                       (six corrections and a new §11)
+docs/program/reviews/W12-CERT.md                           (this file)
+```
+
+`report.json`, `recertification-beaa7f7.json` and `recertification-c0d7daf.json` were **not
+touched**: each records a certification that really happened at its own commit, and
+`W12CERT-OBS-1` is corrected in the runbook rather than in the record that carries it.
+
+Nothing under `src/`, `db/`, `tests/`, `contracts/` or `web/`. No new dependency; `requirements/`
+and `docs/program/P02_LOCK.json` untouched. **No byte added to `fixtures/synthetic/ar/**` or
+`fixtures/validation/PC-02/**`** — every probe built its bytes in-process and purged its objects
+by exact identity. No tag, no push, no merge to `main`. Instance, ports and bucket exactly as
+assigned; no other lane's containers touched.
+
+### Residue I created and cleaned up
+
+A first version of the reconciler probe had no `try/finally` and crashed after replacing an
+object's bytes, leaving a corrupted canonical object behind. The next probe read those bytes as
+its "original" and its green half was therefore meaningless — a false green I caught because the
+`actual_sha256` it reported was identical in all four cases including the healthy one. The object
+was restored from the corpus bytes, proved to hash to its recorded digest, and the whole probe was
+re-run with a `finally` and an explicit **precondition assertion that the object is sound before
+the probe begins**. Both readings are in `/root/w12cert-logs/limit-checksum-reconciler.log`; only
+the clean one is cited above. Recorded because it is the same shape as every failure this
+programme keeps finding: a measurement whose baseline was never established.
+
+Two orphan objects from that crash were located by cross-referencing the bucket against the `blob`
+table and purged by exact key after confirming they carried this session's tag. The scratch
+database `audit_w12b_c2` used for criterion 2 was dropped.
+
+## 10. Verdict
+
+**PC-01 holds at `e6eae1e`, with one named exception.**
+
+All ten criteria of `PROTOTYPE_PROFILE.md` §8 were driven through the composed application's
+router and every one was shown able to fail — by twelve mutations against an isolated copy proved
+live by a control that reddened 47 of 49 tests, plus a migration downgrade, unset environment
+variables, stopped containers, and out-of-band replacement of a published object.
+
+Both accepted limits were re-established rather than inherited. `checksum_mismatch` is **still not
+inducible** through the twelve operations, and the limit is now narrower than it was: the same
+failure arriving from outside the twelve is detected and refused by the read path an operator
+calls, which it was not at `c0d7daf`. `ungrounded_model_item` is **still unreachable by design**,
+and the stronger half of that proof — that with the drop removed the gate fails the run rather
+than writing a diagnostic row — was re-run here.
+
+The four behaviour-carrying changes since `c0d7daf` were each certified against behaviour rather
+than against the diff: the success path's `cost_basis` on a run that succeeded, the read path's
+manifest comparison through the front door, the adapter's refusal of an unstamped object, and the
+removal of `CsvExport.filename` against every consumer in the tree. `DEBT_REGISTER.md` D-2 and D-4
+are confirmed closed behaviourally.
+
+**The exception is `W12CERT-DEF-3`.** Criterion 4 requires that *the UI* distinguish the contract
+run states and the provider mode, and criterion 10 requires failures shown explicitly. The rules
+that decide both are guarded; the components that render them are reached by no test, including
+the single line where `terminal_reason` reaches a user. I state that as an exception rather than
+certify around it, and it is not mine to repair.
+
+Four defects were found and **all four left unrepaired**, none in `src/` or `db/`: three in
+`tests/` and the one above in `web/`. None defeats a criterion. Two further observations are
+recorded.
+
+**No tag was created, nothing was pushed, and `main` was not touched.** Whether `main` advances is
+the owner's decision; `DEBT_REGISTER.md` §3 records that it was waiting on exactly this
+certification, and D-1's condition — "a certification exists for a commit on this line" — is now
+met at `e6eae1e`.
+
+## 11. Elapsed
+
+Start `2026-09-17T12:31:24+05:00` (worktree created), end at the final `GATE OK` below.
