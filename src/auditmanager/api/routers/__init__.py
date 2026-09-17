@@ -137,4 +137,26 @@ def build_router(
     build_finding_routes(router, findings)
     build_decision_routes(router, decisions)
     build_export_routes(router, exports)
+    _refuse_a_duplicate_operation_id(router)
     return router
+
+
+def _refuse_a_duplicate_operation_id(router: APIRouter) -> None:
+    """Two routes may not share an ``operationId``.
+
+    Not a defensive nicety, and not FastAPI's job either -- it logs a warning and carries
+    on. An ``operationId`` is an operation's **identity**: the frozen document keys on it,
+    the frontend's generated client names a function after it, and
+    ``tests/integration/api/test_operation_surface.py`` compares the set. A duplicate makes
+    the served document declare one id at two places, so a caller generating a client gets
+    one of them and cannot address the other -- while ``len(router.routes) == 12`` still
+    passes, which is exactly what that assertion cannot see.
+    """
+    seen: set[str] = set()
+    for route in router.routes:
+        operation_id = getattr(route, "operation_id", None)
+        if operation_id is None:
+            continue
+        if operation_id in seen:
+            raise ValueError(f"duplicate operationId {operation_id!r}")
+        seen.add(operation_id)
