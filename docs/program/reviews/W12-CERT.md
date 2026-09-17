@@ -247,3 +247,145 @@ drift again without failing.
 constant, so raising it admits the fixture instead of allocating anything.
 
 **Holds, with the two accepted limits below and the UI exception in §7.**
+
+## 5. The two accepted limits, re-established
+
+### 5.1 `checksum_mismatch` — **STILL NOT INDUCIBLE** through the twelve operations
+
+This is the limit the brief says to look hardest at, because waves 11 and 12 changed precisely
+the code that decides when bytes and their declarations disagree. `W11-RD` and `W12-RCN` each
+reported finding no way to induce their new faults, and each said it was an observation by the
+session that wrote the code. **This is my own verdict, established four ways.**
+
+**First — the name.** There is no `checksum_mismatch` code in the catalog. `error-codes.json`
+declares **20** codes and `checksum_mismatch` is not among them; the internal
+`ChecksumMismatchError` carries `code = storage_integrity_error`. The limit is therefore about
+criterion 10's *checksum failure*, not about an error code, and I read it that way below.
+
+**Second — the surface.** Every one of the twelve operations was expanded from the frozen
+`openapi.json`, following every `$ref` through `components`, into the complete set of input names
+it accepts:
+
+```
+getFinding                     X-Correlation-Id
+appendDecision                 Idempotency-Key, X-Correlation-Id, comment, event_type, finding_observation_id
+listDecisionHistory            X-Correlation-Id, cursor, limit
+createProject                  Idempotency-Key, X-Correlation-Id, name
+listProjects                   X-Correlation-Id, cursor, limit
+uploadDocument                 Idempotency-Key, X-Correlation-Id, display_title, file
+startRun                       Idempotency-Key, X-Correlation-Id, provider_mode, version_uid
+getRunStatus                   X-Correlation-Id
+exportRunCsv                   X-Correlation-Id
+listRunFindings                X-Correlation-Id, category, cursor, limit, verdict
+getDocumentVersion             X-Correlation-Id
+streamDocumentVersionContent   Range, X-Correlation-Id
+operations examined: 12
+```
+
+Thirteen distinct names across the whole surface. **None is digest-shaped** (no `sha`, `digest`,
+`checksum`, `hash`, `md5`, `etag` or `crc`). The only digest in the system is computed by the
+server from the bytes it received, so there is nothing to disagree with.
+
+**Third — the routers enforce it independently of the document.** Measured, not read:
+
+| attempt | answer |
+|---|---|
+| an extra multipart part named `sha256` alongside the file | **422 `validation_failed`**, `field=body`, `constraint=additionalProperties`, "The upload carries a part the schema does not declare." |
+| a part named `content-sha256` | **422 `validation_failed`**, same details |
+| `startRun` with an extra `"sha256"` JSON property | **422 `validation_failed`**, "The request body carries a property the schema does not declare." |
+
+**Fourth — the guard is alive, shown able to fail, against live MinIO.** Green half first, then
+each red, then every object purged by exact identity. Bytes built in-process; **no byte added to
+any frozen corpus**.
+
+| | probe | result |
+|---|---|---|
+| green | publish, then `read(verify=True)` | 62 bytes returned, identical |
+| R1 | `verify_temporary` with a false declared digest | `ChecksumMismatchError` (`storage_integrity_error`), and the temporary object is **gone** — nothing canonical, nothing staged |
+| R2 | `verify_temporary` with a false declared size | `SizeMismatchError` (`storage_integrity_error`) |
+| R3 | bytes replaced out of band, **same length**, metadata copied verbatim | `inspect()` — head only — still reports it **sound**; `read(verify=True)` raises `ChecksumMismatchError` with both digests |
+| R4 | the `content-sha256` metadata stripped, bytes correct | `BlobMetadataInvalidError`, **`validation_failed`**, `field=content-sha256` — not the integrity verdict |
+
+**And the same fault, through the front door.** A document was uploaded through `uploadDocument`,
+its canonical object replaced out of band with a same-length body under verbatim metadata, and
+the twelve operations asked again:
+
+```
+streamDocumentVersionContent  -> 422  storage_integrity_error, expected_sha256 6d53674f...
+getDocumentVersion            -> 200  still reports the declared digest (a declaration, not the bytes)
+```
+
+then the bytes were restored and the same call returned 200 with the original 58978 bytes.
+
+**Verdict.** A checksum failure **cannot be induced through the twelve operations** — the surface
+offers no way to hand the store bytes that disagree with a declaration, and the routers refuse the
+attempt with a typed envelope. What changed in waves 11 and 12 is that the same failure, arriving
+from *outside* the twelve, is now **detected and refused** by them rather than served. The limit
+holds, and it is a narrower limit than it was: what was "proved only at the storage layer" in
+`W6-CERT`'s pass is now also refused at the read path an operator actually calls.
+
+**D-2 and D-4, checked behaviourally over one live version.** `verify_version` was run against a
+real published version whose object was manipulated three ways in turn, with the object proved
+sound before the probe and restored sound after:
+
+| state of the object | `verify_version` says |
+|---|---|
+| healthy | **SOUND** (returns) |
+| replaced, same length, metadata verbatim — **D-2's exact scenario** | `storage_integrity_error`, `expected_sha256=6d53674f…`, `actual_sha256=612a113c…` — **the body's digest**, not the record's |
+| recording no digest — **D-4's exact scenario** | `validation_failed`, `aggregate_type=Blob`, `field=sha256`, `constraint=recorded on every published object` — **no `actual_sha256` key, no empty string** |
+| restored | **SOUND** |
+
+Both D-2 and D-4 are genuinely closed, measured rather than read off the diff. The brief's claim
+that **nothing in `src/` calls `verify_version`** was checked and is true: `grep -rn verify_version
+src/` returns one `def` and four docstring mentions, and no construction of `Reconciler` outside
+the module.
+
+### 5.2 `ungrounded_model_item` — **STILL UNREACHABLE BY DESIGN**, proved by mutation
+
+**Baseline, from the live database.** `finding_observation` holds **110 rows with
+`grounded = true` and 0 with `grounded = false`**, and the live run added 3 grounded observations
+and 0 ungrounded ones.
+
+**Mutation A — nothing resolves.** `resolve_anchor`'s candidate loop emptied (`for candidate in
+():`), read back as a loop over nothing:
+
+- the journey publishes **0 findings**;
+- `finding_observation` is **110 before and 110 after** — **no row was written at all**, so the
+  drop happens before anything reaches the database;
+- `grounded = false` rows: **0**.
+
+**Mutation B — the drop removed as well**, so evidence-free observations must reach the gate.
+`_ground`'s `if not anchors: dropped += 1; continue` became `if False:`, read back as the literal
+`False`:
+
+- the run **FAILED** with `terminal_reason = analysis_input_invalid`;
+- `finding_observation` still **110**, `grounded = false` rows still **0**.
+
+**Verdict.** Even with the drop-before-the-gate removed, no ungrounded row is written: the gate
+refuses the run instead of recording a diagnostic. The limit is re-established by mutation, not
+inherited.
+
+## 6. Where a number came from, and what a test actually asserts
+
+### 6.1 The gate figures
+`1505 / 5 / 167` and frontend `440` are counts I reproduced exactly at `e6eae1e`. The `440` is
+`289 + 151`, and the `289 → 440` rise is `W12-WEB`'s eleven new suites. The `1505` is
+`1492 + 3 (W12-RCN) + 10 (W12-DEC)`; the three stage-A reviews' own arithmetic reconciles.
+
+### 6.2 The 18% frontend coverage gap, re-measured here rather than inherited
+`W12-WEB` reports that 34 of 110 modules under `web/src` are imported by no test. I ran the
+reachability closure myself from `web/`:
+
+```
+src modules: 110   reachable: 76   unreached: 34   unreached lines: 1352
+```
+
+Identical to `W12-WEB`'s figure. `terminal_reason` reaches a user in exactly one place —
+`src/widgets/run-progress/ui/run-progress.tsx:112`, the `failed` arm's
+`<code data-terminal-reason=…>` — and no test imports that file. `W12-WEB`'s `U-01` made that line
+print a constant with all 440 tests green, and I did not need to re-run it: the module is outside
+the import closure, so nothing could have observed it.
+
+### 6.3 Tests read rather than trusted
+Four acceptance tests were read and judged against what the criterion requires rather than
+against their names. Three of them assert less than their name promises; each is in §7.
