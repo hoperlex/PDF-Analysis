@@ -135,8 +135,16 @@ MULTIPART_BOUNDARY = "w13baselineboundary"
 #
 # So *which finding comes first* is not something this system promises across separate
 # publications of the same document, and a record that pins the sequence is asking for a
-# guarantee that does not exist. Wave 3 recorded the same thing as M2: dropping the
-# tiebreaker makes the order unspecified rather than wrong.
+# guarantee that does not exist. The programme has measured this before: wave 3's
+# `tests/integration/exports/test_listing_order_matches_the_export.py` opens by saying
+# that two findings published in the same millisecond disagree about their relative order
+# roughly half the time, and that `W2-QA` measured 31 of 416 real runs diverging.
+#
+# (Not cited from `W3_CLOSURE.md` M2 -- "dropping the tiebreaker makes the order
+# unspecified rather than wrong" is a sentence that file struck through and corrected
+# after `W5-ADV` reddened M2. The tiebreaker orders observations WITHIN a finding and is
+# load-bearing; what is unspecified is the order BETWEEN findings, where the key is one
+# ULID. See `docs/program/reviews/W13-ORD.md` section 5.2.)
 #
 # What the system does promise is the ordering **rule**, and that is pinned instead --
 # against the live response, by `test_the_published_findings_come_back_ascending_by_
@@ -160,9 +168,11 @@ UNORDERED_O1_CANNOT_HIDE = (
 )
 UNORDERED_O1_STILL_PINNED = (
     "The ordering RULE is asserted against the live response instead: the findings must "
-    "come back strictly ascending by finding_uid under COLLATE \"C\", and the CSV rows "
-    "ascending by (finding_uid, finding_observation_id). A rewrite that dropped the "
-    "ORDER BY would fail those two tests even though this record stayed green."
+    "come back STRICTLY ascending by finding_uid under COLLATE \"C\", and the CSV rows "
+    "NON-DESCENDING by (finding_uid, finding_observation_id) -- non-descending there "
+    "because the export repeats a finding once per evidence quote. A rewrite that "
+    "dropped the ORDER BY would fail those two tests even though this record stayed "
+    "green."
 )
 
 
