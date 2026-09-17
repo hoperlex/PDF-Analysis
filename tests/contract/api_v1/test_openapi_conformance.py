@@ -898,10 +898,42 @@ class TestN7EffectiveSecurity:
         )
 
     def test_an_unsealed_contract_still_compares(self, contract: dict[str, Any]) -> None:
-        """Before the reseal, `security` is absent on both sides and that is not a
-        difference. The gate must not turn red merely because stage 0b has not landed."""
-        assert surface(contract)["paths"]["/projects"]["post"]["security"] is None
-        assert_silent(differences(surface(contract), surface(fastapi_flavoured(contract))))
+        """A contract carrying no `security` at all compares silently against itself.
+
+        Written before stage 0b landed, when it could assert this of the real document.
+        The reseal made that false -- `bearerAuth` is now required at the root -- and the
+        case failed on `origin/dev` with nothing in this file changed.
+
+        The *intent* was never about the real contract's state: it is that `N7` handles
+        the absent case, so a gate does not redden merely because a document has no
+        security. So the unsealed document is now **built** rather than borrowed, which is
+        what the case should have done from the start -- a test that reads the tree to
+        establish its own precondition is a test the tree can invalidate.
+        """
+        unsealed = json.loads(json.dumps(contract))
+        unsealed.pop("security", None)
+        unsealed.get("components", {}).pop("securitySchemes", None)
+        for methods in unsealed["paths"].values():
+            for operation in methods.values():
+                if isinstance(operation, dict):
+                    operation.pop("security", None)
+
+        assert surface(unsealed)["paths"]["/projects"]["post"]["security"] is None, (
+            "the synthetic unsealed document still carries an effective security "
+            "requirement, so this case is not exercising the absent branch"
+        )
+        assert_silent(differences(surface(unsealed), surface(fastapi_flavoured(unsealed))))
+
+    def test_the_real_contract_is_sealed(self, contract: dict[str, Any]) -> None:
+        """The other half, and the reason the case above had to stop borrowing.
+
+        `W13-SEAL` put `bearerAuth` at the document root. If a later change removed it,
+        the case above would still pass -- it builds its own unsealed document -- so the
+        sealed state needs its own assertion or nothing guards it here.
+        """
+        assert surface(contract)["paths"]["/projects"]["post"]["security"] == [
+            {"bearerAuth": []}
+        ], "the frozen contract no longer requires bearerAuth on a write operation"
 
 
 # =======================================================================================
