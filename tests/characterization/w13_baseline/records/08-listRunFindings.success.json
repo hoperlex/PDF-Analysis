@@ -5,6 +5,14 @@
   "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
   "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
   "exception": null,
+  "unordered": {
+    "declared": "O1",
+    "sequence": "json-array:items",
+    "what": "the `items` array: which published finding of this run comes first",
+    "why": "finding_uid is a fresh ULID per publication and ULIDs are not monotonic inside one millisecond (shared/identity/ulid.py says so deliberately: the domain contract forbids deriving ordering from the body). Two findings published in the same millisecond are separated only by 80 random bits, so the SEQUENCE of published findings is not a promise this system makes across publications.",
+    "cannot_hide": "The declared elements are compared as a SORTED LIST of byte slices, not as a set and not field by field. Two sequences have equal sorted forms exactly when one is a permutation of the other, so order -- and nothing else -- is erased: a changed category, a changed quote, a changed offset, a dropped element, a duplicated element, a changed count, and every byte of the prefix, the separator and the suffix are all still compared and still redden. Proven element by element in test_response_baseline.py.",
+    "still_pinned": "The ordering RULE is asserted against the live response instead: the findings must come back STRICTLY ascending by finding_uid under COLLATE \"C\", and the CSV rows NON-DESCENDING by (finding_uid, finding_observation_id) -- non-descending there because the export repeats a finding once per evidence quote. A rewrite that dropped the ORDER BY would fail those two tests even though this record stayed green."
+  },
   "request": {
     "method": "GET",
     "target": "/runs/{{run_id}}/findings",
@@ -41,9 +49,9 @@
     "{{finding_observation_id_0}}": "an observation identity this run allocated, read from this response",
     "{{finding_observation_id_1}}": "an observation identity this run allocated, read from this response",
     "{{finding_observation_id_2}}": "an observation identity this run allocated, read from this response",
-    "{{finding_uid_0}}": "a finding identity this run allocated, read from this response",
-    "{{finding_uid_1}}": "a finding identity this run allocated, read from this response",
-    "{{finding_uid_2}}": "a finding identity this run allocated, read from this response",
+    "{{finding_uid_0}}": "a finding identity this run allocated, read from this response; the index is the finding's rank in document order, not its place in the response",
+    "{{finding_uid_1}}": "a finding identity this run allocated, read from this response; the index is the finding's rank in document order, not its place in the response",
+    "{{finding_uid_2}}": "a finding identity this run allocated, read from this response; the index is the finding's rank in document order, not its place in the response",
     "{{gid_11}}": "an identity this run allocated, read from the declared field 'model_call_id' and checked against the pinned shape ^mc_[0-9A-HJKMNP-TV-Z]{26}$",
     "{{project_uid}}": "the identity case 01 allocated",
     "{{run_id}}": "the identity case 03 allocated",

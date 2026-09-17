@@ -134,6 +134,135 @@ EXCEPTION_D7 = {
 MULTIPART_BOUNDARY = "w13baselineboundary"
 
 
+# --- O1: the one ordering this baseline does not pin -------------------------------
+# `listRunFindings` and `exportRunCsv` return published findings ordered by
+# `f.finding_uid COLLATE "C"` (`findings/queries.py`, `exports/query.py`; wave 3 aligned
+# the listing to the CSV's key family, `W3_CLOSURE.md` section 1). A `finding_uid` is a
+# fresh ULID allocated at publication, and `shared/identity/ulid.py` says in so many
+# words that monotonicity inside one millisecond is **deliberately not promised**: the
+# domain contract forbids deriving ordering from a ULID body, so the generator declines
+# to supply the property that would invite it. The three findings of this journey are
+# published in one loop a few milliseconds apart, and any two of them landing in the same
+# millisecond leaves them separated only by 80 bits of `os.urandom`.
+#
+# So *which finding comes first* is not something this system promises across separate
+# publications of the same document, and a record that pins the sequence is asking for a
+# guarantee that does not exist. The programme has measured this before: wave 3's
+# `tests/integration/exports/test_listing_order_matches_the_export.py` opens by saying
+# that two findings published in the same millisecond disagree about their relative order
+# roughly half the time, and that `W2-QA` measured 31 of 416 real runs diverging.
+#
+# (Not cited from `W3_CLOSURE.md` M2 -- "dropping the tiebreaker makes the order
+# unspecified rather than wrong" is a sentence that file struck through and corrected
+# after `W5-ADV` reddened M2. The tiebreaker orders observations WITHIN a finding and is
+# load-bearing; what is unspecified is the order BETWEEN findings, where the key is one
+# ULID. See `docs/program/reviews/W13-ORD.md` section 5.2.)
+#
+# What the system does promise is the ordering **rule**, and that is pinned instead --
+# against the live response, by `test_the_published_findings_come_back_ascending_by_
+# finding_uid` and its CSV twin, not against a recorded sequence.
+#: The declaration each affected record carries, in that record's own bytes.
+UNORDERED_O1_WHY = (
+    "finding_uid is a fresh ULID per publication and ULIDs are not monotonic inside one "
+    "millisecond (shared/identity/ulid.py says so deliberately: the domain contract "
+    "forbids deriving ordering from the body). Two findings published in the same "
+    "millisecond are separated only by 80 random bits, so the SEQUENCE of published "
+    "findings is not a promise this system makes across publications."
+)
+UNORDERED_O1_CANNOT_HIDE = (
+    "The declared elements are compared as a SORTED LIST of byte slices, not as a set "
+    "and not field by field. Two sequences have equal sorted forms exactly when one is a "
+    "permutation of the other, so order -- and nothing else -- is erased: a changed "
+    "category, a changed quote, a changed offset, a dropped element, a duplicated "
+    "element, a changed count, and every byte of the prefix, the separator and the "
+    "suffix are all still compared and still redden. Proven element by element in "
+    "test_response_baseline.py."
+)
+UNORDERED_O1_STILL_PINNED = (
+    "The ordering RULE is asserted against the live response instead: the findings must "
+    "come back STRICTLY ascending by finding_uid under COLLATE \"C\", and the CSV rows "
+    "NON-DESCENDING by (finding_uid, finding_observation_id) -- non-descending there "
+    "because the export repeats a finding once per evidence quote. A rewrite that "
+    "dropped the ORDER BY would fail those two tests even though this record stayed "
+    "green."
+)
+
+
+def unordered_declaration(sequence: str, what: str) -> dict[str, str]:
+    """The `unordered` block a record carries, spelling out all four answers."""
+    return {
+        "declared": "O1",
+        "sequence": sequence,
+        "what": what,
+        "why": UNORDERED_O1_WHY,
+        "cannot_hide": UNORDERED_O1_CANNOT_HIDE,
+        "still_pinned": UNORDERED_O1_STILL_PINNED,
+    }
+
+
+#: A tokenised finding identity, as the substitution writes it. The index is the
+#: finding's rank in :func:`publication_order`, which is content-determined -- see there.
+FINDING_TOKEN = re.compile(rb"^\{\{finding_uid_\d+\}\}$")
+
+
+def publication_order(items: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """The published findings in **document order**, for numbering their tokens.
+
+    The tokens `finding_uid_0`, `finding_observation_id_0`, ... used to be numbered by a
+    finding's position in the response. That made the token a finding carries a function
+    of an order the system does not promise, which is what made two records order-flaky
+    in the first place: the same finding came back as `{{finding_uid_1}}` in one run and
+    `{{finding_uid_2}}` in the next, so no comparison that ignored order could work.
+
+    The rank is now taken from the finding's own content -- the page and character offset
+    of its first evidence quote, which is where in the *document* the finding was found.
+    That is a property of the AR fixture, not of the publication, so it is the same in
+    every run. It is a **substitution** rule, not an expectation: it decides what a value
+    is called, never what any value must be.
+
+    The key is asserted to be total. Two findings quoting the same offset would make the
+    rank a tie-break of its own, and this function refuses rather than picking one.
+    """
+
+    def key(item: Mapping[str, Any]) -> tuple[int, int]:
+        evidence = item["observation"]["evidence"]
+        assert evidence, (
+            f"published finding {item['finding_uid']!r} carries no evidence, so it has "
+            "no position in the document to be ranked by"
+        )
+        first = evidence[0]
+        return (first["page_number"], first["char_start"])
+
+    ordered = sorted(items, key=key)
+    keys = [key(item) for item in ordered]
+    assert len(set(keys)) == len(keys), (
+        f"two published findings share a first-evidence position {keys!r}; the "
+        "content-determined rank is no longer total"
+    )
+    return ordered
+
+
+def ascending_under_c_collation(values: Sequence[str]) -> bool:
+    """True when ``values`` is **strictly** ascending under SQL ``COLLATE "C"``.
+
+    ``COLLATE "C"`` is byte order, written out here rather than imported from the module
+    that issues the ``ORDER BY``. Strict, not merely non-decreasing: the ordering is on a
+    unique key, so two equal neighbours are a duplicate row and not a tie.
+    """
+    encoded = [value.encode("utf-8") for value in values]
+    return all(a < b for a, b in zip(encoded, encoded[1:]))
+
+
+def non_descending_under_c_collation(rows: Sequence[tuple[str, ...]]) -> bool:
+    """True when ``rows`` is non-decreasing under ``COLLATE "C"``, tuple by tuple.
+
+    The CSV repeats a finding across one row per evidence quote, so equal neighbours are
+    expected there and only a *descent* is a broken ``ORDER BY``.
+    """
+    encoded = [tuple(value.encode("utf-8") for value in row) for row in rows]
+    return all(a <= b for a, b in zip(encoded, encoded[1:]))
+
+
 # --- the exchange record -----------------------------------------------------------
 
 
@@ -156,6 +285,10 @@ class Exchange:
     body_kind: str = "text"
     body_note: str = ""
     exception: Mapping[str, str] | None = None
+    #: ``O1``, when this case carries a sequence whose ORDER is not pinned. See
+    #: :func:`unordered_declaration`. Written into the record, so a reader meets the
+    #: declaration in the record's own bytes rather than in a module they may not open.
+    unordered: Mapping[str, str] | None = None
 
 
 class Tokens:
@@ -395,6 +528,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         body_kind: str = "text",
         response_note: str = "",
         exception: Mapping[str, str] | None = None,
+        unordered: Mapping[str, str] | None = None,
     ) -> Exchange:
         status, response_headers, payload = (caller or api).send(
             method, target, headers=headers, body=body
@@ -415,6 +549,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
             body_kind=body_kind,
             body_note=response_note,
             exception=exception,
+            unordered=unordered,
         )
         exchange.tokens.add(
             "session_tag", tag, "this capture run's tag, carried by every idempotency key"
@@ -694,18 +829,28 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "GET",
         f"/runs/{run_id}/findings",
         tokens=t,
+        unordered=unordered_declaration(
+            "json-array:items",
+            "the `items` array: which published finding of this run comes first",
+        ),
     )
     page = json_of(findings)
-    finding_uid = page["items"][0]["finding_uid"]
-    observation_id = page["items"][0]["observation"]["finding_observation_id"]
+    # Document order, not response order. `publication_order` explains why the token a
+    # finding carries must not be a function of where the response put it; and every
+    # later case that names *a* finding names this one, so no record downstream depends
+    # on which finding this publication's ULIDs happened to sort first either.
+    ordered = publication_order(page["items"])
+    finding_uid = ordered[0]["finding_uid"]
+    observation_id = ordered[0]["observation"]["finding_observation_id"]
     t.add("project_uid", project_uid, "the identity case 01 allocated")
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated")
-    for index, item in enumerate(page["items"]):
+    for index, item in enumerate(ordered):
         t.add(
             f"finding_uid_{index}",
             item["finding_uid"],
-            "a finding identity this run allocated, read from this response",
+            "a finding identity this run allocated, read from this response; the index "
+            "is the finding's rank in document order, not its place in the response",
         )
         t.add(
             f"finding_observation_id_{index}",
@@ -798,6 +943,10 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "GET",
         f"/runs/{run_id}/export.csv",
         tokens=t,
+        unordered=unordered_declaration(
+            "csv-rows-grouped-by-finding",
+            "the data rows: which published finding's run of rows comes first",
+        ),
         body_kind="base64",
         response_note=(
             "text/csv bytes: b'\\xef\\xbb\\xbf' BOM then RFC 4180 rows with CRLF. "
@@ -810,7 +959,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("document_uid", version["document_uid"], "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated")
-    for index, item in enumerate(page["items"]):
+    for index, item in enumerate(ordered):
         t.add(f"finding_uid_{index}", item["finding_uid"], "a finding identity from case 08")
         t.add(
             f"finding_observation_id_{index}",
@@ -1268,6 +1417,7 @@ def to_record(exchange: Exchange) -> dict[str, Any]:
             "is answered. This is not a post-auth expectation."
         ),
         "exception": exchange.exception,
+        "unordered": exchange.unordered,
         "request": {
             "method": exchange.method,
             "target": _sub(exchange, exchange.target),
@@ -1302,6 +1452,200 @@ def write_records(exchanges: Sequence[Exchange]) -> list[Path]:
     return written
 
 
+# --- the declared sequence split, O1 ------------------------------------------------
+# Both sides of a comparison are cut into (prefix, separator, elements, suffix) by the
+# SAME declared splitter, and the reassembly `prefix + separator.join(elements) + suffix`
+# is byte-identical to the input. Nothing is re-serialised, so key order, separators,
+# escaping and the unescaped Russian inside an element are all still compared byte for
+# byte -- only which element sits where is erased.
+
+
+class SequenceShapeError(Exception):
+    """A body does not have the shape its record declares. Reported, never raised out."""
+
+
+#: The first column of every CSV data row, after substitution. A row that does not begin
+#: with it is reported rather than parsed on a guess.
+CSV_ROW_FIRST_COLUMN = b"{{project_uid}},"
+#: Zero-based index of `finding_uid` in the CSV header. The header itself is in the
+#: prefix and is compared byte for byte, so a moved column reddens there too.
+CSV_FINDING_UID_COLUMN = 6
+
+
+def _split_json_array(raw: bytes, key: bytes) -> tuple[bytes, bytes, list[bytes], bytes]:
+    """Cut the JSON array under ``key`` into its top-level elements, at the byte level."""
+    at = raw.find(key)
+    if at < 0:
+        raise SequenceShapeError(f"the body carries no {key.decode()} key")
+    opened = raw.find(b"[", at + len(key))
+    if opened < 0 or raw[at + len(key) : opened].strip():
+        raise SequenceShapeError(f"{key.decode()} is not followed by an array")
+    depth = 0
+    in_string = False
+    escaped = False
+    cuts: list[int] = []
+    closed = -1
+    for index in range(opened, len(raw)):
+        byte = raw[index : index + 1]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif byte == b"\\":
+                escaped = True
+            elif byte == b'"':
+                in_string = False
+            continue
+        if byte == b'"':
+            in_string = True
+        elif byte in (b"[", b"{"):
+            depth += 1
+        elif byte in (b"]", b"}"):
+            depth -= 1
+            if depth == 0:
+                closed = index
+                break
+        elif byte == b"," and depth == 1:
+            cuts.append(index)
+    if closed < 0:
+        raise SequenceShapeError(f"the array under {key.decode()} is never closed")
+
+    bounds = [opened + 1] + [cut + 1 for cut in cuts]
+    ends = cuts + [closed]
+    pieces = [raw[start:end] for start, end in zip(bounds, ends)]
+    if pieces == [b""]:
+        return raw[: opened + 1], b"", [], raw[closed:]
+
+    def lead(piece: bytes) -> bytes:
+        return piece[: len(piece) - len(piece.lstrip())]
+
+    def trail(piece: bytes) -> bytes:
+        return piece[len(piece.rstrip()) :]
+
+    separators = {
+        trail(before) + b"," + lead(after) for before, after in zip(pieces, pieces[1:])
+    }
+    if len(separators) > 1:
+        raise SequenceShapeError(
+            f"the array separators are not uniform: {sorted(separators)!r}"
+        )
+    separator = separators.pop() if separators else b""
+    prefix = raw[: opened + 1] + lead(pieces[0])
+    suffix = trail(pieces[-1]) + raw[closed:]
+    return prefix, separator, [piece.strip() for piece in pieces], suffix
+
+
+def _split_findings_page(raw: bytes) -> tuple[bytes, bytes, list[bytes], bytes]:
+    return _split_json_array(raw, b'"items":')
+
+
+def _split_csv_finding_groups(raw: bytes) -> tuple[bytes, bytes, list[bytes], bytes]:
+    """Cut the CSV into one element per finding: its run of consecutive rows.
+
+    A finding occupies one row per evidence quote, so the rows of one finding move
+    together or the export is broken. Grouping by the finding's own tokenised identity --
+    and requiring the run to be *consecutive* -- means interleaving two findings' rows is
+    a difference, not a permutation.
+    """
+    lines = raw.split(b"\r\n")
+    if len(lines) < 3 or lines[-1] != b"":
+        raise SequenceShapeError(
+            "the CSV is not a CRLF-terminated header plus at least one data row"
+        )
+    rows = lines[1:-1]
+    groups: list[tuple[bytes, list[bytes]]] = []
+    seen: set[bytes] = set()
+    for row in rows:
+        if not row.startswith(CSV_ROW_FIRST_COLUMN):
+            raise SequenceShapeError(
+                f"a CSV data row does not begin with {CSV_ROW_FIRST_COLUMN!r}: {row[:80]!r}"
+            )
+        fields = row.split(b",", CSV_FINDING_UID_COLUMN + 1)
+        if len(fields) <= CSV_FINDING_UID_COLUMN:
+            raise SequenceShapeError(f"a CSV data row has too few columns: {row[:80]!r}")
+        identity = fields[CSV_FINDING_UID_COLUMN]
+        if not FINDING_TOKEN.match(identity):
+            raise SequenceShapeError(
+                f"CSV column {CSV_FINDING_UID_COLUMN + 1} is {identity!r}, not a "
+                "tokenised finding_uid"
+            )
+        if groups and groups[-1][0] == identity:
+            groups[-1][1].append(row)
+        else:
+            if identity in seen:
+                raise SequenceShapeError(
+                    f"the rows of {identity.decode()} are not consecutive"
+                )
+            seen.add(identity)
+            groups.append((identity, [row]))
+    prefix = lines[0] + b"\r\n"
+    return prefix, b"\r\n", [b"\r\n".join(rows) for _, rows in groups], b"\r\n"
+
+
+#: The sequence kinds a record may declare. A record naming anything else is reported.
+SEQUENCE_SPLITTERS: dict[str, Callable[[bytes], tuple[bytes, bytes, list[bytes], bytes]]] = {
+    "json-array:items": _split_findings_page,
+    "csv-rows-grouped-by-finding": _split_csv_finding_groups,
+}
+
+
+def split_sequence(raw: bytes, kind: str) -> tuple[bytes, bytes, list[bytes], bytes]:
+    """The declared split, with the reassembly checked. Used by the comparison and by
+    the planted-difference tests, so a plant is built through the same cut it must defeat."""
+    splitter = SEQUENCE_SPLITTERS[kind]
+    prefix, separator, elements, suffix = splitter(raw)
+    rebuilt = prefix + separator.join(elements) + suffix
+    if rebuilt != raw:
+        raise SequenceShapeError(
+            f"the {kind} split does not reassemble to the body it cut "
+            f"({len(rebuilt)} bytes from {len(raw)})"
+        )
+    return prefix, separator, elements, suffix
+
+
+def _unordered_differences(
+    want: bytes, got: bytes, declaration: Mapping[str, Any]
+) -> list[str]:
+    """Compare under O1: everything byte for byte, the declared elements as a sorted list."""
+    kind = declaration.get("sequence")
+    if kind not in SEQUENCE_SPLITTERS:
+        return [f"unordered: this record declares an unknown sequence kind {kind!r}"]
+    try:
+        want_prefix, want_separator, want_elements, want_suffix = split_sequence(want, kind)
+    except SequenceShapeError as error:
+        return [f"unordered: the RECORDED body no longer has its declared shape: {error}"]
+    try:
+        got_prefix, got_separator, got_elements, got_suffix = split_sequence(got, kind)
+    except SequenceShapeError as error:
+        return [f"unordered: the response does not have the declared {kind} shape: {error}"]
+
+    found: list[str] = []
+    if want_prefix != got_prefix:
+        found.append("before the sequence -- " + _byte_difference(want_prefix, got_prefix))
+    if want_suffix != got_suffix:
+        found.append("after the sequence -- " + _byte_difference(want_suffix, got_suffix))
+    if want_separator != got_separator:
+        found.append(
+            f"the sequence separator: expected {want_separator!r}, got {got_separator!r}"
+        )
+    if len(want_elements) != len(got_elements):
+        found.append(
+            f"the sequence holds {len(got_elements)} elements, not the recorded "
+            f"{len(want_elements)}"
+        )
+        return found
+    # Sorted LISTS, not sets: equal sorted lists is exactly "one is a permutation of the
+    # other", so a duplicated element replacing a missing one is still reported.
+    for index, (a, b) in enumerate(zip(sorted(want_elements), sorted(got_elements))):
+        if a != b:
+            found.append(
+                f"element {index} of the order-insensitive comparison (the elements are "
+                f"sorted on both sides, so this is not element {index} of the response) "
+                "-- " + _byte_difference(a, b)
+            )
+            break
+    return found
+
+
 def differences(exchange: Exchange, expected: Mapping[str, Any]) -> list[str]:
     """Every way this exchange fails to reproduce the recorded one."""
     import base64
@@ -1330,6 +1674,8 @@ def differences(exchange: Exchange, expected: Mapping[str, Any]) -> list[str]:
 
     body = response["body"]
     substituted = exchange.tokens.apply(exchange.body)
+    #: ``None`` for 31 of the 33 records: the body is compared byte for byte, full stop.
+    declaration = expected.get("unordered")
     if body["kind"] == "fixture-bytes":
         fixture = (REPOSITORY_ROOT / body["path"]).read_bytes()
         if hashlib.sha256(fixture).hexdigest() != body["sha256"]:
@@ -1339,14 +1685,17 @@ def differences(exchange: Exchange, expected: Mapping[str, Any]) -> list[str]:
                 f"body: expected the {body['length']} bytes of {body['path']}, got "
                 f"{len(exchange.body)} bytes"
             )
-    elif body["kind"] == "base64":
-        want = base64.b64decode(body["base64"])
-        if substituted != want:
-            found.append(_byte_difference(want, substituted))
     else:
-        want = body["text"].encode("utf-8")
-        if substituted != want:
+        if body["kind"] == "base64":
+            want = base64.b64decode(body["base64"])
+        else:
+            want = body["text"].encode("utf-8")
+        if substituted == want:
+            pass
+        elif declaration is None:
             found.append(_byte_difference(want, substituted))
+        else:
+            found.extend(_unordered_differences(want, substituted, declaration))
     return found
 
 
