@@ -117,3 +117,54 @@ finished (see §2.1).
 | RS-03 | `EXPORTABLE_RUN_STATES` drops `partial` | KILLED | `export/export-panel` and others |
 | **RS-04** | **`stageCarriesError` always returns `false`** | **SURVIVED** | — |
 | **RS-05** | **`isTerminalRunState` always returns `false`** | **TIMEOUT** | nothing red; the suite hangs |
+
+### 2.2 Batch 2 — `csv-columns.ts` and the upload envelope
+
+The dispatch asks whether the frontend's column check has the wave-9 defect the Python one
+had — comparing the header against the list it was built from. **It does not.**
+`tests/contract/csv-columns.contract.test.ts` parses the column table out of
+`docs/program/P02_SEAMS.md` §6 and compares `CSV_COLUMNS` against *that*, and the seam
+document is resolved from `tests/guards/lib/repo.ts` (an authority read from the test
+file's location, which is the correct form). Every reorder, rename, drop and addition
+reddened.
+
+The dispatch also asks whether anything notices if the two copies of the list disagree.
+Something does, and it is not in this tree: `tests/integration/exports/test_frozen_column_list.py`,
+written by `W10-FND`, pins seventeen literals and asserts
+`_web_columns() == FROZEN_COLUMNS == tuple(COLUMNS)`, reading
+`web/src/shared/api/csv-columns.ts` from the repository root. That gap is already closed.
+
+| # | Mutation | Result | What refused |
+|---|---|---|---|
+| CSV-01 | columns 1 and 2 swapped | KILLED | `contract/csv-columns` — *matches the frontend constant exactly, in order*, *starts with the identity columns…*, *detects a reordering* |
+| CSV-02 | columns 12 and 13 swapped | KILLED | `contract/csv-columns` — *matches the frontend constant exactly, in order* |
+| CSV-03 | `current_verdict` renamed to `verdict` | KILLED | `contract/csv-columns` ×2 |
+| CSV-04 | `run_state` dropped | KILLED | `contract/csv-columns` ×4 |
+| CSV-05 | an eighteenth column added | KILLED | `contract/csv-columns` — *matches the frontend constant exactly, in order* |
+| CSV-06 | `byteOrderMark` false | KILLED | `contract/csv-columns` — *records the bytes the seam document fixes*; `export/export-panel` — *states the encoding facts the seam fixes* |
+| CSV-07 | delimiter `;` | KILLED | `contract/csv-columns` — *records the bytes the seam document fixes* |
+| CSV-08 | line ending `\n` | KILLED | same |
+| CSV-09 | null projection `NULL` | KILLED | same |
+| **CSV-10** | **`charset` becomes `windows-1251`** | **SURVIVED** | — |
+| CSV-11 | `quoting` becomes `none` | KILLED | `export/export-panel` — *states the encoding facts the seam fixes* |
+| CSV-12 | download name loses the run id | KILLED | `export/export-panel` — *names the file after the run id* |
+| UE-01 | `maxBytes` raised to 26 MiB | KILLED | `projects/upload-envelope` — *states 25 MiB in bytes, not megabytes* (pinned `26_214_400`) |
+| UE-02 | `maxBytes` becomes 25 MB | KILLED | same |
+| UE-03 | `maxPages` raised to 300 | KILLED | `projects/upload-envelope` ×2 |
+| UE-04 | `fileCount` raised to 2 | KILLED | *states 30 pages and one PDF* |
+| UE-05 | `mediaType` widened | KILLED | `projects/upload-envelope` ×5 |
+| UE-06 | size bound `>` becomes `>=` | KILLED | *accepts a file exactly at the bound and refuses one byte more* |
+| UE-07 | the `too_large` check deleted | KILLED | same |
+| UE-08 | the `empty_file` check deleted | KILLED | *refuses an empty file* |
+| UE-09 | the `not_pdf` check deleted | KILLED | ×2 |
+| UE-10 | extension fallback applies even with a declared type | KILLED | *refuses a declared non-PDF* |
+| **UE-11** | **`endsWith('.pdf')` becomes `includes('.pdf')`** | **SURVIVED** | — |
+| UE-12 | extension match becomes case-sensitive | KILLED | *falls back to the extension only when the browser declares nothing* |
+| **UE-13** | **the declared media type is no longer lower-cased** | **SURVIVED** | — |
+| UE-14 | the OCR sentence dropped from the stated rules | KILLED | *names every refusal reason before a file is chosen* |
+| UE-15 | the encryption rule dropped | KILLED | same |
+| UE-16 | the page-count rule dropped | KILLED | same |
+| **UE-17** | **the one-PDF / no-archive rule dropped** | **SURVIVED** | — |
+| UE-18 | the `too_large` message offers a retry | KILLED | *gives every problem a message that offers no retry* |
+| UE-19 | `formatBytes` uses decimal units | KILLED | *formats in binary units* |
+| UE-20 | `formatBytes` invents a size for a negative input | KILLED | *does not invent a size for a nonsense input* |
