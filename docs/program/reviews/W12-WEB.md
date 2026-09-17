@@ -738,3 +738,38 @@ Run from `web/`. At `3ebe34d` it prints `110 76 34`.
 | 183 mutations / 121 killed | `sweep.py b1..b6` | `3ebe34d` + harness |
 | 64 re-runs / 63 killed | `sweep.py b7` | this branch after the guards |
 | 10 unreached / 10 survived | `sweep.py b8` | this branch after the guards |
+
+## 12. The gate
+
+```
+make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12     -> bootstrap OK
+make gate                                                -> GATE OK, exit 0
+```
+
+Instance `gate-w12c`, `POSTGRES_PORT=55670`, `S3_API_PORT=59270`, `S3_CONSOLE_PORT=59271`,
+`POSTGRES_DB=audit_w12c`, bucket `auditmanager-gate-w12c`; `npm --prefix web ci` once, as
+the dispatch says a linked worktree needs.
+
+| component | expected by the dispatch | measured |
+|---|---|---|
+| foundation | — | 35 passed in 34.53 s |
+| battery | 1492 passed / 5 skipped / 163 subtests | **1492 passed, 5 skipped, 163 subtests passed** in 219.60 s |
+| frontend | 289 passed | **440 passed / 35 files** in 2.93 s |
+| whitespace | — | clean |
+
+The battery figure is unchanged, as it must be: nothing outside `web/tests` and this file
+was touched. The frontend figure is 289 + 151.
+
+Full log: `/root/w12web-logs/gate.log`.
+
+## 13. Elapsed
+
+Start `2026-09-17T11:29:45+05:00` (worktree created), end `2026-09-17T12:19:02+05:00`
+(`GATE OK`). **49 minutes** wall-clock, on a machine also running two other wave-12 lanes
+and an unrelated project's suite; `RS-01`'s first run was measured at 45 s per mutation
+under that load and at 6 s per mutation when it eased, which is why §2's four `TIMEOUT`
+rows were re-checked rather than taken at face value — and why one of them, `RP-12`, was an
+artefact of load on its first run and reddened normally on its second.
+
+Branch `agent/w12-web`, 19 commits, changing only `web/tests/**` and this file. Not pushed,
+not tagged, not merged.
