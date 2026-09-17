@@ -271,6 +271,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     `RunStatus.stages` was permanently empty and nothing said so - a `getattr` default is a
     silent answer to a question the object cannot answer.
     """
+    from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
 
     repository = RunRepository()
@@ -288,6 +289,14 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         degradation_set=tuple(run.degradation_set or ()),
         terminal_reason=run.terminal_reason,
         interrupted_reason=run.interrupted_reason,
+        # W17VIEW-1: both counts are declared by the frozen `RunStatus`, carried by
+        # `RunStatusView` and emitted by `run_status_body` whenever they are not None -
+        # and nothing ever set them, so a user read "Published findings: not reported"
+        # about a run that had published three. The two reads are deliberately separate
+        # functions with separate names (`findings/queries.py` says why): a diagnostic is
+        # not a finding and the two counts must not be obtainable from one call.
+        published_finding_count=published_finding_count(session, run_id),
+        diagnostic_observation_count=len(diagnostics(session, run_id)),
         terminal_at=run.terminal_at,
         stages=tuple(
             StageStateView(
@@ -306,6 +315,10 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
                 # which is the same gap that hid the four defects this method was written
                 # to close. `test_a_failed_stage_reports_its_code` is that test.
                 error_code=(stage.error or {}).get("code"),
+                # W17VIEW-1: the stage rows have carried these since the first migration
+                # and the reader did not select them. `_SELECT_STAGE_RESULTS` does now.
+                started_at=stage.started_at,
+                finished_at=stage.finished_at,
             )
             for stage in stages
         ),
