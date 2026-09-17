@@ -430,3 +430,75 @@ class TestAStaleCommandRecordIsRefused:
                 idempotency_key=key,
             )
         assert caught.value.code is ErrorCode.IDEMPOTENCY_KEY_STALE
+
+
+class TestTheVerdictMapAgreesWithTheSchema:
+    """``VERDICT_FOR_EVENT`` declares the verdict each event type carries, and the
+    database declares the same thing in ``ck_expert_decision_event_type_verdict_agree``.
+    Two declarations that must agree, with nothing making them.
+
+    The ``revoke`` entry is the one nothing reads: ``record_decision`` refuses ``revoke``
+    before it ever indexes the map, so measured, changing that entry from ``pending`` to
+    ``rejected`` leaves all 32 tests of the original suite green — and it is exactly the
+    entry a future PD-01 producer would rely on.
+
+    The inputs here are taken from the map on purpose: the claim *is* that what the map
+    says is what the table accepts. The expectation comes from PostgreSQL, not from the
+    map, so the two cannot move together. The map itself is pinned as a literal below.
+    """
+
+    #: Written out, not imported into its own expectation.
+    EXPECTED_MAP = {
+        "accept": "accepted",
+        "reject": "rejected",
+        "comment": None,
+        "revoke": "pending",
+    }
+
+    def test_the_map_is_exactly_this(self) -> None:
+        from auditmanager.decisions import VERDICT_FOR_EVENT
+
+        assert dict(VERDICT_FOR_EVENT) == self.EXPECTED_MAP
+
+    def test_every_declared_event_type_is_storable_with_the_verdict_the_map_gives_it(
+        self, session: Session, published, subtests
+    ) -> None:
+        from auditmanager.decisions import VERDICT_FOR_EVENT
+        from auditmanager.shared.db import nested_transaction
+
+        assert set(VERDICT_FOR_EVENT) == set(DECLARED_EVENT_TYPES), (
+            "the map and the declared vocabulary have drifted apart"
+        )
+
+        for event_type in sorted(DECLARED_EVENT_TYPES):
+            with subtests.test(event_type=event_type):
+                verdict = VERDICT_FOR_EVENT[event_type]
+                decision_id = DecisionId.new().value
+                # A comment column is required for `comment` and harmless elsewhere;
+                # the constraint under test is the type/verdict agreement.
+                with nested_transaction(session):
+                    session.execute(
+                        text(
+                            "INSERT INTO expert_decision_event (decision_id, finding_uid, "
+                            "finding_observation_id, event_type, verdict, comment, "
+                            "author_label) VALUES (:d, :f, :o, :t, :v, :c, 'local-reviewer')"
+                        ),
+                        {
+                            "d": decision_id,
+                            "f": published.finding_uid,
+                            "o": published.finding_observation_id,
+                            "t": event_type,
+                            "v": verdict,
+                            "c": "Замечание." if event_type == "comment" else None,
+                        },
+                    )
+                stored = session.execute(
+                    text(
+                        "SELECT verdict FROM expert_decision_event WHERE decision_id = :d"
+                    ),
+                    {"d": decision_id},
+                ).scalar_one()
+                assert stored == verdict, (
+                    f"the table stored a different verdict for {event_type!r} than the "
+                    f"map declares"
+                )
