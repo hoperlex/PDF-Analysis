@@ -201,9 +201,12 @@ def on_request_validation_error(
     is told about the second on the next attempt.
     """
     errors = exc.errors()
-    operation = _operation_id(request)
+    if not errors:  # pragma: no cover - FastAPI does not raise an empty report
+        return envelope_response(
+            DomainError(ErrorCode.VALIDATION_FAILED), current_correlation_id()
+        )
     return envelope_response(
-        _refusal(errors[0], operation) if errors else DomainError(ErrorCode.VALIDATION_FAILED),
+        _refusal(errors[0], _operation_id(request), _is_multipart(request)),
         current_correlation_id(),
     )
 
@@ -247,7 +250,21 @@ def _operation_id(request: Request) -> str | None:
     return getattr(route, "operation_id", None)
 
 
-def _refusal(error: Mapping[str, Any], operation: str | None) -> DomainError:
+def _is_multipart(request: Request) -> bool:
+    """Whether the refused body was the multipart upload.
+
+    FastAPI reports a form field's location as ``("body", <part>)``, exactly as it reports a
+    JSON property -- the two are indistinguishable from the error alone, and the contract
+    calls one a *part* and the other a *property*. ``records/26`` pins *"The upload carries a
+    part the schema does not declare."* and ``records/23-25`` pin the property sentence, so
+    the two have to be told apart, and the request's own media type is what tells them.
+    """
+    return "multipart/form-data" in (request.headers.get("content-type") or "").lower()
+
+
+def _refusal(
+    error: Mapping[str, Any], operation: str | None, is_multipart: bool = False
+) -> DomainError:
     """One pydantic error, as this contract's refusal."""
     location: Sequence[Any] = tuple(error.get("loc", ()))
     kind = str(error.get("type", ""))
@@ -281,6 +298,9 @@ def _refusal(error: Mapping[str, Any], operation: str | None) -> DomainError:
 
     if where == "query":
         return _query_refusal(name, kind, constraint)
+
+    if where == "body" and is_multipart:
+        where = "form"
 
     if kind == "extra_forbidden":
         # A closed schema. The offending property name is **not** echoed -- it is

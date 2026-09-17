@@ -133,6 +133,13 @@ EXCEPTION_D7 = {
 
 MULTIPART_BOUNDARY = "w13baselineboundary"
 
+#: `T-6`. The credential every request in this journey presents, and the environment
+#: variable the application reads it from -- both written out here rather than imported,
+#: like every other literal in this file.
+AUTHORIZATION_HEADER = "Authorization"
+STATIC_TOKEN = "w13-baseline-static-token"
+API_TOKEN_VARIABLE = "AUDITMANAGER_API_TOKEN"
+
 
 # --- O1: the one ordering this baseline does not pin -------------------------------
 # `listRunFindings` and `exportRunCsv` return published findings ordered by
@@ -385,12 +392,37 @@ def _walk_named(node: Any, names: Sequence[str]) -> Iterator[tuple[str, Any]]:
 
 
 class Caller:
-    """``Request.build`` plus ``dispatch``, the way ``tests/e2e/pc01/driver.py`` does it."""
+    """An ASGI test client over the FastAPI application, the way the PC-01 driver drives it.
 
-    __slots__ = ("_app",)
+    **Rewritten by `W13-API`, and only here.** `W13-BASE` drove ``Request.build`` plus
+    ``dispatch`` because that was the transport; `T-1` retired both, and this class is the
+    one seam in this module that knew about them. Everything else in this file -- the
+    journey, the token rules, the comparison -- is untouched, which is the whole reason the
+    capture was written with a single caller in the first place.
+
+    Three things it does that a plain ``TestClient`` call does not, each needed for the
+    comparison to stay a *byte* comparison:
+
+    * **``response.headers.raw``**, not ``response.headers.items()``. ``httpx`` lower-cases
+      header names when you iterate the mapping; ``raw`` is what the application actually
+      emitted, and the records pin ``Content-Type`` and ``X-Correlation-Id`` with their
+      case. :class:`auditmanager.api.routers.wire.WireResponse` is the other half of that;
+    * **it sends exactly the headers it is given, and adds none.** The `T-6` credential is
+      added by ``record()``, not here, so that what the record says was sent **is** what was
+      sent. A caller that quietly added a header would make every record's ``request``
+      section a little bit false, and this corpus's whole value is that it is not;
+    * **``raise_server_exceptions=False``**, so that a fault which reached the client as an
+      envelope is recorded as the envelope the client got. With the default, ``TestClient``
+      re-raises inside the test and the recorded answer is never seen -- which would hide
+      exactly the case `D-5` is about.
+    """
+
+    __slots__ = ("_client",)
 
     def __init__(self, app: Any) -> None:
-        self._app = app
+        from starlette.testclient import TestClient
+
+        self._client = TestClient(app, raise_server_exceptions=False)
 
     def send(
         self,
@@ -400,11 +432,14 @@ class Caller:
         headers: Mapping[str, str] = {},
         body: bytes = b"",
     ) -> tuple[int, tuple[tuple[str, str], ...], bytes]:
-        from auditmanager.api.routers import Request, dispatch
-
-        request = Request.build(method, target, headers=headers, body=body)
-        response = dispatch(self._app.router, request)
-        return response.status, tuple(response.headers), response.body
+        response = self._client.request(
+            method, target, headers=dict(headers), content=body
+        )
+        emitted = tuple(
+            (name.decode("latin-1"), value.decode("latin-1"))
+            for name, value in response.headers.raw
+        )
+        return response.status_code, emitted, response.content
 
 
 def load_env_file() -> None:
@@ -438,11 +473,17 @@ def build_apps() -> tuple[Any, Any]:
         assert leaked not in os.environ, (
             f"{leaked} reached the baseline; a recorded capture must not be able to spend"
         )
-    from auditmanager.api.app import create_app
+    from auditmanager.api.app import create_asgi_app
 
-    environ = dict(os.environ) | {"AUDITMANAGER_PROVIDER_MODE": "recorded"}
-    good = create_app(environ=environ)
-    refused = create_app(
+    environ = dict(os.environ) | {
+        "AUDITMANAGER_PROVIDER_MODE": "recorded",
+        # `T-6`: the seam is fail-closed, so a journey that configured no token would
+        # record 33 copies of `authentication_required`. The token is supplied here rather
+        # than read from `.env`, so this capture does not depend on a lane's configuration.
+        API_TOKEN_VARIABLE: STATIC_TOKEN,
+    }
+    good = create_asgi_app(environ=environ)
+    refused = create_asgi_app(
         environ=environ | {"S3_SECRET_ACCESS_KEY": "not-the-configured-secret"}
     )
     return good, refused
@@ -530,6 +571,10 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         exception: Mapping[str, str] | None = None,
         unordered: Mapping[str, str] | None = None,
     ) -> Exchange:
+        # `T-6`: every operation is behind the authorization dependency, so every request
+        # in this journey presents the credential -- and every record says so. The header
+        # goes first, before the case's own, so the recorded order is stable.
+        headers = {AUTHORIZATION_HEADER: f"Bearer {STATIC_TOKEN}", **dict(headers)}
         status, response_headers, payload = (caller or api).send(
             method, target, headers=headers, body=body
         )
@@ -1409,12 +1454,12 @@ def to_record(exchange: Exchange) -> dict[str, Any]:
         "operation": exchange.operation,
         "purpose": exchange.purpose,
         "captured_through": (
-            "auditmanager.api.routers.Request.build + dispatch, over "
-            "auditmanager.api.app.create_app()"
+            "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()"
         ),
         "pre_authorization": (
-            "Captured before the T-6 reseal. Every request here is unauthenticated and "
-            "is answered. This is not a post-auth expectation."
+            "Captured after the T-6 seam landed. Every request here presents the "
+            "configured bearer credential and is answered. No record here exercises a "
+            "caller's rights, so none pins 401 or 403."
         ),
         "exception": exchange.exception,
         "unordered": exchange.unordered,

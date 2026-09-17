@@ -2,14 +2,19 @@
   "case": "14-streamDocumentVersionContent.success",
   "operation": "streamDocumentVersionContent",
   "purpose": "the server streams the bytes itself: 200, application/pdf, Accept-Ranges",
-  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
-  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
+  "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
   "exception": null,
   "unordered": null,
   "request": {
     "method": "GET",
     "target": "/versions/{{version_uid}}/content",
-    "headers": [],
+    "headers": [
+      [
+        "Authorization",
+        "Bearer w13-baseline-static-token"
+      ]
+    ],
     "body_length": 0,
     "body_note": ""
   },

@@ -2,14 +2,19 @@
   "case": "29-dispatch.method_not_allowed",
   "operation": null,
   "purpose": "a declared path under an undeclared method. **404, not 405** -- the surface declares twelve operations and no other method on any of their paths, so this is simply not a resource here. A framework's default 405 would be a difference",
-  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
-  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
+  "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
   "exception": null,
   "unordered": null,
   "request": {
     "method": "DELETE",
     "target": "/projects",
-    "headers": [],
+    "headers": [
+      [
+        "Authorization",
+        "Bearer w13-baseline-static-token"
+      ]
+    ],
     "body_length": 0,
     "body_note": ""
   },
