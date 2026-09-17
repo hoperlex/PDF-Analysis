@@ -9,6 +9,8 @@
  *   generated/**   produced from contracts/api/v1/openapi.json; never hand-edited
  *   transport.ts   the only `fetch` in `web/`
  *   errors.ts      the closed failure surface
+ *   authorization.ts  the two refusals of `T-6`'s seam, worded once
+ *   credentialed-forward.ts  server-only; the `/bff/v1` route handler's rules
  *   idempotency.ts one key per intent, reused on every retry
  *   run-state.ts   terminal / non-terminal / exportable, and the `succeeded` split
  *   polling.ts     the one run-progress loop
@@ -29,6 +31,16 @@ export type {
 export { request } from './transport';
 
 // Failure surface.
+export type { AuthorizationErrorCode } from './authorization';
+export {
+  AUTHENTICATION_REQUIRED_DETAIL,
+  AUTHORIZATION_ERROR_CODES,
+  PERMISSION_DENIED_DETAIL,
+  authorizationDetail,
+  isAuthorizationErrorCode,
+  isAuthorizationFailure,
+} from './authorization';
+
 export type { Pc01ErrorCode } from './errors';
 export {
   ApiError,

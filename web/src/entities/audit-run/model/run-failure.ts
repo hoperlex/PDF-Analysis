@@ -14,13 +14,22 @@
  */
 
 import type { ErrorCode } from '@/shared/api';
-import { ApiError, ApiFailure, TransportError, UnrecognizedApiError } from '@/shared/api';
+import {
+  AUTHENTICATION_REQUIRED_DETAIL,
+  ApiError,
+  ApiFailure,
+  PERMISSION_DENIED_DETAIL,
+  TransportError,
+  UnrecognizedApiError,
+} from '@/shared/api';
 
 export type RunFailureKind =
   | 'request_invalid'
   | 'analysis_input_invalid'
   | 'provider_unavailable'
   | 'not_found'
+  | 'not_authenticated'
+  | 'not_permitted'
   | 'duplicate_intent'
   | 'in_progress'
   | 'stale_intent'
@@ -92,6 +101,24 @@ function fromApiError(error: ApiError): RunFailure {
         title: 'This run request is not valid.',
         detail:
           error.envelope.message + classifiers(error.details, ['constraint', 'field', 'aggregate_type']),
+      };
+    case 'authentication_required':
+      return {
+        ...base,
+        kind: 'not_authenticated',
+        presentation: 'error',
+        title: 'This run is not authorized.',
+        detail: AUTHENTICATION_REQUIRED_DETAIL,
+      };
+    case 'permission_denied':
+      return {
+        ...base,
+        kind: 'not_permitted',
+        presentation: 'error',
+        title: 'You are not permitted to act on this run.',
+        detail:
+          PERMISSION_DENIED_DETAIL +
+          classifiers(error.details, ['aggregate_type', 'required_capability']),
       };
     case 'not_found':
       return {

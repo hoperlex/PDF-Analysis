@@ -22,12 +22,19 @@ import { ERROR_CODE_VALUES } from './generated/types.gen';
 /**
  * The subset of the catalog the PC-01 surface can actually return, per `P3-API-01`.
  *
- * The generated `ErrorCode` union is the full twenty-code catalog, because that is what
- * the contract declares. These ten are the ones a PC-01 screen has to be able to render;
- * `P02_SEAMS.md` section 9.4 records why each of the other ten has no PC-01 producer.
- * The union carries no partial-specific refusal: under `OD-11` a `partial` run **is**
- * exported, and a run whose terminal does not publish a result is refused with
+ * The generated `ErrorCode` union is the full twenty-one-code catalog, because that is
+ * what the contract declares. These twelve are the ones a PC-01 screen has to be able to
+ * render; `P02_SEAMS.md` section 9.4 records why each of the others has no PC-01
+ * producer. The union carries no partial-specific refusal: under `OD-11` a `partial` run
+ * **is** exported, and a run whose terminal does not publish a result is refused with
  * `state_transition_not_allowed`, which is already in the list.
+ *
+ * `authentication_required` and `permission_denied` were added by `W15-AUTH` and are not
+ * a widening of taste. Owner ruling `R-3` put a bearer credential in front of all twelve
+ * operations, and `contracts/api/v1/openapi.json` now declares `401` and `403` on every
+ * one of them: both codes are reachable from every PC-01 screen, so both are codes a
+ * PC-01 screen has to be able to render. The list was ten while nothing could produce
+ * them.
  *
  * This is a narrowing of the contract, never a replacement for it. A code outside the
  * list but inside the catalog is still an `ApiError`; only a code outside the catalog is
@@ -36,6 +43,8 @@ import { ERROR_CODE_VALUES } from './generated/types.gen';
 export const PC01_ERROR_CODES = [
   'validation_failed',
   'not_found',
+  'authentication_required',
+  'permission_denied',
   'conflict',
   'state_transition_not_allowed',
   'idempotency_key_reuse',

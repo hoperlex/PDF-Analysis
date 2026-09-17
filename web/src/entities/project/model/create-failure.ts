@@ -10,11 +10,20 @@
  */
 
 import type { ErrorCode } from '@/shared/api';
-import { ApiError, ApiFailure, TransportError, UnrecognizedApiError } from '@/shared/api';
+import {
+  AUTHENTICATION_REQUIRED_DETAIL,
+  ApiError,
+  ApiFailure,
+  PERMISSION_DENIED_DETAIL,
+  TransportError,
+  UnrecognizedApiError,
+} from '@/shared/api';
 
 export type CreateProjectFailureKind =
   | 'invalid_name'
   | 'dependency_unavailable'
+  | 'not_authenticated'
+  | 'not_permitted'
   | 'duplicate_intent'
   | 'in_progress'
   | 'stale_intent'
@@ -75,6 +84,24 @@ function fromApiError(error: ApiError): CreateProjectFailure {
           error.envelope.message +
           classifiers(error.details, ['dependency']) +
           ' Nothing was partially applied. Retrying reuses the same idempotency key.',
+      };
+    case 'authentication_required':
+      return {
+        ...base,
+        kind: 'not_authenticated',
+        presentation: 'error',
+        title: 'Creating a project is not authorized.',
+        detail: AUTHENTICATION_REQUIRED_DETAIL,
+      };
+    case 'permission_denied':
+      return {
+        ...base,
+        kind: 'not_permitted',
+        presentation: 'error',
+        title: 'You are not permitted to create a project.',
+        detail:
+          PERMISSION_DENIED_DETAIL +
+          classifiers(error.details, ['aggregate_type', 'required_capability']),
       };
     case 'idempotency_key_reuse':
       return {
