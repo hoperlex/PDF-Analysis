@@ -1,0 +1,193 @@
+{
+  "checkpoint_id": "PC-01",
+  "record_type": "re-certification",
+  "supersedes_nothing": "This record sits beside report.json, recertification-beaa7f7.json and recertification-c0d7daf.json. None is edited: each records a certification that really happened at its own commit. Whether main advances to carry this one is the owner's decision, and DEBT_REGISTER.md section 3 records that it was waiting on exactly this certification.",
+  "status": "holds with one named exception",
+  "certified_on": "2026-09-17",
+  "certified_commit": "e6eae1e1a8a5a7c7bca8075ab9511e9c75a2d6f2",
+  "worktree_head_on_arrival": "e6eae1e1a8a5a7c7bca8075ab9511e9c75a2d6f2",
+  "worktree_head_note": "The tip of origin/dev. The dispatch names base 2be71b9 'or later'; e6eae1e is two commits later on the same line and both are docs-only (3f49385 and the merge e6eae1e). git diff 2be71b9..e6eae1e touches only docs/program/dispatch/W12-CERT.md.",
+  "previous_recertified_commit": "c0d7dafab33a47e62050ba7c1c6916fae96ff98a",
+  "previous_accepted_commit": "6d3c0f3d9b633e2dcd894c28e53bc16a00189544",
+  "why_re_certification": "DEBT_REGISTER.md D-1. Since W6-CERT certified c0d7daf, src/ and db/ moved by 232 insertions and 33 deletions across 9 files, four of which carry behaviour: CsvExport.filename removed (a public attribute on an exported class, the one source-compatible break), read_source_bytes now hashes returned bytes against the manifest digest, s3.read(verify=True) refuses an object with no recorded digest, cost_basis added to the text_analysis success path's metrics, and ingest/reconciliation.py's verify_version now hashes bytes rather than comparing two declarations. D-1's own figure of '126 lines across 8 files' was measured at 5c84f43, before wave 12 stage A moved reconciliation.py.",
+  "what_was_certified": {
+    "by": "session W12-CERT, which authored none of waves 11 or 12 and repaired nothing",
+    "method": "the ten criteria of PROTOTYPE_PROFILE.md section 8, driven through the composed application's router; every criterion additionally shown able to fail; both accepted limits re-established rather than inherited",
+    "independent_of_the_integrator": true,
+    "why_the_integrator_could_not_do_it": "The integrator led wave 11's governance stream, wrote every wave-11 and wave-12 brief and merged every branch in both waves.",
+    "instance": "gate-w12b, POSTGRES_PORT 55660, S3_API_PORT 59260, S3_CONSOLE_PORT 59261, POSTGRES_DB audit_w12b, bucket auditmanager-gate-w12b"
+  },
+  "gate": {
+    "make gate": "GATE OK, exit 0",
+    "battery": "1505 passed, 5 skipped, 167 subtests passed in 182.38s - exactly the figure the dispatch quotes",
+    "frontend": "440 passed across 35 files in 3.27s - 289 + the 151 W12-WEB added",
+    "foundation": "35 passed in 28.40s, three FOUNDATION-CHECK OK sentinels",
+    "whitespace": "clean",
+    "tests/e2e/pc01 on the recorded adapter": "49 passed, 5 skipped - exit 0",
+    "mutation_copy_baseline": "make mutation-copy MUT=/root/w12cert-mut, then the acceptance suite against the unmutated copy: 49 passed, 5 skipped, with auditmanager.__file__ printed and resolving into the copy",
+    "liveness_control": "raise RuntimeError('MUT-LIVE-CONTROL') at the top of build_application in the copy: 2 failed, 47 errors. A green below is a green against mutated code.",
+    "gate_run_hygiene": "No file was created or edited in the worktree while a gate ran. Commit, then gate."
+  },
+  "criteria": {
+    "1_services_and_start": "proved; wired/provider_mode=proxy/operations=12, no provider call, plus make foundation's three sentinels. Red four ways: DATABASE_URL unset -> exit 2 naming it, S3_BUCKET likewise, mutation on settings._require (if not value -> if False) -> the construction-time test alone FAILED, and commenting out the listProjects route -> 4 FAILED including the twelve-operations contract test",
+    "2_migration_from_empty": "proved on a scratch database verified empty first (Did not find any relations); alembic upgrade head ran 0001->0005, head 0005_truncated_call_status, 16 BASE TABLEs (15 domain plus alembic_version) and 1 VIEW (finding_current_verdict). Red by alembic downgrade -1 -> make check-db exit 2, 'the database is at 0004_cost_basis, expected head 0005_truncated_call_status'. NOTE W12CERT-DEF-1: the acceptance test named for this criterion passes against a database one migration behind, measured; the whole weight sits on check-db",
+    "3_upload_immutable_version_private_object": "proved; version_ordinal 1, sha256 6d53674f, 58978 bytes streamed back identical, one manifest entry under role source.document. Red by a mutation making the version view report the digest with its last nibble flipped -> 4 FAILED",
+    "4_deterministic_path_and_text_analysis": "proved LIVE through the proxy; run published, provider_mode live, terminal_reason null, degradation_set empty, four stages succeeded - all read from audit_run and stage_result rather than from a print. The success path's stage metrics carry cost_basis='measured' beside cost_usd, which is the wave-11 change certified against a real success rather than read off the diff. Red by removing the adapter-level mode refusal -> the caller-cannot-ask-for-live test alone FAILED. EXCEPTION: the UI clause - see named_exception",
+    "5_seeded_issues_and_quotation_grounding": "proved LIVE - 3 of 3 seeded issues located, 0 of 6 near-miss controls flagged against 5 published quotations, every published quotation verified present on its declared page. Red two ways: with nothing resolving, findings collapse 3 -> 0 rather than publishing misattributed evidence; with the API reporting evidence one page later, test_c5_every_published_quotation_exists_on_its_declared_page alone FAILED",
+    "6_evidence_decisions_and_history": "proved; accept 201, reject 201, a later comment 201 appending without altering the verdict. The append-only guarantee established directly against the live database: UPDATE and DELETE on expert_decision_event both refused with SQLSTATE AM002, ledger intact at 41 rows before and after. Red by truncating decision_history to its last row -> the later-comment test alone FAILED",
+    "7_csv_resolving_to_exact_aggregates": "proved on the live run's export, measured independently of the suite - 17 columns in the frozen order, 5 rows one per evidence item, 3 distinct finding_uid, single run_id, provider_mode live on every row, UTF-8 BOM, 6 CRLF and 0 bare LF, two exports byte-identical. The one source-compatible break (CsvExport.filename) has no surviving reference in src/, tests/, tools/ or web/src, and the frozen contract pins no value for Content-Disposition. Red by dropping latest_comment from the frozen column set",
+    "8_restart_preserves_canonical_state": "proved across a real make down / make up: a census of all 15 domain tables plus the live-call figures is byte-identical before and after (diff exit 0), including 1 live model_call and 38700 cost_micros; a fresh composition root then reports the live run published/live, lists its 3 findings, streams the object back at 58978 bytes hashing to the declared digest, and exports byte-identically twice. Red by check-services exit 2 while down, and by the criterion-3 mutation",
+    "9_idempotency_creates_no_duplicates": "proved; replaying createProject, uploadDocument, startRun and appendDecision under identical keys created nothing new, and a write with no Idempotency-Key is refused 422 validation_failed. Red by making CommandRepository.find always answer None -> all four replay tests FAILED",
+    "10_explicit_failures": "proved; the five negative fixtures measured directly rather than trusted, because the acceptance test pins only the error-code class: five DISTINCT details.constraint values out of five, every one HTTP 422 validation_failed, none a 500, none leaving a version. The unavailable provider fails the run at terminal_reason dependency_unavailable with the failed stage naming its own cause and the three deterministic stages still succeeded. Red by widening MAX_PAGES 30 -> 300, which admits the 31-page fixture"
+  },
+  "explicit_failures": {
+    "five_input_refusals": "not_a_pdf.txt -> field=content constraint=pdf_magic_bytes; encrypted.pdf -> field=content constraint=not_encrypted; image_only.pdf -> field=page_text constraint=every_page_has_extractable_text; too_many_pages.pdf -> field=page_count constraint='1 <= page_count <= 30'; oversize.pdf -> field=file constraint=max_bytes. All HTTP 422 validation_failed, five distinct constraints.",
+    "provider_unavailable_retry_exhausted": "state failed, terminal_reason dependency_unavailable, degradation_set ['text_analysis'], the failed stage carrying error_code dependency_unavailable, source_preparation/page_geometry_extraction/document_context_build still succeeded, 0 findings published.",
+    "w6cert_def_1_closed": "The docstring that RECORDED error_code: null and terminal_reason: analysis_failed - and went on describing a defect wave 3 had fixed, for three waves - now ASSERTS both values. It cannot go stale again without failing."
+  },
+  "limits_re_examined": {
+    "checksum_mismatch": {
+      "verdict": "STILL NOT INDUCIBLE through the twelve operations - re-established four ways, not inherited",
+      "on_the_name": "There is no checksum_mismatch code in the catalog: contracts/domain/v1/error-codes.json declares 20 codes and it is not among them. The internal ChecksumMismatchError carries code = storage_integrity_error. The limit is about criterion 10's checksum FAILURE, not an error code.",
+      "evidence_surface": "All twelve operations expanded from the frozen openapi.json, following every $ref through components, into the complete set of input names each accepts: 13 distinct names across the whole surface, none digest-shaped (no sha, digest, checksum, hash, md5, etag, crc). The only digest in the system is computed by the server from the bytes it received.",
+      "evidence_routers": "Measured independently of the document: an extra multipart part named sha256 -> 422 validation_failed field=body constraint=additionalProperties; a part named content-sha256 -> the same; startRun with an extra 'sha256' JSON property -> 422 validation_failed.",
+      "evidence_guard": "Against live MinIO, green half first, every object purged by exact identity and every byte built in-process. Green: publish then read(verify=True) returns identical bytes. R1 a false declared digest at verify_temporary -> ChecksumMismatchError and the temporary object is gone. R2 a false declared size -> SizeMismatchError. R3 bytes replaced out of band at the SAME LENGTH under verbatim metadata -> inspect() still reports it sound, read(verify=True) raises ChecksumMismatchError with both digests. R4 the content-sha256 metadata stripped -> BlobMetadataInvalidError, validation_failed, NOT the integrity code.",
+      "evidence_through_the_front_door": "A document uploaded through uploadDocument had its canonical object replaced out of band with a same-length body under verbatim metadata. streamDocumentVersionContent then answered 422 storage_integrity_error; getDocumentVersion still answered 200 with the declared digest, which is a declaration and not the bytes. The bytes were restored and the same call returned 200 with the original 58978.",
+      "what_changed_since_c0d7daf": "The limit is narrower than it was. At c0d7daf the checksum failure was proved only at the storage layer; waves 11 and 12 make the same failure, arriving from outside the twelve, detected and refused by the read path an operator actually calls. Inducibility is unchanged: still none."
+    },
+    "d2_and_d4_checked_behaviourally": {
+      "method": "Reconciler.verify_version run against one real published version whose object was manipulated three ways in turn, proved sound before the probe and restored sound after.",
+      "healthy": "SOUND (returns)",
+      "d2_replaced_same_length_metadata_verbatim": "storage_integrity_error with expected_sha256 = the manifest digest and actual_sha256 = the BODY's digest, not the record's",
+      "d4_object_records_no_digest": "validation_failed, aggregate_type=Blob, field=sha256, constraint='recorded on every published object' - no actual_sha256 key and no empty string in the envelope",
+      "restored": "SOUND",
+      "verify_version_callers": "grep -rn verify_version src/ finds one def and four docstring mentions, and no Reconciler(...) outside the module. The dispatch's claim that nothing in src/ calls it is true."
+    },
+    "ungrounded_model_item": {
+      "verdict": "STILL UNREACHABLE BY DESIGN - proved by mutation, not inherited",
+      "baseline": "finding_observation holds 110 rows with grounded = true and 0 with grounded = false; the live run added 3 grounded and 0 ungrounded.",
+      "mutation_A_nothing_resolves": "resolve_anchor's candidate loop emptied: the journey publishes 0 findings, finding_observation is 110 before and 110 after so NO ROW WAS WRITTEN AT ALL, and grounded = false rows remain 0.",
+      "mutation_B_drop_also_removed": "_ground's 'if not anchors: dropped += 1; continue' becomes 'if False:', so evidence-free observations reach the gate: the run FAILED with terminal_reason analysis_input_invalid, finding_observation still 110, grounded = false still 0. The gate refuses the run rather than recording a diagnostic."
+    },
+    "one_version_per_document": "unchanged from the accepted report",
+    "intermediate_run_states": "unchanged from the accepted report",
+    "professional_usefulness": "not established and not claimable here"
+  },
+  "named_exception": {
+    "id": "W12CERT-DEF-3",
+    "criterion": "4, and criterion 10's UI half",
+    "clause": "PROTOTYPE_PROFILE.md section 8 criterion 4 requires that the UI distinguishes the contract run states and the live or recorded provider mode.",
+    "finding": "34 of 110 modules under web/src - 1352 of 7604 lines - are imported by no test. Re-measured in this session by running the import closure independently; identical to W12-WEB's figure. terminal_reason reaches a user in exactly one line, widgets/run-progress/ui/run-progress.tsx:112, and no test imports that file. Six more delivered PC-01 screens are in the same unreached set.",
+    "what_IS_established": "The presentation mapping - run-presentation.ts and run-state.ts - is well guarded: W12-WEB's sweep killed 121 of 183 mutations and its eleven new suites killed 63 of the 64 survivors. The run-state vocabulary, the provider-mode narrowing and the terminal/interrupted rules all redden under mutation.",
+    "what_is_NOT_established": "That the component rendering them renders them correctly. W12-WEB made that line print a constant with all 440 tests green.",
+    "disposition": "Reported as an exception rather than certified around. Not repaired: web/ is not this session's tree, and W12-WEB was instructed not to repair it either. W12-WEB recommends sweeping those seven components as the next wave and this session agrees."
+  },
+  "live_run": {
+    "run_id": "run_01M2Q5C0WRKRBX5SK3S4RCHGB8",
+    "version_uid": "ver_01M2Q5C0VWZR6GTV4JFP3MYHES",
+    "provider": "operated LLM proxy, OD-02 revised 2026-09-14",
+    "provider_transport_mode": "proxy",
+    "model": "anthropic/claude-opus-5",
+    "state": "published",
+    "provider_mode": "live",
+    "terminal_reason": null,
+    "degradation_set": [],
+    "stages_succeeded": 4,
+    "seeded_issues_found": 3,
+    "seeded_issues_total": 3,
+    "seeded_issue_ids": ["SI-01", "SI-02", "SI-03"],
+    "controls_flagged": 0,
+    "controls_total": 6,
+    "published_observations": 3,
+    "published_evidence_items": 5,
+    "quotation_grounding": "every published quotation verified present on its declared page against the corpus's own extractor",
+    "measured_spend_usd": 0.0387,
+    "ceiling_usd": 1.0,
+    "spend_as_fraction_of_ceiling": "3.87%",
+    "cost_basis": "measured",
+    "cost_basis_on_the_success_path": "stage_result.metrics for text_analysis carries cost_basis='measured' beside cost_usd=0.0387 - the wave-11 change, certified on a run that SUCCEEDED rather than on the overrun branch that already carried it",
+    "input_tokens": 3895,
+    "output_tokens": 769,
+    "latency_ms": 11346,
+    "attempts": 1,
+    "attempt_budget_exhausted": false,
+    "spend_verified_not_assumed": "the database holds exactly one row with provider_mode = 'live' and cost_basis = 'measured', cost_micros = 38700, status succeeded, error_code null. A run that had silently fallen back to the recorded adapter would have left no such row.",
+    "controls_zero_verified_not_assumed": "the acceptance test now asserts the measurement's preconditions - that there were controls, that there were published quotations, that anything flagged is a real control - and reports the count rather than gating on it. The zero was read from the published evidence: 5 quotations compared against 6 controls, none matched.",
+    "comparison_to_previous": "identical on both product numbers - 3 of 3 seeded and 0 of 6 controls, as at beaa7f7 and c0d7daf. Cost 0.0387 against 0.038125 at c0d7daf, 0.038225 at beaa7f7 and 0.1147 in the accepted report."
+  },
+  "defects_found": {
+    "count": 4,
+    "observations": 2,
+    "all_left_unrepaired": true,
+    "none_in_src_or_db": true,
+    "items": [
+      {
+        "id": "W12CERT-DEF-1",
+        "owning_tree": "tests/",
+        "location": "tests/e2e/pc01/test_acceptance.py::test_c2_the_application_is_serving_against_the_migrated_head",
+        "summary": "The test named for criterion 2's migration head cannot fail on a wrong head. Measured: a scratch database downgraded to 0004_cost_basis answered listProjects 200 with a list, so every head from 0002 onwards passes. It DOES go red when listProjects is merely removed from the router, which is the shape of the problem.",
+        "impact": "none on the verdict - make check-db refuses a database off head with exit 2 and that was proved - but criterion 2's whole weight sits on the foundation check, not on the acceptance suite."
+      },
+      {
+        "id": "W12CERT-DEF-2",
+        "owning_tree": "tests/",
+        "location": "tests/e2e/pc01/test_acceptance.py::test_c5_the_findings_name_pages_the_corpus_seeds_issues_on",
+        "summary": "Survives a systematic one-page shift of every evidence item. It intersects the seeded issues' page sets with the published pages, and the manifest's seeded issues span page pairs (2 and 6, 3 and 7), so a uniform shift still intersects two of them. Its docstring says it matches on pages because 'a run that published three findings about the wrong pages would pass a bare count'.",
+        "impact": "low - the criterion is guarded by its stronger sibling, test_c5_every_published_quotation_exists_on_its_declared_page, which reddened under exactly that mutation."
+      },
+      {
+        "id": "W12CERT-DEF-3",
+        "owning_tree": "web/",
+        "location": "34 of 110 modules under web/src, led by widgets/run-progress/ui/run-progress.tsx",
+        "summary": "See named_exception. Reported by W12-WEB and re-measured independently here: 110 modules, 76 reachable, 34 unreached, 1352 lines.",
+        "impact": "criterion 4's UI clause and criterion 10's UI half are not established end to end. This is the named exception in the verdict."
+      },
+      {
+        "id": "W12CERT-DEF-4",
+        "owning_tree": "tests/",
+        "location": "tests/e2e/pc01/test_acceptance.py::test_c6_the_decision_ledger_admits_no_update_or_delete",
+        "summary": "Asserts that PUT, PATCH and DELETE are absent from the decisions route set. That is a real property and not the one the name claims: an append-only ledger is a database guarantee, and this test would pass unchanged against a table with no trigger.",
+        "impact": "none on the verdict. The guarantee is held by tests/integration/decisions/**, which the gate runs, and this session established it directly: SQLSTATE AM002 on both statements, ledger intact at 41 rows. Recorded because the manual runbook points a reviewer at the claim and the acceptance suite is where a reviewer would look."
+      },
+      {
+        "id": "W12CERT-OBS-1",
+        "owning_tree": "documentation",
+        "location": "artifacts/checkpoints/PC-01/recertification-c0d7daf.json and docs/manual-tests/PC-01_prototype.md",
+        "summary": "The c0d7daf record says '17 tables' and the runbook said 'sixteen tables'. Measured from information_schema: 16 BASE TABLEs (15 domain plus alembic_version) and 1 VIEW. Both figures are countable; neither said which things it counted.",
+        "impact": "documentation only. The runbook is corrected in this pass because it is an owned path. The c0d7daf record is NOT edited: it records a certification that really happened."
+      },
+      {
+        "id": "W12CERT-OBS-2",
+        "owning_tree": "test harness",
+        "location": "the lane's object store",
+        "summary": "This lane's bucket holds 561 canonical objects against 2 blob rows. The suites truncate the database between runs and do not purge the object store, so a lane bucket accumulates exactly what Reconciler.report() calls orphan_objects.",
+        "impact": "none - a disposable lane. Recorded because an object count is never evidence about a lane's canonical state, and a future session measuring storage should know."
+      }
+    ]
+  },
+  "previous_defects_checked_and_closed": {
+    "W6CERT-DEF-1": "REPAIRED - the criterion-10 docstring's two recorded observations are assertions now and say so.",
+    "W6CERT-DEF-2": "REPAIRED - the live export test parses the provider_mode column and asserts modes == {'live'} instead of hunting for the substring 'live'.",
+    "W6CERT_controls_assertion": "REPAIRED in shape - test_live_the_near_miss_controls_are_reported now asserts the measurement's preconditions and reports the count, instead of asserting isinstance(flagged, list).",
+    "D-2": "CLOSED, proved behaviourally - see limits_re_examined.d2_and_d4_checked_behaviourally.",
+    "D-4": "CLOSED, proved behaviourally - validation_failed with no empty digest in the envelope.",
+    "cost_basis_absent_from_the_success_path": "CLOSED, proved on a live published run rather than read off the diff."
+  },
+  "false_premises_in_the_dispatch_brief": [
+    "None load-bearing. Every claim in the brief's change table was checked as a diff and every one is true, including 'comments only, zero code lines' for multipart.py, projects.py and executor.py.",
+    "DEBT_REGISTER.md D-1's figure - '126 lines across 8 files' - is stale rather than false: it was measured at 5c84f43, before wave 12 stage A moved ingest/reconciliation.py. At e6eae1e it is 9 files, 232 insertions and 33 deletions.",
+    "The dispatch says 'Ten stale premises are on record in this programme'; the session's launch brief says twelve. The two disagree by two, no document enumerates them, and this session records the disagreement rather than a verdict.",
+    "Not in the brief and worth knowing: PROTOTYPE_PROFILE.md section 9 carries a duplicated and truncated bullet - 'agent navigation friction: the search and rework incidents tasks recorded, reported as' - immediately above the complete version of the same bullet. It is in the document that defines the checkpoint, it is not in section 8, it changes no criterion, and it is not a path this session owns. Reported, unrepaired."
+  ],
+  "evidence": {
+    "acceptance_suite": "tests/e2e/pc01/** - 49 passed, 5 skipped on the recorded adapter; the 5 live steps pass against the proxy from the dispatched worktree itself",
+    "runbook": "docs/manual-tests/PC-01_prototype.md",
+    "report": "docs/program/reviews/W12-CERT.md",
+    "logs": "/root/w12cert-logs/",
+    "criteria_shown_able_to_fail": 10,
+    "criteria_shown_able_to_fail_note": "Every one of the ten was demonstrated red as well as green - by a migration downgrade, by unset variables, by stopped containers, by a false digest, by out-of-band object replacement, by negative fixtures, and by twelve mutations applied to an isolated copy of src/ proved to be the imported one by a liveness control that reddened 47 of 49 tests. No tracked file was edited at any point outside the four owned paths. No criterion is counted on an environment assertion alone.",
+    "mutations_applied": 12,
+    "mutation_discipline": "Every mutation was applied by a driver that refuses a literal that is absent, ambiguous or a no-op, and printed the changed line back so it was read for MEANING rather than text. No expectation is imported from the module it tests; every digest, count and constraint is read from the live database, the live object store or the frozen contract."
+  },
+  "verdict": "PC-01 HOLDS at e6eae1e, with one named exception: criterion 4's UI clause and criterion 10's UI half are not established end to end, because 34 of 110 web/src modules - including the only place terminal_reason is rendered - are reached by no test (W12CERT-DEF-3). Every other criterion holds and every one was shown able to fail. No tag was created, nothing was pushed, and main was not touched."
+}
