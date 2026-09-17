@@ -549,7 +549,9 @@ all. No tag, no push, no merge to `main` or `dev`.
 ## 10. The gate
 
 `make gate` on `agent/w13-seal` at `/root/w13seal`, instance `gate-w13b`, on the committed tree
-at `4a83ac8`. Log: `/root/w13seal-logs/gate.log`.
+at `4ce87a0`. *(The first draft of this line carried a hash I had not looked up and which is
+not a commit in this repository. Caught by `grep -oE '\b[0-9a-f]{7}\b'` over this file piped
+through `git log -1` — a thirty-second check that every review here should end with.)* Log: `/root/w13seal-logs/gate.log`.
 
 ```
 1551 passed, 5 skipped, 168 subtests passed in 216.62s (0:03:36)
