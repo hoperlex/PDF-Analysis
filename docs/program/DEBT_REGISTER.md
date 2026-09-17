@@ -1,9 +1,9 @@
 # Debt register
 
 Written 2026-09-17 by the integrator. **Re-measured against the tree at `315de25` on
-2026-09-18**: D-2, D-3, D-4, D-6, D-7 and D-10 close, D-12, D-13 and D-15 open, D-14
-opens and closes in the same pass, and §3's own figure turned out to be three waves
-stale. **Two of those closes — D-2 and D-4 — had been true for a day**: they were fixed
+2026-09-18**: D-2, D-3, D-4, D-5, D-6, D-7 and D-10 close; D-12, D-13 and D-15 open from
+re-measurement and **D-16 through D-21 from the first live journey**; D-14 opens and closes
+in the same pass; and §3's own figure turned out to be three waves stale. **Two of those closes — D-2 and D-4 — had been true for a day**: they were fixed
 thirty-nine minutes after this file was created and nobody carried it back. A row is
 closed in the same commit as its fix, or this register lies.
 
@@ -156,29 +156,121 @@ the records as the only answer. Both change what a consumer reads.
 Check: `grep -n "spent_usd\|cost_basis" src/auditmanager/analysis/text/stage.py` against
 `grep -n "CostMeter(\|run_text_analysis(" src/auditmanager/runs/executor.py`.
 
-### D-5 — the first browser-driven run answered 500, twice
+### D-5 — the first browser-driven run answered 500, twice — **CLOSED, not reproducible**
 
-On 2026-09-16 a manual harness outside the repository put a stdlib server in front of
-`create_app()` and drove the UI against it. `GET /projects` 200, `POST /projects` 201,
-`POST /projects/{uid}/documents` **201**, then `POST /api/v1/runs` **500 — twice — and the
-session ends there.** Provider mode `proxy`, `operations=12`.
+**Closed 2026-09-18 by `W15-RUN`, with the envelope this time.** A real headless Chromium
+clicked *Start run* against the deployed origin:
 
-**`startRun` is green in every suite and in three certifications, all of which drive it in
-process.** The first time a browser asked, it answered 500.
+```
+POST /bff/v1/runs -> 202  {"run_id": "run_01M2RTFR8TNHN7A6QK0WXEJ2ZV",
+                           "state": "published", "provider_mode": "live"}
+four stages succeeded; +11 793 ms to a terminal screen
+```
 
-Two readings with different owners and **nothing in the evidence distinguishes them**: a real
-defect on the run path that only a socket exposes, or an artefact of how that harness hands a
-body to `Request.build`. The harness logged status lines only, so the envelope behind the 500
-was not kept.
+Independently, through the app's own generated client over the same origin: `202`,
+`published`, 10 475 ms. **The 500 does not reproduce**, in either client, on either stack.
 
-The part worth flagging hardest is not the 500. **The only live-transport evidence this
-programme has ever produced sits outside the tree**, at `/root/pdf-prototype/bridge.log`, and
-`grep -rln "pdf-prototype\|bridge.py" docs artifacts` returns nothing. Reported by
-`pdf-analysis-d9`; the harness is explicitly not a deliverable.
+**What that does not settle, and `W15-RUN` refused to gloss it.** The only recorded 500 with
+this signature is `47469a5` *fix(C1)* **D2** — *"start_run returned a two-field receipt… the
+run executed first, every row was written, and then it answered 500 with no run_id"*. It is
+dated 2026-09-14, **two days before** the browser session, and is an **ancestor of `241ae92`**,
+the commit that recorded D-5. So it explains the 500 only if that harness drove an older
+checkout — and the harness is gone.
 
-Check: the log named above, while it exists. **It is untracked and outside the repository, so
-this row may outlive its own evidence** — which is the argument for reproducing it under a
-real server rather than preserving a log.
+**The attribution is permanently unanswerable, and that is the row's whole lesson.** It closes
+as *not reproducible under a real server, superseded by this measurement*, not as *explained*.
+The reason is the one this row flagged hardest when it was written: the only live-transport
+evidence the programme had sat outside the tree and logged status lines only.
+
+Check: `docs/program/reviews/W15-RUN.md` §D-5, and the envelopes in `/root/w15run-logs/`
+while they exist.
+
+### D-16 — no screen can reach anything after a page reload
+
+**`W15RUN-3`, and it is the largest thing the first live journey found. It is not a bug in any
+code.** The twelve operations contain **no `listDocuments`, no `listVersions` and no
+`listRuns`**. Measured in the browser: a project page on a **fresh load** makes **zero API
+calls** and says *"No version published in this session"* — no Start-run control, no route
+back to work that exists.
+
+Every row, object, run, finding and decision survives. **No screen can reach them.** The app
+works only within the session that created the thing.
+
+`PA-01` criterion 8 is **unverifiable through the browser** as a result. Four certifications
+missed it because none of them ever reloaded a page — the same class as wave 13's three
+criterion-10 defects, which survived four certifications because none could construct a
+malformed multipart envelope in process.
+
+Closing it is a **contract change**: a reseal adding list operations, then the screens. It is
+the largest single item between here and a usable alpha, and it is owner-visible work rather
+than a repair.
+
+Tree: `contracts/api/v1/openapi.json` (frozen) and `web/src`.
+
+Check: load a project page in a new tab against a running stack and count the API calls.
+
+### D-17 — a restored instance is proved by reading and broken for writing
+
+**`W15RUN-1`.** `reset.sh --restore` and `object_attrs.py` reattach **two of the four**
+metadata keys the storage adapter writes; **`blob-role` is lost**. The restored object reads
+back byte-identical — which is what wave 14 checked — and **every later upload of those same
+bytes answers `409 conflict`** through `BlobAttributeConflictError`, while the identical bytes
+on a clean stack give `201`. Reproduced twice.
+
+This is `D-4`'s shape one level deeper, and by the same instrument. Wave 14 learned that
+`mc mirror` is not a backup of an object, fixed the digest, and then **verified the fix by
+reading**. A metadata key that only a write path consults survived the check. **A restore is
+proved by writing to the restored instance, not by reading from it.**
+
+`R-4` makes this load-bearing rather than tidy: the wipe and its restore are the commitment
+that real client documents leave the alpha host. `PA-01` criterion 10 is currently **false in
+the direction that looks true**, which is the worst direction.
+
+Tree: `infra/deploy/**`. `W14_CLOSURE.md` §2 carries the correction.
+
+### D-18 — that 409 cannot be diagnosed from the wire
+
+**`W15RUN-2`.** `conflict`'s `safe_detail_keys` drop `blob_id`, `role` and `media_type`, so
+D-17's 409 and an unrelated conflict produce a **byte-identical envelope**. An operator
+holding the response cannot tell which fault they have.
+
+Same family as `D-7` and `D-12` — a code carrying two situations with no discriminator — but
+unlike those two the answer is not a new code: it is which keys `conflict` may safely carry,
+which is a catalog question and therefore the owner's.
+
+### D-19 — a published run reports neither its timings nor its finding count
+
+**`W15RUN-4`.** The `stage_result` rows have them, the contract's `StageState` has them, and
+`api/schemas/runs.py` has them. `_run_status_view` in `bootstrap/adapters.py:266` omits them.
+A user sees *"Published findings: not reported"* and *"Started — Finished —"* on a run that
+published three findings in 11 seconds.
+
+**`W15RUN-5`** belongs beside it: `created_at == updated_at == terminal_at` **to the
+microsecond** on runs that took 9.9 s and 11.1 s.
+
+Tree: `src/auditmanager/bootstrap/adapters.py`. Small, and the most visible cheap win on this
+list.
+
+### D-20 — there is no observable `running` state, and criterion 4 needs one
+
+**`W15RUN-6`.** `execute_run` runs **inline**, so the 202 is already terminal: polling makes
+exactly one request and no client can ever observe `running`. `PA-01` criterion 4's UI clause
+is unreachable — not unimplemented, unreachable.
+
+nginx's 300-second proxy timeout is the entire margin. A 30-page document that takes longer
+than five minutes returns a gateway error to a browser with a run still executing behind it.
+
+This is an architecture item, not a bug: it is where a queue or a background worker goes, and
+`ADR` authority applies rather than the roadmap's.
+
+### D-21 — cost is recorded and exposed nowhere
+
+**`W15-RUN`, and it blocks a `PA-01` criterion outright.** `model_call.cost_micros` is
+recorded. It appears on **no** operation, in **no** CSV column and on **no** screen:
+`grep -c cost` over the frozen contract returns **1**, and that one is `cost_budget_exceeded`.
+
+Criterion 4 requires cost to be visible to a user. It cannot be, so closing this needs a
+reseal — the same reseal `D-16` needs, which is an argument for doing them together.
 
 ### D-6 — the contract has no security scheme at all — **CLOSED**
 

@@ -53,8 +53,22 @@ reset.sh: REFUSED: the typed database is not the configured alpha database.
 
 `audit_w14a` exists on this host with data in it. That is `T-5` demonstrated, not described.
 The real run then dumped, verified, dropped, re-migrated, purged and re-initialised; the
-restore brought both halves back and the API served the document's bytes at `200`, **sha256
-identical to the original fixture**.
+restore brought both halves back and the API served the document's bytes at `200`, sha256
+identical to the original fixture.
+
+> **Corrected 2026-09-18 by `W15-RUN`, and the correction is the more useful half.** That
+> restore is **not** sound, and the sentence above is exactly as far as wave 14's evidence
+> reached. `reset.sh` and `object_attrs.py` reattach **two of the four** metadata keys the
+> storage adapter writes; `blob-role` is lost. So the restored object **reads** back
+> byte-identical — which is what wave 14 checked — and every **later upload of those same
+> bytes** answers `409 conflict` through `BlobAttributeConflictError`, while the identical
+> bytes on a clean stack give `201`. Reproduced twice; `W15RUN-1`.
+>
+> The shape is `§3`'s, one level deeper. Wave 14 learned that `mc mirror` is not a backup of
+> an object and fixed the digest. It then verified the fix **by reading**, and a metadata key
+> that only a write consults survived the check. **A restore is proved by writing to the
+> restored instance, not by reading from it** — and `PA-01` criterion 10 is currently false
+> in the direction that looks true.
 
 ## 3. The finding worth more than the stack
 
