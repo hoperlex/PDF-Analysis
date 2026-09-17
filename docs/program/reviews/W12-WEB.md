@@ -8,6 +8,29 @@ Session `W12-WEB`, wave 12 stage A. Tests only; no product code changed.
 - **Started**: 2026-09-17 11:29:45 +05:00.
 - Baseline before any work: `npx vitest run` in `web/` → **289 passed / 24 files**.
 
+## 0. The result in one page
+
+- **257 mutations** of `web/src` in total: 183 in the sweep proper, 64 re-runs after the
+  guards, 10 confirming what the suite cannot reach.
+- The sweep: **121 killed, 58 survived, 4 hung.** A third of the reachable rules could not
+  be told from a deleted rule.
+- **Eleven new suites, 151 new tests**, 289 → 440. Re-running all 62 not-killed mutations
+  against the guarded tree: **63 of 64 killed**; the 64th was not a valid mutation and is
+  argued as such in §9.
+- Three rules are unreddenable **by construction** and are not faked: the browser download
+  adapter, and the three `useIntentKey` hooks whose rule needs a second render pass this
+  toolchain cannot perform (§5).
+- **34 of 110 modules — 1 352 of 7 604 lines — are imported by no test at all**, including
+  `run-progress.tsx`, the only place `terminal_reason` is rendered. Ten mutations inside
+  them: ten survivors (§4, §10). That region was not swept and the next wave should sweep it.
+- Four product defects reported unrepaired (§7); four defects inside `web/tests` repaired,
+  because that tree is this session's (§7).
+- One premise of the dispatch is false — `cost_basis` reaches nothing in `web/` — and one
+  is out of date: the frontend/backend column-list cross-check the brief asks for already
+  exists, written by `W10-FND` (§8).
+
+---
+
 ## 1. The harness
 
 `make mutation-copy` has no vitest equivalent, and the brief is right that one should not
