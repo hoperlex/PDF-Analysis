@@ -66,9 +66,12 @@ down` stops either; the env files are `/root/w14pkg/infra/deploy/env/alpha.env` 
 `/root/w15run-logs/alpha-w15b.env`.
 
 **Disk.** `df -h /` on arrival: **17 G free of 119 G, 86 %**. After two image builds and two
-stacks: **10 G free, 92 %**. Never near MinIO's ~1 GB refusal threshold, so nothing below is
-that failure wearing an application's clothes. It is worth saying that the margin halved in
-one wave.
+stacks: **10 G free, 92 %**. After the gate lane's own containers and volumes:
+**8.4 G free, 93 %**. Never near MinIO's ~1 GB refusal threshold, so nothing below is that
+failure wearing an application's clothes. But the margin more than halved in one wave, and
+this host now carries two alpha stacks and six gate lanes from four waves. **The next session
+should check `df -h /` before it builds anything**, and the one after that may have to reclaim
+rather than check.
 
 ## 2. `D-5`, answered, with the envelope
 
