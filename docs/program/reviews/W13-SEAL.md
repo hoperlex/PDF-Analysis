@@ -242,12 +242,31 @@ The brief's Step 4 list is four items. The measured list is twelve, and the diff
 | `web/FRONTEND_LOCK.json` | six digests, `content_commit` `a5f4001`, a new `commit_note` | `b370b03` |
 | `tests/characterization/w13_baseline/**` | record 31, `journey.py`, `README.md`, two new tests | `d8b3fff`, `09e863b` |
 
-**Tests that pinned the old state as a literal**, all four moved deliberately rather than
-loosened: `tests/contract/domain_p02/test_contract_vocabulary.py` and
-`test_openapi_document.py` (`== 20` → `21`), `tests/contract/shared_kernel/test_error_kernel.py`
-(`test_there_are_twenty` → `test_there_are_twenty_one`),
-`web/tests/contract/seam-operations.contract.test.ts` (`toHaveLength(20)` → `21`, plus
-containment checks for the new code and for `permission_denied`). And
+**Seven tests pinned the catalog's size as a literal**, and every one was moved deliberately
+rather than loosened. The programme demands literals (`OPERATING_CONSTRAINTS.md` §12) and this
+is the bill for them, paid the right way:
+
+| File | Pin |
+|---|---|
+| `tests/contract/domain_p02/test_contract_vocabulary.py` | `len(migration_module.ERROR_CODES) == 20` |
+| `tests/contract/domain_p02/test_openapi_document.py` | `len(declared) == … == 20` |
+| `tests/contract/shared_kernel/test_error_kernel.py` | `test_there_are_twenty` → `…_twenty_one` |
+| `tests/integration/api/test_envelope_screen_rules.py` | `len(raw["codes"]) == 20` |
+| `tests/contract/test_cp00_candidate.py` | `len(catalog["codes"]), 20` |
+| `web/tests/contract/seam-operations.contract.test.ts` | `toHaveLength(20)` |
+| `web/tests/unit/api/failure-surface.test.ts` | `toHaveLength(20)` |
+
+I found four by reading, the gate found the fifth, and a sweep
+(`grep -rn "== 20\|toHaveLength(20)"` across `tests/`, `web/tests/`, `src/`, `db/`) found the
+last two. **The sweep mattered more than it should have**, because neither of the last two can
+fail the gate on its own: `Makefile:488` excludes `tests/contract/test_cp00_candidate.py` from
+the battery, and the frontend step runs *after* the battery, so the first failure hid the
+second. A guard in a gate-excluded suite is a guard that goes red in private — recorded in §6.9.
+I measured the CP-00 suite before and after against a throwaway worktree at `876e095` rather
+than trusting its summary line: that suite is already 64+ red at base (`CP-00` was never
+ratified), and the diff of the two `FAILED` lists showed exactly one failure attributable to me.
+
+And
 `tests/integration/api/test_operation_surface.py`, whose assertion was
 `"securitySchemes" not in components` with the reason "PC-01 has no authentication and no role
 model" — **inverted, not deleted**, with the superseded premise named in the docstring.
@@ -423,6 +442,15 @@ guard never saw.
 **6.7 — the gate figure moves, and by more than the change itself.**
 The brief expects 1543/5/167. This session adds two tests to the baseline suite, so the figure
 is **1545**. §7 has the run.
+
+**6.9 — two of this change's guards cannot fail `make gate`, and that is not in the brief.**
+`Makefile:488-490` runs the battery with `--ignore=tests/contract/test_cp00_candidate.py`
+(and `test_cp00_final_state.py`, `test_validate_bootstrap.py`), and `--ignore=tests/checkpoint`.
+`test_cp00_candidate.py` contains `DomainErrorEnumParityTests`, which checks the envelope enum
+against the catalog and pins the count — a guard directly over the artefact this session
+changed, invisible to the gate. It is also already ~64 red at `876e095`, so its summary line
+tells a reader nothing. Any session told "run `make gate`" is not told this. Measured:
+`grep -n -- "--ignore" Makefile`, and the before/after `FAILED` diff in §3.
 
 **6.8 — everything else held.** The contract's three measured absences (no `securitySchemes`,
 no top-level `security`, zero operations carrying their own); `not_found`'s summary verbatim;
