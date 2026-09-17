@@ -381,3 +381,43 @@ The unreached set, largest first:
 
 This is the boundary of the sweep, and it is stated rather than papered over: §2 mutated
 the 76 reachable modules, and §5 records what happens to a mutation inside the other 34.
+
+## 5. Rules that cannot be reddened by construction
+
+Three, and only three. Everything else the sweep found unreddenable was reachable, and has
+a guard in §6.
+
+**1. `browserDownloadSink()` — `features/export-run/model/download-sink.ts`.**
+Its three statements are `document.createElement('a')`, `anchor.click()` and
+`URL.createObjectURL`/`revokeObjectURL`. `web/vitest.config.ts` pins
+`environment: 'node'`, and `web/package.json` has no `jsdom`, no `happy-dom` and no
+`@testing-library/*`; `node_modules` confirms none is installed. Rule 3 of this session's
+dispatch forbids adding one. The module's own docstring makes the same argument and is the
+reason the sink is behind an interface at all: `deliverDownload` — the part that carries
+the rule about ordering and revocation — **is** tested, against an injected sink, and is
+guarded further in §6. What is unreachable is the four-line adapter, and mutating it
+proves nothing a DOM would not immediately show.
+
+**2. The three `useIntentKey` hooks — `features/{create-project,start-run,upload-document}/model/use-intent-key.ts`.**
+The rule is *the key is stable across renders and changes when the signature changes*. It
+needs at least two render passes of the same component instance.
+`renderToStaticMarkup` — the only renderer available here — performs exactly one pass and
+discards the instance, so `useRef` is fresh on every call and a hook that re-minted on
+every render is indistinguishable from one that does not. A second pass needs
+`react-dom/client` against a DOM, or `react-test-renderer`; neither exists in this tree
+and neither may be added. `W12-WEB` confirmed it empirically as well: mutations `U-06`,
+`U-07` and `U-08` replace the stability condition with `if (true)` and survive.
+
+This is worth stating precisely because the rule **is** guarded, in its pure form:
+`entities/expert-decision/model/intent.ts`'s `resolveIntentKey` holds the same rule as a
+function over a previously recorded intent, and `tests/unit/decisions/intent.test.ts`
+reddens on `IN-05` and `IN-06`. The three hooks are hand-copies of that rule rather than
+callers of it — each file says so, and says the shared version "belongs in `shared/lib`,
+which a Gate B session may not write to". So the rule has one tested statement and three
+untestable duplicates. That is a product observation, reported in §7, not a repair.
+
+**3. Anything whose rule lives in a `useEffect`** — `entities/audit-run/api/use-run-status.ts`,
+`features/*/model/use-*.ts`. `renderToStaticMarkup` never runs effects. The polling
+lifecycle, the cache write on each reading, and the abort on unmount are therefore not
+observable from this suite. The loop *inside* the effect is `pollRunStatus`, which is in
+`shared/api` and is fully guarded; what cannot be reached is the adapter around it.
