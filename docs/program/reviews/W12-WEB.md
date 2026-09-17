@@ -476,3 +476,64 @@ Plus two repairs inside suites this session owns:
    well as `src/`, so `tests/guards/lib/repo.ts` resolves `WEB_ROOT` **into the mutation
    tree** — proved at runtime by the probe in §1. The contract and seam documents are read
    from the same place, which is the authority case and is correct.
+
+## 7. Product defects, left unrepaired
+
+Four, all in trees this session does not own. None is repaired here; each is reported with
+the mutation that exposed it.
+
+**D-W1 — `stageCarriesError` is declared, exported and read by nothing.**
+`src/shared/api/run-state.ts:67`, exported through `src/shared/api/index.ts:58`. No file
+under `web/src` or `web/tests` called it before this wave. Its docstring says it exists
+"so a stage row does not re-derive it from the presence of `error_code`" — and
+`src/shared/ui/stage-status-badge.tsx:39` re-derives it anyway:
+`const reason = status === 'succeeded' ? null : (errorCode ?? null);`. So the rule has two
+statements, one of which nobody calls. This is the `SORT_KEY` shape `W10-FND` found on the
+Python side. Owner: `A5` (`shared/api`, `shared/ui`). Exposed by `RS-04`. It is now pinned
+by a guard, which defends the constant but does not make it consumed.
+
+**D-W2 — six more declared-and-unconsumed helpers on the same surface.**
+`isPc01ErrorCode`, `hasErrorCode`, `isApiError`, `isIdempotencyInProgress`,
+`isIdempotencyKeyReuse` (`shared/api/errors.ts`), `hasApiBaseUrl` (`shared/config/env.ts`)
+and `QUERY_NAMESPACES` (`shared/api/query-keys.ts`) are each exported from the public seam
+and called from no module in `web/src`. The two idempotency predicates are the ones that
+matter: they encode the distinction between a retry under the same key and a terminal
+conflict, the distinction the whole idempotency rule rests on, and they were reachable
+only through a `hasErrorCode` that a mutation could make answer `true` for any `ApiError`.
+Owner: `A5`. Exposed by `ER-03`, `ER-09`, `ER-10`, `EN-03`, `QK-02`.
+
+**D-W3 — `isErrorEnvelope` does not check `contract_version`, which the contract declares
+required.** `src/shared/api/errors.ts` checks `error_code`, `message`, `correlation_id`
+and `retryable`; `ErrorEnvelope` in `generated/types.gen.ts:187` declares five required
+properties, the fifth being `contract_version: "1.0.0-draft.1"`. A body from a server
+speaking a different contract version — or from no server at all — is therefore accepted as
+an envelope and decoded into an `ApiError`. Whether that is the intended latitude is a
+design call for the owner; this session pinned the **current** behaviour rather than
+asserting the stricter rule, so a change to it is visible rather than silent. Owner: `A5`.
+
+**D-W4 — the idempotency-key rule has one tested statement and three untestable copies.**
+`entities/expert-decision/model/intent.ts` states it as `resolveIntentKey`, a pure function
+that `tests/unit/decisions/intent.test.ts` reddens on. The three write features each carry
+a hand-copied `useIntentKey` hook instead of calling it, and each file records that the
+shared version "belongs in `shared/lib`, which a Gate B session may not write to". Because
+the copies are hooks and this tree has no second-pass renderer, they are unreddenable by
+construction (§5): `U-06`, `U-07` and `U-08` replace the stability condition with
+`if (true)` and survive. Owner: `A5` for `shared/lib`, `B7`/`B8` for the call sites.
+
+### Defects inside `web/tests`, which this session owns and therefore repaired
+
+- **`tests/unit/review/fixtures.ts` violated the contract in three places** while its
+  docstring claimed it did not: `PROJECT_UID` was `proj_…` against `^prj_…$`,
+  `provenance().stage_id` was `'analysis'` which is not one of the nine `StageId` values —
+  hidden from `tsc` by an `as ObservationProvenance` cast, the exact escape the docstring
+  promised was absent — and `evidence().block_id` was `'blk_0042'` against `^b_[0-9]{6}$`.
+  All three corrected, the cast removed, and `fixture-conformance.test.ts` added.
+- **`tests/unit/review/key-leakage.test.ts` carried an assertion that could not fail**:
+  `expect(markup).not.toContain('blk_')`, a prefix nothing in the contract produces.
+- **`tests/unit/run/polling.test.ts` could hang instead of reddening** (§3).
+- A stale comment in `fixtures.ts` says the vitest JSX fix "belongs to `A5` — one line in
+  `web/vitest.config.ts`, `esbuild: { jsx: 'automatic' }` — and is reported as a seam
+  defect, not repaired here". That line **is** in `web/vitest.config.ts` now, so the
+  `globalThis.React` shim beside the comment is redundant. Left in place: removing it is a
+  behaviour change to a working suite with no defect behind it, and it is cheap to drop
+  when someone is next in that file.
