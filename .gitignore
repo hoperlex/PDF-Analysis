@@ -28,3 +28,8 @@ fixtures/private/
 
 # Ephemeral subagent worktrees; never tracked.
 .claude/worktrees/
+
+# W14-PKG: the alpha deployment's environment lives beside its compose file and holds the
+# API token and the service passwords. The `*.example` files beside it ARE committed.
+infra/deploy/env/*.env
+infra/deploy/dumps/

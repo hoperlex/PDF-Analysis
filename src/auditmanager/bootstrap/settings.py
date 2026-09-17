@@ -29,6 +29,23 @@ MODEL_ID_ENV: Final[str] = "AUDITMANAGER_MODEL_ID"
 COST_CEILING_ENV: Final[str] = "AUDITMANAGER_RUN_COST_CEILING_USD"
 API_KEY_ENV: Final[str] = "ANTHROPIC_API_KEY"
 
+#: `T-6`'s static alpha credential, given a configuration channel by `W14-PKG`.
+#:
+#: ``api/security.py`` reads this same name out of the mapping ``create_app(environ=...)``
+#: carries, and spells it there as ``API_TOKEN_VARIABLE``. It is spelled again here rather
+#: than imported, because ``bootstrap`` is below ``api`` and must not depend upward;
+#: ``tests/integration/composition/test_api_token_channel.py`` pins the two spellings
+#: equal so the duplication cannot drift.
+#:
+#: **Why it is required rather than optional.** ``W13_CLOSURE.md`` section 7: the seam is
+#: fail-closed, so a deployment that forgets the token gets a surface that refuses every
+#: one of the twelve operations while liveness and readiness stay green. From outside,
+#: that reads as a broken product rather than an unconfigured one. Refusing at
+#: construction is the same Gate C contract ``ANTHROPIC_API_KEY`` is already held to, and
+#: for the same reason: the cheap place to discover a missing credential is before the
+#: process binds a socket.
+API_TOKEN_ENV: Final[str] = "AUDITMANAGER_API_TOKEN"
+
 #: How the application reaches a model. `proxy` is a **transport**, not a provenance mode:
 #: a proxied call is recorded in the run as `live`, because a model really answered it.
 #: `OD-02` was revised to the proxy on 2026-09-14.
@@ -63,6 +80,7 @@ class AppSettings:
     proxy_model: str
     run_cost_ceiling_usd: float
     api_key: str | None
+    api_token: str
 
     @property
     def requires_credential(self) -> bool:
@@ -138,6 +156,7 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
         model_id=env.get(MODEL_ID_ENV, "").strip() or "claude-opus-5",
         run_cost_ceiling_usd=ceiling,
         api_key=api_key,
+        api_token=_require(API_TOKEN_ENV, env),
         proxy_base_url=proxy_base_url,
         proxy_token=proxy_token,
         # The stub the proxy reads as "I am not choosing a model", so the operator's default

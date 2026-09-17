@@ -1,0 +1,205 @@
+# The alpha stack: PostgreSQL, the object store, the API, the web app and one proxy.
+#
+#   cp infra/deploy/env/alpha.env.example infra/deploy/env/alpha.env   # then edit it
+#   cp infra/deploy/env/provider.env.example infra/deploy/env/provider.env
+#   docker compose --env-file infra/deploy/env/alpha.env \
+#     -f infra/deploy/compose.server.yml up -d --build
+#
+# Run it from the REPOSITORY ROOT: the two builds need `src/`, `db/`, `uv.lock` and `web/`
+# in their context, so the context is `..\..` relative to this file.
+#
+# `infra/local/docker-compose.yml` is NOT this file and neither replaces the other. That
+# one is the developer's disposable pair, driven only by the frozen `make up`/`make down`,
+# with its images pinned by the Makefile's own bytes. This one is the deployed stack: it
+# publishes ONE port, it carries the application, and it takes its images from a file an
+# operator can read.
+#
+# `T-4`: there is no `make` target for any of this. `OD-16` makes a tenth root target an
+# FF-01 freeze-break needing an explicit break record, and nothing here needs one.
+#
+# IMAGE IDENTITY. Every third-party image is pinned by digest, measured on 2026-09-18 with
+# `docker image inspect <ref> --format '{{index .RepoDigests 0}}'` and not recalled. The
+# three service digests are the ones `docs/program/FOUNDATION_LOCK.json` already records,
+# so the deployed stack runs the database and object store the gate ran against.
+
+name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset. Pass --env-file infra/deploy/env/alpha.env.}
+
+networks:
+  alpha:
+    name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-net
+
+# `down` never removes these; only `down --volumes` would. `R-4` makes that matter: real
+# client documents may be uploaded, and the only sanctioned way to remove them is
+# `infra/deploy/reset.sh`, which dumps before it drops.
+volumes:
+  postgres-data:
+    name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-postgres-data
+  s3-data:
+    name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-s3-data
+
+services:
+  postgres:
+    image: postgres:17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+    networks: [alpha]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is unset.}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is unset.}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is unset.}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    # NO `ports:`. Nothing but the proxy leaves this host. The developer stack publishes
+    # 127.0.0.1 only; this one publishes nothing at all.
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # `pg_isready` alone is not readiness: during initdb the entrypoint runs a temporary
+    # server on the unix socket only, so a socket probe reports ready while the role does
+    # not exist yet. Probe TCP and then run a real authenticated query, exactly as
+    # infra/local/docker-compose.yml does and for the reason recorded there.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready --quiet --host=127.0.0.1 --port=5432
+          --username="$$POSTGRES_USER" --dbname="$$POSTGRES_DB"
+          && PGPASSWORD="$$POSTGRES_PASSWORD" psql --quiet --no-align --tuples-only
+          --host=127.0.0.1 --port=5432 --username="$$POSTGRES_USER" --dbname="$$POSTGRES_DB"
+          --command='SELECT 1' >/dev/null
+      interval: 3s
+      timeout: 10s
+      retries: 40
+      start_period: 5s
+
+  s3:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    networks: [alpha]
+    restart: unless-stopped
+    command: ["server", "/data", "--address", ":9000", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is unset.}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is unset.}
+    volumes:
+      - s3-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 10s
+      retries: 40
+      start_period: 5s
+
+  # Idempotent private-bucket initialization, reusing the script the foundation already
+  # proved rather than a second copy of the same logic.
+  s3-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    networks: [alpha]
+    depends_on:
+      s3:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is unset.}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is unset.}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is unset.}
+      S3_INTERNAL_ENDPOINT: http://s3:9000
+    volumes:
+      - ../local/bucket-init.sh:/usr/local/lib/foundation/bucket-init.sh:ro
+    entrypoint: ["/bin/sh", "-c", "set -e; /bin/sh /usr/local/lib/foundation/bucket-init.sh"]
+    restart: "no"
+
+  # One shot, then gone. Migrations are a deploy step and never something a serving process
+  # does on start: two API replicas starting together would race the same upgrade.
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile.api
+    image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-api
+    networks: [alpha]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is unset.}
+    working_dir: /app
+    command: ["alembic", "--config", "db/migrations/alembic.ini", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile.api
+    image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-api
+    networks: [alpha]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+      s3-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    # Named one by one rather than `env_file: alpha.env`, so this file states exactly what
+    # the application reads. The service passwords and the NEXT_PUBLIC_* build values are
+    # in that file too and have no business inside this container.
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is unset.}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:?S3_ENDPOINT_URL is unset.}
+      S3_REGION: ${S3_REGION:?S3_REGION is unset.}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is unset.}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is unset.}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is unset.}
+      AUDITMANAGER_PROVIDER_MODE: ${AUDITMANAGER_PROVIDER_MODE:?AUDITMANAGER_PROVIDER_MODE is unset.}
+      # `T-6`. Required at construction since `W14-PKG`: a container started without it
+      # exits non-zero instead of serving `authentication_required` to everything.
+      AUDITMANAGER_API_TOKEN: ${AUDITMANAGER_API_TOKEN:?AUDITMANAGER_API_TOKEN is unset. The seam is fail-closed; see infra/deploy/env/alpha.env.example.}
+    # The provider credential, and only it. A separate file the owner writes on the host,
+    # never passed to --env-file, so it stays out of compose substitution and therefore out
+    # of `docker compose config` output.
+    env_file:
+      - path: env/provider.env
+        required: false
+    # No `ports:`. The proxy reaches 8000 and 8001 over the compose network.
+    healthcheck:
+      # `T-3`'s liveness plane on the SECOND port, which needs no credential. Polling
+      # /api/v1 would need the token and would make an unconfigured deployment look dead
+      # rather than unconfigured.
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8001/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile.web
+      args:
+        # Build arguments, because Next inlines every NEXT_PUBLIC_* value into the browser
+        # bundle at build time. `/api/v1` is relative, so the image names no origin.
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is unset.}
+        NEXT_PUBLIC_INSTANCE_LABEL: ${NEXT_PUBLIC_INSTANCE_LABEL:-alpha}
+    image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-web
+    networks: [alpha]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--output", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  proxy:
+    image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+    networks: [alpha]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    volumes:
+      - ./proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    # THE ONE PUBLISHED PORT. `T-2`: one origin, the web app at `/` and the API at
+    # `/api/v1`, so there is no cross-origin surface at all.
+    ports:
+      - "${ALPHA_HTTP_PORT:?ALPHA_HTTP_PORT is unset.}:8080"

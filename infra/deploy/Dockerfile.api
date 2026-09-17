@@ -1,0 +1,102 @@
+# The API image: the twelve operations under uvicorn, plus `T-3`'s health plane.
+#
+# Built from the locked toolchain and nothing else. `make bootstrap` syncs `.venv` from
+# `uv.lock` with `--frozen` (no resolution); this does the same thing with the same pinned
+# uv, so the image's closure is the one the gate ran against. Nothing is installed by name
+# and nothing is resolved at build time.
+#
+# `pyproject.toml` declares `[tool.uv] package = false` -- a virtual project. So `uv sync`
+# installs the dependencies and NOT this repository, and `src/` is reached the documented
+# way, through PYTHONPATH. That is the same mechanism FOUNDATION_LOCK.json records for the
+# module invocations, not a packaging shortcut invented here.
+#
+# Image identity is pinned by digest, as FF-01 section 2 item 9 requires of the foundation
+# services. A floating tag in a deploy image would be the same defect one layer up.
+
+# python:3.12-slim-bookworm, resolved 2026-09-18. `.python-version` pins 3.12 exactly and
+# `requires-python = "==3.12.*"` refuses anything else, so a base with a different minor
+# fails `uv sync` rather than shipping.
+FROM python:3.12-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254 AS build
+
+# The pinned uv, taken FROM THE MAKEFILE'S OWN BYTES rather than copied here. The
+# Makefile installs uv from `UV_VERSION` plus the eighteen wheel hashes of `UV_HASHES`,
+# hash-checked, and it is the same resolver that produced the `.venv` the gate ran
+# against. A second copy of a version string and eighteen hashes in this file is a second
+# thing that can drift, and the Makefile already argues for reading a pin out of bytes
+# instead of a variable ("Image identity is taken from THIS FILE'S BYTES").
+#
+# `--require-hashes` makes a wheel Astral did not publish a build failure rather than an
+# image with an unknown resolver in it. The sdist hash is deliberately absent upstream, so
+# a platform with no published wheel fails loudly instead of starting a Rust build.
+COPY Makefile /tmp/Makefile
+RUN set -eu; \
+    version="$(sed -n 's/^UV_VERSION := //p' /tmp/Makefile | head -1)"; \
+    [ -n "$version" ] || { echo "no UV_VERSION in the Makefile" >&2; exit 1; }; \
+    hashes="$(grep -o -- '--hash=sha256:[0-9a-f]\{64\}' /tmp/Makefile | tr '\n' ' ')"; \
+    [ "$(printf '%s' "$hashes" | grep -c -- --hash || true)" -ge 1 ] || \
+      { echo "no UV_HASHES in the Makefile" >&2; exit 1; }; \
+    printf 'uv==%s %s\n' "$version" "$hashes" > /tmp/uv-requirements.txt; \
+    python -m pip install --no-cache-dir --disable-pip-version-check \
+      --require-hashes --requirement /tmp/uv-requirements.txt; \
+    have="$(uv --version | awk '{print $2}')"; \
+    [ "$have" = "$version" ] || { echo "uv resolved to $have, not $version" >&2; exit 1; }; \
+    rm -f /tmp/Makefile /tmp/uv-requirements.txt
+
+WORKDIR /app
+# Only the two files that decide the closure, so a change under src/ does not re-resolve.
+COPY pyproject.toml uv.lock .python-version ./
+# `--frozen`: the lock is authority and uv may not update it. `--no-dev`: the `test` group
+# carries httpx, and a client library in a deployed application's closure is surface for
+# no purpose (pyproject says so where the pin was made).
+ENV UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT=/app/.venv
+RUN uv sync --frozen --no-dev --python "$(command -v python3.12)"
+
+FROM python:3.12-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254
+
+# curl is the only addition, and it is here for one reason: the compose health check polls
+# `T-3`'s liveness plane, and a health check that cannot run is a health check that always
+# passes. Nothing else is installed.
+RUN apt-get update \
+ && apt-get install --no-install-recommends --yes curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# An unprivileged account. The process reads its configuration from the environment and
+# writes nothing to the image.
+RUN useradd --system --create-home --uid 10001 auditmanager
+
+WORKDIR /app
+COPY --from=build /app/.venv /app/.venv
+COPY src/ /app/src/
+COPY db/ /app/db/
+# THE IMAGE IS NOT JUST `src/`. Four things under the runtime resolve a repository path
+# from ``auditmanager.__file__``, and an image without them crashes on import rather than
+# at first use. Measured, not assumed -- `grep -rn "parents\[" src/`:
+#
+#   contracts/domain/v1/error-codes.json      shared/errors/catalog.py   (module scope:
+#                                             the very first import fails without it)
+#   contracts/domain/v1/*                     exports/policy.py
+#   contracts/analysis/v1/stage-registry.json documents/models.py, analysis/engine/registry.py
+#   fixtures/recorded/text_analysis/**        analysis/text/recorded.py  (mode `recorded`)
+#   docs/program/P02_LOCK.json                analysis/text/lock.py
+#
+# `fixtures/recorded` is 72K; the other 55M of `fixtures/` is corpus and test material and
+# is deliberately NOT here. Only the one file out of `docs/` is copied, not the tree.
+COPY contracts/ /app/contracts/
+COPY fixtures/recorded/ /app/fixtures/recorded/
+COPY docs/program/P02_LOCK.json /app/docs/program/P02_LOCK.json
+COPY infra/deploy/serve.py /app/serve.py
+
+ENV PATH=/app/.venv/bin:$PATH \
+    PYTHONPATH=/app/src \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    AUDITMANAGER_API_PORT=8000 \
+    AUDITMANAGER_HEALTH_PORT=8001
+
+USER auditmanager
+EXPOSE 8000 8001
+
+# Not `uvicorn ...`: `serve.py` builds the application ONCE and hands the same object to
+# both the API app and the health app, so readiness reports on the process that is
+# actually serving `/api/v1`. See its module note.
+CMD ["python", "/app/serve.py"]
