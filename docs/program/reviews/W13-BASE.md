@@ -152,3 +152,72 @@ composition root's own `environ` parameter with a wrong `S3_SECRET_ACCESS_KEY`; 
 `test_exactly_one_record_is_marked_as_the_permitted_exception` requires the marked set to be
 exactly this one case, so the exception is countable rather than arguable at the end of a long
 wave. **Every other difference is a failure of the wave, whatever argument accompanies it.**
+## 6. What is false or imprecise in the brief
+
+Checked against the tree at `85aaa24`, with the query beside each.
+
+**6.1 — `23076e0` is not on `dev`, so the rename is not where stage 2 will read it.**
+The coordinator's correction says the plan was updated at `23076e0`.
+`git merge-base --is-ancestor 23076e0 HEAD` → **false**: that commit lives on
+`planning/prototype-roadmap`, not on `origin/dev`. In this worktree
+`docs/program/ALPHA_ROADMAP.md` still reads `Stage 1 — W13-GOLD` and `golden corpus` at lines
+210, 268, 270, 400, 423 and 435. A stage-2 session branching from `dev` — which is what the
+provisioning block in my own brief told me to do — will read the **old** name and look for a
+"golden corpus" that is not there. The rename needs to reach `dev` before stage 2 is
+dispatched. My review file and the corpus use the new name; the branch keeps the old one
+deliberately (§1).
+
+**6.2 — "the 26 MiB boundary" is the *transport's*, and `26214400` is 25 MiB.**
+Measured: `multipart.MAX_BODY` = `26 * 1024 * 1024` = **27 262 976**;
+`ingest.MAX_BYTES` = `25 * 1024 * 1024` = **26 214 400**. So the constraint string
+`byte_size <= 26214400` is the **25 MiB** envelope bound, and the 26 MiB figure is the
+transport's. The brief — and `ALPHA_ROADMAP.md` §4 — put the two in one phrase in a way that
+reads as though 26 MiB were the envelope's number. Nothing downstream is wrong because of it,
+but "the 26 MiB boundary on both sides" has only one coherent reading and I captured that one:
+`18` frames a body to exactly 27 262 976 bytes so the transport passes it and the **envelope**
+answers; `22` adds one byte so the **transport** answers. It is the only boundary at which
+both guards can be made to speak, which is the point
+`tests/integration/ingest/test_size_guard_boundary.py` makes.
+
+**6.3 — "~1 800 lines get rewritten" is low; the measured figure is ~1 968.**
+`wc -l src/auditmanager/api/routers/*.py src/auditmanager/api/schemas/*.py` at `85aaa24` in
+`/root/w13gold` → **2 511** total. `ALPHA_ROADMAP.md` §4 keeps `ports.py` (233),
+`errors.py` (196) and the package `__init__.py` (114), leaving **1 968** replaced. The
+roadmap's own "~1 950" is right; the brief's "~1 800" is not. Figures in this programme
+travel by being repeated, so this one is recorded with its command and its tree
+(`OPERATING_CONSTRAINTS.md` §12).
+
+**6.4 — "a four-times-certified surface" against `D-5`'s "three certifications".**
+`DEBT_REGISTER.md` D-5 says `startRun` "is green in every suite and in **three**
+certifications"; the brief and the coordinator both say four. Two figures are in circulation
+for the same fact. Not mine to settle — flagged because D-5 is the row this stage's ordering
+was changed for.
+
+**6.5 — `OPERATING_CONSTRAINTS.md` is not at the repository root.**
+It is `docs/program/dispatch/OPERATING_CONSTRAINTS.md`. Its §12 says exactly what the brief
+says it says, including that the third instance was the integrator's own.
+
+**6.6 — everything else in the brief held.** Base commit, the instance and its six values,
+`make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12`, foundation 35, the absent
+`web/node_modules`, "no live provider needed", the five constraint strings, the D-7 path and
+its reachability, `make mutation-copy`, and that every oversize fixture in the repository
+(`oversize.pdf` is 27 303 204 bytes) trips the transport guard first.
+
+## 7. One finding about the surface itself
+
+**`startRun` with the same key and a payload that differs only by `provider_mode` is a
+replay, not a conflict.** Captured as `05`.
+
+`src/auditmanager/runs/commands.py:200` says "the same key with a **different payload** raises
+`idempotency_key_reuse`", and that is true at the command layer. At the transport it is not
+the whole story: `RunAdapter.start_run` refuses a `provider_mode` that disagrees with the
+deployment's and otherwise passes the *configured* value down, so the property is normalised
+away before the fingerprint is taken. A caller who adds `"provider_mode": "recorded"` to the
+body and re-sends under the same key gets **202 and the original run**, byte for byte — not a
+409. The genuine conflict is captured separately at `05b`, on `createProject` with a different
+`name`.
+
+This matters to stage 2 because it is precisely the kind of behaviour a rewrite moves without
+noticing: a Pydantic model that gives `provider_mode` a different default, or that forwards
+`None` where the current parser forwards the configured value, changes which of `04`, `05` and
+`05b` a request lands in — and all three are pinned.
