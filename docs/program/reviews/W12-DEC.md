@@ -190,3 +190,135 @@ frozen-column guard see what they would in production.
 4. *Reading source text from the test's own location.* No guard here reads source text at
    all. The schema facts the guards rely on are read from the **live database**
    (`pg_trigger`, `pg_constraint`) or exercised against it, never scraped from a file.
+
+## 4. Rules unreddenable by construction, with the argument
+
+**`_translate` on the `DBAPIError` arm of `record_decision` (M16).** Replacing it with a
+fixed `INTERNAL_ERROR` reddens nothing, and no test can redden it. The argument is read off
+the live catalogue, not off the source:
+
+```
+triggers on expert_decision_event:
+  trg_expert_decision_event_append_only  am_append_only  BEFORE ['DELETE', 'UPDATE']
+```
+
+That is the **only** trigger on the table, and it has no INSERT arm. Every remaining way
+`_INSERT_EVENT` can fail — the ten CHECK constraints, the two foreign keys, the primary key,
+the partial unique index on `command_id` — raises `IntegrityError`, which is caught by the
+`except IntegrityError` clause **above** the `DBAPIError` clause. So the only exceptions
+that can reach `_translate` are infrastructure faults (statement timeout, deadlock,
+serialization failure, a dropped connection), none of which carries a SQLSTATE in
+`SQLSTATE_TO_CATALOG_CODE` and none of which is deterministically inducible from a test.
+Its mapped branch is unreachable from this call site; its fallback branch is reachable only
+by breaking the database under the test. **No test written.** This is defence in depth
+against a future trigger, and the right thing to leave in place.
+
+**`ck_expert_decision_event_verdict` is dead as a guard on this table.** The brief asks what
+refuses a verdict outside the vocabulary. The answer is: not this constraint, ever. Both
+CHECKs were read out of `pg_constraint` and evaluated against each other in PostgreSQL over
+the full cross-product of the four declared event types, the four declared verdicts,
+`NULL`, one out-of-vocabulary value, and both comment states:
+
+> rows satisfying `ck_expert_decision_event_type_verdict_agree` but violating
+> `ck_expert_decision_event_verdict`: **[]**
+
+`…type_verdict_agree` pins `verdict` to exactly one value per `event_type`
+(`accepted`/`rejected`/`pending`/`NULL`), and all four are in the vocabulary. So no row can
+ever violate the vocabulary CHECK alone — the agreement CHECK refuses it first, every time.
+A test claiming to exercise the vocabulary constraint on `expert_decision_event` would in
+fact be exercising the agreement constraint, which is the wave-9 failure exactly.
+**No test written.** Two consequences worth recording:
+
+* `needs_manual_review` is in `VERDICTS` and is paired with no `event_type`, so it **cannot
+  be stored in `expert_decision_event` at all**, and `finding_current_verdict` can therefore
+  never project it. It is reachable only if the schema gains an event type for it.
+* the guard that *is* worth having here is the one now written: that
+  `VERDICT_FOR_EVENT` and `…type_verdict_agree` say the same thing (§3, M23).
+
+**`CONFIGURED_AUTHOR_LABEL`'s value (M21).** Changing `"local-reviewer"` to anything else
+reddens nothing: `test_the_configured_label_is_persisted_with_every_event` imports the
+constant and compares both sides to it. This is vacuity form 1 — but pinning the literal
+would be **wrong**, and no guard was written. OD-12 and the module docstring both make the
+label a composition-root configuration value: "A different label is a configuration change
+at the composition root, never a field in a request." Pinning the string would turn a
+deliberate knob into a frozen literal and redden the gate on a legitimate reconfiguration.
+What the existing test does prove — that whatever the configured label is, it is written
+server-side with every event — is the property OD-12 actually claims. It is correct as it
+stands.
+
+## 5. Product defects left unrepaired
+
+**None.** Nothing in `src/auditmanager/decisions/**` or the decision-facing parts of
+`src/auditmanager/findings/**` was found to behave wrongly. Every gap in §1 is a **missing
+test**, not a broken rule: in each case the product does the right thing and nothing was
+holding it to that. Three things are worth handing on all the same, none of them a defect:
+
+1. **`record_decision` does not bound `comment` length; the database does.** A comment over
+   4000 characters reaches the INSERT, violates `ck_expert_decision_event_comment_length`,
+   and comes back as `CONFLICT` rather than `VALIDATION_FAILED`. The API layer caps it at
+   `MAX_COMMENT = 4000` before the ledger is reached, so PC-01 never sees this. It is a
+   difference in error code between the two entry points, and only that. Not repaired; not
+   in my tree either way.
+2. **No test asserts that an `author_label` supplied in a request body is refused.** The
+   module docstring makes this an explicit design claim ("It is never taken from a request
+   body — PC-01 has no authentication, and a client-supplied 'who did this' would be a
+   subject identity in all but name"). `parse_append_decision_request` does enforce it, by
+   rejecting any key outside `{event_type, finding_observation_id, comment}` — but that
+   refusal is the *unknown-key* rule, not a rule about `author_label`, and nothing asserts
+   it. The guard belongs in `tests/integration/api/**`, which this stream does not own.
+   **Handed to whoever owns that tree; not written here.**
+3. **`tests/integration/decisions/test_keyed_append.py` wraps all three of its test bodies
+   in `if True:`** — dead scaffolding from a removed context manager. Harmless, and left
+   alone: touching it would put noise in a diff that is meant to be readable as evidence.
+
+## 6. Anything false in the brief
+
+The dispatch is accurate on every load-bearing point. Two corrections and one note:
+
+1. **"Does the decision ledger's trigger have both arms exercised?" — yes, already, and in
+   three places.** Wave 10's finding about unexercised trigger *arms* does not apply to this
+   table. `trg_expert_decision_event_append_only` has exactly two arms, UPDATE and DELETE,
+   and both are exercised with the SQLSTATE asserted:
+   `test_decision_ledger.py::test_update_is_refused_with_am002`,
+   `::test_delete_is_refused_with_am002`, and
+   `test_schema_invariants.py::test_the_decision_ledger_refuses_update_and_delete`, which
+   runs both statements and asserts `AM002` for each. The first two even assert
+   `proxy.rowcount == 1` first, so a statement that matched no row cannot be mistaken for a
+   refusal. This took the two minutes the brief budgets for ruling a rule out, and it was
+   worth spending. **No guard written; none needed.**
+2. **Line 157 is the `def`, not an assertion.** `W10-FND`'s "lines 157 and 304" name
+   `test_the_rebuild_from_the_ledger_equals_the_stored_projection` (defined at 157,
+   asserting at 180) and the assertion at 305. Both comparisons are real; the citation is
+   off by a line or two and nothing turns on it.
+3. **`W12-PLAN.md` §1 and the `W12-DEC` dispatch disagree about wave 12's shape.** The plan
+   says stage A is one session, `W12-RCN`, and argues at length that parallel would be
+   wrong. The dispatch says `W12-DEC` is "one of three parallel streams in wave 12's stage
+   A", and `3ebe34d` on `origin/dev` is a merge of "two tests-only streams for wave 12 stage
+   A". The reconciliation is presumably that tests-only streams cannot stale a
+   certification the way `W12-RCN` can — which is consistent with this stream's constraints
+   — but the plan was not updated to say so. Flagged for the integrator, not acted on.
+
+The gate figure in the brief is exact: the canonical battery at `3ebe34d`, run from the
+mutation copy, is **1492 passed / 5 skipped / 163 subtests**.
+
+## 7. The gate, after
+
+```
+GATE OK: battery, foundation, frontend and whitespace all pass
+1502 passed, 5 skipped, 167 subtests passed in 193.71s
+Test Files  24 passed (24)   Tests  289 passed (289)
+```
+
++10 tests and +4 subtests over the 1492/163 at arrival, which is exactly the ten tests and
+four subtests added here. Frontend unchanged at 289. Foundation 35 passed.
+
+## 8. Constraints observed
+
+Tests only — nothing under `src/` was modified in this worktree; the mutation copy at
+`/root/w12dec-mut` is outside it and disposable. Files changed: two, both owned —
+`tests/integration/decisions/test_rules_are_load_bearing.py` (new) and this review. No new
+dependency. No byte added to `fixtures/synthetic/ar/**` or `fixtures/validation/PC-02/**`;
+every fixture the new tests need is built inside the test. No tag, no push, no merge to
+`main`. Committed incrementally, six commits, the review opened before the first edit.
+
+**Elapsed wall-clock: 11:30 → 12:30 (+05:00), 60 minutes.**
