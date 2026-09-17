@@ -230,3 +230,86 @@ every one of its eleven rules has a test that can tell it from a deleted rule.
 | PF-01..03 | failure presentation and retry offer | KILLED | `review/failure-and-selection` |
 | DS-01 | `deliverDownload` stops revoking | KILLED | `export/export-panel` — *revokes even when saving throws* |
 | **DS-02** | **`deliverDownload` revokes before saving** | **SURVIVED** | — |
+
+### 2.5 Batch 5 — the failure surface, the polling schedule, configuration, keys and caches
+
+This batch found more than the other five together. `shared/api/errors.ts`,
+`shared/config/env.ts`, `shared/api/idempotency.ts`, `shared/api/query-keys.ts` and
+`entities/expert-decision/model/cache.ts` were read by **no test in `web/tests`** before
+this wave. The four `classify*Failure` modules above `errors.ts` are well covered, and
+they hide it: each of them re-decides `retryable` itself for the non-`ApiError` cases, so
+`UnrecognizedApiError.retryable` and `TransportError`'s default are never read by anything.
+
+| # | Mutation | Result | What refused |
+|---|---|---|---|
+| ER-01 | `PC01_ERROR_CODES` loses `internal_error` | KILLED | `contract/seam-operations` |
+| **ER-02** | **`isErrorCode` admits anything** | **SURVIVED** | — |
+| **ER-03** | **`isPc01ErrorCode` admits any catalog code** | **SURVIVED** | — |
+| ER-04 | `ApiError.retryable` inferred from the status | KILLED | `projects/upload-failure` ×2 |
+| **ER-05** | **`UnrecognizedApiError.retryable` becomes true** | **SURVIVED** | — |
+| **ER-06** | **`TransportError` defaults to retryable** | **SURVIVED** | — |
+| **ER-07** | **`isErrorEnvelope` stops requiring `retryable`** | **SURVIVED** | — |
+| **ER-08** | **`isErrorEnvelope` stops requiring `error_code`** | **SURVIVED** | — |
+| **ER-09** | **`hasErrorCode` ignores the code** | **SURVIVED** | — |
+| **ER-10** | **`isIdempotencyInProgress` answers for reuse** | **SURVIVED** | — |
+| CP-01..05 | every polling-schedule constant and the ceiling | KILLED | `run/polling` — *is 0, 2000, 3000, 4500, 6750, 10125 then capped at 15000*, *has no wall-clock deadline to configure* |
+| **PO-01** | **the loop absorbs a non-retryable failure** | **TIMEOUT** | nothing red; the suite hangs |
+| PO-02 | the loop rethrows a retryable failure | KILLED | `run/polling` — *absorbs a retryable failure and keeps polling* |
+| **PO-03** | **the loop ignores an abort** | **TIMEOUT** | nothing red; the suite hangs |
+| PO-04 | the loop stops calling `onUpdate` | KILLED | `run/polling` |
+| PO-05 | the loop returns the first reading | KILLED | `run/polling` |
+| PJ-01..07 | the project name bounds, the unknown count, the uid check | KILLED | `projects/project` |
+| **PJ-08** | **the uid regular expression is unanchored** | **SURVIVED** | — |
+| **FI-01** | **`formatInstant` localises instead of using UTC** | **SURVIVED** | — |
+| **FI-02** | **an unparseable instant becomes an em dash** | **SURVIVED** | — |
+| **FI-03** | **an absent instant becomes the epoch** | **SURVIVED** | — |
+| **EN-01** | **a missing API base URL defaults instead of throwing** | **SURVIVED** | — |
+| **EN-02** | **the trailing slash is no longer stripped** | **SURVIVED** | — |
+| **EN-03** | **`hasApiBaseUrl` reports a blank value as configured** | **SURVIVED** | — |
+| **ID-01** | **the `ik_` key prefix is dropped** | **SURVIVED** | — |
+| **ID-02** | **every minted key is the same constant** | **SURVIVED** | — |
+| **QK-01** | **the findings detail key collides with the runs detail key** | **SURVIVED** | — |
+| **QK-02** | **`QUERY_NAMESPACES` loses `findings`** | **SURVIVED** | — |
+| **DC-01** | **a decision stops invalidating the run finding list** | **SURVIVED** | — |
+| **DC-02** | **a decision stops invalidating the decision history** | **SURVIVED** | — |
+
+### 2.6 Batch 6 — the widgets, the transport and the boundary scanner
+
+| # | Mutation | Result | What refused |
+|---|---|---|---|
+| EV-01 | the viewer opens an undeclared page | KILLED | `review/evidence-viewer` |
+| EV-02 | the viewer falls back to the last declared page | KILLED | `review/evidence-viewer` |
+| EV-03 | a finding with no evidence renders an empty pane | KILLED | `review/evidence-viewer` |
+| EV-04 | the quotation is trimmed in the component | KILLED | `review/evidence-viewer` |
+| **EV-05** | **the anchor line is dropped from the quotation card** | **SURVIVED** | — |
+| **EV-06** | **the span-mismatch alert never renders** | **SURVIVED** | — |
+| EV-07 | `block_id` is printed on the anchor line again | KILLED | `review/key-leakage` |
+| EV-08 | navigation offers every page up to the highest declared | KILLED | `review/evidence-viewer` |
+| EV-09 | a missing document URL renders a blank pane | KILLED | `review/evidence-viewer` |
+| **EV-10** | **the `<object>` drops the `#page=` fragment** | **SURVIVED** | — |
+| EV-11 | the observation provider mode is not rendered | KILLED | `review/provider-mode` |
+| DP-01 | the decision panel gains a fourth control | KILLED | `decisions/ledger` — *has exactly three controls and no revoke, undo or clear* |
+| DP-02 | the comment control becomes an undo control | KILLED | `decisions/ledger` |
+| **DP-03** | **the empty-comment refusal never renders** | **SURVIVED** | — |
+| **DP-04** | **the current verdict is derived from the pending intent** | **SURVIVED** | — |
+| **DH-01** | **an empty history renders an error, not not-applicable** | **SURVIVED** | — |
+| DH-02 | the history renders only the most recent event | KILLED | `decisions/ledger` |
+| **DH-03** | **the history stops rendering comments** | **SURVIVED** | — |
+| **DH-04** | **the history stops rendering the verdict of an event** | **SURVIVED** | — |
+| FL-01 | the empty finding list renders nothing | KILLED | `review/finding-admission` |
+| FL-02 | integrity faults are not surfaced | KILLED | `review/finding-admission` |
+| **TR-01** | **writes no longer require an idempotency key** | **SURVIVED** | — |
+| **TR-02** | **the query string is built from the caller's object** | **SURVIVED** | — |
+| **TR-03** | **a missing path parameter becomes the empty string** | **SURVIVED** | — |
+| **TR-04** | **path parameters are no longer percent-encoded** | **SURVIVED** | — |
+| **TR-05** | **an unrecognised code becomes an `ApiError`** | **SURVIVED** | — |
+| **TR-06** | **a non-envelope JSON body becomes an `ApiError`** | **SURVIVED** | — |
+| **TR-07** | **an abort is reported as retryable** | **SURVIVED** | — |
+| SB-01..03, RB-01 | the boundary scanner's own rules | KILLED | `guards/transport-boundary` — the scanner is run against fixtures that violate every rule, which is why it is the one helper that cannot be hollowed out |
+
+### 2.7 The sweep in one line
+
+**183 mutations, 121 killed, 58 survived, 4 hung.** Method: `/root/w12web-mut/sweep.py`
+over a full copy of the web tree rebuilt per mutation, vitest 3.2.7, node 22.23.1, at
+`3ebe34d` with no test files added. The four hangs are `RS-01`, `RS-05`, `PO-01` and
+`PO-03`, all of them in `pollRunStatus`; §3 explains why a hang and not a red.
