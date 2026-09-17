@@ -1,8 +1,8 @@
 # Debt register
 
 Written 2026-09-17 by the integrator. **Re-measured against the tree at `315de25` on
-2026-09-18**: D-6 and D-7 close, D-12 and D-13 open, D-14 opens and closes in the same pass,
-and §3's own figure turned out to be three waves stale.
+2026-09-18**: D-6, D-7 and D-10 close, D-12 and D-13 open, D-14 opens and closes in the
+same pass, and §3's own figure turned out to be three waves stale.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records
 a register that had been entirely obsolete while still reading as the list of what was open,
@@ -218,19 +218,45 @@ cost this programme a session each, which is why it is here before the task exis
 Check: `python3 -c "import json;d=json.load(open('.local/norms/corpus/MANIFEST.json'));print(len(d['documents']))"`
 and the key set of `blocks['blocks'][0]` in any document's `blocks.json`.
 
-### D-10 — `make mutation-copy` cannot serve a tests-only stream
+### D-10 — `make mutation-copy` cannot serve a tests-only stream — **CLOSED**
 
-The target copies `src/` and links `contracts/`, `docs/`, `fixtures/`, `db/`, `tools/`. It
-does **not** carry `tests/`, so a stream whose deliverable *is* a test module — an assertion
-engine, a comparison harness — cannot mutate its own code with it. `W13-CONF` hit this and
-worked around it with a hand-built scratch tree copy, which worked because its engine resolves
-paths from `__file__`.
+**Closed 2026-09-18 by the integrator.** `tests/` and `pyproject.toml` are now copied and
+`.venv` is linked, so a stream whose deliverable is a test module mutates it in the copy:
 
-Not urgent: the workaround holds and the stream reported it rather than skipping the proof.
-But the target exists so that anti-vacuity work does not need a bespoke harness each time, and
-three of the last four waves had a tests-only stream.
+```
+cd /root/<name>-mut && ./.venv/bin/pytest <path>
+```
 
-Check: `grep -n "for name in" -A 2 Makefile` at the `mutation_copy` helper.
+`pyproject.toml` has to come too, because pytest's `pythonpath = ["src"]` and
+`--import-mode=importlib` are root-owned and rootdir is that file's directory — without it
+the copy would collect under a different import mode from the gate, so a red there would not
+be a red in the tree. `.venv` is linked rather than copied because it is not a thing anyone
+mutates, and because `tests/integration/db/conftest.py:217` requires
+`REPOSITORY_ROOT/.venv/bin/python` — and once `tests/` is copied, that root *is* the copy.
+
+**`tests/` is copied, never linked, and the probe checks it by identity rather than by
+policy** — it resolves the path and refuses one that lands outside the copy. A symlinked
+`tests/` would hand a stream exactly what `mutation_copy`'s own guard refuses in its own
+words (*"no tracked file is ever edited to mutate"*), by a different route.
+
+**Proved, not asserted.** Unmutated copy green first (`16 passed, 26 subtests`), then `21`
+→ `99` in the copy's `test_error_kernel.py`: copy red, `git status --porcelain tests/` empty,
+tracked tree still green. The probe's four refusals were each driven to red — no `tests/`, a
+symlinked `tests/`, no `pyproject.toml`, no reachable `.venv` — and then green again on a
+restored copy, which is the control.
+
+**And it closed a caveat this Makefile has carried since wave 10.** The note said *"a
+MIGRATION cannot be mutated by any copy"*. With `FULL=1` it now can: the copy's root is
+where alembic runs, and `db/` is a real copy. Driven — unmutated FULL copy, `102 passed`;
+then `BEFORE UPDATE OR DELETE` → `BEFORE DELETE` on the immutability trigger, **7 failed /
+95 passed**, all seven being immutability guards across three test files.
+
+Guarded by `tests/integration/composition/test_mutation_copy_serves_a_tests_only_stream.py`,
+because `make mutation-copy` is not part of `make gate` and deleting the recipe line and the
+probe branch together would otherwise redden nothing. Four mutations of the Makefile, four
+killed, control green.
+
+Check: `make mutation-copy MUT=/root/x-mut` and read the probe's output.
 
 ### D-11 — `certifi` is MPL-2.0, and `OD-01` is narrower than the programme quotes it
 

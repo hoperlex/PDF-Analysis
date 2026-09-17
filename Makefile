@@ -549,6 +549,24 @@ mutation_copy() {
   rm -rf "$$dest"
   mkdir -p "$$dest"
   cp -a src "$$dest/src"
+  # `tests` is copied, never symlinked, and that is not a preference. A symlinked `tests`
+  # would mean editing the copy's test file edits the TRACKED one -- the exact thing the
+  # guard above refuses for every other path. `D-10`: a stream whose deliverable IS a test
+  # module (an assertion engine, a comparison harness) could not mutate its own code with
+  # this target at all, and `W13-CONF` had to hand-build a scratch tree to prove its engine
+  # could fail. Three of the four waves before it had a tests-only stream.
+  cp -a tests "$$dest/tests"
+  # pytest's configuration is root-owned: `pythonpath = ["src"]` and `--import-mode=importlib`
+  # live in pyproject.toml, and rootdir is that file's directory. Without it the copy
+  # collects under a DIFFERENT import mode and a different sys.path from the one the gate
+  # uses, so a red in the copy would not be a red in the tree.
+  cp -a pyproject.toml "$$dest/pyproject.toml"
+  # Not for imports -- for the tests that shell out to the interpreter by repository-root
+  # path. `tests/integration/db/conftest.py:29` derives REPOSITORY_ROOT from its own file
+  # and then requires `$$REPOSITORY_ROOT/.venv/bin/python` (line 217); in a copy that root
+  # is the copy, so without this the db lane fails on a missing interpreter rather than on
+  # anything the mutation did. A symlink is right here: the venv is not a thing to mutate.
+  ln -s "$$PWD/.venv" "$$dest/.venv"
   local name
   for name in contracts docs fixtures db tools; do
     [ -e "$$name" ] || fail "mutation_copy: $$name is not in this checkout."
@@ -571,10 +589,14 @@ mutation_copy() {
       "      Mutating anything inside them has no effect, and anything that reaches them" \
       "      by a path not derived from auditmanager.__file__ reads the pristine tree." \
       "      To mutate a contract, a fixture or the ledger tool: make mutation-copy FULL=1" \
-      "      A MIGRATION cannot be mutated by any copy: tests/integration/db derives the" \
-      "      repository root from the TEST FILE and runs alembic with that cwd. Mutating" \
-      "      one means copying the whole worktree, tests included, and running there."
+      "      A MIGRATION cannot be mutated by THIS copy, because db/ is one of the symlinks" \
+      "      above: tests/integration/db derives the repository root from the TEST FILE and" \
+      "      runs alembic with that cwd, so the copy's root is reached but the real db/ is" \
+      "      read through the link. FULL=1 copies db/ as well and does make one mutable."
   fi
+  printf '%s\n' \
+    "      tests/ and pyproject.toml are COPIES and .venv is a link, so a tests-only" \
+    "      mutation runs here: cd $$dest && ./.venv/bin/pytest <path>"
 }
 
 probe_mutation_copy() {
@@ -599,9 +621,26 @@ import auditmanager
 here = pathlib.Path(auditmanager.__file__).resolve()
 if dest not in here.parents:
     raise SystemExit("MUTATION-COPY FAIL: auditmanager imported from %s, not under %s" % (here, dest))
-missing = [n for n in ("contracts", "docs", "fixtures", "db", "tools") if not (dest / n).exists()]
+missing = [n for n in ("contracts", "docs", "fixtures", "db", "tools", "tests") if not (dest / n).exists()]
 if missing:
     raise SystemExit("MUTATION-COPY FAIL: unreachable from the copy: %s" % missing)
+# `tests` and `pyproject.toml` must be COPIES, not links. A link would mean a stream
+# mutating "the copy's" test file is editing the tracked one, which is the single thing
+# this target exists to make impossible. Checked by identity, not by policy: a symlink
+# whose target is the worktree resolves outside `dest`.
+for name in ("tests", "pyproject.toml"):
+    p = dest / name
+    if not p.exists():
+        raise SystemExit("MUTATION-COPY FAIL: %s is not in the copy" % name)
+    if dest not in p.resolve().parents:
+        raise SystemExit(
+            "MUTATION-COPY FAIL: %s resolves to %s, outside the copy. Mutating it would "
+            "edit the tracked tree." % (name, p.resolve())
+        )
+# The db lane shells out by repository-root path and fails on a missing interpreter
+# before it can fail on anything a mutation did.
+if not (dest / ".venv" / "bin" / "python").is_file():
+    raise SystemExit("MUTATION-COPY FAIL: %s/.venv/bin/python is not reachable" % dest)
 from auditmanager.analysis.text import lock as _lock
 from auditmanager.shared.errors import catalog as _catalog
 print("MUTATION-COPY OK %s" % here)
@@ -926,11 +965,22 @@ foundation: up check-services migrate check-db check-storage test-foundation
 #   resolves them from `auditmanager.__file__` reads the copy's version and a mutation to
 #   one of them actually takes.
 #
-#   It does NOT make a migration mutable. `tests/integration/db/conftest.py` derives
-#   REPOSITORY_ROOT from its own file and runs alembic with that cwd, so the worktree's
-#   migrations are used whatever any copy contains. Mutating a migration means copying the
-#   whole worktree, tests included, and running pytest from there.
-# Then:  .venv/bin/pytest <suite> -o pythonpath=/root/<name>-mut/src -p no:randomly
+#   FULL=1 also makes a MIGRATION mutable, which it did not before `D-10` was closed.
+#   `tests/integration/db/conftest.py:29` derives REPOSITORY_ROOT from its own file and
+#   runs alembic with that cwd; now that `tests/` is copied, that root IS the copy, and
+#   with `db/` copied too the migration alembic reads is the copy's. Without FULL=1 the
+#   root is still the copy but `db/` is a link, so the real migration is read.
+#
+# Then, for a tests-only mutation -- which is what `D-10` was about:
+#        cd /root/<name>-mut && ./.venv/bin/pytest <path>
+#   `tests/`, `pyproject.toml` and `src/` are all copies there, so pytest's rootdir,
+#   import mode and `pythonpath` are the gate's and the module under mutation is the
+#   copy's. To mutate only `src/` you may still run from the worktree:
+#        .venv/bin/pytest <suite> -o pythonpath=/root/<name>-mut/src
+#   `pytest-randomly` is NOT installed and is not in `uv.lock`, so `-p no:randomly` --
+#   which this recipe carried for four waves -- is a no-op. `W13-ORD` measured the
+#   difference it was supposedly explaining over 191 journeys and found two samples of a
+#   5.6% coin. Do not add it back without checking the closure first.
 #
 # Build the copy, then run your suites against it **unmutated** and confirm they are green
 # before you trust a single red. That baseline is the part the prose recipe never had.
@@ -946,7 +996,8 @@ mutation-copy:
 	probe_mutation_copy "$(MUT)"
 	printf '%s\n' \
 	  "Next: run your suites against the UNMUTATED copy and confirm green." \
-	  "  .venv/bin/pytest <suite> -o pythonpath=$(MUT)/src -p no:randomly" \
+	  "  tests-only mutation : cd $(MUT) && ./.venv/bin/pytest <path>" \
+	  "  src-only mutation   : .venv/bin/pytest <suite> -o pythonpath=$(MUT)/src" \
 	  "A red from a copy you never baselined is not evidence."
 
 gate: foundation
