@@ -583,3 +583,37 @@ A". The reconciliation is in the history — `9f3a90d docs: two tests-only strea
 12 stage A, restoring the parallelism` — and the argument holds, because the two added
 streams write tests only and so cannot stale a certification. The plan document was not
 updated to say so. Not a defect in the work; a stale document that reads as a contradiction.
+
+## 9. Verification: the guards were re-measured, not asserted
+
+Every one of the 62 mutations that survived or hung in §2 was **re-applied to a freshly
+rebuilt mutation copy after the guards were committed**, together with the two corrected
+forms. `/root/w12web-logs/b7.log`, 64 mutations:
+
+**63 killed, 1 survived.**
+
+The one survivor is `IN-04` as originally written, and it is the third named failure mode
+in my own work rather than a gap in the guard. `IN-04` replaced
+`.map((part) => `${part.length}|${part}`).join('')` with `.join('|')` while **leaving the
+inner `${[...comment].length}:${comment}` prefix in place** — so the comment part is still
+length-prefixed and no two distinct intents collide. It is a mutation that does not mutate
+the rule. The honest form, `W7-IN-04`, removes the prefixing entirely:
+
+```
+-    `${[...comment].length}:${comment}`,
+-  ]
+-    .map((part) => `${part.length}|${part}`)
+-    .join('');
++    comment,
++  ].join('|');
+```
+
+and is **KILLED** by `unit/decisions/intent-signature-collision.test.ts > keeps a comment
+containing the separator apart from an id containing it`, and by the five-separator case
+beside it. `IN-04` is therefore recorded as **NOT A VALID MUTATION**, not as an unguarded
+rule.
+
+`W7-RS-01N` is the natural form of `RS-01` — deleting `'cancelled'` from the literal rather
+than slicing the array — and is **KILLED** by
+`unit/run/polling.test.ts > stops on 'cancelled' after one reading`, in milliseconds,
+where the original hung for 150 s.
