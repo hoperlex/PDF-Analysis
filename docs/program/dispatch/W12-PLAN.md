@@ -3,25 +3,35 @@
 Written 2026-09-17 by the integrator. Base `38a973a`, published as `origin/dev`. Gate: 1492
 passed / 5 skipped / 163 subtests.
 
-## 1. Why this wave is sequential, and parallel would be wrong
+## 1. What must be sequential, and what must not be
 
-Waves 10 and 11 ran streams in parallel because their work was disjoint. This one cannot.
+**Corrected 2026-09-17, after dispatch.** This section first read *"Why this wave is
+sequential, and parallel would be wrong"* and listed one stage-A session. Three were
+dispatched. The correction was written in a commit message and not here, which is the same
+defect this programme keeps repairing in other people's comments — **a commit message is not
+an amendment to a document**, and a reader of this file got the wrong picture. `W12-DEC`
+found it and was right to.
 
-`W12-CERT` certifies a tree. `W12-RCN` changes one. **Run together, the certification is
-stale before it is written** — which is precisely the debt `DEBT_REGISTER.md` D-1 records
+The rule is narrower than the original sentence:
+
+**Only a stream that changes `src/` must be serialized before the certification.** A
+certification is a statement about *behaviour*. A stream that writes tests only cannot make
+one stale, so it runs beside the repair and its work is inside the same certification.
+
+`W12-CERT` certifies a tree; `W12-RCN` changes one. Run together, the certification would be
+stale before it is written — which is precisely the debt `DEBT_REGISTER.md` D-1 records
 against `W6-CERT`, whose certification of `c0d7daf` stopped describing the tree the moment
-wave 11 merged.
+wave 11 merged. **That argument applies to `W12-RCN` and to nothing else in this wave.**
 
-So: **stage A repairs, stage B certifies what stage A produced.** One certification then
-covers waves 11 and 12 together, and the debt stays one wave wide — the rule from
-`W5_CLOSURE.md` §4, honoured since.
+So stage A runs three ways and stage B follows it. One certification then covers waves 11 and
+12 together and the debt stays one wave wide — the rule from `W5_CLOSURE.md` §4.
 
-The cost is wall-clock. It buys a certification that describes a commit that exists.
-
-| Stage | Session | Instance | Starts |
-|---|---|---|---|
-| A | `W12-RCN` — reconciliation proves less than it promises | `gate-w12a` 55650 / 59250 / 59251 | now |
-| B | `W12-CERT` — re-certify PC-01 | `gate-w12b` 55660 / 59260 / 59261 | **only after A is merged and published** |
+| Stage | Session | Writes | Instance | Starts |
+|---|---|---|---|---|
+| A | `W12-RCN` — reconciliation proves less than it promises | **`src/`** + its tests | `gate-w12a` 55650 / 59250 / 59251 | now |
+| A | `W12-WEB` — the frontend has never been swept | `web/tests/**` only | `gate-w12c` 55670 / 59270 / 59271 | now |
+| A | `W12-DEC` — the decision ledger, swept only by reading | `tests/integration/{decisions,findings}/**` only | `gate-w12d` 55680 / 59280 / 59281 | now |
+| B | `W12-CERT` — re-certify PC-01 | checkpoint artifacts only | `gate-w12b` 55660 / 59260 / 59261 | **only after stage A is merged and published** |
 
 ## 2. Stage A carries a design call, not a fix
 
