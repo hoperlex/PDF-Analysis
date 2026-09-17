@@ -594,6 +594,63 @@ the owner's decision; `DEBT_REGISTER.md` §3 records that it was waiting on exac
 certification, and D-1's condition — "a certification exists for a commit on this line" — is now
 met at `e6eae1e`.
 
-## 11. Elapsed
+## 11. The gate, after
 
-Start `2026-09-17T12:31:24+05:00` (worktree created), end at the final `GATE OK` below.
+Re-run at the end, on the same tree with my four owned files committed, against a database now
+carrying the live run and every probe's residue:
+
+| component | at arrival | at the end |
+|---|---|---|
+| foundation | 35 passed, 28.40 s | **35 passed**, 28.79 s |
+| battery | 1505 / 5 skipped / 167 subtests, 182.38 s | **1505 / 5 skipped / 167 subtests**, 183.98 s |
+| frontend | 440 passed / 35 files | **440 passed / 35 files** |
+| whitespace | clean | clean |
+
+`GATE OK`, exit 0. Identical, as it must be: I changed no test and no product code. It is also a
+population-independence check in passing (`OPERATING_CONSTRAINTS.md` §9) — the battery ran
+unchanged against a database holding a published live run, 56 audit runs and 41 ledger events.
+
+Log: `/root/w12cert-logs/gate-final.log`.
+
+## 12. Command log, complete
+
+| command | exit |
+|---|---|
+| `git worktree add /root/w12cert -b agent/w12-cert origin/dev` | 0 |
+| `make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12` | 0 |
+| `npm --prefix web ci` | 0 |
+| `make gate` (arrival) | 0 |
+| `git diff --stat c0d7daf..HEAD -- src/ db/` | 0 |
+| `env -u AUDITMANAGER_PROVIDER_MODE PYTHONPATH=src .venv/bin/pytest -q tests/e2e/pc01` | 0 |
+| `make mutation-copy MUT=/root/w12cert-mut` | 0 |
+| the unmutated copy, same suite | 0 |
+| liveness control (`MUT-LIVE-CONTROL`) | 1 — 2 failed, 47 errors, as intended |
+| mutations C1a, C1b, C3, C4, C5a, C5b, C6, C7, C9, C10 | 1 each — each red named above |
+| the two `ungrounded_model_item` mutations (A, B) | 1 each |
+| `PYTHONPATH=src .venv/bin/python -m auditmanager.api.app` | 0 — `wired, provider_mode=proxy`, `operations=12` |
+| the same with `DATABASE_URL` unset / `S3_BUCKET` unset | **2** each |
+| `alembic upgrade head` on an empty scratch database | 0 |
+| `alembic downgrade -1`, then `make check-db` | 0, then **2** (`FOUNDATION-CHECK FAIL check-db`) |
+| `C2_PC01_LIVE=1 … pytest -q tests/e2e/pc01/test_live_text_analysis.py` | 0 — 5 passed |
+| `make down`; `make check-services` while down | 0; **2** |
+| `make up`; `make check-services` / `check-db` / `check-storage` | 0; 0 / 0 / 0 |
+| the census diff before and after the restart | 0 — identical |
+| the checksum-guard probe against live MinIO | 0 |
+| the read-path probe through `uploadDocument` / `streamDocumentVersionContent` | 0 |
+| the `verify_version` probe over one live version | 0 |
+| the five negative fixtures, measured directly | 0 |
+| `UPDATE` / `DELETE` on `expert_decision_event` | refused, **SQLSTATE `AM002`** |
+| the `web/src` import-closure measurement | 0 — `110 76 34` |
+| `DROP DATABASE audit_w12b_c2` | 0 |
+| `make gate` (final) | 0 |
+
+## 13. Elapsed
+
+Start `2026-09-17T12:31:24+05:00` (worktree created), end `2026-09-17T13:09:15+05:00` (final
+`GATE OK`). **38 minutes wall-clock**, of which roughly 13 is machine time: two full gate runs at
+about 3.5 minutes each, bootstrap, `npm ci`, the foundation sequence twice and a real container
+restart. The twelve mutation runs cost about 12 seconds each; the live run cost 14 seconds and
+USD 0.0387.
+
+Branch `agent/w12-cert`, seven commits, changing only the four owned paths. **Not pushed, not
+tagged, not merged.**
