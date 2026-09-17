@@ -651,10 +651,24 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     #
     # Created *before* case 01 so that case 01's project is still the newest and case 16's
     # `items[0]` assertion is unchanged.
+    # The credential is added here, not by `Caller`, for the reason `Caller`'s docstring
+    # gives: it sends exactly the headers it is given so that what a record says was sent
+    # **is** what was sent. `record()` adds it for every captured case; this call is not a
+    # record, so it has to carry its own.
+    #
+    # It did not, from the moment `T-6` landed, and the failure was silent in the worst
+    # way: the POST was answered 401, created nothing, and its response was discarded, so
+    # case 16's second row never existed. On a lane that had been run before, an older
+    # project supplied it and the corpus passed; on a fresh one, 47 errors. `W15-AUTH`
+    # found it by running `make gate` on a clean lane, which is the only place it shows.
     api.send(
         "POST",
         "/projects",
-        headers={"Idempotency-Key": f"w13base-{tag}-cursor-setup", **json_headers},
+        headers={
+            AUTHORIZATION_HEADER: f"Bearer {STATIC_TOKEN}",
+            "Idempotency-Key": f"w13base-{tag}-cursor-setup",
+            **json_headers,
+        },
         body=b'{"name": "W13 baseline cursor setup"}',
     )
 
