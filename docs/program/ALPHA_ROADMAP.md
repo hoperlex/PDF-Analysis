@@ -198,7 +198,12 @@ FF-01 §2.8 makes this a single-owner task; §9 R-2 is the ruling it needs.
 
 **Stage 0b — the contract reseal, one writer, the contract's owner and not this wave's
 sessions.** `securitySchemes` and the operations' `security` per `T-6`, and the
-`permission_denied` collision settled. It lands before stage 2 declares its dependency and
+`permission_denied` collision settled — registered as `D-7`, with the integrator recommending
+that the code keeps its contract meaning (an authenticated subject's rights) and the storage
+case gets a code of its own. That is a catalog addition and an owner decision. `D-8` makes it a
+smaller act than this programme's prose implied: the catalog declares itself
+`"frozen": false, "status": "draft_candidate"`, so what is being asked for is approval of an
+addition to a candidate, not the unfreezing of a freeze. It lands before stage 2 declares its dependency and
 before `W13-CONF` can compare anything, and it moves `web/openapi/openapi.json` and the
 generated client with it. §9 R-3 is the ruling it needs.
 
@@ -210,7 +215,15 @@ both sides, a Range read, the CSV with its BOM and CRLF, and an `X-Correlation-I
 and absent. Commit the bytes.
 
 This is the wave's safety net and it is cheap: after the rewrite, **the FastAPI
-implementation must reproduce those bytes exactly.** A rewrite of a certified surface with no
+implementation must reproduce those bytes exactly.**
+
+**The one place it is allowed not to, named in advance.** If `D-7` moves the storage
+credential refusal to a code of its own, that path's captured bytes change on purpose. It is
+written down here, before the corpus exists, because a safety net with an unnamed exception is
+a safety net somebody talks their way past at two in the morning: **exactly one path may
+differ, only by the decision `D-7` records, and the commit that decided it is cited beside the
+new expectation.** Every other difference is a failure of the wave, whatever argument
+accompanies it. A rewrite of a certified surface with no
 before-picture is how a programme discovers in wave 15, in a browser, that a status code
 moved.
 
@@ -389,8 +402,9 @@ live run.** No row here is a commitment, and the first one to be revised will be
   `securitySchemes` in wave 13, all twelve operations sit behind one dependency, and the alpha
   satisfies it with a static token. The reseal has an owner (`P2-API-01`'s successor), ripples
   into `web/openapi/openapi.json` and the generated client, and carries the `permission_denied`
-  collision above. Also: who holds the alpha token. Blocks stage 2 of wave 13 and PA-01
-  criterion 2.
+  collision above. It may also carry a **catalog addition** for the storage case (`D-7`), which
+  `D-8` shows to be an approval against a draft candidate rather than a freeze-break. Also: who
+  holds the alpha token. Blocks stage 2 of wave 13 and PA-01 criterion 2.
 - **R-4 — the documents.** Whether real client PDFs may be uploaded to this server, by whom, and
   what happens to them at the end of the pilot. Nothing in this repository may hold them, and
   `reset.sh` is the answer to the last part — but the first two are not the integrator's call.
