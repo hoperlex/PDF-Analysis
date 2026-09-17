@@ -44,7 +44,7 @@ have not used.
 |---|---|
 | any process that listens on a socket, and any web framework | `grep -rn "serve_forever\|uvicorn\|asgi\|fastapi" src tools tests Makefile` — empty. `ADR-0002` and `ARCHITECTURE_BIBLE.md` P-05 have named FastAPI since the bootstrap; the lock has never carried it, and `GATE_B2_CLOSURE.md` §3 records `B6` finding that and writing ~100 stdlib lines instead |
 | an application image or any packaging | `find . -iname "*Dockerfile*"` finds only `infra/local/docker-compose.yml`, which runs PostgreSQL and MinIO and nothing of ours |
-| one run of the UI against the backend | `web/src/shared/api/transport.ts` calls `NEXT_PUBLIC_API_BASE_URL`; nothing has ever served it. `e2e:pc01` is a reserved name that fails on purpose (`web/scripts/reserved-forwarder.mjs`) |
+| the UI served by anything the repository contains | **Corrected 2026-09-17.** Revision 1 said the UI had never run against the backend. It has: `/root/pdf-prototype/` — outside the repository, untracked, four files — puts a stdlib `ThreadingHTTPServer` in front of `dispatch`, proxies everything else to Next on loopback and was driven by hand in a browser on 2026-09-16. So the claim is true of the *repository* and false of the *world*, and the difference produced evidence nothing in `docs/` records — see §10 risk 1 |
 | any authentication | `src/auditmanager/access/` holds a README and no code |
 | a wipe, a dump or a restore | no script under `infra/`; `make down` keeps the volumes |
 | UI rendering under test | `DEBT_REGISTER.md` D-1.5: 34 of 110 `web/src` modules reached by no test; criterion 4's UI clause is the certification's one named exception |
@@ -112,7 +112,7 @@ this road with a machine checking it on every run.
 and the API at `/api/v1`. `getApiBaseUrl()` accepts a base *path*, so
 `NEXT_PUBLIC_API_BASE_URL=/api/v1` is relative: the web image works on any host, the value is
 not baked to one origin, and there is no cross-origin surface to configure, mis-configure or
-test. Adding CORS headers would also mean touching a frozen contract.
+test. Adding CORS headers would also mean touching a frozen contract. **This shape is already known to work here:** the out-of-repo bridge of §2 served `/api/v1` itself, proxied the rest to Next and set `NEXT_PUBLIC_API_BASE_URL=/api/v1`, one origin and one forwarded port — `run.sh` records why, in the same words.
 
 **T-3 — the operational plane is off-contract.** Liveness and readiness answer on a **second
 port**, never under `/api/v1`. The contract has twelve operations and `openapi-drift.contract.test.ts`
@@ -345,10 +345,23 @@ live run.** No row here is a commitment, and the first one to be revised will be
 
 ## 10. Risks, ranked by what they would cost
 
-1. **The first HTTP run finds what four in-process certifications could not.** Upload
-   buffering and timeouts at 25 MiB, the polling loop under real latency, the PDF page render in
-   a browser, the CSV's BOM and CRLF through a download. This is not a risk to be mitigated —
-   it is the reason for the road. It is ranked first because it is where the schedule moves.
+1. **The first HTTP run finds what four in-process certifications could not — and it already
+   has.** `/root/pdf-prototype/bridge.log`, 2026-09-16, a hand-driven browser session through
+   the out-of-repo bridge: `GET /projects` 200, `POST /projects` 201, `POST /projects/{uid}/documents`
+   **201**, then `POST /api/v1/runs` → **500, twice**, and the session stops there. The same
+   operation is green in every suite and in three certifications, all of which drive it in
+   process.
+
+   Nothing in `docs/` or `artifacts/` mentions this: `grep -rln "pdf-prototype\|bridge.py\|3101" docs artifacts`
+   returns nothing. The bridge logs only status lines, so the envelope behind those two 500s
+   was not kept — **the first thing wave 13's golden corpus must do is reproduce that request
+   and find out**, because it is either a real defect on the run path or an artefact of how the
+   bridge passes a body, and the two have different owners.
+
+   The rest of the list stands as prediction rather than measurement: upload buffering and
+   timeouts at 25 MiB, polling under real latency, the PDF page render in a browser, the CSV's
+   BOM and CRLF through a download. This risk is ranked first because it is where the schedule
+   moves, and it is now the only one with evidence already against it.
 2. **FastAPI answering in its own voice instead of the contract's.** `RequestValidationError`
    and `HTTPException` have their own JSON bodies, and a single unhandled path lets one escape
    with a shape no client of this API has ever been written against — while every suite that
