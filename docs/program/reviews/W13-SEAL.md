@@ -222,3 +222,92 @@ I did **not** add an entry to `open_owner_decisions`. That register's `id` is a 
 different register. Putting it there would need a schema enum edit and would put two kinds of
 thing under one name — `D-1.6` and `D-8`'s shape. The citation lives in the code's `evidence`,
 its `notes` and the `revision_note` instead.
+
+## 3. Everything that moved with the contract
+
+The brief's Step 4 list is four items. The measured list is twelve, and the difference is §6.2.
+
+| Artefact | What moved | Commit |
+|---|---|---|
+| `contracts/domain/v1/error-codes.json` | the 21st code; `dependency` category description; `candidate_revision` 6 + note | `e6d0a6a` |
+| `contracts/domain/v1/error-codes.schema.json` | `codes.required` + the name, `minProperties` 21, `candidate_revision` const 6 | `e6d0a6a` |
+| `contracts/domain/v1/error-envelope.schema.json` | the `error_code` enum, and a new `allOf` branch pinning `retryable: false` for it | `e6d0a6a` |
+| `contracts/domain/v1/identifiers{,.schema}.json`, `state-machines{,.schema}.json` | `candidate_revision` 6 only — the family carries one, and `W0-DOM-02` permits no other byte in those two | `e6d0a6a` |
+| `src/auditmanager/shared/errors/codes.py` | the `ErrorCode` member; "twenty" → "twenty-one" | `e6d0a6a` |
+| `src/auditmanager/storage/errors.py`, `s3.py`, `port.py`, `__init__.py`, `README.md` | the class renamed and moved to the new code; `SAFE_DETAIL_KEYS` loses the two subject-shaped keys with the code that declared them | `e6d0a6a` |
+| `db/migrations/versions/20260910_0002_pc01_schema.py` | `ERROR_CODES` — three `CHECK` constraints are built from it | `e6d0a6a` |
+| `contracts/api/v1/openapi.json` | the scheme, the root requirement, 401/403 on twelve, the enum, `info.description` | `a5f4001` |
+| `web/openapi/openapi.json` | byte copy of the above | `b370b03` |
+| `web/src/shared/api/generated/**` | all four files, regenerated — never hand-edited | `b370b03` |
+| `web/FRONTEND_LOCK.json` | six digests, `content_commit` `a5f4001`, a new `commit_note` | `b370b03` |
+| `tests/characterization/w13_baseline/**` | record 31, `journey.py`, `README.md`, two new tests | `d8b3fff`, `09e863b` |
+
+**Tests that pinned the old state as a literal**, all four moved deliberately rather than
+loosened: `tests/contract/domain_p02/test_contract_vocabulary.py` and
+`test_openapi_document.py` (`== 20` → `21`), `tests/contract/shared_kernel/test_error_kernel.py`
+(`test_there_are_twenty` → `test_there_are_twenty_one`),
+`web/tests/contract/seam-operations.contract.test.ts` (`toHaveLength(20)` → `21`, plus
+containment checks for the new code and for `permission_denied`). And
+`tests/integration/api/test_operation_surface.py`, whose assertion was
+`"securitySchemes" not in components` with the reason "PC-01 has no authentication and no role
+model" — **inverted, not deleted**, with the superseded premise named in the docstring.
+
+### The database, and the one thing to know about it
+
+`test_error_code_domain_equals_the_frozen_catalog` requires the migration's `ERROR_CODES` tuple
+to equal the catalog's key set **in both directions**, so the catalog cannot gain a code without
+the DDL gaining it too. I edited the tuple in `20260910_0002_pc01_schema.py` rather than adding
+a `0006`, because the test reads that module by path and a new migration would leave it failing
+— and because **no database anywhere was created from the old tuple and has to be migrated off
+it**: nothing is deployed (`ALPHA_ROADMAP.md` §2 — no packaging, no application image, no host
+yet under `R-1`), and every lane's instance is built by `alembic upgrade head` from empty. My
+own `audit_w13b` was.
+
+**That stops being true the moment `R-1`'s VPS holds a database.** The next catalog addition
+after that is a real migration with a real `ALTER ... DROP CONSTRAINT` / `ADD CONSTRAINT` on
+three columns. Recorded here so the cheapness of this one is not read as a precedent.
+
+## 4. The baseline record, and the citation
+
+`records/31-streamDocumentVersionContent.storage_credential_refused.json`.
+
+|  | as captured by `W13-BASE` | now |
+|---|---|---|
+| status | `403` | `500` |
+| `error_code` | `permission_denied` | `dependency_credential_refused` |
+| `message` | the catalog's *"the authenticated subject is not permitted…"* | the new summary |
+| `details` | `{aggregate_type: Blob, required_capability: blob_storage_rw}` | `{dependency: blob_storage}` |
+| `retryable` | `false` | `false` |
+
+`exception.decided_by` is **`e6d0a6a`**, with its subject and date beside it, and
+`exception.status` is now `"taken"`. The count stayed at one:
+`test_exactly_one_record_is_marked_as_the_permitted_exception` is unchanged and still passes.
+
+**The evidence that the change is confined to that one record.** Before touching anything under
+`records/`, I ran the suite against the changed implementation. `journey.py`'s own literal
+assertion `storage.status == 403` fired first and aborted the session fixture — one cause, named
+in advance, and nothing else got as far as disagreeing
+(`/root/w13seal-logs/baseline-before-update.log`). Then I re-ran **`capture.py`**, which
+rewrites all 33 records, rather than hand-editing one. `git status` afterwards listed exactly
+one changed file. A hand edit would have proved only that I edited one file; the recapture
+proves the other 32 responses are byte-identical to what `W13-BASE` committed.
+
+The file was renamed with the code it carries — `storage_permission_denied` →
+`storage_credential_refused`. The `31-` prefix is deliberately unchanged, so "record 31", which
+is how `W13-BASE.md` §10 and the roadmap refer to it, still finds it.
+
+### Keeping "this baseline says nothing about authorization" true rather than old
+
+The contract now declares the seam; the implementation does not, because that is stage 2's.
+So the 33 records still show unauthenticated requests being answered — and after this reseal
+that is a thing a later reader can mistake for the surface's *intended* unauthenticated
+behaviour. The README paragraph stayed true by accident of ordering; that is not a property to
+leave unguarded.
+
+`test_the_baseline_makes_no_authorization_claim` reports any record that carries an
+`Authorization` or `Proxy-Authorization` header, pins `401` or `403`, or drops its
+`pre_authorization` declaration. Its prover plants all three and requires each to be reported,
+and both call the **same** `_authorization_claims` function — the first version of the prover
+re-implemented the rule, which proves only that a copy can fail. The README is amended with the
+reseal commit, the before/after table, and the sentence that if stage 2 makes the journey
+authenticate, that test and that paragraph change together.
