@@ -463,3 +463,54 @@ second consumer — which is the whole reason the name is generic.
 configuration fault reported to the caller as a validation failure on their request. It is the
 same misattribution `D-7` describes, one class along in the same file, and it is **not** a
 precedent for the choice in §2; I noticed it while reading and left it alone.
+
+## 8. For stage 2 (`W13-API`) and `W13-CONF`
+
+1. **The scheme is `http`/`bearer` with no `bearerFormat`.** FastAPI's `HTTPBearer` generates
+   exactly `{"type": "http", "scheme": "bearer"}` — it will not emit `bearerFormat` unless asked,
+   so the conformance comparison has nothing to reconcile. `auto_error` is the thing to watch:
+   FastAPI's default raises its own `HTTPException`, and a bare 403 or a `{"detail": ...}` body
+   would violate the one-failure-shape rule this document has held since CP-00. **`401` is
+   `authentication_required` in an `ErrorEnvelope` with `X-Correlation-Id`, and nothing else is
+   acceptable.** The same trap `W13-BASE` §10.3 names for `RequestValidationError`.
+2. **Declare the requirement once, at the router or the app, not twelve times.** The contract
+   does, and `test_every_operation_requires_the_bearer_scheme` resolves effective security the
+   way the spec does — so a FastAPI document that declares it per-operation still conforms. What
+   does not conform is any operation that ends up with no requirement, or with an empty
+   alternative.
+3. **The health plane carries no dependency.** `T-3` puts it outside `/api/v1`, on its own port,
+   and the deploy script and the proxy poll it. If it inherits an app-wide dependency it stops
+   answering and wave 14 discovers that in a deployment.
+4. **Record 31 is still the only record you may change, and it has already been changed.**
+   Its `exception.status` is `"taken"`. A *second* difference in that record is now a failure of
+   the wave like any other — the exception was spent, not made permanent.
+5. **`test_the_baseline_makes_no_authorization_claim` will go red the moment the journey
+   authenticates**, which it should. Change it and the README paragraph together, in the same
+   commit, and say which era the records then belong to.
+6. **The frontend has no branch for 401.** `web/src/shared/api/errors.ts` narrows to ten
+   `PC01_ERROR_CODES`, and `authentication_required`, `permission_denied` and
+   `dependency_credential_refused` are all outside it. That is correct by construction — the
+   narrowing is documented as "a code outside the list but inside the catalog is still an
+   `ApiError`" — but 401 is now reachable on every operation, and a generic `ApiError` toast is
+   not what an expired credential should produce. A UI decision, not a contract one, and it is
+   not made here.
+7. **`dependency_credential_refused` is a 500 that is not `internal_error`.** Anything that
+   maps "5xx → internal_error" at the edge will erase it. `envelope_response()` already reads
+   the status *from* the code, which is the behaviour to preserve.
+
+## 9. Scope
+
+Written: `contracts/**`, `web/openapi/**`, `web/FRONTEND_LOCK.json`, the generated client,
+`src/auditmanager/shared/errors/**`, `tests/characterization/w13_baseline/**`, this file — and,
+by necessity, `src/auditmanager/storage/**`, `db/migrations/versions/20260910_0002_pc01_schema.py`,
+three files under `tests/contract/**`, `tests/integration/api/test_operation_surface.py`,
+`tests/integration/storage/test_unavailable.py` and
+`web/tests/contract/seam-operations.contract.test.ts`. §6.2 is the argument for each.
+
+**Nothing under `src/auditmanager/api/**`.** Stage 2 writes the API layer; this session wrote
+the document it will be checked against and did not anticipate a line of it.
+
+No dependency added — `pyproject.toml` and `web/package-lock.json` are untouched, and
+`agent/w13-pin`'s FastAPI pins were deliberately not carried into this branch. No bytes added
+under `fixtures/synthetic/ar/**` or `fixtures/validation/PC-02/**`; nothing under `fixtures/` at
+all. No tag, no push, no merge to `main` or `dev`.
