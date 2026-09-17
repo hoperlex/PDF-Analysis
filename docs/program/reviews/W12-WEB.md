@@ -341,3 +341,43 @@ calls **outside** that `try`, so it escapes.
   state > stops on 'cancelled' after one reading` now fails with *the poll loop asked for
   more than 3 readings and did not stop* in 13 ms instead of hanging.
 - Green: unmutated, `tests/unit/run/polling.test.ts` — 14 passed, 13 ms.
+
+## 4. What `web/tests` could not reach at all
+
+Before any mutation: **34 of the 110 modules under `web/src` are imported, transitively,
+by no test in `web/tests`.** That is 1 352 of 7 604 lines — 18% of the tree — and it
+includes every screen the manual PC-01 runbook is driven through.
+
+Measured, not estimated, by resolving the `@/` alias and every relative import from each
+test file and taking the transitive closure:
+
+```
+cd /root/w12web/web && python3 -              # the script is in §8 of this file
+src modules: 110   reachable from tests: 76   unreached: 34   unreached lines: 1352
+```
+
+The unreached set, largest first:
+
+| lines | module |
+|---|---|
+| 231 | `widgets/run-progress/ui/run-progress.tsx` |
+| 169 | `features/upload-document/ui/upload-document-form.tsx` |
+| 128 | `features/create-project/ui/create-project-form.tsx` |
+| 82 | `features/start-run/ui/start-run-control.tsx` |
+| 74 | `widgets/project-list/ui/project-list.tsx` |
+| 73 | `widgets/upload-panel/ui/upload-panel.tsx` |
+| 53 | `_pages/project-detail/ui/project-detail-page.tsx` |
+| 50 | `features/upload-document/model/use-upload-document.ts` |
+| 45 | `_app/query-client.ts` |
+| 41 | `features/start-run/model/use-start-run.ts` |
+| 36 | `features/create-project/model/use-create-project.ts` |
+| 35 | `_app/app-frame.tsx`, `_pages/run/ui/run-page.tsx` |
+| 30, 27, 26 | the three copies of `use-intent-key.ts` |
+| 28, 27, 25 | `app/layout.tsx`, `_app/providers.tsx`, `_pages/projects/ui/projects-page.tsx` |
+| ≤20 | the six `app/**` route files and seven barrel `index.ts` files |
+
+`run-progress.tsx` is the file the dispatch points at: it is the only place
+`terminal_reason` is rendered, and no test imports it.
+
+This is the boundary of the sweep, and it is stated rather than papered over: §2 mutated
+the 76 reachable modules, and §5 records what happens to a mutation inside the other 34.
