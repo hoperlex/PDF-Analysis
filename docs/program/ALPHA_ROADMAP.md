@@ -57,7 +57,8 @@ have not used.
 | UI rendering under test | `DEBT_REGISTER.md` D-1.5: 34 of 110 `web/src` modules reached by no test; criterion 4's UI clause is the certification's one named exception |
 
 What is **not** missing, and is why this road is still short: the twelve operations, the
-typed error envelope over a frozen 20-code catalog, the append-only ledger, migrations, the
+typed error envelope over a 20-code catalog (frozen by practice and the P02 lock, not by the
+file — `D-8`), the append-only ledger, migrations, the
 checksum-verified blob store, the six `Port` protocols the handlers talk to, the frozen
 OpenAPI and a generated client against it. `envelope_response()` in
 `src/auditmanager/api/routers/errors.py` already renders every failure the contract declares.
@@ -150,7 +151,7 @@ about seams decides the rest.
 
 - the contract declares **no `securitySchemes`**, no top-level `security`, and no operation
   carries its own. Tokens are a contract change and a reseal of the frozen document;
-- but the catalog already carries `authentication_required` (401) and `permission_denied`
+- but that same catalog already carries `authentication_required` (401) and `permission_denied`
   (403) in an `authorization` category, with `safe_detail_keys` of `aggregate_type` and
   `required_capability`, and `not_found`'s own summary says a response "never reveals the
   existence of a resource the caller may not see". **This contract was designed for an
@@ -164,12 +165,14 @@ token; the public version replaces the dependency's implementation with OIDC and
 neither the twelve operations nor the contract again. Doing it after wave 13 means reopening
 the API layer, reopening the contract, and regenerating the frontend client a second time.
 
-**One snag the reseal must settle, found in the tree rather than in a document:**
-`StoragePermissionDeniedError` already emits `permission_denied` when *our* S3 credentials are
-refused (`storage/errors.py:153`). If API authorization reuses that code, one 403 means two
-unrelated things — the caller lacks rights, or the server's own credential to the bucket was
-rejected — and an operator cannot tell them apart from the envelope. That is a code-catalog
-decision and it belongs to the contract's owner, not to this file.
+**One snag the reseal must settle, found in the tree rather than in a document — and now
+ruled.** `StoragePermissionDeniedError` already emits `permission_denied` when *our* S3
+credentials are refused (`storage/errors.py:153`), so one 403 would mean either that the caller
+lacks rights or that the server's own credential to the bucket was rejected, indistinguishably:
+both declare exactly `aggregate_type` and `required_capability` and neither carries a
+discriminator. **The owner ruled on 2026-09-17: tokens *and* the storage code.** The code keeps
+the contract's meaning — an authenticated subject's rights — and the storage case gets a code
+of its own at the same reseal, which is registered as `D-7`.
 
 Still out of scope here: user management, roles, multi-tenancy. One subject with one token is
 not an identity model, and pretending otherwise is the guess §2.5 refuses.
@@ -217,8 +220,9 @@ and absent. Commit the bytes.
 This is the wave's safety net and it is cheap: after the rewrite, **the FastAPI
 implementation must reproduce those bytes exactly.**
 
-**The one place it is allowed not to, named in advance.** If `D-7` moves the storage
-credential refusal to a code of its own, that path's captured bytes change on purpose. It is
+**The one place it is allowed not to, named in advance.** `D-7` is ruled, so this is no
+longer conditional: the storage credential refusal **will** move to a code of its own, and that
+path's captured bytes change on purpose. It is
 written down here, before the corpus exists, because a safety net with an unnamed exception is
 a safety net somebody talks their way past at two in the morning: **exactly one path may
 differ, only by the decision `D-7` records, and the commit that decided it is cited beside the
@@ -235,7 +239,7 @@ moved.
   carrying the contract's `operationId`, tags, parameters, status codes and response headers;
 - **every failure rendered by `envelope_response` and nothing else.** FastAPI's own
   `RequestValidationError` and `HTTPException` bodies must never reach a client: handlers map
-  them onto the frozen 20-code catalog, preserving the constraint names the certifications
+  them onto the 20-code catalog, preserving the constraint names the certifications
   pin. This is the single highest-risk item in the wave;
 - the `X-Correlation-Id` middleware, the body cap, the two-guard size distinction
   (`max_bytes` at the transport, `byte_size <= 26214400` in the envelope — `P4_CLOSURE.md` §5
@@ -393,7 +397,7 @@ live run.** No row here is a commitment, and the first one to be revised will be
 ## 9. What the owner has ruled, and what is still owed
 
 **All four were answered on 2026-09-17** and are recorded in
-`docs/program/OWNER_RULINGS_2026-09-17.md` at `3f97e33`. Wave 13 is unblocked; wave 14 waits
+`docs/program/OWNER_RULINGS_2026-09-17.md` — written at `3f97e33`, on this line at the merge `85aaa24`. Wave 13 is unblocked; wave 14 waits
 only on host details.
 
 | | Ruling | What it does to this plan |
