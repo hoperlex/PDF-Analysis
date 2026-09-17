@@ -12,10 +12,14 @@ from __future__ import annotations
 import re
 from typing import Annotated, Any, Final
 
-from fastapi import APIRouter, Form, Header, Path, Response
+from fastapi import APIRouter, Depends, Form, Header, Path, Response
 
 from auditmanager.api.routers.declarations import envelope_responses, success
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
+from auditmanager.api.routers.multipart import (
+    CheckedUpload,
+    require_a_strict_multipart_body,
+)
 from auditmanager.api.routers.ports import DocumentPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
@@ -61,12 +65,12 @@ RangeParam = Annotated[
 ]
 
 
-def build_document_routes(documents: DocumentPort) -> APIRouter:
-    router = APIRouter(tags=["documents"])
+def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
 
     @router.post(
         "/projects/{project_uid}/documents",
         operation_id="uploadDocument",
+        tags=["documents"],
         status_code=201,
         response_model=models.DocumentVersion,
         openapi_extra=_MULTIPART_ENCODING,
@@ -79,24 +83,22 @@ def build_document_routes(documents: DocumentPort) -> APIRouter:
         project_uid: Annotated[models.ProjectUid, Path()],
         body: Annotated[models.UploadDocumentRequest, Form(media_type=_MULTIPART)],
         idempotency_key: RequiredIdempotencyKey,
+        checked: Annotated[CheckedUpload, Depends(require_a_strict_multipart_body)],
     ) -> WireResponse:
         # `UploadDocumentRequest` is closed, so an undeclared part is an `extra_forbidden`
         # that `on_request_validation_error` renders as `additionalProperties` -- the same
         # answer a JSON body's undeclared property gets, which is the point.
-        filename = body.file.filename
-        if not filename:
-            raise DomainError(
-                ErrorCode.VALIDATION_FAILED,
-                message="The file part requires a filename.",
-                field="file",
-                constraint="filename",
-            )
+        # `checked` ran first -- FastAPI resolves sub-dependencies before the body -- so
+        # by here the body is a readable multipart of uniquely named parts, the file part
+        # has a filename, and `checked.display_title` is the text the caller actually
+        # encoded rather than Starlette's latin-1 reading of it.
+        filename = body.file.filename or ""
         content = body.file.file.read()
         outcome = documents.upload_document(
             project_uid=project_uid,
             content=content,
             source_filename=filename,
-            display_title=body.display_title,
+            display_title=checked.display_title,
             idempotency_key=idempotency_key,
         )
         return json_response(201, encode_json(document_version_body(outcome.version)))
@@ -104,6 +106,7 @@ def build_document_routes(documents: DocumentPort) -> APIRouter:
     @router.get(
         "/versions/{version_uid}",
         operation_id="getDocumentVersion",
+        tags=["documents"],
         status_code=200,
         response_model=models.DocumentVersion,
         responses={
@@ -120,6 +123,7 @@ def build_document_routes(documents: DocumentPort) -> APIRouter:
     @router.get(
         "/versions/{version_uid}/content",
         operation_id="streamDocumentVersionContent",
+        tags=["documents"],
         status_code=200,
         response_class=Response,
         responses={
@@ -170,7 +174,6 @@ def build_document_routes(documents: DocumentPort) -> APIRouter:
             window,
         )
 
-    return router
 
 
 def _resolve_range(header: str, size: int) -> tuple[int, int]:

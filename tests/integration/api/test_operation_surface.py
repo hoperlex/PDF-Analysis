@@ -13,8 +13,7 @@ from typing import Any
 
 import pytest
 
-from auditmanager.api.routers import Router, dispatch
-from auditmanager.api.routers.http import Request
+from w13_api_driver import Request, Surface, dispatch
 
 _METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
 
@@ -30,7 +29,7 @@ def declared_operations(document: dict[str, Any]) -> set[tuple[str, str, str]]:
 
 
 def test_the_router_declares_exactly_the_frozen_operations(
-    router: Router, openapi_document: dict[str, Any]
+    router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     declared = declared_operations(openapi_document)
     implemented = set(router.signature())
@@ -43,7 +42,7 @@ def test_the_router_declares_exactly_the_frozen_operations(
 
 
 def test_the_document_declares_twelve_and_the_router_implements_twelve(
-    router: Router, openapi_document: dict[str, Any]
+    router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     """The count is checked separately from the set.
 
@@ -55,7 +54,7 @@ def test_the_document_declares_twelve_and_the_router_implements_twelve(
 
 
 def test_every_declared_operation_is_reachable(
-    router: Router, openapi_document: dict[str, Any]
+    router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     """Every operation resolves to a handler for its own method.
 
@@ -82,10 +81,10 @@ def test_every_declared_operation_is_reachable(
         )
         for name in samples:
             if "{" + name + "}" in template:
-                assert bound.path_params[name] == samples[name]
+                assert bound[name] == samples[name]
 
 
-def test_no_thirteenth_operation_answers(router: Router) -> None:
+def test_no_thirteenth_operation_answers(router: Surface) -> None:
     """A path the document does not declare is not a resource.
 
     Includes a method the document does not declare on a path that *is* declared:

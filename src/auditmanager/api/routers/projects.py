@@ -20,12 +20,12 @@ from auditmanager.api.schemas.projects import project_body
 __all__ = ["build_project_routes"]
 
 
-def build_project_routes(projects: ProjectPort) -> APIRouter:
-    router = APIRouter(tags=["projects"])
+def build_project_routes(router: APIRouter, projects: ProjectPort) -> None:
 
     @router.post(
         "/projects",
         operation_id="createProject",
+        tags=["projects"],
         status_code=201,
         response_model=models.Project,
         responses={
@@ -49,6 +49,7 @@ def build_project_routes(projects: ProjectPort) -> APIRouter:
     @router.get(
         "/projects",
         operation_id="listProjects",
+        tags=["projects"],
         status_code=200,
         response_model=models.ProjectPage,
         responses={
@@ -65,7 +66,6 @@ def build_project_routes(projects: ProjectPort) -> APIRouter:
         body = page_body([project_body(view) for view in page.items], page.next_cursor)
         return json_response(200, encode_json(body))
 
-    return router
 
 
 def _project_sort_key(view: object) -> tuple[str, ...]:

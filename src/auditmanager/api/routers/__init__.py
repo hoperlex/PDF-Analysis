@@ -125,13 +125,16 @@ def build_router(
     defect waiting to happen and the type checker cannot see it.
     """
     router = APIRouter()
-    for built in (
-        build_project_routes(projects),
-        build_document_routes(documents),
-        build_run_routes(runs),
-        build_finding_routes(findings),
-        build_decision_routes(decisions),
-        build_export_routes(exports),
-    ):
-        router.include_router(built)
+    # One router, registered onto directly, rather than six included into a seventh.
+    # ``include_router`` wraps each sub-router instead of copying its routes, so
+    # ``router.routes`` would carry six opaque wrappers and the twelve-operation
+    # assertions -- ``len(routes) == 12``, the ``(operationId, method, path)`` set,
+    # ``tests/integration/api/test_operation_surface.py`` -- could not see an operation at
+    # all. A table nobody can enumerate is a table nobody can check.
+    build_project_routes(router, projects)
+    build_document_routes(router, documents)
+    build_run_routes(router, runs)
+    build_finding_routes(router, findings)
+    build_decision_routes(router, decisions)
+    build_export_routes(router, exports)
     return router

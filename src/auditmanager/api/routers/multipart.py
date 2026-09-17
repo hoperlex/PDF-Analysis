@@ -26,13 +26,23 @@ and FastAPI has no equivalent. So the limit stays here, in front of the parser, 
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Final
+
+from fastapi import Request
+from starlette.datastructures import UploadFile
+from starlette.formparsers import MultiPartException
 
 from auditmanager.api.routers.correlation import current_correlation_id
 from auditmanager.api.routers.errors import envelope_response
 from auditmanager.shared.errors import DomainError, ErrorCode
 
-__all__ = ["MAX_BODY", "BodyCapMiddleware"]
+__all__ = [
+    "MAX_BODY",
+    "BodyCapMiddleware",
+    "CheckedUpload",
+    "require_a_strict_multipart_body",
+]
 
 #: The upload envelope refuses anything larger long before this, but see the module note.
 #: 25 MiB is the declared maximum; the slack covers part headers and the boundary.
@@ -44,6 +54,10 @@ _UPLOAD_TOO_LARGE: Final[str] = "The upload exceeds the maximum accepted size."
 #: ``field: "file"`` would be a lie about a JSON body, and a refusal that names the wrong
 #: part of the request is worse than one that names none.
 _BODY_TOO_LARGE: Final[str] = "The request body exceeds the maximum accepted size."
+#: The certified reader's own sentence for an unreadable multipart body, kept.
+_NO_BOUNDARY: Final[str] = (
+    "The multipart body could not be read; the boundary may be missing."
+)
 
 
 class _BodyTooLarge(Exception):
@@ -60,9 +74,15 @@ def _refusal(is_upload: bool) -> DomainError:
 
 
 class BodyCapMiddleware:
-    """Refuse a body over :data:`MAX_BODY`, before anything materialises it.
+    """Refuse a body over :data:`MAX_BODY`, or a multipart body with no boundary.
 
-    Two checks, and both are needed. ``Content-Length`` is refused up front so an oversized
+    Two rules, both here for the same reason: they must be settled **before any parser
+    reads the body**. The size one because materialising an unbounded body to discover it
+    is unbounded is the denial-of-service surface the limit exists to close; the boundary
+    one because FastAPI parses a form before it resolves dependencies, so an application
+    handler cannot get in front of it.
+
+    The size rule has two checks, and both are needed. ``Content-Length`` is refused up front so an oversized
     body is never read at all -- but a client may omit it, or lie, so the stream is counted
     as well and the request is refused the moment the running total passes the limit. A
     guard that trusted the declared length would be a guard a client can switch off.
@@ -80,11 +100,13 @@ class BodyCapMiddleware:
             return
 
         is_upload = False
+        has_boundary = False
         declared: int | None = None
         for name, value in scope.get("headers", ()):
             lowered = name.lower()
             if lowered == b"content-type":
                 is_upload = b"multipart/form-data" in value.lower()
+                has_boundary = b"boundary=" in value.lower()
             elif lowered == b"content-length":
                 try:
                     declared = int(value)
@@ -93,6 +115,26 @@ class BodyCapMiddleware:
 
         if declared is not None and declared > self.limit:
             response = envelope_response(_refusal(is_upload), current_correlation_id())
+            await response(scope, receive, send)
+            return
+
+        if is_upload and not has_boundary:
+            # Checked on the header, before anything reads the body, because FastAPI parses
+            # a form *before* it resolves dependencies and Starlette's "Missing boundary in
+            # multipart" is an exception the route has already turned into its own
+            # ``HTTPException(400)`` by the time an application handler could see it. Read
+            # from the header rather than from the parser's message: mapping a refusal on
+            # another library's prose is exactly what ``routers/errors.py`` refuses to do
+            # with a database driver, and it is no better here.
+            response = envelope_response(
+                DomainError(
+                    ErrorCode.VALIDATION_FAILED,
+                    message=_NO_BOUNDARY,
+                    field="Content-Type",
+                    constraint="boundary",
+                ),
+                current_correlation_id(),
+            )
             await response(scope, receive, send)
             return
 
@@ -113,3 +155,127 @@ class BodyCapMiddleware:
         except _BodyTooLarge:
             response = envelope_response(_refusal(is_upload), current_correlation_id())
             await response(scope, receive, send)
+
+
+# ---------------------------------------------------------------------------------------
+# the four rules a closed Pydantic model cannot state
+# ---------------------------------------------------------------------------------------
+
+_FILE_PART: Final[str] = "file"
+_TITLE_PART: Final[str] = "display_title"
+
+
+def _refuse(message: str, *, field: str, constraint: str) -> DomainError:
+    """One refusal of the strict pass. Distinct from ``_refusal`` above, which is the
+    body cap's and takes no message."""
+    return DomainError(
+        ErrorCode.VALIDATION_FAILED, message=message, field=field, constraint=constraint
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class CheckedUpload:
+    """What the strict pass established about the body, beyond the declared parts."""
+
+    display_title: str | None
+
+
+async def require_a_strict_multipart_body(request: Request) -> CheckedUpload:
+    """Refuse a multipart body the declared schema cannot judge, and fix the one it misreads.
+
+    ``UploadDocumentRequest`` is a closed Pydantic model, so FastAPI already refuses an
+    **undeclared part** as ``additionalProperties`` -- the same answer a JSON object's
+    undeclared property gets, which is the point. Four things it cannot say, each of which
+    the hand-written reader `T-1` retired *did* say, and each of which was a refusal some
+    caller could otherwise get as a 500 or, worse, not get at all:
+
+    * **the media type.** A JSON body posted here parses as an empty form, so the model
+      reports ``file`` missing. That is true and useless: the caller's mistake is the
+      media type and ``Content-Type`` is the field to name.
+    * **an empty part name.** ``name=""`` parses, so the parser says nothing; the part
+      simply is not one the schema declares and nothing would report it. (An *absent*
+      ``name`` is a different case and is refused before this runs -- see
+      :class:`BodyCapMiddleware` for the boundary, and ``handlers._STATUS_CODES`` for the
+      parser's own refusals.)
+    * **a repeated part.** ``FormData`` is a multidict and Pydantic sees only the last
+      value, so ``file`` sent twice would be *silently accepted* and the second one
+      published. A lenient multipart reader is a security surface; this is the case that
+      makes it strict.
+    * **the text part's encoding.** Starlette decodes a part with no ``charset`` parameter
+      as latin-1 (``formparsers._user_safe_decode``), so a UTF-8 ``display_title`` with any
+      character outside ASCII arrives as mojibake and a non-UTF-8 one arrives silently. The
+      certified reader did ``payload.decode("utf-8")`` and refused what did not. The
+      round-trip below restores exactly that: latin-1 gives back the bytes the client sent,
+      and they are then decoded as UTF-8 or refused.
+
+    The part name and the filename are **never echoed**. They are caller-controlled text,
+    and ``details`` values are screened by the six ``_FORBIDDEN`` patterns in
+    ``shared/errors/envelope.py`` -- an echo would turn this caller's 422 into an unhandled
+    ``UnsafeDetailValue``, and one carrying no forbidden shape would still reflect the
+    caller's own input back out. ``constraint`` is the classifier that replaces it.
+    """
+    content_type = request.headers.get("content-type") or ""
+    if "multipart/form-data" not in content_type.lower():
+        raise _refuse(
+            "This operation expects a multipart/form-data body.",
+            field="Content-Type",
+            constraint="media_type",
+        )
+    # No ``try`` around this: FastAPI has already parsed the form by the time a
+    # dependency runs (``fastapi/routing.py:429``), so a ``MultiPartException`` has
+    # already become its ``HTTPException(400)`` and is handled in ``handlers.py``. This
+    # call gets Starlette's cached ``FormData`` and cannot raise.
+    form = await request.form()
+
+    seen: set[str] = set()
+    for name, _value in form.multi_items():
+        if not name:
+            raise _refuse(
+                "A multipart part carries no name.",
+                field="file",
+                constraint="part_name",
+            )
+        if name in seen:
+            raise _refuse(
+                "A multipart part is repeated.", field="body", constraint="unique_part"
+            )
+        seen.add(name)
+
+    uploaded = form.get(_FILE_PART)
+    # ``starlette.datastructures.UploadFile``, not ``fastapi.UploadFile``: the parser
+    # produces the former and the latter is a *subclass* of it, so the obvious import
+    # makes this ``isinstance`` always false and every upload answer "requires a filename".
+    if uploaded is not None and (
+        not isinstance(uploaded, UploadFile) or not uploaded.filename
+    ):
+        raise _refuse(
+            "The file part requires a filename.", field="file", constraint="filename"
+        )
+
+    return CheckedUpload(display_title=_decoded_title(form.get(_TITLE_PART)))
+
+
+def _decoded_title(value: Any) -> str | None:
+    """The ``display_title`` part as the client encoded it: UTF-8, or refused."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise _refuse(
+            "The display_title part could not be decoded.",
+            field=_TITLE_PART,
+            constraint="encoding",
+        )
+    try:
+        original = value.encode("latin-1")
+    except UnicodeEncodeError:
+        # Starlette decoded it with a real charset from the part's own header, so the
+        # string is already the client's text and there are no bytes to recover.
+        return value
+    try:
+        return original.decode("utf-8")
+    except UnicodeDecodeError:
+        raise _refuse(
+            "The display_title part is not valid UTF-8.",
+            field=_TITLE_PART,
+            constraint="encoding",
+        ) from None

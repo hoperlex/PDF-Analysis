@@ -33,12 +33,12 @@ _CSV: Final[str] = "text/csv; charset=utf-8"
 _CSV_MEDIA_TYPE: Final[str] = "text/csv"
 
 
-def build_export_routes(exports: CsvExportPort) -> APIRouter:
-    router = APIRouter(tags=["export"])
+def build_export_routes(router: APIRouter, exports: CsvExportPort) -> None:
 
     @router.get(
         "/runs/{run_id}/export.csv",
         operation_id="exportRunCsv",
+        tags=["export"],
         status_code=200,
         response_class=Response,
         responses={
@@ -75,7 +75,6 @@ def build_export_routes(exports: CsvExportPort) -> APIRouter:
             content,
         )
 
-    return router
 
 
 def _disposition(run_id: str) -> str:

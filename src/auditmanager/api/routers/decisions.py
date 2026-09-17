@@ -26,12 +26,12 @@ from auditmanager.api.schemas.decisions import (
 __all__ = ["build_decision_routes"]
 
 
-def build_decision_routes(decisions: DecisionPort) -> APIRouter:
-    router = APIRouter(tags=["decisions"])
+def build_decision_routes(router: APIRouter, decisions: DecisionPort) -> None:
 
     @router.post(
         "/findings/{finding_uid}/decisions",
         operation_id="appendDecision",
+        tags=["decisions"],
         status_code=201,
         response_model=models.AppendDecisionResponse,
         responses={
@@ -64,6 +64,7 @@ def build_decision_routes(decisions: DecisionPort) -> APIRouter:
     @router.get(
         "/findings/{finding_uid}/decisions",
         operation_id="listDecisionHistory",
+        tags=["decisions"],
         status_code=200,
         response_model=models.DecisionEventPage,
         responses={
@@ -81,7 +82,6 @@ def build_decision_routes(decisions: DecisionPort) -> APIRouter:
         body = page_body([decision_event_body(view) for view in page.items], page.next_cursor)
         return json_response(200, encode_json(body))
 
-    return router
 
 
 def _decision_sort_key(view: object) -> tuple[str, ...]:

@@ -11,7 +11,9 @@ from __future__ import annotations
 from typing import Annotated, Any, Final, Mapping
 
 from fastapi import Header, Query
-from pydantic import WithJsonSchema
+from pydantic import BeforeValidator, Field, WithJsonSchema
+
+from auditmanager.api.schemas.common import DEFAULT_LIMIT
 
 from auditmanager.api.routers.correlation import CORRELATION_HEADER
 from auditmanager.api.schemas import models
@@ -112,18 +114,52 @@ CorrelationIdParam = Annotated[
     Header(alias=CORRELATION_HEADER, json_schema_extra=optional_property),
 ]
 
+def _absent(value: Any) -> Any:
+    """``?category=`` is the absent parameter, not a value of the empty string.
+
+    The certified edge read query parameters through ``request.query_one`` and treated
+    ``""`` as absent -- ``parse_limit`` returned the default for it and ``_enum_filter``
+    returned ``None``. Pydantic would refuse it instead, so a caller whose form serialised
+    an empty filter would start getting a 422 for a request that used to work. That is a
+    change to the surface, and this wave's acceptance is that the surface did not change.
+    ``cursor`` is deliberately **not** in this set: an empty cursor was refused before this
+    wave too, by ``decode_cursor``'s ``if not raw`` branch, and it still is.
+    """
+    return None if value == "" else value
+
+
+def _absent_limit(value: Any) -> Any:
+    """The same rule for ``limit``, whose absent value is the frozen default rather than
+    ``None``."""
+    return DEFAULT_LIMIT if value == "" else value
+
+
 #: ``#/components/parameters/Cursor``.
 CursorParam = Annotated[models.Cursor, Query(json_schema_extra=optional_property)]
 
 #: ``#/components/parameters/Limit``: 1..200, **default 50**. The default is the one place
 #: in this contract where a parameter declares one, and the gate compares it.
-LimitParam = Annotated[int, Query(ge=1, le=200)]
-
-#: ``#/components/parameters/CategoryFilter`` and ``VerdictFilter``.
-CategoryFilterParam = Annotated[
-    models.FindingCategory, Query(json_schema_extra=optional_property)
+LimitParam = Annotated[
+    Annotated[int, Field(ge=1, le=200)], BeforeValidator(_absent_limit), Query()
 ]
-VerdictFilterParam = Annotated[models.Verdict, Query(json_schema_extra=optional_property)]
+
+#: ``#/components/parameters/CategoryFilter`` and ``VerdictFilter``. ``WithJsonSchema``
+#: keeps the document's bare ``$ref`` while the annotation admits the absent value; the
+#: enum itself is still enforced, so ``?category=nonsense`` is ``constraint: enum`` and not
+#: an empty page. An empty page would read as "this run has no findings of that kind",
+#: which is a different and wrong answer to "that kind does not exist".
+CategoryFilterParam = Annotated[
+    models.FindingCategory | None,
+    BeforeValidator(_absent),
+    WithJsonSchema({"$ref": "#/components/schemas/FindingCategory"}),
+    Query(json_schema_extra=optional_property),
+]
+VerdictFilterParam = Annotated[
+    models.Verdict | None,
+    BeforeValidator(_absent),
+    WithJsonSchema({"$ref": "#/components/schemas/Verdict"}),
+    Query(json_schema_extra=optional_property),
+]
 
 
 def declare_correlation_id(correlation_id: CorrelationIdParam = None) -> None:  # type: ignore[assignment]

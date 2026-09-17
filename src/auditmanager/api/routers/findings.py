@@ -23,12 +23,12 @@ from auditmanager.api.schemas.findings import finding_body, finding_detail_body
 __all__ = ["build_finding_routes"]
 
 
-def build_finding_routes(findings: FindingPort) -> APIRouter:
-    router = APIRouter(tags=["findings"])
+def build_finding_routes(router: APIRouter, findings: FindingPort) -> None:
 
     @router.get(
         "/runs/{run_id}/findings",
         operation_id="listRunFindings",
+        tags=["findings"],
         status_code=200,
         response_model=models.FindingPage,
         responses={
@@ -60,6 +60,7 @@ def build_finding_routes(findings: FindingPort) -> APIRouter:
     @router.get(
         "/findings/{finding_uid}",
         operation_id="getFinding",
+        tags=["findings"],
         status_code=200,
         response_model=models.FindingDetail,
         responses={
@@ -71,7 +72,6 @@ def build_finding_routes(findings: FindingPort) -> APIRouter:
         view = findings.get_finding(finding_uid=finding_uid)
         return json_response(200, encode_json(finding_detail_body(view)))
 
-    return router
 
 
 def _finding_sort_key(view: object) -> tuple[str, ...]:

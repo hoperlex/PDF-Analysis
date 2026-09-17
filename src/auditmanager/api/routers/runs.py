@@ -33,12 +33,12 @@ from auditmanager.api.schemas.runs import run_status_body
 __all__ = ["build_run_routes"]
 
 
-def build_run_routes(runs: RunPort) -> APIRouter:
-    router = APIRouter(tags=["runs"])
+def build_run_routes(router: APIRouter, runs: RunPort) -> None:
 
     @router.post(
         "/runs",
         operation_id="startRun",
+        tags=["runs"],
         status_code=202,
         response_model=models.RunStatus,
         responses={
@@ -62,6 +62,7 @@ def build_run_routes(runs: RunPort) -> APIRouter:
     @router.get(
         "/runs/{run_id}",
         operation_id="getRunStatus",
+        tags=["runs"],
         status_code=200,
         response_model=models.RunStatus,
         responses={
@@ -73,4 +74,3 @@ def build_run_routes(runs: RunPort) -> APIRouter:
         view = runs.get_run_status(run_id=run_id)
         return json_response(200, encode_json(run_status_body(view)))
 
-    return router

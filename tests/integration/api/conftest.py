@@ -31,9 +31,11 @@ widening of another session's module.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -44,7 +46,29 @@ import pytest
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.api.routers import Router, build_router
+from auditmanager.api.routers import build_router
+
+# ``driver.py`` sits beside this file and is loaded **by explicit path**, the mechanism
+# ``tests/integration/p02_journey``, ``tests/integration/runs`` and ``tests/contract/api_v1``
+# already use for a helper module beside a suite: with ``--import-mode=importlib`` a bare
+# ``from driver import ...`` does not resolve, and adding to ``sys.path`` is the thing
+# ``pyproject.toml``'s pytest section calls working around its contract rather than
+# extending it. Registering it under a session-unique name means the test modules in this
+# directory can ``from w13_api_driver import ...``: conftest is imported first, so the name
+# is already in ``sys.modules`` when they are.
+_DRIVER_NAME = "w13_api_driver"
+_DRIVER_PATH = Path(__file__).resolve().parent / "driver.py"
+_driver_spec = importlib.util.spec_from_file_location(_DRIVER_NAME, _DRIVER_PATH)
+assert _driver_spec is not None and _driver_spec.loader is not None
+_driver = importlib.util.module_from_spec(_driver_spec)
+sys.modules[_DRIVER_NAME] = _driver
+_driver_spec.loader.exec_module(_driver)
+
+Answer = _driver.Answer
+Request = _driver.Request
+Surface = _driver.Surface
+TEST_TOKEN = _driver.TEST_TOKEN
+dispatch = _driver.dispatch
 from auditmanager.api.schemas.decisions import DecisionEventView
 from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
 from auditmanager.api.schemas.findings import (
@@ -662,15 +686,22 @@ class SeamExportAdapter:
 
 
 @pytest.fixture
-def router(ingest: IngestService, session: Session) -> Router:
-    return build_router(
+def router(ingest: IngestService, session: Session) -> Surface:
+    """The twelve operations over this suite's seam adapters, and the app that serves them.
+
+    A :class:`~tests.integration.api.driver.Surface` rather than the bare ``APIRouter``,
+    because after `T-1` a router is not something you can ask a question of: the
+    declarations, the middlewares and the exception handlers are the application's, and a
+    test that drove the router alone would be testing half the edge. See ``driver.py``.
+    """
+    return Surface(build_router(
         projects=IngestProjectAdapter(ingest),
         documents=IngestDocumentAdapter(ingest, session),
         runs=SeamRunAdapter(session),
         findings=DatabaseFindingAdapter(session),
         decisions=LedgerDecisionAdapter(session),
         exports=SeamExportAdapter(session),
-    )
+    ))
 
 
 @pytest.fixture
@@ -678,8 +709,8 @@ def shipped_router(
     ingest: IngestService,
     session: Session,
     session_factory: sessionmaker[Session],
-) -> Router:
-    """The router over the adapters the application actually ships.
+) -> Surface:
+    """The surface over the adapters the application actually ships.
 
     ``router`` above wires three **test** adapters, because three shapes the frozen
     document requires had no producer when this suite was written. That is honest about
@@ -702,14 +733,14 @@ def shipped_router(
         ProjectAdapter,
     )
 
-    return build_router(
+    return Surface(build_router(
         projects=ProjectAdapter(ingest),
         documents=IngestDocumentAdapter(ingest, session),
         runs=SeamRunAdapter(session),
         findings=FindingAdapter(session_factory),
         decisions=DecisionAdapter(session_factory),
         exports=SeamExportAdapter(session),
-    )
+    ))
 
 
 # ---------------------------------------------------------------------------

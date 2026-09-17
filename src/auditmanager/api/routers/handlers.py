@@ -116,6 +116,7 @@ _FORM_UNDECLARED_PART: Final[str] = (
     "The upload carries a part the schema does not declare."
 )
 _FILE_REQUIRED: Final[str] = "The upload requires a file part."
+_BODY_NOT_READABLE: Final[str] = "The multipart body could not be read."
 _IDEMPOTENCY_REQUIRED: Final[str] = (
     "This operation requires an Idempotency-Key header."
 )
@@ -156,6 +157,7 @@ _ENUM_VALUES: Final[Mapping[str, str]] = {
 #: An HTTP status Starlette raises for itself, and the catalog code that answers it. 405 is
 #: deliberately 404's code: see ``METHOD_NOT_ALLOWED_CODE``.
 _STATUS_CODES: Final[Mapping[int, ErrorCode]] = {
+    400: ErrorCode.VALIDATION_FAILED,
     401: ErrorCode.AUTHENTICATION_REQUIRED,
     403: ErrorCode.PERMISSION_DENIED,
     404: ErrorCode.NOT_FOUND,
@@ -185,6 +187,24 @@ def on_http_exception(request: Request, exc: StarletteHTTPException) -> WireResp
     client reads one vocabulary and not two.
     """
     del request
+    if exc.status_code == 400:
+        # FastAPI raises exactly one 400 in this application: ``routing.py:470`` wraps any
+        # failure of ``await request.form()`` in ``HTTPException(400, "There was an error
+        # parsing the body")``. Starlette's parser raises for a missing part name, a part
+        # over its size bound, or too many parts or files -- the one remaining cause, a
+        # missing boundary, is refused on the header before this and reports
+        # ``constraint: boundary``. The classifier here is the family, because the cause is
+        # only distinguishable from the parser's own prose and this contract does not map
+        # refusals on another library's message text.
+        return envelope_response(
+            DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message=_BODY_NOT_READABLE,
+                field="body",
+                constraint="readable_multipart",
+            ),
+            current_correlation_id(),
+        )
     code = _STATUS_CODES.get(exc.status_code, ErrorCode.INTERNAL_ERROR)
     return envelope_response(DomainError(code), current_correlation_id())
 
