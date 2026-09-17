@@ -1,0 +1,46 @@
+{
+  "case": "16-listProjects.success",
+  "operation": "listProjects",
+  "purpose": "the page envelope with a bounded page. The listing is newest-first, so the project of case 01 is the one row, and next_cursor is the opaque continuation token -- asserted to decode to exactly that project_uid before it is tokenised",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "GET",
+    "target": "/projects?limit=1",
+    "headers": [],
+    "body_length": 0,
+    "body_note": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 215,
+      "text": "{\"items\": [{\"project_uid\": \"{{project_uid}}\", \"name\": \"W13 response baseline\", \"created_at\": \"{{ts_4}}\"}], \"page\": {\"next_cursor\": \"{{next_cursor}}\"}}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{next_cursor}}": "base64url of the page's last sort key; asserted to decode to exactly [project_uid] before being tokenised",
+    "{{project_uid}}": "the identity case 01 allocated",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
+    "{{ts_4}}": "a timestamp the database stamped, read from the declared field 'created_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+  }
+}

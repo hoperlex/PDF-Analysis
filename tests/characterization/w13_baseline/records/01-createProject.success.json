@@ -1,0 +1,54 @@
+{
+  "case": "01-createProject.success",
+  "operation": "createProject",
+  "purpose": "the write that every other case needs, and the 201 the frozen document gives both a creation and a replay",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "POST",
+    "target": "/projects",
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Idempotency-Key",
+        "w13base-{{session_tag}}-project"
+      ]
+    ],
+    "body_length": 33,
+    "body_note": "CreateProjectRequest, one declared property"
+  },
+  "response": {
+    "status": 201,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 127,
+      "text": "{\"project_uid\": \"{{project_uid}}\", \"name\": \"W13 response baseline\", \"created_at\": \"{{ts_3}}\"}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{project_uid}}": "the identity this request allocated",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
+    "{{ts_3}}": "a timestamp the database stamped, read from the declared field 'created_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+  }
+}

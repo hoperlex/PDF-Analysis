@@ -1,0 +1,56 @@
+{
+  "case": "04-startRun.replay",
+  "operation": "startRun",
+  "purpose": "the same key with the same payload: the frozen document gives a replay the same 202 and the same run, and nothing new is created",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "POST",
+    "target": "/runs",
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Idempotency-Key",
+        "w13base-{{session_tag}}-run"
+      ]
+    ],
+    "body_length": 49,
+    "body_note": "byte-identical to case 03, under the same Idempotency-Key"
+  },
+  "response": {
+    "status": 202,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 773,
+      "text": "{\"run_id\": \"{{run_id}}\", \"project_uid\": \"{{project_uid}}\", \"version_uid\": \"{{version_uid}}\", \"state\": \"published\", \"provider_mode\": \"recorded\", \"stages\": [{\"stage_id\": \"document_context_build\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\"}, {\"stage_id\": \"page_geometry_extraction\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\"}, {\"stage_id\": \"source_preparation\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\"}, {\"stage_id\": \"text_analysis\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\"}], \"created_at\": \"{{ts_5}}\", \"analysis_profile_id\": \"ap_01M25P3TH08VVTTGJRXYBZZ7RP\", \"prompt_bundle_id\": \"pb_01M25P3TH0PDQYVKTRQFEM0CYS\", \"degradation_set\": [], \"terminal_at\": \"{{ts_5}}\"}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{project_uid}}": "the identity case 01 allocated",
+    "{{run_id}}": "the identity case 03 allocated; the replay returns it",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
+    "{{ts_5}}": "a timestamp the database stamped, read from the declared field 'created_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$; also a timestamp the database stamped, read from the declared field 'terminal_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{version_uid}}": "the identity case 02 allocated"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "case": "15-streamDocumentVersionContent.range",
+  "operation": "streamDocumentVersionContent",
+  "purpose": "a single byte range: 206, Content-Range, and a window of exactly 64 bytes",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "GET",
+    "target": "/versions/{{version_uid}}/content",
+    "headers": [
+      [
+        "Range",
+        "bytes=100-163"
+      ]
+    ],
+    "body_length": 0,
+    "body_note": ""
+  },
+  "response": {
+    "status": 206,
+    "headers": [
+      [
+        "Content-Type",
+        "application/pdf"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "Content-Range",
+        "bytes 100-163/58978"
+      ],
+      [
+        "Accept-Ranges",
+        "bytes"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "base64",
+      "length": 64,
+      "base64": "cyAvS2lkcyBbIDkgMCBSIDExIDAgUiAxMyAwIFIgMTUgMCBSIDE3IDAgUiAxOSAwIFIgMjEgMCBSIDIzIDAgUg==",
+      "note": "the 64 bytes at offsets 100..163 of the AR baseline document"
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
+    "{{version_uid}}": "the identity case 02 allocated"
+  }
+}

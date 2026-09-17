@@ -1,0 +1,59 @@
+{
+  "case": "12-exportRunCsv.success",
+  "operation": "exportRunCsv",
+  "purpose": "the CSV with its BOM and its CRLF line terminators, byte for byte, and the Content-Disposition built from the run identity alone",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "GET",
+    "target": "/runs/{{run_id}}/export.csv",
+    "headers": [],
+    "body_length": 0,
+    "body_note": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": [
+      [
+        "Content-Type",
+        "text/csv; charset=utf-8"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "Content-Disposition",
+        "attachment; filename=\"{{run_id}}.csv\""
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "base64",
+      "length": 4409,
+      "base64": "77u/cHJvamVjdF91aWQsZG9jdW1lbnRfdWlkLHZlcnNpb25fdWlkLHJ1bl9pZCxydW5fc3RhdGUscHJvdmlkZXJfbW9kZSxmaW5kaW5nX3VpZCxmaW5kaW5nX29ic2VydmF0aW9uX2lkLGNhdGVnb3J5LGZpbmRpbmdfdGV4dCxyZWNvbW1lbmRhdGlvbl90ZXh0LGV2aWRlbmNlX3BhZ2UsZXZpZGVuY2VfcXVvdGUsY3VycmVudF92ZXJkaWN0LGxhdGVzdF9jb21tZW50LGxhdGVzdF9kZWNpc2lvbl9pZCxkZWNpc2lvbl9yZWNvcmRlZF9hdA0Ke3twcm9qZWN0X3VpZH19LHt7ZG9jdW1lbnRfdWlkfX0se3t2ZXJzaW9uX3VpZH19LHt7cnVuX2lkfX0scHVibGlzaGVkLHJlY29yZGVkLHt7ZmluZGluZ191aWRfMH19LHt7ZmluZGluZ19vYnNlcnZhdGlvbl9pZF8wfX0saW50ZXJuYWxfY29udHJhZGljdGlvbizQodGC0LXQv9C10L3RjCDQvtCz0L3QtdGB0YLQvtC50LrQvtGB0YLQuCDQvtC00L3QvtCz0L4g0Lgg0YLQvtCz0L4g0LbQtSDQt9C00LDQvdC40Y8g0YPQutCw0LfQsNC90LAg0L/Qvi3RgNCw0LfQvdC+0LzRgzogSUkg0LIg0YDQsNC30LTQtdC70LUg0L7QsdGJ0LjRhSDQtNCw0L3QvdGL0YUg0LggSUlJINCyINGA0LDQt9C00LXQu9C1INC/0YDQvtGC0LjQstC+0L/QvtC20LDRgNC90YvRhSDQvNC10YDQvtC/0YDQuNGP0YLQuNC5Liwi0KHQvtCz0LvQsNGB0L7QstCw0YLRjCDRgdGC0LXQv9C10L3RjCDQvtCz0L3QtdGB0YLQvtC50LrQvtGB0YLQuCDQt9C00LDQvdC40Y8g0LzQtdC20LTRgyDRgNCw0LfQtNC10LvQvtC8INC+0LHRidC40YUg0LTQsNC90L3Ri9GFINC4INGA0LDQt9C00LXQu9C+0Lwg0L/RgNC+0YLQuNCy0L7Qv9C+0LbQsNGA0L3Ri9GFINC80LXRgNC+0L/RgNC40Y/RgtC40LksINC+0YHRgtCw0LLQuNCyINC+0LTQvdC+INC30L3QsNGH0LXQvdC40LUuIiwyLNCh0YLQtdC/0LXQvdGMINC+0LPQvdC10YHRgtC+0LnQutC+0YHRgtC4INC30LTQsNC90LjRjyDigJQgSUkuLGFjY2VwdGVkLFcxMyByZXNwb25zZSBiYXNlbGluZSx7e2RlY2lzaW9uX2lkfX0se3tkZWNpc2lvbl9yZWNvcmRlZF9hdH19DQp7e3Byb2plY3RfdWlkfX0se3tkb2N1bWVudF91aWR9fSx7e3ZlcnNpb25fdWlkfX0se3tydW5faWR9fSxwdWJsaXNoZWQscmVjb3JkZWQse3tmaW5kaW5nX3VpZF8wfX0se3tmaW5kaW5nX29ic2VydmF0aW9uX2lkXzB9fSxpbnRlcm5hbF9jb250cmFkaWN0aW9uLNCh0YLQtdC/0LXQvdGMINC+0LPQvdC10YHRgtC+0LnQutC+0YHRgtC4INC+0LTQvdC+0LPQviDQuCDRgtC+0LPQviDQttC1INC30LTQsNC90LjRjyDRg9C60LDQt9Cw0L3QsCDQv9C+LdGA0LDQt9C90L7QvNGDOiBJSSDQsiDRgNCw0LfQtNC10LvQtSDQvtCx0YnQuNGFINC00LDQvdC90YvRhSDQuCBJSUkg0LIg0YDQsNC30LTQtdC70LUg0L/RgNC+0YLQuNCy0L7Qv9C+0LbQsNGA0L3Ri9GFINC80LXRgNC+0L/RgNC40Y/RgtC40LkuLCLQodC+0LPQu9Cw0YHQvtCy0LDRgtGMINGB0YLQtdC/0LXQvdGMINC+0LPQvdC10YHRgtC+0LnQutC+0YHRgtC4INC30LTQsNC90LjRjyDQvNC10LbQtNGDINGA0LDQt9C00LXQu9C+0Lwg0L7QsdGJ0LjRhSDQtNCw0L3QvdGL0YUg0Lgg0YDQsNC30LTQtdC70L7QvCDQv9GA0L7RgtC40LLQvtC/0L7QttCw0YDQvdGL0YUg0LzQtdGA0L7Qv9GA0LjRj9GC0LjQuSwg0L7RgdGC0LDQstC40LIg0L7QtNC90L4g0LfQvdCw0YfQtdC90LjQtS4iLDYs0KHRgtC10L/QtdC90Ywg0L7Qs9C90LXRgdGC0L7QudC60L7RgdGC0Lgg0LfQtNCw0L3QuNGPIOKAlCBJSUkuLGFjY2VwdGVkLFcxMyByZXNwb25zZSBiYXNlbGluZSx7e2RlY2lzaW9uX2lkfX0se3tkZWNpc2lvbl9yZWNvcmRlZF9hdH19DQp7e3Byb2plY3RfdWlkfX0se3tkb2N1bWVudF91aWR9fSx7e3ZlcnNpb25fdWlkfX0se3tydW5faWR9fSxwdWJsaXNoZWQscmVjb3JkZWQse3tmaW5kaW5nX3VpZF8xfX0se3tmaW5kaW5nX29ic2VydmF0aW9uX2lkXzF9fSxpbnRlcm5hbF9jb250cmFkaWN0aW9uLNCa0L7Qu9C40YfQtdGB0YLQstC+INGN0LLQsNC60YPQsNGG0LjQvtC90L3Ri9GFINCy0YvRhdC+0LTQvtCyINC40Lcg0L3QsNC00LfQtdC80L3QvtC5INGH0LDRgdGC0Lgg0LfQtNCw0L3QuNGPINGD0LrQsNC30LDQvdC+INC60LDQuiDQtNCy0LAg0LIg0L7QsdGK0ZHQvNC90L4t0L/Qu9Cw0L3QuNGA0L7QstC+0YfQvdGL0YUg0YDQtdGI0LXQvdC40Y/RhSDQuCDQutCw0Log0YLRgNC4INCyINGA0LDQt9C00LXQu9C1INGN0LLQsNC60YPQsNGG0LjQvtC90L3Ri9GFINC/0YPRgtC10Lkg0Lgg0LLRi9GF0L7QtNC+0LIuLNCf0YDQuNCy0LXRgdGC0Lgg0LrQvtC70LjRh9C10YHRgtCy0L4g0Y3QstCw0LrRg9Cw0YbQuNC+0L3QvdGL0YUg0LLRi9GF0L7QtNC+0LIg0LjQtyDQvdCw0LTQt9C10LzQvdC+0Lkg0YfQsNGB0YLQuCDQt9C00LDQvdC40Y8g0Log0L7QtNC90L7QvNGDINC30L3QsNGH0LXQvdC40Y4g0LIg0L7QsdC+0LjRhSDRgNCw0LfQtNC10LvQsNGFLiwzLNCY0Lcg0L3QsNC00LfQtdC80L3QvtC5INGH0LDRgdGC0Lgg0LfQtNCw0L3QuNGPINC/0YDQtdC00YPRgdC80L7RgtGA0LXQvdC+INC00LLQsCDRjdCy0LDQutGD0LDRhtC40L7QvdC90YvRhSDQstGL0YXQvtC00LAuLHBlbmRpbmcsLCwNCnt7cHJvamVjdF91aWR9fSx7e2RvY3VtZW50X3VpZH19LHt7dmVyc2lvbl91aWR9fSx7e3J1bl9pZH19LHB1Ymxpc2hlZCxyZWNvcmRlZCx7e2ZpbmRpbmdfdWlkXzF9fSx7e2ZpbmRpbmdfb2JzZXJ2YXRpb25faWRfMX19LGludGVybmFsX2NvbnRyYWRpY3Rpb24s0JrQvtC70LjRh9C10YHRgtCy0L4g0Y3QstCw0LrRg9Cw0YbQuNC+0L3QvdGL0YUg0LLRi9GF0L7QtNC+0LIg0LjQtyDQvdCw0LTQt9C10LzQvdC+0Lkg0YfQsNGB0YLQuCDQt9C00LDQvdC40Y8g0YPQutCw0LfQsNC90L4g0LrQsNC6INC00LLQsCDQsiDQvtCx0YrRkdC80L3Qvi3Qv9C70LDQvdC40YDQvtCy0L7Rh9C90YvRhSDRgNC10YjQtdC90LjRj9GFINC4INC60LDQuiDRgtGA0Lgg0LIg0YDQsNC30LTQtdC70LUg0Y3QstCw0LrRg9Cw0YbQuNC+0L3QvdGL0YUg0L/Rg9GC0LXQuSDQuCDQstGL0YXQvtC00L7Qsi4s0J/RgNC40LLQtdGB0YLQuCDQutC+0LvQuNGH0LXRgdGC0LLQviDRjdCy0LDQutGD0LDRhtC40L7QvdC90YvRhSDQstGL0YXQvtC00L7QsiDQuNC3INC90LDQtNC30LXQvNC90L7QuSDRh9Cw0YHRgtC4INC30LTQsNC90LjRjyDQuiDQvtC00L3QvtC80YMg0LfQvdCw0YfQtdC90LjRjiDQsiDQvtCx0L7QuNGFINGA0LDQt9C00LXQu9Cw0YUuLDcs0JjQtyDQvdCw0LTQt9C10LzQvdC+0Lkg0YfQsNGB0YLQuCDQt9C00LDQvdC40Y8g0L/RgNC10LTRg9GB0LzQvtGC0YDQtdC90L4g0YLRgNC4INGN0LLQsNC60YPQsNGG0LjQvtC90L3Ri9GFINCy0YvRhdC+0LTQsC4scGVuZGluZywsLA0Ke3twcm9qZWN0X3VpZH19LHt7ZG9jdW1lbnRfdWlkfX0se3t2ZXJzaW9uX3VpZH19LHt7cnVuX2lkfX0scHVibGlzaGVkLHJlY29yZGVkLHt7ZmluZGluZ191aWRfMn19LHt7ZmluZGluZ19vYnNlcnZhdGlvbl9pZF8yfX0sZXhwbGljaXRfcGxhY2Vob2xkZXIs0KLQuNC/INC30LDQv9C+0LvQvdC10L3QuNGPINC+0LrQvtC90L3Ri9GFINC/0YDQvtGR0LzQvtCyINC90LUg0L7Qv9GA0LXQtNC10LvRkdC9OiDQstC80LXRgdGC0L4g0L/RgNC+0LXQutGC0L3QvtCz0L4g0YDQtdGI0LXQvdC40Y8g0L7RgdGC0LDQstC70LXQvdC+INCx0YPQutCy0LDQu9GM0L3QvtC1INGD0LrQsNC30LDQvdC40LUgwqvRg9GC0L7Rh9C90LjRgtGMwrsuLNCe0L/RgNC10LTQtdC70LjRgtGMINGC0LjQvyDQt9Cw0L/QvtC70L3QtdC90LjRjyDQvtC60L7QvdC90YvRhSDQv9GA0L7RkdC80L7QsiDQuCDQstC90LXRgdGC0Lgg0LXQs9C+INCyINCy0LXQtNC+0LzQvtGB0YLRjCDQt9Cw0L/QvtC70L3QtdC90LjRjyDQv9GA0L7RkdC80L7Qsi4sOCzQotC40L8g0LfQsNC/0L7Qu9C90LXQvdC40Y8g0L7QutC+0L3QvdGL0YUg0L/RgNC+0ZHQvNC+0LIg4oCUINGD0YLQvtGH0L3QuNGC0YwuLHBlbmRpbmcsLCwNCg==",
+      "note": "text/csv bytes: b'\\xef\\xbb\\xbf' BOM then RFC 4180 rows with CRLF. Compared as bytes, so a lost BOM or an LF is a difference"
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{decision_id}}": "the identity case 10 allocated",
+    "{{decision_recorded_at}}": "the decision timestamp case 10 returned; the CSV repeats it in decision_recorded_at",
+    "{{document_uid}}": "the identity case 02 allocated",
+    "{{finding_observation_id_0}}": "an observation identity from case 08",
+    "{{finding_observation_id_1}}": "an observation identity from case 08",
+    "{{finding_observation_id_2}}": "an observation identity from case 08",
+    "{{finding_uid_0}}": "a finding identity from case 08",
+    "{{finding_uid_1}}": "a finding identity from case 08",
+    "{{finding_uid_2}}": "a finding identity from case 08",
+    "{{project_uid}}": "the identity case 01 allocated",
+    "{{run_id}}": "the identity case 03 allocated",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
+    "{{version_uid}}": "the identity case 02 allocated"
+  }
+}

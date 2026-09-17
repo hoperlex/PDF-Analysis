@@ -1,0 +1,53 @@
+{
+  "case": "22-uploadDocument.refusal.max_bytes",
+  "operation": "uploadDocument",
+  "purpose": "the 26 MiB transport boundary, over side: one byte more and the transport guard answers instead, with a different constraint",
+  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
+  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "exception": null,
+  "request": {
+    "method": "POST",
+    "target": "/projects/{{project_uid}}/documents",
+    "headers": [
+      [
+        "Content-Type",
+        "multipart/form-data; boundary=w13baselineboundary"
+      ],
+      [
+        "Idempotency-Key",
+        "w13base-{{session_tag}}-overlimit"
+      ]
+    ],
+    "body_length": 27262977,
+    "body_note": "a framed multipart body of exactly 27262977 bytes"
+  },
+  "response": {
+    "status": 422,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 267,
+      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"validation_failed\", \"message\": \"The upload exceeds the maximum accepted size.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"file\", \"constraint\": \"max_bytes\"}}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{project_uid}}": "the identity case 01 allocated",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key"
+  }
+}
