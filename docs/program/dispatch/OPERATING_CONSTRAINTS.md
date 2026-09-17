@@ -250,3 +250,33 @@ about everything that will ever live under that path, and nothing re-checks it w
 new is added there. Where a quarantine must be broad, say in the same breath what it costs,
 so the next reader can tell coverage from the appearance of it.
 
+## 12. A query that shares an assumption with the thing it measures is not a measurement
+
+Three instances, one shape, and the third was mine.
+
+- **Wave 9.** Tests imported the module's own constants and built the expected value from
+  them. Raising a limit moved both sides of the comparison, so the test passed against every
+  mutation. Five green tests over three rules they could not check.
+- **Wave 10.** A test derived its *input* from the constant it tested. Raising that constant
+  made the test allocate 13 GiB and get killed — recorded as a red, and it was not one.
+- **Wave 12, in a register row.** I wrote that `permission_denied` was "used nowhere in
+  `src/`", having grepped the enum constant `PERMISSION_DENIED`. The storage layer carries the
+  **string** `code = "permission_denied"` on a `ClassVar`. The codebase spells the same fact
+  two ways and my query knew one of them.
+
+The common part is not carelessness and it is not about tests. **The query and its subject
+shared an assumption, so the query could not see the subject being wrong.** A green, a red and
+a register row all came out of it, and all three read as evidence.
+
+Two practical forms, and the first is cheap enough to have no excuse:
+
+- **Search both spellings, or say which one you searched.** An enum constant and its value are
+  different strings; so are a class name and the code it carries. `grep -rn "permission_denied"`
+  would have found what `grep -rn "PERMISSION_DENIED"` did not.
+- **Never build an expectation, or an input, out of the thing under test.** §7's battery figure
+  and the literals every brief since wave 9 demands are the same rule applied to numbers.
+
+And the standing one: **a row, a table or a report that says "measured" is worth exactly what
+the query behind it is worth, so show the query.** Every row of `DEBT_REGISTER.md` carries one
+for this reason.
+
