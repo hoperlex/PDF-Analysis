@@ -23,7 +23,7 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import type { RunState, RunStatus } from '@/shared/api';
+import type { ErrorCode, RunState, RunStatus } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import { RunProgress } from '@/widgets/run-progress';
 
@@ -64,11 +64,14 @@ describe('the harness reaches this widget at all', () => {
  * red rather than green.
  */
 describe('a failed run states the catalog code it terminated with (U-01)', () => {
-  const REASONS = [
-    'analysis_provider_unavailable',
+  // Three real codes from the frozen catalog, not invented ones: `tsc` rejects a
+  // `terminal_reason` that is not an `ErrorCode`, which is how the first draft of this
+  // suite learned that `analysis_provider_unavailable` is not a code.
+  const REASONS: readonly ErrorCode[] = [
+    'analysis_failed',
     'storage_integrity_error',
     'dependency_credential_refused',
-  ] as const;
+  ];
 
   it.each(REASONS)('renders %s as itself', (reason) => {
     const markup = screen({ state: 'failed', terminal_reason: reason, published_finding_count: 0 });
@@ -81,7 +84,7 @@ describe('a failed run states the catalog code it terminated with (U-01)', () =>
   it('does not print any other reason alongside it', () => {
     const markup = screen({
       state: 'failed',
-      terminal_reason: 'analysis_provider_unavailable',
+      terminal_reason: 'analysis_failed',
       published_finding_count: 0,
     });
     expect(markup).not.toContain('redacted');
@@ -98,7 +101,7 @@ describe('a failed run states the catalog code it terminated with (U-01)', () =>
   it('states the interrupted reason on a reconciled failure', () => {
     const markup = screen({
       state: 'failed',
-      terminal_reason: 'run_interrupted',
+      terminal_reason: 'internal_error',
       interrupted_reason: 'worker_lost',
       published_finding_count: 0,
     });
@@ -160,7 +163,7 @@ describe('review is offered only by a run that published a result (U-03)', () =>
     const markup = screen({
       state,
       published_finding_count: 0,
-      ...(state === 'failed' ? { terminal_reason: 'analysis_provider_unavailable' } : {}),
+      ...(state === 'failed' ? { terminal_reason: 'analysis_failed' as ErrorCode } : {}),
       ...(state === 'created' || state === 'queued' || state === 'running' || state === 'validating'
         ? { terminal_at: null }
         : {}),
