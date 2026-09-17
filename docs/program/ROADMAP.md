@@ -252,6 +252,11 @@ be laid over it afterwards. It is recorded here rather than in `ALPHA_ROADMAP.md
 it belongs to the alpha deployment, and putting it there would make the alpha look like it
 waits on this. It does not.
 
+**Read the next two sections before estimating this.** It is not a data-movement task. The
+paragraph boundaries do not exist in the corpus and neither does their geometry — both have to
+be produced — so a plan that reads the sentence above and schedules a load will discover that
+mid-session, which is the shape of every stale premise this programme has paid for.
+
 ### Where the corpus is today, because git cannot show you
 
 `.local/norms/corpus/`, on this machine, **outside version control** — no diff, grep or clone
