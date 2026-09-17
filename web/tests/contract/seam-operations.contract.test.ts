@@ -170,10 +170,14 @@ describe('the run vocabulary', () => {
 });
 
 describe('the error catalog', () => {
-  it('is the closed twenty-code set', () => {
-    expect(ERROR_CODE_VALUES).toHaveLength(20);
+  it('is the closed twenty-one-code set', () => {
+    // Twenty-one since the wave-13 reseal: owner ruling `R-3` added
+    // `dependency_credential_refused` so one 403 stopped meaning two things (`D-7`).
+    expect(ERROR_CODE_VALUES).toHaveLength(21);
     expect(ERROR_CODE_VALUES).toContain('idempotency_key_in_progress');
     expect(ERROR_CODE_VALUES).toContain('state_transition_not_allowed');
+    expect(ERROR_CODE_VALUES).toContain('dependency_credential_refused');
+    expect(ERROR_CODE_VALUES).toContain('permission_denied');
   });
 
   it('narrows to the ten codes a PC-01 screen must render, all of them in the catalog', () => {
