@@ -53,6 +53,49 @@ purpose. **The commit that decides it is cited beside the new expectation.**
 the marked set must be exactly this one case. **Every other difference is a failure of the
 wave, whatever argument accompanies it.**
 
+## The one order not pinned
+
+`records/08-listRunFindings.success.json` and `records/12-exportRunCsv.success.json` each
+carry an `unordered` block declaring **`O1`**, and they are the **only** two that do.
+`test_exactly_two_records_declare_an_unordered_sequence` makes that countable, the way the
+permitted exception is countable.
+
+Both operations order published findings by `finding_uid COLLATE "C"`. A `finding_uid` is a
+**fresh ULID per publication**, and `shared/identity/ulid.py` says in so many words that
+monotonicity inside one millisecond is deliberately *not* promised: the domain contract
+forbids deriving ordering from a ULID body, so the generator declines to supply the property
+that would invite it. Two findings published in the same millisecond are separated only by
+80 bits of `os.urandom`. Measured over 150 journeys against this lane: two findings shared a
+millisecond in a few percent of runs, and when they did, the order was a coin flip. Pinning
+the sequence was asking the system for a guarantee it does not make — which is why these two
+records, and only these two, failed inside `make gate` and passed when run alone.
+
+**What is erased, and why it cannot hide anything else.** Both sides are cut by the *same*
+declared splitter into `(prefix, separator, elements, suffix)`, at the byte level — nothing
+is re-parsed or re-serialised, so key order, separators, `ensure_ascii=False` and every byte
+inside an element survive the cut. `prefix + separator.join(elements) + suffix` is asserted
+to reassemble to the body it cut. Prefix, separator and suffix are then compared byte for
+byte, and the elements are compared as a **sorted list**. Two sequences have equal sorted
+lists exactly when one is a permutation of the other, so *order, and nothing else, is
+erased*: a changed category, quote, offset or verdict, a dropped element, a repeated element,
+a duplicated element replacing a missing one, and a changed count all still redden. Each of
+those is a test, run against every permutation of the sequence rather than one.
+
+**What is pinned instead.** The ordering *rule*, which the system does promise, asserted
+against the live response rather than against a recorded sequence:
+`test_the_published_findings_come_back_ascending_by_finding_uid` and
+`test_the_csv_rows_come_back_ascending_by_finding_uid_then_observation_id`. A rewrite that
+dropped the `ORDER BY` would leave both records green and fail both of those.
+
+**One consequence for the substitution.** `{{finding_uid_0}}`…`{{finding_uid_2}}` are
+numbered by the finding's rank in **document order** — the page and character offset of its
+first evidence quote — and no longer by its place in the response. A token numbered by an
+order the system does not promise is a token that names a different finding from run to run,
+which is what made an order-insensitive comparison impossible before. The rank is a property
+of the frozen AR fixture, it is asserted to be total, and it decides what a value is *called*,
+never what any value must *be*. Cases 09, 10, 11 and 12 name their finding through the same
+rank, so no record downstream depends on which finding a publication's ULIDs sorted first.
+
 ## How a response is made comparable, and what that does not hide
 
 A response carries values that cannot repeat: ULID identities, database timestamps, the
