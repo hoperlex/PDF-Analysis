@@ -201,3 +201,32 @@ This is criterion 6's surface and it is where the sweep found most of what it fo
 | GR-01 | grouping renders empty categories | KILLED | `review/finding-admission` |
 | GR-02 | grouping follows the reversed contract order | KILLED | `review/finding-admission` |
 | **GR-03** | **`countGrouped` counts groups, not findings** | **SURVIVED** | — |
+
+### 2.4 Batch 4 — the decision ledger, intents, the page fragment, selection, failure presentation, the download sink
+
+Thirty-one of thirty-three reddened. The ledger is the best-guarded module in the tree:
+every one of its eleven rules has a test that can tell it from a deleted rule.
+
+| # | Mutation | Result | What refused |
+|---|---|---|---|
+| LG-01 | `compareEvents` drops the `decision_id` tiebreaker | KILLED | `decisions/ledger` — *orders by (recorded_at, decision_id)* |
+| LG-02 | `compareEvents` orders newest first | KILLED | `decisions/ledger` |
+| LG-03 | `orderEvents` sorts the caller's array in place | KILLED | `decisions/ledger` — *never mutates the array it is given* |
+| LG-04 | `isVerdictBearing` keys off `event_type` | KILLED | `decisions/ledger` — *classifies verdict-bearing events by the verdict field, not the event type* |
+| LG-05 | a comment overwrites the current verdict | KILLED | `decisions/ledger` — *leaves the verdict standing* |
+| LG-06 | `latest_comment` takes the first comment | KILLED | `decisions/ledger` |
+| LG-07 | the default projection is `accepted` | KILLED | `decisions/ledger` — *is pending when nothing has judged the finding* |
+| LG-08 | `decision_recorded_at` from the oldest event | KILLED | `decisions/ledger` |
+| LG-09 | `appendEvent` duplicates a replayed `decision_id` | KILLED | `decisions/ledger` — *treats re-appending the same decision_id as a no-op* |
+| LG-10 | `appendEvent` mutates the input list | KILLED | `decisions/ledger` |
+| LG-11 | `reconcile` prefers the client projection | KILLED | `decisions/ledger` — *prefers the server projection when one is supplied* |
+| IN-01..03 | `intentSignature` drops a part | KILLED | `decisions/intent` |
+| **IN-04** | **parts joined by a separator instead of length-prefixed** | **SURVIVED** | — (see §4: the mutation as written was too weak; re-run as `W7-IN-04`) |
+| IN-05 | `resolveIntentKey` mints on every call | KILLED | `decisions/intent` — *reuses the key when the same intent is retried* |
+| IN-06 | `resolveIntentKey` reuses across intents | KILLED | `decisions/intent` ×3 |
+| CT-01..03 | comment check accepts empty / stops trimming / collapses | KILLED | `decisions/intent` |
+| PU-01..04 | page fragment rules | KILLED | `review/evidence-viewer` |
+| SEL-01..04 | selection rules | KILLED | `review/failure-and-selection` |
+| PF-01..03 | failure presentation and retry offer | KILLED | `review/failure-and-selection` |
+| DS-01 | `deliverDownload` stops revoking | KILLED | `export/export-panel` — *revokes even when saving throws* |
+| **DS-02** | **`deliverDownload` revokes before saving** | **SURVIVED** | — |
