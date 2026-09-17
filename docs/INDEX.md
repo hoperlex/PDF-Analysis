@@ -19,6 +19,7 @@
 
 ## Program
 - [Roadmap](program/ROADMAP.md)
+- [Short road to a deployable alpha](program/ALPHA_ROADMAP.md) — three waves to a served, deployed stack and the `PA-01` checkpoint
 - [Prototype profile](program/PROTOTYPE_PROFILE.md) — scope, reuse and gate policy
 - [FF-01 PostgreSQL/S3 Foundation Freeze](program/PROTOTYPE_FOUNDATION_FREEZE.md) — accepted 2026-09-09
 - [Task P0-FND-00](program/tasks/P0-FND-00.md) — accepted and complete
