@@ -216,12 +216,26 @@ through FastAPI to see what it answered now.
 | a part with no `name` | **`500 internal_error`** | `422`, `body` / `readable_multipart` |
 | `file` sent twice | **accepted; the second one published, silently** | `422`, `body` / `unique_part` |
 
-A fourth is not a refusal and is the worst of them: Starlette decodes a text part with no
-`charset` parameter as **latin-1** (`formparsers._user_safe_decode`), so a UTF-8
-`display_title` with any character outside ASCII arrived as mojibake — no refusal, no log,
-a wrong string in the database. `agent/display-title` is a fix this programme already made
-once for this property. `require_a_strict_multipart_body` recovers the bytes and decodes
-them as UTF-8 or refuses, which is exactly what the certified reader did.
+A fourth was **claimed and then withdrawn, by a mutation of this session's own code** —
+recorded rather than deleted, because it is the most useful thing in this section. The claim
+was that Starlette decodes a text part as latin-1 and so mojibakes every non-ASCII
+`display_title`. It does not: `MultiPartParser.parse` reads `charset` off the request's
+Content-Type and **defaults it to `utf-8`**; the latin-1 in `_user_safe_decode` is a
+*fallback*, taken only for bytes that are not valid UTF-8. What Starlette does not do is
+**refuse** them, which the retired reader did.
+
+The first version of `_decoded_title` "recovered" the bytes by re-encoding latin-1 and
+decoding UTF-8. Mutating it away did not redden the round-trip test, which is what sent me
+to look — and what I found is that the recovery was itself a defect: `"coûts"` is valid
+UTF-8 on the wire, every character is under `U+0100`, so it round-trips to `b"co\xfbts"`,
+which is **not** valid UTF-8, and a perfectly good title was refused. Most titles in French,
+German or Spanish. It is `agent/display-title`'s property — *the display title reaches the
+reviewer who typed it* — broken by the code written to protect it.
+
+The two cases are **indistinguishable from the decoded string**: `b"co\xc3\xbbts"` (valid)
+and `b"co\xfbts"` (a fallback) both give `"coûts"`. So the refusal is dropped, deliberately
+and once, and §6.6 records it. It is the only refusal of the retired reader this transport
+does not reproduce.
 
 The first two were `500`s because FastAPI parses a form **before** it resolves dependencies
 (`routing.py:429`), so no application dependency can get in front of the parser. The
@@ -262,9 +276,69 @@ enforced.** A constrained parameter is a refusable one, and four operations decl
 unchanged and is now pinned by
 `test_an_unusable_supplied_id_is_replaced_and_not_refused`, which did not exist before.
 
+**6.6 — a `display_title` whose bytes are not valid UTF-8 is accepted, not refused.** §5.
+`test_a_display_title_that_is_not_utf8_is_accepted_and_that_is_declared` is a *passing*
+test a reader meets, rather than a sentence they have to trust — the pattern `W13-CONF`
+used for its own declared blind spot under `N4`.
+
 **6.5 — an empty query value is the absent value, preserved deliberately.** `?limit=`
 returns the default and `?category=` is no filter, as `parse_limit` and `_enum_filter` did.
 Pydantic would refuse both. `?cursor=` is still refused, as `decode_cursor` refused it.
+
+## 6b. The mutation sweep
+
+`make mutation-copy MUT=/root/w13api-mut`, baselined **green at 302** on the unmutated copy
+before any red was read. `src/` is copied and `contracts/`, `docs/`, `fixtures/`, `db/` and
+`tools/` are symlinks, so nothing under them can be mutated — and `tests/` is not copied at
+all (`D-10`), which is why every mutation below is of product code and the suites are run
+from the worktree with `-o pythonpath=/root/w13api-mut/src`.
+
+Document-level mutations are read with the conformance engine directly, against the mutated
+copy; behavioural ones are read with the suites named.
+
+| # | Mutation | Result |
+|---|---|---|
+| `M1` | `405` no longer maps to `404` | `record 29`, `test_no_thirteenth_operation_answers`, the status sweep |
+| `M2` | `FailureEnvelopeMiddleware` removed from the stack | **9 failed** across `test_database_refusals`, `test_error_envelope`, the framework sweep |
+| `M3` | the seam admits anyone | **10 failed** across `test_authorization` and the sweep's 401 case |
+| `M4` | an unconfigured token *opens* the seam instead of closing it | `test_an_application_with_no_configured_token_refuses_everything` |
+| `M5` | compact JSON separators in `encode_json` | **17 records** |
+| `M6` | Starlette writes the header list instead of `WireResponse` | the journey's own `Content-Length` rule, aborting the capture |
+| `M7` | the repeated-part rule removed | `test_a_repeated_part_is_refused_as_unique_part` |
+| `M8` | `_decoded_title` short-circuited | **did not redden** — and that is how §5's fourth finding was found |
+| `M9` | the boundary check removed from `BodyCapMiddleware` | `test_a_multipart_content_type_with_no_boundary_is_refused_as_boundary` |
+| `M10` | the 422 removal widened to every 422 | two cases in `test_served_document_and_health_plane` |
+| `M11` | the duplicate-`operationId` rule removed | two cases in `test_router_and_body_rules` |
+| `M12` | `optional_property` made a no-op | **0 differences** — see below |
+| `M13` | `separate_input_output_schemas=True` | **0 differences** — see below |
+| `M14` | the multipart `encoding` not restored | 1 difference, at the exact dotted location |
+| `M15` | FastAPI's injected 422 left in the document | 6 differences: four operations and the two schemas |
+| `M16` | `provider_mode: ProviderMode \| None = None`, the ordinary Pydantic spelling | 2 differences on `StartRunRequest.properties.provider_mode` |
+| `M17` | one scalar newtype spelled `Annotated[str, ...]` instead of `TypeAliasType` | **22 differences** |
+| `M18` | the transport body limit raised tenfold | 2 failed + the baseline capture aborts on `record 22` |
+| `M19` | the multipart media-type check removed | two `media_type` cases |
+| `M20` | a malformed path identity answers `422` instead of `404` | `record 30` |
+| `M21` | the `400` from the form parser left unmapped | `test_a_part_with_no_name_is_refused_as_an_unreadable_multipart` |
+
+**Two mutations did not redden, and both are reported rather than quietly dropped.**
+
+* **`M12`** — `optional_property` is **belt and braces, not load-bearing.** With
+  `separate_input_output_schemas=False`, FastAPI generates one schema per model in
+  *serialization* mode, and Pydantic omits `default` there.
+  `Model.model_json_schema()` alone — validation mode — does emit it, which is what the
+  helper was written against and why the claim looked true. The helper is kept, with the
+  measurement in its docstring, and the **property** it declares is now pinned directly by
+  `test_no_schema_property_declares_a_default`, over the contract *and* the served
+  document. `M16` shows the other half of the same spelling — the *type* — is load-bearing
+  at two dotted locations.
+* **`M13`** — `separate_input_output_schemas=False` is **inert at this contract's shape.**
+  `W13-CONF`'s finding 2 is right about the mechanism: a model with a default is emitted
+  twice as `X-Input`/`X-Output`. It does not fire here because no model in this set is used
+  in both positions — the four request bodies are input-only and the response models are
+  output-only. Kept, because the day `Project` appears in a request body the split is a
+  conformance failure and this is the flag that prevents it.
+
+Nothing else in this session's product code survived a mutation of itself.
 
 ## 7. The 21 coupled test files: which were re-pointed, which rewritten
 

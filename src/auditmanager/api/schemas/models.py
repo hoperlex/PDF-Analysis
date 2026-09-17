@@ -95,8 +95,22 @@ def optional_property(schema: dict[str, Any]) -> None:
 
     A callable ``json_schema_extra`` is handed the generated property schema to mutate. The
     contract declares no ``default`` on any property, and the conformance gate compares
-    ``default``, so emitting one is a difference -- and a wrong one: ``default: null`` says
-    the server substitutes ``null``, which is not what an absent property means here.
+    ``default``, so emitting one would be a difference -- and a wrong one: ``default: null``
+    says the server substitutes ``null``, which is not what an absent property means here.
+
+    **Measured, and it is belt and braces rather than load-bearing.** Replacing this body
+    with ``pass`` changes the generated document by **nothing**: with
+    ``separate_input_output_schemas=False`` FastAPI generates one schema per model in
+    *serialization* mode, and Pydantic omits ``default`` there. ``model_json_schema()``
+    alone -- validation mode -- does emit it, which is what this was written against.
+
+    It is kept, and said out loud rather than quietly deleted, because the property it
+    declares is the contract's and the mode FastAPI happens to choose is not.
+    ``test_no_schema_property_declares_a_default`` pins the property itself, which is the
+    thing worth guarding; this function is the declaration of intent beside it. The half of
+    the spelling that **is** load-bearing is the type: ``ProviderMode`` with
+    ``default=None`` rather than ``ProviderMode | None``, which the sweep's ``M16``
+    reddens at two dotted locations.
     """
     schema.pop("default", None)
 

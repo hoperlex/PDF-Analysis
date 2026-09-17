@@ -95,6 +95,29 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "uploadDocument",
         }, declared_422
 
+    def test_no_schema_property_declares_a_default(self) -> None:
+        """The contract declares no ``default`` on any property of any of the 43 schemas.
+
+        ``default: null`` on an optional property says the server substitutes ``null``,
+        which is not what an absent property means here -- and the conformance gate
+        compares ``default``. ``models.optional_property`` is the declaration of that
+        intent; this is the property itself, pinned where a change in how FastAPI chooses
+        to generate a schema would be caught whether or not that helper is still there.
+        """
+        contract = json.loads(OPENAPI.read_text(encoding="utf-8"))
+        for name, schema in contract["components"]["schemas"].items():
+            for prop, sub in (schema.get("properties") or {}).items():
+                assert "default" not in sub, f"the contract declares one: {name}.{prop}"
+
+        served = create_documentation_app().openapi()["components"]["schemas"]
+        offenders = [
+            f"{name}.{prop}"
+            for name, schema in served.items()
+            for prop, sub in (schema.get("properties") or {}).items()
+            if "default" in sub
+        ]
+        assert offenders == [], offenders
+
     def test_a_declared_422_is_the_contracts_and_is_never_removed(self) -> None:
         """The removal is narrow, and this is what says so.
 
