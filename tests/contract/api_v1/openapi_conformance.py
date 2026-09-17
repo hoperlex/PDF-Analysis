@@ -554,8 +554,8 @@ def differences(expected: Any, generated: Any, path: str = "") -> list[str]:
         if len(expected) != len(generated):
             return [
                 f"{here}: the contract has {len(expected)} entries and the generated "
-                f"document has {len(generated)} - contract {_render(expected)}, "
-                f"generated {_render(generated)}"
+                f"document has {len(generated)} entries - contract {_render(expected)} "
+                f"- generated {_render(generated)}"
             ]
         out = []
         for index, (left, right) in enumerate(zip(expected, generated)):
