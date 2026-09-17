@@ -78,7 +78,7 @@ the set-valued keywords `required` and `enum` are sorted.`
      `test_changed_enum_member_is_caught`.
 
 `N4 - annotation-only keywords are dropped: description, summary, title, examples, example,
-externalDocs, info and the top-level tag descriptions.`
+externalDocs, info, and the document's top-level `tags` array.`
   1. Pydantic writes a `title` on every model and every field, derived from the name.
      FastAPI writes an operation's `description` from the handler docstring and a
      property's from `Field(description=...)`.
@@ -94,6 +94,14 @@ externalDocs, info and the top-level tag descriptions.`
      `test_changed_description_is_deliberately_invisible` records the blind spot as a test
      rather than as a promise, and `test_changed_pattern_is_caught` shows the boundary:
      prose moves freely, constraints do not.
+     The document's **top-level `tags` array** goes with them, and it is worth saying why
+     separately: FastAPI emits one only when the application passes `openapi_tags`, and it
+     is measured here that a perfectly conforming application emits none. That array names
+     and describes the groups a documentation UI draws; an operation's membership of a
+     group is the operation's own `tags`, which **is** compared, so removing the array
+     cannot change which operations exist, what they accept or what they answer.
+     `test_the_top_level_tag_list_is_deliberately_not_compared` and
+     `test_a_changed_operation_tag_is_caught` are the pair.
 
 `N5 - the two-branch nullable union is canonicalized to `anyOf` with the null branch last.`
   1. The contract spells its 21 optional fields `{"oneOf": [S, {"type": "null"}]}`.
@@ -122,6 +130,38 @@ externalDocs, info and the top-level tag descriptions.`
      `test_type_beside_const_is_invisible`, `test_changed_const_is_caught`,
      `test_contradictory_type_beside_const_is_caught`.
 
+`N8 - a JSON number is compared by value, so an integral float equals the integer.`
+  1. The contract writes `"maximum": 30` and `"minimum": 1`. FastAPI 0.141.1 with
+     pydantic 2.13.5 writes `"maximum": 30.0` and `"minimum": 1.0` for the same bound -
+     measured, not assumed, by generating a document from `Field(ge=1, le=30)`.
+  2. Pydantic carries a numeric constraint as a float and json-encodes it as one.
+  3. JSON has a single number type: `30` and `30.0` are the same JSON value, and no JSON
+     Schema keyword can tell them apart. The comparison therefore compares numbers by
+     value - and **only** numbers: `True` is an `int` in Python and is not a number in
+     JSON, so a boolean is never equal to `1` and a required flag that became an integer
+     is still reported. A bound that actually moved - `30` to `3000`, or `30` to `30.5` -
+     changes the value and still fails. `test_an_integral_float_bound_is_invisible`,
+     `test_a_true_is_not_a_one`, `test_a_widened_numeric_bound_is_caught`,
+     `test_a_fractional_bound_is_caught`.
+
+`N9 - the name of an HTTP header, as a parameter or as a response header, is compared case
+insensitively.`
+  1. The contract writes `X-Correlation-Id` and `Idempotency-Key`. FastAPI derives a header
+     parameter's wire name from the Python parameter name - `x_correlation_id` becomes
+     `x-correlation-id` - unless the handler passes an explicit `alias`. Measured on a
+     generated document, not assumed.
+  2. `Header()` lowercases and converts underscores by default.
+  3. RFC 9110 §5.1 makes HTTP field names case insensitive: `X-Correlation-Id` and
+     `x-correlation-id` are the same header to every client, server and proxy, so two
+     spellings that differ only in case cannot denote different headers. The fold is applied
+     **only** to `in: "header"` parameters and to response header names. Query and path
+     parameter names, schema property names and media types are case *sensitive* and are
+     compared exactly as written, so `limit` and `Limit` remain two different query
+     parameters. A header that was actually renamed still fails.
+     `test_a_lowercased_header_name_is_invisible`, `test_a_renamed_header_is_caught`,
+     `test_a_recased_query_parameter_is_caught`,
+     `test_a_recased_schema_property_is_caught`.
+
 `N7 - an operation's security is reduced to its effective value.`
   1. The contract may declare `security` at the document root, per operation, or both.
      FastAPI only ever emits it per operation, from the `Security()` dependencies in the
@@ -138,7 +178,8 @@ externalDocs, info and the top-level tag descriptions.`
 WHAT IS COMPARED, AFTER ALL OF THAT
 --------------------------------------------------------------------------------------
 
-  * the `openapi` version string and the `servers` base paths;
+  * the `openapi` version string and the `servers` base paths (the document's top-level
+    `tags` array is annotation and is **not** compared - see `N4`);
   * the set of paths and, per path, the set of HTTP methods;
   * per operation: `operationId`, `tags`, effective `security`, `deprecated`;
   * per parameter: `in`, `name`, `required`, and its schema in full;
@@ -336,7 +377,12 @@ def _stable_key(value: Any) -> tuple[str, str]:
 
 
 def _parameter_key(parameter: dict[str, Any]) -> str:
-    return f"{parameter.get('in')}:{parameter.get('name')}"
+    """`N9` for header parameters only. `query:` and `path:` names stay as written."""
+    location = parameter.get("in")
+    name = parameter.get("name")
+    if location == "header" and isinstance(name, str):
+        name = name.lower()
+    return f"{location}:{name}"
 
 
 def _effective_parameters(
@@ -395,12 +441,13 @@ def _headers(headers: dict[str, Any] | None) -> dict[str, Any]:
     if not headers:
         return {}
     return {
-        name: {
+        # N9. A response header name is an HTTP field name and is case insensitive.
+        name.lower(): {
             "required": bool(header.get("required", False)),
             "schema": normalize_schema(header.get("schema")),
             "deprecated": bool(header.get("deprecated", False)),
         }
-        for name, header in sorted(headers.items())
+        for name, header in sorted(headers.items(), key=lambda item: item[0].lower())
     }
 
 
@@ -487,7 +534,6 @@ def surface(document: dict[str, Any]) -> dict[str, Any]:
     return {
         "openapi": document.get("openapi"),
         "servers": [server.get("url") for server in document.get("servers", []) or []],
-        "tags": sorted(tag.get("name") for tag in document.get("tags", []) or []),
         "securitySchemes": _strip_annotations(components.get("securitySchemes")),
         "paths": paths,
         "schemas": {
@@ -561,6 +607,25 @@ def differences(expected: Any, generated: Any, path: str = "") -> list[str]:
         for index, (left, right) in enumerate(zip(expected, generated)):
             out.extend(differences(left, right, f"{path}[{index}]" if path else f"[{index}]"))
         return out
+
+    # N8. Two JSON numbers are equal when their values are, whatever Python parsed them
+    # into. `bool` is excluded deliberately: it is an `int` in Python and is not a number
+    # in JSON, so `True` never equals `1` here.
+    both_numbers = (
+        isinstance(expected, (int, float))
+        and isinstance(generated, (int, float))
+        and not isinstance(expected, bool)
+        and not isinstance(generated, bool)
+    )
+    if both_numbers:
+        return (
+            []
+            if expected == generated
+            else [
+                f"{here}: the contract has {_render(expected)}, "
+                f"the generated document has {_render(generated)}"
+            ]
+        )
 
     if type(expected) is not type(generated) or expected != generated:
         return [

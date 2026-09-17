@@ -163,7 +163,17 @@ FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
 
 #: The declared normalization, by identifier. Pinned here so that a normalization added to
 #: the engine without a planted difference proving it still fails is itself a failure.
-DECLARED_NORMALIZATIONS: tuple[str, ...] = ("N1", "N2", "N3", "N4", "N5", "N6", "N7")
+DECLARED_NORMALIZATIONS: tuple[str, ...] = (
+    "N1",
+    "N2",
+    "N3",
+    "N4",
+    "N5",
+    "N6",
+    "N7",
+    "N8",
+    "N9",
+)
 
 
 @pytest.fixture(scope="module")
@@ -222,7 +232,7 @@ class TestTheFrozenDocument:
             for path, operations in reduced["paths"].items()
             for method, operation in operations.items()
             for code, response in operation["responses"].items()
-            if "X-Correlation-Id" not in response["headers"]
+            if "x-correlation-id" not in response["headers"]
         ]
         assert missing == []
 
@@ -262,7 +272,7 @@ class TestTheComparison:
         assert len(report) == 1
         line = report[0]
         assert line.startswith(
-            "paths./runs/{run_id}/export.csv.get.responses.200.headers.Content-Disposition:"
+            "paths./runs/{run_id}/export.csv.get.responses.200.headers.content-disposition:"
         )
         assert "missing from the generated document" in line
 
@@ -640,7 +650,7 @@ class TestN3OrderingAndSetValuedKeywords:
         )
         assert_reported_at(
             report,
-            "paths./projects/{project_uid}/documents.post.parameters.header:Idempotency-Key",
+            "paths./projects/{project_uid}/documents.post.parameters.header:idempotency-key",
         )
 
     def test_a_relaxed_parameter_requirement_is_caught(self, contract: dict[str, Any]) -> None:
@@ -653,7 +663,7 @@ class TestN3OrderingAndSetValuedKeywords:
         line = assert_reported_at(
             report,
             "paths./projects/{project_uid}/documents.post.parameters."
-            "header:Idempotency-Key.required",
+            "header:idempotency-key.required",
         )
         assert "true" in line and "false" in line
 
@@ -927,7 +937,7 @@ class TestThePlantedDifferences:
         )
         assert_reported_at(
             report,
-            "paths./runs/{run_id}/export.csv.get.responses.200.headers.X-Correlation-Id",
+            "paths./runs/{run_id}/export.csv.get.responses.200.headers.x-correlation-id",
         )
 
     def test_a_renamed_schema_property_is_caught(self, contract: dict[str, Any]) -> None:
@@ -1099,6 +1109,19 @@ class TestThePlantedDifferences:
         )
         assert_reported_at(report, "openapi")
 
+    def test_the_top_level_tag_list_is_deliberately_not_compared(
+        self, contract: dict[str, Any]
+    ) -> None:
+        """The second declared blind spot, recorded rather than promised.
+
+        Measured, not assumed: a conforming FastAPI application emits no top-level `tags`
+        array unless it passes `openapi_tags`, and `TestAgainstARealGeneratedDocument`
+        generates a document that has none. What associates an operation with a group is
+        the operation's own `tags`, and the test below compares those.
+        """
+        report = report_for(contract, lambda document: document.pop("tags"))
+        assert_silent(report)
+
     def test_a_changed_operation_tag_is_caught(self, contract: dict[str, Any]) -> None:
         report = report_for(
             contract,
@@ -1140,7 +1163,7 @@ class TestThePlantedDifferences:
         assert_reported_at(
             report,
             "paths./versions/{version_uid}/content.get.responses.200.headers."
-            "Content-Length.schema.type",
+            "content-length.schema.type",
         )
 
     def test_a_response_header_that_stopped_being_required_is_caught(
@@ -1153,5 +1176,412 @@ class TestThePlantedDifferences:
             ),
         )
         assert_reported_at(
-            report, "paths./projects.post.responses.201.headers.X-Correlation-Id.required"
+            report, "paths./projects.post.responses.201.headers.x-correlation-id.required"
         )
+
+
+class TestN8JsonNumbers:
+    """`N8`: a JSON number is one type. Python's `int` and `float` are two."""
+
+    def test_an_integral_float_bound_is_invisible(self, contract: dict[str, Any]) -> None:
+        """What pydantic actually writes for `Field(ge=1, le=30)`, measured below in
+        `TestAgainstARealGeneratedDocument`."""
+        report = report_for(
+            contract,
+            lambda document: document["components"]["schemas"]["DocumentVersion"]["properties"][
+                "page_count"
+            ].update({"maximum": 30.0, "minimum": 1.0}),
+        )
+        assert_silent(report)
+
+    def test_a_fractional_bound_is_caught(self, contract: dict[str, Any]) -> None:
+        """The boundary of `N8`: equal in value is invisible, different in value is not."""
+        report = report_for(
+            contract,
+            lambda document: document["components"]["schemas"]["DocumentVersion"]["properties"][
+                "page_count"
+            ].__setitem__("maximum", 30.5),
+        )
+        assert_reported_at(report, "schemas.DocumentVersion.properties.page_count.maximum")
+
+    def test_a_boolean_is_never_a_number(self) -> None:
+        assert differences({"required": True}, {"required": 1}) != []
+        assert differences({"required": True}, {"required": 1.0}) != []
+        assert differences({"retryable": False}, {"retryable": 0}) != []
+
+    def test_a_string_that_looks_like_a_number_is_not_one(self) -> None:
+        assert differences({"maximum": 30}, {"maximum": "30"}) != []
+
+
+class TestN9HttpFieldNameCase:
+    """`N9`: HTTP field names are case insensitive (RFC 9110 §5.1). Nothing else is."""
+
+    def test_a_lowercased_header_name_is_invisible(self, contract: dict[str, Any]) -> None:
+        """FastAPI turns `x_correlation_id: Annotated[str | None, Header()]` into a
+        parameter named `x-correlation-id`. Same header, on the wire and in every proxy."""
+
+        def lowercase_headers(document: dict[str, Any]) -> None:
+            for parameter in document["components"]["parameters"].values():
+                if parameter["in"] == "header":
+                    parameter["name"] = parameter["name"].lower()
+            for path_item in document["paths"].values():
+                for method in conformance.HTTP_METHODS:
+                    operation = path_item.get(method)
+                    if operation is None:
+                        continue
+                    for parameter in operation.get("parameters", []):
+                        if parameter.get("in") == "header":
+                            parameter["name"] = parameter["name"].lower()
+                    for response in operation["responses"].values():
+                        if "headers" in response:
+                            response["headers"] = {
+                                name.lower(): value
+                                for name, value in response["headers"].items()
+                            }
+
+        assert_silent(report_for(contract, lowercase_headers))
+
+    def test_a_renamed_header_is_caught(self, contract: dict[str, Any]) -> None:
+        """The boundary: a different spelling of the same name is invisible, a different
+        name is not."""
+        report = report_for(
+            contract,
+            lambda document: document["components"]["parameters"]["CorrelationId"].__setitem__(
+                "name", "X-Request-Id"
+            ),
+        )
+        assert_reported_at(
+            report, "paths./projects.get.parameters.header:x-correlation-id"
+        )
+        assert_reported_at(report, "paths./projects.get.parameters.header:x-request-id")
+
+    def test_a_recased_query_parameter_is_caught(self, contract: dict[str, Any]) -> None:
+        """A query parameter name is case sensitive and is not folded."""
+        report = report_for(
+            contract,
+            lambda document: document["components"]["parameters"]["Limit"].__setitem__(
+                "name", "Limit"
+            ),
+        )
+        assert_reported_at(report, "paths./projects.get.parameters.query:limit")
+        assert_reported_at(report, "paths./projects.get.parameters.query:Limit")
+
+    def test_a_recased_schema_property_is_caught(self, contract: dict[str, Any]) -> None:
+        """A JSON property name is case sensitive and is not folded."""
+
+        def recase(document: dict[str, Any]) -> None:
+            schema = document["components"]["schemas"]["DocumentVersion"]
+            schema["properties"]["Byte_Size"] = schema["properties"].pop("byte_size")
+
+        report = report_for(contract, recase)
+        assert_reported_at(report, "schemas.DocumentVersion.properties.byte_size")
+        assert_reported_at(report, "schemas.DocumentVersion.properties.Byte_Size")
+
+    def test_a_recased_media_type_is_caught(self, contract: dict[str, Any]) -> None:
+        report = report_for(
+            contract,
+            lambda document: document["paths"]["/runs/{run_id}/export.csv"]["get"]["responses"][
+                "200"
+            ]["content"].__setitem__(
+                "TEXT/CSV",
+                document["paths"]["/runs/{run_id}/export.csv"]["get"]["responses"]["200"][
+                    "content"
+                ].pop("text/csv"),
+            ),
+        )
+        assert_reported_at(
+            report, "paths./runs/{run_id}/export.csv.get.responses.200.content.text/csv"
+        )
+
+
+# =======================================================================================
+# Part 5 - a real generated document, without waiting for stage 2
+# =======================================================================================
+#
+# `W13-API` (stage 2) builds the application; this suite runs beside it. Until it lands
+# there is no `app.openapi()` for the twelve operations to compare - but FastAPI is pinned
+# in this tree (`W13-PIN`, `6c4b236`), so a *real* generated document can be had now.
+#
+# The miniature below is a hand-written contract, in the same style as the frozen one and
+# in the same spellings: a `$ref`ed component parameter and response (`N1`), a path-item
+# level parameter (`N2`), editorial parameter order (`N3`), prose and examples (`N4`), a
+# `oneOf` nullable (`N5`), a bare `const` (`N6`), an integer bound that pydantic will emit
+# as a float (`N8`) and a capitalised header name FastAPI will lowercase (`N9`). The
+# application beside it is written the way stage 2 will write one.
+#
+# This is the difference between "the normalization handles what I believe FastAPI emits"
+# and "the normalization handles what FastAPI emits". The declarations in
+# `openapi_conformance.py` are measured against this, not assumed.
+
+from fastapi import FastAPI, Header, Path as PathParam, Query, Security  # noqa: E402
+from fastapi.security import HTTPBearer  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+from typing import Annotated, Literal, Optional  # noqa: E402
+
+#: The frozen document's own spellings, in miniature. A literal, not a slice of the
+#: contract: `OPERATING_CONSTRAINTS.md` §12 - an expectation is never built out of the
+#: thing it measures, and here the thing measured is FastAPI's generator.
+MINIATURE_CONTRACT: dict[str, Any] = {
+    "openapi": "3.1.0",
+    "info": {"title": "Miniature", "version": "1.0.0-draft.1"},
+    "servers": [{"url": "/api/v1", "description": "Version-prefixed base path."}],
+    "tags": [{"name": "documents", "description": "Upload one PDF."}],
+    "paths": {
+        "/versions/{version_uid}": {
+            "parameters": [{"$ref": "#/components/parameters/VersionUid"}],
+            "get": {
+                "operationId": "getDocumentVersion",
+                "tags": ["documents"],
+                "summary": "Read the published version.",
+                "description": "Prose the gate does not compare.",
+                "security": [{"bearerAuth": []}],
+                "parameters": [
+                    {"$ref": "#/components/parameters/CorrelationId"},
+                    {"$ref": "#/components/parameters/Limit"},
+                ],
+                "responses": {
+                    "200": {
+                        "description": "A published, immutable document version.",
+                        "headers": {
+                            "X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/DocumentVersion"}
+                            }
+                        },
+                    },
+                    "404": {"$ref": "#/components/responses/NotFound"},
+                    "422": {"$ref": "#/components/responses/ValidationFailed"},
+                },
+            },
+        }
+    },
+    "components": {
+        "parameters": {
+            "VersionUid": {
+                "name": "version_uid",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string"},
+            },
+            "CorrelationId": {
+                "name": "X-Correlation-Id",
+                "in": "header",
+                "required": False,
+                "description": "Correlates this request with its diagnostic record.",
+                "schema": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+            },
+            "Limit": {
+                "name": "limit",
+                "in": "query",
+                "required": False,
+                "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50},
+            },
+        },
+        "headers": {
+            "CorrelationId": {
+                "description": "Present on every response.",
+                "required": True,
+                "schema": {"type": "string"},
+            }
+        },
+        "responses": {
+            "NotFound": {
+                "description": "The addressed aggregate does not exist.",
+                "headers": {"X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}},
+                "content": {
+                    "application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}
+                },
+            },
+            "ValidationFailed": {
+                "description": "The request violates a declared schema.",
+                "headers": {"X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}},
+                "content": {
+                    "application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}
+                },
+            },
+        },
+        "securitySchemes": {
+            "bearerAuth": {"type": "http", "scheme": "bearer", "description": "The token."}
+        },
+        "schemas": {
+            "DocumentVersion": {
+                "type": "object",
+                "description": "A published, immutable input state.",
+                "additionalProperties": False,
+                "required": ["version_uid", "media_type", "page_count"],
+                "properties": {
+                    "version_uid": {
+                        "type": "string",
+                        "pattern": "^ver_[0-9A-HJKMNP-TV-Z]{26}$",
+                        "examples": ["ver_01M2545JSD15ETSNNV904X991F"],
+                    },
+                    "media_type": {"const": "application/pdf"},
+                    "page_count": {"type": "integer", "minimum": 1, "maximum": 30},
+                    "source_filename": {
+                        "description": "The uploaded file name, for display.",
+                        "oneOf": [{"type": "string"}, {"type": "null"}],
+                    },
+                },
+            },
+            "ErrorEnvelope": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["contract_version", "message"],
+                "properties": {
+                    "contract_version": {"const": "1.0.0-draft.1"},
+                    "message": {"type": "string", "minLength": 1, "maxLength": 512},
+                },
+            },
+        },
+    },
+}
+
+
+class DocumentVersion(BaseModel):
+    """Written the way stage 2 will write one: named as the contract's schema key."""
+
+    model_config = {"extra": "forbid"}
+
+    version_uid: str = Field(pattern=r"^ver_[0-9A-HJKMNP-TV-Z]{26}$")
+    media_type: Literal["application/pdf"]
+    page_count: int = Field(ge=1, le=30)
+    source_filename: Optional[str] = None
+
+
+class ErrorEnvelope(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    contract_version: Literal["1.0.0-draft.1"]
+    message: str = Field(min_length=1, max_length=512)
+
+
+def build_miniature_app(*, leave_fastapis_own_422_in_place: bool = False) -> Any:
+    """A FastAPI application implementing `MINIATURE_CONTRACT`.
+
+    `leave_fastapis_own_422_in_place` is the defect case: FastAPI attaches its own 422 with
+    an `HTTPValidationError` body to any operation that can fail validation, and
+    `ALPHA_ROADMAP.md` §4 stage 2 requires *"every failure rendered by `envelope_response`
+    and nothing else"*. Declaring the contract's own 422 replaces it - measured here rather
+    than asserted, because it is the single most likely way the generated document drifts.
+    """
+    bearer = HTTPBearer(scheme_name="bearerAuth", auto_error=False)
+    app = FastAPI(servers=[{"url": "/api/v1"}], separate_input_output_schemas=False)
+    correlation_header = {
+        "X-Correlation-Id": {"required": True, "schema": {"type": "string"}}
+    }
+    envelope = {"model": ErrorEnvelope, "headers": correlation_header}
+    responses: dict[Any, Any] = {200: {"headers": correlation_header}, 404: envelope}
+    if not leave_fastapis_own_422_in_place:
+        responses[422] = envelope
+
+    @app.get(
+        "/versions/{version_uid}",
+        operation_id="getDocumentVersion",
+        tags=["documents"],
+        response_model=DocumentVersion,
+        status_code=200,
+        responses=responses,
+        dependencies=[Security(bearer)],
+    )
+    def get_document_version(  # pragma: no cover - never called, only described
+        version_uid: Annotated[str, PathParam()],
+        x_correlation_id: Annotated[str | None, Header()] = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> DocumentVersion: ...
+
+    return app
+
+
+class TestAgainstARealGeneratedDocument:
+    """`app.openapi()`, for real, against a contract written in the frozen document's style."""
+
+    def test_the_generated_document_conforms(self) -> None:
+        generated = build_miniature_app().openapi()
+        assert_silent(differences(surface(MINIATURE_CONTRACT), surface(generated)))
+
+    def test_the_generated_document_really_is_spelled_differently(self) -> None:
+        """Otherwise the test above proves nothing about the normalization.
+
+        Each assertion is one declared entry, measured on FastAPI 0.141.1 and pydantic
+        2.13.5 rather than assumed.
+        """
+        generated = build_miniature_app().openapi()
+        operation = generated["paths"]["/versions/{version_uid}"]["get"]
+        schema = generated["components"]["schemas"]["DocumentVersion"]
+
+        # N1 - nothing is factored into components.parameters/responses/headers.
+        assert "parameters" not in generated["components"]
+        assert "responses" not in generated["components"]
+        assert "headers" not in generated["components"]
+        # N2 - every parameter sits on the operation, including the path parameter.
+        assert "parameters" not in generated["paths"]["/versions/{version_uid}"]
+        assert {p["name"] for p in operation["parameters"]} == {
+            "version_uid",
+            "limit",
+            "x-correlation-id",
+        }
+        # N3 - a different order, and `required` in field-declaration order.
+        assert [p["name"] for p in operation["parameters"]] != [
+            "version_uid",
+            "x-correlation-id",
+            "limit",
+        ]
+        # N4 - a title on every model and field, and a summary nobody wrote.
+        assert schema["title"] == "DocumentVersion"
+        assert schema["properties"]["page_count"]["title"] == "Page Count"
+        assert operation["summary"] == "Get Document Version"
+        assert "examples" not in schema["properties"]["version_uid"]
+        # N5 - `anyOf`, not `oneOf`.
+        assert "oneOf" not in json.dumps(schema)
+        assert schema["properties"]["source_filename"]["anyOf"][1] == {"type": "null"}
+        # N6 - the type of the literal, beside the literal.
+        assert schema["properties"]["media_type"] == {
+            "const": "application/pdf",
+            "type": "string",
+            "title": "Media Type",
+        }
+        # N8 - an integral float where the contract wrote an integer.
+        assert schema["properties"]["page_count"]["maximum"] == 30.0
+        assert isinstance(schema["properties"]["page_count"]["maximum"], float)
+        # N9 - the header parameter's name, lowercased by `Header()`.
+        assert [p for p in operation["parameters"] if p["in"] == "header"][0][
+            "name"
+        ] == "x-correlation-id"
+
+    def test_the_gate_catches_fastapis_own_validation_error(self) -> None:
+        """The defect the whole normalization must not hide.
+
+        An operation that does not declare the contract's 422 gets FastAPI's, with an
+        `HTTPValidationError` body and two schemas the contract never declared. That is a
+        `criterion-10` regression wearing a 422, and the gate reports it in three places.
+        """
+        generated = build_miniature_app(leave_fastapis_own_422_in_place=True).openapi()
+        report = differences(surface(MINIATURE_CONTRACT), surface(generated))
+        assert_reported_at(
+            report,
+            "paths./versions/{version_uid}.get.responses.422.content.application/json"
+            ".schema.$ref",
+        )
+        assert_reported_at(report, "schemas.HTTPValidationError")
+        assert_reported_at(report, "schemas.ValidationError")
+
+    def test_the_gate_catches_a_missing_security_requirement(self) -> None:
+        generated = build_miniature_app().openapi()
+        generated["paths"]["/versions/{version_uid}"]["get"].pop("security")
+        assert_reported_at(
+            differences(surface(MINIATURE_CONTRACT), surface(generated)),
+            "paths./versions/{version_uid}.get.security",
+        )
+
+    def test_the_gate_catches_a_split_input_and_output_schema(self) -> None:
+        """`separate_input_output_schemas` defaults to `True` in FastAPI, and a model with
+        a default value is then emitted twice, as `X-Input` and `X-Output`. The 43 names
+        are pinned, so the split fails rather than being normalized away."""
+        generated = build_miniature_app().openapi()
+        schemas = generated["components"]["schemas"]
+        schemas["DocumentVersion-Output"] = schemas.pop("DocumentVersion")
+        report = differences(surface(MINIATURE_CONTRACT), surface(generated))
+        assert_reported_at(report, "schemas.DocumentVersion")
+        assert_reported_at(report, "schemas.DocumentVersion-Output")
