@@ -10,7 +10,8 @@ is two commits later on the same line (`3f49385` and the merge `e6eae1e`, both d
 
 **Started: 2026-09-17T12:31:24+05:00.**
 
-Status: in progress.
+**Verdict: PC-01 holds at `e6eae1e`, with one named exception** (`W12CERT-DEF-3`,
+criterion 4's and criterion 10's UI half). Full statement in §10.
 
 ---
 
