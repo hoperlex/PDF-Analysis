@@ -379,3 +379,24 @@ red on the missing modules), `gate3.log` (**the reported run**), plus `bootstrap
 - **Elapsed wall clock:** ~24 minutes by the machine's own clock
   (`date -u`, 2026-09-17T23:03:37Z on arrival → 23:27:42Z after the green gate); the gate's own
   internal durations are battery 214.53s, foundation 30.54s, frontend 4.21s.
+
+## 9 — addendum: `dev` moved under me, and `D-10` is now closed
+
+Checked at hand-off. My base is `315de25`; `origin/dev` is now **`ebf06ad`**, two commits
+ahead, landed by the `W15` integrator while this session was running:
+
+- `36278a9` *docs: close wave 14, re-measure the register, and correct a bullet nobody had read*
+- `ebf06ad` *feat: the mutation copy carries the tests, and a migration is mutable at last*
+
+**`ebf06ad` closes `D-10`.** `mutation_copy` now does `cp -a tests "$dest/tests"` (Makefile
+line 558), copied rather than symlinked and argued as such in the recipe's own comment, with
+`tests/.../test_mutation_copy_serves_a_tests_only_stream.py` as its guard. So §3's paragraph on
+`D-10` describes **my base**, not today's `dev`, and I have left it as written rather than
+rewriting history: it was accurate when I measured it, and the point it makes — that `D-10` did
+not actually bind a src-only mutation — is unaffected either way.
+
+`git diff --stat 315de25..HEAD` is exactly five files: the two sources, their two tests and
+this review. A diff against `origin/dev` will additionally *appear* to revert `Makefile`,
+`DEBT_REGISTER.md`, `W14_CLOSURE.md`, `PROTOTYPE_PROFILE.md` and that new test — **that is the
+two commits above, not this session's work.** This branch needs a rebase or merge onto
+`ebf06ad` before it is integrated, and the integrator should take `dev`'s side on all five.
