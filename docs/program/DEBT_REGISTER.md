@@ -126,12 +126,19 @@ authorization tokens**. Measured against the frozen contract at `2593862`:
 - `contracts/api/v1/openapi.json` declares **no `securitySchemes`**, no top-level `security`,
   and **zero** operations carrying their own — the twelve operations are unauthenticated by
   construction;
-- `authentication_required` and `permission_denied` **are** in the frozen 20-code catalog and
-  are **used nowhere in `src/`**.
+- `authentication_required` is in the catalog and is **raised nowhere**;
+- `permission_denied` **is raised** — corrected below.
 
-So the codes were reserved and the transport was never given a way to raise them. Adding
-tokens is therefore a **contract change** — a reseal of the frozen document and of
-`web/FRONTEND_LOCK.json`, not a lane decision.
+So the transport was never given a way to raise `authentication_required`. Adding tokens is
+therefore a **contract change** — a reseal of the document and of `web/FRONTEND_LOCK.json`,
+not a lane decision.
+
+**Correction, 2026-09-17.** This row first said both codes were "used nowhere in `src/`". That
+was wrong for `permission_denied`, and wrong for a reason worth keeping: I grepped for the enum
+constant `PERMISSION_DENIED`, and `storage/errors.py:153` carries the **string**
+`code = "permission_denied"` on a `ClassVar`. Found by `pdf-analysis-d9` checking the row
+against the tree. **A row that says "measured" is only as good as the query behind it**, and
+mine matched one of the two spellings the codebase uses.
 
 Note what this is *not*: the current alpha draft's §11 excludes "no in-app authorization" and
 its `R-3` proposes **one shared secret at the proxy**. A shared secret is a gate; a token is an
@@ -139,6 +146,61 @@ identity. They are different deliverables and only the second answers the owner'
 
 Check: the `python3 -c` one-liner over `openapi.json` in this row's history, and
 `grep -rn "AUTHENTICATION_REQUIRED\|PERMISSION_DENIED" src/`.
+
+### D-7 — one code, two situations, and they cannot be told apart in the envelope
+
+**This collision exists today, before any token work.** It is the thing to settle at the
+reseal, and the settlement is the owner's because it touches the catalog.
+
+The catalog defines `permission_denied` as: *"The **authenticated subject** is not permitted to
+perform this operation on this resource. Authorization is decided server-side."*
+
+`StoragePermissionDeniedError` raises it for *"the configured application credentials were
+refused by the store"* — our own credentials against the private bucket. **There is no
+authenticated subject in that scenario at all.** So the API meaning is the one the contract's
+own text describes, and the storage use is the borrowed one.
+
+**They are indistinguishable in the envelope by construction.** Both declare exactly
+`aggregate_type` and `required_capability`; neither carries a discriminator. So once API
+authorization also raises it, one 403 means either *"you lack rights"* — the caller's problem —
+or *"our S3 credential was rejected"*, which is an operator being paged. **Nothing in the
+response separates them.**
+
+That is the shape wave 3 had to undo: `terminal_reason` flattened every failure to
+`analysis_failed`, and an operator could not tell a model that answered badly from a provider
+that never answered. `W11-RD` refused the same flattening again and said so.
+
+**Recommendation, and it is a recommendation.** At the reseal, `permission_denied` keeps the
+contract's meaning — the caller. The storage case needs its own code: it is not retryable and
+not a degraded service (which is why `dependency_unavailable` was avoided, per that class's own
+docstring), and it is not about a subject's rights. **This is a second, independent candidate
+for the 21st code**, alongside "usable output over a strict subset of the input" — and unlike
+`checksum_mismatch` (D-1.6), which turned out to be a class name rather than a missing code,
+this is a real gap.
+
+If no code is added, the storage case must at least become distinguishable in the envelope —
+and it cannot, on the declared keys, which is itself the argument that a code is the answer.
+
+Check: the `summary` of `permission_denied` in `contracts/domain/v1/error-codes.json`, against
+the docstring of `StoragePermissionDeniedError`.
+
+### D-8 — the catalog is not frozen, and the whole programme says it is
+
+`contracts/domain/v1/error-codes.json` declares `"frozen": false`, `"status":
+"draft_candidate"`, `"contract_version": "1.0.0-draft.1"`.
+
+"The frozen 20-member catalog" appears in closures, in certifications, in dispatch briefs and
+in this register — written by me more often than by anyone. The freeze is real **in practice**,
+by `P02_LOCK.json` and by CP-00 never having been ratified, but **the document does not say
+it**, and every brief that called it frozen inherited the phrase rather than opening the file.
+
+Third instance of the same shape: D-1.6 (`checksum_mismatch` is not a code), D-1.9 (a pin set
+read as overruling an ADR), and now this. **A name repeated often enough stops being checked.**
+
+Found by `pdf-analysis-d9`. Consequence for the reseal: adding a code is a smaller act than
+"unfreezing a frozen catalog" made it sound.
+
+Check: the top-level keys of that file.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
