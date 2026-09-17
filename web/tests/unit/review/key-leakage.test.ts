@@ -69,7 +69,14 @@ describe('the rendered review screen leaks no storage address', () => {
     expect(findLeaks(markup)).toEqual([]);
     // The value itself, not the word — `<blockquote>` is the quotation element.
     expect(markup).not.toContain(LEAKED_VALUE);
-    expect(markup).not.toContain('blk_');
+    // The secondary anchor is not rendered at all. Asserted against the value this
+    // observation actually carries — here the leaked one, above — rather than against a
+    // `blk_` prefix: the contract's `block_id` is `^b_[0-9]{6}$`, so the earlier
+    // `not.toContain('blk_')` looked for something nothing could ever produce.
+    expect(observed.evidence[0]?.block_id).toBe(LEAKED_VALUE);
+    expect(markup).not.toContain(LEAKED_VALUE);
+    // And the ordinary, contract-shaped anchor is not rendered either.
+    expect(markup).not.toContain(evidence().block_id ?? 'b_000042');
   });
 
   it('keeps the finding list clean when provenance carries a storage value', () => {

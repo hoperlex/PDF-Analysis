@@ -8,8 +8,15 @@
  * removes or renames a field takes these red at `tsc` time rather than at runtime.
  *
  * Identifiers follow the contract's patterns (`fnd_`, `fobs_`, `dec_`, `ver_`, `run_`,
- * `proj_` plus a 26-character Crockford ULID body). Nothing in the UI parses one, but a
+ * `prj_` plus a 26-character Crockford ULID body). Nothing in the UI parses one, but a
  * fixture that ignored the shape would hide a bug in anything that ever does.
+ *
+ * `W12-WEB` found three of these wrong and nothing able to say so: `PROJECT_UID` was
+ * `proj_` against a contract pattern of `^prj_...$`, `provenance().stage_id` was
+ * `'analysis'` which is not one of the nine `StageId` values, and `evidence().block_id`
+ * was `blk_0042` against `^b_[0-9]{6}$`. All three are corrected here, the cast that hid
+ * the second from `tsc` is gone, and `tests/unit/review/fixture-conformance.test.ts` now
+ * checks every one of them against the generated contract constants.
  *
  * This file lives under `tests/unit/review/` because that is a tree `B8` owns; the
  * decisions and export suites import it from here rather than duplicating the builders or
@@ -61,7 +68,7 @@ export function render(element: ReactElement): string {
 
 const ULID_A = '01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 
-export const PROJECT_UID = `proj_${ULID_A}`;
+export const PROJECT_UID = `prj_${ULID_A}`;
 export const VERSION_UID = `ver_${ULID_A}`;
 export const DOCUMENT_UID = `doc_${ULID_A}`;
 export const RUN_ID = `run_${ULID_A}`;
@@ -76,12 +83,12 @@ export function provenance(overrides: Partial<ObservationProvenance> = {}): Obse
   return {
     analysis_profile_id: `ap_${ULID_A}`,
     prompt_bundle_id: `pb_${ULID_A}`,
-    stage_id: 'analysis',
+    stage_id: 'text_analysis',
     provider_mode: 'recorded',
     model_call_id: `mc_${ULID_A}`,
     model_identity: 'recorded-fixture',
     ...overrides,
-  } as ObservationProvenance;
+  };
 }
 
 /**
@@ -98,7 +105,7 @@ export function evidence(overrides: Partial<Evidence> = {}): Evidence {
     quote,
     char_start: charStart,
     char_end: charStart + [...quote].length,
-    block_id: 'blk_0042',
+    block_id: 'b_000042',
     ...overrides,
     // `quote` and `char_end` are recomputed after the spread so an override of `quote`
     // alone still produces a consistent anchor.

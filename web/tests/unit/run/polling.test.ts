@@ -49,6 +49,36 @@ function scripted(states: readonly RunState[]) {
   return { fetch, calls };
 }
 
+/**
+ * A `sleep` that refuses to be called more than `max` times.
+ *
+ * The bound is not decoration. `scripted`'s "polled more times than the script allows"
+ * throw is raised *inside* the fetch implementation, and `transport.request` catches
+ * anything the fetch throws and rethrows it as a **retryable** `TransportError` — which
+ * this loop is supposed to absorb and retry. So the script's own guard can never stop a
+ * loop that has lost its stop condition.
+ *
+ * `W12-WEB` measured the consequence: removing `cancelled` from `TERMINAL_RUN_STATES`,
+ * making `isTerminalRunState` always false, absorbing a non-retryable failure and
+ * ignoring an abort each left this suite **hanging** rather than red — and because the
+ * injected sleep resolves immediately, the loop never yields to a macrotask, so vitest's
+ * own `testTimeout` cannot fire either. `pollRunStatus` calls `sleep` outside that
+ * `try`, so a throw from here is the one thing that escapes.
+ */
+function boundedSleep(
+  max: number,
+  onDelay: (ms: number) => void = () => {},
+): (ms: number) => Promise<void> {
+  let calls = 0;
+  return async (ms: number): Promise<void> => {
+    calls += 1;
+    if (calls > max) {
+      throw new Error(`the poll loop asked for more than ${max} readings and did not stop`);
+    }
+    onDelay(ms);
+  };
+}
+
 describe('the loop stops on every terminal state', () => {
   it('covers all four terminals, not just the two that come to mind', () => {
     expect(TERMINAL_RUN_STATES).toEqual(['published', 'partial', 'failed', 'cancelled']);
@@ -63,9 +93,7 @@ describe('the loop stops on every terminal state', () => {
         {
           baseUrl: BASE_URL,
           fetch,
-          sleep: async (ms) => {
-            delays.push(ms);
-          },
+          sleep: boundedSleep(3, (ms) => delays.push(ms)),
         },
       );
       expect(result.state).toBe(terminal);
@@ -86,9 +114,7 @@ describe('the loop continues while the run is open', () => {
       {
         baseUrl: BASE_URL,
         fetch,
-        sleep: async (ms) => {
-          delays.push(ms);
-        },
+        sleep: boundedSleep(8, (ms) => delays.push(ms)),
         onUpdate: (status) => updates.push(status.state),
       },
     );
@@ -142,7 +168,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
 
     const result = await pollRunStatus(
       { path: { run_id: 'run_01M2545JSD15ETSNNV904X991J' } },
-      { baseUrl: BASE_URL, fetch, sleep: async () => {} },
+      { baseUrl: BASE_URL, fetch, sleep: boundedSleep(5) },
     );
     expect(result.state).toBe('published');
     expect(call).toBe(2);
@@ -169,7 +195,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
     await expect(
       pollRunStatus(
         { path: { run_id: 'run_01M2545JSD15ETSNNV904X991J' } },
-        { baseUrl: BASE_URL, fetch, sleep: async () => {} },
+        { baseUrl: BASE_URL, fetch, sleep: boundedSleep(5) },
       ),
     ).rejects.toBeInstanceOf(ApiError);
   });
@@ -183,7 +209,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
         {
           baseUrl: BASE_URL,
           fetch: () => Promise.resolve(ok(reading('running'))),
-          sleep: async () => {},
+          sleep: boundedSleep(3),
           signal: controller.signal,
         },
       ),
