@@ -20,9 +20,18 @@ from auditmanager.bootstrap.settings import (
 )
 
 
+#: A literal, never a value read from the process. `W14-PKG` made
+#: ``AUDITMANAGER_API_TOKEN`` required at construction, and it is deliberately **not** one
+#: of the fifteen names the Makefile allow-lists in ``.env`` -- see
+#: ``infra/deploy/env/alpha.env.example``. So no lane's configuration supplies it and
+#: every construction in this suite names it here, in the open.
+STATIC_TOKEN = "composition-suite-token"
+
+
 def _base_env() -> dict[str, str]:
     env = {k: v for k, v in os.environ.items()}
     assert env.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
+    env["AUDITMANAGER_API_TOKEN"] = STATIC_TOKEN
     return env
 
 
