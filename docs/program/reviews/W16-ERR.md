@@ -139,3 +139,66 @@ to this catalog under the versioning policy, not an edge-local or provider-local
 That is the owner's. `internal_error` is strictly more truthful than the 422 it replaces and is
 the catalog's declared destination meanwhile, so this is not a bad fit forced to close a row.
 
+## 2.3 — `D-3` and `D-4`, re-measured before anything was touched
+
+### `D-4` — "an empty digest reaches an operator-facing envelope": **already closed. No change made.**
+
+The register states two things. Measured separately:
+
+1. *"Against an unstamped object, `inspect` yields `sha256=\"\"`"* — **still true.**
+   `src/auditmanager/storage/s3.py:408`: `sha256=recorded_sha or ""`.
+2. *"and `verify_version` emits `actual_sha256=\"\"`"* — **no longer true.**
+   `src/auditmanager/ingest/reconciliation.py:287` now guards it explicitly, ahead of the
+   comparison that used to fire, and raises `validation_failed` with
+   `{aggregate_type: Blob, field: sha256, constraint: "recorded on every published object"}`.
+   The code's own comment names the defect it is there to prevent: *"Reporting this as an
+   integrity failure would put `actual_sha256=\"\"` into an operator's envelope."*
+
+So the reachable half is closed, and it was closed by the wave-12/13 rewrite exactly as the
+brief suspected. **It already has a guard**, which I ran rather than assumed:
+`tests/integration/ingest/test_reconciliation_reads_the_bytes.py::test_a_version_whose_object_records_no_digest_is_not_an_integrity_verdict`
+— 1 passed. It asserts the debt's own words back at it:
+`assert "actual_sha256" not in envelope.details` and `assert "" not in set(envelope.details.values())`.
+
+**One residual, and it is not the one `D-4` names.**
+`src/auditmanager/storage/blob_repository.py:260` still reads
+`actual_sha256=existing.sha256 or ""`, which would put an empty digest in a
+`storage_integrity_error` envelope. I judged it **latent, not live**: `_assert_same_content` is
+reached only for a row in `available` or `verifying` (`blob_repository.py:182`); the migration's
+`ck_blob_available_is_verified` forbids a NULL `sha256` on `available`; and the only insert path
+writes `verified.sha256`, which is never empty. The `or ""` is type-narrowing for a
+`str | None` column, not a live defect. **I did not change it** — `blob_repository.py` is not a
+file this session owns (STEP 4), and there is no defect behind the change. Recommend `D-4` be
+**re-scoped to that line and kept**, rather than closed outright.
+
+### `D-3` — `_record`'s `cost_basis` default: **still latent. No change made. The register's own text is stale.**
+
+The register says: *"`analysis/text/stage.py`: `cost_basis: str = \"estimated\"`. … **Latent, not
+live** — one call site exists and passes it explicitly."*
+
+Measured (`grep -n "_record(" src/auditmanager/analysis/text/stage.py`):
+
+- the default is still there, `stage.py:417`;
+- there are **two** call sites now, not one: `stage.py:260` and `stage.py:292`;
+- `:292` (the success path) passes it explicitly;
+- **`:260` (the budget-overrun path) does not** — it takes the default.
+
+So the register's count is out of date and the row understates the shape. But the **verdict
+still holds**, and this is the part worth being careful about: the overrun call site passes
+`cost_usd=overrun`, where `overrun = pin.cost_usd(input_tokens=…, output_tokens=…)` — a figure
+computed from the pin's price table, never the provider's reported cost. For *that* figure
+`"estimated"` is the correct basis. The defaulted value is right; it is right **by coincidence
+rather than by statement**, which is precisely the latency `W11-FIX` flagged and correctly
+declined to act on.
+
+Two further notes so the row can be judged without re-deriving this:
+
+- the `"cost_basis"` in the metrics dict beside it (`stage.py:279`) computes
+  `"measured" if response.reported_cost_usd is not None else "estimated"`, but it describes a
+  **different figure** — `cost_meter.spent_usd`, not `overrun`. The two are not in conflict.
+- **`D-3` is not an error mapping and tells no caller anything untrue.** It is a provenance
+  default on a `model_call` row. It does not belong with 2.1 and 2.2.
+
+**No change made**, for two reasons that are each sufficient: there is no defect behind it, and
+`analysis/text/stage.py` is not a file this session owns.
+
