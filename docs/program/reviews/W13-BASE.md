@@ -221,3 +221,45 @@ This matters to stage 2 because it is precisely the kind of behaviour a rewrite 
 noticing: a Pydantic model that gives `provider_mode` a different default, or that forwards
 `None` where the current parser forwards the configured value, changes which of `04`, `05` and
 `05b` a request lands in — and all three are pinned.
+## 8. The gate, and the numbers
+
+`make gate` on `agent/w13-gold` at `/root/w13gold`, log `/root/w13gold-logs/gate.log`:
+
+```
+1543 passed, 5 skipped, 167 subtests passed in 298.82s
+frontend:    35 files, 440 tests passed
+foundation:  35 passed
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+1543 = the expected 1505 plus this suite's **38**: 33 record comparisons and five structural
+tests (the record set matches the journey; the twelve operations are all covered; exactly one
+record is the permitted exception; the planted differences are reported; a `Content-Length`
+that does not describe its body is reported). Skips and subtests unchanged.
+
+The suite writes nothing while it runs, so it does not trip the gate's
+changed-during-the-run check. `git status --porcelain` is empty before and after.
+
+## 9. Scope kept
+
+Written: `tests/characterization/w13_baseline/**` and this file. Nothing under `src/`, `db/`,
+`contracts/`, `web/`. No dependency added. No bytes added under `fixtures/` — the four
+negative fixtures are read, and both size-boundary bodies are built in process. No tag, no
+push, no merge.
+
+## 10. For stage 2
+
+1. **Run this suite first, before writing a FastAPI model.** It is green now; it tells you the
+   moment it stops being.
+2. **`records/29-dispatch.method_not_allowed.json` pins 404, not 405.** FastAPI answers 405
+   with its own body by default. That is one of the twelve operations' paths under an
+   undeclared method, and the surface's answer is `not_found` — deliberately, so the API is
+   not an oracle for which paths exist.
+3. **`27` and `30` pin what a framework most wants to answer for you**: a missing required
+   header and a malformed path identity. Neither may reach a client as
+   `RequestValidationError`.
+4. **`04`, `05` and `05b` are three different idempotency outcomes on two operations.** §7
+   says why a Pydantic default can move a request between them.
+5. **`31` is the only record you may change**, and the commit that decided it is cited beside
+   the new expectation. `test_exactly_one_record_is_marked_as_the_permitted_exception` will
+   tell you if a second one appears.
