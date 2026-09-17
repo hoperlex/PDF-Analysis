@@ -421,3 +421,58 @@ untestable duplicates. That is a product observation, reported in §7, not a rep
 lifecycle, the cache write on each reading, and the abort on unmount are therefore not
 observable from this suite. The loop *inside* the effect is `pollRunStatus`, which is in
 `shared/api` and is fully guarded; what cannot be reached is the adapter around it.
+
+## 6. The guards
+
+Eleven new suites under `web/tests`, **151 new tests**, 289 → 440. No product code was
+changed. Every expected value is a literal; no test builds its expectation from the
+constant it is asserting about, and no test derives its *input* from one either.
+
+Each guard's red is the mutation it was written for, re-applied to the mutation copy after
+the guard was committed (`/root/w12web-logs/b7.log`); its green is the same suite on the
+unmutated copy.
+
+| Guard | Rules it defends | Literals pinned |
+|---|---|---|
+| `unit/review/quotation-anchor-and-pages.test.ts` | QT-03..07, PG-01, PG-03, PG-04, PG-05, PG-07, GR-03 | `'café'` vs `'café'`; `'a\u{1F5CE}b'` is 3 code points and 4 units; `'page 7, chars 1200–1232'`; pages `[2, 7, 10]` |
+| `unit/review/admission-diagnostic-fields.test.ts` | AD-02, AD-03, AD-04 | the refusal name `'ungrounded_diagnostic'`, asserted on a payload whose **only** fault is the diagnostic key |
+| `unit/review/viewer-and-panels.test.ts` | EV-05, EV-06, EV-10, DP-03, DP-04, DH-01, DH-03, DH-04 | `data="<blob>#page=11"` on the `<object>` itself; `'am-quotation__inconsistent'`; `'am-state--neutral'`; `data-verdict="pending"` |
+| `unit/review/fixture-conformance.test.ts` | the fixtures themselves | `'^prj_[0-9A-HJKMNP-TV-Z]{26}$'`, `/^b_[0-9]{6}$/`, the ten identifier prefixes |
+| `unit/run/terminal-and-stage-vocabulary.test.ts` | RP-10, RS-04, RS-01, RS-05 | `stageCarriesError` truth table written out; `['succeeded','partial','failed','skipped']`; a poll bound of 1 reading per terminal |
+| `unit/projects/envelope-encoding-and-delivery.test.ts` | CSV-10, UE-11, UE-13, UE-17, DS-02 | `'utf-8'`; `'annual-report.pdf.exe'` → `'not_pdf'`; `'APPLICATION/PDF'` → accepted; `['create','save:…','revoke:…']` |
+| `unit/projects/instant-and-project-address.test.ts` | FI-01, FI-02, FI-03, PJ-08 | `'2026-09-10 09:00:00 UTC'` from a `+03:00` input; `'—'` for absent only |
+| `unit/decisions/intent-signature-collision.test.ts` | IN-04 (re-run as `W7-IN-04`) | the colliding pair `('fobs_X', 'a\|b')` vs `('fobs_X\|a', 'b')` |
+| `unit/api/failure-surface.test.ts` | ER-02, ER-03, ER-05, ER-06, ER-07, ER-08, ER-09, ER-10 | catalog length 20; PC-01 subset length 10; `'cost_budget_exhausted'` is not a catalog code |
+| `unit/api/configuration-and-cache-keys.test.ts` | EN-01..03, ID-01, ID-02, QK-01, QK-02, DC-01, DC-02 | `['projects','versions','runs','findings']`; `['runs','findings',<id>,{}]`; `/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/` |
+| `unit/api/transport-rules.test.ts` | TR-01..07 | `https://api.test/v1/runs/run%201%2F2%3Fx%3D1`; `?limit=25` with `api_key` dropped; `calls` empty when a write has no key |
+
+Plus two repairs inside suites this session owns:
+
+- `unit/run/polling.test.ts` — the injected `sleep` is now bounded (§3). Red: `RS-01`
+  fails *stops on `cancelled` after one reading* in 13 ms instead of hanging for 150 s.
+  Green: 14 passed, 13 ms.
+- `unit/review/key-leakage.test.ts` — `expect(markup).not.toContain('blk_')` replaced by an
+  assertion against the `block_id` the observation actually carries. The old form looked
+  for a prefix the contract cannot produce (`^b_[0-9]{6}$`), so it could not fail.
+
+### The discipline, checked against the four named failure modes
+
+1. *Importing the constant you test.* `CSV_ENCODING.charset` is compared to the literal
+   `'utf-8'` **and** to the seam document's prose; `stageCarriesError` is written out as a
+   four-row truth table rather than looped over its own vocabulary;
+   `PROJECT_UID_PATTERN` is used as the authority for the fixtures and is itself pinned to
+   `'^prj_[0-9A-HJKMNP-TV-Z]{26}$'`, so the generated file and the fixture cannot move
+   together.
+2. *Deriving the input from the constant.* No guard allocates anything sized from a
+   constant. The upload guards use fixed 4 096-byte files; the existing
+   `maxBytes + 1` case in `upload-envelope.test.ts` was left alone because the sibling
+   assertion pins `26_214_400` and `UE-01` proved it reddens.
+3. *A mutation that does not mutate.* The driver prints the before and after of every
+   changed line and refuses a substitution that is absent, ambiguous or a no-op. It caught
+   one of mine: `IN-04` left the inner length prefix in place, so no collision was
+   possible and `SURVIVED` was the wrong word for it — re-run as `W7-IN-04` with the
+   prefixing removed entirely.
+4. *Reading source text from your own file's location.* The harness copies `tests/` as
+   well as `src/`, so `tests/guards/lib/repo.ts` resolves `WEB_ROOT` **into the mutation
+   tree** — proved at runtime by the probe in §1. The contract and seam documents are read
+   from the same place, which is the authority case and is correct.
