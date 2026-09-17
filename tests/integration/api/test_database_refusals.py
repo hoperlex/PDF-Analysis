@@ -21,9 +21,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
-from auditmanager.api.routers import Router, dispatch
+from w13_api_driver import Answer, Request, Surface, dispatch, probe_surface
 from auditmanager.api.routers.errors import error_code_for, to_domain_error
-from auditmanager.api.routers.http import Request, Response, Route, Router as RawRouter
 from auditmanager.documents import sqlstate_of
 from auditmanager.shared.db.schema import SQLSTATE_TO_CATALOG_CODE
 
@@ -42,14 +41,19 @@ def _refusal(session: Session, statement: str, params: dict[str, object]) -> DBA
     return caught.value
 
 
-def _envelope(router_for: Router, error: DBAPIError) -> dict:
-    """Send one real driver error through the middleware and read the envelope."""
+def _envelope(router_for: Surface, error: DBAPIError) -> dict:
+    """Send one real driver error through the edge and read the envelope.
 
-    def handler(_: Request) -> Response:
+    Through a one-operation application built by ``probe_surface`` -- the same middleware
+    stack and the same exception handlers the twelve travel -- so what is measured is what
+    a client would be answered, not what a classifier function returns in isolation.
+    """
+    del router_for
+
+    def handler() -> Answer:
         raise error
 
-    router = RawRouter([Route("probe", "GET", "/probe", handler)])
-    response = dispatch(router, Request.build("GET", "/probe"))
+    response = dispatch(probe_surface(handler), Request.build("GET", "/probe"))
     assert response.status == 409, response.body
     return json.loads(response.body)
 
@@ -60,7 +64,7 @@ def _envelope(router_for: Router, error: DBAPIError) -> dict:
 
 
 def test_am001_a_non_initial_insert_becomes_the_typed_code(
-    session: Session, router: Router
+    session: Session, router: Surface
 ) -> None:
     """``AM001``: an aggregate inserted in a state that is not the declared initial one.
 
@@ -82,7 +86,7 @@ def test_am001_a_non_initial_insert_becomes_the_typed_code(
 
 
 def test_am001_an_undeclared_edge_becomes_the_typed_code(
-    session: Session, router: Router, published_run: PublishedRun
+    session: Session, router: Surface, published_run: PublishedRun
 ) -> None:
     """``AM001``: a state column moved along an edge the contract does not declare.
 
@@ -100,7 +104,7 @@ def test_am001_an_undeclared_edge_becomes_the_typed_code(
 
 
 def test_am002_an_append_only_ledger_refuses_delete(
-    session: Session, router: Router, published_run: PublishedRun
+    session: Session, router: Surface, published_run: PublishedRun
 ) -> None:
     """``AM002``: UPDATE or DELETE on an append-only ledger.
 
@@ -134,7 +138,7 @@ def test_am002_an_append_only_ledger_refuses_delete(
 
 
 def test_am003_an_immutable_row_refuses_update(
-    session: Session, router: Router, published_run: PublishedRun
+    session: Session, router: Surface, published_run: PublishedRun
 ) -> None:
     """``AM003``: UPDATE or DELETE on an immutable published row.
 
@@ -152,7 +156,7 @@ def test_am003_an_immutable_row_refuses_update(
 
 
 def test_am003_immutable_evidence_refuses_delete(
-    session: Session, router: Router, published_run: PublishedRun
+    session: Session, router: Surface, published_run: PublishedRun
 ) -> None:
     """``AM003`` on emitted evidence: a rerun never rewrites an earlier observation."""
     error = _refusal(
@@ -185,7 +189,7 @@ def test_all_three_sqlstates_are_covered_by_this_module(session: Session) -> Non
 
 
 def test_the_middleware_maps_on_sqlstate_and_not_on_message_text(
-    session: Session, router: Router
+    session: Session, router: Surface
 ) -> None:
     """A refusal whose message says nothing recognisable still maps, by its SQLSTATE.
 
@@ -206,7 +210,7 @@ def test_the_middleware_maps_on_sqlstate_and_not_on_message_text(
 
 
 def test_an_ordinary_database_fault_is_not_a_contract_refusal(
-    session: Session, router: Router
+    session: Session, router: Surface
 ) -> None:
     """A refusal that is not one of the three is ``internal_error``, not a typed refusal.
 
@@ -226,7 +230,7 @@ def test_an_ordinary_database_fault_is_not_a_contract_refusal(
 
 
 def test_the_driver_message_never_reaches_the_envelope(
-    session: Session, router: Router, published_run: PublishedRun
+    session: Session, router: Surface, published_run: PublishedRun
 ) -> None:
     """The envelope carries the catalog summary, not the trigger's prose.
 

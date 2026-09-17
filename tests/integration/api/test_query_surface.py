@@ -34,10 +34,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.api.routers import Router, dispatch
-from auditmanager.api.routers.http import Request, Response
+from w13_api_driver import Answer, Request, Surface, dispatch
 from auditmanager.api.schemas.common import DEFAULT_LIMIT, MAX_LIMIT, MIN_LIMIT
-from auditmanager.api.schemas.findings import FINDING_CATEGORIES, VERDICTS
+from auditmanager.api.schemas.models import FindingCategory, Verdict
 from auditmanager.findings import TextLayer
 from auditmanager.shared.identity import ProjectUid
 
@@ -54,7 +53,7 @@ from .conftest import (
 # ---------------------------------------------------------------------------
 
 
-def ok(response: Response) -> dict[str, Any]:
+def ok(response: Answer) -> dict[str, Any]:
     assert response.status < 300, (response.status, response.body)
     return json.loads(response.body)
 
@@ -67,7 +66,7 @@ def uids(page: Mapping[str, Any], field: str = "finding_uid") -> list[str]:
     return [item[field] for item in page["items"]]
 
 
-def get(router: Router, target: str) -> Response:
+def get(router: Surface, target: str) -> Answer:
     return dispatch(router, Request.build("GET", target))
 
 
@@ -98,7 +97,7 @@ class Ladder:
     #: index 2, 0, 4, 3, 5, 1 -- nothing like the identity order 5, 4, 3, 2, 1, 0.
     OFFSETS = (40, 10, 60, 30, 50, 20)
 
-    def __init__(self, router: Router, session: Session) -> None:
+    def __init__(self, router: Surface, session: Session) -> None:
         self.router = router
         self.session = session
         self.created: list[str] = []
@@ -152,7 +151,7 @@ class Ladder:
 
 
 @pytest.fixture
-def ladder(shipped_router: Router, session: Session) -> Ladder:
+def ladder(shipped_router: Surface, session: Session) -> Ladder:
     built = Ladder(shipped_router, session)
     # The fixture must discriminate before any assertion leans on it. Six distinct
     # stamps, and a time order that is not the identity order: without both, every
@@ -251,7 +250,7 @@ def crowd(session: Session) -> int:
 
 
 def test_the_listing_is_newest_first_and_not_highest_identity_first(
-    shipped_router: Router, ladder: Ladder
+    shipped_router: Surface, ladder: Ladder
 ) -> None:
     """`listProjects` declares "newest first" and `Ladder` makes that a real claim."""
     page = ok(get(shipped_router, f"/projects?limit={len(ladder.created)}"))
@@ -265,7 +264,7 @@ def test_the_listing_is_newest_first_and_not_highest_identity_first(
 
 
 def test_limit_bounds_the_page_and_the_listing_is_longer_than_the_page(
-    shipped_router: Router, ladder: Ladder
+    shipped_router: Surface, ladder: Ladder
 ) -> None:
     """A surface ignoring `limit` returns everything, so the page must be shorter."""
     whole = ok(get(shipped_router, "/projects?limit=200"))
@@ -278,7 +277,7 @@ def test_limit_bounds_the_page_and_the_listing_is_longer_than_the_page(
 
 
 def test_the_cursor_walks_a_live_listing_without_losing_or_repeating(
-    shipped_router: Router, ladder: Ladder, crowd: int, session: Session
+    shipped_router: Surface, ladder: Ladder, crowd: int, session: Session
 ) -> None:
     """The walk enumerates the listing exactly once, on a table of any size.
 
@@ -391,7 +390,7 @@ def test_the_cursor_walks_a_live_listing_without_losing_or_repeating(
 
 
 def test_the_cursor_is_stable_across_an_insert_at_the_head(
-    shipped_router: Router, ladder: Ladder
+    shipped_router: Surface, ladder: Ladder
 ) -> None:
     """The claim that separates a real cursor from an offset.
 
@@ -428,7 +427,7 @@ def test_the_cursor_is_stable_across_an_insert_at_the_head(
 
 
 def test_the_cursor_carries_the_emitted_key_and_nothing_else(
-    shipped_router: Router, ladder: Ladder, session: Session
+    shipped_router: Surface, ladder: Ladder, session: Session
 ) -> None:
     """Opaque means it carries no address a caller could compute with.
 
@@ -460,7 +459,7 @@ def test_the_cursor_carries_the_emitted_key_and_nothing_else(
 
 @pytest.mark.parametrize("bad", ["0", "201", "-1", "abc", "1.5", ""])
 def test_a_limit_outside_the_frozen_bounds_is_refused(
-    shipped_router: Router, ladder: Ladder, bad: str
+    shipped_router: Surface, ladder: Ladder, bad: str
 ) -> None:
     response = get(shipped_router, f"/projects?limit={bad}")
     if bad == "":
@@ -473,7 +472,7 @@ def test_a_limit_outside_the_frozen_bounds_is_refused(
 
 
 def test_a_forged_project_cursor_is_refused_rather_than_restarting_the_listing(
-    shipped_router: Router, ladder: Ladder
+    shipped_router: Surface, ladder: Ladder
 ) -> None:
     """Silently restarting at the top reads to a caller as data loss, not as an error."""
     for forged in ("not-a-token", base64.urlsafe_b64encode(b'{"offset": 2}').decode()):
@@ -567,13 +566,13 @@ def mixed_run(session: Session) -> MixedRun:
     return MixedRun(session)
 
 
-def _category_of(router: Router, run_id: str) -> dict[str, str]:
+def _category_of(router: Surface, run_id: str) -> dict[str, str]:
     page = ok(get(router, f"/runs/{run_id}/findings?limit=200"))
     return {item["finding_uid"]: item["category"] for item in page["items"]}
 
 
 def test_the_category_filter_returns_a_proper_non_empty_subset(
-    shipped_router: Router, mixed_run: MixedRun
+    shipped_router: Surface, mixed_run: MixedRun
 ) -> None:
     categories = _category_of(shipped_router, mixed_run.run_id)
     assert len(categories) == 3
@@ -599,7 +598,7 @@ def test_the_category_filter_returns_a_proper_non_empty_subset(
 
 
 def test_the_verdict_filter_reads_the_projection_and_not_the_row(
-    shipped_router: Router, mixed_run: MixedRun
+    shipped_router: Surface, mixed_run: MixedRun
 ) -> None:
     """Three findings, three different projected verdicts, one per filter value.
 
@@ -651,7 +650,7 @@ def test_the_verdict_filter_reads_the_projection_and_not_the_row(
 
 
 def test_the_two_filters_compose_and_compose_with_paging(
-    shipped_router: Router, mixed_run: MixedRun
+    shipped_router: Surface, mixed_run: MixedRun
 ) -> None:
     categories = _category_of(shipped_router, mixed_run.run_id)
     contradictions = sorted(
@@ -710,7 +709,7 @@ def test_the_two_filters_compose_and_compose_with_paging(
     ],
 )
 def test_a_value_outside_the_frozen_vocabulary_is_refused_not_answered_empty(
-    shipped_router: Router, mixed_run: MixedRun, parameter: str, value: str
+    shipped_router: Surface, mixed_run: MixedRun, parameter: str, value: str
 ) -> None:
     """An empty page answers a different question from the one that was asked.
 
@@ -732,7 +731,7 @@ def test_a_value_outside_the_frozen_vocabulary_is_refused_not_answered_empty(
 
 
 def test_an_in_vocabulary_value_that_matches_nothing_is_an_empty_page_not_a_refusal(
-    shipped_router: Router, mixed_run: MixedRun
+    shipped_router: Surface, mixed_run: MixedRun
 ) -> None:
     """The counterpart: 422 is about the vocabulary, never about emptiness."""
     page = ok(get(shipped_router, f"/runs/{mixed_run.run_id}/findings?verdict=accepted"))
@@ -741,7 +740,7 @@ def test_an_in_vocabulary_value_that_matches_nothing_is_an_empty_page_not_a_refu
 
 
 def test_a_cursor_whose_key_is_not_in_this_listing_gives_an_empty_page_not_a_restart(
-    shipped_router: Router, mixed_run: MixedRun
+    shipped_router: Surface, mixed_run: MixedRun
 ) -> None:
     """A token that decodes but does not belong here must not reopen the listing.
 
@@ -853,15 +852,22 @@ class _RecordingQuery(Mapping[str, Sequence[str]]):
 
 
 def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
-    shipped_router: Router, mixed_run: MixedRun, ladder: Ladder, contract: dict[str, Any]
+    shipped_router: Surface, mixed_run: MixedRun, ladder: Ladder, contract: dict[str, Any]
 ) -> None:
     """The guard against the defect this session exists for.
 
     The four parameters were declared in the frozen document, exposed by the generated
-    client and read by nothing. A behavioural test per parameter catches that only for
-    the parameters someone remembered to test; this catches it for every query parameter
-    the document declares, including ones added later, by watching what the handler
-    actually looks up.
+    client and read by nothing. A behavioural test per parameter catches that only for the
+    parameters someone remembered to test; this catches it for every query parameter the
+    document declares, including ones added later.
+
+    **Rewritten by `W13-API`.** Before `T-1` this watched a recording ``Mapping`` stand in
+    for ``Request.query`` and asserted that the handler *looked each name up*. A real HTTP
+    client has no such seam -- a query string is a string -- and, more to the point, that
+    instrumentation could only ever prove a parameter was *read*, not that reading it did
+    anything. This asks the stronger question directly: **supply the parameter and require
+    the answer to change.** A handler that accepted a parameter and ignored it passes the
+    old test and fails this one.
     """
     declared = _declared_query_parameters(contract)
     assert declared, "no query parameters found in the frozen document"
@@ -877,29 +883,92 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "an operation declaring query parameters is not driven here: "
         f"{sorted(set(declared) ^ set(targets))}"
     )
+    assert declared == {
+        "listProjects": {"cursor", "limit"},
+        "listRunFindings": {"category", "cursor", "limit", "verdict"},
+        "listDecisionHistory": {"cursor", "limit"},
+    }, f"the contract's query surface moved: {declared}"
 
-    unread: dict[str, set[str]] = {}
+    # One supplied value per parameter that the answer must be visibly different for, and
+    # the difference each one has to make. Literals, not derived: a case computed from the
+    # response it is checking cannot tell you the response moved.
+    categories = sorted({member.value for member in FindingCategory})
+    inert: dict[str, list[str]] = {}
+
+    # `listDecisionHistory` pages a ledger, and a fresh finding's ledger is empty, so two
+    # events are appended through the surface itself. Driven rather than inserted: a
+    # hand-written INSERT would page rows the append path might never produce.
+    for ordinal, event in enumerate(("comment", "accept"), start=1):
+        appended = dispatch(
+            shipped_router,
+            Request.build(
+                "POST",
+                f"/findings/{mixed_run.findings[0].finding_uid}/decisions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Idempotency-Key": f"qs-history-{ordinal}",
+                },
+                body=json.dumps(
+                    {
+                        "event_type": event,
+                        "finding_observation_id": (
+                            mixed_run.findings[0].finding_observation_id
+                        ),
+                        "comment": f"query surface {ordinal}",
+                    }
+                ).encode("utf-8"),
+            ),
+        )
+        assert appended.status == 201, appended.body
+
     for operation_id, names in declared.items():
-        recorder = _RecordingQuery({name: ["1"] for name in ()})
-        request = Request(method="GET", path=targets[operation_id], query=recorder)
-        response = dispatch(shipped_router, request)
-        assert response.status == 200, (operation_id, response.body)
-        missing = names - recorder.read
-        if missing:
-            unread[operation_id] = missing
+        target = targets[operation_id]
+        baseline = ok(get(shipped_router, f"{target}?limit=200"))
+        assert len(baseline["items"]) >= 2, (
+            f"{operation_id} returned {len(baseline['items'])} items; this test needs at "
+            "least two for a filter or a page boundary to be visible"
+        )
 
-    assert unread == {}, (
-        "the router declares these query parameters and never even reads them, so a "
-        f"caller supplying one has it silently ignored: {unread}"
+        # limit: one item, and the first one.
+        limited = ok(get(shipped_router, f"{target}?limit=1"))
+        if [item for item in limited["items"]] != [baseline["items"][0]]:
+            inert.setdefault(operation_id, []).append("limit")
+
+        # cursor: the page after the first item starts at the second.
+        cursor = limited["page"]["next_cursor"]
+        assert cursor, f"{operation_id}: a truncated page carried no cursor"
+        resumed = ok(get(shipped_router, f"{target}?limit=1&cursor={cursor}"))
+        if [item for item in resumed["items"]] != [baseline["items"][1]]:
+            inert.setdefault(operation_id, []).append("cursor")
+
+        if "category" in names:
+            for category in categories:
+                filtered = ok(get(shipped_router, f"{target}?category={category}&limit=200"))
+                if {item["category"] for item in filtered["items"]} != {category}:
+                    inert.setdefault(operation_id, []).append(f"category={category}")
+
+        if "verdict" in names:
+            # Every finding of a fresh run is `pending`, so the discriminating case is the
+            # verdict that must return nothing rather than the one that returns everything.
+            everything = ok(get(shipped_router, f"{target}?verdict=pending&limit=200"))
+            nothing = ok(get(shipped_router, f"{target}?verdict=rejected&limit=200"))
+            if not everything["items"] or nothing["items"]:
+                inert.setdefault(operation_id, []).append("verdict")
+
+    assert inert == {}, (
+        "the contract declares these query parameters and supplying one changes nothing, "
+        f"so a caller has it silently ignored: {inert}"
     )
 
 
 def test_the_filter_vocabularies_are_the_frozen_ones(contract: dict[str, Any]) -> None:
     """`category` and `verdict` take their values from the document, not from here."""
     schemas = contract["components"]["schemas"]
-    assert set(schemas["FindingCategory"]["enum"]) == set(FINDING_CATEGORIES)
-    assert set(schemas["Verdict"]["enum"]) == set(VERDICTS)
-    assert len(FINDING_CATEGORIES) == 2 and len(VERDICTS) == 4
+    assert set(schemas["FindingCategory"]["enum"]) == {
+        member.value for member in FindingCategory
+    }
+    assert set(schemas["Verdict"]["enum"]) == {member.value for member in Verdict}
+    assert len(FindingCategory) == 2 and len(Verdict) == 4
 
 
 def test_the_limit_bounds_are_the_frozen_ones(contract: dict[str, Any]) -> None:
@@ -973,7 +1042,7 @@ def test_the_generated_client_declares_the_query_parameters_the_contract_does(
     )
 
 
-def test_this_suite_really_drives_the_shipped_adapters(shipped_router: Router) -> None:
+def test_this_suite_really_drives_the_shipped_adapters(shipped_router: Surface) -> None:
     """The anti-vacuity of the fixture itself.
 
     Everything above is worth exactly as much as the claim that `shipped_router` is
@@ -985,8 +1054,8 @@ def test_this_suite_really_drives_the_shipped_adapters(shipped_router: Router) -
 
     modules = {
         route.operation_id: type(
-            route.handler.__closure__[  # type: ignore[index]
-                route.handler.__code__.co_freevars.index(name)
+            route.endpoint.__closure__[  # type: ignore[index]
+                route.endpoint.__code__.co_freevars.index(name)
             ].cell_contents
         ).__module__
         for route, name in _bound_ports(shipped_router)
@@ -998,7 +1067,7 @@ def test_this_suite_really_drives_the_shipped_adapters(shipped_router: Router) -
         )
 
 
-def _bound_ports(router: Router) -> list[tuple[Any, str]]:
+def _bound_ports(router: Surface) -> list[tuple[Any, str]]:
     """Each list route, paired with the closure name holding its port."""
     wanted = {
         "listProjects": "projects",
@@ -1010,7 +1079,7 @@ def _bound_ports(router: Router) -> list[tuple[Any, str]]:
         name = wanted.get(route.operation_id)
         if name is None:
             continue
-        assert name in (route.handler.__code__.co_freevars or ()), (
+        assert name in (route.endpoint.__code__.co_freevars or ()), (
             f"{route.operation_id} does not close over {name!r}"
         )
         found.append((route, name))

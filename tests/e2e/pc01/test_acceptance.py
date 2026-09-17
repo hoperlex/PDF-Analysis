@@ -328,7 +328,16 @@ def test_c1_the_twelve_operations_are_exactly_the_frozen_contract(client: Client
         for method, operation in operations.items()
         if method in {"get", "post", "put", "patch", "delete"}
     }
-    assert client.app.router.signature() == declared
+    # ``(operationId, METHOD, path)`` read off the ``APIRoute`` table. One route carries a
+    # *set* of methods, so each pair is one row here and an operation that quietly gained
+    # a second method changes the set.
+    implemented = {
+        (route.operation_id, method, route.path)
+        for route in client.app.router.routes
+        for method in sorted(route.methods)
+        if getattr(route, "operation_id", None)
+    }
+    assert implemented == declared
 
 
 # ======================================================================================
@@ -425,7 +434,7 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
     mutating = {
         route.operation_id
         for route in client.app.router.routes
-        if route.method in {"PUT", "PATCH", "DELETE"}
+        if route.methods & {"PUT", "PATCH", "DELETE"}
     }
     assert mutating == set(), mutating
     # Addressed at the version that really exists, so a 404 here can only mean "no such
@@ -723,7 +732,9 @@ def test_c6_a_later_comment_appends_without_overwriting_the_history(
 def test_c6_the_decision_ledger_admits_no_update_or_delete(client: Client) -> None:
     """There is no route that could overwrite history, and that is checked as a set."""
     routes = {
-        (route.method, route.template) for route in client.app.router.routes
+        (method, route.path)
+        for route in client.app.router.routes
+        for method in route.methods
     }
     assert ("POST", "/findings/{finding_uid}/decisions") in routes
     for method in ("PUT", "PATCH", "DELETE"):

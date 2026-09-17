@@ -10,32 +10,35 @@ four-times-certified surface. This directory is what that rewrite has to be *wro
 
 ## Read this before you read a record
 
-**This is a picture of the surface as it was BEFORE the `T-6` reseal.**
+**These records are of the authorized surface. Amended 2026-09-18 by `W13-API`, stage 2,
+in the commit that put the `T-6` dependency in front of the twelve operations.**
 
-Every request in `records/` is **unauthenticated, and is answered**. The contract carried no
-`securitySchemes` at all when this was captured (`DEBT_REGISTER.md` D-6), so there is no
-401 anywhere here and no operation asks for a token. When wave 13 adds the authorization
-dependency of `T-6` in front of all twelve operations, **every operation's unauthenticated
-behaviour changes** — and that is not a difference this baseline is claiming should not
-happen. It is a difference this baseline has nothing to say about.
+Every request in `records/` now presents `Authorization: Bearer w13-baseline-static-token`,
+which is the credential `journey.build_apps()` configures, and is answered. None of them
+pins `401` or `403`: no case here omits the credential and no case here exercises a
+*caller's rights*, so an authorization answer in this corpus would mean the journey had
+stopped doing what it says it does. `test_the_baseline_records_the_authenticated_era` is the
+guard, and `test_the_authorization_era_check_can_fail` plants four records to show it can
+reject one. **The seam's own refusals are asserted where they belong** —
+`tests/integration/api/test_authorization.py` drives requests with no credential, with a
+malformed one and with the wrong one.
 
-Read a record as: *this is what the operation answered when it was allowed to answer.* The
-comparison suite drives the journey through whatever satisfies the dependency at the time;
-what it pins is the answer, not the absence of a gate in front of it.
+**What this amendment did and did not change.** It added the `Authorization` header to each
+record's `request.headers`, replaced the `pre_authorization` sentence and updated
+`captured_through`. It changed **nothing** under `response` in any of the 33 records: the
+recapture that produced this state was run against the FastAPI implementation and the diff
+is exactly three request-side lines per file. The status, every header and every body byte
+are what `W13-BASE` committed — which is the claim this whole directory exists to support,
+and it survives.
 
-**Amended 2026-09-18, `W13-SEAL`, stage 0b.** The contract half of `T-6` has now landed:
-`contracts/api/v1/openapi.json` declares one `http`/`bearer` scheme at its root and all
-twelve operations declare `401` and `403` (`a5f4001`). The *implementation* half has not —
-stage 2 (`W13-API`) writes the dependency — so the records below are unchanged and every
-request in them is still unauthenticated and still answered.
-
-The paragraph above therefore stayed true, and it is now the kind of true that has to be
-kept rather than assumed: a reader arriving after the seam exists could take 33 records of
-answered unauthenticated requests as the surface's *expected* unauthenticated behaviour,
-which is exactly backwards. `test_the_baseline_makes_no_authorization_claim` is what keeps
-it honest — no record carries an `Authorization` header, none answers `401`, and every one
-declares `pre_authorization`. If stage 2 makes the journey authenticate, that test is the
-one that must be changed deliberately, and this paragraph with it.
+**Three earlier eras of this paragraph, kept so the sequence is readable.** `W13-BASE`
+captured against a contract with no `securitySchemes` at all (`DEBT_REGISTER.md` D-6): every
+request was unauthenticated and answered, and the corpus was explicitly *silent* about
+authorization rather than asserting it. `W13-SEAL` landed the contract half of `T-6`
+(`a5f4001`) and added `test_the_baseline_makes_no_authorization_claim` to keep that silence
+true rather than merely old, noting that *"if stage 2 makes the journey authenticate, that
+test is the one that must be changed deliberately, and this paragraph with it."* This is
+that change, made in one commit with the test, as instructed.
 
 ## What is here
 
@@ -46,10 +49,12 @@ one that must be changed deliberately, and this paragraph with it.
 | `records/*.json` | one committed record per case: status, **every** header, the body |
 | `test_response_baseline.py` | re-drives the journey and requires the records to hold |
 
-Driven the way `tests/e2e/pc01/driver.py` drives it: `Request.build` plus `dispatch`, over a
-real `auditmanager.api.app.create_app()`, against real PostgreSQL and real MinIO. Nothing
-imports `IngestService`, `execute_run` or `export_run_csv`; everything here is learned from a
-response.
+Driven the way `tests/e2e/pc01/driver.py` drives it — which, since `T-1`, is a
+`starlette.testclient.TestClient` over a real `auditmanager.api.app.create_asgi_app()`,
+against real PostgreSQL and real MinIO. `journey.Caller` is the one place that knows how the
+transport is reached, which is why the rewrite touched one class in this directory and
+nothing else. Nothing imports `IngestService`, `execute_run` or `export_run_csv`; everything
+here is learned from a response.
 
 ## The one path allowed to change
 

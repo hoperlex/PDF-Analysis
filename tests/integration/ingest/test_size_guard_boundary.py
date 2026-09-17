@@ -34,11 +34,15 @@ import uuid
 
 import pytest
 
-from auditmanager.api.app import create_app
-from auditmanager.api.routers import dispatch
-from auditmanager.api.routers.http import Request
+from starlette.testclient import TestClient
+
+from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.routers.multipart import MAX_BODY
+from auditmanager.api.security import API_TOKEN_VARIABLE
 from auditmanager.ingest import MAX_BYTES
+
+#: `T-6`. The credential this suite configures and presents, as a literal.
+STATIC_TOKEN = "size-guard-static-token"
 
 #: Between the two limits, with room for the multipart framing on either side. Asserted
 #: below rather than trusted: if either limit moves, the window may close or this value
@@ -60,46 +64,57 @@ def _upload(app, project_uid: str, payload: bytes):
         f"the framed body is {len(body)}, over the transport limit {MAX_BODY}; this test "
         "would measure the transport guard instead of ENV-SIZE"
     )
-    return dispatch(
-        app.router,
-        Request(
-            method="POST",
-            path=f"/projects/{project_uid}/documents",
-            headers={
-                "Idempotency-Key": f"size-{uuid.uuid4().hex[:12]}",
-                "Content-Type": f"multipart/form-data; boundary={boundary}",
-            },
-            query={},
-            body=body,
-        ),
+    return app.client.post(
+        f"/projects/{project_uid}/documents",
+        headers={
+            "Authorization": f"Bearer {STATIC_TOKEN}",
+            "Idempotency-Key": f"size-{uuid.uuid4().hex[:12]}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        content=body,
     )
+
+
+class _Composed:
+    """The built application and an ASGI client over what serves it.
+
+    Re-pointed by `W13-API`: the two guards are unchanged and still independently
+    breakable, but the outer one is now ``BodyCapMiddleware`` in front of the routing
+    rather than a call inside a hand-written reader, so the only way to ask which of them
+    answered is to drive the transport.
+    """
+
+    __slots__ = ("application", "client")
+
+    def __init__(self, application, client) -> None:
+        self.application = application
+        self.client = client
 
 
 @pytest.fixture(scope="module")
 def app():
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
-    return create_app()
+    environ = dict(os.environ) | {API_TOKEN_VARIABLE: STATIC_TOKEN}
+    application = create_app(environ=environ)
+    asgi = create_asgi_app(environ=environ, application=application)
+    return _Composed(application, TestClient(asgi, raise_server_exceptions=False))
 
 
 @pytest.fixture(scope="module")
 def project_uid(app) -> str:
     import json
 
-    response = dispatch(
-        app.router,
-        Request(
-            method="POST",
-            path="/projects",
-            headers={
-                "content-type": "application/json",
-                "Idempotency-Key": f"proj-{uuid.uuid4().hex[:12]}",
-            },
-            query={},
-            body=json.dumps({"name": "ENV-SIZE boundary"}).encode(),
-        ),
+    response = app.client.post(
+        "/projects",
+        headers={
+            "Authorization": f"Bearer {STATIC_TOKEN}",
+            "content-type": "application/json",
+            "Idempotency-Key": f"proj-{uuid.uuid4().hex[:12]}",
+        },
+        content=json.dumps({"name": "ENV-SIZE boundary"}).encode(),
     )
-    assert response.status in (200, 201), response.body
-    return json.loads(response.body)["project_uid"]
+    assert response.status_code in (200, 201), response.content
+    return json.loads(response.content)["project_uid"]
 
 
 def test_the_window_between_the_two_guards_is_open() -> None:
@@ -132,9 +147,11 @@ def test_a_body_inside_the_window_is_refused_by_the_envelope(app, project_uid) -
     assert len(payload) > MAX_BYTES, "the payload does not break ENV-SIZE"
 
     response = _upload(app, project_uid, payload)
-    body = json.loads(response.body) if response.body else {}
+    body = json.loads(response.content) if response.content else {}
 
-    assert response.status >= 400, f"an oversized upload was accepted: {response.status}"
+    assert response.status_code >= 400, (
+        f"an oversized upload was accepted: {response.status_code}"
+    )
     # The constraint lives under `details`, where the error envelope puts the machine
     # -readable part; the top level carries the human message. Reading the top level
     # returned "" and made the failure look like the transport had answered, which is the

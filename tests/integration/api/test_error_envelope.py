@@ -14,11 +14,9 @@ from typing import Any
 
 import pytest
 
-from auditmanager.api.routers import Router, dispatch
+from w13_api_driver import Answer, Request, Surface, dispatch, probe_surface
 from auditmanager.api.routers.correlation import CORRELATION_HEADER
 from auditmanager.api.routers.errors import envelope_response
-from auditmanager.api.routers.http import Request, Response, Route
-from auditmanager.api.routers.http import Router as RawRouter
 from auditmanager.shared.errors import CONTRACT_VERSION, DomainError, ErrorCode
 
 from .conftest import PublishedRun
@@ -41,7 +39,7 @@ def test_every_catalog_code_renders_a_valid_envelope(
         assert body["retryable"] is code.retryable, (
             f"{code.value}: envelope says {body['retryable']}, catalog says {code.retryable}"
         )
-        assert response.status == code.http_status
+        assert response.status_code == code.http_status
         assert body["contract_version"] == CONTRACT_VERSION
         cases.append({"name": code.value, "schema": "ErrorEnvelope", "payload": body})
 
@@ -80,7 +78,7 @@ def test_the_contract_version_matches_the_frozen_document(
 
 
 def test_every_response_carries_a_correlation_id(
-    router: Router, published_run: PublishedRun
+    router: Surface, published_run: PublishedRun
 ) -> None:
     """Success and failure alike. Section 7 says *every* response."""
     requests = (
@@ -97,7 +95,7 @@ def test_every_response_carries_a_correlation_id(
         )
 
 
-def test_a_supplied_correlation_id_is_echoed(router: Router) -> None:
+def test_a_supplied_correlation_id_is_echoed(router: Surface) -> None:
     supplied = "trace-0123456789"
     response = dispatch(
         router,
@@ -106,7 +104,7 @@ def test_a_supplied_correlation_id_is_echoed(router: Router) -> None:
     assert response.header(CORRELATION_HEADER) == supplied
 
 
-def test_an_unusable_correlation_id_is_replaced_not_reflected(router: Router) -> None:
+def test_an_unusable_correlation_id_is_replaced_not_reflected(router: Surface) -> None:
     """A value outside the frozen pattern is replaced rather than echoed.
 
     Echoing it would put caller-controlled text into a response header, and into the
@@ -123,7 +121,7 @@ def test_an_unusable_correlation_id_is_replaced_not_reflected(router: Router) ->
     assert "/" not in assigned
 
 
-def test_the_correlation_id_in_the_body_matches_the_header(router: Router) -> None:
+def test_the_correlation_id_in_the_body_matches_the_header(router: Surface) -> None:
     response = dispatch(router, Request.build("GET", "/nothing-here"))
     assert response.status == 404
     assert json.loads(response.body)["correlation_id"] == response.header(
@@ -132,7 +130,7 @@ def test_the_correlation_id_in_the_body_matches_the_header(router: Router) -> No
 
 
 def test_an_unknown_identity_is_not_found_and_reveals_nothing(
-    router: Router, published_run: PublishedRun
+    router: Surface, published_run: PublishedRun
 ) -> None:
     """A malformed identity and a well-formed absent one are indistinguishable.
 
@@ -187,15 +185,14 @@ def test_a_message_carrying_an_address_is_refused_by_the_screen() -> None:
 
 
 def test_an_unclassified_fault_becomes_internal_error_carrying_nothing(
-    router: Router,
+    router: Surface,
 ) -> None:
     """A handler that raises anything at all answers 500 with no trace of the original."""
 
-    def handler(_: Request) -> Response:
+    def handler() -> Answer:
         raise RuntimeError("/var/lib/audit/secret.key could not be read")
 
-    raw = RawRouter([Route("probe", "GET", "/probe", handler)])
-    response = dispatch(raw, Request.build("GET", "/probe"))
+    response = dispatch(probe_surface(handler), Request.build("GET", "/probe"))
 
     assert response.status == 500
     body = json.loads(response.body)
@@ -206,7 +203,7 @@ def test_an_unclassified_fault_becomes_internal_error_carrying_nothing(
 
 
 def test_the_error_response_is_json_whatever_the_operation_produced(
-    router: Router, published_run: PublishedRun
+    router: Surface, published_run: PublishedRun
 ) -> None:
     """A failure on a ``text/csv`` operation is still the JSON envelope."""
     response = dispatch(

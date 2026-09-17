@@ -16,8 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.documents import MANIFEST_ROLE_SOURCE_DOCUMENT
-from auditmanager.api.routers import Router, dispatch
-from auditmanager.api.routers.http import Request, Response
+from w13_api_driver import Answer, Request, Surface, dispatch
 
 from .conftest import PublishedRun
 
@@ -56,13 +55,13 @@ def json_headers(key: str) -> dict[str, str]:
     return {"Idempotency-Key": key, "Content-Type": "application/json"}
 
 
-def ok(response: Response) -> dict[str, Any]:
+def ok(response: Answer) -> dict[str, Any]:
     assert response.status < 300, (response.status, response.body)
     return json.loads(response.body)
 
 
 @pytest.fixture
-def project(router: Router) -> dict[str, Any]:
+def project(router: Surface) -> dict[str, Any]:
     return ok(
         dispatch(
             router,
@@ -82,7 +81,7 @@ def project(router: Router) -> dict[str, Any]:
 
 
 def test_the_ingest_path_publishes_an_immutable_version(
-    router: Router, project: dict[str, Any], corpus_pdf: bytes
+    router: Surface, project: dict[str, Any], corpus_pdf: bytes
 ) -> None:
     response = dispatch(
         router,
@@ -111,7 +110,7 @@ def test_the_ingest_path_publishes_an_immutable_version(
 
 
 def test_the_same_key_and_payload_replays_and_creates_nothing(
-    router: Router, project: dict[str, Any], corpus_pdf: bytes, session: Session
+    router: Surface, project: dict[str, Any], corpus_pdf: bytes, session: Session
 ) -> None:
     """A replay returns the original resource. It does not publish a second version."""
     body = upload_body(corpus_pdf, filename="ar_baseline.pdf")
@@ -147,7 +146,7 @@ def test_the_same_key_and_payload_replays_and_creates_nothing(
 
 
 def test_the_same_key_with_a_different_payload_is_refused(
-    router: Router, project: dict[str, Any], corpus_pdf: bytes
+    router: Surface, project: dict[str, Any], corpus_pdf: bytes
 ) -> None:
     """``idempotency_key_reuse``, and nothing is created."""
     dispatch(
@@ -175,7 +174,7 @@ def test_the_same_key_with_a_different_payload_is_refused(
 
 
 def test_a_write_without_the_header_is_refused_before_anything_happens(
-    router: Router, project: dict[str, Any], corpus_pdf: bytes, session: Session
+    router: Surface, project: dict[str, Any], corpus_pdf: bytes, session: Session
 ) -> None:
     before = session.execute(text("SELECT count(*) FROM document_version")).scalar_one()
     response = dispatch(
@@ -194,7 +193,7 @@ def test_a_write_without_the_header_is_refused_before_anything_happens(
 
 
 def test_an_upload_outside_the_envelope_is_refused(
-    router: Router, project: dict[str, Any]
+    router: Surface, project: dict[str, Any]
 ) -> None:
     """A non-PDF is ``validation_failed``. OCR is never silently substituted."""
     response = dispatch(
@@ -217,7 +216,7 @@ def test_an_upload_outside_the_envelope_is_refused(
 
 @pytest.fixture
 def published_version(
-    router: Router, project: dict[str, Any], corpus_pdf: bytes
+    router: Surface, project: dict[str, Any], corpus_pdf: bytes
 ) -> dict[str, Any]:
     return ok(
         dispatch(
@@ -233,7 +232,7 @@ def published_version(
 
 
 def test_the_whole_document_streams_back_byte_for_byte(
-    router: Router, published_version: dict[str, Any], corpus_pdf: bytes
+    router: Surface, published_version: dict[str, Any], corpus_pdf: bytes
 ) -> None:
     response = dispatch(
         router,
@@ -254,7 +253,7 @@ def test_the_whole_document_streams_back_byte_for_byte(
     ],
 )
 def test_a_byte_range_returns_exactly_that_window(
-    router: Router,
+    router: Surface,
     published_version: dict[str, Any],
     corpus_pdf: bytes,
     header: str,
@@ -275,7 +274,7 @@ def test_a_byte_range_returns_exactly_that_window(
 
 
 def test_an_open_ended_and_a_suffix_range_both_work(
-    router: Router, published_version: dict[str, Any], corpus_pdf: bytes
+    router: Surface, published_version: dict[str, Any], corpus_pdf: bytes
 ) -> None:
     path = f"/versions/{published_version['version_uid']}/content"
 
@@ -291,7 +290,7 @@ def test_an_open_ended_and_a_suffix_range_both_work(
 
 
 def test_an_unsatisfiable_range_is_refused_rather_than_answered_in_full(
-    router: Router, published_version: dict[str, Any], corpus_pdf: bytes
+    router: Surface, published_version: dict[str, Any], corpus_pdf: bytes
 ) -> None:
     """Answering with the whole file would hide the caller's bug behind a big download."""
     for header in ("bytes=999999999-", "bytes=abc", "bytes=-", "bytes=50-10"):
@@ -308,7 +307,7 @@ def test_an_unsatisfiable_range_is_refused_rather_than_answered_in_full(
 
 
 def test_the_content_route_never_redirects(
-    router: Router, published_version: dict[str, Any]
+    router: Surface, published_version: dict[str, Any]
 ) -> None:
     response = dispatch(
         router,
@@ -323,7 +322,7 @@ def test_the_content_route_never_redirects(
 # ---------------------------------------------------------------------------
 
 
-def test_findings_list_and_filter(router: Router, published_run: PublishedRun) -> None:
+def test_findings_list_and_filter(router: Surface, published_run: PublishedRun) -> None:
     page = ok(dispatch(router, Request.build("GET", f"/runs/{published_run.run_id}/findings")))
     assert len(page["items"]) == 1
     finding = page["items"][0]
@@ -361,7 +360,7 @@ def test_findings_list_and_filter(router: Router, published_run: PublishedRun) -
 
 
 def test_a_decision_moves_the_projection_and_appends_nothing_twice(
-    router: Router, published_run: PublishedRun, session: Session
+    router: Surface, published_run: PublishedRun, session: Session
 ) -> None:
     path = f"/findings/{published_run.finding_uid}/decisions"
     payload = json.dumps(
@@ -427,7 +426,7 @@ def test_a_decision_moves_the_projection_and_appends_nothing_twice(
 
 
 def test_a_comment_without_a_comment_is_refused(
-    router: Router, published_run: PublishedRun
+    router: Surface, published_run: PublishedRun
 ) -> None:
     response = dispatch(
         router,
@@ -448,7 +447,7 @@ def test_a_comment_without_a_comment_is_refused(
 
 
 def test_revoke_is_declared_but_has_no_pc01_producer(
-    router: Router, published_run: PublishedRun
+    router: Surface, published_run: PublishedRun
 ) -> None:
     """The enum accepts it at the edge; the ledger refuses to emit one."""
     response = dispatch(
@@ -475,7 +474,7 @@ def test_revoke_is_declared_but_has_no_pc01_producer(
 
 
 def test_the_decision_history_pages_without_losing_or_repeating_an_event(
-    router: Router, published_run: PublishedRun
+    router: Surface, published_run: PublishedRun
 ) -> None:
     path = f"/findings/{published_run.finding_uid}/decisions"
     for index in range(5):
@@ -516,7 +515,7 @@ def test_the_decision_history_pages_without_losing_or_repeating_an_event(
 
 
 def test_no_cursor_carries_a_row_sequence(
-    router: Router, published_run: PublishedRun, session: Session
+    router: Surface, published_run: PublishedRun, session: Session
 ) -> None:
     """The server's ``sequence_no`` is never embedded in a continuation token."""
     path = f"/findings/{published_run.finding_uid}/decisions"
@@ -570,7 +569,7 @@ def test_no_cursor_carries_a_row_sequence(
     assert "sequence" not in json.dumps(page).lower()
 
 
-def test_a_forged_cursor_is_refused(router: Router, published_run: PublishedRun) -> None:
+def test_a_forged_cursor_is_refused(router: Surface, published_run: PublishedRun) -> None:
     response = dispatch(
         router,
         Request.build(
@@ -588,7 +587,7 @@ def test_a_forged_cursor_is_refused(router: Router, published_run: PublishedRun)
 
 @pytest.mark.parametrize("state", ["created", "queued", "running", "validating", "failed"])
 def test_a_run_whose_terminal_publishes_no_result_is_refused(
-    router: Router, session: Session, state: str
+    router: Surface, session: Session, state: str
 ) -> None:
     """``state_transition_not_allowed`` verbatim, never a generic internal error."""
     run = PublishedRun(session, state=state)
@@ -600,7 +599,7 @@ def test_a_run_whose_terminal_publishes_no_result_is_refused(
     assert body["retryable"] is False
 
 
-def test_a_published_run_exports(router: Router, session: Session) -> None:
+def test_a_published_run_exports(router: Surface, session: Session) -> None:
     run = PublishedRun(session, state="published")
     response = dispatch(router, Request.build("GET", f"/runs/{run.run_id}/export.csv"))
 
@@ -614,7 +613,7 @@ def test_a_published_run_exports(router: Router, session: Session) -> None:
 
 
 def test_the_export_router_adds_nothing_to_the_bytes(
-    router: Router, session: Session
+    router: Surface, session: Session
 ) -> None:
     """The response body is exactly what the export use case returned."""
     from .conftest import SeamExportAdapter
@@ -625,7 +624,7 @@ def test_the_export_router_adds_nothing_to_the_bytes(
     assert response.body == expected
 
 
-def test_an_unknown_run_is_not_found_not_a_refusal(router: Router) -> None:
+def test_an_unknown_run_is_not_found_not_a_refusal(router: Surface) -> None:
     response = dispatch(
         router,
         Request.build("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),

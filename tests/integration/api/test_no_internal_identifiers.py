@@ -29,8 +29,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from auditmanager.documents import MANIFEST_ROLE_SOURCE_DOCUMENT
-from auditmanager.api.routers import Router, dispatch
-from auditmanager.api.routers.http import Request, Response
+from w13_api_driver import Answer, Request, Surface, dispatch
 from auditmanager.storage import S3StorageSettings
 
 from .conftest import PublishedRun
@@ -141,7 +140,7 @@ def assert_clean(body: Any, forbidden_values: tuple[str, ...], where: str) -> No
             )
 
 
-def _headers_and_body(response: Response) -> tuple[dict[str, str], Any]:
+def _headers_and_body(response: Answer) -> tuple[dict[str, str], Any]:
     headers = {name: value for name, value in response.headers}
     content_type = headers.get("Content-Type", "")
     if "json" in content_type:
@@ -153,7 +152,7 @@ def _headers_and_body(response: Response) -> tuple[dict[str, str], Any]:
 
 
 def test_the_whole_surface_leaks_nothing(
-    router: Router,
+    router: Surface,
     corpus_pdf: bytes,
     published_run: PublishedRun,
     forbidden_values: tuple[str, ...],
@@ -248,7 +247,7 @@ def test_the_whole_surface_leaks_nothing(
 
 
 def test_the_uploaded_filename_never_comes_back(
-    router: Router, corpus_pdf: bytes, forbidden_values: tuple[str, ...]
+    router: Surface, corpus_pdf: bytes, forbidden_values: tuple[str, ...]
 ) -> None:
     """The name really was supplied, and really is absent from the response.
 
@@ -298,7 +297,7 @@ def test_the_uploaded_filename_never_comes_back(
 
 
 def test_the_streamed_content_response_carries_no_address(
-    router: Router, corpus_pdf: bytes, forbidden_values: tuple[str, ...]
+    router: Surface, corpus_pdf: bytes, forbidden_values: tuple[str, ...]
 ) -> None:
     """The viewer receives bytes, and its headers name no location.
 
@@ -351,7 +350,7 @@ def test_the_streamed_content_response_carries_no_address(
 
 
 def test_an_export_disposition_names_only_the_opaque_run_identity(
-    router: Router, session: Session, forbidden_values: tuple[str, ...]
+    router: Surface, session: Session, forbidden_values: tuple[str, ...]
 ) -> None:
     """The one filename the document allows is built from an opaque identity.
 
@@ -371,7 +370,7 @@ def test_an_export_disposition_names_only_the_opaque_run_identity(
 
 
 def test_an_error_envelope_leaks_nothing_either(
-    router: Router, published_run: PublishedRun, forbidden_values: tuple[str, ...]
+    router: Surface, published_run: PublishedRun, forbidden_values: tuple[str, ...]
 ) -> None:
     """Failures are walked too. A leak is at least as likely on a failure path."""
     cases = (

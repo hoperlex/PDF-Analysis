@@ -1,4 +1,15 @@
-"""``Project``, ``ProjectPage`` and ``CreateProjectRequest``."""
+"""The ``Project`` view the ports produce, and the bytes it renders as.
+
+The *validation* of ``CreateProjectRequest`` moved to
+:class:`auditmanager.api.schemas.models.CreateProjectRequest` under `T-1`: one closed
+Pydantic model that both refuses an undeclared property and puts the schema in the served
+document. The hand-written parser this module used to carry was the second copy, and a
+second copy of a contract is a second thing to be wrong.
+
+:class:`ProjectView` stays, and stays exactly as it was: it is the declared return type of
+``ProjectPort.create_project`` and it is constructed by ``bootstrap/adapters.py``, which is
+not this session's to change.
+"""
 
 from __future__ import annotations
 
@@ -7,11 +18,12 @@ from datetime import datetime
 from typing import Any, Mapping
 
 from auditmanager.api.schemas.common import timestamp
-from auditmanager.shared.errors import DomainError, ErrorCode
 
-__all__ = ["ProjectView", "parse_create_project_request", "project_body"]
+__all__ = ["ProjectView", "project_body"]
 
-#: ``#/components/schemas/CreateProjectRequest.properties.name``.
+#: ``#/components/schemas/CreateProjectRequest.properties.name``. The bound is enforced by
+#: :class:`auditmanager.api.schemas.models.CreateProjectRequest`, which is also what puts it
+#: in the served document; this is the same number, named, for a reader of this module.
 MAX_PROJECT_NAME = 200
 
 
@@ -39,45 +51,3 @@ def project_body(view: ProjectView) -> dict[str, Any]:
     if view.document_count is not None:
         body["document_count"] = view.document_count
     return body
-
-
-def parse_create_project_request(payload: Mapping[str, Any]) -> str:
-    """Validate ``CreateProjectRequest`` and return the project name.
-
-    The schema is closed (``additionalProperties: false``), so an unknown property is
-    refused here rather than dropped: a client that sent ``{"nmae": ...}`` has a bug,
-    and silently creating a project called something else hides it.
-    """
-    if set(payload) - {"name"}:
-        # The offending property name is **not** echoed. It is caller-controlled text,
-        # and `details` values ARE screened -- by exactly the six `_FORBIDDEN` patterns
-        # that screen `message`, since `B6`, raising `UnsafeDetailValue`. This site is
-        # what `B6` was: it echoed the caller's property name, so one named
-        # `/etc/passwd` came back inside the envelope. The value screen now refuses that
-        # rather than shipping it, which means echoing here would convert this caller's
-        # 422 into an unhandled `UnsafeDetailValue`, and a property name carrying no
-        # forbidden shape would still be the caller's raw input reflected back. Details
-        # carry classifiers; `constraint` below is the classifier for this refusal.
-        # `tests/integration/api/test_no_internal_identifiers.py` found the leak here.
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="The request body carries a property the schema does not declare.",
-            field="body",
-            constraint="additionalProperties",
-        )
-    name = payload.get("name")
-    if not isinstance(name, str):
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message="The project name is required and must be a string.",
-            field="name",
-            constraint="type",
-        )
-    if not 1 <= len(name) <= MAX_PROJECT_NAME:
-        raise DomainError(
-            ErrorCode.VALIDATION_FAILED,
-            message=f"The project name must be 1 to {MAX_PROJECT_NAME} characters.",
-            field="name",
-            constraint="length",
-        )
-    return name

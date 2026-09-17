@@ -8,47 +8,79 @@ from here: `A5` generates the frontend's typed client from it and a drift guard 
 the committed client against it, so an edit here reddens the web suite. A defect in the
 document is reported, not repaired.
 
-## There is no HTTP framework *here*, and that is a pin-set consequence, not a decision
+## FastAPI, natively, with the frozen contract built under it
 
-`docs/program/P02_LOCK.json` pins three runtime distributions — `pdfplumber`, `pypdf`
-and `anthropic` — and none of them is a web framework. Its closing line is explicit:
-*every Gate B session consumes these pins and may not add or upgrade a root dependency.*
-Nothing in the transitive closure serves HTTP either; `h11` and `pydantic` are there only
-because `anthropic` pulls them.
+**`T-1`, owner decision 2026-09-17, landed by `W13-API` in wave 13.** The twelve operations
+are typed FastAPI path operations, the 43 `components.schemas` are Pydantic models, and the
+hand-rolled `Router` / `dispatch` / `http.py` / `multipart.py` layer is retired.
 
-**Corrected 2026-09-17 on the owner's ruling.** This section opened "there is no HTTP
-framework, and that is deliberate", which presented an absence as an architectural decision.
-It was not one. `ADR-0002` names "one deployable Python/**FastAPI** backend";
-`TECHNOLOGY_BASELINE.md` names "Python, FastAPI/ASGI"; `ARCHITECTURE_BIBLE.md` P-05 and
-`PROTOTYPE_PROFILE.md` §2 say the same. **A lane-level pin set records what a lane may
-install; it cannot overrule an ADR.** The lock is why no framework is here; the architecture
-direction is, and remains, FastAPI.
+### What this section used to say, and why it is worth keeping the correction
 
-So `routers/http.py` supplies the three things a router actually needs — `Request`,
-`Response`, `Route`/`Router` — in about a hundred lines of standard library, and
-`routers/multipart.py` reads the one multipart operation on `email.parser`. Adding a
-framework is a single-owner pin request, not a lane decision.
+It said "there is no HTTP framework here, and that is a pin-set consequence, not a
+decision", and before *that* it said the absence was deliberate. `ADR-0002` names "one
+deployable Python/**FastAPI** backend"; `TECHNOLOGY_BASELINE.md` names "Python,
+FastAPI/ASGI"; `ARCHITECTURE_BIBLE.md` P-05 and `PROTOTYPE_PROFILE.md` §2 say the same.
+`docs/program/P02_LOCK.json` pinned three runtime distributions and none of them was a web
+framework, so `B6` wrote about a hundred stdlib lines instead — which was the right call
+**for a lane that may not add a root dependency**, and the wrong sentence to write about it.
+A lane-level pin set records what a lane may install; it cannot overrule an ADR. `W13-PIN`
+added the pins on the owner's ruling and this is what was always meant to be here.
 
-Note that the earlier version of this file said "FastAPI transport adapters only". No
-FastAPI is pinned, and none was added.
+### The second authority, and the machine that checks it
+
+A framework that generates its own OpenAPI document over a frozen one creates a **second
+routing and schema authority**, and that is a real drift risk — it is the objection revision
+1 of `ALPHA_ROADMAP.md` raised against this decision. What answers it is not an assurance
+but a gate: `tests/contract/api_v1/test_openapi_conformance.py` compares
+`create_documentation_app().openapi()` against `contracts/api/v1/openapi.json` under a
+declared normalization, and every entry of that normalization carries a planted difference
+proving the comparison can still fail.
+
+**The contract stays the authority. The generated document is what has to move.** Three
+places in this package exist only because of that, and each says so at its own site:
+
+* `schemas/models.py` spells "optional but not nullable" as
+  `Field(default=None, json_schema_extra=optional_property)`, because Pydantic's ordinary
+  `X | None = None` emits a null branch and a `default` the contract does not declare;
+* the scalar newtypes are `TypeAliasType` aliases, because the contract spells them as
+  `$ref`s and only an alias is *also* a scalar FastAPI will accept as a path, query or
+  header parameter;
+* `app.py` removes the `422` FastAPI injects into the four operations that declare none,
+  and only when the response object is byte-for-byte FastAPI's own. Those four answer `404`
+  for a malformed path identity by design and enforce nothing else, so a `422` on them is a
+  false statement about this application.
 
 ## What lives here
 
 | Path | What it is |
 |---|---|
-| `routers/http.py` | `Request`, `Response`, `Route`, `Router`, path-template matching |
-| `routers/errors.py` | the error middleware: any failure becomes one typed envelope |
+| `app.py` | `create_app`, `create_asgi_app`, `create_documentation_app`, and the document's own metadata |
+| `composition.py` | the thin seam to `auditmanager.bootstrap` |
+| `security.py` | `T-6` — the bearer seam, and the alpha's static token behind it |
+| `health.py` | `T-3` — liveness and readiness, a **separate application** on a second port |
+| `routers/wire.py` | `WireResponse`: the exact header list, in the exact order and case |
+| `routers/declarations.py` | the response table and the parameters every operation repeats |
+| `routers/handlers.py` | where FastAPI's own failures stop being FastAPI's |
+| `routers/errors.py` | classification: a DBAPIError's SQLSTATE, and the envelope renderer |
 | `routers/correlation.py` | `X-Correlation-Id` on every response, assigned when absent |
-| `routers/idempotency.py` | the required `Idempotency-Key`, and path-identity validation |
-| `routers/multipart.py` | a strict reader for the one `multipart/form-data` operation |
+| `routers/idempotency.py` | the required `Idempotency-Key`, as a declared parameter |
+| `routers/multipart.py` | the transport body cap, and the four rules a closed model cannot state |
 | `routers/ports.py` | the six narrow ports a composition root satisfies |
 | `routers/{projects,documents,runs,findings,decisions,export}.py` | the twelve operations |
-| `schemas/**` | one view type per frozen schema, and the function that renders it |
+| `schemas/models.py` | the 43 `components.schemas`, as Pydantic models |
+| `schemas/{common,projects,documents,runs,findings,decisions}.py` | the view types the ports return, and the functions that render their bytes |
 
-`api/app.py` and `api/composition.py` are **not** here and are not this session's to
-write: they are the composition root, owned by the integrator in Gate C.
-`build_router(...)` takes its six dependencies as keyword arguments and constructs none
-of them.
+**`build_router(...)` takes the same six keyword-only ports it always did and constructs
+none of them**, which is what made `T-1` a transport change rather than a rewrite of the
+application: `bootstrap/composition.py` — another session's file — did not move a line.
+
+**Why the bodies are not rendered by the Pydantic models.** A handler returns a
+`WireResponse`, which FastAPI passes through untouched, so `response_model` describes a
+response without serializing it. `model_dump_json` would emit compact separators and its
+own key order, and every one of the 33 records in
+`tests/characterization/w13_baseline/records/` would differ from what it recorded in a way
+that means nothing — inside the one safety net this wave has for differences that mean
+something.
 
 The task file `docs/program/tasks/P2-API-01.md` also lists `api/errors.py` and
 `api/idempotency.py` as allowed paths. The `B6` dispatch brief is narrower —
@@ -140,10 +172,10 @@ from the contract.
 
 | Parameter | Where | How |
 |---|---|---|
-| `limit` | `listProjects`, `listRunFindings`, `listDecisionHistory` | `schemas.common.parse_limit`, against the frozen `1..200 default 50`. Out of range or not an integer is `validation_failed`, never a clamp — a silently clamped page is a page the caller is wrong about |
+| `limit` | `listProjects`, `listRunFindings`, `listDecisionHistory` | `declarations.LimitParam`, which is the frozen `1..200 default 50` and is also what puts those three numbers in the served document. Out of range or not an integer is `validation_failed`, never a clamp — a silently clamped page is a page the caller is wrong about. An **empty** value is the absent value, as it was before `T-1` |
 | `cursor` | the same three | `schemas.common.encode_cursor` / `paginate`. Base64url of the **last sort key emitted**, and nothing else |
-| `category` | `listRunFindings` | validated against `FindingCategory` and passed to the port; the shipped `FindingAdapter` filters |
-| `verdict` | `listRunFindings` | validated against `Verdict` and passed to the port; filtered on the **projection** over the decision ledger, not on a column |
+| `category` | `listRunFindings` | typed with the frozen `FindingCategory` enum and passed to the port; the shipped `FindingAdapter` filters |
+| `verdict` | `listRunFindings` | typed with the frozen `Verdict` enum and passed to the port; filtered on the **projection** over the decision ledger, not on a column |
 
 Three things about the cursor are worth stating, because each is a claim a test has to
 carry rather than a property of the code anyone can see by reading it:
@@ -191,8 +223,11 @@ the storage port, not a shortcut around it.
 
 `tests/integration/api` — real PostgreSQL, real MinIO, never a skip.
 
-The twelve-operation assertion compares the router's `(operationId, method, template)`
-set against the frozen document itself, never against a list in the test. Response bodies
+The twelve-operation assertion compares the router's `(operationId, METHOD, path)` set
+against the frozen document itself, never against a list in the test. `build_router` also
+refuses a duplicate `operationId` at construction — FastAPI logs a warning and serves a
+document declaring the id twice, which leaves `len(routes) == 12` passing while one frozen
+operation is no longer addressable. Response bodies
 are validated with the pinned `jsonschema` in the **governance** environment, driven
 through `tests/contract/api_v1/schema_validation_check.py`; the runtime lock carries no
 validator.
@@ -201,10 +236,12 @@ validator.
 structural rather than behavioural, because a behavioural test only catches the parameters
 somebody remembered to write one for:
 
-* **every query parameter the frozen document declares is watched being read** by the
-  handler that declares it. The request carries a query mapping that records which names
-  were looked up, so a parameter added to the document and read by nothing fails here
-  without anyone writing a test for that parameter;
+* **every query parameter the frozen document declares is supplied and required to change
+  the answer.** Before `T-1` this watched a recording mapping stand in for `Request.query`
+  and asserted the handler *looked each name up*; a real HTTP client has no such seam, and
+  the stronger question is the one that catches a parameter accepted and ignored. A
+  parameter added to the document and acted on by nothing fails here without anyone writing
+  a test for that parameter;
 * **the committed client cannot drift from the contract unnoticed in this suite either.**
   `web/tests/guards/frontend-lock.guard.test.ts` already checks the digests, in the
   frontend suite — but the contract and the routers change in one commit and the frontend
@@ -221,3 +258,46 @@ bound from the measured population and take the expected sequence from the rows.
 fixture that guarantees the size is `crowd`, and scoping such a walk to the handful of rows
 the test created would be the vacuous repair — a cursor that restarts, repeats or resumes
 by position still serves those.
+
+
+## The one failure shape, and the four ways it could have been broken
+
+`routers/handlers.py` is the single highest-risk module this package acquired in wave 13,
+and `tests/integration/api/test_no_framework_body_reaches_a_client.py` is the sweep that
+holds it. FastAPI's own answer to a bad request is
+
+```
+422 {"detail": [{"type": "string_too_short", "loc": ["body", "name"], ...}]}
+```
+
+— a status a reader would accept, with no `error_code`, no `contract_version`, no
+`correlation_id` and no `details.constraint`. Four certifications and the response baseline
+assert *which rule refused*, so that body reaching a client is a criterion-10 regression
+wearing a 422.
+
+Every exception is registered, and the one that cannot be is caught anyway:
+
+| raised by | mapped to |
+|---|---|
+| `DomainError` | itself — already typed, passes through |
+| `RequestValidationError` | the catalog, by `handlers._REFUSALS` and the rules beside it |
+| `StarletteHTTPException` | the catalog; **405 becomes 404**, so the API is not an oracle for which paths exist |
+| anything else | `internal_error`, or the SQLSTATE's code, carrying nothing from the original |
+
+The last row is `FailureEnvelopeMiddleware`, which sits *inside* the correlation middleware
+and *outside* Starlette's `ExceptionMiddleware`. Starlette's own last resort sends an HTML
+or plain-text 500 and re-raises; this one sends an envelope and does not.
+
+## `T-6` and `T-3`
+
+**The authorization seam is fail-closed.** `security.py` reads `AUDITMANAGER_API_TOKEN`
+from the environment `create_app(environ=...)` already carries, and an application built
+without one answers `authentication_required` to every request on this surface. "No token
+configured, so let everyone in" is a switch that turns the seam off by omission. The
+variable is **not** in `.env.example` and **not** on `AppSettings`: both are outside
+`W13-API`'s scope and the gap is reported in `docs/program/reviews/W13-API.md`.
+
+**The health plane is a different ASGI application**, built by `health.py` and served on its
+own port. Not a route on this one with the dependency excluded: "excluded from the app-wide
+dependency" is one edit away from "included again", and the failure mode is a health check
+that starts returning 401 in a deployment.

@@ -49,6 +49,12 @@ def _load() -> Any:
 
 journey = _load()
 
+#: `T-6`. The credential every request in this corpus presents, written out here rather
+#: than imported from ``journey`` for the same reason every other expectation in this file
+#: is a literal: a check that reads its expectation from the thing it is checking cannot
+#: tell you that the thing moved. ``OPERATING_CONSTRAINTS.md`` section 12.
+STATIC_TOKEN = "w13-baseline-static-token"
+
 RECORD_FILES = sorted(journey.RECORDS.glob("*.json"))
 
 #: The frozen document's twelve operationIds, written out rather than read from the
@@ -126,64 +132,92 @@ def test_exactly_one_record_is_marked_as_the_permitted_exception() -> None:
 
 
 def _authorization_claims(record: dict[str, Any]) -> list[str]:
-    """Every way a record could start saying something about authorization.
+    """Every way a record could stop being a record of the authenticated era.
 
-    One function, used by the guard and by the test that proves the guard can fail, so
-    the proof exercises the rule rather than a second copy of it that could drift.
+    One function, used by the guard and by the test that proves the guard can fail, so the
+    proof exercises the rule rather than a second copy of it that could drift. The first
+    version of the prover in this file re-implemented the rule, which proves only that a
+    copy can fail.
     """
     found: list[str] = []
     if not record.get("pre_authorization"):
         found.append("no pre_authorization declaration")
-    for name, _value in record["request"]["headers"]:
-        if name.lower() in ("authorization", "proxy-authorization"):
-            found.append(f"the request carries {name}")
-    # 401 is unreachable before the dependency exists; a 403 in this corpus would have
-    # to mean a caller's rights, and no case here exercises any.
+    presented = [
+        value
+        for name, value in record["request"]["headers"]
+        if name.lower() == "authorization"
+    ]
+    if presented != [f"Bearer {STATIC_TOKEN}"]:
+        found.append(f"presents {presented!r} rather than the configured credential")
+    if any(
+        name.lower() == "proxy-authorization" for name, _ in record["request"]["headers"]
+    ):
+        found.append("the request carries Proxy-Authorization")
+    # No case here exercises a caller's *rights*, and none omits the credential, so an
+    # authorization answer in this corpus would mean the journey stopped doing what it
+    # says it does. The seam's own refusals are asserted where they belong, in
+    # `tests/integration/api/test_authorization.py`, which drives requests with no
+    # credential and with a wrong one.
     if record["response"]["status"] in (401, 403):
         found.append(f"pins {record['response']['status']}, an authorization answer")
     return found
 
 
-def test_the_baseline_makes_no_authorization_claim() -> None:
-    """The corpus must stay unreadable as an authorization expectation.
+def test_the_baseline_records_the_authenticated_era() -> None:
+    """Every record presents the credential, and none of them pins an authorization answer.
 
-    `W13-SEAL` added the contract half of `T-6` at `a5f4001`: the document now declares a
-    bearer scheme at its root and `401`/`403` on all twelve operations. The
-    implementation half is stage 2's, so every request here is still unauthenticated and
-    still answered -- and 33 records of exactly that is a thing a later reader can
-    mistake for the surface's intended unauthenticated behaviour.
+    **This test and the README paragraph beside it changed together, deliberately**, at the
+    commit that put the `T-6` dependency in front of the twelve operations. `W13-SEAL`
+    wrote the rule this replaces -- *the corpus makes no authorization claim* -- and said
+    in its section 8.5 that it *"will go red the moment the journey authenticates, which it
+    should. Change it and the README paragraph together, in the same commit, and say which
+    era the records then belong to."* This is that change, and this is the era: authorized,
+    with the credential presented on every request and the refusals asserted elsewhere.
 
-    `README.md` says the baseline has nothing to say about authorization. This is the
-    test that keeps that sentence true instead of merely old.
-
-    If stage 2 makes the journey authenticate, this test and that paragraph are changed
-    together, deliberately -- which is the point of writing it down.
+    **The response bytes did not move.** The recapture that added the header to these files
+    changed exactly three things per record -- ``captured_through``, ``pre_authorization``
+    and the request's header list -- and nothing under ``response``. See
+    ``docs/program/reviews/W13-API.md``.
     """
     offenders: list[str] = []
     for path in RECORD_FILES:
         record = json.loads(path.read_text(encoding="utf-8"))
         offenders.extend(f"{path.stem}: {claim}" for claim in _authorization_claims(record))
     assert offenders == [], (
-        "the baseline has started making an authorization claim:\n" + "\n".join(offenders)
+        "the baseline has stopped being a record of the authenticated era:\n"
+        + "\n".join(offenders)
     )
 
 
-def test_the_no_authorization_claim_check_can_fail() -> None:
-    """The same rule, run against three planted records.
+def test_the_authorization_era_check_can_fail() -> None:
+    """The same rule, run against four planted records.
 
-    A guard nobody has seen reject anything accepts anything -- the rule this corpus
-    already applies to itself in
-    :func:`test_the_comparison_reddens_on_a_planted_difference`.
+    A guard nobody has seen reject anything accepts anything -- the rule this corpus already
+    applies to itself in :func:`test_the_comparison_reddens_on_a_planted_difference`.
 
-    The plants are in-memory copies rather than rewritten files, because a test that
-    edits `records/` would trip the gate's changed-during-the-run check.
+    The plants are in-memory copies rather than rewritten files, because a test that edits
+    `records/` would trip the gate's changed-during-the-run check.
     """
     clean = json.loads(RECORD_FILES[0].read_text(encoding="utf-8"))
     assert _authorization_claims(clean) == [], "the unperturbed record is already reported"
 
-    authenticated = json.loads(json.dumps(clean))
-    authenticated["request"]["headers"].append(["Authorization", "Bearer w13-static"])
-    assert _authorization_claims(authenticated) == ["the request carries Authorization"]
+    anonymous = json.loads(json.dumps(clean))
+    anonymous["request"]["headers"] = [
+        pair for pair in clean["request"]["headers"] if pair[0].lower() != "authorization"
+    ]
+    assert _authorization_claims(anonymous) == [
+        "presents [] rather than the configured credential"
+    ]
+
+    someone_elses = json.loads(json.dumps(clean))
+    someone_elses["request"]["headers"] = [
+        ["Authorization", "Bearer not-the-configured-token"] if pair[0] == "Authorization"
+        else pair
+        for pair in clean["request"]["headers"]
+    ]
+    assert _authorization_claims(someone_elses) == [
+        "presents ['Bearer not-the-configured-token'] rather than the configured credential"
+    ]
 
     refused = json.loads(json.dumps(clean))
     refused["response"]["status"] = 401

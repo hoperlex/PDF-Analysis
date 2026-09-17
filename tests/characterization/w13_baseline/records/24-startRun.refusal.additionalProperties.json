@@ -2,14 +2,18 @@
   "case": "24-startRun.refusal.additionalProperties",
   "operation": "startRun",
   "purpose": "the same rule on StartRunRequest",
-  "captured_through": "auditmanager.api.routers.Request.build + dispatch, over auditmanager.api.app.create_app()",
-  "pre_authorization": "Captured before the T-6 reseal. Every request here is unauthenticated and is answered. This is not a post-auth expectation.",
+  "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
+  "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
   "exception": null,
   "unordered": null,
   "request": {
     "method": "POST",
     "target": "/runs",
     "headers": [
+      [
+        "Authorization",
+        "Bearer w13-baseline-static-token"
+      ],
       [
         "Content-Type",
         "application/json"

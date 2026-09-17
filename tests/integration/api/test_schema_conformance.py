@@ -21,13 +21,12 @@ from typing import Any
 import pytest
 from sqlalchemy.orm import Session
 
-from auditmanager.api.routers import Router, dispatch
-from auditmanager.api.routers.http import Request
+from w13_api_driver import Request, Surface, dispatch
 
 from .conftest import PublishedRun
 
 
-def _body(router: Router, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+def _body(router: Surface, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
     response = dispatch(router, Request.build(method, path, **kwargs))
     assert response.status < 300, (response.status, response.body)
     return json.loads(response.body)
@@ -44,7 +43,7 @@ def _valid(results: dict[str, Any], name: str) -> None:
 
 
 def test_a_real_finding_detail_body_validates(
-    router: Router,
+    router: Surface,
     published_run: PublishedRun,
     openapi_document: dict[str, Any],
     validate_against_schema,
@@ -70,7 +69,7 @@ def test_a_real_finding_detail_body_validates(
 
 
 def test_a_real_finding_page_validates(
-    router: Router,
+    router: Surface,
     published_run: PublishedRun,
     openapi_document: dict[str, Any],
     validate_against_schema,
@@ -85,7 +84,7 @@ def test_a_real_finding_page_validates(
 
 
 def test_a_real_run_status_body_validates(
-    router: Router,
+    router: Surface,
     published_run: PublishedRun,
     openapi_document: dict[str, Any],
     validate_against_schema,
@@ -100,7 +99,7 @@ def test_a_real_run_status_body_validates(
 
 
 def test_a_real_decision_body_validates(
-    router: Router,
+    router: Surface,
     published_run: PublishedRun,
     openapi_document: dict[str, Any],
     validate_against_schema,
@@ -145,7 +144,7 @@ def test_a_real_decision_body_validates(
 
 
 def test_a_real_project_and_page_validate(
-    router: Router, openapi_document: dict[str, Any], validate_against_schema
+    router: Surface, openapi_document: dict[str, Any], validate_against_schema
 ) -> None:
     created = _body(
         router,
@@ -168,7 +167,7 @@ def test_a_real_project_and_page_validate(
 
 
 def test_a_real_document_version_validates(
-    router: Router,
+    router: Surface,
     corpus_pdf: bytes,
     openapi_document: dict[str, Any],
     validate_against_schema,
@@ -218,7 +217,7 @@ def test_a_real_document_version_validates(
 
 
 def test_every_error_body_validates_as_the_envelope(
-    router: Router, openapi_document: dict[str, Any], validate_against_schema
+    router: Surface, openapi_document: dict[str, Any], validate_against_schema
 ) -> None:
     """Every non-2xx body on this surface is the frozen ``ErrorEnvelope``.
 
@@ -260,7 +259,7 @@ def test_every_error_body_validates_as_the_envelope(
 
 
 def test_the_validator_can_fail(
-    router: Router,
+    router: Surface,
     published_run: PublishedRun,
     openapi_document: dict[str, Any],
     validate_against_schema,

@@ -117,13 +117,27 @@ class Client:
     module the router calls. Everything this suite learns, it learns from a response.
     """
 
-    __slots__ = ("_app",)
+    __slots__ = ("_app", "_application", "_client")
 
-    def __init__(self, app: Any) -> None:
+    def __init__(self, app: Any, application: Any = None) -> None:
+        from starlette.testclient import TestClient
+
         self._app = app
+        self._application = application if application is not None else app
+        # `raise_server_exceptions=False`: a fault that reached the client as an envelope
+        # is recorded as the envelope the client got. With the default, `TestClient`
+        # re-raises inside the test and the acceptance runbook never sees the answer --
+        # which is exactly the case `D-5` is about.
+        self._client = TestClient(app, raise_server_exceptions=False)
 
     @property
     def app(self) -> Any:
+        """The built ``Application``. ``criterion 8`` asks it what was wired."""
+        return self._application
+
+    @property
+    def asgi_app(self) -> Any:
+        """The ``FastAPI`` this client drives."""
         return self._app
 
     def request(
@@ -134,11 +148,33 @@ class Client:
         headers: Mapping[str, str] | Sequence[tuple[str, str]] = (),
         body: bytes = b"",
     ) -> Answer:
-        from auditmanager.api.routers import Request, dispatch
+        """One request over the real transport.
 
-        request = Request.build(method, target, headers=headers, body=body)
-        response = dispatch(self._app.router, request)
-        return Answer(response.status, tuple(response.headers), response.body)
+        **The one place in this suite that knows how the API is reached**, which is why
+        `T-1` changed this method and nothing else in the file. It was ``Request.build``
+        plus ``dispatch``; it is now a ``starlette.testclient.TestClient`` over the
+        ``FastAPI`` application, so every criterion below is asserted against routing, the
+        declared parameters, the body models, the exception handlers and the middlewares
+        rather than against a hand-rolled table in front of them.
+
+        ``response.headers.raw`` rather than the mapping: ``httpx`` lower-cases header
+        names when you iterate it, and this suite asserts them as the contract spells them.
+
+        The `T-6` credential is presented on every call unless the caller supplies its own
+        ``Authorization`` header -- which the authorization criteria do, to be refused.
+        """
+        sent = {name: value for name, value in dict(headers).items()}
+        if not any(name.lower() == "authorization" for name in sent):
+            sent["Authorization"] = f"Bearer {STATIC_TOKEN}"
+        response = self._client.request(method, target, headers=sent, content=body)
+        return Answer(
+            response.status_code,
+            tuple(
+                (name.decode("latin-1"), value.decode("latin-1"))
+                for name, value in response.headers.raw
+            ),
+            response.content,
+        )
 
     # -- the twelve operations, spelled the way the frozen document spells them --------
 
@@ -245,10 +281,20 @@ def build_client(**overrides: str) -> Client:
     adapter and a new router. That is what makes the criterion-8 test a restart rather
     than a second look at the same objects.
     """
-    environ = dict(os.environ) | overrides
-    from auditmanager.api.app import create_app
+    environ = dict(os.environ) | {API_TOKEN_VARIABLE: STATIC_TOKEN} | overrides
+    from auditmanager.api.app import create_app, create_asgi_app
 
-    return Client(create_app(environ=environ))
+    application = create_app(environ=environ)
+    return Client(
+        create_asgi_app(environ=environ, application=application), application
+    )
+
+
+#: `T-6`. The credential this suite configures and presents, and the variable the
+#: application reads it from. Literals: a driver that read the token out of the
+#: application would drive an application that had stopped checking it.
+STATIC_TOKEN = "c2-pc01-static-token"
+API_TOKEN_VARIABLE = "AUDITMANAGER_API_TOKEN"
 
 
 def key(label: str, *, unique: bool = False) -> str:
