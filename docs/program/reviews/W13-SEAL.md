@@ -439,9 +439,12 @@ the copy has no `tests/` and the contract suites read the contract relative to t
 location. Anyone briefed to prove a contract guard this way will get a green from a mutation the
 guard never saw.
 
-**6.7 — the gate figure moves, and by more than the change itself.**
-The brief expects 1543/5/167. This session adds two tests to the baseline suite, so the figure
-is **1545**. §7 has the run.
+**6.7 — the gate figure moves.**
+The brief expects 1543/5/167. The measured figure is **1551/5/168** — eight new tests and one
+new subtest. *(I first wrote 1545 here, counting only the two baseline tests and forgetting the
+six seam guards I had written an hour earlier. The number is now the one `make gate` printed,
+which is the point of §10 and of `OPERATING_CONSTRAINTS.md` §12's standing rule: a figure is
+worth what the query behind it is worth.)*
 
 **6.9 — two of this change's guards cannot fail `make gate`, and that is not in the brief.**
 `Makefile:488-490` runs the battery with `--ignore=tests/contract/test_cp00_candidate.py`
@@ -542,3 +545,44 @@ No dependency added — `pyproject.toml` and `web/package-lock.json` are untouch
 `agent/w13-pin`'s FastAPI pins were deliberately not carried into this branch. No bytes added
 under `fixtures/synthetic/ar/**` or `fixtures/validation/PC-02/**`; nothing under `fixtures/` at
 all. No tag, no push, no merge to `main` or `dev`.
+
+## 10. The gate
+
+`make gate` on `agent/w13-seal` at `/root/w13seal`, instance `gate-w13b`, on the committed tree
+at `4a83ac8`. Log: `/root/w13seal-logs/gate.log`.
+
+```
+1551 passed, 5 skipped, 168 subtests passed in 216.62s (0:03:36)
+frontend:    35 files, 440 tests passed
+foundation:  35 passed
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+**1551 = the brief's expected 1543 plus 8**, and each of the eight is named:
+
+| Count | Tests |
+|---|---|
+| 6 | the seam guards in `tests/contract/domain_p02/test_openapi_document.py` — one scheme; the seam and not its implementation; every declared scheme required somewhere; every operation requires it; every operation reports 401 and 403; the description no longer denies authentication |
+| 2 | `test_the_baseline_makes_no_authorization_claim` and its prover |
+
+Skips unchanged at 5. Subtests 167 → **168**: `test_error_kernel.py` runs one subtest per code
+and there is one more code. Frontend unchanged at 440 — the two frontend pins moved their
+expected value, not their count.
+
+**Two runs before this one failed, and both are worth recording rather than deleting.**
+
+1. **1549 passed, 2 failed.** `test_envelope_screen_rules.py` pinned the catalog at 20. That is
+   the guard doing its job, and it is why §3's table has seven rows instead of four.
+2. **The changed-during-the-run check fired, on me.** I appended to this review while the gate
+   was running and it refused the difference — `M docs/program/reviews/W13-SEAL.md`, before
+   versus after. The brief says "commit, then gate" and I did not, on the one file I thought was
+   harmless. It is a *changed-during-the-run* check precisely because "harmless" is not a
+   property the check can be asked to evaluate.
+
+`git status --porcelain` is empty before and after the passing run.
+
+## 11. Elapsed
+
+39 minutes wall-clock, `2026-09-18T00:14:48+05:00` to `00:54:04+05:00`, arrival to gate green.
+Bootstrap and `npm ci` ran in the background during Step 1's reading, and the two failed gates
+cost roughly nine minutes of the total.
