@@ -227,10 +227,12 @@ noticing: a Pydantic model that gives `provider_mode` a different default, or th
 `05b` a request lands in — and all three are pinned.
 ## 8. The gate, and the numbers
 
-`make gate` on `agent/w13-gold` at `/root/w13gold`, log `/root/w13gold-logs/gate.log`:
+`make gate` on `agent/w13-gold` at `/root/w13gold`. Run twice — before the rebase
+(`/root/w13gold-logs/gate.log`) and again on the rebased tree
+(`/root/w13gold-logs/gate-rebased.log`) — with identical counts:
 
 ```
-1543 passed, 5 skipped, 167 subtests passed in 298.82s
+1543 passed, 5 skipped, 167 subtests passed in 248.94s
 frontend:    35 files, 440 tests passed
 foundation:  35 passed
 GATE OK: battery, foundation, frontend and whitespace all pass
