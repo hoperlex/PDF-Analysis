@@ -202,6 +202,37 @@ Found by `pdf-analysis-d9`. Consequence for the reseal: adding a code is a small
 
 Check: the top-level keys of that file.
 
+### D-9 — "paragraph granularity" for the normative corpus is production, not movement
+
+The owner has directed that the normative document corpus be carried into PostgreSQL at
+**paragraph granularity**, so that vectors can be laid over it afterwards. `pdf-analysis-d9`
+measured the corpus against its manifest and reported a shape that makes that sentence mean
+something other than a load. **Verified independently here at `85aaa24`:**
+
+- **674 documents**, per `.local/norms/corpus/MANIFEST.json`, outside git entirely — no diff
+  and no grep of the tree will show them;
+- the per-document `blocks.json` is **page-level**, and a block's complete key set is
+  `block_id, block_type, coords_norm, crop_url, export_status, ordinal, page_index,
+  page_label, polygon_points, shape_type, status`. **There is no field carrying text**;
+- `block_type: "text"` is a *type label*, not content. A substring search for `"text"` finds
+  it and reads as though content were present — I made exactly that mistake and caught it by
+  reading the key set instead. `OPERATING_CONSTRAINTS.md` §12, within the hour of writing it;
+- the recognised content sits behind `crop_url`, pointing at an **external service**
+  (`vibe.cloud-ip.cc`), not at anything on disk. The markdown beside each document is the only
+  local rendering, and it carries no geometry.
+
+So: **no paragraph in that corpus has a bounding box today, and the text and the geometry live
+in two places neither of which is joined to the other.** Producing paragraph granularity means
+segmenting, associating text with geometry, and deciding what to do about a remote dependency
+for the content — that is a task with a design in it, not a migration.
+
+A later task that reads "carry the corpus into PostgreSQL at paragraph granularity" and plans a
+load will lose a session discovering this. That is the shape of the stale premises that have
+cost this programme a session each, which is why it is here before the task exists.
+
+Check: `python3 -c "import json;d=json.load(open('.local/norms/corpus/MANIFEST.json'));print(len(d['documents']))"`
+and the key set of `blocks['blocks'][0]` in any document's `blocks.json`.
+
 ## 1.9 — the authority order, ruled 2026-09-17
 
 **The ADRs and the architecture corpus are the primary source of truth. A roadmap is a draft
