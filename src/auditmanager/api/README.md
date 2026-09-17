@@ -8,13 +8,21 @@ from here: `A5` generates the frontend's typed client from it and a drift guard 
 the committed client against it, so an edit here reddens the web suite. A defect in the
 document is reported, not repaired.
 
-## There is no HTTP framework, and that is deliberate
+## There is no HTTP framework *here*, and that is a pin-set consequence, not a decision
 
 `docs/program/P02_LOCK.json` pins three runtime distributions — `pdfplumber`, `pypdf`
 and `anthropic` — and none of them is a web framework. Its closing line is explicit:
 *every Gate B session consumes these pins and may not add or upgrade a root dependency.*
 Nothing in the transitive closure serves HTTP either; `h11` and `pydantic` are there only
 because `anthropic` pulls them.
+
+**Corrected 2026-09-17 on the owner's ruling.** This section opened "there is no HTTP
+framework, and that is deliberate", which presented an absence as an architectural decision.
+It was not one. `ADR-0002` names "one deployable Python/**FastAPI** backend";
+`TECHNOLOGY_BASELINE.md` names "Python, FastAPI/ASGI"; `ARCHITECTURE_BIBLE.md` P-05 and
+`PROTOTYPE_PROFILE.md` §2 say the same. **A lane-level pin set records what a lane may
+install; it cannot overrule an ADR.** The lock is why no framework is here; the architecture
+direction is, and remains, FastAPI.
 
 So `routers/http.py` supplies the three things a router actually needs — `Request`,
 `Response`, `Route`/`Router` — in about a hundred lines of standard library, and
