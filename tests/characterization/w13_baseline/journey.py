@@ -81,6 +81,13 @@ TIMESTAMP_FIELDS = (
     "terminal_at",
     "recorded_at",
     "started_at",
+    # `W17-VIEW`: `started_at` was already named and `finished_at` was not, because before
+    # `aae0209` no response carried one. The first re-capture after the repair pinned four
+    # absolute wall-clock instants as literals -- a record that could never reproduce. This
+    # list names fields one at a time on purpose, so a *new* timestamp property on the
+    # surface has to be added here deliberately; that is the mechanism working, and this is
+    # the entry it was waiting for.
+    "finished_at",
     "completed_at",
 )
 
@@ -124,6 +131,54 @@ EXCEPTION_D7 = {
         "it. The two subject-shaped detail keys went with the meaning they carried. "
         "This is the whole of the permitted change; the record is compared byte for "
         "byte against the new expectation like every other."
+    ),
+    "everything_else": (
+        "Every other difference in this directory is a failure of the wave, whatever "
+        "argument accompanies it."
+    ),
+}
+
+#: ``DEBT_REGISTER.md`` D-19 / ``W15-RUN`` defects ``W15RUN-4`` and ``W15RUN-5``: a
+#: published run reported neither its stage timings nor its finding count, and stamped
+#: ``created_at``, ``updated_at`` and ``terminal_at`` from one transaction timestamp. The
+#: five records rendering a ``RunStatus`` body moved with the repair. Nothing else in this
+#: directory did, and nothing else may.
+#:
+#: **This corpus had pinned the second defect as the expectation.** Records 03-07 carried
+#: ``"created_at": "{{ts_5}}"`` and ``"terminal_at": "{{ts_5}}"`` -- one token, because
+#: substitution is by exact value and the two values *were* identical. A safety net that
+#: reproduces a defect byte for byte is protecting it, and that is why these five records
+#: had to move rather than the repair being fitted around them.
+EXCEPTION_W17VIEW = {
+    "debt": "D-19",
+    "ruling": (
+        "no owner ruling -- this is a defect repair inside a declared contract, not a "
+        "contract change; `RunStatus` and `StageState` already declare all four fields "
+        "and the reseal authority is not engaged"
+    ),
+    "status": "taken",
+    "decided_by": "aae0209",
+    "decided_by_subject": (
+        "fix(runs): a published run reports its timings and its finding count"
+    ),
+    "decided_on": "2026-09-18",
+    "permitted_change": (
+        "Before aae0209 a `RunStatus` body carried no `started_at`/`finished_at` on any "
+        "stage and neither `published_finding_count` nor `diagnostic_observation_count`, "
+        "and its `created_at`, `updated_at` and `terminal_at` were three copies of one "
+        "value. All four fields are declared by the frozen `RunStatus`/`StageState`, "
+        "carried by `RunStatusView` and serialised by `run_status_body`; they simply had "
+        "no producer, so `_SELECT_STAGE_RESULTS` now reads back the two timing columns "
+        "its own upsert has always written and `_run_status_view` now sets the two "
+        "counts. The timestamps are a second, unrelated defect: `now()` is "
+        "`transaction_timestamp()` and a run is created and executed in one transaction, "
+        "so `_ADVANCE`/`_TERMINATE` use `statement_timestamp()`. The body therefore gains "
+        "four properties and `created_at`/`terminal_at` stop sharing a token. **No "
+        "property was renamed, removed or re-typed and no status or header moved**; "
+        "`additionalProperties: false` on `RunStatus` is satisfied because every added "
+        "name is one the frozen document declares. This is the whole of the permitted "
+        "change; the five records are compared byte for byte against the new expectation "
+        "like every other."
     ),
     "everything_else": (
         "Every other difference in this directory is a failure of the wave, whatever "
@@ -741,6 +796,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
         body_note="StartRunRequest, version_uid only; provider_mode omitted",
         tokens=t,
+        exception=EXCEPTION_W17VIEW,
     )
     run = json_of(started)
     run_id = run["run_id"]
@@ -766,6 +822,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
         body_note="byte-identical to case 03, under the same Idempotency-Key",
         tokens=t,
+        exception=EXCEPTION_W17VIEW,
     )
     assert json_of(replay)["run_id"] == run_id, "the replay produced a different run"
     t.add("project_uid", project_uid, "the identity case 01 allocated")
@@ -796,6 +853,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         ).encode("utf-8"),
         body_note="the key of case 03, with provider_mode stated explicitly",
         tokens=t,
+        exception=EXCEPTION_W17VIEW,
     )
     assert json_of(normalised)["run_id"] == run_id
     t.add("project_uid", project_uid, "the identity case 01 allocated")
@@ -851,6 +909,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "GET",
         f"/runs/{run_id}",
         tokens=t,
+        exception=EXCEPTION_W17VIEW,
     )
     t.add("project_uid", project_uid, "the identity case 01 allocated")
     t.add("version_uid", version_uid, "the identity case 02 allocated")
@@ -870,6 +929,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         f"/runs/{run_id}",
         headers={"X-Correlation-Id": "w13base-supplied-correlation-id"},
         tokens=t,
+        exception=EXCEPTION_W17VIEW,
     )
     assert dict(supplied.headers)["X-Correlation-Id"] == "w13base-supplied-correlation-id"
     t.add("project_uid", project_uid, "the identity case 01 allocated")

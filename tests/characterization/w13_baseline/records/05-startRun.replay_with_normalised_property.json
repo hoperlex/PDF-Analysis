@@ -4,7 +4,16 @@
   "purpose": "the same key with a payload that differs only by `provider_mode`. That property is normalised away before the fingerprint, so this replays rather than conflicting: 202, and the run of case 03",
   "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
   "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
-  "exception": null,
+  "exception": {
+    "debt": "D-19",
+    "ruling": "no owner ruling -- this is a defect repair inside a declared contract, not a contract change; `RunStatus` and `StageState` already declare all four fields and the reseal authority is not engaged",
+    "status": "taken",
+    "decided_by": "aae0209",
+    "decided_by_subject": "fix(runs): a published run reports its timings and its finding count",
+    "decided_on": "2026-09-18",
+    "permitted_change": "Before aae0209 a `RunStatus` body carried no `started_at`/`finished_at` on any stage and neither `published_finding_count` nor `diagnostic_observation_count`, and its `created_at`, `updated_at` and `terminal_at` were three copies of one value. All four fields are declared by the frozen `RunStatus`/`StageState`, carried by `RunStatusView` and serialised by `run_status_body`; they simply had no producer, so `_SELECT_STAGE_RESULTS` now reads back the two timing columns its own upsert has always written and `_run_status_view` now sets the two counts. The timestamps are a second, unrelated defect: `now()` is `transaction_timestamp()` and a run is created and executed in one transaction, so `_ADVANCE`/`_TERMINATE` use `statement_timestamp()`. The body therefore gains four properties and `created_at`/`terminal_at` stop sharing a token. **No property was renamed, removed or re-typed and no status or header moved**; `additionalProperties: false` on `RunStatus` is satisfied because every added name is one the frozen document declares. This is the whole of the permitted change; the five records are compared byte for byte against the new expectation like every other.",
+    "everything_else": "Every other difference in this directory is a failure of the wave, whatever argument accompanies it."
+  },
   "unordered": null,
   "request": {
     "method": "POST",
@@ -44,8 +53,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 773,
-      "text": "{\"run_id\": \"{{run_id}}\", \"project_uid\": \"{{project_uid}}\", \"version_uid\": \"{{version_uid}}\", \"state\": \"published\", \"provider_mode\": \"recorded\", \"stages\": [{\"stage_id\": \"document_context_build\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\"}, {\"stage_id\": \"page_geometry_extraction\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\"}, {\"stage_id\": \"source_preparation\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\"}, {\"stage_id\": \"text_analysis\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\"}], \"created_at\": \"{{ts_5}}\", \"analysis_profile_id\": \"ap_01M25P3TH08VVTTGJRXYBZZ7RP\", \"prompt_bundle_id\": \"pb_01M25P3TH0PDQYVKTRQFEM0CYS\", \"degradation_set\": [], \"terminal_at\": \"{{ts_5}}\"}",
+      "length": 1202,
+      "text": "{\"run_id\": \"{{run_id}}\", \"project_uid\": \"{{project_uid}}\", \"version_uid\": \"{{version_uid}}\", \"state\": \"published\", \"provider_mode\": \"recorded\", \"stages\": [{\"stage_id\": \"document_context_build\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\", \"started_at\": \"{{ts_5}}\", \"finished_at\": \"{{ts_6}}\"}, {\"stage_id\": \"page_geometry_extraction\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\", \"started_at\": \"{{ts_7}}\", \"finished_at\": \"{{ts_8}}\"}, {\"stage_id\": \"source_preparation\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\", \"started_at\": \"{{ts_9}}\", \"finished_at\": \"{{ts_10}}\"}, {\"stage_id\": \"text_analysis\", \"status\": \"succeeded\", \"stage_version\": \"1.0.0\", \"started_at\": \"{{ts_11}}\", \"finished_at\": \"{{ts_12}}\"}], \"created_at\": \"{{ts_13}}\", \"analysis_profile_id\": \"ap_01M25P3TH08VVTTGJRXYBZZ7RP\", \"prompt_bundle_id\": \"pb_01M25P3TH0PDQYVKTRQFEM0CYS\", \"degradation_set\": [], \"published_finding_count\": 3, \"diagnostic_observation_count\": 0, \"terminal_at\": \"{{ts_14}}\"}",
       "note": ""
     }
   },
@@ -55,7 +64,16 @@
     "{{project_uid}}": "the identity case 01 allocated",
     "{{run_id}}": "the identity case 03 allocated",
     "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
-    "{{ts_5}}": "a timestamp the database stamped, read from the declared field 'created_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$; also a timestamp the database stamped, read from the declared field 'terminal_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_10}}": "a timestamp the database stamped, read from the declared field 'finished_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_11}}": "a timestamp the database stamped, read from the declared field 'started_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_12}}": "a timestamp the database stamped, read from the declared field 'finished_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_13}}": "a timestamp the database stamped, read from the declared field 'created_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_14}}": "a timestamp the database stamped, read from the declared field 'terminal_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_5}}": "a timestamp the database stamped, read from the declared field 'started_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_6}}": "a timestamp the database stamped, read from the declared field 'finished_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_7}}": "a timestamp the database stamped, read from the declared field 'started_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_8}}": "a timestamp the database stamped, read from the declared field 'finished_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_9}}": "a timestamp the database stamped, read from the declared field 'started_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
     "{{version_uid}}": "the identity case 02 allocated"
   }
 }

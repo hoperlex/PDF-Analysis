@@ -77,9 +77,26 @@ _INSERT_RUN = text(
 
 _SELECT_RUN = text(f"SELECT {_RUN_COLUMNS} FROM audit_run WHERE run_id = :run_id")
 
+#: `W17VIEW-2`. **`now()` is `transaction_timestamp()`** - one value for the whole
+#: transaction, however long it runs. `start_run` creates the run *and* executes it inside
+#: a single `self._write(...)`, so `created_at` (a `DEFAULT now()`), every `updated_at`
+#: and `terminal_at` were all stamped with the instant the transaction opened. Measured on
+#: this lane: a run whose stages really ran `…19.808917 -> …20.047389` reported
+#: `created_at == updated_at == terminal_at == …19.797308`, identical to the microsecond,
+#: and every duration computed from the API was zero.
+#:
+#: `statement_timestamp()` is the value that advances between statements of one
+#: transaction and is *constant within* a statement - so `_TERMINATE` below stamps
+#: `terminal_at` and `updated_at` with one identical value rather than two
+#: `clock_timestamp()` readings a microsecond apart.
+#:
+#: `created_at`'s `DEFAULT now()` is left alone: the INSERT is the first statement of the
+#: transaction, so the transaction timestamp *is* when the run was created (11 ms before
+#: the first stage started, measured above). It is the two values that must move on later
+#: statements that were wrong.
 _ADVANCE = text(
     """
-    UPDATE audit_run SET state = :to_state, updated_at = now()
+    UPDATE audit_run SET state = :to_state, updated_at = statement_timestamp()
     WHERE run_id = :run_id AND state = :from_state
     """
 )
@@ -88,8 +105,8 @@ _TERMINATE = text(
     """
     UPDATE audit_run
        SET state = :to_state,
-           terminal_at = now(),
-           updated_at = now(),
+           terminal_at = statement_timestamp(),
+           updated_at = statement_timestamp(),
            terminal_reason = :terminal_reason,
            interrupted_reason = :interrupted_reason,
            degradation_set = CAST(:degradation_set AS jsonb)
@@ -124,8 +141,15 @@ _UPSERT_STAGE_RESULT = text(
     """
 )
 
+#: `W17VIEW-1`. The upsert above has written `started_at` and `finished_at` since the
+#: first migration, and this SELECT did not read them back, so the two columns were
+#: write-only: the frozen `StageState` declares both, `api/schemas/runs.py` serialises
+#: both, and a user was shown `Started -  Finished -` on a run whose rows held real
+#: timings. Same shape as `D3` one layer up - a declared, stored, serialisable value
+#: with no reader between the row and the response.
 _SELECT_STAGE_RESULTS = text(
-    "SELECT stage_id, stage_version, status, artifacts, metrics, error "
+    "SELECT stage_id, stage_version, status, artifacts, metrics, error, "
+    "started_at, finished_at "
     "FROM stage_result WHERE run_id = :run_id ORDER BY stage_id"
 )
 
@@ -179,6 +203,11 @@ class StageResultRow:
     artifacts: tuple[Mapping[str, Any], ...]
     metrics: Mapping[str, Any]
     error: Mapping[str, Any] | None
+    #: What the stage actually cost in wall-clock. Declared by the frozen `StageState`,
+    #: written by the executor from a Python clock (so these are real per-stage spans and
+    #: not one transaction timestamp), and nullable because a row may predate the write.
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 def _run_row(row: Any) -> RunRow:
@@ -296,6 +325,8 @@ class RunRepository:
                 artifacts=tuple(row["artifacts"] or ()),
                 metrics=dict(row["metrics"] or {}),
                 error=row["error"],
+                started_at=row["started_at"],
+                finished_at=row["finished_at"],
             )
             for row in rows
         )
