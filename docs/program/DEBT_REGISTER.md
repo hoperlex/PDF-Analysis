@@ -11,7 +11,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
-| **D-20** | there is no observable `running` state | architecture |
 | **D-18** | two opposite faults share one byte-identical envelope | **ruled `R-8`**: a second code |
 | **D-23** | the contract's prose is unguarded, and one claim is **served** | a cheap guard |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
@@ -307,9 +306,8 @@ nothing while `uploadDocument` declares no `document_uid`. The route exists beca
 field of every `DocumentVersion`, the `aggregate_type` of a `404`. **An identifier a product
 prints and cannot open is `D-16` one aggregate smaller.**
 
-**What this does not close:** `D-20`. Execution is inline, so a run is `published` by the time
-`startRun` answers; `listRuns` makes the set of runs reachable and **cannot** make criterion
-4's `running` state observable.
+~~**What this does not close:** `D-20`.~~ **`D-20` closed 2026-09-18 by `W20-EXEC`**: execution
+left the request thread, so `startRun` answers `queued` and a poller reads `running`.
 
 Check: `git grep -l listDocuments -- web/src/_pages web/src/widgets web/src/entities` is
 non-empty (3 files), and the browser journal in `W19-SHELL` §4.
@@ -420,17 +418,64 @@ checks — and additionally requires every marked record to carry a `permitted_c
 
 Check: `grep -n "PERMITTED_EXCEPTIONS" -A 8 tests/characterization/w13_baseline/test_response_baseline.py`.
 
-### D-20 — there is no observable `running` state, and criterion 4 needs one
+### D-20 — there is no observable `running` state — **CLOSED**
 
-**`W15RUN-6`.** `execute_run` runs **inline**, so the 202 is already terminal: polling makes
-exactly one request and no client can ever observe `running`. `PA-01` criterion 4's UI clause
-is unreachable — not unimplemented, unreachable.
+**Closed 2026-09-18 by `W20-EXEC`, and this row's diagnosis was wrong in a way that changed
+the repair.**
 
-nginx's 300-second proxy timeout is the entire margin. A 30-page document that takes longer
-than five minutes returns a gateway error to a browser with a run still executing behind it.
+It said the states were unreachable. They were unreachable **to a client**, not to the code:
+`executor.py:589-590` has written `created → queued → running` since `B5`. What hid them was
+that `RunAdapter.start_run` wrapped creation *and* execution in **one transaction**, so every
+intermediate state was written and overwritten before anything committed. **This was a
+transaction-boundary repair, not a write-the-missing-states repair** — and that is also what
+decided the crash story.
 
-This is an architecture item, not a bug: it is where a queue or a background worker goes, and
-`ADR` authority applies rather than the roadmap's.
+Measured over a real socket:
+
+```
+after  : startRun 202 in 22 ms, state "queued", empty stages, no terminal_at
+         poller: queued -> running (10 readings) -> published
+before : 202 in 354 ms carrying "published"; poller's distinct readings ['published']
+```
+
+**The shape** is a bounded thread pool in the serving process, `RUN_CONCURRENCY = 1`, argued
+from `PROTOTYPE_PROFILE.md` rather than from taste: §7 defers *remote and distributed*
+workers, and §2 says run and stage state are persisted **before** execution — a clause that is
+empty unless another reader can see the state in between. No `Job`, `Attempt`, lease,
+heartbeat, fencing token or outbox. `execute_run` gained **one line**, a `checkpoint()` hook
+defaulting to a no-op, so all 52 existing call sites keep their all-or-nothing unit of work.
+
+**Two faults, deliberately different vocabulary.** A worker exception terminates the run
+`failed` with `executor_raised_before_terminal` in a fresh transaction, because off the
+request thread there is no caller left to raise at. A **process death** leaves `running` or
+`queued` and is resolved by `OD-10`'s reconciler from the ASGI lifespan **before the socket
+binds** — `executor_process_ended_before_terminal`, a declared terminal with the interruption
+as a *column*, not an invented state.
+
+**That reconciler has existed since `B5` and nothing in `src/` ever called it.** It could not
+have found anything, because nothing ever committed an intermediate state.
+
+**No shutdown hook**, and the argument is the right way round: it would be a second
+implementation of the reconciler's rule covering strictly fewer cases, since `SIGKILL` reaches
+no hook.
+
+**`web/` needed nothing, and the frontend had been built for this all along.** `polling.ts`
+loops until a terminal state and `web/tests/unit/run/polling.test.ts:108` **already scripts
+`['queued','running','validating','published']`** against a fake transport. `PA-01` criterion
+4's UI clause was tested against a sequence **the server could not produce**.
+
+**The 300-second margin, and nothing was changed.** `startRun` no longer blocks, so 300 s has
+stopped being the deadline for a run — a ten-minute document now finishes and the screen shows
+it. What it now bounds is the slowest remaining request, a cap-sized upload, measured three
+times at **0.85–0.87 s**. Nothing in the repository measures that end to end through nginx, so
+trading a measured margin for a guess is the wrong direction.
+
+**Left false and not this session's to edit:** `infra/deploy/proxy/nginx.conf:37`'s comment
+(*"would cut `startRun` off mid-call"*) and `web/src/widgets/run-list/ui/run-list.tsx:10-13`
+(*"a screen that waited for a `running` reading would wait forever"*). The widget's behaviour
+is still right; only its reason moved.
+
+Check: `curl` `startRun` on a running stack and read `state`; it is `queued`, not `published`.
 
 ### D-21 — cost is recorded and exposed nowhere — **CLOSED**
 
