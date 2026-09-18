@@ -15,6 +15,30 @@ own line, which this record neither advances nor disturbs.
 | PC-01 | none | *re-certification* after wave 6 changed 87 lines of `src/` and `db/` | **re-certified 2026-09-15** at `c0d7daf` by `W6-CERT`: **holds** — all ten criteria, each shown able to fail; live run again 3 of 3 seeded and 0 of 6 controls at USD 0.038125 against the USD 1.00 ceiling; both criterion-10 limits re-established by mutation rather than inherited; the wave-6 `attempt_budget_exhausted` change judged correct against the field's purpose rather than against its tests, which `W2-QA` had pinned wrongly; `W5CERT-DEF-1` and `W5CERT-DEF-2` both verified fixed, the second behaviourally; **four defects found and left unrepaired**, all in `tests/` and none defeating a criterion (`W6CERT-DEF-1`..`W6CERT-DEF-4`). Gate at this commit is **803** passed, not the 793 the brief quoted. Current record: `artifacts/checkpoints/PC-01/recertification-c0d7daf.json`. **No tag, nothing pushed, `main` untouched** — whether `main` advances is the owner's decision |
 | PC-01 | none | *re-certification* after waves 11–12 changed 232 lines across 9 files of `src/` (`DEBT_REGISTER.md` D-1) | **re-certified 2026-09-17** at `e6eae1e` by `W12-CERT`: **holds with one named exception** — all ten criteria driven through the composed router and each shown able to fail, by twelve mutations plus a migration downgrade, unset variables, stopped containers and out-of-band object replacement; live run again **3 of 3 seeded and 0 of 6 controls** at **USD 0.0387** against the USD 1.00 ceiling, verified from the single `provider_mode='live'`, `cost_basis='measured'` row rather than from a print; both criterion-10 limits re-established rather than inherited — `checksum_mismatch` **still not inducible** (the twelve operations accept 13 input names and none is digest-shaped, and the routers refuse an injected one with 422 `additionalProperties`), `ungrounded_model_item` **still unreachable by design** (with the drop removed the run fails `analysis_input_invalid` and still writes no `grounded = false` row); D-2, D-4 and the missing success-path `cost_basis` all confirmed closed behaviourally. **Named exception:** criterion 4's UI clause and criterion 10's UI half are not established end to end — 34 of 110 `web/src` modules, including the only place `terminal_reason` is rendered, are reached by no test (`W12CERT-DEF-3`). **Four defects found and left unrepaired** (`W12CERT-DEF-1`..`-4`, three in `tests/` and one in `web/`), plus two observations. Gate at this commit is **1505 passed / 5 skipped / 167 subtests**, frontend **440**, foundation **35**. Current record: `artifacts/checkpoints/PC-01/recertification-e6eae1e.json`. **No tag, nothing pushed, `main` untouched** — whether `main` advances is the owner's decision, and `DEBT_REGISTER.md` §3 records that it was waiting on exactly this certification |
 
+### Erratum E-PC01-1 — the criterion-10 limit called `checksum_mismatch` is not a code
+
+**`DEBT_REGISTER.md` `D-1.6`, corrected here 2026-09-18 by `W20-CODE`, carried forward by
+the integrator after `R-11` reverted that session's catalog addition.** Three rows above,
+`artifacts/checkpoints/PC-01/report.json` and the three re-certification records name a
+criterion-10 limit **`checksum_mismatch`**. There is no such error code.
+`contracts/domain/v1/error-codes.json` declares twenty-one and that is not one of them:
+**`ChecksumMismatchError` is a Python class in `src/auditmanager/storage/errors.py`, and
+the code it carries is `storage_integrity_error`.**
+
+**Nothing is broken by it and no verdict moves.** The limit is real, the behaviour is
+right, and every session that re-established it — `W5-CERT`, `W6-CERT`, `W12-CERT` — was
+measuring the real thing under a wrong name. What the name costs is a reader: a limit
+named after a code that does not exist sends someone looking for one, and `D-8` records
+what happens to a name repeated often enough that nobody opens the file.
+
+**The accepted records are not edited.** `artifacts/checkpoints/PC-01/**` is an audit
+trail: every re-certification in it added a file and none has ever amended one, and unlike
+`CP-00` it carries no erratum mechanism of its own. Adding one is the integrator's act,
+not a lane's. This note is the correction a reader of the registry meets first; the four
+records still say `checksum_mismatch` and are still exactly what those sessions wrote.
+
+Check: `.venv/bin/python -c "import json;print('checksum_mismatch' in json.load(open('contracts/domain/v1/error-codes.json'))['codes'])"` → `False`.
+
 ## Historical CP checkpoints
 
 | CP | Tag | Entry requirement | Manual runbook | Status |

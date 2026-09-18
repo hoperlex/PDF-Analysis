@@ -11,8 +11,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
-| **D-18** | two opposite faults share one byte-identical envelope | **ruled `R-8`**: a second code |
-| **D-23** | the contract's prose is unguarded, and one claim is **served** | a cheap guard |
+| **D-18** | a catalog code costs a frontend reseal; built, proved, reverted by **`R-11`** | owner |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
@@ -763,6 +762,29 @@ the row asked for and which `W16-WEB` correctly declined to make (`D-1.5` was a 
 
 Check: `ls web/src/features/*/model/use-intent-key.ts` finds nothing;
 `git grep -c "export function useIntentKey" -- web/src` returns one line.
+
+### D-23 — the contract's prose is an unguarded hand-copy — **CLOSED**
+
+**Closed 2026-09-19 by `W20-CODE`'s guard**, `tests/contract/api_v1/test_surface_counts_in_prose.py`,
+ten tests. Every count is **read from the documents** — `(path, method)` pairs,
+`len(components.schemas)`, `len(paths)`, `len(codes)` — and **no literal appears anywhere**,
+because a literal would need editing at the next reseal, which is the failure mode itself.
+
+Shown able to fail against the tree: `app.py`'s `_DESCRIPTION` — **the string served on
+`/openapi.json`** — reddens at fifteen→twelve, and `declarations.py` at 46→43.
+
+**It found the thirty-sixth on its first widening, and there were four.**
+`infra/deploy/README.md` ×3 and **`infra/deploy/serve.py:4`, the process entry point's own
+docstring**, all still said *"twelve operations"*. `W18-SEAL` had swept `src/` only. A fifth,
+in `web/src/app/bff/v1/[...path]/route.ts:16`, is **left standing and named** — outside that
+session's ownership, and now the only one left.
+
+**One of its own parametrised proofs had to move when `R-11` reverted `R-8`.** The example
+*"the twenty-one-code catalog"* stopped being a stale spelling the moment the catalog went
+back to twenty-one — so it now uses the pre-`R-3` *"twenty-code"*. The test's own docstring
+had anticipated exactly that: it says so rather than enforcing a claim that has become true.
+
+Check: `.venv/bin/pytest tests/contract/api_v1/test_surface_counts_in_prose.py` is 10 passed.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 

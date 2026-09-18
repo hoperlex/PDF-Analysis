@@ -265,13 +265,16 @@ def test_the_guard_actually_reaches_the_files_that_carried_the_defect() -> None:
         ("guards all twelve operations", "operations"),
         ("The 43 schema names are generated from the models.", "schemas"),
         ("the ten paths of this surface", "paths"),
-        ("its error_code drawn from the twenty-one-code catalog", "codes"),
+        # Pre-`R-3`, when the catalog had twenty. "twenty-one" is NOT used here: it
+        # is the current count, so it would assert a claim that has become true. `R-8`
+        # would have made it stale again and was reverted by the owner -- see `D-18`.
+        ("its error_code drawn from the twenty-code catalog", "codes"),
     ],
 )
 def test_a_stale_count_is_caught(prose: str, noun: str) -> None:
     """The exact wordings `W18-SEAL` had to correct, each shown to redden.
 
-    These are the pre-`R-5` and pre-`R-8` spellings. If the surface ever really does have
+    These are the pre-`R-5` and pre-`R-3` spellings. If the surface ever really does have
     twelve operations again this test says so, rather than enforcing a claim that has
     become true.
     """

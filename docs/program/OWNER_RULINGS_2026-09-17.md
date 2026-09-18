@@ -172,6 +172,38 @@ It changes an existing operation's body and moves a seventh characterization rec
 `R-5` did not authorise — hence the question. This ruling authorises exactly that and nothing
 wider.
 
+## 3.7 — `R-11`, ruled 2026-09-19
+
+### `R-11` — revert `R-8` rather than pay its unpriced cost now
+
+**Ruled: revert.** `W20-CODE` carried out `R-8` in full — `staged_upload_lost`, 503,
+`retryable: true`, proved over a real socket to make the two blob faults distinguishable where
+they had been byte-identical apart from `correlation_id`.
+
+**It did not land, and the reason is a cost `R-8` did not price.** A domain-catalog addition
+forces one enum member into `contracts/api/v1/openapi.json`. No path, operation or schema
+moved — the surface stayed 12 / 15 / 46 — but the contract's sha256 is recorded in
+`web/FRONTEND_LOCK.json`, a hand-maintained file with no generator. **So a catalog addition is
+also a frontend reseal**: regenerate the client, rewrite six digests, move two literals.
+
+The session was blocked from that file twice over — its brief said *"No `web/`"*, and the
+harness's permission classifier refused every write to it — and it stopped rather than work
+around either. It offered the integrator the four mechanical steps; the integrator declined to
+perform an action a delegated session had been refused, and put the choice here.
+
+**The owner was offered three options and took the revert.** The alternative was authorising
+the frontend reseal inside a wave that had not planned for one.
+
+**What is kept:** everything in that wave that does not depend on the code — `D-23`'s guard,
+the four stale counts it found (including the process entry point's own docstring), and
+`D-1.6`'s erratum. **What is lost:** nothing measured. The evidence is in
+`docs/program/reviews/W20-CODE.md` and reinstating it is `git cherry-pick b437616 271ba42`
+plus the four steps in its §1.6.
+
+**The general finding outlives the row**, and `D-18` now carries it: `R-3` and `R-5` both paid
+this cost inside a wave that was already resealing the API contract, so it never showed. Any
+future catalog change should be planned as a two-document change from the start.
+
 ## 4. Still open, and still the owner's
 
 - **`OD-18`** — three to five named experts with committed slots; `P4-BHV-01` waits on it alone.
@@ -179,6 +211,7 @@ wider.
 - **`R-4`'s two halves** — who uploads a real document, and what event counts as *"the end of the
   pilot"* and therefore triggers the wipe. **`D-17` now bears on this**: the restore is broken for
   writing, so the mechanism the wipe depends on is not yet sound.
-- ~~`D-18` — which detail keys `conflict` may safely carry.~~ **Settled by `R-8`**: a second code.
+- **`D-18`** — `R-8` ruled a second code; `R-11` reverted it when the frontend-reseal cost
+  appeared. The row is open and now carries a measured price rather than a description.
 - ~~Whether `origin/main` advances.~~ **Settled by `R-7`**: `main` is at `9291db6`, tagged
   `alpha-w18`.
