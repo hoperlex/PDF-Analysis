@@ -2,3 +2,10 @@
 
 export { assertNever } from './assert-never';
 export { formatInstant } from './format-instant';
+
+export type { IntentRecord } from './intent-key';
+export { resolveIntentKey } from './intent-key';
+export { useIntentKey } from './use-intent-key';
+
+export type { ListingFailure, ListingFailureKind, ListingSubject } from './listing-failure';
+export { classifyListingFailure } from './listing-failure';
