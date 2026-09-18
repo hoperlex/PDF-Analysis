@@ -1,4 +1,4 @@
-"""The twelve operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The fifteen operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the six router modules. It takes its
 dependencies as arguments and constructs none of them: choosing what sits behind each port
@@ -8,7 +8,7 @@ concrete implementation would have taken that decision away from it.
 ``tests/contract/api_v1/test_openapi_conformance.py`` asserts the generated document's
 ``(operationId, method, path)`` set against the frozen document itself, so a thirteenth
 operation fails the suite and a missing one cannot be overlooked. ``web/tests/contract/
-openapi-drift.contract.test.ts`` counts twelve from the other side.
+openapi-drift.contract.test.ts`` counts fifteen from the other side.
 
 **The signature is the one the composition root already calls.** ``build_router`` took six
 keyword-only ports before `T-1` and takes the same six now; ``Router`` is still the name of
@@ -99,7 +99,7 @@ __all__ = [
 ]
 
 #: ``servers[0].url`` of the frozen document. A breaking change is a new contract version,
-#: never an edit here. The twelve paths are declared **relative to it** and the prefix is
+#: never an edit here. The paths are declared **relative to it** and the prefix is
 #: not pushed into them: `W13-CONF`'s ``test_a_changed_base_path_is_caught`` compares
 #: ``servers``, and a document whose paths carried ``/api/v1`` would declare a different
 #: surface from the one the contract does.
@@ -119,7 +119,7 @@ def build_router(
     decisions: DecisionPort,
     exports: CsvExportPort,
 ) -> Router:
-    """Assemble the twelve operations.
+    """Assemble the fifteen operations.
 
     Keyword-only, because six same-shaped dependencies passed positionally is a wiring
     defect waiting to happen and the type checker cannot see it.
@@ -127,8 +127,8 @@ def build_router(
     router = APIRouter()
     # One router, registered onto directly, rather than six included into a seventh.
     # ``include_router`` wraps each sub-router instead of copying its routes, so
-    # ``router.routes`` would carry six opaque wrappers and the twelve-operation
-    # assertions -- ``len(routes) == 12``, the ``(operationId, method, path)`` set,
+    # ``router.routes`` would carry six opaque wrappers and the fifteen-operation
+    # assertions -- ``len(routes) == 15``, the ``(operationId, method, path)`` set,
     # ``tests/integration/api/test_operation_surface.py`` -- could not see an operation at
     # all. A table nobody can enumerate is a table nobody can check.
     build_project_routes(router, projects)
@@ -149,7 +149,7 @@ def _refuse_a_duplicate_operation_id(router: APIRouter) -> None:
     the frontend's generated client names a function after it, and
     ``tests/integration/api/test_operation_surface.py`` compares the set. A duplicate makes
     the served document declare one id at two places, so a caller generating a client gets
-    one of them and cannot address the other -- while ``len(router.routes) == 12`` still
+    one of them and cannot address the other -- while ``len(router.routes) == 15`` still
     passes, which is exactly what that assertion cannot see.
     """
     seen: set[str] = set()

@@ -55,11 +55,11 @@ __all__ = [
 #: is the same string.
 _TITLE: Final[str] = "AuditManager API"
 _DESCRIPTION: Final[str] = (
-    "The twelve operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
+    "The fifteen operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
     "carrying a catalog `error_code`, and every response carries `X-Correlation-Id`."
 )
 
-#: ``servers`` of the frozen document, verbatim. The twelve paths are declared relative to
+#: ``servers`` of the sealed document, verbatim. The paths are declared relative to
 #: it rather than carrying it, so the document describes the same surface the contract does.
 _SERVERS: Final[list[dict[str, str]]] = [
     {
@@ -91,7 +91,7 @@ def create_asgi_app(
     *,
     application: Application | None = None,
 ) -> FastAPI:
-    """The ASGI application: the twelve operations, the seam, and the four middlewares.
+    """The ASGI application: the fifteen operations, the seam, and the four middlewares.
 
     ``application`` lets a caller that has already built one -- a test driving two
     applications in one process, for instance -- avoid building it twice. When it is omitted
@@ -105,7 +105,7 @@ def create_asgi_app(
 def create_documentation_app(environ: Mapping[str, str] | None = None) -> FastAPI:
     """The same application shape, with nothing wired behind the six ports.
 
-    The served document is a function of the twelve declarations and the 43 models and not
+    The served document is a function of the fifteen declarations and the 46 models and not
     of what sits behind the ports, so this builds it without a database, an object store or
     a credential -- which is what lets the conformance gate read
     ``create_documentation_app().openapi()`` on any checkout. It **cannot serve a request**:
@@ -142,7 +142,7 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     **Why this is not document surgery, and how you can tell.** `W13-CONF` measured that
     FastAPI's own 422 must be *displaced, not deleted*: declaring the contract's own
     ``422: {"model": ErrorEnvelope, ...}`` replaces it and keeps ``HTTPValidationError`` and
-    ``ValidationError`` out of ``components.schemas``. Eight of the twelve operations do
+    ``ValidationError`` out of ``components.schemas``. Eleven of the fifteen operations do
     exactly that. **Four cannot**, because the contract declares no ``422`` for them:
     ``getRunStatus``, ``getDocumentVersion``, ``getFinding`` and ``exportRunCsv``. FastAPI
     injects one anyway, for any operation with parameters, and there is no switch
@@ -202,7 +202,7 @@ def _assemble(router: Router, environ: Mapping[str, str]) -> FastAPI:
         servers=list(_SERVERS),
         openapi_tags=list(_TAGS),
         # A model with a default would otherwise be emitted twice, as `X-Input` and
-        # `X-Output`. The 43 schema names are pinned by the contract and by the frontend's
+        # `X-Output`. The 46 schema names are pinned by the contract and by the frontend's
         # generated client, so the split is a conformance failure -- and the fix belongs
         # here, in the application, never in the gate's normalization. `W13-CONF` measured
         # it: `test_the_gate_catches_a_split_input_and_output_schema`.

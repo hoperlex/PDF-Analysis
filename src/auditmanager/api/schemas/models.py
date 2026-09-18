@@ -1,4 +1,4 @@
-"""The 43 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
+"""The 46 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
 
 `T-1` makes FastAPI generate the served document, and `W13-CONF`'s conformance gate compares
 that document against the frozen contract. **The contract stays the authority**: every class
@@ -24,7 +24,7 @@ Three spellings in here are deliberate and are the reason the generated document
   these as ``$ref``s into ``components.schemas``. A resolved ``$ref`` is exactly the drift
   `W13-CONF` refuses to normalize away (`N1` resolves component *parameters*, *responses*
   and *headers*, and deliberately not schemas).
-* **``extra="forbid"`` on every object**, because all 43 object schemas in the contract
+* **``extra="forbid"`` on every object**, because all 46 object schemas in the contract
   declare ``additionalProperties: false``. There is no object schema here that does not.
 
 Nothing in this module renders a response. The wire bytes are produced by the ``*_body``

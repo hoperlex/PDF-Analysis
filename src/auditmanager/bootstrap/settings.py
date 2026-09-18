@@ -39,7 +39,7 @@ API_KEY_ENV: Final[str] = "ANTHROPIC_API_KEY"
 #:
 #: **Why it is required rather than optional.** ``W13_CLOSURE.md`` section 7: the seam is
 #: fail-closed, so a deployment that forgets the token gets a surface that refuses every
-#: one of the twelve operations while liveness and readiness stay green. From outside,
+#: one of the sealed operations while liveness and readiness stay green. From outside,
 #: that reads as a broken product rather than an unconfigured one. Refusing at
 #: construction is the same Gate C contract ``ANTHROPIC_API_KEY`` is already held to, and
 #: for the same reason: the cheap place to discover a missing credential is before the

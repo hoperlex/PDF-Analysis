@@ -4,10 +4,10 @@ The contract declares one scheme at its root since `W13-SEAL`'s reseal (`a5f4001
 
     "bearerAuth": {"type": "http", "scheme": "bearer"}
 
-and `security: [{"bearerAuth": []}]` over all twelve operations. **That declares the seam,
+and `security: [{"bearerAuth": []}]` over all fifteen operations. **That declares the seam,
 not its implementation.** No issuer, no discovery URL, no flow, no token format, and no
 role, subject or capability vocabulary appears in the document, and none may be added here:
-the deployment decides all of them and the same twelve operations must keep working when it
+the deployment decides all of them and the same fifteen operations must keep working when it
 does. The alpha's implementation is one static token; the public version replaces the body
 of :func:`require_authorization` with OIDC and touches neither the operations nor the
 contract.
@@ -82,7 +82,7 @@ AuthorizationDependency = Annotated[
 
 
 def build_authorization_dependency(environ: Mapping[str, str]) -> object:
-    """The dependency that guards all twelve operations, closed over the configured token.
+    """The dependency that guards all fifteen operations, closed over the configured token.
 
     A factory rather than a module-level dependency reading ``os.environ``, because
     ``create_app(environ=...)`` exists precisely so that a second application can be built

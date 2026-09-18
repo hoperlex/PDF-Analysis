@@ -1,4 +1,4 @@
-"""The narrow ports the twelve routers depend on.
+"""The narrow ports the routers depend on.
 
 A router in this package holds **no business logic and no transaction**. It parses a
 request, calls one port method, renders the frozen shape, and lets the error middleware
@@ -139,7 +139,7 @@ class DocumentPort(Protocol):
 
         An unknown document is ``not_found``, for the reason above. A document with a
         published version always has at least one item, so an empty page here means the
-        document exists and has published nothing -- which through the twelve operations
+        document exists and has published nothing -- which through this surface
         cannot happen, because ``uploadDocument`` creates the document and its first
         version in one transaction.
         """

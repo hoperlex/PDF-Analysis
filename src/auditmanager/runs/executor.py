@@ -560,7 +560,7 @@ def execute_run(
     # holds where it stands. This is the only place that holds both the run row and the
     # adapter — but it is **not** where the API path refuses, and the comment used to imply
     # that it was. `bootstrap/adapters.py` rejects a request for a mode the deployment does
-    # not provide before a run row is written, so the twelve operations never reach here:
+    # not provide before a run row is written, so the API surface never reaches here:
     # `W6-CERT` removed this branch and the whole criterion-4 suite stayed green.
     #
     # It is defence in depth behind that one, and it guards a different thing: `adapters.py`
