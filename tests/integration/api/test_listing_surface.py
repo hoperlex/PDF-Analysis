@@ -424,6 +424,45 @@ def test_document_count_is_the_length_of_the_list_it_sits_above(
     assert counts[catalogue.other_project_uid]["document_count"] == 1
 
 
+def test_a_project_holding_nothing_reports_zero_on_the_wire_and_not_nothing(
+    counting_router: Surface, catalogue: Catalogue, session: Session
+) -> None:
+    """`D-3`, at the only layer where it can be got wrong invisibly.
+
+    `ProjectView.document_count` is `int | None` and `project_body` **omits the field when
+    it is None**, which is the right rule for `createProject` and a silent hole for this
+    one: a count that arrived as `0` and left as `None` renders as the same
+    `documents --` R-10 exists to remove, and every assertion about a project that *has*
+    documents stays green while it does.
+
+    This test was written because a mutation proved the gap rather than to decorate one
+    that was already closed. `document_count=r.document_count or None` in the shipped
+    adapter -- one word, and the exact slip the `int | None` invites -- passed the whole
+    of this wave's other evidence, including the characterization record, whose project
+    holds one document. It fails here.
+    """
+    empty = str(ProjectUid.new())
+    session.execute(
+        text("INSERT INTO project (project_uid, name) VALUES (:p, 'Пустой проект')"),
+        {"p": empty},
+    )
+    session.flush()
+
+    listing = ok(get(counting_router, "/projects?limit=200"))
+    items = {item["project_uid"]: item for item in listing["items"]}
+    assert empty in items, "the empty project is not in the page at all"
+
+    assert "document_count" in items[empty], (
+        "a project with no documents carries no `document_count` key; absent is the "
+        "claim that nobody counted, and something did count -- it counted zero"
+    )
+    assert items[empty]["document_count"] == 0
+    assert items[empty]["document_count"] is not None
+
+    page = ok(get(counting_router, f"/projects/{empty}/documents?limit=200"))
+    assert page["items"] == [], "the empty project is not empty, so this proves nothing"
+
+
 # ---------------------------------------------------------------------------
 # The rows each listing returns
 # ---------------------------------------------------------------------------
