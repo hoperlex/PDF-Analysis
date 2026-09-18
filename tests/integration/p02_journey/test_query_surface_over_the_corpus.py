@@ -85,6 +85,7 @@ from auditmanager.bootstrap.adapters import (
     FindingAdapter,
     RunAdapter,
 )
+from auditmanager.runs import InlineCarrier
 
 #: How many extra runs this module publishes into the same tables before it asks the
 #: query surface anything. Not a realistic corpus on its own -- the point is that it is
@@ -109,6 +110,10 @@ def router(session_factory):
             provider_mode="recorded",
             analysis_profile_id="unused",
             prompt_bundle_id="unused",
+            # `D-20`. Nothing here starts a run, so nothing is ever submitted. The
+            # carrier is required rather than defaulted precisely so this reads as a
+            # decision: an inline one would execute on this thread if anything did.
+            carrier=InlineCarrier(),
         ),
         findings=FindingAdapter(session_factory),
         decisions=DecisionAdapter(session_factory),
@@ -163,12 +168,22 @@ _STATIC_TOKEN = "p02-journey-static-token"
 
 
 class _Built:
-    """Just enough of ``Application`` for ``create_asgi_app`` to take a router as given."""
+    """Just enough of ``Application`` for ``create_asgi_app`` to take a router as given.
 
-    __slots__ = ("router",)
+    Two attributes since `D-20`: the router, and the carrier the served application
+    publishes as ``app.state.run_carrier``. Nothing in this module starts a run, so
+    nothing is ever submitted to it -- it is a real carrier rather than ``None`` so that
+    a test which did start one would get a finished run instead of an ``AttributeError``
+    three frames from the cause.
+    """
+
+    __slots__ = ("router", "carrier")
 
     def __init__(self, router: Any) -> None:
+        from auditmanager.runs import InlineCarrier
+
         self.router = router
+        self.carrier = InlineCarrier()
 
 
 def _client(router: Any) -> Any:

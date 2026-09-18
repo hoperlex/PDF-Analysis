@@ -105,7 +105,12 @@ from auditmanager.findings import (
     run_grounding_gate,
     select_terminal,
 )
-from auditmanager.runs.repository import PC01_STAGES, RunRepository, RunRow
+from auditmanager.runs.repository import (
+    INITIAL_STATE,
+    PC01_STAGES,
+    RunRepository,
+    RunRow,
+)
 from auditmanager.runs.retry import (
     AttemptLedger,
     AttemptSummary,
@@ -157,6 +162,14 @@ Clock = Callable[[], datetime]
 #: How the executor waits between attempts. Injected for the same reason ``Clock`` is: a
 #: test must be able to assert *that* the pinned backoff was taken without spending it.
 Sleep = Callable[[float], None]
+
+#: `D-20`. What a caller does with the fact that the run has reached ``running``. The
+#: default is nothing, which is what every caller that owns one transaction wants.
+Checkpoint = Callable[[], None]
+
+
+def _no_checkpoint() -> None:
+    return None
 
 
 def _utc_now() -> datetime:
@@ -524,6 +537,7 @@ def execute_run(
     retry_policy: RetryPolicy | None = None,
     cost_meter: CostMeter | None = None,
     sleep: Sleep = time.sleep,
+    checkpoint: Checkpoint = _no_checkpoint,
 ) -> ExecutionResult:
     """Drive one run from ``created`` to a terminal state.
 
@@ -586,8 +600,40 @@ def execute_run(
     version = document_repo.get_version(session, VersionUid.parse(run.version_uid))
     source_entry = version.entry(ROLE_SOURCE_DOCUMENT)
 
-    run_repo.advance(session, run_id=run_id, from_state="created", to_state="queued")
+    # `D-20`. Two callers, two starting states, and the row is asked which one this is
+    # rather than a flag being passed that could disagree with it.
+    #
+    # The API path queues the run inside the transaction that *accepts* it -- that is what
+    # lets `startRun` answer `202 queued` without executing -- and hands the queued run to
+    # a carrier, so what arrives here is already `queued`. An in-process caller that
+    # creates and executes in one go (every suite under `tests/integration/runs`, the
+    # export suites, the p02 journey) still hands over a run in `created`.
+    #
+    # Nothing here is tolerant: a run in any other state falls straight through to the
+    # `queued -> running` compare-and-set, which matches no row and raises
+    # `state_transition_not_allowed` naming both states. A second executor picking up a run
+    # that is already `running` is refused by the database, not by this branch.
+    if run.state == INITIAL_STATE:
+        run_repo.advance(
+            session, run_id=run_id, from_state=INITIAL_STATE, to_state="queued"
+        )
     run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
+    # `D-20`. The one place a caller is invited to make what has happened so far durable.
+    #
+    # Every state this function writes used to be written and overwritten inside the
+    # caller's single uncommitted transaction, so `running` existed for the length of one
+    # `UPDATE` and no second connection could ever read it. A poller therefore made exactly
+    # one request and `PA-01` criterion 4's UI clause was unreachable.
+    #
+    # The hook is here and nowhere else, and that placement is the crash story. Committing
+    # here leaves a reader exactly two pictures of a run whose process died: `running` with
+    # no stage rows, or a terminal with all of them. A second checkpoint inside the stage
+    # loop would add a third -- stage rows belonging to a run no terminal accounts for --
+    # and PC-01 cannot resume, so nothing would ever account for them.
+    #
+    # It defaults to doing nothing, so the 50-odd in-process callers that create and
+    # execute a run inside one unit of work are unchanged and still get all-or-nothing.
+    checkpoint()
 
     outputs = _StageOutputs()
     outputs.refs[ROLE_SOURCE_DOCUMENT] = ArtifactRef(
@@ -705,4 +751,4 @@ def execute_run(
     )
 
 
-__all__ = ["Clock", "ExecutionResult", "Sleep", "execute_run"]
+__all__ = ["Checkpoint", "Clock", "ExecutionResult", "Sleep", "execute_run"]

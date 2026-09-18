@@ -120,6 +120,11 @@ def test_every_one_of_the_fifteen_operations_is_covered() -> None:
     )
 
 
+#: The four non-terminal ``RunState`` values, written out rather than imported from the
+#: contract or from ``auditmanager``: this file's job is to notice a surface that moved,
+#: and an expectation read from something the change could also touch would not.
+NON_TERMINAL_RUN_STATES = ("created", "queued", "running", "validating")
+
 #: The permitted-exception set, case by case with the debt that moved it. Written out as a
 #: literal, never derived from the records: an expectation computed from the files it
 #: checks cannot report that a sixth, seventh or eighth record quietly acquired a block.
@@ -142,8 +147,18 @@ def test_every_one_of_the_fifteen_operations_is_covered() -> None:
 #: had no producer -- and `R-10` names that distinction in as many words. The rule is
 #: still the rule: a named debt, a cited commit, a `permitted_change` describing the whole
 #: of the move, and the same byte-for-byte comparison every unmarked record gets.
+#:
+#: **`W20-EXEC` added no entry and lengthened one.** `D-20` moved record 03 and no other:
+#: `startRun` no longer executes the run, so its `202` carries the accepted state instead
+#: of the terminal one. The count of marked records is **still seven**, which is the
+#: assertion below, and record 03's tuple is now three debts long -- a record moved by a
+#: third debt has to name a third. Records 04 and 05 are `startRun` replays and are
+#: **not** marked by `D-20`: the journey waits for the run to finish before replaying, so
+#: those bodies are the published shape they have always been. Three records that moved
+#: together twice not moving together a third time is the reason `debt` is a list and the
+#: reason this map is written out case by case.
 PERMITTED_EXCEPTIONS = {
-    "03-startRun.success": ("D-19", "D-21"),
+    "03-startRun.success": ("D-19", "D-21", "D-20"),
     "04-startRun.replay": ("D-19", "D-21"),
     "05-startRun.replay_with_normalised_property": ("D-19", "D-21"),
     "06-getRunStatus.success": ("D-19", "D-21"),
@@ -173,6 +188,12 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     `document_count` the sealed `Project` has always declared, filled under owner ruling
     `R-10`. Nothing in `contracts/**` moved for it, which is exactly the distinction
     between `R-10` and the `R-5` reseal that declined this change.
+
+    `D-20` is record 03 alone, and it needs no ruling at all: `startRun` stopped executing
+    the run it accepts, so its `202` reports `queued` -- a state the frozen `RunState`
+    enum has always declared and the frozen `audit_run` machine has always had an edge to
+    -- instead of the terminal the inline executor had already reached. No property was
+    added, so neither R-5's nor R-10's kind of authority is engaged.
     """
     marked = {
         path.stem: json.loads(path.read_text(encoding="utf-8"))["exception"]
@@ -201,34 +222,83 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     assert "R-10" in exceptions["16-listProjects.success"]["ruling"]
 
 
-def test_the_five_run_status_records_no_longer_pin_one_instant_for_the_whole_run() -> None:
+#: The four `RunStatus` records that report a **finished** run. Record 03 was the fifth
+#: until `D-20`; see the test below for why it is now asserted separately and not dropped.
+FINISHED_RUN_RECORDS = (
+    "04-startRun.replay",
+    "05-startRun.replay_with_normalised_property",
+    "06-getRunStatus.success",
+    "07-getRunStatus.correlation_supplied",
+)
+
+
+def _recorded_body(case: str) -> dict[str, Any]:
+    """One record's response body, parsed.
+
+    The tokens sit inside the body's own quoting, so the recorded text parses as JSON as
+    it stands: `created_at` reads back as the string `{{ts_9}}`, and two fields sharing
+    one instant read back as the *same* token.
+    """
+    record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+    return json.loads(record["response"]["body"]["text"])  # type: ignore[no-any-return]
+
+
+def test_the_run_status_records_no_longer_pin_one_instant_for_the_whole_run() -> None:
     """The defect this corpus had frozen, asserted against the records themselves.
 
     `W15RUN-5` was readable in this directory before it was found in a browser: a run
     that took eleven seconds recorded the same token for the instant it was created and
     the instant it terminated. Re-capturing alone would have erased that without anyone
     having to say it had been there, so it is asserted here rather than left to a diff.
+
+    **`W20-EXEC` narrowed the set and did not shrink the claim.** `D-20` made record 03 a
+    record of an *accepted* run, which has no terminal instant to disagree with its
+    creation -- so the assertion below cannot be made of it, and the next test makes the
+    stronger one instead. Four records still carry a finished run and still have to show
+    two different instants and per-stage timings.
     """
-    for case in (
-        "03-startRun.success",
-        "04-startRun.replay",
-        "05-startRun.replay_with_normalised_property",
-        "06-getRunStatus.success",
-        "07-getRunStatus.correlation_supplied",
-    ):
-        record = json.loads(
-            (journey.RECORDS / f"{case}.json").read_text(encoding="utf-8")
-        )
-        # The tokens sit inside the body's own quoting, so the recorded text parses as
-        # JSON as it stands: `created_at` reads back as the string `{{ts_9}}`, and two
-        # fields sharing one instant read back as the *same* token.
-        body = json.loads(record["response"]["body"]["text"])
+    for case in FINISHED_RUN_RECORDS:
+        body = _recorded_body(case)
         assert body["created_at"] != body["terminal_at"], (
             f"{case} pins the same value for created_at and terminal_at, which is the "
             "D-19 defect recorded as the expectation"
         )
+        assert body["stages"], f"{case} records a finished run with no stages"
         for stage in body["stages"]:
             assert "started_at" in stage and "finished_at" in stage, (case, stage)
+
+
+def test_the_start_run_record_pins_an_accepted_run_and_not_a_finished_one() -> None:
+    """`D-20`, asserted on the record rather than left to a diff.
+
+    The reason this is a test and not a recapture: a corpus that simply took whatever
+    `startRun` answered would go green again the day somebody put `execute_run` back on
+    the request thread, and the only evidence would be a body that got longer. This states
+    what the record must show -- a declared non-terminal state, nothing a run can only
+    have after it has run -- so that reversal is a red test and not a quiet diff.
+
+    Every absent property is one the frozen `RunStatus` declares as optional and
+    `run_status_body` has always omitted when there is nothing to report. Nothing here
+    asks for a property the contract does not declare, which is the other half of why
+    `D-20` engaged no reseal.
+    """
+    body = _recorded_body("03-startRun.success")
+    assert body["state"] in NON_TERMINAL_RUN_STATES, (
+        f"startRun pins {body['state']!r}; a 202 that already carries a terminal is the "
+        "whole of D-20 and means execution went back on the request thread"
+    )
+    assert body["state"] == "queued", body["state"]
+    assert body["stages"] == [], "an accepted run reports stages it has not run"
+    for absent in ("terminal_at", "terminal_reason", "cost_micros", "cost_basis",
+                   "model_call_count"):
+        assert absent not in body, (
+            f"the accepted run reports {absent!r}, which only a run that has executed has"
+        )
+    # The identity and the frozen configuration are there from the first instant, because
+    # they are what `startRun` established. A 202 a caller cannot address is `D-5`.
+    for present in ("run_id", "project_uid", "version_uid", "provider_mode", "created_at",
+                    "analysis_profile_id", "prompt_bundle_id", "degradation_set"):
+        assert present in body, f"the accepted run does not report {present!r}"
 
 
 def _authorization_claims(record: dict[str, Any]) -> list[str]:

@@ -180,8 +180,15 @@ def test_an_application_with_no_configured_token_refuses_everything(
     from starlette.testclient import TestClient
 
     class _Built:
+        # `D-20`: `create_asgi_app` publishes the built application's carrier as
+        # `app.state.run_carrier`. This application exists to be refused at the
+        # credential and starts nothing, so an inline carrier is the honest stand-in
+        # rather than a `None` that would fail three frames from the cause.
         def __init__(self, table: object) -> None:
+            from auditmanager.runs import InlineCarrier
+
             self.router = table
+            self.carrier = InlineCarrier()
 
     unconfigured = create_asgi_app(environ={}, application=_Built(router.router))
     client = TestClient(unconfigured, raise_server_exceptions=False)

@@ -209,7 +209,20 @@ class _Uploaded:
 
 
 class RunAdapter(_SessionHolder):
-    """Starts and reports runs. Execution itself is synchronous in PC-01."""
+    """Starts and reports runs. Starting one does not execute it.
+
+    `D-20`. This adapter used to import ``execute_run`` and call it inside the same
+    ``_write(...)`` that created the run, so ``startRun`` answered ``202`` with a
+    ``published`` body and every state between was written and overwritten inside one
+    uncommitted transaction. A poller made exactly one request; ``PA-01`` criterion 4's UI
+    clause had nothing to poll for. See :mod:`auditmanager.runs.carrier` for what replaced
+    it and why that is concurrency rather than the distribution the profile defers.
+
+    The ``carrier`` is a constructor argument with no default. A default would make "which
+    side of `D-20` is this application on?" a question you answer by reading a signature
+    instead of by reading the composition root, and :class:`InlineCarrier` -- the
+    pre-`D-20` behaviour -- is a thing a caller must ask for by name.
+    """
 
     def __init__(
         self,
@@ -221,6 +234,7 @@ class RunAdapter(_SessionHolder):
         provider_mode: str,
         analysis_profile_id: str,
         prompt_bundle_id: str,
+        carrier: Any,
     ) -> None:
         super().__init__(session_factory)
         self._blob_store = blob_store
@@ -229,6 +243,7 @@ class RunAdapter(_SessionHolder):
         self._provider_mode = provider_mode
         self._profile = analysis_profile_id
         self._bundle = prompt_bundle_id
+        self._carrier = carrier
 
     def start_run(
         self,
@@ -245,7 +260,7 @@ class RunAdapter(_SessionHolder):
         got a recorded run. Silently substituting a mode is the same failure class as
         publishing a recorded run as live, which `B-III` found one level down.
         """
-        from auditmanager.runs import execute_run, start_audit_run
+        from auditmanager.runs import start_audit_run
 
         if provider_mode is not None and provider_mode != self._provider_mode:
             raise DomainError(
@@ -255,6 +270,8 @@ class RunAdapter(_SessionHolder):
                     "configured to provide; a run is never silently given a different one"
                 ),
             )
+
+        from auditmanager.runs import RunRepository
 
         def work(session: Session) -> Any:
             started = start_audit_run(
@@ -271,12 +288,27 @@ class RunAdapter(_SessionHolder):
                 idempotency_key=idempotency_key,
             )
             if not started.replayed:
-                execute_run(
+                # `D-20`. `created -> queued` happens here, in the transaction that
+                # *accepts* the run, and not in the worker. Two reasons, and neither is
+                # convenience.
+                #
+                # The contract's guard on this edge is "the input manifest and the
+                # AnalysisProfile, PromptBundle and NormsSnapshot references resolve to
+                # immutable versioned records" (`state-machines.json`, audit_run guards;
+                # PC-01 leaves the NormsSnapshot clause unevaluated, `runs/scope.py`).
+                # `start_audit_run` has just resolved exactly those references, three
+                # statements ago and in this transaction. Queueing anywhere else would
+                # evaluate the guard in one place and take the edge in another.
+                #
+                # And it is what makes the answer true. A run this method has handed to a
+                # carrier is scheduled; saying `created` -- "exists, nothing has scheduled
+                # it" -- about a run already sitting in a work queue would be a state that
+                # was accurate for the few microseconds before the submit.
+                RunRepository().advance(
                     session,
-                    started.run_id,
-                    blob_store=self._blob_store,
-                    adapter=self._model_adapter,
-                    provider_config=self._provider_config,
+                    run_id=started.run_id,
+                    from_state="created",
+                    to_state="queued",
                 )
             return started
 
@@ -286,7 +318,45 @@ class RunAdapter(_SessionHolder):
         # fields answered 500 *after* the analysis had run and every row was written, which
         # left the caller unable to address what it had just created - the worst shape a
         # failure can take on a write.
-        return self._read(lambda session: _run_status_view(session, str(started.run_id)))
+        #
+        # **Read before submit, and that ordering is the answer, not an implementation
+        # detail.** Once the carrier has the job, the run's state is a race between this
+        # process's worker and this process's reader: a fast recorded run can be `running`
+        # or already `published` by the time the view is built. Reading first makes the
+        # `202` say what was *accepted* -- `queued`, every time, for every document and
+        # every provider -- instead of reporting how quick the machine happened to be. A
+        # body that varies with scheduling is a body no characterization record can pin
+        # and no client can reason about.
+        view = self._read(lambda session: _run_status_view(session, str(started.run_id)))
+        if not started.replayed:
+            # A replay submits nothing. The key's original request submitted the work and
+            # the run has whatever state it has since reached; re-submitting would hand a
+            # second worker a run that is not `queued`, which the compare-and-set in
+            # `run_to_terminal` refuses - correctly, and after needlessly occupying a
+            # worker. `started.replayed` is the command ledger's own answer to "did this
+            # request create anything", so nothing here re-derives it from the state.
+            self._carrier.submit(self._job(str(started.run_id)))
+        return view
+
+    def _job(self, run_id: str) -> Any:
+        """The unit of work a carrier carries: one queued run, to a terminal.
+
+        Built here because this adapter is what holds the store, the model adapter and the
+        provider configuration, and closed over rather than passed as arguments so the
+        carrier stays a scheduler that knows nothing about runs.
+        """
+        from auditmanager.runs import run_to_terminal
+
+        def job() -> None:
+            run_to_terminal(
+                self._sessions,
+                run_id,
+                blob_store=self._blob_store,
+                adapter=self._model_adapter,
+                provider_config=self._provider_config,
+            )
+
+        return job
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._read(lambda session: _run_status_view(session, run_id))

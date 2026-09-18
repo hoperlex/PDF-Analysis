@@ -152,7 +152,7 @@ _COST_SUMMARY = text(
     "FROM model_call WHERE run_id = :run_id"
 )
 
-_STALE_RUNNING = text(
+_STALE_IN_STATE = text(
     f"SELECT {_RUN_COLUMNS} FROM audit_run "
     "WHERE state = :state AND updated_at < now() - CAST(:age AS interval) "
     "ORDER BY updated_at"
@@ -436,20 +436,31 @@ class RunRepository:
             row.stage_id: row.status for row in self.stage_results(session, run_id)
         }
 
+    def stale_in_state(
+        self, session: Session, *, state: str, older_than: str = "1 hour"
+    ) -> tuple[RunRow, ...]:
+        """Runs sitting in one non-terminal state longer than the threshold.
+
+        `D-20`. There are now two such states, not one. A run is put into ``queued`` by
+        the transaction that accepts it and handed to a carrier
+        (:mod:`auditmanager.runs.carrier`); the carrier moves it to ``running`` and
+        commits before the analysis begins. A process that dies can therefore leave a row
+        in either -- ``queued`` if it died between the accepting commit and the worker
+        picking the job up, ``running`` if it died during the analysis.
+
+        PC-01 runs one execution in one process, so a row older than the threshold in
+        either state means that process is gone. There is no lease and no heartbeat to
+        consult: age is the only evidence available, and ``OD-10`` says what to do about
+        it rather than inventing an ``interrupted`` state to park it in.
+        """
+        rows = session.execute(_STALE_IN_STATE, {"state": state, "age": older_than}).all()
+        return tuple(_run_row(row) for row in rows)
+
     def stale_running(
         self, session: Session, *, older_than: str = "1 hour"
     ) -> tuple[RunRow, ...]:
-        """Runs still ``running`` after their executor should have finished.
-
-        PC-01 runs one execution in one process, so a ``running`` row older than the
-        threshold means that process is gone. There is no lease and no heartbeat to
-        consult: age is the only evidence available, and ``OD-10`` says what to do
-        about it rather than inventing an ``interrupted`` state to park it in.
-        """
-        rows = session.execute(
-            _STALE_RUNNING, {"state": "running", "age": older_than}
-        ).all()
-        return tuple(_run_row(row) for row in rows)
+        """The ``running`` half of :meth:`stale_in_state`, kept under its own name."""
+        return self.stale_in_state(session, state="running", older_than=older_than)
 
     # -- transitions ---------------------------------------------------------
 

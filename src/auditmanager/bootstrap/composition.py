@@ -30,6 +30,7 @@ from auditmanager.bootstrap.adapters import (
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
+from auditmanager.runs import ThreadCarrier
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +44,12 @@ class Application:
     #: configuration" is checkable rather than asserted. Without it the ceiling the run
     #: will enforce is invisible from outside, which is how `W5CERT-DEF-2` survived.
     provider_config: Any
+    #: `D-20`. What carries a run off the request thread. Exposed for the same reason
+    #: ``provider_config`` is: "this application does not execute on the request thread"
+    #: is then a property a test can read off the built object, rather than a claim about
+    #: a line inside an adapter. It is also the only honest way to *wait* for a run --
+    #: ``carrier.drain(timeout)`` waits on the real work, where a sleep waits on a guess.
+    carrier: Any
 
 
 def build_application(
@@ -86,6 +93,14 @@ def build_application(
 
     ingest = IngestService(store, session_factory=sessions)
 
+    # `D-20`. One carrier per built application, constructed here like everything else:
+    # a process that starts has its executor, and `RunAdapter` takes it as a required
+    # argument so no application can be assembled that quietly executes on the request
+    # thread. `ThreadCarrier` is `RUN_CONCURRENCY` wide -- one, per `PROTOTYPE_PROFILE.md`
+    # section 2 -- so a second run waits in `queued` instead of competing for the
+    # provider budget with the first.
+    carrier = ThreadCarrier()
+
     router = build_router(
         projects=ProjectAdapter(ingest),
         documents=DocumentAdapter(ingest),
@@ -103,6 +118,7 @@ def build_application(
             provider_mode=_provenance_mode(resolved.provider_mode),
             analysis_profile_id=profile_id,
             prompt_bundle_id=bundle_id,
+            carrier=carrier,
         ),
         findings=FindingAdapter(sessions),
         decisions=DecisionAdapter(sessions),
@@ -113,6 +129,7 @@ def build_application(
         settings=resolved,
         session_factory=sessions,
         provider_config=provider_config,
+        carrier=carrier,
     )
 
 

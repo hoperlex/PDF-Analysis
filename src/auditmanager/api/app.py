@@ -17,9 +17,12 @@ separate port; see its module note for why it is not a route on this one.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 import os
 import sys
+from collections.abc import AsyncIterator
 from typing import Any, Final, Mapping
 
 from fastapi import Depends, FastAPI
@@ -37,6 +40,8 @@ from auditmanager.api.routers import (
     install_exception_handlers,
 )
 from auditmanager.api.security import build_authorization_dependency
+
+_log = logging.getLogger(__name__)
 
 __all__ = [
     "BASE_PATH",
@@ -99,7 +104,7 @@ def create_asgi_app(
     """
     resolved_environ: Mapping[str, str] = dict(os.environ) if environ is None else environ
     built = application if application is not None else create_app(dict(resolved_environ))
-    return _assemble(built.router, resolved_environ)
+    return _assemble(built.router, resolved_environ, application=built)
 
 
 def create_documentation_app(environ: Mapping[str, str] | None = None) -> FastAPI:
@@ -120,7 +125,7 @@ def create_documentation_app(environ: Mapping[str, str] | None = None) -> FastAP
         decisions=None,  # type: ignore[arg-type]
         exports=None,  # type: ignore[arg-type]
     )
-    return _assemble(router, environ if environ is not None else {})
+    return _assemble(router, environ if environ is not None else {}, application=None)
 
 
 #: Exactly what FastAPI injects at ``fastapi/openapi/utils.py:522`` for an operation that
@@ -193,8 +198,62 @@ class _ContractApplication(FastAPI):
         return self.openapi_schema
 
 
-def _assemble(router: Router, environ: Mapping[str, str]) -> FastAPI:
-    """One router, one environment, one served application."""
+def _run_lifespan(application: Application) -> Any:
+    """`D-20`. What a *serving* process does before it answers and after it stops.
+
+    **Startup: reconcile, then serve.** ``execute_run`` now commits ``running`` before the
+    analysis begins (:mod:`auditmanager.runs.carrier`), so a process that is killed leaves
+    that row behind and no ``except`` clause runs. ``OD-10``'s reconciler has existed since
+    `B5` and had nothing to find, because the pre-`D-20` architecture never committed an
+    intermediate state. This is the call that gives it something to do, and it happens
+    **before the socket is bound**, so a client cannot read a stranded run from the
+    previous process's crash and be told it is in flight.
+
+    Why here and not in ``build_application``: constructing an ``Application`` is not
+    starting a process. Suites build several per session, some while another's run is in
+    flight, and ``STARTUP_THRESHOLD`` is ``0 seconds`` -- a reconciliation on every
+    construction would terminate live runs. A lifespan runs when something *serves*.
+
+    **Shutdown: stop accepting, do not wait.** PC-01 cannot resume, so a run interrupted
+    by a shutdown is going to be ``failed`` whatever this does; the only question is
+    whether it is marked now or at the next start. Marking it here would be a second
+    implementation of the rule the reconciler already owns, and it would cover strictly
+    fewer cases -- a ``SIGKILL`` reaches no shutdown hook at all. One mechanism, at
+    startup, where it works for every way a process can end.
+    """
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        from auditmanager.runs import reconcile_at_startup
+
+        report = reconcile_at_startup(application.session_factory)
+        if report.run_count or report.abandoned_count:
+            _log.warning(
+                "startup reconciliation: %d run(s) were left non-terminal by a previous "
+                "process and are now failed; %d command record(s) abandoned",
+                report.run_count,
+                report.abandoned_count,
+            )
+        try:
+            yield
+        finally:
+            application.carrier.shutdown()
+
+    return lifespan
+
+
+def _assemble(
+    router: Router,
+    environ: Mapping[str, str],
+    *,
+    application: Application | None = None,
+) -> FastAPI:
+    """One router, one environment, one served application.
+
+    ``application`` is ``None`` for :func:`create_documentation_app`, which has nothing
+    behind its six ports: it must not reconcile, because there is no database to reconcile
+    against, and it cannot serve a request anyway.
+    """
     app = _ContractApplication(
         title=_TITLE,
         description=_DESCRIPTION,
@@ -207,7 +266,17 @@ def _assemble(router: Router, environ: Mapping[str, str]) -> FastAPI:
         # here, in the application, never in the gate's normalization. `W13-CONF` measured
         # it: `test_the_gate_catches_a_split_input_and_output_schema`.
         separate_input_output_schemas=False,
+        **(
+            {}
+            if application is None
+            else {"lifespan": _run_lifespan(application)}
+        ),
     )
+    if application is not None:
+        # `D-20`. The carrier, reachable from the served application. A caller holding the
+        # ASGI app -- a test, the acceptance driver -- can then wait for a run on the real
+        # completion of the real work instead of on a duration somebody guessed.
+        app.state.run_carrier = application.carrier
     install_exception_handlers(app)
     app.include_router(
         router,
