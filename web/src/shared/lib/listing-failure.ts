@@ -82,7 +82,7 @@ export function classifyListingFailure(error: unknown, subject: ListingSubject):
           kind: 'parent_not_found',
           title: `There is no such ${parent}.`,
           detail:
-            `The server does not have this ${parent}, so there are no ${collection} to list. ` +
+            `The server does not have this ${parent}, so there is nothing here to list. ` +
             'That is a different answer from an empty list, and it is not retried.',
           retryable: false,
         };
