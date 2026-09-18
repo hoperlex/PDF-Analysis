@@ -13,15 +13,14 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 |---|---|---|
 | **D-16** | no screen reaches anything after a page reload | a **reseal** — ruled: do it |
 | **D-21** | cost is recorded and exposed nowhere | the **same reseal** — ruled: do it |
-| **D-17** | a restored instance is proved by reading and broken for writing | `infra/` repair |
 | **D-20** | there is no observable `running` state | architecture |
-| **D-18** | a 409 cannot be diagnosed from the wire | catalog — owner's |
+| **D-18** | two opposite faults share one byte-identical envelope | catalog — owner's, and now a narrow question |
 | **D-22** | one rule, three hand-copies | `web/src` repair |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | D-9, D-11 | corpus granularity; a licence reading | owner / registered |
 
-**Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-4, D-12, D-13, D-19, and D-14 opened
+**Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-4, D-12, D-13, D-17, D-19, and D-14 opened
 and closed in the same pass.
 
 **Two rules this register earned the hard way, both on the same day:**
@@ -297,34 +296,73 @@ Tree: `contracts/api/v1/openapi.json` (frozen) and `web/src`.
 
 Check: load a project page in a new tab against a running stack and count the API calls.
 
-### D-17 — a restored instance is proved by reading and broken for writing
+### D-17 — a restored instance is proved by reading and broken for writing — **CLOSED**
 
-**`W15RUN-1`.** `reset.sh --restore` and `object_attrs.py` reattach **two of the four**
-metadata keys the storage adapter writes; **`blob-role` is lost**. The restored object reads
-back byte-identical — which is what wave 14 checked — and **every later upload of those same
-bytes answers `409 conflict`** through `BlobAttributeConflictError`, while the identical bytes
-on a clean stack give `201`. Reproduced twice.
+**Closed 2026-09-18 by `W18-OPS`, and this row's own figure was one key too generous.**
 
-This is `D-4`'s shape one level deeper, and by the same instrument. Wave 14 learned that
-`mc mirror` is not a backup of an object, fixed the digest, and then **verified the fix by
-reading**. A metadata key that only a write path consults survived the check. **A restore is
-proved by writing to the restored instance, not by reading from it.**
+**Read from the adapter rather than from the report:** `S3BlobStore.publish` is the single
+publication site, one `copy_object` with `MetadataDirective="REPLACE"`, writing **four**
+user-metadata keys — `blob-id`, `blob-role`, `content-sha256`, `content-size` — **plus the
+`Content-Type` header**, which `_record_from_head` reads back as `media_type` and `publish`
+compares. The old restore carried **one of the four plus the header**. So **three keys were
+lost, not one**: `blob-role`, `blob-id` and `content-size`.
 
-`R-4` makes this load-bearing rather than tidy: the wipe and its restore are the commitment
-that real client documents leave the alpha host. `PA-01` criterion 10 is currently **false in
-the direction that looks true**, which is the worst direction.
+**A fix built on this row's original figure would have closed it wrongly.** It would have
+carried `blob-role`, passed the write-back test, and left `content-size` lost — whose loss is
+**quieter rather than smaller**, because `_record_from_head` raises `SizeMismatchError` only
+`if recorded_size is not None`. A restore without it does not fail; it **silently stops
+checking**.
 
-Tree: `infra/deploy/**`. `W14_CLOSURE.md` §2 carries the correction.
+**Proved by writing, which was the whole row.** Post-fix: upload `201` → wipe → restore → read
+back byte-identical → **re-upload `201`**. Pre-fix, reproduced first-hand at `56f37ab`: read
+back byte-identical → **re-upload `409`**. Reading back is **necessary** — a lost
+`content-sha256` 422s the read, so wave 14 was right to check it — and **not sufficient**,
+because `blob-role` is consulted by no read at all, only by `publish`.
 
-### D-18 — that 409 cannot be diagnosed from the wire
+And run against the bucket a pre-fix restore left behind, the fixed script **exits 3, names
+the bad row and purges nothing**. That is `R-4`'s commitment holding: it will not destroy an
+instance whose objects it cannot put back.
 
-**`W15RUN-2`.** `conflict`'s `safe_detail_keys` drop `blob_id`, `role` and `media_type`, so
-D-17's 409 and an unrelated conflict produce a **byte-identical envelope**. An operator
-holding the response cannot tell which fault they have.
+**A second defect, and it is the more general one: `dump-verified`'s empty-digest check had
+never fired.** The test was `grep -q '^[^\t]*\t\t'`, and **GNU grep does not read `\t` as a
+tab outside a bracket expression** — it is the letter `t`. Confirmed independently here:
+`/usr/bin/grep` is GNU grep 3.11 and gives **no match** on a row that should match. It looked
+correct only because an interactive agent shell routes `grep` through ugrep, which does read
+`\t`; a script run as a subprocess never sees that, so **the guard was inert everywhere,
+including inside its own test suite**. It had no case, so it had never been shown able to
+fail — which is the entire argument for the rule that every guard needs one.
 
-Same family as `D-7` and `D-12` — a code carrying two situations with no discriminator — but
-unlike those two the answer is not a new code: it is which keys `conflict` may safely carry,
-which is a catalog question and therefore the owner's.
+Guard markers stay at **11** — widened, not added — so the meta-test still pins the count and
+every marker still has a case. Suite **23 → 31**; six redden against the pre-fix script, and
+the two that do not are the control and the deletion proof, which should not.
+
+Check: `grep -c 'guard:' infra/deploy/reset.sh` is 11, and
+`.venv/bin/pytest tests/integration/composition/test_reset_script_refusals.py` is 31.
+
+### D-18 — that 409 cannot be diagnosed from the wire — **OPEN, and now a narrow question**
+
+**Measured by `W18-OPS` without touching `contracts/`.** `conflict` declares
+`safe_detail_keys: ["aggregate_type", "expected_revision"]`, and `BlobAttributeConflictError`
+raises `blob_id`, `role` and `media_type` — all screened off. **The message goes too**:
+`envelope.py:126` uses the *catalog's* summary, so the class's own distinguishing sentence
+never reaches the wire.
+
+**Exactly two errors in `src/` carry `conflict` with `aggregate_type: "Blob"`:**
+
+| Class | What an operator must do |
+|---|---|
+| `BlobAttributeConflictError` | **stop** — the instance was restored wrong |
+| `TemporaryBlobLostError` | **retry the upload** |
+
+Their envelopes are **byte-identical apart from `correlation_id`** — same status, same code,
+same message, same details, `retryable: false` on both. Opposite operator responses, one
+indistinguishable answer. And `retryable: false` is right for one and arguably wrong for the
+other.
+
+**The question for the owner is narrower than "widen the detail keys":** *may a `conflict`
+envelope carry a discriminator between these two, and is that a detail key or a second code?*
+`R-3`'s `dependency_credential_refused` is the same shape and has been ruled once already,
+which is the precedent either way.
 
 ### D-19 — a published run reports neither its timings nor its finding count — **CLOSED**
 
