@@ -274,3 +274,183 @@ describe('the three terminals are three different claims', () => {
     expect(markup).toContain('No result has been published yet');
   });
 });
+
+// ======================================================================================
+// W19-RUN — the timings, the counts and the cost the response has carried since W18-SEAL
+// and no screen rendered.
+//
+//   M-3  the absent-cost and zero-cost branches render the same sentence;
+//   M-4  the cost is rendered without the call count it sums;
+//   M-6  the diagnostic count is rendered as the finding count, collapsing the two;
+//   M-7  an `estimated` basis is rendered as a warning;
+//   M-9  the cost section is dropped from the screen.
+// ======================================================================================
+
+/** A reading that made provider calls, for the cases that need one. */
+function priced(overrides: Partial<RunStatus> = {}): Partial<RunStatus> {
+  return { state: 'published', cost_micros: 0, cost_basis: 'measured', model_call_count: 2, ...overrides };
+}
+
+/**
+ * M-3. `D-3` is this programme's record of what inventing the flattering state costs.
+ * The two states must reach the user as different sentences, not as the same number.
+ */
+describe('a run that spent nothing and a run that called nothing read differently (M-3)', () => {
+  it('says a run with no provider call has no cost to report, and does not say zero', () => {
+    const markup = screen({ state: 'published', published_finding_count: 3 });
+    expect(markup).toContain('data-run-cost="absent"');
+    expect(markup).toContain('made no provider call');
+    // The flattering invention this test exists to prevent.
+    expect(markup).not.toContain('data-run-cost="reported"');
+    expect(markup).not.toContain('data-cost-micros="0"');
+  });
+
+  it('says a run whose calls were free was charged nothing, and shows the zero', () => {
+    const markup = screen(priced({ published_finding_count: 3 }));
+    expect(markup).toContain('data-run-cost="reported"');
+    expect(markup).toContain('data-cost-micros="0"');
+    expect(markup).toContain('data-run-cost-zero="reported"');
+    expect(markup).not.toContain('data-run-cost="absent"');
+  });
+
+  it('gives the two states markers that cannot both appear', () => {
+    const absent = screen({ state: 'published', published_finding_count: 3 });
+    const free = screen(priced({ published_finding_count: 3 }));
+    expect(absent).not.toBe(free);
+    expect(absent.includes('data-run-cost="absent"')).toBe(true);
+    expect(free.includes('data-run-cost="absent"')).toBe(false);
+  });
+});
+
+/**
+ * M-4. `D-15` is open and this is the screen where it would be re-created: the total sums
+ * retry attempts, so a figure printed without its span is the ambiguity `D-15` is about.
+ */
+describe('a cost is never shown without the call count it sums (M-4)', () => {
+  it('prints the call count beside the figure', () => {
+    const markup = screen(priced({ cost_micros: 4_500_000, model_call_count: 3 }));
+    expect(markup).toContain('data-model-call-count="3"');
+    expect(markup).toContain('data-cost-micros="4500000"');
+    expect(markup).toContain('4.500000');
+  });
+
+  it('distinguishes a first-try run from a retried one on the screen', () => {
+    const first = screen(priced({ cost_micros: 1_000_000, model_call_count: 1 }));
+    const retried = screen(priced({ cost_micros: 1_000_000, model_call_count: 4 }));
+    expect(first).toContain('data-model-call-count="1"');
+    expect(retried).toContain('data-model-call-count="4"');
+    // Same money, different spans: the screens must not be identical.
+    expect(first).not.toBe(retried);
+  });
+
+  it('shows no figure at all when the count did not arrive', () => {
+    const markup = screen({
+      state: 'published',
+      published_finding_count: 3,
+      cost_micros: 900 as never,
+      cost_basis: 'estimated' as never,
+    });
+    expect(markup).toContain('data-run-cost="unreadable"');
+    expect(markup).not.toContain('data-cost-micros');
+    expect(markup).not.toContain('0.000900');
+  });
+
+  it('renders sub-cent money instead of rounding it away (M-1 on the screen)', () => {
+    const markup = screen(priced({ cost_micros: 1, model_call_count: 1 }));
+    expect(markup).toContain('0.000001');
+    expect(markup).not.toContain('>0.00<');
+  });
+});
+
+/**
+ * M-6. The two counts are different facts and `findings/queries.py` keeps them apart on
+ * purpose: a published finding is admitted evidence, a diagnostic observation is not.
+ */
+describe('findings and diagnostic observations are two counts, never one (M-6)', () => {
+  it('renders both, with different values, under different labels', () => {
+    const markup = screen({
+      state: 'published',
+      published_finding_count: 3,
+      diagnostic_observation_count: 11,
+    });
+    expect(markup).toContain('Published findings');
+    expect(markup).toContain('data-diagnostic-observation-count="11"');
+    expect(markup).toContain('3');
+    expect(markup).toContain('Diagnostic observations');
+    // A mutation that printed the diagnostic count where the finding count goes, or that
+    // summed them, cannot satisfy both of these.
+    expect(markup).not.toContain('Published findings: 11');
+    expect(markup).not.toContain('Published findings: 14');
+  });
+
+  it('says in words that an observation is not a finding', () => {
+    const markup = screen({ state: 'published', published_finding_count: 1 }).toLowerCase();
+    expect(markup).toContain('is not a finding');
+  });
+
+  it('reports an unreported diagnostic count as unreported, not as zero', () => {
+    const markup = screen({
+      state: 'published',
+      published_finding_count: 1,
+      diagnostic_observation_count: null as never,
+    });
+    expect(markup).toContain('data-diagnostic-observation-count="not-reported"');
+    expect(markup).not.toContain('data-diagnostic-observation-count="0"');
+  });
+
+  it('keeps the diagnostic count on a run that published nothing', () => {
+    // A cancelled run has no findings to report but can still have observed something,
+    // and the existing contract that it must not say "Published findings" still holds.
+    const markup = screen({
+      state: 'cancelled',
+      published_finding_count: 0,
+      diagnostic_observation_count: 2,
+    });
+    expect(markup).toContain('data-diagnostic-observation-count="2"');
+    expect(markup).not.toContain('Published findings');
+  });
+});
+
+/**
+ * M-7. `W18-SEAL` notes the first live run is the first that can print `measured`, so
+ * `estimated` is the ordinary case for this prototype. Rendering the ordinary case as a
+ * warning trains a reviewer to ignore the one signal this field carries.
+ */
+describe('an estimated basis is the normal case, not a warning (M-7)', () => {
+  it('renders the basis as itself', () => {
+    expect(screen(priced({ cost_basis: 'estimated' }))).toContain('data-cost-basis="estimated"');
+    expect(screen(priced({ cost_basis: 'measured' }))).toContain('data-cost-basis="measured"');
+  });
+
+  it('does not dress an estimated basis as an error or a warning', () => {
+    const markup = screen(priced({ cost_basis: 'estimated', cost_micros: 250_000 }));
+    const cost = markup.slice(markup.indexOf('data-run-cost="reported"'));
+    for (const alarm of ['am-state--error', 'Warning', 'warning', 'Invalid', 'went wrong']) {
+      expect(cost).not.toContain(alarm);
+    }
+    expect(markup.toLowerCase()).toContain('not a fault');
+  });
+
+  it('does not default an unstated basis to measured', () => {
+    const markup = screen({
+      state: 'published',
+      published_finding_count: 1,
+      cost_micros: 5 as never,
+      model_call_count: 1 as never,
+    });
+    expect(markup).toContain('data-cost-basis="unstated"');
+    expect(markup).not.toContain('data-cost-basis="measured"');
+  });
+});
+
+/** M-9. The section exists at all, on every terminal state. */
+describe('the cost section is on the screen (M-9)', () => {
+  it.each(['published', 'partial', 'failed', 'cancelled'] as const)(
+    'renders a cost statement for a %s run',
+    (state) => {
+      const markup = screen({ state, published_finding_count: state === 'published' ? 1 : 0 });
+      expect(markup).toContain('data-run-cost=');
+      expect(markup).toContain('Diagnostic observations');
+    },
+  );
+});
