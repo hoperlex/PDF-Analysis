@@ -116,6 +116,62 @@ The two alpha stacks on 31480 and 31490 and every active lane were left untouche
 Recorded because it is a destructive act on shared infrastructure, and because wave 14 lost time to
 a full disk and `W15-RUN` and `W16-WEB` both flagged the same thing independently.
 
+## 3.6 — `R-7` … `R-10`, ruled 2026-09-18 by direct poll
+
+### `R-7` — `main` advances to the gated tip, not only to the certified one
+
+**Ruled: fast-forward to `9291db6` and tag it.** Done: `alpha-w18`, 337 commits, from
+`8f418e9`. The owner was offered the certified commit `e6eae1e` instead and took the tip.
+
+**What the tag says, and what it deliberately does not.** It records the gate — 1778 / 5 /
+168, foundation 35, frontend 595, exit 0 — and states in its own body that **this is a gated
+tip and not a certification**. The last certification is `W12-CERT`'s at `e6eae1e`, whose one
+named exception `D-1.5` closed on 2026-09-18, so that certification now holds without a
+caveat. A certification *of this commit* is separate work and has not been done.
+
+The tag also names what is open at it: no screen renders the three new list operations, so a
+browser still cannot reach its own data after a reload; execution is inline so no `running`
+state exists; and the deployed stack is wave 15's build until rebuilt.
+
+### `R-8` — `D-18` gets a second code, not a wider key set
+
+**Ruled: add a code to the catalog.** `BlobAttributeConflictError` (*stop — the instance was
+restored wrong*) and `TemporaryBlobLostError` (*retry the upload*) currently produce
+**byte-identical envelopes** differing only in `correlation_id`.
+
+The owner was offered a widened `safe_detail_keys` instead and rejected it, and the reason is
+in the option as put: **a detail key cannot fix `retryable`.** That flag is a property of the
+code, it is correct for one of these two and arguably wrong for the other, and only a separate
+code carries a separate value. Widening the keys would have left half the defect standing.
+
+Precedent: `R-3` split exactly this shape with `dependency_credential_refused`. The catalog
+declares `"frozen": false, "status": "draft_candidate"`, so this is an **addition to a draft
+candidate, not a freeze-break** — `D-8`.
+
+### `R-9` — the corpus waits for the screens and a manual pass
+
+**Ruled: after the screens and manual testing, not in parallel and not as a pilot first.**
+
+The re-measurement that prompted the question matters: `D-9` said the corpus's text and
+geometry were unjoined and the content remote. **Both are false.** 674 documents, ~15 500
+blocks, and in a random 25-document sample **1106 of 1106 blocks have a local
+`crops/<block_id>.pdf`** yielding extractable text — no remote dependency. The real work is
+**segmentation inside a block**, because a block is a region of several paragraphs.
+
+The owner's reasoning, and it is the argument against my own instinct to start early:
+**manual testing will say what granularity the norms actually need.** Segmenting before that
+is segmenting blind, and 674 documents is an expensive thing to segment twice.
+
+### `R-10` — `listProjects.document_count` is populated in the screens wave
+
+**Ruled: populate it.** The field is already declared in the contract and simply unfilled, so
+a project list reads `documents —`. The alternative was a screen calling `listDocuments` once
+per project in a list.
+
+It changes an existing operation's body and moves a seventh characterization record, which
+`R-5` did not authorise — hence the question. This ruling authorises exactly that and nothing
+wider.
+
 ## 4. Still open, and still the owner's
 
 - **`OD-18`** — three to five named experts with committed slots; `P4-BHV-01` waits on it alone.
@@ -123,8 +179,6 @@ a full disk and `W15-RUN` and `W16-WEB` both flagged the same thing independentl
 - **`R-4`'s two halves** — who uploads a real document, and what event counts as *"the end of the
   pilot"* and therefore triggers the wipe. **`D-17` now bears on this**: the restore is broken for
   writing, so the mechanism the wipe depends on is not yet sound.
-- **`D-18`** — which detail keys `conflict` may safely carry. A catalog question, so the owner's.
-- **Whether `origin/main` advances.** It is now **eight** waves behind, at `8f418e9`, while `dev`
-  carries the FastAPI transport, the deployable stack and the credential path. `W12-CERT` certified
-  `e6eae1e`, so the condition `DEBT_REGISTER.md` §3 named is met. `D-1.5`, the named exception that
-  qualified that certification, **closed on 2026-09-18** — so the qualification is gone.
+- ~~`D-18` — which detail keys `conflict` may safely carry.~~ **Settled by `R-8`**: a second code.
+- ~~Whether `origin/main` advances.~~ **Settled by `R-7`**: `main` is at `9291db6`, tagged
+  `alpha-w18`.
