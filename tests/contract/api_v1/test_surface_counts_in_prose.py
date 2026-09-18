@@ -38,7 +38,16 @@ from typing import Iterator
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-API_SOURCE = REPO_ROOT / "src" / "auditmanager" / "api"
+#: The two trees that describe the surface in prose. `W18-SEAL`'s sweep covered `src/`
+#: only, so `infra/deploy/` kept four statements saying twelve operations -- including
+#: `serve.py`'s module docstring, which is the first thing an operator reads about the
+#: process. This guard found them on its first widening, which is the row's own point:
+#: a claim a checker cannot read is a claim nobody is checking.
+SCANNED_TREES = (
+    REPO_ROOT / "src" / "auditmanager" / "api",
+    REPO_ROOT / "infra" / "deploy",
+)
+API_SOURCE = SCANNED_TREES[0]
 API_CONTRACT = REPO_ROOT / "contracts" / "api" / "v1" / "openapi.json"
 ERROR_CATALOG = REPO_ROOT / "contracts" / "domain" / "v1" / "error-codes.json"
 
@@ -147,7 +156,8 @@ def _surface_counts() -> dict[str, int]:
 def _api_source_files() -> list[pathlib.Path]:
     return sorted(
         path
-        for path in API_SOURCE.rglob("*")
+        for tree in SCANNED_TREES
+        for path in tree.rglob("*")
         if path.is_file()
         and path.suffix in {".py", ".md"}
         and "__pycache__" not in path.parts
