@@ -14,7 +14,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-16** | no screen reaches anything after a page reload | a **reseal** — ruled: do it |
 | **D-21** | cost is recorded and exposed nowhere | the **same reseal** — ruled: do it |
 | **D-17** | a restored instance is proved by reading and broken for writing | `infra/` repair |
-| **D-19** | a published run reports neither timings nor finding count | `src/` repair |
 | **D-20** | there is no observable `running` state | architecture |
 | **D-4** | one site still emits an empty digest | `src/` repair |
 | **D-18** | a 409 cannot be diagnosed from the wire | catalog — owner's |
@@ -23,8 +22,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | D-9, D-11 | corpus granularity; a licence reading | owner / registered |
 
-**Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-12, D-13, and D-14 opened and
-closed in the same pass.
+**Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-12, D-13, D-19, and D-14 opened
+and closed in the same pass.
 
 **Two rules this register earned the hard way, both on the same day:**
 
@@ -322,18 +321,43 @@ Same family as `D-7` and `D-12` — a code carrying two situations with no discr
 unlike those two the answer is not a new code: it is which keys `conflict` may safely carry,
 which is a catalog question and therefore the owner's.
 
-### D-19 — a published run reports neither its timings nor its finding count
+### D-19 — a published run reports neither its timings nor its finding count — **CLOSED**
 
-**`W15RUN-4`.** The `stage_result` rows have them, the contract's `StageState` has them, and
-`api/schemas/runs.py` has them. `_run_status_view` in `bootstrap/adapters.py:266` omits them.
-A user sees *"Published findings: not reported"* and *"Started — Finished —"* on a run that
-published three findings in 11 seconds.
+**Closed 2026-09-18 by `W17-VIEW`, and it was two defects, not one.**
 
-**`W15RUN-5`** belongs beside it: `created_at == updated_at == terminal_at` **to the
-microsecond** on runs that took 9.9 s and 11.1 s.
+**`W17VIEW-1` — four declared fields with no producer, in *two* readers.**
+`runs/repository.py::_SELECT_STAGE_RESULTS` never selected `started_at`/`finished_at` — columns
+**its own upsert has written since the first migration** — so `StageResultRow` had nowhere to carry
+them and they were write-only. Only *then* does `bootstrap/adapters.py::_run_status_view` fail to
+set `published_finding_count` and `diagnostic_observation_count`. My brief named the assembler
+because that is where `W15-RUN` looked; **the assembler could not have set the timings if it had
+tried.**
 
-Tree: `src/auditmanager/bootstrap/adapters.py`. Small, and the most visible cheap win on this
-list.
+**`W17VIEW-2` (`W15RUN-5`) — `now()` is `transaction_timestamp()`.** `RunAdapter.start_run` creates
+*and executes* a run inside one write, so `created_at`, every `updated_at` and `terminal_at` were
+three copies of the instant the transaction opened. SQL rather than the assembler, and unrelated to
+the first.
+
+**No contract change:** all four fields were already declared by the frozen document. Verified over
+a **real socket** — `uvicorn` on this lane's PostgreSQL and MinIO — not the in-process router.
+
+**The finding is worth more than both repairs: the response baseline had pinned the second defect
+as the expectation.** Records 03–07 carried **one token for `created_at` and `terminal_at`**,
+because substitution in that corpus is by exact value and the two really were identical to the
+microsecond. `W15RUN-5` was legible in `tests/characterization/w13_baseline/records/` for five
+waves before a browser found it.
+
+**A safety net that reproduces a defect byte for byte is protecting it.** A re-capture alone would
+have erased that evidence with nobody having to say it had been there, so it is asserted instead:
+`test_the_five_run_status_records_no_longer_pin_one_instant_for_the_whole_run`.
+
+**One boundary flagged rather than quietly taken, and checked here.** The countability guard
+asserted a *single* named exception, so a second permitted change was impossible to record without
+editing it. It is now a **literal** case→debt map of six entries — not derived from the records it
+checks — and additionally requires every marked record to carry a `permitted_change` and a
+`decided_by`, which the one-case version did not. The count changed; the rule is strictly stronger.
+
+Check: `grep -n "PERMITTED_EXCEPTIONS" -A 8 tests/characterization/w13_baseline/test_response_baseline.py`.
 
 ### D-20 — there is no observable `running` state, and criterion 4 needs one
 
