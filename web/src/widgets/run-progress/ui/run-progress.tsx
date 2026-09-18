@@ -55,7 +55,9 @@ import {
   badgeProviderMode,
   costBasisCaption,
   diagnosticObservationCount,
+  elapsedMs,
   formatCostMicros,
+  formatElapsed,
   interruptedReason,
   isRunAnimating,
   providerModeCaption,
@@ -269,6 +271,10 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
         <dd>{formatInstant(status.created_at)}</dd>
         <dt>Terminal at</dt>
         <dd>{formatInstant(status.terminal_at)}</dd>
+        <dt>Took</dt>
+        <dd data-run-elapsed={elapsedMs(status.created_at, status.terminal_at) ?? 'unknown'}>
+          {formatElapsed(elapsedMs(status.created_at, status.terminal_at))}
+        </dd>
       </dl>
 
       <p>

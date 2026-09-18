@@ -345,3 +345,47 @@ export function diagnosticObservationCount(status: {
   const value = status.diagnostic_observation_count;
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
 }
+
+// ------------------------------------------------------------------------------------
+// Elapsed
+// ------------------------------------------------------------------------------------
+
+/**
+ * How long something took, in whole milliseconds, from two contract instants.
+ *
+ * `null` when either end is missing or unparseable, and `null` when the pair runs
+ * backwards — a negative elapsed is a clock fact about the writer, not a duration, and
+ * printing it as one would invent a run that finished before it started.
+ */
+export function elapsedMs(
+  startedAt: string | null | undefined,
+  finishedAt: string | null | undefined,
+): number | null {
+  if (!startedAt || !finishedAt) return null;
+  const from = Date.parse(startedAt);
+  const to = Date.parse(finishedAt);
+  if (Number.isNaN(from) || Number.isNaN(to)) return null;
+  const ms = to - from;
+  return ms < 0 ? null : ms;
+}
+
+/**
+ * Render an elapsed span at a resolution that still says something.
+ *
+ * `formatInstant` prints to the second, so a stage that took 30 ms shows the same Started
+ * and Finished stamp and the pair reads as "no information". This is the column that
+ * makes the timings a fact rather than two identical strings: a sub-second stage reports
+ * its milliseconds.
+ */
+export function formatElapsed(ms: number | null): string {
+  if (ms === null) return '—';
+  if (ms < 1000) return `${ms} ms`;
+  if (ms < 60_000) {
+    const seconds = Math.floor(ms / 1000);
+    const tenths = Math.floor((ms % 1000) / 100);
+    return `${seconds}.${tenths} s`;
+  }
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.floor((ms % 60_000) / 1000);
+  return `${minutes} m ${seconds} s`;
+}

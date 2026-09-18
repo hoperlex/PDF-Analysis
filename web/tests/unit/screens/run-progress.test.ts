@@ -454,3 +454,43 @@ describe('the cost section is on the screen (M-9)', () => {
     },
   );
 });
+
+/**
+ * M-13. The stage timings were rendered before this session and still said nothing: a run
+ * finishes in about 360 ms and `formatInstant` prints to the second, so Started and
+ * Finished were the same string on every row.
+ */
+describe('the stage timings carry a measurement, not two identical stamps (M-13)', () => {
+  const stages = [
+    {
+      stage_id: 'source_preparation' as const,
+      status: 'succeeded' as const,
+      stage_version: '1.0.0',
+      started_at: '2026-09-18T13:02:34.538Z',
+      finished_at: '2026-09-18T13:02:34.653Z',
+    },
+  ];
+
+  it('reports how long a sub-second stage took', () => {
+    const markup = screen({ state: 'published', published_finding_count: 3, stages });
+    expect(markup).toContain('data-stage-elapsed="115"');
+    expect(markup).toContain('115 ms');
+  });
+
+  it('reports how long the whole run took', () => {
+    const markup = screen({
+      state: 'published',
+      published_finding_count: 3,
+      created_at: '2026-09-18T13:02:34.527Z',
+      terminal_at: '2026-09-18T13:02:34.901Z',
+    });
+    expect(markup).toContain('data-run-elapsed="374"');
+    expect(markup).toContain('374 ms');
+  });
+
+  it('says nothing rather than zero for a stage that never ran', () => {
+    const markup = screen({ state: 'published', published_finding_count: 3, stages: [] });
+    expect(markup).toContain('data-stage-elapsed="unknown"');
+    expect(markup).not.toContain('data-stage-elapsed="0"');
+  });
+});

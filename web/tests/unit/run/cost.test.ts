@@ -17,7 +17,9 @@ import { describe, expect, it } from 'vitest';
 import {
   costBasisCaption,
   diagnosticObservationCount,
+  elapsedMs,
   formatCostMicros,
+  formatElapsed,
   runCost,
 } from '@/entities/audit-run';
 
@@ -171,5 +173,54 @@ describe('a diagnostic count that was not reported is not zero (M-8)', () => {
 
   it('carries a real count through', () => {
     expect(diagnosticObservationCount({ diagnostic_observation_count: 12 })).toBe(12);
+  });
+});
+
+/**
+ * M-11  `formatElapsed` reports a sub-second span as `0 s`, losing the measurement;
+ * M-12  `elapsedMs` returns a negative span instead of refusing it.
+ *
+ * These exist because of what the browser showed. A real PC-01 run finishes in about
+ * 360 ms, `formatInstant` prints to the second, and every stage therefore rendered the
+ * same Started and Finished string. Two identical stamps are not a timing.
+ */
+describe('a span is rendered at a resolution that still says something (M-11)', () => {
+  it('reports a sub-second stage in milliseconds rather than as zero', () => {
+    expect(formatElapsed(30)).toBe('30 ms');
+    expect(formatElapsed(363)).toBe('363 ms');
+    expect(formatElapsed(999)).toBe('999 ms');
+    // The mutation this exists to kill: everything below a second collapsing to '0 s'.
+    expect(formatElapsed(30)).not.toBe('0 s');
+    expect(formatElapsed(363)).not.toBe('0 s');
+  });
+
+  it('reports a multi-second span in seconds', () => {
+    expect(formatElapsed(1_000)).toBe('1.0 s');
+    expect(formatElapsed(11_400)).toBe('11.4 s');
+  });
+
+  it('reports a span over a minute in minutes and seconds', () => {
+    expect(formatElapsed(65_000)).toBe('1 m 5 s');
+  });
+
+  it('says nothing rather than zero when there is no span to report', () => {
+    expect(formatElapsed(null)).toBe('—');
+    expect(formatElapsed(null)).not.toBe('0 ms');
+  });
+});
+
+describe('a span that runs backwards is not a duration (M-12)', () => {
+  it('measures a forward span in whole milliseconds', () => {
+    expect(elapsedMs('2026-09-18T13:02:34.527Z', '2026-09-18T13:02:34.890Z')).toBe(363);
+  });
+
+  it('refuses a pair that finishes before it starts', () => {
+    expect(elapsedMs('2026-09-18T13:02:35.000Z', '2026-09-18T13:02:34.000Z')).toBeNull();
+  });
+
+  it('refuses a missing or unparseable end', () => {
+    expect(elapsedMs('2026-09-18T13:02:34.527Z', null)).toBeNull();
+    expect(elapsedMs(null, '2026-09-18T13:02:34.527Z')).toBeNull();
+    expect(elapsedMs('2026-09-18T13:02:34.527Z', 'not-an-instant')).toBeNull();
   });
 });
