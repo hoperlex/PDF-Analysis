@@ -34,6 +34,13 @@ class ProjectView:
     ``document_count`` is optional in the document, so a producer that does not count
     documents leaves it ``None`` and the field is omitted rather than sent as a wrong
     zero. Omitting an optional field is valid; sending a fabricated one is not.
+
+    Under owner ruling `R-10` the ``listProjects`` producer **does** count, in the same
+    statement that reads the row, so every item of a project page carries the field and a
+    project with no documents carries ``0``. ``create_project`` still reads no documents
+    and still claims no count, and its response is unchanged. The ``None`` here is
+    therefore no longer "nobody has implemented this"; it is "this path genuinely did not
+    count", which is the claim it was always meant to make.
     """
 
     project_uid: str

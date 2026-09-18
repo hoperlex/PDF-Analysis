@@ -51,6 +51,7 @@ from auditmanager.documents import (
     DocumentRepository,
     DocumentVersionRecord,
     ManifestEntry,
+    ProjectListingRecord,
     ProjectRecord,
     UploadOutcome,
 )
@@ -165,7 +166,12 @@ class IngestService:
             )
             return record, False
 
-    def list_projects(self) -> tuple[ProjectRecord, ...]:
+    def list_projects(self) -> tuple[ProjectListingRecord, ...]:
+        """`listProjects`. Each row carries its own `document_count` -- `R-10`.
+
+        The count comes back on the listing row because the repository's single statement
+        computed it; this layer neither counts nor re-reads anything.
+        """
         with session_scope(self._factory) as session:
             return self._documents.list_projects(session)
 

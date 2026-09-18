@@ -83,9 +83,22 @@ class ProjectAdapter:
         )
 
     def list_projects(self) -> Sequence[ProjectView]:
+        # `document_count` is carried, not recomputed: `IngestService.list_projects`
+        # returns `ProjectListingRecord`s whose count came out of the same statement that
+        # produced the row (`R-10`). Passing it here rather than counting here is what
+        # keeps this a single query -- a `len(list_documents(...))` in this comprehension
+        # would be one round trip per project and would also be a *second* definition of
+        # what a document is.
+        #
+        # It is never `None` on this path, so `project_body` always emits the field: a
+        # project with no documents answers `0`. The `None` default on `ProjectView`
+        # remains for `create_project`, which reads no documents and claims no count.
         return tuple(
             ProjectView(
-                project_uid=str(r.project_uid), name=r.name, created_at=r.created_at
+                project_uid=str(r.project_uid),
+                name=r.name,
+                created_at=r.created_at,
+                document_count=r.document_count,
             )
             for r in self._service.list_projects()
         )

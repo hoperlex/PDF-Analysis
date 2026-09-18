@@ -338,6 +338,92 @@ class _UnusedProjectPort:
         raise AssertionError("this suite does not drive listProjects")
 
 
+@pytest.fixture
+def counting_router(ingest: Any, session: Session) -> Surface:
+    """`listProjects` and `listDocuments` on one surface, both over shipped adapters.
+
+    `W19-API`, owner ruling `R-10`. The two operations have to agree about what a document
+    is, and the only way to assert that is to ask both of them in one process against one
+    set of rows. `ProjectPort` is the shipped `bootstrap.adapters.ProjectAdapter` -- not
+    the suite's `IngestProjectAdapter` copy in `conftest.py` -- because a count forwarded
+    by a fixture proves that the fixture forwards it.
+    """
+    from auditmanager.bootstrap.adapters import ProjectAdapter
+
+    return Surface(
+        build_router(
+            projects=ProjectAdapter(ingest),
+            documents=IngestDocumentAdapter(ingest, session),
+            runs=_Unused(),
+            findings=_Unused(),
+            decisions=_Unused(),
+            exports=_Unused(),
+        )
+    )
+
+
+class _Unused:
+    """Four ports this fixture's two operations never reach."""
+
+    def __getattr__(self, name: str) -> Any:  # pragma: no cover - never called
+        raise AssertionError(f"counting_router does not drive {name}")
+
+
+def test_document_count_is_the_length_of_the_list_it_sits_above(
+    counting_router: Surface, catalogue: Catalogue, session: Session
+) -> None:
+    """`R-10`, and the defect it would be to ship the field carelessly.
+
+    The catalogue holds four documents in one project and one in a sibling, so the two
+    counts are different from each other and neither is the total -- a count keyed to the
+    wrong parent, or to the whole `document` table, cannot satisfy this.
+
+    Then the case where the two definitions come apart: a document with no published
+    version. `listDocuments` INNER JOINs on `current_version_uid` and does not list it
+    (`test_a_document_with_no_published_version_is_not_listed` is the assertion of that),
+    so a `document_count` that counted `document` rows would render "5 documents" above a
+    list of four. The count is asserted **equal to the length of the page**, not to a
+    literal, so the two can never drift apart without this going red.
+    """
+    orphan = str(DocumentUid.new())
+    session.execute(
+        text(
+            "INSERT INTO document (document_uid, project_uid, display_title) "
+            "VALUES (:d, :p, 'Создан, не опубликован')"
+        ),
+        {"d": orphan, "p": catalogue.project_uid},
+    )
+    session.flush()
+
+    rows = session.execute(
+        text("SELECT count(*) FROM document WHERE project_uid = :p"),
+        {"p": catalogue.project_uid},
+    ).scalar_one()
+    assert rows == 5, (
+        "the fixture does not hold the unversioned document, so the divergence this "
+        "test exists for is not present"
+    )
+
+    listing = ok(get(counting_router, "/projects?limit=200"))
+    counts = {item["project_uid"]: item for item in listing["items"]}
+
+    for project_uid in (catalogue.project_uid, catalogue.other_project_uid):
+        assert project_uid in counts, f"{project_uid} is missing from the project page"
+        item = counts[project_uid]
+        assert "document_count" in item, (
+            f"{project_uid} carries no document_count; the field is declared and this is "
+            "the `documents --` R-10 exists to remove"
+        )
+        page = ok(get(counting_router, f"/projects/{project_uid}/documents?limit=200"))
+        assert item["document_count"] == len(page["items"]), (
+            f"{project_uid} reports {item['document_count']} documents above a list of "
+            f"{len(page['items'])}"
+        )
+
+    assert counts[catalogue.project_uid]["document_count"] == 4
+    assert counts[catalogue.other_project_uid]["document_count"] == 1
+
+
 # ---------------------------------------------------------------------------
 # The rows each listing returns
 # ---------------------------------------------------------------------------
