@@ -275,7 +275,30 @@ same shape, already ruled once. `D-18` is left open and unchanged here.
 
 ## 6. The gate
 
-(pending)
+Instance `gate-w18b`, `POSTGRES_PORT=55810`, `S3_API_PORT=59410`, `S3_CONSOLE_PORT=59411`,
+`POSTGRES_DB=audit_w18b`, bucket `auditmanager-gate-w18b`. One measurement, nothing else
+running on this lane, no subagents dispatched during it, tree committed and clean before it
+started.
+
+```
+$ make gate FOUNDATION_PYTHON=/usr/bin/python3.12 > /root/w18ops-logs/gate.log 2>&1
+$ echo $?
+0
+```
+
+**Exit code read from `$?` after the redirect, not through a pipe.**
+
+| | base `3df17a7` | here |
+|---|---|---|
+| battery | 1746 / 5 skipped / 168 subtests | **1754** / 5 skipped / 168 subtests |
+| foundation | 35 | **35** |
+| frontend | 592 (44 files) | **592 (44 files)** |
+
+`GATE OK: battery, foundation, frontend and whitespace all pass`.
+
+The battery moves by **+8, and by exactly the eight cases added** to
+`test_reset_script_refusals.py` (23 -> 31). Nothing else moved: no `src/`, `web/` or
+`contracts/` file was touched.
 
 ## 7. What was false in this brief
 
@@ -296,4 +319,20 @@ direction that looks true, and `D-18`'s envelope.
 
 ## 8. Elapsed
 
-(pending)
+**Measured, not estimated.** `date +%s` on arrival `1789712704` (2026-09-18T11:25:04+05:00);
+at the end of the gate `1789713813` (11:43:33). **18 min 29 s** to a green gate, of which
+the gate itself was 3 min 24 s of battery plus 28 s of foundation plus 4 s of frontend.
+
+Cost that is worth recording because the next session will meet it: the `api` image build
+was 400 MB on a host with 8.5 GB free, and building `web` as well would have been another
+1.2 GB. Skipping `web` and `proxy` cost nothing — the proof is an API-level write — and the
+stack was torn down with `docker compose down -v`, leaving the two alpha stacks untouched.
+
+## 9. Not done here, and why
+
+`DEBT_REGISTER.md` **D-17 is left open**. This session owns `infra/deploy/**`,
+`tests/integration/composition/test_reset_script_refusals.py` and this review; the register
+is not on that list, and two writers on it is how a row gets closed twice. The row's close
+belongs to the integrator, with this file as its evidence, and it should record that the
+key count in the row is one key too generous. **D-18 is left open and unmeasured in the
+register**; section 5 is the measured question it needs.
