@@ -9,6 +9,33 @@ bucket `auditmanager-gate-w19a`. **Logs** `/root/w19shell-logs/`.
 
 *This document is written as the work lands. Sections below are filled in order.*
 
+## Summary
+
+| | before | after |
+|---|---|---|
+| addressable screens | 4 | **6** — a document and a version each have a URL |
+| API calls a project page makes on a fresh load | **0** | **1** (`listDocuments`) |
+| screens calling `listDocuments` / `listVersions` / `listRuns` | **0** | 1 each |
+| "No version published in this session" | on screen | **gone**, and its absence is asserted |
+| copies of the intent-key rule (`D-22`) | 4 | **1** |
+| frontend suite | 595 (44 files) | **633 (46 files)** |
+| gate | — | **exit 0**, battery and foundation unchanged |
+
+* **Six addresses, loaded cold in six separate browser processes, each one asking the
+  server for what it shows** (§4). The figure `D-16` opened on — *"bff calls made by that
+  page load: (none — zero)"* — is now 1, 1, 1, 2, 1 and 5.
+* **Eleven mutations, eleven killed** (§5), including re-inserting the defect itself.
+* **`D-22` closed on the way past** (§7): the rule is one pure function over an opaque
+  signature, and `W16-WEB`'s `U-06`/`U-07`/`U-08` are reddenable for the first time.
+* **A document route earns its place as an *address*, not as a *step*** (§6), because
+  `document_uid` is a value this product prints — a CSV column, a field of every
+  `DocumentVersion`, the subject of a `404` — and an identifier a product prints and cannot
+  open is `D-16` in miniature.
+* **One premise of the dispatch is wrong in the way that matters** (§8.1): `web/src/app/**`
+  could not have held this defect, and repairing it there alone is not possible.
+* **Elapsed 45 minutes**, measured (§11). **Disk is down to 5.2 GB** and the next session
+  should reclaim rather than check (§10).
+
 ## 1. The defect, restated from the measurement
 
 `W15-RUN` §6 `W15RUN-3`, measured in a real browser against the deployed stack: a project
