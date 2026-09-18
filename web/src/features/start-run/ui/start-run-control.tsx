@@ -13,10 +13,10 @@
 
 import type { RunStatus, VersionUid } from '@/shared/api';
 import { ErrorState, LoadingState, UnsupportedState } from '@/shared/ui';
+import { useIntentKey } from '@/shared/lib';
 import type { RunFailure } from '@/entities/audit-run';
 import { classifyRunFailure } from '@/entities/audit-run';
 
-import { useIntentKey } from '../model/use-intent-key';
 import { useStartRun } from '../model/use-start-run';
 
 export interface StartRunControlProps {

@@ -11,6 +11,7 @@
 import Link from 'next/link';
 
 import { PageShell } from '@/shared/ui';
+import { routes } from '@/shared/lib';
 import { RunProgress } from '@/widgets/run-progress';
 
 export interface RunPageProps {
@@ -27,7 +28,12 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
           <code>{runId}</code>
         </>
       }
-      actions={<Link href={`/projects/${projectUid}`}>Back to project</Link>}
+      actions={
+        <>
+          <Link href={routes.project(projectUid)}>Back to project</Link>{' '}
+          <Link href={routes.projects()}>All projects</Link>
+        </>
+      }
     >
       <RunProgress projectUid={projectUid} runId={runId} />
     </PageShell>

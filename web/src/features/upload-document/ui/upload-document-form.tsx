@@ -22,6 +22,7 @@ import { useState } from 'react';
 
 import type { DocumentVersion, ProjectUid } from '@/shared/api';
 import { ErrorState, LoadingState, UnsupportedState } from '@/shared/ui';
+import { useIntentKey } from '@/shared/lib';
 import type { UploadFailure, UploadPrecheckProblem } from '@/entities/document-version';
 import {
   PC01_UPLOAD_ENVELOPE,
@@ -31,7 +32,6 @@ import {
   precheckUploadFile,
 } from '@/entities/document-version';
 
-import { useIntentKey } from '../model/use-intent-key';
 import { useUploadDocument } from '../model/use-upload-document';
 
 export interface UploadDocumentFormProps {

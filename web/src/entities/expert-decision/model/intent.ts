@@ -7,8 +7,10 @@
  * accepts in the ledger — and the ledger is append-only, so there is nothing to undo.
  *
  * The rule needs somewhere to live that is not a component, because a component that keeps
- * the key in a `useState` loses it on remount. It lives here as a pure function over the
- * previously recorded intent, so the whole rule is testable without rendering anything.
+ * the key in a `useState` loses it on remount. Since `D-22` it lives in
+ * `shared/lib/intent-key`, once, as a pure function over an opaque signature. What stays
+ * here is the part that is genuinely about decisions: **what makes two decision intents
+ * the same**.
  *
  * What makes two intents "the same": the event type, the observation being judged and the
  * comment text. Pressing Accept, having it fail, and pressing Accept again is one intent.
@@ -16,12 +18,16 @@
  */
 
 import type { AppendDecisionRequest } from '@/shared/api';
+import type { IntentRecord } from '@/shared/lib';
+import { resolveIntentKey as resolveBySignature } from '@/shared/lib';
 
-/** The key currently held for an intent, and the intent it belongs to. */
-export interface IntentRecord {
-  readonly signature: string;
-  readonly idempotencyKey: string;
-}
+/**
+ * The key currently held for an intent, and the intent it belongs to.
+ *
+ * Re-exported from `shared/lib` rather than redeclared: `D-22` is about one rule living
+ * in one place, and two structurally identical records are two places.
+ */
+export type { IntentRecord };
 
 /**
  * A stable, collision-resistant signature for one decision intent.
@@ -53,7 +59,5 @@ export function resolveIntentKey(
   request: AppendDecisionRequest,
   mint: () => string,
 ): IntentRecord {
-  const signature = intentSignature(request);
-  if (previous !== null && previous.signature === signature) return previous;
-  return { signature, idempotencyKey: mint() };
+  return resolveBySignature(previous, intentSignature(request), mint);
 }

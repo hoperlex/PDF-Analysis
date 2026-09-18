@@ -16,6 +16,7 @@ import { useState } from 'react';
 
 import type { Project } from '@/shared/api';
 import { ErrorState, LoadingState, UnsupportedState } from '@/shared/ui';
+import { useIntentKey } from '@/shared/lib';
 import type { CreateProjectFailure, ProjectNameProblem } from '@/entities/project';
 import {
   classifyCreateProjectFailure,
@@ -24,7 +25,6 @@ import {
 } from '@/entities/project';
 
 import { useCreateProject } from '../model/use-create-project';
-import { useIntentKey } from '../model/use-intent-key';
 
 export interface CreateProjectFormProps {
   /** Called with the created project, so the screen can navigate or announce it. */
