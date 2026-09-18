@@ -211,10 +211,19 @@ if [ -n "$RESTORE" ]; then
     # `content-sha256` -- "recorded on every object this adapter publishes"
     # (`storage/s3.py`, `_META_SHA256`). An instance restored that way lists a document
     # and 422s on its bytes. So each object goes back with its attributes reattached.
+    #
+    # ALL FIVE of them (`D-17`). Until wave 18 this line reattached `content-sha256` and
+    # `Content-Type` -- the two a READ consults -- and dropped `blob-id`, `blob-role` and
+    # `content-size`. Wave 14 verified the restore by reading an object back, got its
+    # bytes, and closed. `blob-role` is consulted only by a WRITE: `publish` compares the
+    # recorded role and media type before accepting the same bytes again, so every later
+    # upload of a restored document answered `409` / `BlobAttributeConflictError` while the
+    # identical bytes on a clean stack gave `201`. A restore is proved by writing to the
+    # restored instance, not by reading from it.
     restore_objects='
-        while IFS="	" read -r key sha ctype; do
+        while IFS="	" read -r key id role sha size ctype; do
             [ -n "$key" ] || continue
-            mc --quiet cp --attr "content-sha256=$sha;Content-Type=$ctype" \
+            mc --quiet cp --attr "blob-id=$id;blob-role=$role;content-sha256=$sha;content-size=$size;Content-Type=$ctype" \
                 "/dump/objects/$key" "local/$S3_BUCKET/$key" >/dev/null
         done < /dump/objects.attrs
         echo "  reset.sh: restored $(wc -l < /dump/objects.attrs) objects"'
@@ -281,12 +290,32 @@ if ! compose exec -T postgres pg_restore --list < "$DUMP_DIR/database.dump" >/de
            "Nothing has been dropped. A dump nobody read is not a backup."
 fi
 RECORDED="$(grep -c . "$DUMP_DIR/objects.attrs" 2>/dev/null || echo 0)"
-if [ "$RECORDED" != "${LIVE_OBJECTS:-x}" ] || grep -q '^[^\t]*\t\t' "$DUMP_DIR/objects.attrs" 2>/dev/null; then
-    refuse "the object metadata sidecar is incomplete." \
+if [ "$RECORDED" != "${LIVE_OBJECTS:-x}" ]; then
+    refuse "the object metadata sidecar is short." \
            "  objects in $BUCKET  : ${LIVE_OBJECTS:-<unknown>}" \
            "  attributes recorded : $RECORDED" \
-           "Nothing has been purged. Bytes without their content-sha256 restore into an" \
+           "Nothing has been purged. Bytes without their attributes restore into an" \
            "instance that lists a document and refuses to serve it."
+fi
+# Every row carries all six fields, none of them empty: the key, the four user-metadata
+# keys `storage/s3.py` `_metadata_for` writes, and `Content-Type`. A row short of one of
+# them is `D-17`: the object comes home readable and refuses the next upload of its own
+# bytes with a `409`, which is the failure this whole guard exists to make impossible.
+#
+# THE TAB IS A LITERAL, and that is not a style choice. This test previously read
+# `grep -q '^[^\t]*\t\t'`, which GNU grep -- the grep a deploy host has -- does not read as
+# a tab at all: `\t` outside a bracket is just `t`, so the pattern looked for the letters
+# `tt` and matched nothing. Measured at this commit with GNU grep 3.11 against a sidecar
+# row whose digest field was empty: no match, no refusal. It appeared to work only on a
+# host whose `grep` is ugrep. A guard written in a regex dialect the target does not speak
+# is not a guard, and this one had never been shown able to fail.
+TAB="$(printf '\t')"
+if grep -qvE "^[^$TAB]+($TAB[^$TAB]+){5}\$" "$DUMP_DIR/objects.attrs" 2>/dev/null; then
+    refuse "the object metadata sidecar is incomplete -- a row is missing an attribute." \
+           "  expected per row    : key, blob-id, blob-role, content-sha256, content-size, content-type" \
+           "  first bad row       : $(grep -nvE "^[^$TAB]+($TAB[^$TAB]+){5}\$" "$DUMP_DIR/objects.attrs" | head -1 | cat -A | head -c 300)" \
+           "Nothing has been purged. A restore missing blob-role gives back an object that" \
+           "reads correctly and answers 409 to the next upload of its own bytes (D-17)."
 fi
 MIRRORED="$(find "$DUMP_DIR/objects" -type f | wc -l | tr -d '[:space:]')"
 if [ "${LIVE_OBJECTS:-x}" != "$MIRRORED" ]; then
