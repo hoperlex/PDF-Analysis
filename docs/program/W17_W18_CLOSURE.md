@@ -17,7 +17,7 @@ reseal.
 | integrator | `D-4` | an unreachable branch stops inventing a digest |
 
 **Contract: 10 paths / 12 operations / 43 schemas → 12 / 15 / 46.** No error code added.
-**Gate: 1746 → 1776** in the battery, frontend 592 → 595, foundation 35 throughout.
+**Gate: 1746 → 1778** in the battery, frontend 592 → 595, foundation 35 throughout.
 
 ## 2. Three instruments that reported something other than what they claimed
 
@@ -39,12 +39,14 @@ were byte-identical to the microsecond. `W15RUN-5` was legible in that directory
 waves** before a browser found it. A re-capture alone would have erased the evidence with
 nobody having to say it had been there, so `W17-VIEW` asserted the repair instead.
 
-**Thirty statements a gate structurally cannot check.** `grep` over `src/auditmanager/api/`
-returned **thirty** claims about the size of the surface — docstrings, comments, `README.md`,
+**Thirty-five statements a gate structurally cannot check.** `grep` over
+`src/auditmanager/api/` returned **thirty**, and a second sweep over the rest of `src/` found
+**five more** — thirty-five across twelve files, all claiming the surface has twelve operations
+and 43 schemas — docstrings, comments, `README.md`,
 and one string the application **serves** on `/openapi.json`: *"The twelve operations of the
 PC-01 surface"*. The conformance engine drops `description`, `summary` and `title` as
 annotation, so **every one of them would have survived this reseal and gone on being read as
-true.** All thirty were **re-measured, not find-and-replaced**: *"eight of the twelve"* became
+true.** All thirty-five were **re-measured, not find-and-replaced**: *"eight of the twelve"* became
 *eleven of fifteen* because they were counted; *"four of the twelve declare no 422"* stayed
 **four**, because that set did not change.
 
@@ -144,12 +146,19 @@ first one that will put today's repairs in front of a browser.
 
 ```
 GATE OK: battery, foundation, frontend and whitespace all pass
-1776 passed, 5 skipped, 168 subtests passed
+1778 passed, 5 skipped, 168 subtests passed
 foundation 35 passed, frontend 595 passed (44 files)
 ```
 
-Every delta accounted for: 1748 → 1756 (`W18-OPS`'s eight refusal cases) → 1776 (`W18-SEAL`'s
-twenty). Frontend 592 → 595. Read from a log with the exit code appended by the same shell
+Every delta accounted for: 1748 → 1756 (`W18-OPS`'s eight refusal cases) → **1778**
+(`W18-SEAL`'s twenty-two: nineteen `test_listing_surface.py` cases and three new records).
+Frontend 592 → 595, and those three are **not new test code** —
+`seam-operations.contract.test.ts` generates one `it` per seam operation, so the count follows
+the contract.
+
+**I wrote 1776 and twenty here before the gate ran, and both were wrong.** The figures above
+are the measured ones. That is the third time today a number of mine was a prediction wearing
+a measurement's clothes, which is why this programme writes the command beside the figure. Read from a log with the exit code appended by the same shell
 that ran `make`.
 
 ## 9. What these waves hand forward

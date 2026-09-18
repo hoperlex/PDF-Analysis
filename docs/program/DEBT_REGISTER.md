@@ -15,6 +15,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-20** | there is no observable `running` state | architecture |
 | **D-18** | two opposite faults share one byte-identical envelope | catalog — owner's, and now a narrow question |
 | **D-22** | one rule, three hand-copies | `web/src` repair |
+| **D-23** | the contract's prose is unguarded, and one claim is **served** | a cheap guard |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | D-9, D-11 | corpus granularity; a licence reading | owner / registered |
@@ -710,6 +711,37 @@ its dispatch.
 
 Check: `grep -rn "resolveIntentKey" web/src` — one definition, and three places that should call it
 and do not.
+
+### D-23 — the contract's prose is an unguarded hand-copy, in both documents
+
+**Found by `W18-SEAL` while resealing under `R-5`, and it is bigger than that wave.**
+
+The conformance engine verifies the whole **surface** against `app.openapi()` and drops
+`description`, `summary` and `title` as annotation (`N4`). So it verifies **none of the prose
+either document carries** — and the prose makes checkable claims.
+
+`W18-SEAL`'s sweep found **thirty-five statements across twelve files** asserting the surface
+has twelve operations and 43 schemas, after the reseal made it fifteen and 46. Six are in
+`api/app.py` alone, and **one of them is served**: `_DESCRIPTION`, *"The twelve operations of
+the PC-01 surface"*, goes out on `/openapi.json` to every caller. Others sit in
+`build_authorization_dependency`'s docstring (*"guards all twelve operations"*), in
+`declarations.py` (*"four of the twelve declare no 422"*), and in `api/README.md`.
+
+**Not one of them can fail a gate.** They would all have survived the reseal and gone on being
+read as true, including the one on the wire.
+
+This is `D-8` and `D-22` in one place: a name repeated often enough stops being checked, and
+the copies are what ship. All thirty-five were re-measured rather than find-and-replaced —
+*"eight of the twelve"* became **eleven of fifteen** because they were counted, and *"four of
+the twelve declare no 422"* stayed **four**, because that set did not change.
+
+**The standing gap, which is what this row is for:** nothing guards the `info` block or any
+docstring against the surface it describes. A cheap version exists — assert that no file under
+`src/auditmanager/api/` contains a number-word for the operation count that disagrees with the
+document — and it would have caught all thirty-five.
+
+Check: `grep -rn "twelve\|fifteen\|43 \|46 " src/auditmanager/api/ | wc -l`, against the
+operation and schema counts in `contracts/api/v1/openapi.json`.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
