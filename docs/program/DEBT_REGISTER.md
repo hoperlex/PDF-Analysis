@@ -15,14 +15,13 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-21** | cost is recorded and exposed nowhere | the **same reseal** — ruled: do it |
 | **D-17** | a restored instance is proved by reading and broken for writing | `infra/` repair |
 | **D-20** | there is no observable `running` state | architecture |
-| **D-4** | one site still emits an empty digest | `src/` repair |
 | **D-18** | a 409 cannot be diagnosed from the wire | catalog — owner's |
 | **D-22** | one rule, three hand-copies | `web/src` repair |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | D-9, D-11 | corpus granularity; a licence reading | owner / registered |
 
-**Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-12, D-13, D-19, and D-14 opened
+**Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-4, D-12, D-13, D-19, and D-14 opened
 and closed in the same pass.
 
 **Two rules this register earned the hard way, both on the same day:**
@@ -176,43 +175,49 @@ against a figure that did not use it.
 
 Check: `python3 -c "import inspect;from auditmanager.analysis.text.stage import _record;print(inspect.signature(_record).parameters['cost_basis'].default)"`.
 
-### D-4 — an empty digest reaches an operator-facing envelope — **PARTLY CLOSED, RE-SCOPED**
+### D-4 — an empty digest reaches an operator-facing envelope — **CLOSED**
 
-**The reconciliation half is closed** by `1b2549b`, alongside D-2 above. An object recording no
-digest is `validation_failed` carrying `aggregate_type="Blob"`, `field="sha256"`,
-`constraint="recorded on every published object"` — not an integrity verdict with
-`actual_sha256=""`, which the code's own comment calls *"an empty string where a digest is
-expected, and a claim about bytes nothing has looked at"*. It is also the same answer
-`BlobStore.read` gives over the same row, so the two do not disagree about one object. Guarded by
-`tests/integration/ingest/test_reconciliation_reads_the_bytes.py`.
+**The reconciliation half** closed at `1b2549b` alongside D-2: an object recording no digest is
+`validation_failed` carrying `aggregate_type="Blob"`, `field="sha256"`, `constraint="recorded on
+every published object"` — not an integrity verdict with `actual_sha256=""`, which the code's own
+comment calls *"an empty string where a digest is expected, and a claim about bytes nothing has
+looked at"*. Guarded by `tests/integration/ingest/test_reconciliation_reads_the_bytes.py`.
 
 **Wave 14 produced that state on a real host by accident, which is the best evidence the choice was
 right.** `mc mirror` restored an object whose bytes were intact and whose
-`X-Amz-Meta-Content-Sha256` was gone. Under the repaired code an operator is told the store has
-compared nothing to anything — not that their bytes are corrupt, and not sent to restore a backup
-they do not need.
+`X-Amz-Meta-Content-Sha256` was gone. An operator is told the store has compared nothing to
+anything — not that their bytes are corrupt.
 
-**The row does not close, and the correction is `W16-ERR`'s.** I closed it on the strength of
-`reconciliation.py` alone. A second site does the same thing:
+**The second site** — `blob_repository.py::_assert_same_content`, `actual_sha256=existing.sha256 or
+""` — was found by `W16-ERR` after I closed this row on one module's evidence. Closed 2026-09-18.
 
-```python
-# src/auditmanager/storage/blob_repository.py:260, in _assert_same_content
-    actual_sha256=existing.sha256 or "",
-```
+**And my re-opened row was wrong about why.** I wrote *"it is reachable, and the schema says so"*,
+citing `ck_blob_sha256`'s `CHECK (sha256 IS NULL OR …)`. That constraint permits NULL **in
+general**; it is not evidence that a row reaches this comparison carrying one. Reading a permissive
+constraint as a reachable state, without checking the writer, is `OPERATING_CONSTRAINTS.md` §12 in
+its own right — **a query sharing an assumption with its subject**, three rows below where this file
+records the same mistake twice already.
 
-**It is reachable, and the schema says so.** `ck_blob_sha256` is
-`CHECK (sha256 IS NULL OR sha256 <pattern>)` and the column's own comment reads *"Write-once: NULL
-until verification, then immutable."* So a blob in the pre-verification window has `sha256 IS
-NULL`, the comparison above is then true, and the envelope carries `actual_sha256=""` — the exact
-string this row was opened about.
+**Measured:** `_assert_same_content` runs only on an `available` or `verifying` row, and two
+independent facts stop either carrying a NULL digest —
 
-**Two closes in one day, one of them wrong, and the shape is the same both times.** D-2 and D-4
-were closed in the tree and left open here; then D-4 was closed here on one module's evidence while
-a second module still did it. **A row is measured across every site that can produce the behaviour,
-not the first one that explains it** — `OPERATING_CONSTRAINTS.md` §12's rule about queries, applied
-to closes.
+* `ck_blob_available_is_verified` is `CHECK (state <> 'available' OR (sha256 IS NOT NULL AND …))`,
+  so the schema forbids it outright on an `available` row;
+* `_INSERT` is the **only** statement in the tree that creates a `blob` row (`grep -rn "INSERT INTO
+  blob" src/ db/` returns one line) and it always supplies `verified.sha256`, so a `verifying` row
+  never acquires one either.
 
-Check: `grep -rn 'sha256 or ""' src/` returns exactly one line, and it is the one above.
+So the branch is **unreachable, and saying so is the repair.** It now raises `internal_error`
+naming the invariant and carrying **no details at all**, rather than inventing an empty digest. An
+unreachable branch that invents a plausible value is worse than one that refuses: the empty string
+would have reached an operator looking exactly like a digest of nothing.
+
+Two guards, each shown able to fail. Restoring `or ""` reddens the refusal test; pointing the
+discriminator at a different constraint reddens the reachability test — **and the first attempt at
+that second mutation was vacuous**, because it rewrote the constraint name in the docstring rather
+than in the query. The name is now a module constant so the mutation lands where it matters.
+
+Check: `grep -rn 'sha256 or ""' src/` returns nothing.
 
 ### D-15 — one `cost_basis` describes a figure summed over several attempts
 

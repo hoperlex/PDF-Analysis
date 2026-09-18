@@ -252,10 +252,34 @@ class BlobMetadataRepository:
     def _assert_same_content(
         existing: BlobMetadataRecord, verified: VerifiedBlob
     ) -> None:
+        if existing.sha256 is None:
+            # `D-4`, the second site. This used to send `existing.sha256 or ""` into the
+            # envelope -- an empty string where a digest is expected, and a claim about
+            # bytes nothing has looked at, which is the exact shape `verify_version` was
+            # repaired for at `1b2549b`.
+            #
+            # **It is unreachable, and saying so is the repair.** The row reaches here
+            # only in `available` or `verifying`. `ck_blob_available_is_verified` forbids
+            # a NULL digest on an `available` row outright; a `verifying` row could carry
+            # one as far as the schema is concerned, and does not, because `_INSERT` is
+            # the only statement in the tree that creates a `blob` row and it always
+            # supplies `verified.sha256`. So the `| None` on the record is the column's
+            # type, not a state this writer can produce.
+            #
+            # An unreachable branch that invents a plausible value is worse than one that
+            # refuses: the empty string would have reached an operator looking exactly
+            # like a digest of nothing. This names the invariant instead.
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message=(
+                    "a blob row in a verified state carries no digest; this is a "
+                    "storage invariant, not a fact about the bytes the caller sent"
+                ),
+            )
         if existing.sha256 != verified.sha256 or existing.size_bytes != verified.size:
             raise DomainError(
                 ErrorCode.STORAGE_INTEGRITY_ERROR,
                 blob_id=str(verified.blob_id),
                 expected_sha256=verified.sha256,
-                actual_sha256=existing.sha256 or "",
+                actual_sha256=existing.sha256,
             )

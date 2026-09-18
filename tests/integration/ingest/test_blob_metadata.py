@@ -10,6 +10,7 @@ the declared lifecycle a row actually takes.
 from __future__ import annotations
 
 import dataclasses
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import text
@@ -17,9 +18,15 @@ from sqlalchemy import text
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage import BlobState, VerifiedBlob, derive_blob_id, sha256_of
-from auditmanager.storage.blob_repository import BlobMetadataRepository
+from auditmanager.storage.blob_repository import (
+    BlobMetadataRecord,
+    BlobMetadataRepository,
+)
 
 CONTENT = b"%PDF-1.7\nnot a real document, but real bytes\n"
+
+#: Any instant. The refusal below is about the digest and never reads these.
+_EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def verified_for(content: bytes) -> VerifiedBlob:
@@ -148,3 +155,85 @@ def test_the_blob_table_has_no_location_column(engine) -> None:
         "created_at",
         "updated_at",
     }
+
+
+# --- D-4, the second site: an empty digest must never reach an envelope ---------------
+
+#: Read from the schema rather than spelled here, so the assertion below is about what
+#: PostgreSQL enforces and not about what this file remembers.
+_AVAILABLE_IS_VERIFIED = "ck_blob_available_is_verified"
+
+
+def test_no_row_the_writer_can_create_reaches_the_comparison_without_a_digest(
+    session_factory, engine
+) -> None:
+    """The discriminator, and the reason the test below is not itself the repair.
+
+    `_assert_same_content` runs only on an `available` or `verifying` row. Two
+    independent facts stop either carrying a NULL digest, and both are asserted because
+    either alone would leave the other free to change silently:
+
+    * the schema forbids it on an `available` row;
+    * `_INSERT` is the only statement in the tree that creates a `blob` row, and it
+      always supplies `verified.sha256`, so a `verifying` row never acquires one either.
+
+    If either stops being true this reddens, and the branch below stops being unreachable.
+    """
+    repository = BlobMetadataRepository()
+    verified = verified_for(CONTENT)
+    with session_scope(session_factory) as session:
+        repository.record_verified(session, verified)
+
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT state, sha256 FROM blob "
+                "WHERE state = ANY(ARRAY['available', 'verifying'])"
+            )
+        ).all()
+    assert rows, "nothing reached a verified state; the discriminator proved nothing"
+    assert all(sha is not None for _, sha in rows)
+
+    with engine.connect() as connection:
+        definition = connection.execute(
+            text(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conname = :name"
+            ),
+            {"name": _AVAILABLE_IS_VERIFIED},
+        ).scalar_one()
+    assert "sha256 IS NOT NULL" in definition, definition
+
+
+def test_a_digestless_row_is_refused_as_an_invariant_not_reported_as_empty_bytes() -> None:
+    """`DEBT_REGISTER.md` D-4, second site.
+
+    This branch is unreachable through the writer -- the test above establishes that --
+    so the record is constructed directly. That is legitimate precisely because the point
+    is what the code says about a state it cannot produce.
+
+    Before the repair it emitted `actual_sha256=""`: an empty string where a digest is
+    expected, in an operator-facing envelope, claiming something about bytes nothing had
+    looked at. An unreachable branch that invents a plausible value is worse than one
+    that refuses, because the empty string reaches a reader looking exactly like a digest
+    of nothing. The repair names the invariant instead.
+    """
+    verified = verified_for(CONTENT)
+    digestless = BlobMetadataRecord(
+        blob_id=verified.blob_id,
+        state=BlobState.VERIFYING,
+        sha256=None,
+        size_bytes=verified.size,
+        media_type=verified.media_type,
+        created_at=_EPOCH,
+        updated_at=_EPOCH,
+    )
+
+    with pytest.raises(DomainError) as raised:
+        BlobMetadataRepository._assert_same_content(digestless, verified)
+
+    assert raised.value.code is ErrorCode.INTERNAL_ERROR
+    # The whole of the row: nothing in the envelope claims anything about the bytes.
+    assert "actual_sha256" not in raised.value.detail_fields
+    assert "" not in raised.value.detail_fields.values()
+    assert raised.value.envelope("cid-d4").details == {}
