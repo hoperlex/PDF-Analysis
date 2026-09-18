@@ -328,7 +328,7 @@ EXCEPTION_W20EXEC = {
         "property was added, renamed, removed or re-typed and no status code changed"
     ),
     "status": "taken",
-    "decided_by": "PLACEHOLDER_COMMIT",
+    "decided_by": "9f3436f",
     "decided_by_subject": (
         "feat(runs): a carrier takes the run off the request thread, and `running` is "
         "committed"

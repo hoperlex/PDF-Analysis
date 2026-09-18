@@ -163,6 +163,14 @@ Clock = Callable[[], datetime]
 #: test must be able to assert *that* the pinned backoff was taken without spending it.
 Sleep = Callable[[float], None]
 
+#: `D-20`. What a caller does with the fact that the run has reached ``running``. The
+#: default is nothing, which is what every caller that owns one transaction wants.
+Checkpoint = Callable[[], None]
+
+
+def _no_checkpoint() -> None:
+    return None
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -529,6 +537,7 @@ def execute_run(
     retry_policy: RetryPolicy | None = None,
     cost_meter: CostMeter | None = None,
     sleep: Sleep = time.sleep,
+    checkpoint: Checkpoint = _no_checkpoint,
 ) -> ExecutionResult:
     """Drive one run from ``created`` to a terminal state.
 
@@ -609,6 +618,22 @@ def execute_run(
             session, run_id=run_id, from_state=INITIAL_STATE, to_state="queued"
         )
     run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
+    # `D-20`. The one place a caller is invited to make what has happened so far durable.
+    #
+    # Every state this function writes used to be written and overwritten inside the
+    # caller's single uncommitted transaction, so `running` existed for the length of one
+    # `UPDATE` and no second connection could ever read it. A poller therefore made exactly
+    # one request and `PA-01` criterion 4's UI clause was unreachable.
+    #
+    # The hook is here and nowhere else, and that placement is the crash story. Committing
+    # here leaves a reader exactly two pictures of a run whose process died: `running` with
+    # no stage rows, or a terminal with all of them. A second checkpoint inside the stage
+    # loop would add a third -- stage rows belonging to a run no terminal accounts for --
+    # and PC-01 cannot resume, so nothing would ever account for them.
+    #
+    # It defaults to doing nothing, so the 50-odd in-process callers that create and
+    # execute a run inside one unit of work are unchanged and still get all-or-nothing.
+    checkpoint()
 
     outputs = _StageOutputs()
     outputs.refs[ROLE_SOURCE_DOCUMENT] = ArtifactRef(
@@ -726,4 +751,4 @@ def execute_run(
     )
 
 
-__all__ = ["Clock", "ExecutionResult", "Sleep", "execute_run"]
+__all__ = ["Checkpoint", "Clock", "ExecutionResult", "Sleep", "execute_run"]

@@ -42,8 +42,11 @@ Two transactions, and the crash story that follows from where the boundary is
 -----------------------------------------------------------------------------
 :func:`run_to_terminal` executes a queued run in **two** transactions:
 
-1. ``queued -> running``, committed. This is what makes ``running`` a reading rather than
-   an internal step.
+1. up to and including ``queued -> running``, committed. This is what makes ``running`` a
+   reading rather than an internal step. The commit happens through ``execute_run``'s
+   ``checkpoint`` hook, which is called there and nowhere else and defaults to doing
+   nothing, so the fifty-odd in-process callers that create and execute a run inside one
+   unit of work keep the all-or-nothing they have always had.
 2. everything else -- all four stages, every ``stage_result`` row, the evidence gate, the
    published findings and the terminal -- committed once, at the end.
 
@@ -231,24 +234,22 @@ def run_to_terminal(
     """Execute one **queued** run to a terminal, in its own sessions.
 
     The job a carrier carries. It owns its transactions -- the request that accepted the
-    run has committed and gone -- and it raises nothing: there is nobody left to raise at,
-    so every outcome is written to the run row instead.
+    run has committed and gone -- and every outcome is written to the **run row** before
+    anything else happens, because on a worker thread there is nobody left to raise at.
 
-    Called with a run that is not ``queued`` it fails at the first transition, which is a
-    ``state_transition_not_allowed`` from the same compare-and-set every other move uses
-    and is then recorded as the failure terminal like any other. It is not silently
-    tolerated: a carrier handed a run somebody else is already executing must not join in.
+    It then re-raises. Not for the pool, which drops the exception into a future nothing
+    reads, but because :class:`InlineCarrier` runs this on the request thread and a caller
+    that asked for inline execution should still see a fault as a fault. The run row says
+    the same thing either way, which is the point.
+
+    Called with a run that is not ``queued`` (or ``created``, which an in-process caller
+    hands over) it fails at ``execute_run``'s own compare-and-set -- the same one every
+    other move uses -- and is then recorded as the failure terminal like any other. It is
+    not silently tolerated: a carrier handed a run somebody else is already executing must
+    not join in.
     """
     run_repo = runs or RunRepository()
 
-    # -- transaction 1: the state that makes this run observable --------------
-    with session_factory() as session:
-        run_repo.advance(
-            session, run_id=run_id, from_state="queued", to_state="running"
-        )
-        session.commit()
-
-    # -- transaction 2: the whole analysis, or none of it ---------------------
     try:
         with session_factory() as session:
             execute_run(
@@ -258,9 +259,16 @@ def run_to_terminal(
                 adapter=adapter,
                 provider_config=provider_config,
                 runs=run_repo,
+                # The two transactions. `execute_run` calls this once, the moment the run
+                # is `running` and before any stage has done anything; committing there is
+                # the whole of what makes the state readable. Everything after it -- four
+                # stages, every `stage_result` row, the evidence gate, the published
+                # findings and the terminal -- is the second transaction and commits
+                # below, together or not at all.
+                checkpoint=session.commit,
             )
             session.commit()
-    except Exception as failure:  # noqa: BLE001 - see the module note
+    except Exception as failure:
         _log.exception("run %s did not reach a terminal by itself", run_id)
         _record_crash(session_factory, run_id, failure, runs=run_repo)
         raise
