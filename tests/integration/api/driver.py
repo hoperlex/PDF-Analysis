@@ -220,16 +220,27 @@ class Surface:
 class _PreBuilt:
     """Just enough of ``Application`` for ``create_asgi_app`` to take a router as given.
 
-    ``create_asgi_app(application=...)`` reads exactly one attribute. Standing in for the
-    whole composition root here is what lets this suite keep wiring the seam adapters it
-    has always wired -- three of the shapes the frozen document requires still have no
-    producer outside it -- without a database-backed application being built per test.
+    ``create_asgi_app(application=...)`` reads two attributes since `D-20`: the router, and
+    the carrier it publishes as ``app.state.run_carrier``. Standing in for the whole
+    composition root here is what lets this suite keep wiring the seam adapters it has
+    always wired -- three of the shapes the frozen document requires still have no producer
+    outside it -- without a database-backed application being built per test.
+
+    The carrier is an :class:`~auditmanager.runs.InlineCarrier` and nothing in this suite
+    submits to it: the seam adapters answer from rows this suite writes itself and start no
+    run. It is a real carrier rather than ``None`` so that a test which *did* start one
+    would get a finished run rather than an ``AttributeError`` three frames away from the
+    cause. ``session_factory`` is deliberately absent: it is read only by the startup
+    lifespan, and this driver builds its ``TestClient`` without entering one.
     """
 
-    __slots__ = ("router",)
+    __slots__ = ("router", "carrier")
 
     def __init__(self, router: APIRouter) -> None:
+        from auditmanager.runs import InlineCarrier
+
         self.router = router
+        self.carrier = InlineCarrier()
 
 
 def dispatch(

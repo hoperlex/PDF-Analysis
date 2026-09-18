@@ -236,6 +236,23 @@ class Client:
             body=json.dumps(payload).encode("utf-8"),
         )
 
+    def await_runs(self, timeout: float = 300.0) -> None:
+        """Block until every run this client has started has reached a terminal.
+
+        `D-20`. ``startRun`` answers ``202 queued`` and the analysis runs on a carrier
+        thread, so a criterion that asks what a *finished* run reports has to say when it
+        is finished. It waits on the carrier's own futures --
+        ``ThreadCarrier.drain`` -- which is the completion of the real work; a suite that
+        slept for a plausible number would be asserting against a guess and would be
+        flaky on a loaded host in exactly the way this programme has paid for before.
+
+        Deliberately a method on the driver rather than something each test remembers: a
+        criterion that forgot to wait would read a `queued` run and blame the product.
+        """
+        assert self._application.carrier.drain(timeout=timeout), (
+            f"a run started through this client did not finish within {timeout}s"
+        )
+
     def run_status(self, run_id: str) -> Answer:
         return self.request("GET", f"/runs/{run_id}")
 

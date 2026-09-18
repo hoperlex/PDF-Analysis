@@ -294,6 +294,82 @@ EXCEPTION_W19API = {
     ),
 }
 
+#: ``DEBT_REGISTER.md`` D-20: ``startRun`` executed the run inline, so the ``202`` was
+#: already ``published``, a poller made one request and stopped, and the contract's
+#: ``queued`` and ``running`` states -- both declared by ``contracts/domain/v1/
+#: state-machines.json`` since CP-00 -- could not be read by any client.
+#:
+#: **One record moves, and only one.** Case 03 is the request that *accepts* a run, and
+#: its body is now the accepted state rather than the finished one. Cases 04 and 05 are
+#: replays, and a replay reports the run as it stands: the journey waits for the run to
+#: finish before it replays, so those two bodies are the published shape they have always
+#: been, byte for byte, and carry no exception block. Cases 06 and 07 read the same
+#: finished run and do not move either. That is the whole of it -- the three records
+#: `D-19` and `D-21` moved together did **not** move together this time, because this
+#: change is about *when* a body is produced and not about what a `RunStatus` contains.
+#:
+#: **No ruling, and no contract file touched.** ``queued`` is a state the frozen
+#: ``RunState`` enum has always declared and the ``audit_run`` machine has always had an
+#: edge to; ``startRun``'s ``202`` and its ``RunStatus`` response are unchanged in the
+#: document. What moved is an implementation that could not reach a declared state from
+#: outside itself. `W18-SEAL`'s R-5 and `W19-API`'s R-10 were both needed because a
+#: *property* appeared or was filled; nothing appears here.
+EXCEPTION_W20EXEC = {
+    # Three debts, oldest first, because this record has now been moved three times and
+    # an exception block describes the whole of a record's divergence from the `W13-BASE`
+    # capture rather than only the most recent step.
+    "debt": ["D-19", "D-21", "D-20"],
+    "ruling": (
+        "D-19 and D-21: OWNER_RULINGS_2026-09-17.md section 3.5, R-5 -- one reseal "
+        "carrying the list operations and cost visibility together. D-20: **no owner "
+        "ruling** -- `queued` is declared by the frozen `RunState` enum and "
+        "`created -> queued` by the frozen `audit_run` machine, nothing in "
+        "`contracts/**` moved, and the reseal authority is not engaged because no "
+        "property was added, renamed, removed or re-typed and no status code changed"
+    ),
+    "status": "taken",
+    "decided_by": "PLACEHOLDER_COMMIT",
+    "decided_by_subject": (
+        "feat(runs): a carrier takes the run off the request thread, and `running` is "
+        "committed"
+    ),
+    "decided_on": "2026-09-18",
+    "permitted_change": (
+        "D-19 and D-21 moved this record with the four other `RunStatus` records; see "
+        "`EXCEPTION_W18SEAL`, whose text governs cases 04, 05, 06 and 07 unchanged. What "
+        "they added is **absent from this one record now**, and that is not a reversal: a "
+        "run that has just been accepted has no stage rows, has published nothing and has "
+        "called no provider, and `run_status_body` has always omitted what the producer "
+        "has nothing to report. The same fields are still on the four records of a "
+        "finished run. "
+        "D-20: "
+        "before this commit `RunAdapter.start_run` imported `execute_run` and called it "
+        "inside the same `_write(...)` that created the run, so `startRun` answered the "
+        "run's **terminal** shape: `state: published`, four `stages` each with its "
+        "timings, `published_finding_count`, `diagnostic_observation_count`, the three "
+        "cost properties and a `terminal_at`. It now answers the shape of a run that has "
+        "been accepted and handed to a carrier: `state: queued`, an empty `stages` list, "
+        "both counts at `0`, no cost properties -- the run has made no provider call yet, "
+        "and `RunStatusView` emits the three together or not at all -- and no "
+        "`terminal_at`, because there is no terminal. `run_id`, `project_uid`, "
+        "`version_uid`, `provider_mode`, `created_at`, `analysis_profile_id`, "
+        "`prompt_bundle_id` and `degradation_set` are unchanged, and the status is still "
+        "`202` with the same three headers. **No property was renamed, removed or "
+        "re-typed and no status or header moved**: every property that is gone is one "
+        "`run_status_body` has always omitted when the producer has nothing to report, "
+        "which is the same rule that already governs an absent cost. The state is one the "
+        "frozen `RunState` enum declares and the frozen `audit_run` machine has an edge "
+        "to. Records 04 and 05 replay a run the journey has waited for and are unmoved; "
+        "so are 06, 07, 34 and every other record in this directory. This is the whole of "
+        "the permitted change; the record is compared byte for byte against the new "
+        "expectation like every other."
+    ),
+    "everything_else": (
+        "Every other difference in this directory is a failure of the wave, whatever "
+        "argument accompanies it."
+    ),
+}
+
 MULTIPART_BOUNDARY = "w13baselineboundary"
 
 #: `T-6`. The credential every request in this journey presents, and the environment
@@ -702,6 +778,20 @@ def sized_multipart(total: int) -> bytes:
 # --- the journey -------------------------------------------------------------------
 
 
+def await_runs(app: Any, timeout: float = 300.0) -> None:
+    """Wait for every run this application has started to reach a terminal.
+
+    `D-20`. ``create_asgi_app`` publishes the built application's carrier as
+    ``app.state.run_carrier``; ``drain`` waits on the futures of the work itself. Nothing
+    here polls, sleeps or retries, so the journey is as deterministic after the carrier as
+    it was when execution happened on the request thread.
+    """
+    carrier = app.state.run_carrier
+    assert carrier.drain(timeout=timeout), (
+        f"a run started by this journey did not finish within {timeout}s"
+    )
+
+
 def run_journey(good: Any, refused: Any) -> list[Exchange]:
     """Drive every case, in order, and return what came back.
 
@@ -895,16 +985,16 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     started = record(
         "03-startRun.success",
         "startRun",
-        "D-5's operation. 202, and the run's whole published shape: state, provider "
-        "mode, the four stages, the pinned profile and bundle identities, the empty "
-        "degradation set",
+        "D-5's operation, and D-20's. 202, and the shape of a run that has been "
+        "*accepted*: the non-terminal state, the provider mode, no stages yet, the "
+        "pinned profile and bundle identities, the empty degradation set",
         "POST",
         "/runs",
         headers={"Idempotency-Key": f"w13base-{tag}-run", **json_headers},
         body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
         body_note="StartRunRequest, version_uid only; provider_mode omitted",
         tokens=t,
-        exception=EXCEPTION_W18SEAL,
+        exception=EXCEPTION_W20EXEC,
     )
     run = json_of(started)
     run_id = run["run_id"]
@@ -916,6 +1006,17 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.timestamps(run)
     correlation(started, t)
     content_length(started, t)
+
+    # `D-20`. Every case below this line reads a run that has finished -- the replays, the
+    # two `getRunStatus` captures, the findings, the CSV and the listing -- so the journey
+    # waits here, once, and waits on the carrier's own futures rather than on a duration.
+    # A sleep would make this corpus's 36 byte-for-byte comparisons depend on how loaded
+    # the host was, which is the one thing a characterization baseline must never do.
+    #
+    # It is also why records 04 and 05 do not move: a replay reports the run as it stands,
+    # and by the time they are sent it stands published, exactly as it did when `startRun`
+    # executed inline.
+    await_runs(good)
 
     # 4 -- startRun, replayed under the same key ------------------------------------
     t = Tokens()

@@ -307,6 +307,7 @@ def listing_router(
     drives starts a run, and passing a fake provider would make it possible to.
     """
     from auditmanager.bootstrap.adapters import RunAdapter
+    from auditmanager.runs import InlineCarrier
 
     return Surface(
         build_router(
@@ -320,6 +321,9 @@ def listing_router(
                 provider_mode="recorded",
                 analysis_profile_id=str(AnalysisProfileId.new()),
                 prompt_bundle_id=str(PromptBundleId.new()),
+                # `D-20`, and the same reason the provider collaborators are `None`:
+                # nothing this module drives starts a run.
+                carrier=InlineCarrier(),
             ),
             findings=DatabaseFindingAdapter(session),
             decisions=LedgerDecisionAdapter(session),

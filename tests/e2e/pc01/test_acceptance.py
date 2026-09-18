@@ -187,6 +187,13 @@ def journey(client: Client) -> Journey:
         "analysis, writes the rows and *then* answers 500 with no run_id.",
     )
     started = answer.json
+    # `D-20`. The `202` is the acceptance, not the result: every criterion below reads a
+    # finished run, so the journey waits for the carrier here, once, on the real futures.
+    assert started["state"] == "queued", (
+        "startRun answered with a state that is not the accepted one; `D-20` put "
+        "execution on a carrier and the 202 reports what was accepted"
+    )
+    client.await_runs()
 
     answer = client.run_status(started["run_id"])
     assert answer.status == 200, _blocked(
@@ -1112,6 +1119,9 @@ def test_c10_an_unavailable_provider_fails_the_run_explicitly(journey: Journey) 
         return
 
     run_id = answer.json["run_id"]
+    # `D-20`. The provider is unreachable and the retry budget is spent on a carrier
+    # thread, so the terminal this criterion reads only exists once that thread is done.
+    unavailable.await_runs()
     status = unavailable.run_status(run_id)
     assert status.status == 200, status.body
     state = status.json["state"]

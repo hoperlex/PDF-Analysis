@@ -85,6 +85,7 @@ from auditmanager.bootstrap.adapters import (
     FindingAdapter,
     RunAdapter,
 )
+from auditmanager.runs import InlineCarrier
 
 #: How many extra runs this module publishes into the same tables before it asks the
 #: query surface anything. Not a realistic corpus on its own -- the point is that it is
@@ -109,6 +110,10 @@ def router(session_factory):
             provider_mode="recorded",
             analysis_profile_id="unused",
             prompt_bundle_id="unused",
+            # `D-20`. Nothing here starts a run, so nothing is ever submitted. The
+            # carrier is required rather than defaulted precisely so this reads as a
+            # decision: an inline one would execute on this thread if anything did.
+            carrier=InlineCarrier(),
         ),
         findings=FindingAdapter(session_factory),
         decisions=DecisionAdapter(session_factory),

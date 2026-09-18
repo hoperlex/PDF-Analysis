@@ -207,6 +207,9 @@ def live_run(page_texts: tuple[str, ...]) -> dict[str, Any]:
             f"no invented transcript: {answer.status} {answer.body!r}"
         )
     started = answer.json
+    # `D-20`. A live run is exactly the case the carrier exists for -- it is the slow one
+    # -- so this waits on the carrier's futures rather than reading the `202` as a result.
+    client.await_runs()
 
     status = client.run_status(started["run_id"])
     assert status.status == 200, status.body

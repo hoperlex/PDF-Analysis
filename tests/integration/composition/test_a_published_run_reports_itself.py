@@ -92,7 +92,8 @@ def published_run() -> dict[str, Any]:
         "AUDITMANAGER_PROVIDER_MODE": "recorded",
         API_TOKEN_VARIABLE: STATIC_TOKEN,
     }
-    client = TestClient(create_asgi_app(environ=environ), raise_server_exceptions=False)
+    asgi_app = create_asgi_app(environ=environ)
+    client = TestClient(asgi_app, raise_server_exceptions=False)
     auth = {"Authorization": f"Bearer {STATIC_TOKEN}"}
     tag = uuid.uuid4().hex[:12]
 
@@ -134,7 +135,13 @@ def published_run() -> dict[str, Any]:
     )
     assert answer.status_code == 202, answer.content
     started = answer.json()
-    assert started["state"] == "published", started
+    # `D-20`. The `202` reports what was **accepted**, and execution happens on a carrier
+    # thread; the published shape this module reads is the one `getRunStatus` answers once
+    # the run has finished. The wait is on the carrier's own futures --
+    # `ThreadCarrier.drain` -- so this waits for the work to be done rather than for a
+    # duration somebody guessed, and no reading below can race the executor.
+    assert started["state"] == "queued", started
+    assert asgi_app.state.run_carrier.drain(timeout=300), "the run never finished"
 
     answer = client.get(f"/runs/{started['run_id']}", headers=auth)
     assert answer.status_code == 200, answer.content

@@ -485,6 +485,7 @@ def test_the_api_run_body_reports_partial_through_the_shipped_adapter(
         FindingAdapter,
         RunAdapter,
     )
+    from auditmanager.runs import InlineCarrier
 
     router = build_router(
         projects=None,
@@ -497,6 +498,8 @@ def test_the_api_run_body_reports_partial_through_the_shipped_adapter(
             provider_mode="recorded",
             analysis_profile_id="unused",
             prompt_bundle_id="unused",
+            # `D-20`. This dispatches reads at the shipped adapter and starts no run.
+            carrier=InlineCarrier(),
         ),
         findings=FindingAdapter(session_factory),
         decisions=DecisionAdapter(session_factory),
