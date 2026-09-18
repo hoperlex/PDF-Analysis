@@ -670,6 +670,21 @@ class SeamRunAdapter:
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._view(run_id)
 
+    def list_runs(self, *, version_uid: str) -> tuple[RunStatusView, ...]:
+        """`R-5`. The **shipped** query, rendered through this stand-in's own view.
+
+        `RunRepository.list_for_version` is the real one, and so is the existence check
+        in front of it: the rows and the order a caller sees here are the application's,
+        which is the whole reason `test_query_surface.py` runs against this fixture
+        rather than against one that filters in the test file.
+        """
+        from auditmanager.documents.repository import DocumentRepository
+        from auditmanager.runs import RunRepository
+
+        DocumentRepository().get_version(self._session, VersionUid(version_uid))
+        rows = RunRepository().list_for_version(self._session, version_uid)
+        return tuple(self._view(str(row.run_id)) for row in rows)
+
 
 class SeamExportAdapter:
     """``CsvExportPort`` standing in for ``B5``'s use case.

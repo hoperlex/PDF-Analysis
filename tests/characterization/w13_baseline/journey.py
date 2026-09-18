@@ -113,7 +113,9 @@ PROMPT_BUNDLE_ID = "pb_01M25P3TH0PDQYVKTRQFEM0CYS"
 #: credential refusal got a code of its own, so this record's status, ``error_code``,
 #: message and details moved. Nothing else in this directory did, and nothing else may.
 EXCEPTION_D7 = {
-    "debt": "D-7",
+    # A list, like every marked record's, since `W18-SEAL`: a record can be moved by more
+    # than one debt and a comma inside a string is not a countable thing.
+    "debt": ["D-7"],
     "ruling": "OWNER_RULINGS_2026-09-17.md R-3 -- tokens *and* the storage code",
     "status": "taken",
     "decided_by": "e6d0a6a",
@@ -150,7 +152,7 @@ EXCEPTION_D7 = {
 #: reproduces a defect byte for byte is protecting it, and that is why these five records
 #: had to move rather than the repair being fitted around them.
 EXCEPTION_W17VIEW = {
-    "debt": "D-19",
+    "debt": ["D-19"],
     "ruling": (
         "no owner ruling -- this is a defect repair inside a declared contract, not a "
         "contract change; `RunStatus` and `StageState` already declare all four fields "
@@ -177,6 +179,58 @@ EXCEPTION_W17VIEW = {
         "property was renamed, removed or re-typed and no status or header moved**; "
         "`additionalProperties: false` on `RunStatus` is satisfied because every added "
         "name is one the frozen document declares. This is the whole of the permitted "
+        "change; the five records are compared byte for byte against the new expectation "
+        "like every other."
+    ),
+    "everything_else": (
+        "Every other difference in this directory is a failure of the wave, whatever "
+        "argument accompanies it."
+    ),
+}
+
+#: ``DEBT_REGISTER.md`` D-21, under owner ruling `R-5`: cost was recorded on every
+#: ``model_call`` row and appeared on no operation, in no CSV column and on no screen, so
+#: `PA-01` criterion 4 -- *"a live `text_analysis` run completes, with its provider mode
+#: and cost visible"* -- could not be satisfied at all. The same five records that D-19
+#: moved carry a ``RunStatus`` body, so they move again, and they now carry **both** debts.
+#:
+#: The three new listing records carry no exception block. Adding an operation adds a case
+#: and a record; it changes none.
+EXCEPTION_W18SEAL = {
+    "debt": ["D-19", "D-21"],
+    "ruling": (
+        "OWNER_RULINGS_2026-09-17.md section 3.5, R-5 -- one reseal carrying the list "
+        "operations and cost visibility together. D-19's half was a defect repair inside "
+        "a declared contract and engaged no reseal authority; D-21's half adds three "
+        "properties to `RunStatus` and is the owner's act"
+    ),
+    "status": "taken",
+    "decided_by": "6398bcc",
+    "decided_by_subject": (
+        "feat(api-v1): three list operations and a run's cost, resealed under R-5"
+    ),
+    "decided_on": "2026-09-18",
+    "permitted_change": (
+        "D-19, at aae0209: before it a `RunStatus` body carried no "
+        "`started_at`/`finished_at` on any stage and neither `published_finding_count` "
+        "nor `diagnostic_observation_count`, and its `created_at`, `updated_at` and "
+        "`terminal_at` were three copies of one value -- `now()` is "
+        "`transaction_timestamp()` and a run is created and executed in one transaction, "
+        "so `_ADVANCE`/`_TERMINATE` now use `statement_timestamp()`. All four fields were "
+        "already declared by the frozen `RunStatus`/`StageState` and simply had no "
+        "producer. "
+        "D-21, at 6398bcc: the body now also carries `cost_micros`, `cost_basis` and "
+        "`model_call_count`, three properties the `R-5` reseal added to `RunStatus`. The "
+        "figure is the sum of `model_call.cost_micros` over every row of the run, "
+        "including every retry attempt, and the basis is an aggregate over those same "
+        "rows -- `measured` only when every one of them reported a measured cost. It is "
+        "deliberately **not** `stage_result.metrics`, whose `cost_usd` sums the attempts "
+        "while its `cost_basis` describes the last response only: that pair is D-15, it "
+        "is unrepaired, and this contract does not inherit it. A recorded run reports "
+        "`estimated`, because a replayed call reports no cost of its own. "
+        "**No property was renamed, removed or re-typed and no status or header moved**; "
+        "`additionalProperties: false` on `RunStatus` is satisfied because every added "
+        "name is one the sealed document declares. This is the whole of the permitted "
         "change; the five records are compared byte for byte against the new expectation "
         "like every other."
     ),
@@ -796,7 +850,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
         body_note="StartRunRequest, version_uid only; provider_mode omitted",
         tokens=t,
-        exception=EXCEPTION_W17VIEW,
+        exception=EXCEPTION_W18SEAL,
     )
     run = json_of(started)
     run_id = run["run_id"]
@@ -822,7 +876,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
         body_note="byte-identical to case 03, under the same Idempotency-Key",
         tokens=t,
-        exception=EXCEPTION_W17VIEW,
+        exception=EXCEPTION_W18SEAL,
     )
     assert json_of(replay)["run_id"] == run_id, "the replay produced a different run"
     t.add("project_uid", project_uid, "the identity case 01 allocated")
@@ -853,7 +907,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         ).encode("utf-8"),
         body_note="the key of case 03, with provider_mode stated explicitly",
         tokens=t,
-        exception=EXCEPTION_W17VIEW,
+        exception=EXCEPTION_W18SEAL,
     )
     assert json_of(normalised)["run_id"] == run_id
     t.add("project_uid", project_uid, "the identity case 01 allocated")
@@ -909,7 +963,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "GET",
         f"/runs/{run_id}",
         tokens=t,
-        exception=EXCEPTION_W17VIEW,
+        exception=EXCEPTION_W18SEAL,
     )
     t.add("project_uid", project_uid, "the identity case 01 allocated")
     t.add("version_uid", version_uid, "the identity case 02 allocated")
@@ -929,7 +983,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         f"/runs/{run_id}",
         headers={"X-Correlation-Id": "w13base-supplied-correlation-id"},
         tokens=t,
-        exception=EXCEPTION_W17VIEW,
+        exception=EXCEPTION_W18SEAL,
     )
     assert dict(supplied.headers)["X-Correlation-Id"] == "w13base-supplied-correlation-id"
     t.add("project_uid", project_uid, "the identity case 01 allocated")
@@ -1465,6 +1519,95 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     correlation(storage, t)
     content_length(storage, t)
+
+    # --- `R-5`: the three listings, added rather than changed -----------------------
+    #
+    # These are new *cases* and new records. No existing record's response bytes move
+    # because of them, and they carry no exception block: adding an operation is not a
+    # permitted change to anything, it is a larger corpus.
+    #
+    # They are driven last because they are pure reads that create nothing, so wherever
+    # they sit they see the same three rows -- and last is where a case that is wrong
+    # cannot perturb any case that came before it.
+    t = Tokens()
+    documents = record(
+        "32-listDocuments.success",
+        "listDocuments",
+        "the project's documents after a reload: one row per document, carrying the "
+        "version it currently points at. Before `R-5` there was no operation that could "
+        "reach this at all, and a reloaded project screen made zero API calls",
+        "GET",
+        f"/projects/{project_uid}/documents",
+        tokens=t,
+    )
+    listed_documents = json_of(documents)
+    assert [item["version_uid"] for item in listed_documents["items"]] == [version_uid], (
+        "the project's one published version is not the one row this listing returned"
+    )
+    assert listed_documents["page"]["next_cursor"] is None, (
+        "one row and a continuation token; the page is not exhausted when it says it is"
+    )
+    t.add("project_uid", project_uid, "the identity case 01 allocated")
+    t.add("version_uid", version_uid, "the identity case 02 allocated")
+    t.add("document_uid", version["document_uid"], "the identity case 02 allocated")
+    t.timestamps(listed_documents)
+    correlation(documents, t)
+    content_length(documents, t)
+
+    t = Tokens()
+    versions = record(
+        "33-listVersions.success",
+        "listVersions",
+        "every published version of one document, newest first. Through the twelve "
+        "operations a document has exactly one version -- `uploadDocument` declares no "
+        "`document_uid` -- so the one row here is `version_ordinal: 1`, and that is a "
+        "fact about the surface rather than about this document",
+        "GET",
+        f"/documents/{version['document_uid']}/versions",
+        tokens=t,
+    )
+    listed_versions = json_of(versions)
+    assert [item["version_uid"] for item in listed_versions["items"]] == [version_uid]
+    assert [item["version_ordinal"] for item in listed_versions["items"]] == [1]
+    t.add("project_uid", project_uid, "the identity case 01 allocated")
+    t.add("version_uid", version_uid, "the identity case 02 allocated")
+    t.add("document_uid", version["document_uid"], "the identity case 02 allocated")
+    t.timestamps(listed_versions)
+    correlation(versions, t)
+    content_length(versions, t)
+
+    t = Tokens()
+    runs = record(
+        "34-listRuns.success",
+        "listRuns",
+        "the runs of one version, each item the whole `RunStatus` and byte for byte what "
+        "`getRunStatus` answers for it -- asserted here rather than assumed, because a "
+        "lighter list shape is the thing this operation deliberately does not have",
+        "GET",
+        f"/versions/{version_uid}/runs",
+        tokens=t,
+    )
+    listed_runs = json_of(runs)
+    assert [item["run_id"] for item in listed_runs["items"]] == [run_id], (
+        "the version's one run is not the one row this listing returned"
+    )
+    single = json.loads(
+        api.send(
+            "GET",
+            f"/runs/{run_id}",
+            headers={AUTHORIZATION_HEADER: f"Bearer {STATIC_TOKEN}"},
+            body=b"",
+        )[2].decode("utf-8")
+    )
+    assert listed_runs["items"][0] == single, (
+        "the run reads differently in a listing than it does on its own"
+    )
+    t.add("project_uid", project_uid, "the identity case 01 allocated")
+    t.add("version_uid", version_uid, "the identity case 02 allocated")
+    t.add("run_id", run_id, "the identity case 03 allocated")
+    t.timestamps(listed_runs)
+    correlation(runs, t)
+    content_length(runs, t)
 
     return out
 
