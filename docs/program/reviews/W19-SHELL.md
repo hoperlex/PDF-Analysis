@@ -525,3 +525,148 @@ a second command, and *never* minting sends a changed payload under an old key, 
 **`D-22` is closeable on this evidence.** Check:
 `ls web/src/features/*/model/use-intent-key.ts` finds nothing;
 `grep -rn "export function useIntentKey" web/src` returns one line, in `shared/lib`.
+
+## 8. What I found false, incomplete or stale in the dispatch
+
+**One premise is wrong in the way that matters, one is a path, and the rest hold.**
+
+### 8.1 Wrong — *"You own `web/src/app/**`, the routing"* is not where the defect was
+
+`web/src/app/**` at `653152f` is nine files: a layout, a stylesheet, a README, the
+`/bff/v1` catch-all, and **five delegation-only route files that decide nothing**. The
+project route is six lines and reads:
+
+```
+const { project_uid } = await params;
+return <ProjectDetailPage projectUid={project_uid} />;
+```
+
+**The screen that made zero API calls is not in that directory.** It is
+`web/src/_pages/project-detail/**` and `web/src/widgets/upload-panel/**`, and the version
+it could not reach was held in a `useState` in the second of those. Repairing `D-16`
+inside `web/src/app/**` alone is not possible: the two new route files there are nine
+lines each, and every line that closes the row is in `_pages`, `widgets`, `entities` and
+`shared`.
+
+I took "and the routing" to carry the screens those routes serve, because nothing else
+would have delivered the row. **Everything I edited outside `web/src/app/**` is listed in
+§9 with its reason.** If the intent was narrower, the boundary and not the brief is what
+needs to move — because the narrow reading makes the row unclosable.
+
+*(This is the same shape as the finding the dispatch warned about: "one where the file I
+pointed at could not have held the defect".)*
+
+### 8.2 Stale — `DEBT_REGISTER.md` is at `docs/program/DEBT_REGISTER.md`
+
+A navigational nit, not a substantive one: the brief and the register's own prose both
+spell it as a bare filename, and there is no such file at the repository root.
+
+### 8.3 Checked and holding
+
+| Premise | Verdict |
+|---|---|
+| base `653152f` or later | **holds** — provisioned at exactly `653152f` |
+| gate at base: battery **1778 / 5 skipped / 168 subtests**, foundation **35** | **holds** — §9 reproduces all three unchanged |
+| frontend **595 (44 files)** at base | **holds** — this session adds 2 files and 38 tests; 595 + 38 = 633, 44 + 2 = 46 |
+| the three operations are in the contract and the generated client, and **no screen calls them** | **holds** — at `653152f`, `git grep -c listDocuments -- web/src` matches only `generated/client.gen.ts` and `generated/operations.gen.ts`; `web/src/app` has no match |
+| `listProjects.document_count` is unpopulated | **holds** — measured in the browser at §4: the project list still reads `documents —`. Nothing here populates it |
+| `listRuns` cannot make `running` observable (`D-20`) | **holds** — the seeded `POST /runs` answered `202` already carrying `state: published`. Nothing built here waits for `running`, and the run row asserts it does not render one |
+| `D-22`: the rule once as `resolveIntentKey`, three hand-copies in hooks | **holds exactly** — the three were `web/src/features/{create-project,upload-document,start-run}/model/use-intent-key.ts`, byte-identical, each with the comment. §7 |
+| `web/FRONTEND_LOCK.json` is a seal | **holds and is untouched** — it seals `generated/**`, the lockfile, the OpenAPI snapshot and the generator script; none of those was edited, and `frontend-lock.guard.test.ts` passes in the gate |
+| `df -h /` ~11 GB | **held on arrival**, and does not hold now — §9 |
+
+## 9. Boundaries, and every file I touched outside `web/src/app/**`
+
+### 9.1 Boundaries I stopped at
+
+* **`contracts/**`, `src/**`, `infra/**`, `Makefile` — not touched, and nothing needed
+  them.** Every screen here is served by the fifteen operations as sealed. No reseal is
+  requested by this session.
+* **`web/FRONTEND_LOCK.json` — not touched.** No regeneration was needed.
+* **`listProjects.document_count` — deliberately not computed.** A screen *could* derive it
+  from one `listDocuments` per project row, and that is exactly the local second source of
+  truth `R-10` is avoiding. The dash stays until `W19-API` lands.
+* **`docs/program/DEBT_REGISTER.md` — not edited.** `D-16`'s screens half and `D-22` are
+  both closeable on this evidence and both are argued above with their check commands, but
+  the register is the integrator's and two more streams of this wave land on the same rows.
+  Flagging rather than closing:
+  * **`D-16`** — check: `grep -rn "listDocuments" web/src/_pages web/src/widgets web/src/entities`
+    is now non-empty, and §4 is the browser measurement the row's own text asked for.
+  * **`D-22`** — check: `ls web/src/features/*/model/use-intent-key.ts` finds nothing;
+    `grep -rn "export function useIntentKey" web/src` returns exactly one line.
+* **`W15RUN-5`, `D-15`, `D-20` — untouched.** The run screen still prints
+  `Created … / Terminal at …` at the same instant, because `created_at` and `terminal_at`
+  are what the API sends. Not a screen defect and not mine.
+
+### 9.2 What I edited, and why each one is not `web/src/app/**`
+
+| Path | Why |
+|---|---|
+| `web/src/shared/lib/routes.ts` *(new)* | every screen address, built once. The routing, in the only place a test can assert it |
+| `web/src/shared/lib/intent-key.ts`, `use-intent-key.ts` *(new)* | `D-22`, which the dispatch asks for by name |
+| `web/src/shared/lib/listing-failure.ts` *(new)* | the catalog-code→state mapping for the three listings. It is in `shared/lib` and not in an entity because `document-version` and `audit-run` both need it and an entity may not import another entity |
+| `web/src/shared/api/query-keys.ts` | **a judged edit.** The file says the namespaces are fixed "by the toolchain owner". I added three *builder functions* under the existing `projects`, `versions` and `runs` roots and invented no fourth namespace, which keeps both of the file's own rules — every key starts with one of the four roots, and a key is built by calling a function here. Where each listing is filed is argued in the file: `listDocuments` is under `projects` so that `uploadDocument`'s existing invalidation reaches it, and `listRuns` is under `runs` so `startRun`'s does |
+| `web/src/entities/{document-version,audit-run}/**` | the three query hooks, two row components, and the `doc_`/`ver_` address shape checks |
+| `web/src/widgets/{document-list,version-list,run-list}/**` *(new)* | the three listings, each rendering the mandatory states |
+| `web/src/widgets/upload-panel/**` | **the defect itself.** It held the published version in `useState`; that state was the only copy in the product, and a reload lost it |
+| `web/src/_pages/{project-detail,document-detail,version-detail}/**` | the screens the two new routes delegate to, and the rewiring of the one that made zero calls |
+| `web/src/_pages/{run,review}/**`, `web/src/widgets/run-progress/**` | "a route back from every screen": the review screen had none at all, and run progress now links to the version it read |
+| `web/docs/PC01_UI_SEAM.md` §2 | **a frozen table the dispatch did not mention.** It froze four URLs and said *"there is no route for a document version"* — **that sentence is `D-16`**. It is amended, with the reason, in the same commit as the route files, rather than left to contradict the tree |
+| `web/tests/unit/**` | §5 |
+
+## 10. The gate
+
+Run after the last commit, with nothing else of mine running: the local API and the
+`next start` used for §4 were both stopped first, and both alpha stacks (31480, 31490) were
+left untouched throughout.
+
+```
+$ make gate > /root/w19shell-logs/gate.log 2>&1 ; echo "GATE_EXIT=$?"
+GATE_EXIT=0
+```
+
+The exit code is taken from `$?` after the redirect, never through a pipe.
+
+| | at base (dispatch) | here |
+|---|---|---|
+| battery | 1778 passed / 5 skipped / 168 subtests | **1778 passed, 5 skipped, 168 subtests**, 223.84 s |
+| foundation | 35 | **35 passed**, 29.04 s |
+| frontend | 595 (44 files) | **633 passed (46 files)** |
+| exit | — | **0** |
+
+`GATE OK: battery, foundation, frontend and whitespace all pass`. The battery and
+foundation figures are **identical** to the base, which is the expected shape of a
+frontend-only wave: nothing in `src/`, `db/`, `contracts/` or `infra/` moved.
+
+**Disk, and this is a finding.** `df -h /` was **11 GB free (91 %)** on arrival and is
+**5.2 GB (96 %)** now. Two things consumed it and only one is mine: this lane's
+containers, volumes and two `next build` outputs, and a parallel session's gate lane
+running in `/root/w19api` at the same time. `W15-RUN` warned that "the one after that may
+have to reclaim rather than check"; that session is the next one. This host now carries two
+alpha stacks and gate lanes from several waves, and MinIO refuses writes near ~1 GB.
+
+## 11. Elapsed — measured
+
+`2026-09-18T12:02:56Z` → `2026-09-18T12:47Z`, **45 minutes** of wall clock, from the two
+timestamps in `/root/w19shell-logs/START_UTC` and the gate's completion. Roughly: 9 minutes
+reading `W15-RUN`, `W18-SEAL`, `D-16` and the `web/src` tree; 5 on `D-22`; 12 on the routes,
+hooks, widgets and screens; 6 on the tests and the eleven mutations; 9 bringing up an API, a
+served build and a browser and driving eight cold loads; 4 on the gate, which ran while this
+document was being written.
+
+## 12. Reproducing §4
+
+```
+make up && make migrate                                     # lane gate-w19a
+PYTHONPATH=src .venv/bin/python infra/deploy/serve.py        # with /root/w19shell-logs/api.env
+NEXT_PUBLIC_API_BASE_URL=/bff/v1 npm --prefix web run build
+AUDITMANAGER_API_UPSTREAM=http://127.0.0.1:58820 \
+  AUDITMANAGER_API_TOKEN=... npx next start -p 3919 -H 127.0.0.1
+node /root/w19shell-logs/browser/drive.mjs                   # one browser process per URL
+```
+
+`drive.mjs` is kept in `/root/w19shell-logs/browser/` rather than in the repository: it
+depends on a `playwright-core` installed outside the tree and on a cached Chromium this
+host happened to have, and adding either to `web/package.json` would move
+`FRONTEND_LOCK.json`. That is a boundary, not an oversight — and it is the same one
+`W15-RUN` stopped at.
