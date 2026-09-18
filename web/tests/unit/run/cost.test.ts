@@ -96,6 +96,19 @@ describe('a cost is never reported without the count it sums (M-5)', () => {
   it('refuses a cost that arrived with no model_call_count', () => {
     const reading = runCost({ cost_micros: 4_500, cost_basis: 'estimated' });
     expect(reading.kind).toBe('unreadable');
+    // `why` reaches the user -- the screen prints "cannot be read: {why}" -- so the two
+    // unreadable causes must not collapse into one sentence. Without this, deleting the
+    // missing-count guard is an equivalent mutant: the type guard below catches
+    // `undefined` too, and only the reason a reader is given changes.
+    expect(reading).toMatchObject({ why: 'it carries a cost with no model call count' });
+  });
+
+  it('distinguishes a missing count from a malformed one in what it tells the reader', () => {
+    const missing = runCost({ cost_micros: 4_500 });
+    const malformed = runCost({ cost_micros: 4_500, model_call_count: 0 });
+    expect(missing.kind).toBe('unreadable');
+    expect(malformed.kind).toBe('unreadable');
+    expect(missing).not.toEqual(malformed);
   });
 
   it('refuses a cost whose count is zero, which contradicts the cost being present', () => {
