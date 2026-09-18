@@ -333,3 +333,51 @@ before you mutate**, because the revert mechanism cannot tell your work from the
 Everything else in the brief held. `D-3`, `D-15` and `D-20` are all open or closed as
 described, the six fields carry the semantics the contract states, and the response body
 did contain everything I needed.
+
+## The gate
+
+Run on a clean tree at **`1d4cb390208ec239226334c59d9cf0197224068f`**, which is every
+commit of this session except the two that add this section and record elapsed. Instance
+`gate-w19c`, PostgreSQL 55840, MinIO 59440/59441, database `audit_w19c`, bucket
+`auditmanager-gate-w19c`. No image rebuilt; the alpha stacks on 31480, 31490 and 31500
+were untouched.
+
+Exit code taken from `$?` after a redirect, never through a pipe:
+
+```
+make gate > /root/w19run-logs/gate.log 2>&1
+GATE_EXIT=$?          ->  0
+```
+
+```
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+| suite | at base `d3520b0` (mine) | at `1d4cb39` | integrator's figure |
+|---|---|---|---|
+| battery | *not separately measured* | **1785 passed, 5 skipped, 168 subtests** | 1785 / 5 / 168 — agrees |
+| foundation | **35 passed** | **35 passed** | 35 — agrees |
+| frontend | **633 passed (46 files)** | **681 passed (47 files)** | 633 (46) — agrees |
+
+I measured foundation and frontend at base myself before editing anything and both matched
+the integrator's figures exactly. I did not run the battery separately at base — it is a
+four-minute suite, it is untouched by a frontend-only change, and its figure at exit is
+identical to the base figure, which is the evidence that matters. **No base figure
+differed from what was briefed.**
+
+Frontend is +48 tests in +1 file: 27 in the new `web/tests/unit/run/cost.test.ts` and 21
+added to `web/tests/unit/screens/run-progress.test.ts`.
+
+## Elapsed
+
+**24 m 24 s**, measured, not estimated: `date +%s` recorded at STEP 0 on arrival and again
+after the gate returned.
+
+```
+start  2026-09-18T17:50:02+05:00
+end    2026-09-18T18:14:26+05:00
+       1464 s
+```
+
+This excludes the earlier STEP 0 stop, which was a separate span before the integrator
+pushed.
