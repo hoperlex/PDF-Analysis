@@ -426,13 +426,29 @@ fixture adapter that filters proves only that the fixture filters.
 `grep -rn "twelve\|43 " src/auditmanager/api/` returned **thirty** statements about the size
 of the surface, in module docstrings, in comments, in `README.md`, and in one string the
 application **serves**: `_DESCRIPTION`, *"The twelve operations of the PC-01 surface"*, which
-goes out on `/openapi.json`. None of them can fail a gate — the conformance engine drops
-`description`, `summary` and `title` as annotation (`N4`) — so every one of them would have
-survived this reseal and gone on being read as true.
+goes out on `/openapi.json`. A second sweep over the rest of `src/` found five more — in
+`api/health.py`, `api/routers/declarations.py`, `bootstrap/settings.py` and
+`runs/executor.py`. **Thirty-five statements across twelve files**, `git show --numstat`
+counting thirty-six lines because one of them spans two.
+
+**None of them can fail a gate.** The conformance engine drops `description`, `summary` and
+`title` as annotation (`N4`), so every one of these would have survived the reseal and gone
+on being read as true — including the one a caller reads off `/openapi.json`.
+
+| file | statements |
+|---|---|
+| `api/app.py` | 6 — including `_DESCRIPTION`, the served one, and `_SERVERS`' *"the twelve paths"* |
+| `api/routers/__init__.py` | 7 — the module docstring, `build_router`'s, `BASE_PATH`'s, and three `len(routes) == 12` references in comments |
+| `api/routers/declarations.py` | 6 — *"twelve copies of a response table"*, *"a served document with twelve responses"*, *"four of the twelve declare no 422"*, *"not twelve signatures"*, *"on all twelve and a thirteenth spelling"*, and `The 43 schema names` |
+| `api/README.md` | 4 (5 lines) |
+| `api/security.py` | 3 — including `build_authorization_dependency`'s *"guards all twelve operations"* |
+| `api/schemas/models.py` | 2 |
+| `api/routers/ports.py` | 2 |
+| `api/health.py`, `api/routers/errors.py`, `api/schemas/__init__.py`, `bootstrap/settings.py`, `runs/executor.py` | 1 each |
 
 That is `D-8` exactly (*"a name repeated often enough stops being checked"*) and `D-22`
-(*"one rule, three hand-copies, and the copies are what ship"*). All thirty were re-measured
-and corrected, not find-and-replaced: `"Eight of the twelve operations"` displacing FastAPI's
+(*"one rule, three hand-copies, and the copies are what ship"*). All thirty-five were
+re-measured and corrected, not find-and-replaced: `"Eight of the twelve operations"` displacing FastAPI's
 422 became **eleven of fifteen**, because I counted them; `"four of the twelve declare no 422"`
 stayed **four**, because that set did not change.
 
@@ -511,7 +527,11 @@ GATE OK: battery, foundation, frontend and whitespace all pass
 GATE_EXIT=0
 ```
 
-**Exit code `0`.**
+**Exit code `0`.** It ran at `87f8e0b`. The two commits after it — `e0e0244` and the
+correction to §6's count — touch `docs/program/reviews/W18-SEAL.md` and nothing else, and no
+suite in the battery reads that directory: the only test that names `docs/program/reviews/`
+by path is `tests/contract/test_cp00_final_state.py`, which the battery excludes and which
+excludes that directory anyway.
 
 Against the base the brief quotes — 1746 / 5 / 168, 35, 592 — the battery is **+22**: the
 nineteen cases of `tests/integration/api/test_listing_surface.py` and the three new
