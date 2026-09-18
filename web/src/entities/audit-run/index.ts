@@ -6,15 +6,19 @@
  * slice that polls the run endpoint.
  */
 
-export type { ProviderModeLabel, RunOutcome, StageRow } from './model/run-presentation';
+export type { ProviderModeLabel, RunCostReading, RunOutcome, StageRow } from './model/run-presentation';
 export {
   PC01_STAGE_IDS,
   PROVIDER_MODE_UNKNOWN,
   badgeProviderMode,
+  costBasisCaption,
+  diagnosticObservationCount,
+  formatCostMicros,
   interruptedReason,
   isRunAnimating,
   providerModeCaption,
   providerModeLabel,
+  runCost,
   runHasPublishedResult,
   runOutcome,
   runProviderMode,
