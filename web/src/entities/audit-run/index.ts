@@ -24,8 +24,13 @@ export {
 export type { RunFailure, RunFailureKind } from './model/run-failure';
 export { classifyRunFailure } from './model/run-failure';
 
+export { RUN_PAGE_LIMIT, useRunList } from './api/use-run-list';
+
 export type { RunStatusPolling } from './api/use-run-status';
 export { useRunStatus } from './api/use-run-status';
+
+export type { RunRowProps } from './ui/run-row';
+export { RunRow } from './ui/run-row';
 
 export type { StageTableProps } from './ui/stage-table';
 export { StageTable } from './ui/stage-table';

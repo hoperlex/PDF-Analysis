@@ -31,6 +31,7 @@
  * loop; this page reads run state once to decide whether export is offered.
  */
 
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
@@ -43,6 +44,7 @@ import {
   queryKeys,
 } from '@/shared/api';
 import { ErrorState, LoadingState, PageShell, RunStateBadge } from '@/shared/ui';
+import { routes } from '@/shared/lib';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
@@ -155,6 +157,13 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             ) : null}
           </>
         )
+      }
+      actions={
+        <>
+          <Link href={routes.run(projectUid, runId)}>Back to the run</Link>{' '}
+          <Link href={routes.project(projectUid)}>Back to project</Link>{' '}
+          <Link href={routes.projects()}>All projects</Link>
+        </>
       }
     >
       <div className="am-review">

@@ -59,8 +59,15 @@ reads run state to decide whether export is offered; it does not poll (§7).
 | `/` | `src/app/page.tsx` | redirect to `/projects` | `A5` |
 | `/projects` | `src/app/projects/page.tsx` | project list and create | `B7` |
 | `/projects/{project_uid}` | `src/app/projects/[project_uid]/page.tsx` | one project: upload, start run | `B7` |
+| `/projects/{project_uid}/documents/{document_uid}` | `.../documents/[document_uid]/page.tsx` | one document, its versions | `W19-SHELL` |
+| `/projects/{project_uid}/versions/{version_uid}` | `.../versions/[version_uid]/page.tsx` | one published version: manifest, runs, start a run | `W19-SHELL` |
 | `/projects/{project_uid}/runs/{run_id}` | `.../runs/[run_id]/page.tsx` | run progress | `B7` |
 | `/projects/{project_uid}/runs/{run_id}/review` | `.../runs/[run_id]/review/page.tsx` | findings, evidence, decisions, export | `B8` |
+
+Every address in this table is built by `routes` in `@/shared/lib`, and never by a
+template literal at a call site. An address that exists in four places can be wrong in
+three of them, and the property these routes have to keep — **a URL pasted into a fresh
+tab renders** — is a property of the string.
 
 Route parameter names are the contract's path parameter names exactly — `project_uid`,
 `run_id`. They are opaque `<prefix>_<ULID>` strings; nothing in the UI parses one, and
@@ -69,8 +76,25 @@ Route parameter names are the contract's path parameter names exactly — `proje
 Review is a child of the run, not a sibling: a finding is only meaningful against the run
 that produced it.
 
-There is no route for a document version. The viewer opens version content from within
-the review screen through `streamDocumentVersionContent`.
+**Amended 2026-09-18 by `W19-SHELL` under `DEBT_REGISTER.md` D-16.** This section used to
+read *"there is no route for a document version"*, and that sentence was the defect. With
+no address for a document and none for a version, everything below the project list could
+be reached only by having just created it in the same browser session: `W15-RUN` measured a
+project page on a fresh load making **zero** API calls and reporting *"No version published
+in this session"* over a project whose documents, versions, runs and decisions had all
+survived in PostgreSQL and the store. The two rows above are the repair, and they became
+possible when `W18-SEAL` added `listDocuments`, `listVersions` and `listRuns` under ruling
+`R-5`.
+
+The review screen still opens version *content* through `streamDocumentVersionContent`;
+that is unchanged. What is new is that the version itself has an address.
+
+**Through this surface a document has exactly one version today** (`W18-SEAL` §2:
+`uploadDocument` declares no `document_uid`), so the document screen lists one row and the
+project screen links past it, straight to the version. The document address exists anyway,
+because `document_uid` is a value this product prints — a CSV column, a field of every
+`DocumentVersion`, the subject of a `404` envelope — and an identifier a product prints and
+cannot open is `D-16` in miniature.
 
 ## 3. Shared components — `@/shared/ui`
 

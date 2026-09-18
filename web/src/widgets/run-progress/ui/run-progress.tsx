@@ -29,7 +29,7 @@
 import Link from 'next/link';
 
 import type { RunStatus } from '@/shared/api';
-import { formatInstant } from '@/shared/lib';
+import { formatInstant, routes } from '@/shared/lib';
 import { ErrorState, LoadingState, NotApplicableState, RunStateBadge } from '@/shared/ui';
 import {
   StageTable,
@@ -182,6 +182,14 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
         <dd>{formatInstant(status.terminal_at)}</dd>
       </dl>
 
+      <p>
+        <Link href={routes.version(status.project_uid, status.version_uid)}>
+          The version this run read
+        </Link>{' '}
+        — <code>{status.version_uid}</code>. A run never changes the version it read, and
+        that version&apos;s other runs are listed there.
+      </p>
+
       <Outcome status={status} />
 
       {interrupted !== null && status.state !== 'failed' ? (
@@ -196,9 +204,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       <h2>Review</h2>
       {runHasPublishedResult(status.state) ? (
         <p>
-          <Link href={`/projects/${projectUid}/runs/${status.run_id}/review`}>
-            Review findings
-          </Link>{' '}
+          <Link href={routes.review(projectUid, status.run_id)}>Review findings</Link>{' '}
           — this run&apos;s provider mode is <strong>{mode}</strong>.
         </p>
       ) : (

@@ -1,34 +1,36 @@
 'use client';
 
 /**
- * Upload one AR PDF and, once it is published, start a run over it.
+ * Upload one AR PDF into a project.
  *
  * The accepted envelope is on screen **before** the file picker, not only in the
  * rejection that follows a bad choice. Every line of it names a refusal the server can
- * return, so a later `validation_failed` reads as the rule that was already stated
- * rather than as an arbitrary "no".
+ * return, so a later `validation_failed` reads as the rule that was already stated rather
+ * than as an arbitrary "no".
  *
- * The published version is shown as an immutable panel. The run control appears only
- * after a version exists, because there is nothing to run over until then.
+ * **What this widget no longer does, and why.** It used to hold the published version in
+ * React state, render it, and offer the Start-run control beside it — so a project opened
+ * in a fresh tab said *"No version published in this session"* over a project full of
+ * published work, and the run control existed only for a user who had just uploaded.
+ * `W15-RUN` measured that sentence in a real browser and `D-16` is the row it opened. The
+ * version now has an address of its own: this widget reports the upload and the screen
+ * navigates there, where the version is read back from the server and the runs are listed.
+ *
+ * A session that keeps the only copy of what it just created is the defect, not the
+ * feature.
  */
 
-import { useState } from 'react';
-
-import type { DocumentVersion, ProjectUid, RunStatus } from '@/shared/api';
-import { EmptyState } from '@/shared/ui';
-import { PC01_UPLOAD_ENVELOPE, UPLOAD_ENVELOPE_RULES, VersionPanel } from '@/entities/document-version';
+import type { DocumentVersion, ProjectUid } from '@/shared/api';
+import { PC01_UPLOAD_ENVELOPE, UPLOAD_ENVELOPE_RULES } from '@/entities/document-version';
 import { UploadDocumentForm } from '@/features/upload-document';
-import { StartRunControl } from '@/features/start-run';
 
 export interface UploadPanelProps {
   readonly projectUid: ProjectUid;
-  /** Called when a run has been started over the uploaded version. */
-  readonly onRunStarted?: ((run: RunStatus) => void) | undefined;
+  /** Called with the published version. The screen decides where that leads. */
+  readonly onUploaded?: ((version: DocumentVersion) => void) | undefined;
 }
 
-export function UploadPanel({ projectUid, onRunStarted }: UploadPanelProps) {
-  const [version, setVersion] = useState<DocumentVersion | null>(null);
-
+export function UploadPanel({ projectUid, onUploaded }: UploadPanelProps) {
   return (
     <section>
       <h2>Upload</h2>
@@ -47,27 +49,17 @@ export function UploadPanel({ projectUid, onRunStarted }: UploadPanelProps) {
             document is never accepted quietly. The limits are{' '}
             {PC01_UPLOAD_ENVELOPE.maxBytesLabel} and {PC01_UPLOAD_ENVELOPE.maxPages} pages.
           </p>
+          <p>
+            A published version is immutable: nothing here edits or replaces one. A second
+            upload publishes a second document, and both stay addressable.
+          </p>
         </div>
       </div>
 
-      <UploadDocumentForm projectUid={projectUid} onUploaded={setVersion} />
-
-      <h2>Published version</h2>
-      {version === null ? (
-        <EmptyState
-          title="No version published in this session."
-          detail="Upload a PDF above. A published version is immutable: nothing here edits or replaces one."
-        />
-      ) : (
-        <>
-          <VersionPanel version={version} />
-          <h2>Run</h2>
-          <StartRunControl
-            versionUid={version.version_uid}
-            {...(onRunStarted === undefined ? {} : { onStarted: onRunStarted })}
-          />
-        </>
-      )}
+      <UploadDocumentForm
+        projectUid={projectUid}
+        {...(onUploaded === undefined ? {} : { onUploaded })}
+      />
     </section>
   );
 }
