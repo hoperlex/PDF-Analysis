@@ -52,6 +52,19 @@ class RunStatusView:
     interrupted_reason: str | None = None
     published_finding_count: int | None = None
     diagnostic_observation_count: int | None = None
+    #: `D-21`. What the run spent at the provider, in the stored integer unit, summed
+    #: over **every** ``model_call`` row of the run including every retry attempt. The
+    #: three cost fields are set together or not at all: a run that made no provider call
+    #: has no cost to report, and ``0`` would be an answer to a question nothing asked.
+    cost_micros: int | None = None
+    #: ``measured`` only when every contributing call reported its own cost; ``estimated``
+    #: the moment one did not. An aggregate over the calls the sum spans -- never the last
+    #: call's basis, which is the `D-15` defect.
+    cost_basis: str | None = None
+    #: How many ``model_call`` rows ``cost_micros`` sums. Published rather than inferred:
+    #: without it a reader cannot tell a one-attempt run from a retried one, and that is
+    #: exactly the ambiguity `D-15` records.
+    model_call_count: int | None = None
     terminal_at: datetime | None = None
 
 
@@ -96,6 +109,15 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         body["published_finding_count"] = view.published_finding_count
     if view.diagnostic_observation_count is not None:
         body["diagnostic_observation_count"] = view.diagnostic_observation_count
+    # The three move together. A partially emitted cost -- a figure with no basis, or a
+    # basis with no figure -- would be less legible than no cost at all, so the producer
+    # sets all three or none and this renders what it set.
+    if view.cost_micros is not None:
+        body["cost_micros"] = view.cost_micros
+    if view.cost_basis is not None:
+        body["cost_basis"] = view.cost_basis
+    if view.model_call_count is not None:
+        body["model_call_count"] = view.model_call_count
     if view.terminal_at is not None:
         body["terminal_at"] = timestamp(view.terminal_at)
     return body

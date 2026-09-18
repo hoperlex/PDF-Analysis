@@ -108,6 +108,54 @@ _SELECT_MANIFEST = text(
     "SELECT role, blob_id, sha256, size_bytes, media_type FROM input_manifest_entry "
     "WHERE version_uid = :version_uid ORDER BY role"
 )
+#: `listDocuments`. One row per document in the project: the version the document
+#: *currently* points at, which is what a reader would act on. `current_version_uid` is
+#: maintained by `publish_version` through `_POINT_DOCUMENT_AT_VERSION`, so this is a join
+#: and never a per-document subquery over `max(version_ordinal)`.
+#:
+#: A document whose `current_version_uid` is still NULL is deliberately **not** listed: it
+#: has no published version, so there is nothing a caller could open, start a run against
+#: or stream. The INNER JOIN is that rule, written as a join rather than as a filter a
+#: later reader could take for an optimisation.
+#:
+#: Newest first, like `listProjects`, with the opaque identity as the tiebreaker so the
+#: order is total and stable across pages.
+_LIST_DOCUMENTS = text(
+    "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
+    "       d.display_title, v.media_type, v.byte_size,"
+    "       v.sha256, v.page_count, v.published_at "
+    "FROM document d JOIN document_version v ON v.version_uid = d.current_version_uid "
+    "WHERE d.project_uid = :project_uid "
+    "ORDER BY v.published_at DESC, v.version_uid DESC"
+)
+
+#: `listVersions`. Every published version of one document, newest first.
+#: `version_ordinal` is the document's own publication order and is monotonic per
+#: document, so it orders these rows exactly and needs no tiebreaker: the schema's
+#: `uq_document_version_ordinal` makes `(document_uid, version_ordinal)` unique. It is a
+#: display value and not an identity -- `P02_SEAMS.md` section 2.2 -- and ordering by it
+#: does not make it one.
+_LIST_VERSIONS = text(
+    "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
+    "       d.display_title, v.media_type, v.byte_size,"
+    "       v.sha256, v.page_count, v.published_at "
+    "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
+    "WHERE v.document_uid = :document_uid "
+    "ORDER BY v.version_ordinal DESC"
+)
+
+#: The manifests of a whole page of versions in one statement. The frozen
+#: `DocumentVersion` declares `input_manifest` **required**, so a listing has to carry one
+#: per row; calling `manifest_for` in a loop would make a list of twenty versions twenty-one
+#: round trips. Same columns and same `ORDER BY role` as `_SELECT_MANIFEST`, so a manifest
+#: read through a listing and the same manifest read through `getDocumentVersion` are the
+#: same tuple in the same order.
+_SELECT_MANIFESTS = text(
+    "SELECT version_uid, role, blob_id, sha256, size_bytes, media_type "
+    "FROM input_manifest_entry WHERE version_uid = ANY(:version_uids) "
+    "ORDER BY version_uid, role"
+)
+
 _VERSIONS_REFERENCING = text(
     "SELECT version_uid, role FROM input_manifest_entry WHERE blob_id = :blob_id "
     "ORDER BY version_uid"
@@ -121,6 +169,43 @@ def _project_record(row: Any) -> ProjectRecord:
     project_uid, name, created_at = tuple(row)
     return ProjectRecord(
         project_uid=ProjectUid(project_uid), name=name, created_at=created_at
+    )
+
+
+def _version_record(
+    row: Any, manifest: tuple[ManifestEntry, ...]
+) -> DocumentVersionRecord:
+    """One ``document_version`` row, in the column order every SELECT here uses.
+
+    Written once. ``get_version``, ``list_documents`` and ``list_versions`` project the
+    same ten columns in the same order, and three hand-unpacked copies of that tuple would
+    be three places for one of them to shift a column silently -- which is a fault the
+    reader cannot see, because every value here is a string or an int.
+    """
+    (
+        version_uid,
+        document_uid,
+        project_uid,
+        version_ordinal,
+        display_title,
+        media_type,
+        byte_size,
+        sha256,
+        page_count,
+        published_at,
+    ) = tuple(row)
+    return DocumentVersionRecord(
+        version_uid=VersionUid(version_uid),
+        document_uid=DocumentUid(document_uid),
+        project_uid=ProjectUid(project_uid),
+        version_ordinal=int(version_ordinal),
+        display_title=display_title,
+        media_type=media_type,
+        byte_size=int(byte_size),
+        sha256=sha256,
+        page_count=int(page_count),
+        published_at=published_at,
+        manifest=manifest,
     )
 
 
@@ -252,30 +337,63 @@ class DocumentRepository:
         ).first()
         if row is None:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="DocumentVersion")
-        (
-            found_version_uid,
-            document_uid,
-            project_uid,
-            version_ordinal,
-            display_title,
-            media_type,
-            byte_size,
-            sha256,
-            page_count,
-            published_at,
-        ) = tuple(row)
-        return DocumentVersionRecord(
-            version_uid=VersionUid(found_version_uid),
-            document_uid=DocumentUid(document_uid),
-            project_uid=ProjectUid(project_uid),
-            version_ordinal=int(version_ordinal),
-            display_title=display_title,
-            media_type=media_type,
-            byte_size=int(byte_size),
-            sha256=sha256,
-            page_count=int(page_count),
-            published_at=published_at,
-            manifest=self.manifest_for(session, VersionUid(found_version_uid)),
+        return _version_record(
+            row, self.manifest_for(session, VersionUid(tuple(row)[0]))
+        )
+
+    def list_documents(
+        self, session: Session, project_uid: ProjectUid
+    ) -> tuple[DocumentVersionRecord, ...]:
+        """`listDocuments`: the current version of every document in one project.
+
+        **The project is proved to exist first**, so an unknown project is ``not_found``
+        and not an empty page. The two answers are different facts and a caller acts on
+        them differently -- an empty page says "this project has nothing in it yet", which
+        is a wrong and reassuring thing to say about a project that does not exist. The
+        same rule ``get_project`` already applies to a single read.
+        """
+        self.get_project(session, project_uid)
+        rows = session.execute(
+            _LIST_DOCUMENTS, {"project_uid": str(project_uid)}
+        ).all()
+        return self._with_manifests(session, rows)
+
+    def list_versions(
+        self, session: Session, document_uid: DocumentUid
+    ) -> tuple[DocumentVersionRecord, ...]:
+        """`listVersions`: every published version of one document, newest first.
+
+        ``require_document`` first, for the reason ``list_documents`` states: an unknown
+        document is ``not_found``, never an empty page.
+        """
+        self.require_document(session, document_uid)
+        rows = session.execute(
+            _LIST_VERSIONS, {"document_uid": str(document_uid)}
+        ).all()
+        return self._with_manifests(session, rows)
+
+    @staticmethod
+    def _with_manifests(
+        session: Session, rows: Any
+    ) -> tuple[DocumentVersionRecord, ...]:
+        """Attach each row's manifest, in one statement rather than one per row."""
+        uids = [str(tuple(row)[0]) for row in rows]
+        if not uids:
+            return ()
+        grouped: dict[str, list[ManifestEntry]] = {uid: [] for uid in uids}
+        for entry in session.execute(_SELECT_MANIFESTS, {"version_uids": uids}).all():
+            version_uid, role, blob_id, sha256, size_bytes, media_type = tuple(entry)
+            grouped[version_uid].append(
+                ManifestEntry(
+                    role=role,
+                    blob_id=parse_blob_id(blob_id),
+                    sha256=sha256,
+                    size_bytes=int(size_bytes),
+                    media_type=media_type,
+                )
+            )
+        return tuple(
+            _version_record(row, tuple(grouped[str(tuple(row)[0])])) for row in rows
         )
 
     def find_version(

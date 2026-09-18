@@ -4,7 +4,7 @@
     "title": "AuditManager PC-01 API",
     "version": "1.0.0-draft.1",
     "summary": "The exact PC-01 journey: one project, one AR PDF, one text-consistency run, one CSV.",
-    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, roles, rate limiting, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-one-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.",
+    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, roles, rate limiting, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-one-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.\n\nResealed 2026-09-18 under owner ruling `R-5`, which closes `DEBT_REGISTER.md` `D-16` and `D-21` together. Three list operations -- `listDocuments`, `listVersions` and `listRuns` -- make published work reachable after a page reload: before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. And `RunStatus` gained `cost_micros`, `cost_basis` and `model_call_count`, so what a run spent is readable by a user for the first time. Each listing is a `GET` of the collection its parent creates into, pages with the same `cursor` and `limit` and returns the same `{items, page}` envelope as `listProjects`. No error code was added: an unknown parent is the catalog's `not_found` and a malformed cursor is `validation_failed`.",
     "contact": {
       "name": "docs/program/P02_SEAMS.md - seam S8"
     },
@@ -237,6 +237,60 @@
             "$ref": "#/components/responses/DependencyUnavailable"
           }
         }
+      },
+      "get": {
+        "operationId": "listDocuments",
+        "tags": [
+          "documents"
+        ],
+        "summary": "List the documents of one project, newest first.",
+        "description": "One item per document, carrying the version the document currently points at -- the one a reader would open, stream or start a run against. A document with no published version is not listed, because there is nothing to address.\n\nThe item is a `DocumentVersion` because that is what `uploadDocument` publishes into this same collection: the `GET` of a collection returns a page of exactly what its `POST` returns, which is the rule `listProjects` follows against `createProject`. This surface has no separate `Document` resource and does not acquire one here.\n\nAn unknown project is `404`, never an empty page: \"this project has nothing in it yet\" is a different answer from \"there is no such project\".",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of this project's documents.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVersionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
       }
     },
     "/versions/{version_uid}": {
@@ -368,6 +422,128 @@
           },
           "422": {
             "$ref": "#/components/responses/StorageIntegrityError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/versions/{version_uid}/runs": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/VersionUid"
+        }
+      ],
+      "get": {
+        "operationId": "listRuns",
+        "tags": [
+          "runs"
+        ],
+        "summary": "List the runs of one published version, newest first.",
+        "description": "Runs hang off the version because `startRun` takes a `version_uid` and nothing else that identifies anything -- the project is derived from it. This is the inverse of that direction and not a second way of addressing a run.\n\nEach item is the whole `RunStatus`, identical to what `getRunStatus` answers for that run. There is no lighter list shape: a second shape of one resource is a second thing to drift.\n\nAn unknown version is `404`, never an empty page.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of this version's runs.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStatusPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/documents/{document_uid}/versions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DocumentUid"
+        }
+      ],
+      "get": {
+        "operationId": "listVersions",
+        "tags": [
+          "documents"
+        ],
+        "summary": "List the published versions of one document, newest first.",
+        "description": "Every immutable version of one document, ordered by `version_ordinal` descending. The ordinal is a display and ordering value and is never an identity; the continuation token carries the opaque `version_uid` and nothing else.\n\nAn unknown document is `404`, never an empty page.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of this document's published versions.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVersionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -876,6 +1052,14 @@
           "$ref": "#/components/schemas/ProjectUid"
         }
       },
+      "DocumentUid": {
+        "name": "document_uid",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/DocumentUid"
+        }
+      },
       "VersionUid": {
         "name": "version_uid",
         "in": "path",
@@ -1148,6 +1332,14 @@
         "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
         "minLength": 1,
         "maxLength": 128
+      },
+      "CostBasis": {
+        "type": "string",
+        "description": "How well a published cost figure is known. `measured` means every provider call the figure sums reported its own cost; `estimated` means at least one did not, so the total is derived. The value is an aggregate over **every** call the figure spans and is never the last call's basis: a run whose first attempt replayed and whose second reported a cost is `estimated`.",
+        "enum": [
+          "measured",
+          "estimated"
+        ]
       },
       "IdempotencyKey": {
         "type": "string",
@@ -1521,6 +1713,25 @@
           }
         }
       },
+      "DocumentVersionPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "page"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentVersion"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
+        }
+      },
       "StartRunRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -1668,6 +1879,19 @@
             "minimum": 0,
             "description": "Ungrounded model items rejected by the grounding gate. They are not findings and appear in no finding list."
           },
+          "cost_micros": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "What this run spent at the provider, in millionths of the provider currency unit, as an integer. Never a floating-point money value. It is the sum of `cost_micros` over **every** `model_call` row of this run, including every retry attempt, because the per-run budget ceiling is enforced over the same span. Absent when the run made no provider call at all, which is a different fact from a cost of zero."
+          },
+          "cost_basis": {
+            "$ref": "#/components/schemas/CostBasis"
+          },
+          "model_call_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many provider calls `cost_micros` sums. Published rather than left to be inferred: a reader who cannot see it cannot tell a run answered first time from one that was retried, and the two spent differently. Present exactly when `cost_micros` is."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -1682,6 +1906,25 @@
                 "type": "null"
               }
             ]
+          }
+        }
+      },
+      "RunStatusPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "page"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunStatus"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
           }
         }
       },

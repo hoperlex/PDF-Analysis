@@ -163,6 +163,22 @@ class DocumentAdapter:
 
         return self._service.read_source_bytes(VersionUid.parse(version_uid))
 
+    def list_documents(self, *, project_uid: str) -> Sequence[DocumentVersionView]:
+        from auditmanager.shared.identity import ProjectUid
+
+        return tuple(
+            _version_view(record)
+            for record in self._service.list_documents(ProjectUid.parse(project_uid))
+        )
+
+    def list_versions(self, *, document_uid: str) -> Sequence[DocumentVersionView]:
+        from auditmanager.shared.identity import DocumentUid
+
+        return tuple(
+            _version_view(record)
+            for record in self._service.list_versions(DocumentUid.parse(document_uid))
+        )
+
 
 class _Uploaded:
     __slots__ = ("_version", "_replayed")
@@ -262,6 +278,27 @@ class RunAdapter(_SessionHolder):
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._read(lambda session: _run_status_view(session, run_id))
 
+    def list_runs(self, *, version_uid: str) -> Sequence[RunStatusView]:
+        """Every run of one version, each built through ``_run_status_view``.
+
+        The version is proved to exist before the runs are read, so an unknown version is
+        ``not_found`` rather than an empty page. ``RunRepository`` owns ``audit_run`` and
+        knows nothing about ``document_version``, so the check belongs here, in the one
+        place that holds both modules.
+        """
+        from auditmanager.documents.repository import DocumentRepository
+        from auditmanager.runs import RunRepository
+        from auditmanager.shared.identity import VersionUid
+
+        def work(session: Session) -> Sequence[RunStatusView]:
+            DocumentRepository().get_version(session, VersionUid.parse(version_uid))
+            rows = RunRepository().list_for_version(session, version_uid)
+            return tuple(
+                _run_status_view(session, str(row.run_id)) for row in rows
+            )
+
+        return self._read(work)
+
 
 def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     """The whole frozen `RunStatus`, from the two places that hold it.
@@ -277,6 +314,10 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     repository = RunRepository()
     run = repository.get(session, run_id)
     stages = repository.stage_results(session, run_id)
+    # `D-21`. Read from the `model_call` rows, which are exact, and not from
+    # `stage_result.metrics` -- `D-15` measures that pair as a sum over attempts wearing
+    # one attempt's provenance, and that ambiguity is not being inherited into a contract.
+    cost = repository.cost(session, run_id)
     return RunStatusView(
         run_id=str(run.run_id),
         project_uid=str(run.project_uid),
@@ -297,6 +338,11 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         # not a finding and the two counts must not be obtainable from one call.
         published_finding_count=published_finding_count(session, run_id),
         diagnostic_observation_count=len(diagnostics(session, run_id)),
+        # All three or none: a run that made no provider call has no cost to report, and
+        # a zero would be an answer to a question nothing asked.
+        cost_micros=None if cost is None else cost.cost_micros,
+        cost_basis=None if cost is None else cost.basis,
+        model_call_count=None if cost is None else cost.model_call_count,
         terminal_at=run.terminal_at,
         stages=tuple(
             StageStateView(

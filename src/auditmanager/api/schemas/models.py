@@ -47,6 +47,7 @@ __all__ = [
     "AppendDecisionRequest",
     "AppendDecisionResponse",
     "CorrelationId",
+    "CostBasis",
     "CreateProjectRequest",
     "Cursor",
     "DecisionEvent",
@@ -55,6 +56,7 @@ __all__ = [
     "DecisionId",
     "DocumentUid",
     "DocumentVersion",
+    "DocumentVersionPage",
     "ErrorCode",
     "ErrorEnvelope",
     "Evidence",
@@ -78,6 +80,7 @@ __all__ = [
     "RunId",
     "RunState",
     "RunStatus",
+    "RunStatusPage",
     "Sha256",
     "StageId",
     "StageState",
@@ -280,6 +283,19 @@ class ProviderMode(str, enum.Enum):
     RECORDED = "recorded"
 
 
+class CostBasis(str, enum.Enum):
+    """How well a published cost figure is known. `D-21`.
+
+    ``measured`` means every provider call the figure sums reported its own cost.
+    ``estimated`` means at least one did not, so the total is derived. The value is an
+    aggregate over every contributing call and never the last one's basis -- see
+    ``auditmanager.runs.repository.RunCost`` and `DEBT_REGISTER.md` `D-15`.
+    """
+
+    MEASURED = "measured"
+    ESTIMATED = "estimated"
+
+
 class FindingCategory(str, enum.Enum):
     INTERNAL_CONTRADICTION = "internal_contradiction"
     EXPLICIT_PLACEHOLDER = "explicit_placeholder"
@@ -383,6 +399,12 @@ class DocumentVersion(_Object):
     input_manifest: list[InputManifestEntry]
 
 
+class DocumentVersionPage(_Object):
+    items: list[DocumentVersion]
+    page: PageInfo
+
+
+
 # --- runs --------------------------------------------------------------------------
 
 
@@ -424,8 +446,20 @@ class RunStatus(_Object):
     diagnostic_observation_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    cost_micros: Annotated[int, Field(ge=0)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    cost_basis: CostBasis = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    model_call_count: Annotated[int, Field(ge=0)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
     created_at: datetime
     terminal_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
+
+
+class RunStatusPage(_Object):
+    items: list[RunStatus]
+    page: PageInfo
 
 
 # --- findings ----------------------------------------------------------------------
