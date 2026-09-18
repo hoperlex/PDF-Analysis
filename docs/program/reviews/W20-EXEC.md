@@ -402,11 +402,24 @@ with. The run harness's `seed_version` is loaded by explicit path, the way
 
 ## 10. Gate
 
+Same lane, same instance, run on `403faaa` (this review's own commit; the only later commit
+is the one that fills these figures in). Exit code read from `$?` after a redirect, never
+through `| tail`:
+
 ```
+1796 passed, 5 skipped, 1 warning, 168 subtests passed in 237.89s   (battery)
+35 passed in 29.30s                                                 (foundation)
+Test Files  47 passed (47)   Tests  681 passed (681)                (frontend)
 GATE OK: battery, foundation, frontend and whitespace all pass
+GATE_FINAL_EXIT=0
 ```
 
-*(figures and exit code filled in below from the run on the final commit)*
+**+11 on the battery, and every one of them is accounted for:** 8 in
+`test_the_run_leaves_the_request_thread.py`, 2 in
+`TestTheAcceptedRunIsNotTheFinishedRun`, and 1 —
+`test_the_start_run_record_pins_an_accepted_run_and_not_a_finished_one` — in the
+characterization guard. Skips, subtests, foundation and frontend are all unmoved, which is
+the shape a change that touched no contract and no `web/` file should have.
 
 ## 11. Anything false in the brief
 
@@ -421,7 +434,18 @@ Restated from the table at the top, because it is the part a coordinator reads:
    builds the carrier (nothing else builds an `Application`) and `api/app.py` is the only
    place that can tell "serving" from "constructed", which is where startup reconciliation
    has to go. Both are tabulated in §2 with the proof.
-3. **`make mutation-copy` symlinks more than the brief's list suggests**, and three
+3. **Two comments elsewhere in the tree now state a reason that no longer holds**, and
+   both are outside this session's ownership:
+   `infra/deploy/proxy/nginx.conf:37` ("A model run is slow. The default 60s read timeout
+   would cut `startRun` off mid-call") and
+   `web/src/widgets/run-list/ui/run-list.tsx:10-13` ("`execute_run` is inline, so a run is
+   already `published` when `startRun` answers, and a screen that waited for a `running`
+   reading would wait forever"). The run-list widget's *behaviour* — not polling — is still
+   right; a list should not be a second cadence. Only its reason moved.
+   `docs/program/DEBT_REGISTER.md` carries `D-20` as open in two places (the summary table
+   and section `D-17`'s "What this does not close"), which is the integrator's row to close
+   against this branch rather than mine to edit.
+4. **`make mutation-copy` symlinks more than the brief's list suggests**, and three
    composition suites therefore cannot run in a copy. Not a defect in the tool — its own
    output says so — but a session that did not read that output would report three false
    reds.
