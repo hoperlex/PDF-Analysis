@@ -40,6 +40,8 @@ from auditmanager.api.schemas.models import FindingCategory, Verdict
 from auditmanager.findings import TextLayer
 from auditmanager.shared.identity import ProjectUid
 
+from .test_listing_surface import Catalogue
+
 from .conftest import (
     PAGE_ONE,
     PAGE_TWO,
@@ -852,7 +854,11 @@ class _RecordingQuery(Mapping[str, Sequence[str]]):
 
 
 def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
-    shipped_router: Surface, mixed_run: MixedRun, ladder: Ladder, contract: dict[str, Any]
+    shipped_router: Surface,
+    mixed_run: MixedRun,
+    ladder: Ladder,
+    paged: Catalogue,
+    contract: dict[str, Any],
 ) -> None:
     """The guard against the defect this session exists for.
 
@@ -878,6 +884,12 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listDecisionHistory": (
             f"/findings/{mixed_run.findings[0].finding_uid}/decisions"
         ),
+        # `R-5`. Each of the three listings declares `cursor` and `limit`, so each one is
+        # driven here too: the point of this test is that it covers every query parameter
+        # the *document* declares, including ones a later reseal adds.
+        "listDocuments": f"/projects/{paged.project_uid}/documents",
+        "listVersions": f"/documents/{paged.versioned_document_uid}/versions",
+        "listRuns": f"/versions/{paged.run_version_uid}/runs",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -887,6 +899,9 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listProjects": {"cursor", "limit"},
         "listRunFindings": {"category", "cursor", "limit", "verdict"},
         "listDecisionHistory": {"cursor", "limit"},
+        "listDocuments": {"cursor", "limit"},
+        "listVersions": {"cursor", "limit"},
+        "listRuns": {"cursor", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     # One supplied value per parameter that the answer must be visibly different for, and
@@ -1085,3 +1100,15 @@ def _bound_ports(router: Surface) -> list[tuple[Any, str]]:
         found.append((route, name))
     assert len(found) == len(wanted)
     return found
+
+
+@pytest.fixture
+def paged(session: Session) -> Catalogue:
+    """The `R-5` listings' rows, built by the fixture that owns them.
+
+    `test_listing_surface.py` is where these three operations are asserted on; this
+    module only needs each of them to hold at least two rows, so the fixture is imported
+    rather than re-seeded. A second seeding routine for the same three tables is a second
+    thing to drift.
+    """
+    return Catalogue(session)

@@ -45,6 +45,11 @@ const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> = [
   ['appendDecision', 'POST', '/findings/{finding_uid}/decisions'],
   ['listDecisionHistory', 'GET', '/findings/{finding_uid}/decisions'],
   ['exportRunCsv', 'GET', '/runs/{run_id}/export.csv'],
+  // R-5, 2026-09-18: the three listings that make published work reachable after a
+  // page reload. DEBT_REGISTER.md D-16.
+  ['listDocuments', 'GET', '/projects/{project_uid}/documents'],
+  ['listVersions', 'GET', '/documents/{document_uid}/versions'],
+  ['listRuns', 'GET', '/versions/{version_uid}/runs'],
 ];
 
 const document = JSON.parse(readText(CONTRACT_PATH)) as {
@@ -57,7 +62,7 @@ const schema = (name: string) => {
   return found as { required?: string[]; properties?: Record<string, unknown> };
 };
 
-describe('the twelve seam operations', () => {
+describe('the fifteen seam operations', () => {
   it('are exactly the operations the client exposes', () => {
     expect([...OPERATION_IDS].sort()).toEqual(SEAM_OPERATIONS.map(([id]) => id).sort());
   });
@@ -208,7 +213,7 @@ describe('the error catalog', () => {
         withResponses.push([typed.operationId, Object.keys(typed.responses ?? {})]);
       }
     }
-    expect(withResponses).toHaveLength(12);
+    expect(withResponses).toHaveLength(15);
     for (const [operationId, statuses] of withResponses) {
       expect(statuses, `${operationId} declares no 401`).toContain('401');
       expect(statuses, `${operationId} declares no 403`).toContain('403');
@@ -294,7 +299,7 @@ describe('the surface leaks no internal address', () => {
     expect(FORBIDDEN.test('finding_uid')).toBe(false);
   });
 
-  it('names 43 component schemas, so a truncated document cannot pass', () => {
-    expect(SCHEMA_NAMES).toHaveLength(43);
+  it('names 46 component schemas, so a truncated document cannot pass', () => {
+    expect(SCHEMA_NAMES).toHaveLength(46);
   });
 });

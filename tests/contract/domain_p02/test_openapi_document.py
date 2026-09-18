@@ -24,7 +24,10 @@ import pytest
 
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
-#: Every capability P2-API-01 enumerates, as the operationId that must implement it.
+#: Every capability P2-API-01 enumerates, as the operationId that must implement it,
+#: plus the three `R-5` added: P2-API-01's eleven capabilities are what a *client journey*
+#: needs, and `W15-RUN` measured in a browser that the journey cannot be resumed without
+#: a way to list what it produced. `DEBT_REGISTER.md` D-16.
 REQUIRED_OPERATIONS = {
     "createProject",
     "listProjects",
@@ -38,11 +41,21 @@ REQUIRED_OPERATIONS = {
     "appendDecision",
     "listDecisionHistory",
     "exportRunCsv",
+    "listDocuments",
+    "listVersions",
+    "listRuns",
 }
 
 WRITE_OPERATIONS = {"createProject", "uploadDocument", "startRun", "appendDecision"}
 
-PAGINATED_OPERATIONS = {"listProjects", "listRunFindings", "listDecisionHistory"}
+PAGINATED_OPERATIONS = {
+    "listProjects",
+    "listRunFindings",
+    "listDecisionHistory",
+    "listDocuments",
+    "listVersions",
+    "listRuns",
+}
 
 
 def _walk(node: Any, path: str = "$"):

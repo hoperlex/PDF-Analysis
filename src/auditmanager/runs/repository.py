@@ -114,6 +114,44 @@ _TERMINATE = text(
     """
 )
 
+#: `listRuns`. Every run of one published version, newest first -- the same order
+#: `listProjects` declares, with the opaque identity as the tiebreaker so the order is
+#: total and stable across pages. A run belongs to a version: `start_audit_run` takes a
+#: `version_uid` and derives the project from it, so the version is the parent in the
+#: create direction and this listing is its inverse.
+_LIST_RUNS_FOR_VERSION = text(
+    f"SELECT {_RUN_COLUMNS} FROM audit_run WHERE version_uid = :version_uid "
+    "ORDER BY created_at DESC, run_id DESC"
+)
+
+#: `D-21`. What one run cost, from the `model_call` rows themselves.
+#:
+#: **Deliberately not from `stage_result.metrics`.** `DEBT_REGISTER.md` `D-15` measures
+#: that `metrics["cost_usd"]` is a sum across retry attempts while `metrics["cost_basis"]`
+#: describes the *last* response only, so a run that replayed once and then measured
+#: publishes a two-attempt sum wearing one attempt's provenance. That pair is left exactly
+#: as it is -- repairing it is a design call `D-15` records as not a lane decision -- and
+#: this statement reads the per-call rows instead, which `D-15` itself says are exact:
+#: "the model-call **records** are exact -- each carries its own basis".
+#:
+#: Three values, computed in one pass so they cannot disagree with each other:
+#:
+#: * `calls` -- how many `model_call` rows the sum spans. A reader who cannot see this
+#:   cannot tell a one-attempt run from a two-attempt one, which is the very ambiguity
+#:   `D-15` is about, so it is published rather than inferred.
+#: * `cost_micros` -- the sum, in the stored integer unit. Never a float: the column is
+#:   `bigint` millionths and `20260910_0002` says floating point money is not stored.
+#: * `unmeasured` -- how many contributing rows are **not** a measured cost, counting a
+#:   NULL `cost_micros` as unmeasured too. A NULL contributes nothing to `sum`, so a run
+#:   with one NULL row would otherwise publish a short total wearing the word `measured`.
+_COST_SUMMARY = text(
+    "SELECT count(*) AS calls, "
+    "       coalesce(sum(cost_micros), 0) AS cost_micros, "
+    "       count(*) FILTER (WHERE cost_micros IS NULL OR cost_basis <> 'measured') "
+    "         AS unmeasured "
+    "FROM model_call WHERE run_id = :run_id"
+)
+
 _STALE_RUNNING = text(
     f"SELECT {_RUN_COLUMNS} FROM audit_run "
     "WHERE state = :state AND updated_at < now() - CAST(:age AS interval) "
@@ -191,6 +229,26 @@ class RunRow:
     #: migration and simply was not selected, so a required API property had no producer.
     created_at: datetime
     terminal_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class RunCost:
+    """What one run spent at the provider, and how well that figure is known.
+
+    ``basis`` is an **aggregate over every contributing call**, and the rule is the
+    conservative one: ``measured`` only when every row reports a measured cost, and
+    ``estimated`` the moment one does not. The alternative -- reporting the last call's
+    basis, which is what ``stage_result.metrics["cost_basis"]`` does -- is the `D-15`
+    defect, and inheriting it into a contract would make it permanent.
+    """
+
+    model_call_count: int
+    cost_micros: int
+    basis: str
+
+    @property
+    def is_measured(self) -> bool:
+        return self.basis == "measured"
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,6 +372,42 @@ class RunRepository:
     def find(self, session: Session, run_id: str) -> RunRow | None:
         row = session.execute(_SELECT_RUN, {"run_id": run_id}).first()
         return None if row is None else _run_row(row)
+
+    def list_for_version(
+        self, session: Session, version_uid: str
+    ) -> tuple[RunRow, ...]:
+        """Every run of one version, newest first.
+
+        No existence check on the version: this repository owns ``audit_run`` and knows
+        nothing about ``document_version``. The caller proves the parent exists -- see
+        ``RunAdapter.list_runs`` -- because a listing that answered an empty page for an
+        unknown version would tell a caller "that document has never been analysed" about
+        a document that does not exist.
+        """
+        rows = session.execute(
+            _LIST_RUNS_FOR_VERSION, {"version_uid": version_uid}
+        ).all()
+        return tuple(_run_row(row) for row in rows)
+
+    def cost(self, session: Session, run_id: str) -> RunCost | None:
+        """What this run cost, or ``None`` when it made no provider call at all.
+
+        ``None`` and ``RunCost(0, 0, "measured")`` are different facts and are kept
+        different all the way to the wire: a run that never reached the provider has no
+        cost to report, while a run that made two calls which both came back free has a
+        cost and it is zero. Reporting the first as ``0`` would be the same class of
+        invention as `D-3`'s defaulted provenance -- an answer produced for a question
+        nothing was asked.
+        """
+        row = session.execute(_COST_SUMMARY, {"run_id": run_id}).mappings().one()
+        calls = int(row["calls"])
+        if calls == 0:
+            return None
+        return RunCost(
+            model_call_count=calls,
+            cost_micros=int(row["cost_micros"]),
+            basis="estimated" if int(row["unmeasured"]) else "measured",
+        )
 
     def stage_results(self, session: Session, run_id: str) -> tuple[StageResultRow, ...]:
         rows = session.execute(_SELECT_STAGE_RESULTS, {"run_id": run_id}).mappings().all()
@@ -457,6 +551,7 @@ __all__ = [
     "INITIAL_STATE",
     "PC01_STAGES",
     "RUN_MACHINE",
+    "RunCost",
     "RunRepository",
     "RunRow",
     "StageResultRow",

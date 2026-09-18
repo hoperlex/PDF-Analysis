@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 17ece21beb295c0f0893c5f16956401b5a349e4ebfa5f7c9cd2c4260a08611e1
+ *   sha256 701ecd58a860f53762775bee353cd5461d21c9e56f0bcb8d00b45dbfe685f8fe
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '17ece21beb295c0f0893c5f16956401b5a349e4ebfa5f7c9cd2c4260a08611e1';
+export const CONTRACT_DIGEST = '701ecd58a860f53762775bee353cd5461d21c9e56f0bcb8d00b45dbfe685f8fe';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -25,6 +25,7 @@ export const SCHEMA_NAMES = [
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'CorrelationId',
+  'CostBasis',
   'CreateProjectRequest',
   'Cursor',
   'DecisionEvent',
@@ -33,6 +34,7 @@ export const SCHEMA_NAMES = [
   'DecisionId',
   'DocumentUid',
   'DocumentVersion',
+  'DocumentVersionPage',
   'ErrorCode',
   'ErrorEnvelope',
   'Evidence',
@@ -56,6 +58,7 @@ export const SCHEMA_NAMES = [
   'RunId',
   'RunState',
   'RunStatus',
+  'RunStatusPage',
   'Sha256',
   'StageId',
   'StageState',
@@ -89,6 +92,15 @@ export type CorrelationId = string;
 
 /** The contract pattern for `CorrelationId`. Anchored; use with `new RegExp()`. */
 export const CORRELATION_ID_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$";
+
+/** How well a published cost figure is known. `measured` means every provider call the figure sums reported its own cost; `estimated` means at least one did not, so the total is derived. The value is an aggregate over **every** call the figure spans and is never the last call's basis: a run whose first attempt replayed and whose second reported a cost is `estimated`. */
+export const COST_BASIS_VALUES = [
+  'measured',
+  'estimated',
+] as const;
+
+/** CostBasis - the closed value set above. */
+export type CostBasis = (typeof COST_BASIS_VALUES)[number];
 
 export type CreateProjectRequest = {
   /** Display label. Not unique and not an identity. */
@@ -154,6 +166,11 @@ export type DocumentVersion = {
   /** Display and ordering value only. Never an identity and never accepted as a path parameter. */
   version_ordinal: number;
   version_uid: VersionUid;
+};
+
+export type DocumentVersionPage = {
+  items: Array<DocumentVersion>;
+  page: PageInfo;
 };
 
 /** Exactly the key set of contracts/domain/v1/error-codes.json. */
@@ -362,6 +379,9 @@ export type RunState = (typeof RUN_STATE_VALUES)[number];
 
 export type RunStatus = {
   analysis_profile_id?: AnalysisProfileId;
+  cost_basis?: CostBasis;
+  /** What this run spent at the provider, in millionths of the provider currency unit, as an integer. Never a floating-point money value. It is the sum of `cost_micros` over **every** `model_call` row of this run, including every retry attempt, because the per-run budget ceiling is enforced over the same span. Absent when the run made no provider call at all, which is a different fact from a cost of zero. */
+  cost_micros?: number;
   created_at: string;
   /** The explicitly recorded missing or degraded stage set. Non-empty exactly when the run is `partial`; a `published` run carries none. */
   degradation_set?: Array<StageId>;
@@ -369,6 +389,8 @@ export type RunStatus = {
   diagnostic_observation_count?: number;
   /** OD-10: a run left `running` by a crash is reconciled to `failed` with an explicit interrupted reason. There is no `interrupted` state. */
   interrupted_reason?: string | null;
+  /** How many provider calls `cost_micros` sums. Published rather than left to be inferred: a reader who cannot see it cannot tell a run answered first time from one that was retried, and the two spent differently. Present exactly when `cost_micros` is. */
+  model_call_count?: number;
   project_uid: ProjectUid;
   prompt_bundle_id?: PromptBundleId;
   provider_mode: ProviderMode;
@@ -380,6 +402,11 @@ export type RunStatus = {
   /** The catalog code a `failed` run terminated with. Null otherwise. */
   terminal_reason?: ErrorCode | null;
   version_uid: VersionUid;
+};
+
+export type RunStatusPage = {
+  items: Array<RunStatus>;
+  page: PageInfo;
 };
 
 /** A verification value, never an identity. */

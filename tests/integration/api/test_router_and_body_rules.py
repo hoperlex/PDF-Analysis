@@ -9,7 +9,7 @@ Two did not.
 * **a duplicate ``operationId`` is refused at construction.** Removing the check left all
   816 tests green. An ``operationId`` is an operation's identity: the frozen document keys
   on it, the generated client names a function after it, and the conformance gate compares
-  the set. A duplicate leaves ``len(routes) == 12`` passing while one frozen operation is
+  the set. A duplicate leaves ``len(routes) == 15`` passing while one frozen operation is
   no longer addressable.
 * **a request body must be one JSON object.** Removing the ``isinstance(parsed, dict)``
   check left all 816 tests green. A bare array, a string or ``null`` then reached the
@@ -102,10 +102,10 @@ class TestTheRouterRefusesADuplicateOperationId:
 
         Distinct ids give a surface whose ``operation_ids`` has one entry per route. A
         duplicate would leave ``routes`` at twelve and ``operation_ids`` at eleven, which
-        is exactly what ``len(router.routes) == 12`` cannot see.
+        is exactly what ``len(router.routes) == 15`` cannot see.
         """
-        assert len(router.routes) == 12
-        assert len(router.operation_ids) == 12
+        assert len(router.routes) == 15
+        assert len(router.operation_ids) == 15
         assert len(router.operation_ids) == len(router.routes)
 
 

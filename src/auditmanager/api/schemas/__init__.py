@@ -2,7 +2,7 @@
 
 Two layers, and the split is the point.
 
-**:mod:`~auditmanager.api.schemas.models`** holds the 43 Pydantic models named exactly as
+**:mod:`~auditmanager.api.schemas.models`** holds the 46 Pydantic models named exactly as
 the contract's ``components.schemas`` keys. They declare the **document** FastAPI serves and
 they validate the four request bodies. `T-1` makes the generated document a second authority
 and `W13-CONF`'s conformance gate is the machine that stops it drifting from the frozen one.

@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 17ece21beb295c0f0893c5f16956401b5a349e4ebfa5f7c9cd2c4260a08611e1
+ *   sha256 701ecd58a860f53762775bee353cd5461d21c9e56f0bcb8d00b45dbfe685f8fe
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -32,10 +32,16 @@ import type {
   GetRunStatusResult,
   ListDecisionHistoryInput,
   ListDecisionHistoryResult,
+  ListDocumentsInput,
+  ListDocumentsResult,
   ListProjectsInput,
   ListProjectsResult,
   ListRunFindingsInput,
   ListRunFindingsResult,
+  ListRunsInput,
+  ListRunsResult,
+  ListVersionsInput,
+  ListVersionsResult,
   StartRunInput,
   StartRunResult,
   StreamDocumentVersionContentInput,
@@ -130,6 +136,18 @@ export function listDecisionHistory(
 }
 
 /**
+ * List the documents of one project, newest first.
+ *
+ * `GET /projects/{project_uid}/documents`.
+ */
+export function listDocuments(
+  input: ListDocumentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListDocumentsResult>> {
+  return request<ListDocumentsResult>(OPERATIONS.listDocuments, input, options);
+}
+
+/**
  * List projects, newest first.
  *
  * `GET /projects`.
@@ -151,6 +169,30 @@ export function listRunFindings(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListRunFindingsResult>> {
   return request<ListRunFindingsResult>(OPERATIONS.listRunFindings, input, options);
+}
+
+/**
+ * List the runs of one published version, newest first.
+ *
+ * `GET /versions/{version_uid}/runs`.
+ */
+export function listRuns(
+  input: ListRunsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListRunsResult>> {
+  return request<ListRunsResult>(OPERATIONS.listRuns, input, options);
+}
+
+/**
+ * List the published versions of one document, newest first.
+ *
+ * `GET /documents/{document_uid}/versions`.
+ */
+export function listVersions(
+  input: ListVersionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListVersionsResult>> {
+  return request<ListVersionsResult>(OPERATIONS.listVersions, input, options);
 }
 
 /**
@@ -201,8 +243,11 @@ export const apiClient = {
   getFinding,
   getRunStatus,
   listDecisionHistory,
+  listDocuments,
   listProjects,
   listRunFindings,
+  listRuns,
+  listVersions,
   startRun,
   streamDocumentVersionContent,
   uploadDocument,

@@ -297,7 +297,7 @@ def test_c1_the_application_composes_from_the_environment_and_answers(client: Cl
     against a root that wired nothing, which is why this issues a request that has to
     reach PostgreSQL before it can answer.
     """
-    assert len(client.app.router.routes) == 12
+    assert len(client.app.router.routes) == 15
     answer = client.list_projects()
     assert answer.status == 200, answer.body
     assert "items" in answer.json

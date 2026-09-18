@@ -8,6 +8,34 @@ four-times-certified surface. This directory is what that rewrite has to be *wro
 
 **After the rewrite, the FastAPI implementation must reproduce these bytes exactly.**
 
+## Amended 2026-09-18 by `W18-SEAL`, under owner ruling `R-5`
+
+**Thirty-six records, not thirty-three, and five of them carry a second debt.**
+
+Three cases were **added** -- `32-listDocuments.success`, `33-listVersions.success` and
+`34-listRuns.success`. Adding an operation adds a case and a record; it changes none, so
+these three carry no exception block and need none. `FIFTEEN_OPERATIONS` in
+`test_response_baseline.py` moved from twelve to fifteen with them.
+
+Five records **changed**, and they are the five already marked for `D-19`: every body
+rendering a `RunStatus` now carries `cost_micros`, `cost_basis` and `model_call_count`,
+the three properties `R-5` added so that `PA-01` criterion 4's cost clause can be
+satisfied at all. Their `exception.debt` is now `["D-19", "D-21"]` -- a list, on all six
+marked records including record 31, because a record can be moved twice and a comma inside
+a sentence is not a countable thing.
+
+**The re-capture was checked for vacuity, and here is the measurement.** `capture.py`
+rewrites all thirty-six files. Comparing the directory before and after, key by key:
+five records differ under `response` **and** `exception`, record 31 differs under
+`exception` alone (the list format, not its content), three are new, and the remaining
+twenty-seven are byte-identical. The five response diffs are three added keys each and
+nothing else -- no status moved, no header moved, no existing property changed value.
+
+A note worth keeping, because it is a real measurement rather than a design choice: the
+baseline's `recorded` run reports `cost_micros: 34400` with `cost_basis: "estimated"` over
+one model call. Estimated because a replayed call reports no cost of its own, so the
+figure is derived -- which is exactly what the aggregate basis rule is for.
+
 ## Read this before you read a record
 
 **These records are of the authorized surface. Amended 2026-09-18 by `W13-API`, stage 2,
@@ -25,7 +53,7 @@ malformed one and with the wrong one.
 
 **What this amendment did and did not change.** It added the `Authorization` header to each
 record's `request.headers`, replaced the `pre_authorization` sentence and updated
-`captured_through`. It changed **nothing** under `response` in any of the 33 records: the
+`captured_through`. It changed **nothing** under `response` in any of the 33 records as they then stood: the
 recapture that produced this state was run against the FastAPI implementation and the diff
 is exactly three request-side lines per file. The status, every header and every body byte
 are what `W13-BASE` committed — which is the claim this whole directory exists to support,
@@ -89,7 +117,7 @@ a re-capture alone would have erased the evidence silently — so
 `test_the_five_run_status_records_no_longer_pin_one_instant_for_the_whole_run` asserts against
 the records that it is gone.
 
-**The re-capture was checked for vacuity.** `capture.py` rewrites all 33 files. Measured at
+**The re-capture was checked for vacuity.** `capture.py` rewrites every file. Measured at
 `aae0209` with `git diff --stat`: **28 came back byte-identical and exactly the 5 above
 moved**, +110/-20 lines, evenly split five ways because the five bodies changed the same way.
 Re-running the capture is the one thing that can make this directory vacuous, so the diff is

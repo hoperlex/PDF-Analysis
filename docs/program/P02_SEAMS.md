@@ -588,9 +588,13 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Twelve operations, frozen. `A5` generates the typed client from this document; `B6`
+Fifteen operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
+
+Twelve until the reseal of 2026-09-18 under owner ruling `R-5`, which added the three
+listings below and made published work reachable after a page reload (`DEBT_REGISTER.md`
+D-16).
 
 | Operation | Method and path |
 |---|---|
@@ -606,6 +610,9 @@ implements the routers against it; `B7` and `B8` consume the client and never ca
 | `appendDecision` | `POST /findings/{finding_uid}/decisions` |
 | `listDecisionHistory` | `GET /findings/{finding_uid}/decisions` |
 | `exportRunCsv` | `GET /runs/{run_id}/export.csv` |
+| `listDocuments` | `GET /projects/{project_uid}/documents` |
+| `listVersions` | `GET /documents/{document_uid}/versions` |
+| `listRuns` | `GET /versions/{version_uid}/runs` |
 
 Rules that hold across the whole surface:
 

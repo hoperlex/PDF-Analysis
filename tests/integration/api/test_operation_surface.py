@@ -41,16 +41,20 @@ def test_the_router_declares_exactly_the_frozen_operations(
     )
 
 
-def test_the_document_declares_twelve_and_the_router_implements_twelve(
+def test_the_document_declares_fifteen_and_the_router_implements_fifteen(
     router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     """The count is checked separately from the set.
 
     Equal sets with an unexpected size would mean the document itself had changed, and
-    the document is frozen. This is the assertion that notices that.
+    the document is sealed. This is the assertion that notices that.
+
+    **Twelve until the `R-5` reseal of 2026-09-18**, which added `listDocuments`,
+    `listVersions` and `listRuns`. The number moved because an owner ruling moved it;
+    nothing else may move it.
     """
-    assert len(declared_operations(openapi_document)) == 12
-    assert len(router.routes) == 12
+    assert len(declared_operations(openapi_document)) == 15
+    assert len(router.routes) == 15
 
 
 def test_every_declared_operation_is_reachable(
@@ -65,6 +69,7 @@ def test_every_declared_operation_is_reachable(
     """
     samples = {
         "project_uid": "prj_01M2545JSD15ETSNNV904X991F",
+        "document_uid": "doc_01M2545JSD15ETSNNV904X991H",
         "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
         "run_id": "run_01M2545JSD15ETSNNV904X991K",
         "finding_uid": "fnd_01M2545JSD15ETSNNV904X991M",
@@ -84,7 +89,7 @@ def test_every_declared_operation_is_reachable(
                 assert bound[name] == samples[name]
 
 
-def test_no_thirteenth_operation_answers(router: Surface) -> None:
+def test_no_sixteenth_operation_answers(router: Surface) -> None:
     """A path the document does not declare is not a resource.
 
     Includes a method the document does not declare on a path that *is* declared:
@@ -105,7 +110,7 @@ def test_no_thirteenth_operation_answers(router: Surface) -> None:
         assert response.status == 404, f"{method} {path} answered {response.status}"
 
 
-def test_the_document_declares_no_operation_outside_the_twelve_capabilities(
+def test_the_document_declares_no_operation_outside_the_declared_capabilities(
     openapi_document: dict[str, Any],
 ) -> None:
     """No tenancy, WebSocket, export resource or polling endpoint, and no auth *endpoint*.
@@ -132,9 +137,13 @@ def test_the_document_declares_no_operation_outside_the_twelve_capabilities(
     assert list(openapi_document["components"]["securitySchemes"]) == ["bearerAuth"], (
         "the authorization seam is one bearer scheme declared once, per R-3"
     )
-    assert len(paths) == 10 and sum(
+    assert len(paths) == 12 and sum(
         1
         for item in openapi_document["paths"].values()
         for method in item
         if method in {"get", "put", "post", "delete", "options", "head", "patch"}
-    ) == 12, "the seam added an operation; it is a header, not a thirteenth endpoint"
+    ) == 15, (
+        "10 paths / 12 operations before the `R-5` reseal, 12 / 15 after it. The seam "
+        "`R-3` added is still a header and not an endpoint; the three operations `R-5` "
+        "added are endpoints and are named in `REQUIRED_OPERATIONS`."
+    )

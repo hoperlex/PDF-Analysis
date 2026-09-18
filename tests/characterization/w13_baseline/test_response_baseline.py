@@ -57,10 +57,15 @@ STATIC_TOKEN = "w13-baseline-static-token"
 
 RECORD_FILES = sorted(journey.RECORDS.glob("*.json"))
 
-#: The frozen document's twelve operationIds, written out rather than read from the
+#: The frozen document's fifteen operationIds, written out rather than read from the
 #: contract: this suite's job is to notice a surface that changed, and an expectation
 #: computed from a file the change could also touch would not.
-TWELVE_OPERATIONS = (
+#:
+#: **`W18-SEAL` moved it from twelve to fifteen** under owner ruling `R-5`. Adding an
+#: operation adds a case and a record; it is not a permitted *change* to any record and
+#: carries no exception block. What changed here is the count, not the rule: every one of
+#: the fifteen still has to be covered by at least one record.
+FIFTEEN_OPERATIONS = (
     "appendDecision",
     "createProject",
     "exportRunCsv",
@@ -71,6 +76,9 @@ TWELVE_OPERATIONS = (
     "listProjects",
     "listRunFindings",
     "startRun",
+    "listDocuments",
+    "listRuns",
+    "listVersions",
     "streamDocumentVersionContent",
     "uploadDocument",
 )
@@ -99,16 +107,16 @@ def test_the_record_set_and_the_journey_agree(exchanges: dict[str, Any]) -> None
     assert recorded, "the baseline is empty"
 
 
-def test_every_one_of_the_twelve_operations_is_covered() -> None:
+def test_every_one_of_the_fifteen_operations_is_covered() -> None:
     covered = set()
     for path in RECORD_FILES:
         operation = json.loads(path.read_text(encoding="utf-8"))["operation"]
         if operation is not None:
             covered.add(operation)
-    assert covered == set(TWELVE_OPERATIONS), (
-        f"operations with no record: {sorted(set(TWELVE_OPERATIONS) - covered)}; "
+    assert covered == set(FIFTEEN_OPERATIONS), (
+        f"operations with no record: {sorted(set(FIFTEEN_OPERATIONS) - covered)}; "
         f"records naming an operation the contract does not declare: "
-        f"{sorted(covered - set(TWELVE_OPERATIONS))}"
+        f"{sorted(covered - set(FIFTEEN_OPERATIONS))}"
     )
 
 
@@ -121,13 +129,19 @@ def test_every_one_of_the_twelve_operations_is_covered() -> None:
 #: changed is the *count*, not the rule: every marked record still has to name a debt, cite
 #: the commit that moved it, carry a `permitted_change` describing the whole of the move,
 #: and be compared byte for byte against the new expectation like every other record.
+#:
+#: **`W18-SEAL` made the value a tuple**, because the five `RunStatus` records have now
+#: been moved twice -- by `D-19`, then by `D-21` under owner ruling `R-5` -- and a record
+#: moved by two debts has to name two. A comma inside a string would have kept the shape
+#: and lost the property: a list of debts is countable and a sentence is not. The record's
+#: own `debt` key is a list on all six for the same reason -- one spelling, not two.
 PERMITTED_EXCEPTIONS = {
-    "03-startRun.success": "D-19",
-    "04-startRun.replay": "D-19",
-    "05-startRun.replay_with_normalised_property": "D-19",
-    "06-getRunStatus.success": "D-19",
-    "07-getRunStatus.correlation_supplied": "D-19",
-    "31-streamDocumentVersionContent.storage_credential_refused": "D-7",
+    "03-startRun.success": ("D-19", "D-21"),
+    "04-startRun.replay": ("D-19", "D-21"),
+    "05-startRun.replay_with_normalised_property": ("D-19", "D-21"),
+    "06-getRunStatus.success": ("D-19", "D-21"),
+    "07-getRunStatus.correlation_supplied": ("D-19", "D-21"),
+    "31-streamDocumentVersionContent.storage_credential_refused": ("D-7",),
 }
 
 
@@ -138,12 +152,14 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     end of a long wave. This is the assertion that makes the exceptions countable.
 
     `D-7` is record 31: the storage credential refusal got a code of its own at `e6d0a6a`
-    under owner ruling `R-3`. `D-19` is the five records carrying a `RunStatus` body: a
-    published run reported no stage timings, no finding count, and one instant for its
-    creation and its terminal. **Those five records had pinned the second of those as the
-    expectation** -- `created_at` and `terminal_at` shared the token `{{ts_5}}`, because
-    substitution is by exact value and the two values were identical to the microsecond.
-    A record that reproduces a defect byte for byte is protecting it.
+    under owner ruling `R-3`. `D-19` and `D-21` are the five records carrying a
+    `RunStatus` body. `D-19`: a published run reported no stage timings, no finding count,
+    and one instant for its creation and its terminal -- and **those five records had
+    pinned the last of those as the expectation**, `created_at` and `terminal_at` sharing
+    the token `{{ts_5}}` because substitution is by exact value and the two values were
+    identical to the microsecond. A record that reproduces a defect byte for byte is
+    protecting it. `D-21`: the same five bodies now carry `cost_micros`, `cost_basis` and
+    `model_call_count`, the three properties owner ruling `R-5` added to `RunStatus`.
     """
     marked = {
         path.stem: json.loads(path.read_text(encoding="utf-8"))["exception"]
@@ -154,12 +170,18 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
         f"the permitted-exception set is {sorted(exceptions)}"
     )
     for case, block in exceptions.items():
-        assert block["debt"] == PERMITTED_EXCEPTIONS[case], (case, block["debt"])
+        assert tuple(block["debt"]) == PERMITTED_EXCEPTIONS[case], (case, block["debt"])
         assert block["permitted_change"], f"{case} is marked but describes no change"
         assert block["decided_by"], f"{case} cites no commit"
     assert "R-3" in exceptions[
         "31-streamDocumentVersionContent.storage_credential_refused"
     ]["ruling"]
+    # The five `RunStatus` records cite the ruling that authorised the *contract* half of
+    # their move. `D-19` needed none -- it repaired a declared field that had no producer
+    # -- but `D-21` adds three properties, and adding a property is the owner's act.
+    for case in PERMITTED_EXCEPTIONS:
+        if "D-21" in PERMITTED_EXCEPTIONS[case]:
+            assert "R-5" in exceptions[case]["ruling"], case
 
 
 def test_the_five_run_status_records_no_longer_pin_one_instant_for_the_whole_run() -> None:

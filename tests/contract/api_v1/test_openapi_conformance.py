@@ -29,8 +29,8 @@ survive normalization rather than merely to differ from the pristine document.
 
 `OPERATING_CONSTRAINTS.md` §12: *"never build an expectation, or an input, out of the thing
 under test."* What is under test here is the comparison, not the contract. Its expectations
-are literals in this file: the seven normalization identifiers, the twelve
-`(method, path, operationId)` triples, the forty-three schema names, the version string,
+are literals in this file: the seven normalization identifiers, the fifteen
+`(method, path, operationId)` triples, the forty-six schema names, the version string,
 and the exact dotted location each plant must be reported at. The contract is read from
 disk as an **authority**, from a path anchored on this file, which §12 names as the
 opposite case and which the `tests/integration/exports/test_frozen_column_list.py` guard
@@ -86,13 +86,15 @@ surface = conformance.surface
 
 #: `ALPHA_ROADMAP.md` §3 `T-1` and the measurement in the `W13-CONF` brief.
 FROZEN_OPENAPI_VERSION = "3.1.0"
-FROZEN_OPERATION_COUNT = 12
-FROZEN_SCHEMA_COUNT = 43
+FROZEN_OPERATION_COUNT = 15
+FROZEN_SCHEMA_COUNT = 46
 FROZEN_SERVER_URL = "/api/v1"
 
-#: The twelve operations, written out. Deliberately not derived from the document: an
+#: The fifteen operations, written out. Deliberately not derived from the document: an
 #: operation that disappears from the contract has to fail *here*, not silently reduce the
 #: size of the thing both sides are compared through.
+#:
+#: Twelve until the `R-5` reseal of 2026-09-18 added the three listings.
 FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("POST", "/projects", "createProject"),
     ("GET", "/projects", "listProjects"),
@@ -106,9 +108,13 @@ FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("POST", "/findings/{finding_uid}/decisions", "appendDecision"),
     ("GET", "/findings/{finding_uid}/decisions", "listDecisionHistory"),
     ("GET", "/runs/{run_id}/export.csv", "exportRunCsv"),
+    ("GET", "/projects/{project_uid}/documents", "listDocuments"),
+    ("GET", "/documents/{document_uid}/versions", "listVersions"),
+    ("GET", "/versions/{version_uid}/runs", "listRuns"),
 )
 
-#: The forty-three `components.schemas` keys, written out. These are the names the
+#: The forty-six `components.schemas` keys, written out. Forty-three until the `R-5`
+#: reseal, which added `DocumentVersionPage`, `RunStatusPage` and `CostBasis`. These are the names the
 #: Pydantic models must carry (`ALPHA_ROADMAP.md` §4, stage 2: *"named exactly as the
 #: contract's `components.schemas` keys"*). If FastAPI splits a model into `X-Input` and
 #: `X-Output`, this set changes and the gate fails - which is the correct outcome. The fix
@@ -119,6 +125,7 @@ FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
         "AppendDecisionRequest",
         "AppendDecisionResponse",
         "CorrelationId",
+        "CostBasis",
         "CreateProjectRequest",
         "Cursor",
         "DecisionEvent",
@@ -127,6 +134,7 @@ FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
         "DecisionId",
         "DocumentUid",
         "DocumentVersion",
+        "DocumentVersionPage",
         "ErrorCode",
         "ErrorEnvelope",
         "Evidence",
@@ -150,6 +158,7 @@ FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
         "RunId",
         "RunState",
         "RunStatus",
+        "RunStatusPage",
         "Sha256",
         "StageId",
         "StageState",
@@ -199,7 +208,7 @@ class TestTheFrozenDocument:
     def test_declares_openapi_3_1_0(self, contract: dict[str, Any]) -> None:
         assert contract["openapi"] == FROZEN_OPENAPI_VERSION
 
-    def test_declares_exactly_twelve_operations(self, contract: dict[str, Any]) -> None:
+    def test_declares_exactly_fifteen_operations(self, contract: dict[str, Any]) -> None:
         index = conformance.operation_index(contract)
         assert len(index) == FROZEN_OPERATION_COUNT
         assert index == {
@@ -236,7 +245,7 @@ class TestTheFrozenDocument:
         ]
         assert missing == []
 
-    def test_the_surface_reduces_to_the_twelve_operations(self, contract: dict[str, Any]) -> None:
+    def test_the_surface_reduces_to_the_declared_operations(self, contract: dict[str, Any]) -> None:
         reduced = surface(contract)
         seen = {
             (method.upper(), path)
@@ -549,8 +558,10 @@ class TestN1ComponentReferenceResolution:
             "paths./findings/{finding_uid}.get.responses.404.content.application/json.schema.$ref",
         )
         assert "ErrorEnvelope" in line and "Finding" in line
-        # Every operation that referenced it, not just one.
-        assert len(report) == 10, report
+        # Every operation that referenced it, not just one. Ten before the `R-5`
+        # reseal; thirteen after it, because each of the three new listings declares
+        # its own `404` -- an unknown parent is `not_found` and never an empty page.
+        assert len(report) == 13, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

@@ -1,6 +1,6 @@
 """The parts of the frozen document every operation repeats.
 
-Declared once, because twelve copies of a response table is twelve places for one of them
+Declared once, because fifteen copies of a response table is fifteen places for one of them
 to be missing a status -- which is the shape of the defect ``openapi-drift.contract.test.ts``
 and `W13-CONF`'s gate both exist to catch. Each helper here produces exactly what the
 contract declares, and the gate compares the result on every run.
@@ -44,7 +44,7 @@ CORRELATION_RESPONSE_HEADER: Final[Mapping[str, Any]] = {
 }
 
 #: The catalog summary each declared status carries in the document. Prose, dropped by the
-#: conformance gate's `N4`; written out because a served document with twelve responses
+#: conformance gate's `N4`; written out because a served document with fifteen responses
 #: described as "Additional Response" is a document nobody reads twice.
 _DESCRIPTIONS: Final[Mapping[int, str]] = {
     401: "No credential was presented, or the deployment does not accept it.",
@@ -65,7 +65,7 @@ def envelope_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
     own ``422`` *replaces* it, and ``HTTPValidationError`` and ``ValidationError`` then
     never enter ``components.schemas``. An operation that omits it gets FastAPI's, and the
     gate reports it in three places
-    (``test_the_gate_catches_fastapis_own_validation_error``). The 43 schema names are
+    (``test_the_gate_catches_fastapis_own_validation_error``). The 46 schema names are
     pinned, so two extra ones are a failure.
     """
     return {
@@ -101,7 +101,7 @@ def success(status: int, description: str, **extra: Any) -> dict[int | str, dict
 #: **Declared, and deliberately not enforced.** The annotation is a plain ``str`` with the
 #: contract's schema attached, not ``models.CorrelationId``, because a constrained parameter
 #: is a *refusable* one -- FastAPI would answer 422 for a malformed value. Two things say
-#: that would be wrong. The contract: four of the twelve operations declare no ``422`` at
+#: that would be wrong. The contract: four of the fifteen operations declare no ``422`` at
 #: all, and every one of them carries this parameter. And the rule
 #: :mod:`auditmanager.api.routers.correlation` has held since `B6`: an unusable correlation
 #: id is **replaced, not refused**, because it addresses a diagnostic record and authorises
@@ -165,8 +165,8 @@ VerdictFilterParam = Annotated[
 def declare_correlation_id(correlation_id: CorrelationIdParam = None) -> None:  # type: ignore[assignment]
     """Declare the ``X-Correlation-Id`` request parameter on every operation.
 
-    A router-level dependency and not twelve signatures, because the parameter is the same
-    on all twelve and a thirteenth spelling of it is a thirteenth thing to get wrong. The
+    A router-level dependency and not fifteen signatures, because the parameter is the same
+    on all fifteen and a sixteenth spelling of it is a sixteenth thing to get wrong. The
     value is *read* by :class:`~auditmanager.api.routers.correlation.CorrelationMiddleware`,
     which has to see it on requests no operation serves as well -- an undeclared path, an
     undeclared method -- so this declares the contract's parameter and does nothing else.

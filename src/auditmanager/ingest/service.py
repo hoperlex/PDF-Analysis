@@ -173,6 +173,20 @@ class IngestService:
         with session_scope(self._factory) as session:
             return self._documents.get_project(session, project_uid)
 
+    def list_documents(
+        self, project_uid: ProjectUid
+    ) -> tuple[DocumentVersionRecord, ...]:
+        """`listDocuments`: the current version of every document in one project."""
+        with session_scope(self._factory) as session:
+            return self._documents.list_documents(session, project_uid)
+
+    def list_versions(
+        self, document_uid: DocumentUid
+    ) -> tuple[DocumentVersionRecord, ...]:
+        """`listVersions`: every published version of one document, newest first."""
+        with session_scope(self._factory) as session:
+            return self._documents.list_versions(session, document_uid)
+
     # -- reads ---------------------------------------------------------------
 
     def get_version(self, version_uid: VersionUid) -> DocumentVersionRecord:

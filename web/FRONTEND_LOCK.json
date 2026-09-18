@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "17ece21beb295c0f0893c5f16956401b5a349e4ebfa5f7c9cd2c4260a08611e1",
-    "content_commit": "a5f4001",
-    "content_commit_subject": "feat(api-v1): the authorization seam, declared once at the document root",
+    "sha256": "701ecd58a860f53762775bee353cd5461d21c9e56f0bcb8d00b45dbfe685f8fe",
+    "content_commit": "6398bcc",
+    "content_commit_subject": "feat(api-v1): three list operations and a run's cost, resealed under R-5",
     "dispatch_named_commit": "876e095",
-    "commit_note": "Resealed 2026-09-18 by W13-SEAL under owner ruling R-3 (docs/program/OWNER_RULINGS_2026-09-17.md). Two changes: the document gained one http/bearer security scheme, declared once at the root so all twelve operations require a credential, with 401 and 403 response components on each; and the ErrorCode enum gained dependency_credential_refused, the 21st code, which settles DEBT_REGISTER.md D-7 -- permission_denied had meant both an authenticated subject's rights and the store refusing the application's own credential, indistinguishably. Paths, operations and component schemas are unchanged at 10 / 12 / 43: the seam is a header, not a thirteenth endpoint.",
+    "commit_note": "Resealed 2026-09-18 by W18-SEAL under owner ruling R-5 (docs/program/OWNER_RULINGS_2026-09-17.md section 3.5), closing DEBT_REGISTER.md D-16 and D-21 together. Three list operations were added -- listDocuments (GET /projects/{project_uid}/documents), listVersions (GET /documents/{document_uid}/versions) and listRuns (GET /versions/{version_uid}/runs) -- because before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. Each is the GET of the collection its parent creates into, takes cursor and limit and returns the same {items, page} envelope as listProjects. RunStatus gained three optional properties -- cost_micros, cost_basis and model_call_count -- so what a run spent at the provider is readable by a user for the first time; the figure is summed from the model_call rows and never from stage_result.metrics, whose cost_usd/cost_basis pair is the D-15 ambiguity. Paths, operations and component schemas move from 10 / 12 / 43 to 12 / 15 / 46. No error code was added: an unknown parent is not_found and a malformed cursor is validation_failed, both already in the catalog.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 10,
-    "operations": 12,
-    "component_schemas": 43,
+    "paths": 12,
+    "operations": 15,
+    "component_schemas": 46,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "17ece21beb295c0f0893c5f16956401b5a349e4ebfa5f7c9cd2c4260a08611e1",
+    "snapshot_sha256": "701ecd58a860f53762775bee353cd5461d21c9e56f0bcb8d00b45dbfe685f8fe",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "0a198228de453978d3d1cdd92c448ff34486f40077dfa5798a4200d72c8e040b",
-      "index.ts": "1f3f366ea597a5e51abb0554dde2a93be0396fbd5591e12917ce6b8b7450f787",
-      "operations.gen.ts": "f30666e4dc5abd4781cc54d71b870bbb343fbeb5e78c013994871144d00badd0",
-      "types.gen.ts": "48124e22f102c0d3e232990109c6afb32e952695418f14d6c120ca1b57352a92"
+      "client.gen.ts": "9b547281eec29e034bfbfe59e4c31aa936effc4057e472be9b5d8e490bc52e0d",
+      "index.ts": "826456b0e982f90a60d12d727cc9f48097fd3c0b3022dab1e1ae2e808043537c",
+      "operations.gen.ts": "5e1fb92c16fae8092eececd3456118e7e67c2add4fe456dae4eaf6ea4dfaf024",
+      "types.gen.ts": "bb80b32796389a7b45eee418ccff6349b6037b8434a4f6ba5c1c8b172f5363d8"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

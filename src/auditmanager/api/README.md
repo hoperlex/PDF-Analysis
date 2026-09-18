@@ -10,8 +10,8 @@ document is reported, not repaired.
 
 ## FastAPI, natively, with the frozen contract built under it
 
-**`T-1`, owner decision 2026-09-17, landed by `W13-API` in wave 13.** The twelve operations
-are typed FastAPI path operations, the 43 `components.schemas` are Pydantic models, and the
+**`T-1`, owner decision 2026-09-17, landed by `W13-API` in wave 13.** The operations
+are typed FastAPI path operations, the `components.schemas` are Pydantic models, and the
 hand-rolled `Router` / `dispatch` / `http.py` / `multipart.py` layer is retired.
 
 ### What this section used to say, and why it is worth keeping the correction
@@ -66,8 +66,8 @@ places in this package exist only because of that, and each says so at its own s
 | `routers/idempotency.py` | the required `Idempotency-Key`, as a declared parameter |
 | `routers/multipart.py` | the transport body cap, and the four rules a closed model cannot state |
 | `routers/ports.py` | the six narrow ports a composition root satisfies |
-| `routers/{projects,documents,runs,findings,decisions,export}.py` | the twelve operations |
-| `schemas/models.py` | the 43 `components.schemas`, as Pydantic models |
+| `routers/{projects,documents,runs,findings,decisions,export}.py` | the fifteen operations |
+| `schemas/models.py` | the 46 `components.schemas`, as Pydantic models |
 | `schemas/{common,projects,documents,runs,findings,decisions}.py` | the view types the ports return, and the functions that render their bytes |
 
 **`build_router(...)` takes the same six keyword-only ports it always did and constructs
@@ -223,7 +223,7 @@ the storage port, not a shortcut around it.
 
 `tests/integration/api` — real PostgreSQL, real MinIO, never a skip.
 
-The twelve-operation assertion compares the router's `(operationId, METHOD, path)` set
+The fifteen-operation assertion compares the router's `(operationId, METHOD, path)` set
 against the frozen document itself, never against a list in the test. `build_router` also
 refuses a duplicate `operationId` at construction — FastAPI logs a warning and serves a
 document declaring the id twice, which leaves `len(routes) == 12` passing while one frozen

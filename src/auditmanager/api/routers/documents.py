@@ -1,4 +1,5 @@
-"""``uploadDocument``, ``getDocumentVersion`` and ``streamDocumentVersionContent``.
+"""``uploadDocument``, ``getDocumentVersion``, ``streamDocumentVersionContent``,
+``listDocuments`` and ``listVersions``.
 
 The streaming operation is the one with a rule worth restating: **the server streams the
 bytes itself**. There is no redirect and no presigned link. A URL into object storage is the
@@ -14,7 +15,12 @@ from typing import Annotated, Any, Final
 
 from fastapi import APIRouter, Depends, Form, Header, Path, Response
 
-from auditmanager.api.routers.declarations import envelope_responses, success
+from auditmanager.api.routers.declarations import (
+    CursorParam,
+    LimitParam,
+    envelope_responses,
+    success,
+)
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.multipart import (
     CheckedUpload,
@@ -23,6 +29,7 @@ from auditmanager.api.routers.multipart import (
 from auditmanager.api.routers.ports import DocumentPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
+from auditmanager.api.schemas.common import page_body, paginate
 from auditmanager.api.schemas.documents import document_version_body
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -104,6 +111,58 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         return json_response(201, encode_json(document_version_body(outcome.version)))
 
     @router.get(
+        "/projects/{project_uid}/documents",
+        operation_id="listDocuments",
+        tags=["documents"],
+        status_code=200,
+        response_model=models.DocumentVersionPage,
+        responses={
+            **success(
+                200,
+                "One page of the current version of each document in this project.",
+            ),
+            **envelope_responses(401, 403, 404, 422, 500, 503),
+        },
+    )
+    def list_documents(
+        project_uid: Annotated[models.ProjectUid, Path()],
+        cursor: CursorParam = None,  # type: ignore[assignment]
+        limit: LimitParam = 50,
+    ) -> WireResponse:
+        # `GET` of the collection `uploadDocument` `POST`s into, returning a page of
+        # exactly the resource that `POST` returns -- which is the rule `listProjects`
+        # already follows against `createProject`.
+        rows = documents.list_documents(project_uid=project_uid)
+        page = paginate(rows, limit=limit, cursor=cursor, sort_key=_version_sort_key)
+        body = page_body(
+            [document_version_body(view) for view in page.items], page.next_cursor
+        )
+        return json_response(200, encode_json(body))
+
+    @router.get(
+        "/documents/{document_uid}/versions",
+        operation_id="listVersions",
+        tags=["documents"],
+        status_code=200,
+        response_model=models.DocumentVersionPage,
+        responses={
+            **success(200, "One page of this document's published versions."),
+            **envelope_responses(401, 403, 404, 422, 500, 503),
+        },
+    )
+    def list_versions(
+        document_uid: Annotated[models.DocumentUid, Path()],
+        cursor: CursorParam = None,  # type: ignore[assignment]
+        limit: LimitParam = 50,
+    ) -> WireResponse:
+        rows = documents.list_versions(document_uid=document_uid)
+        page = paginate(rows, limit=limit, cursor=cursor, sort_key=_version_sort_key)
+        body = page_body(
+            [document_version_body(view) for view in page.items], page.next_cursor
+        )
+        return json_response(200, encode_json(body))
+
+    @router.get(
         "/versions/{version_uid}",
         operation_id="getDocumentVersion",
         tags=["documents"],
@@ -174,6 +233,19 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
             window,
         )
 
+
+
+def _version_sort_key(view: object) -> tuple[str, ...]:
+    """The opaque identity, which is also each listing's total order.
+
+    Both listings order by a display value -- ``published_at`` for documents,
+    ``version_ordinal`` for versions -- and both carry the identity as their tiebreaker,
+    so the key the cursor carries is the identity and nothing else.
+    ``auditmanager.api.schemas.common.encode_cursor`` is explicit that a cursor never
+    carries a row number, a sequence value or an ordinal, and ``P02_SEAMS.md`` section 2.2
+    lists a display ordinal among the things that are never an identity.
+    """
+    return (getattr(view, "version_uid"),)
 
 
 def _resolve_range(header: str, size: int) -> tuple[int, int]:

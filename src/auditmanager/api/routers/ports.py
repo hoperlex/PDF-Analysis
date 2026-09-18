@@ -1,4 +1,4 @@
-"""The narrow ports the twelve routers depend on.
+"""The narrow ports the routers depend on.
 
 A router in this package holds **no business logic and no transaction**. It parses a
 request, calls one port method, renders the frozen shape, and lets the error middleware
@@ -100,7 +100,8 @@ class ProjectPort(Protocol):
 
 @runtime_checkable
 class DocumentPort(Protocol):
-    """``uploadDocument``, ``getDocumentVersion`` and ``streamDocumentVersionContent``."""
+    """``uploadDocument``, ``getDocumentVersion``, ``streamDocumentVersionContent``,
+    ``listDocuments`` and ``listVersions``."""
 
     def upload_document(
         self,
@@ -116,6 +117,33 @@ class DocumentPort(Protocol):
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
         """One published version and its input manifest."""
 
+    def list_documents(self, *, project_uid: str) -> Sequence[DocumentVersionView]:
+        """The current version of every document in one project, **newest first**.
+
+        The order is part of this declaration for the reason ``list_projects`` gives: the
+        router pages what this returns and never re-sorts it.
+
+        **An unknown project is ``not_found``, never an empty page.** The two are
+        different facts -- "this project has nothing in it yet" is a reassuring and wrong
+        thing to say about a project that does not exist -- and an implementation that
+        returned ``()`` for an unknown identity would make the distinction unobservable
+        at the wire.
+
+        Items are ``DocumentVersion`` because that is what ``upload_document`` publishes
+        into this same collection. There is no ``Document`` shape in the frozen contract
+        and this declaration does not invent one.
+        """
+
+    def list_versions(self, *, document_uid: str) -> Sequence[DocumentVersionView]:
+        """Every published version of one document, **newest first**.
+
+        An unknown document is ``not_found``, for the reason above. A document with a
+        published version always has at least one item, so an empty page here means the
+        document exists and has published nothing -- which through this surface
+        cannot happen, because ``uploadDocument`` creates the document and its first
+        version in one transaction.
+        """
+
     def read_content(self, *, version_uid: str) -> bytes:
         """The source bytes of one published version.
 
@@ -129,7 +157,7 @@ class DocumentPort(Protocol):
 
 @runtime_checkable
 class RunPort(Protocol):
-    """``startRun`` and ``getRunStatus``. Produced by ``B5``.
+    """``startRun``, ``getRunStatus`` and ``listRuns``. Produced by ``B5``.
 
     The success terminal is ``published``; an implementation that reported
     ``succeeded`` would be reporting a ``StageResult`` status on the wrong aggregate.
@@ -151,6 +179,22 @@ class RunPort(Protocol):
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         """Current run state and per-stage state."""
+
+    def list_runs(self, *, version_uid: str) -> Sequence[RunStatusView]:
+        """Every run of one published version, **newest first**.
+
+        The version is the parent because ``start_run`` takes a ``version_uid`` and
+        nothing else that identifies anything: the project is derived from it. So this is
+        the inverse of the create direction rather than a second way of addressing runs.
+
+        **An unknown version is ``not_found``, never an empty page** -- an empty page
+        would say "this document has never been analysed" about a document that does not
+        exist.
+
+        Each item is the **whole** ``RunStatus``, identical to what ``get_run_status``
+        returns for that run. A list item that were a subset would be a second shape of
+        the same resource, and the first thing a second shape does is drift.
+        """
 
 
 @runtime_checkable
