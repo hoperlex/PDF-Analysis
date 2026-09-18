@@ -257,7 +257,7 @@ All versions of this document
 
 Runs
 
-run_01M2T7EB1930BTCMY2K649FTWE 
+run_01M2T7EB1930BTCMY2K649FTWE
 published
 recorded
 
@@ -312,16 +312,16 @@ Published findings: 3
 
 Stages
 Stage	Status	Started	Finished
-source_preparation	
+source_preparation
 succeeded
 	2026-09-18 12:21:44 UTC	2026-09-18 12:21:44 UTC
-page_geometry_extraction	
+page_geometry_extraction
 succeeded
 	2026-09-18 12:21:44 UTC	2026-09-18 12:21:44 UTC
-document_context_build	
+document_context_build
 succeeded
 	2026-09-18 12:21:44 UTC	2026-09-18 12:21:44 UTC
-text_analysis	
+text_analysis
 succeeded
 	2026-09-18 12:21:44 UTC	2026-09-18 12:21:44 UTC
 Review
@@ -374,7 +374,7 @@ page 2, chars 712–746
 Page-level navigation only: no highlight overlay and no bounding box. The quotation above is the exact string the grounding gate verified at its anchor.
 
 Decision
-current verdict 
+current verdict
 pending
 AcceptReject
 Append a commentAppend comment
@@ -643,9 +643,11 @@ spell it as a bare filename, and there is no such file at the repository root.
 
 ## 10. The gate
 
-Run after the last commit, with nothing else of mine running: the local API and the
-`next start` used for §4 were both stopped first, and both alpha stacks (31480, 31490) were
-left untouched throughout.
+Run after the last **code** commit (`2c1a029`), with nothing else of mine running: the
+local API and the `next start` used for §4 were both stopped first, and both alpha stacks
+(31480, 31490) were left untouched throughout. The commits after it are this document and
+nothing else, so no gated file moved; `check_whitespace` is `git diff --check` over a tree
+that is clean at every one of them.
 
 ```
 $ make gate > /root/w19shell-logs/gate.log 2>&1 ; echo "GATE_EXIT=$?"
