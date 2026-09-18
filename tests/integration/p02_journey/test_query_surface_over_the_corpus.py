@@ -168,12 +168,22 @@ _STATIC_TOKEN = "p02-journey-static-token"
 
 
 class _Built:
-    """Just enough of ``Application`` for ``create_asgi_app`` to take a router as given."""
+    """Just enough of ``Application`` for ``create_asgi_app`` to take a router as given.
 
-    __slots__ = ("router",)
+    Two attributes since `D-20`: the router, and the carrier the served application
+    publishes as ``app.state.run_carrier``. Nothing in this module starts a run, so
+    nothing is ever submitted to it -- it is a real carrier rather than ``None`` so that
+    a test which did start one would get a finished run instead of an ``AttributeError``
+    three frames from the cause.
+    """
+
+    __slots__ = ("router", "carrier")
 
     def __init__(self, router: Any) -> None:
+        from auditmanager.runs import InlineCarrier
+
         self.router = router
+        self.carrier = InlineCarrier()
 
 
 def _client(router: Any) -> Any:

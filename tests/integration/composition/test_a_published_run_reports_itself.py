@@ -151,7 +151,27 @@ def published_run() -> dict[str, Any]:
     assert answer.status_code == 200, answer.content
     findings = answer.json()["items"]
 
-    return {"started": started, "status": status, "findings": findings}
+    # `D-20`. The `startRun` body of a **finished** run, which is what the four-fields
+    # test below needs and what the `202` no longer is. Replaying the original key under
+    # the original payload returns the same run through the same `_run_status_view`, so
+    # the two operations are still compared against each other on one run -- and now at
+    # one instant, rather than one before the analysis and one after it.
+    answer = client.post(
+        "/runs",
+        headers=auth
+        | {IDEMPOTENCY_HEADER: f"w17view-{tag}-run", "Content-Type": "application/json"},
+        content=json.dumps({"version_uid": version_uid}).encode("utf-8"),
+    )
+    assert answer.status_code == 202, answer.content
+    replayed = answer.json()
+    assert replayed["run_id"] == started["run_id"], replayed
+
+    return {
+        "started": started,
+        "replayed": replayed,
+        "status": status,
+        "findings": findings,
+    }
 
 
 class TestTheFourDeclaredFieldsHaveAProducer:
@@ -232,14 +252,59 @@ class TestTheFourDeclaredFieldsHaveAProducer:
         `startRun` builds its body through the same view, so a repair applied to one
         path and not the other would leave the 202 a client actually receives poorer
         than the 200 it polls for.
+
+        **`D-20` changed which `startRun` body this asks, and not what it asks.** The
+        `202` that *accepts* a run now describes an accepted run -- no stages, both counts
+        at zero -- so comparing it against a finished `getRunStatus` would be comparing
+        two instants and not two renderers. The `startRun` body of a finished run is the
+        one a **replay** returns, and that is what is compared here: same run, same view,
+        same instant. The accepted body has assertions of its own in
+        `TestTheAcceptedRunIsNotTheFinishedRun`.
         """
-        started, status = published_run["started"], published_run["status"]
+        replayed, status = published_run["replayed"], published_run["status"]
         for field in ("published_finding_count", "diagnostic_observation_count"):
-            assert started.get(field) == status.get(field), (field, started, status)
+            assert replayed.get(field) == status.get(field), (field, replayed, status)
         by_stage = {stage["stage_id"]: stage for stage in status["stages"]}
-        for stage in started["stages"]:
+        assert replayed["stages"], "a replay of a finished run reported no stages"
+        for stage in replayed["stages"]:
             assert stage.get("started_at") == by_stage[stage["stage_id"]].get("started_at")
             assert stage.get("finished_at") == by_stage[stage["stage_id"]].get("finished_at")
+
+
+class TestTheAcceptedRunIsNotTheFinishedRun:
+    """`D-20`, through the composed application, over the real edge.
+
+    `startRun` used to execute the run inside the transaction that created it, so the
+    `202` was already `published` and a poller stopped after one request. These are the
+    two halves of the repair asserted on response bodies: what the `202` says, and that
+    the same run says something else once the carrier has finished with it.
+    """
+
+    def test_the_202_reports_a_non_terminal_state_and_nothing_a_run_earns_by_running(
+        self, published_run: dict[str, Any]
+    ) -> None:
+        started = published_run["started"]
+        assert started["state"] == "queued", started["state"]
+        assert started["stages"] == [], started["stages"]
+        assert "terminal_at" not in started, started
+        assert started["published_finding_count"] == 0, started
+        # The three cost properties move together and a run that has called no provider
+        # reports none of them. Absent is not zero -- `W19-RUN` made that a sentence a
+        # user reads, and it starts here.
+        for absent in ("cost_micros", "cost_basis", "model_call_count"):
+            assert absent not in started, (absent, started)
+
+    def test_the_same_run_reaches_its_terminal_and_reports_what_it_did(
+        self, published_run: dict[str, Any]
+    ) -> None:
+        started, status = published_run["started"], published_run["status"]
+        assert status["run_id"] == started["run_id"]
+        assert status["state"] == "published", status["state"]
+        assert status["published_finding_count"] == len(published_run["findings"])
+        assert status["state"] != started["state"], (
+            "the run answered the same state before and after execution; if `startRun` "
+            "executes inline again this is the assertion that says so"
+        )
 
 
 class TestTheRunDoesNotBeginAndEndAtTheSameInstant:
