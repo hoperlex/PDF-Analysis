@@ -31,9 +31,13 @@ class TheEnumIsExactlyTheCatalog(unittest.TestCase):
     def test_member_set_equals_the_catalog_key_set(self) -> None:
         self.assertEqual(frozenset(c.value for c in ErrorCode), frozenset(RAW["codes"]))
 
-    def test_there_are_twenty_one(self) -> None:
-        """Twenty-one since the wave-13 reseal: `R-3` added dependency_credential_refused."""
-        self.assertEqual(len(list(ErrorCode)), 21)
+    def test_there_are_twenty_two(self) -> None:
+        """Twenty-two since `R-8` added staged_upload_lost, settling `D-18`.
+
+        The twenty-first was `dependency_credential_refused`, added by `R-3` at the
+        wave-13 reseal.
+        """
+        self.assertEqual(len(list(ErrorCode)), 22)
 
     def test_contract_version_is_read_not_restated(self) -> None:
         self.assertEqual(CONTRACT_VERSION, RAW["contract_version"])

@@ -218,8 +218,9 @@ Cursor = TypeAliasType("Cursor", Annotated[str, Field(min_length=1, max_length=5
 class ErrorCode(str, enum.Enum):
     """Exactly the key set of ``contracts/domain/v1/error-codes.json``.
 
-    Twenty-one codes since `W13-SEAL` added ``dependency_credential_refused`` at `e6ea..`'s
-    successor `e6d0a6a`, settling `D-7`. The catalog is the authority;
+    Twenty-two codes since `W20-CODE` added ``staged_upload_lost`` under owner ruling
+    `R-8`, settling `D-18`; the twenty-first was ``dependency_credential_refused``, added at
+    `e6d0a6a` under `R-3`. The catalog is the authority;
     ``tests/contract/shared_kernel/test_error_kernel.py`` refuses a disagreement at import.
     """
 
@@ -236,6 +237,7 @@ class ErrorCode(str, enum.Enum):
     STORAGE_INTEGRITY_ERROR = "storage_integrity_error"
     DEPENDENCY_UNAVAILABLE = "dependency_unavailable"
     DEPENDENCY_CREDENTIAL_REFUSED = "dependency_credential_refused"
+    STAGED_UPLOAD_LOST = "staged_upload_lost"
     REQUIRED_NORM_UNAVAILABLE = "required_norm_unavailable"
     ANALYSIS_INPUT_INVALID = "analysis_input_invalid"
     ANALYSIS_FAILED = "analysis_failed"

@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.errors",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 6,
-  "revision_note": "Sixth review round of the unreleased 1.0.0-draft.1 candidate. Round 6 carries owner ruling R-3 of 2026-09-17 (OWNER_RULINGS_2026-09-17.md) and settles DEBT_REGISTER.md D-7. One code is added: dependency_credential_refused, 500, not retryable, category dependency, safe_detail_keys exactly [dependency]. It exists because permission_denied meant two unrelated things that no envelope could separate -- the catalog defines it as an authenticated subject's rights, while the blob-store adapter raised it when the store refused the application's own credential, a scenario with no subject in it, and both declared exactly aggregate_type and required_capability with no discriminator. permission_denied keeps the contract's meaning and is otherwise untouched. The dependency category description is widened to admit a refused credential alongside a transient outage and an unresolvable reference; the category set is unchanged. This is an addition to a draft candidate, not a freeze-break: status is draft_candidate and frozen is false, and D-8 records that the programme's prose had been calling this catalog frozen. contract_version stays 1.0.0-draft.1: the candidate is unreleased, so the addition does not supersede a released version. Nothing else changed -- the other twenty codes and every http status, retryable flag, category, summary, safe detail key list and evidence list are exactly those of round 5, and the envelope declaration, safety rules, internal_mapping and the open decision and question registers are untouched. The family carries one candidate_revision, so all three catalogs and all three schemas move to 6; identifiers.json and state-machines.json carry only that integer in this round and their revision notes still describe round 4, as in round 5, because W0-DOM-02 permits no other byte in those files.",
+  "candidate_revision": 7,
+  "revision_note": "Seventh review round of the unreleased 1.0.0-draft.1 candidate. Round 7 carries owner ruling R-8 of 2026-09-18 (OWNER_RULINGS_2026-09-17.md section 3.6) and settles DEBT_REGISTER.md D-18. One code is added: staged_upload_lost, 503, RETRYABLE TRUE, category dependency, safe_detail_keys exactly [dependency]. It exists because two storage failures that demand opposite operator responses -- stop, the instance was restored wrong, against retry the upload -- both raised conflict with aggregate_type Blob and produced envelopes that were byte-identical apart from correlation_id. The owner was offered a widened safe_detail_keys on conflict instead and rejected it: a detail key cannot fix retryable. That flag is a property of the code, conflict's false is correct for an immutable blob already published and wrong for a staged upload the store lost, and only a separate code carries a separate value. conflict keeps the contract's meaning and is otherwise untouched, byte for byte. The dependency category description is widened to admit a dependency that failed to retain staged bytes alongside a transient outage, a refused credential and an unresolvable reference; the category set is unchanged. This is an addition to a draft candidate, not a freeze-break: status is draft_candidate and frozen is false, and D-8 records that the programme's prose had been calling this catalog frozen. contract_version stays 1.0.0-draft.1: the candidate is unreleased, so the addition does not supersede a released version. Nothing else changed -- the other twenty-one codes and every http status, retryable flag, category, summary, safe detail key list and evidence list are exactly those of round 6, and the envelope declaration, safety rules, internal_mapping and the open decision and question registers are untouched. The family carries one candidate_revision, so all three catalogs and all three schemas move to 7; identifiers.json and state-machines.json carry only that integer in this round and their revision notes still describe round 4, as in rounds 5 and 6, because W0-DOM-02 permits no other byte in those files.",
   "status": "draft_candidate",
   "frozen": false,
   "envelope": {
@@ -91,7 +91,7 @@
     "not_found": "The addressed aggregate does not exist or is not visible to this caller.",
     "state_conflict": "The requested transition or command conflicts with durable state, including idempotency-key conflicts.",
     "stale_authority": "The caller no longer holds execution or publication authority for the addressed work.",
-    "dependency": "A required dependency is transiently unavailable, refused the application's own credential, or a required authoritative reference cannot be resolved.",
+    "dependency": "A required dependency is transiently unavailable, refused the application's own credential, failed to retain bytes the application had staged with it, or a required authoritative reference cannot be resolved.",
     "integrity": "Stored or delivered bytes, checksums or manifests do not match their declared identity.",
     "execution": "A run, job or attempt terminated in a declared failure state.",
     "policy": "An explicit product or operational policy refused the operation.",
@@ -283,6 +283,25 @@
         "The status is 5xx because the fault is the server's. A 4xx would attribute a rejected application credential to the caller, which is the confusion D-7 records; giving the case its own code but leaving it on 403 would settle only half of it.",
         "The dependency detail carries a stable dependency class name only, never a host, URL, credential, bucket or vendor endpoint. It is the vocabulary dependency_unavailable already uses, so the pair is read the same way.",
         "safe_detail_keys is deliberately just that one key. aggregate_type and required_capability are not carried: they describe a subject's rights over the addressed aggregate, they are exactly what made the two 403s indistinguishable, and the addressed aggregate is not what failed. The environment variable at fault is not carried either; the catalog's own safety rule puts operator diagnostics behind correlation_id."
+      ]
+    },
+    "staged_upload_lost": {
+      "http": 503,
+      "retryable": true,
+      "category": "dependency",
+      "summary": "The blob store no longer holds the bytes this upload staged with it, so the upload cannot be completed. Nothing was published and nothing was changed; sending the same upload again is the remedy.",
+      "safe_detail_keys": [
+        "dependency"
+      ],
+      "evidence": [
+        "D-18",
+        "OWNER_RULINGS_2026-09-17.md R-8"
+      ],
+      "notes": [
+        "Distinct from conflict, which this reported until R-8 alongside the opposite situation. Nothing here conflicts with durable state: no blob was published under these bytes and no uniqueness invariant was violated. The store simply did not keep what it had accepted. The other conflict with aggregate_type Blob means the addressed bytes are already published under different declared attributes, which an operator answers by stopping, not by retrying.",
+        "retryable is true, and it is the whole reason this is a code and not a wider safe_detail_keys on conflict. conflict pins retryable false, which is right for an immutable blob already published and wrong here. A detail key cannot carry a different retryable, because the envelope reads that flag from this catalog for the reported code and from nowhere else; only a separate code carries a separate value. That is the argument the owner accepted in R-8 when a widened key set was offered instead: widening the keys would have left half the defect standing.",
+        "The status is 503 rather than 409 because nothing conflicted, and rather than 500 because the request is worth repeating unchanged. It is the status dependency_unavailable already carries for the case a caller answers by sending the same request again, so the pair is read the same way.",
+        "safe_detail_keys is deliberately just dependency, the stable dependency class name, never a host, URL, bucket or object key. blob_id is not carried because no blob exists: these bytes were never published and were never addressable. role and media_type are not carried either -- they are the caller's own declaration handed back, and they say nothing about what failed."
       ]
     },
     "required_norm_unavailable": {

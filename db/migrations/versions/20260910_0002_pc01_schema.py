@@ -86,6 +86,7 @@ ERROR_CODES = (
     "storage_integrity_error",
     "dependency_unavailable",
     "dependency_credential_refused",
+    "staged_upload_lost",
     "required_norm_unavailable",
     "analysis_input_invalid",
     "analysis_failed",

@@ -2,7 +2,7 @@
   "contract": "auditmanager.domain.state-machines",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 6,
+  "candidate_revision": 7,
   "revision_note": "Fourth review round of the unreleased 1.0.0-draft.1 candidate. Round 4 corrects one stale statement and changes nothing else. A round-3 integrator note said that the architecture and program ledgers still recorded U-06 as open and that the fail-soft policy of the excluded optimization names therefore had no encoder; that was read from a state the architecture lane has since superseded. U-06 is resolved, and the same owner decision splits FS-04 into three parts, each with an owner, a contract family and a task, so no part of it is without an encoder. This lane owns and encodes exactly one of them, the AuditRun and Job consumer part. The round-3 decision itself is untouched: optional_branch_policy, the six-row decision table, the guards of machines.audit_run and machines.job, the terminal semantics and the schema pins that hold them are exactly those of round 3, so the rule still cannot be weakened or removed without a deliberate edit of both the catalog and its schema. Rounds 1 and 2 are unchanged: no error code, identifier, state, transition or machine was added, removed or renamed, and PD-01 and PD-03 keep the wording the repository owner approved on 2026-09-01. contract_version stays 1.0.0-draft.1 because the round redefined no meaning, and round-to-round distinguishability is carried by candidate_revision rather than by the version string; candidate_revision records the review round.",
   "status": "draft_candidate",
   "frozen": false,

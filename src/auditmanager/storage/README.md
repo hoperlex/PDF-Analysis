@@ -82,8 +82,8 @@ name; a closed enum here would make each of those a rewrite of this package.
 | `ChecksumMismatchError` | `storage_integrity_error` | Stored SHA-256 ≠ declared. |
 | `SizeMismatchError` | `storage_integrity_error` | Stored byte count ≠ declared. |
 | `BlobIntegrityError` | `storage_integrity_error` | Base of the two above. |
-| `TemporaryBlobLostError` | `conflict` | A staged upload vanished mid-sequence. |
-| `BlobAttributeConflictError` | `conflict` | Identical bytes already published with a different role or media type. |
+| `TemporaryBlobLostError` | `staged_upload_lost` | A staged upload vanished mid-sequence. Carried `conflict` until owner ruling `R-8`, which is `D-18`: it and the row below were then one code, one message and one `retryable` for two opposite operator responses. 503 and `retryable: true`, because this upload is worth sending again. |
+| `BlobAttributeConflictError` | `conflict` | Identical bytes already published with a different role or media type. Since `R-8` the only storage error carrying `conflict`, and `retryable: false` is right for it: the published bytes are immutable. |
 | `BlobNotFoundError` | `not_found` | No published blob has that `blob_id`. |
 | `BlobMetadataInvalidError` | `validation_failed` | A declaration is malformed. |
 | `InvalidBlobIdError` | `validation_failed` | A string is not a well-formed `blob_id`. |

@@ -15,7 +15,7 @@ from auditmanager.shared.errors.catalog import CODES, UNKNOWN_INTERNAL_CODE
 
 
 class ErrorCode(str, Enum):
-    """Exactly the twenty-one codes of ``contracts/domain/v1/error-codes.json``."""
+    """Exactly the twenty-two codes of ``contracts/domain/v1/error-codes.json``."""
 
     VALIDATION_FAILED = "validation_failed"
     NOT_FOUND = "not_found"
@@ -30,6 +30,7 @@ class ErrorCode(str, Enum):
     STORAGE_INTEGRITY_ERROR = "storage_integrity_error"
     DEPENDENCY_UNAVAILABLE = "dependency_unavailable"
     DEPENDENCY_CREDENTIAL_REFUSED = "dependency_credential_refused"
+    STAGED_UPLOAD_LOST = "staged_upload_lost"
     REQUIRED_NORM_UNAVAILABLE = "required_norm_unavailable"
     ANALYSIS_INPUT_INVALID = "analysis_input_invalid"
     ANALYSIS_FAILED = "analysis_failed"
