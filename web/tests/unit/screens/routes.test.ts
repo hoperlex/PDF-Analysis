@@ -19,14 +19,23 @@
  * sends nothing upstream — is decided in this file and nowhere else.
  */
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
+import { WEB_ROOT } from '../../guards/lib/repo';
+
+import { DocumentDetailPage } from '@/_pages/document-detail';
 import { ReviewPage } from '@/_pages/review';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectsPage } from '@/_pages/projects';
 import { RunPage } from '@/_pages/run';
+import { VersionDetailPage } from '@/_pages/version-detail';
 
+import DocumentRoute from '@/app/projects/[project_uid]/documents/[document_uid]/page';
 import ProjectRoute from '@/app/projects/[project_uid]/page';
+import VersionRoute from '@/app/projects/[project_uid]/versions/[version_uid]/page';
 import ProjectsRoute from '@/app/projects/page';
 import ReviewRoute from '@/app/projects/[project_uid]/runs/[run_id]/review/page';
 import RootPage from '@/app/page';
@@ -36,11 +45,15 @@ import { GET, POST } from '@/app/bff/v1/[...path]/route';
 import RootLayout, { metadata } from '@/app/layout';
 import { AppFrame, AppProviders } from '@/_app';
 
-import { PROJECT_UID, RUN_ID } from '../review/fixtures';
+import { routes } from '@/shared/lib';
+
+import { DOCUMENT_UID, PROJECT_UID, RUN_ID, VERSION_UID } from '../review/fixtures';
 
 /** Distinct values, so a route that crossed its two parameters is red rather than green. */
 const A_PROJECT = PROJECT_UID;
 const A_RUN = RUN_ID.replace(/.$/, 'C');
+const A_DOCUMENT = DOCUMENT_UID.replace(/.$/, 'D');
+const A_VERSION = VERSION_UID.replace(/.$/, 'E');
 
 describe('each route delegates to its screen and to no other', () => {
   it('/projects renders the projects screen', () => {
@@ -68,6 +81,22 @@ describe('each route delegates to its screen and to no other', () => {
     });
     expect(element.type).toBe(ReviewPage);
     expect(element.props).toEqual({ projectUid: A_PROJECT, runId: A_RUN });
+  });
+
+  it('/projects/{project_uid}/documents/{document_uid} passes both, and does not cross them', async () => {
+    const element = await DocumentRoute({
+      params: Promise.resolve({ project_uid: A_PROJECT, document_uid: A_DOCUMENT }),
+    });
+    expect(element.type).toBe(DocumentDetailPage);
+    expect(element.props).toEqual({ projectUid: A_PROJECT, documentUid: A_DOCUMENT });
+  });
+
+  it('/projects/{project_uid}/versions/{version_uid} passes both, and does not cross them', async () => {
+    const element = await VersionRoute({
+      params: Promise.resolve({ project_uid: A_PROJECT, version_uid: A_VERSION }),
+    });
+    expect(element.type).toBe(VersionDetailPage);
+    expect(element.props).toEqual({ projectUid: A_PROJECT, versionUid: A_VERSION });
   });
 
   it('review is mounted under the run, not beside it', () => {
@@ -202,5 +231,64 @@ describe('the root layout wires the providers outside the frame', () => {
     expect(String(metadata.title)).toContain('AuditManager');
     expect(String(metadata.title)).toContain('PC-01');
     expect(String(metadata.description)).toContain('one AR PDF');
+  });
+});
+
+
+/**
+ * The addresses themselves.
+ *
+ * `D-16`'s acceptance test is a **fresh tab**: a URL is pasted, nothing is in the client,
+ * and the screen renders. Half of that property is the string — a route file that exists
+ * at a path nothing ever links to is as unreachable as no route at all. `routes` in
+ * `@/shared/lib` is the one place those strings are built, and this is where they are
+ * compared to the directory layout on disk rather than to another copy of themselves.
+ */
+describe('every screen address is built once and matches a route file on disk', () => {
+  const ADDRESSES: ReadonlyArray<{ url: string; file: string }> = [
+    { url: routes.projects(), file: 'src/app/projects/page.tsx' },
+    { url: routes.project(A_PROJECT), file: 'src/app/projects/[project_uid]/page.tsx' },
+    {
+      url: routes.document(A_PROJECT, A_DOCUMENT),
+      file: 'src/app/projects/[project_uid]/documents/[document_uid]/page.tsx',
+    },
+    {
+      url: routes.version(A_PROJECT, A_VERSION),
+      file: 'src/app/projects/[project_uid]/versions/[version_uid]/page.tsx',
+    },
+    { url: routes.run(A_PROJECT, A_RUN), file: 'src/app/projects/[project_uid]/runs/[run_id]/page.tsx' },
+    {
+      url: routes.review(A_PROJECT, A_RUN),
+      file: 'src/app/projects/[project_uid]/runs/[run_id]/review/page.tsx',
+    },
+  ];
+
+  it.each(ADDRESSES)('$url is served by a file that exists', ({ url, file }) => {
+    expect(existsSync(join(WEB_ROOT, file))).toBe(true);
+    // The directory layout, turned back into the URL Next serves it at. A route file
+    // moved without its builder -- or a builder that spelled a segment differently --
+    // makes these two disagree.
+    const served = file
+      .replace(/^src\/app/, '')
+      .replace(/\/page\.tsx$/, '')
+      .replace('[project_uid]', A_PROJECT)
+      .replace('[document_uid]', A_DOCUMENT)
+      .replace('[version_uid]', A_VERSION)
+      .replace('[run_id]', A_RUN);
+    expect(url).toBe(served);
+  });
+
+  it('carries no identity a route file cannot receive', () => {
+    // `version_ordinal` is a display and ordering value; the contract refuses it as a path
+    // parameter. An address built from one would be an identity invented by the UI.
+    for (const { url } of ADDRESSES) expect(url).not.toMatch(/\/\d+(\/|$)/);
+  });
+
+  it('gives a document and a version each an address of their own', () => {
+    // The sentence this replaces is web/docs/PC01_UI_SEAM.md's "there is no route for a
+    // document version", which is D-16.
+    expect(routes.document(A_PROJECT, A_DOCUMENT)).toContain(A_DOCUMENT);
+    expect(routes.version(A_PROJECT, A_VERSION)).toContain(A_VERSION);
+    expect(routes.document(A_PROJECT, A_DOCUMENT)).not.toBe(routes.version(A_PROJECT, A_VERSION));
   });
 });

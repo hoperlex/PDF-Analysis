@@ -30,11 +30,11 @@ export function DocumentList({ projectUid }: DocumentListProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useDocumentList(projectUid, cursor);
 
-  if (query.isPending) return <LoadingState what="this project's documents" />;
+  if (query.isPending) return <LoadingState what="the documents of this project" />;
 
   if (query.isError) {
     const failure = classifyListingFailure(query.error, {
-      collection: "this project's documents",
+      collection: 'the documents of this project',
       parent: 'project',
     });
     return (

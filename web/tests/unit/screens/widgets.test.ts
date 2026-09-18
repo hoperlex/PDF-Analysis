@@ -22,6 +22,9 @@ import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { ProjectList } from '@/widgets/project-list';
 import { UploadPanel } from '@/widgets/upload-panel';
 
+import { join } from 'node:path';
+
+import { WEB_ROOT, readText } from '../../guards/lib/repo';
 import { PROJECT_UID } from '../review/fixtures';
 import { newClient, renderWith, seedError } from './harness';
 
@@ -64,14 +67,26 @@ describe('the upload panel states the envelope before the file picker (U-09)', (
     expect(markup).toMatch(/\d+\s*pages/);
   });
 
-  it('offers no run control until a version exists', () => {
+  it('offers no run control at all: the run is started from the version address (D-16)', () => {
+    // This assertion used to read `expect(markup).toContain('No version published in this
+    // session.')`. That sentence is the defect W15-RUN measured in a browser: the panel
+    // held the published version in React state, so a reload reported an empty project
+    // over published work and the run control existed only for whoever had just uploaded.
+    // The version now has an address, and the Start-run control lives there.
     const markup = panel();
-    expect(markup).toContain('No version published in this session.');
+    expect(markup).not.toContain('No version published in this session');
     expect(markup).not.toContain('Start run');
   });
 
   it('says a published version is immutable rather than offering to replace one', () => {
     expect(panel()).toContain('immutable');
+  });
+
+  it('keeps no copy of what it just published', () => {
+    // The panel holds no version state of its own any more. Anything it rendered from
+    // such state would be the only copy in the product, and a reload would lose it.
+    const source = readText(join(WEB_ROOT, 'src/widgets/upload-panel/ui/upload-panel.tsx'));
+    expect(source).not.toContain('useState');
   });
 });
 

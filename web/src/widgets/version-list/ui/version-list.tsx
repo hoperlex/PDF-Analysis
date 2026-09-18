@@ -30,11 +30,11 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useVersionList(documentUid, cursor);
 
-  if (query.isPending) return <LoadingState what="this document's versions" />;
+  if (query.isPending) return <LoadingState what="the versions of this document" />;
 
   if (query.isError) {
     const failure = classifyListingFailure(query.error, {
-      collection: "this document's versions",
+      collection: 'the versions of this document',
       parent: 'document',
     });
     return (
