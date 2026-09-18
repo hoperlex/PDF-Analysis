@@ -268,6 +268,12 @@ $ echo $?
 
 `GATE OK: battery, foundation, frontend and whitespace all pass`.
 
+**Run three times, every exit code read from `$?` after a redirect and never through a
+pipe.** The first was on `6dd39b3`, before this review existed; the second after the review
+landed; the third on this branch's tip, so the figures above describe the tree a reader
+actually checks out rather than that tree minus its documentation. Identical every time:
+1785 / 5 / 168, foundation 35, frontend 595, exit 0.
+
 The +7 is exactly the seven tests added: five in
 `tests/integration/ingest/test_project_document_count.py` and two in
 `tests/integration/api/test_listing_surface.py`. The frontend figure is unchanged because
@@ -327,4 +333,4 @@ the seventh, and `contracts/**` needed no edit — `Project.document_count` is d
 | Lane | `gate-w19b` — PostgreSQL 55830, S3 59430/59431, `audit_w19b`, `auditmanager-gate-w19b`. No image rebuilt; 31480 and 31490 untouched. |
 | Files outside `src/auditmanager/documents/**` | `src/auditmanager/bootstrap/adapters.py`, `src/auditmanager/ingest/service.py`, `src/auditmanager/api/schemas/projects.py` (docstring only), `tests/integration/api/conftest.py`, `tests/integration/api/test_listing_surface.py`, `tests/characterization/w13_baseline/{journey.py,test_response_baseline.py,records/16-listProjects.success.json}` |
 | `contracts/**`, `web/**`, `infra/`, `Makefile` | untouched |
-| Elapsed, wall clock | **27 minutes**, measured: `date +%s` was `1789732838` on arrival and `1789734465` at this line. Not an estimate. |
+| Elapsed, wall clock | **37 minutes**, measured, not estimated: `date +%s` was `1789732838` on arrival and `1789735081` at the last commit. 27 of those minutes reached the completed review; the remainder is the three gate runs. |
