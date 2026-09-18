@@ -79,11 +79,52 @@ see, so it is named here rather than folded in.
   as "the end of the pilot" and therefore triggers the wipe. Nothing in this repository may hold
   such a document under any of the answers.
 
+## 3.5 — `R-5` and `R-6`, ruled 2026-09-18 after the first live browser journey
+
+### `R-5` — one reseal, carrying the list operations **and** cost visibility
+
+**Ruled: do both in a single reseal.** Asked because `W15-RUN` drove a real browser through the
+deployed stack and found that **after a page reload no screen can reach anything** — the twelve
+operations have no `listDocuments`, no `listVersions`, no `listRuns`. Every row, object, run,
+finding and decision survives in PostgreSQL and the store; the app can only see what the current
+session created. `DEBT_REGISTER.md` **D-16**.
+
+The owner was offered three shapes — both, lists only, or neither — and took **both**, on the
+reasoning that a second reseal later costs more than carrying cost visibility now. So the same
+reseal also closes **D-21**: `model_call.cost_micros` is recorded and appears on no operation, in
+no CSV column and on no screen (`grep -c cost` over the frozen contract returns **1**, and that one
+is `cost_budget_exceeded`).
+
+**Why this is a ruling and not a lane decision.** The contract is the primary artefact below the
+ADRs, and `R-3` set the precedent that a reseal is the owner's act. This one is larger than `R-3`:
+it adds operations rather than a scheme and a code.
+
+**What it unblocks.** `PA-01` criterion 8 — *"the server is rebooted and every canonical row,
+object and decision survives"* — is currently **unverifiable through the browser**, because nothing
+can display the survivors. Criterion 4's cost clause is unsatisfiable for the same reason. Both
+become reachable with this reseal and neither can be reached without it.
+
+**What it does not settle:** whether `execute_run` stops running inline (**D-20**), which is an
+architecture question and not a contract one.
+
+### `R-6` — reclaim the abandoned test stands
+
+**Ruled: remove them.** Four wave-13 gate lanes (`gate-w13a/c/d/e`) held containers and volumes
+whose worktrees were deleted waves ago. Removed 2026-09-18; the host went **8.4 GB → 11 GB free**.
+The two alpha stacks on 31480 and 31490 and every active lane were left untouched.
+
+Recorded because it is a destructive act on shared infrastructure, and because wave 14 lost time to
+a full disk and `W15-RUN` and `W16-WEB` both flagged the same thing independently.
+
 ## 4. Still open, and still the owner's
 
 - **`OD-18`** — three to five named experts with committed slots; `P4-BHV-01` waits on it alone.
 - **`OD-17`** — the next corpus shape.
-- **Whether `origin/main` advances.** It has been six waves behind. `W12-CERT` certified
-  `e6eae1e`, so the condition `DEBT_REGISTER.md` §3 named is met; the certification holds **with
-  one named exception**, `D-1.5`, which is about what a user sees rather than what the system
-  does.
+- **`R-4`'s two halves** — who uploads a real document, and what event counts as *"the end of the
+  pilot"* and therefore triggers the wipe. **`D-17` now bears on this**: the restore is broken for
+  writing, so the mechanism the wipe depends on is not yet sound.
+- **`D-18`** — which detail keys `conflict` may safely carry. A catalog question, so the owner's.
+- **Whether `origin/main` advances.** It is now **eight** waves behind, at `8f418e9`, while `dev`
+  carries the FastAPI transport, the deployable stack and the credential path. `W12-CERT` certified
+  `e6eae1e`, so the condition `DEBT_REGISTER.md` §3 named is met. `D-1.5`, the named exception that
+  qualified that certification, **closed on 2026-09-18** — so the qualification is gone.

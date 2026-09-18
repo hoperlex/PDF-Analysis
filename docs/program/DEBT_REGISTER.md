@@ -1,15 +1,40 @@
 # Debt register
 
-Written 2026-09-17 by the integrator. **Re-measured against the tree at `315de25` on
-2026-09-18**: D-2, D-3, D-4, D-5, D-6, D-7 and D-10 close; D-12, D-13 and D-15 open from
-re-measurement and **D-16 through D-21 from the first live journey**; D-14 opens and closes
-in the same pass; and §3's own figure turned out to be three waves stale. **Two of those closes — D-2 and D-4 — had been true for a day**: they were fixed
-thirty-nine minutes after this file was created and nobody carried it back. A row is
-closed in the same commit as its fix, or this register lies.
+Written 2026-09-17 by the integrator. **Re-measured against the tree at `315de25`–`80db00f` on
+2026-09-18.**
 
-**Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records
-a register that had been entirely obsolete while still reading as the list of what was open,
-and this file exists to not become that.
+**Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
+register that had been entirely obsolete while still reading as the list of what was open, and this
+file exists to not become that. It very nearly did anyway; see the two rules below.
+
+**What is open right now**, so a reader does not scan twenty-three rows to find out:
+
+| | Row | Needs |
+|---|---|---|
+| **D-16** | no screen reaches anything after a page reload | a **reseal** — ruled: do it |
+| **D-21** | cost is recorded and exposed nowhere | the **same reseal** — ruled: do it |
+| **D-17** | a restored instance is proved by reading and broken for writing | `infra/` repair |
+| **D-19** | a published run reports neither timings nor finding count | `src/` repair |
+| **D-20** | there is no observable `running` state | architecture |
+| **D-4** | one site still emits an empty digest | `src/` repair |
+| **D-18** | a 409 cannot be diagnosed from the wire | catalog — owner's |
+| **D-22** | one rule, three hand-copies | `web/src` repair |
+| **D-15** | one `cost_basis` over a figure summed across attempts | design call |
+| D-1.6, D-8 | names the programme repeats without opening the file | prose |
+| D-9, D-11 | corpus granularity; a licence reading | owner / registered |
+
+**Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-12, D-13, and D-14 opened and
+closed in the same pass.
+
+**Two rules this register earned the hard way, both on the same day:**
+
+1. **A row is closed in the same commit as its fix, or this register lies.** D-2 and D-4 were
+   fixed **thirty-nine minutes after this file was created**, by a stream dispatched to fix them,
+   with a test file that names both rows in its third line. They sat open here for a day.
+2. **A row is measured across every site that can produce the behaviour, not the first one that
+   explains it.** I then closed D-4 on one module's evidence while a second module still did it.
+   `W16-ERR` caught it. That is `OPERATING_CONSTRAINTS.md` §12's rule about queries, applied to
+   closes.
 
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
@@ -31,23 +56,61 @@ in the row.** Every figure below now carries one.
 
 Check: `git diff --shortstat c0d7daf..<commit> -- src/ db/`.
 
-### D-1.5 — `W12CERT-DEF-3`, the named exception to the certification
+### D-1.5 — `W12CERT-DEF-3`, the named exception to the certification — **CLOSED**
 
-**18% of `web/src` is reached by no test** — 34 of 110 modules, 1352 of 7604 lines, measured
-independently by `W12-WEB` and again by `W12-CERT` (`110 76 34`). It includes
-`run-progress.tsx`, and `terminal_reason` reaches a user in exactly one line of it
-(`run-progress.tsx:112`).
+**Closed 2026-09-18 by `W16-WEB`.** PC-01's certification had one named exception and this was
+it: 34 modules of `web/src` reached by no test, holding the rendering behind criterion 4, with
+**ten mutations run and all ten surviving** on a green 440-test suite — including *"`run-progress`
+stops rendering `terminal_reason`"*.
 
-Criterion 4 requires the **UI** to distinguish run states and provider mode. The rules behind
-that are guarded; **the rendering is not.** Ten mutations inside the unreached region were all
-survivors, including "`run-progress` stops rendering `terminal_reason`" with 440 frontend
-tests green.
+**Six of those ten are now killed**, plus **12 of 12** mutations `W16-WEB` wrote against its own
+new tests — because a suite that kills someone else's mutations has not shown its own assertions
+can fail. Reachability 34 unreached → **0**. Frontend **498 → 592**.
 
-This is the certification's one named exception and the strongest candidate for the next wave.
-Seven of the ten are ordinary components `renderToStaticMarkup` can reach, so most of it is
-reachable with the harness that already exists.
+**Four survivors, each argued rather than quietly dropped:**
 
-Check: the script in `docs/program/reviews/W12-WEB.md` §11.
+* **U-06/07/08** — unreddenable **by construction**: one render pass, `useRef` always fresh. The
+  rule itself *is* guarded in its pure form as `resolveIntentKey`; the three hooks are hand-copies
+  that each say in their own comment that they belong in `shared/lib`. **The repair is a `web/src`
+  edit, not a test** — move the rule and have the three call it. Correctly not made here: D-1.5 is
+  a testing row. Carried forward as **D-22**.
+* **U-10** — the *effect-time* cache seed. What it costs if broken is one wasted request on an
+  already-terminal run, not a wrong screen. Genuinely unguarded and deliberately left.
+
+**U-04 and U-05 were killed by a source guard, not by a render, and the report says so in the same
+breath rather than presenting the two as equivalent.** Both live in closures only an event fires.
+`web/tests/guards/upload-precheck-wiring.guard.test.ts` scans the real source and then proves the
+scanner fires by applying `W12-WEB`'s own `b8.json` substitutions in memory, byte for byte. **It
+proves the statements are present and wired; it does not execute them.**
+
+**And `W12-WEB` §10 is wrong** that seven of the ten are reachable by `renderToStaticMarkup`. Four
+are — U-01, U-02, U-03, U-09. U-04, U-05 and U-10 are not.
+
+**The `Check:` line this row carried was broken, and had been under-reporting for two waves.**
+`W12-WEB` §11's reachability script matches `(?:from|import)\s+['"]…['"]`, which demands whitespace
+after the keyword. A **dynamic** import has a parenthesis there, so it is invisible to the script.
+Verified here independently:
+
+```
+import { a } from '@/shared/x'      -> ['@/shared/x']
+await import('@/shared/api/x')      -> []            <- the bug
+```
+
+Counting both forms gives **`114 80 34`, 1352 lines** — *the same 34 modules and the same 1352
+lines* `W12-WEB` listed at `3ebe34d`, module for module. The broken script gives `114 79 35`. So a
+session re-deriving this row's own check would have concluded the unreached region **grew**, when
+it had not.
+
+**A consequence worth naming: `W15-AUTH` §8.4 was right, and my dispatch's doubt about it was
+itself the stale premise.** Its BFF `route.ts` *is* reached, by
+`tests/unit/api/server-credential.test.ts:97`, through a dynamic import — exactly the form the
+script cannot see.
+
+The "18%" in this row's original text is **16.3%** of a tree that grew: `web/src` is 8273 lines,
+not 7604.
+
+Check: any counter that matches a dynamic import as well as `import … from`. **Not** `W12-WEB`
+§11's script as written.
 
 ### D-1.6 — the programme has been naming a code that does not exist
 
@@ -114,22 +177,43 @@ against a figure that did not use it.
 
 Check: `python3 -c "import inspect;from auditmanager.analysis.text.stage import _record;print(inspect.signature(_record).parameters['cost_basis'].default)"`.
 
-### D-4 — an empty digest reaches an operator-facing envelope — **CLOSED**
+### D-4 — an empty digest reaches an operator-facing envelope — **PARTLY CLOSED, RE-SCOPED**
 
-Closed by `1b2549b` alongside D-2, and stale here for the same day and the same reason. An
-object recording no digest is now `validation_failed` carrying `aggregate_type="Blob"`,
-`field="sha256"`, `constraint="recorded on every published object"` — not an integrity verdict
-with `actual_sha256=""`, which the code's own comment calls *"an empty string where a digest
-is expected, and a claim about bytes nothing has looked at"*. It is also the same answer
-`BlobStore.read` gives over the same row, so the two do not disagree about one object.
+**The reconciliation half is closed** by `1b2549b`, alongside D-2 above. An object recording no
+digest is `validation_failed` carrying `aggregate_type="Blob"`, `field="sha256"`,
+`constraint="recorded on every published object"` — not an integrity verdict with
+`actual_sha256=""`, which the code's own comment calls *"an empty string where a digest is
+expected, and a claim about bytes nothing has looked at"*. It is also the same answer
+`BlobStore.read` gives over the same row, so the two do not disagree about one object. Guarded by
+`tests/integration/ingest/test_reconciliation_reads_the_bytes.py`.
 
-**Wave 14 produced this state on a real host by accident, which is the best evidence the
-choice was right.** `mc mirror` restored an object whose bytes were intact and whose
-`X-Amz-Meta-Content-Sha256` was gone. Under the repaired code an operator is told the store
-has compared nothing to anything — not that their bytes are corrupt, and not sent to restore
-a backup they do not need.
+**Wave 14 produced that state on a real host by accident, which is the best evidence the choice was
+right.** `mc mirror` restored an object whose bytes were intact and whose
+`X-Amz-Meta-Content-Sha256` was gone. Under the repaired code an operator is told the store has
+compared nothing to anything — not that their bytes are corrupt, and not sent to restore a backup
+they do not need.
 
-Check: `sed -n '286,300p' src/auditmanager/ingest/reconciliation.py`.
+**The row does not close, and the correction is `W16-ERR`'s.** I closed it on the strength of
+`reconciliation.py` alone. A second site does the same thing:
+
+```python
+# src/auditmanager/storage/blob_repository.py:260, in _assert_same_content
+    actual_sha256=existing.sha256 or "",
+```
+
+**It is reachable, and the schema says so.** `ck_blob_sha256` is
+`CHECK (sha256 IS NULL OR sha256 <pattern>)` and the column's own comment reads *"Write-once: NULL
+until verification, then immutable."* So a blob in the pre-verification window has `sha256 IS
+NULL`, the comparison above is then true, and the envelope carries `actual_sha256=""` — the exact
+string this row was opened about.
+
+**Two closes in one day, one of them wrong, and the shape is the same both times.** D-2 and D-4
+were closed in the tree and left open here; then D-4 was closed here on one module's evidence while
+a second module still did it. **A row is measured across every site that can produce the behaviour,
+not the first one that explains it** — `OPERATING_CONSTRAINTS.md` §12's rule about queries, applied
+to closes.
+
+Check: `grep -rn 'sha256 or ""' src/` returns exactly one line, and it is the one above.
 
 ### D-15 — one `cost_basis` describes a figure summed over several attempts
 
@@ -430,7 +514,7 @@ supports.
 Check: `python3 -c "import tomllib;print(tomllib.load(open('uv.lock','rb')))"` for the
 provenance chain, and line 574 of `PROTOTYPE_EXECUTION_PLAN.md` for the wording.
 
-### D-12 — a refused model-proxy credential is pinned retryable
+### D-12 — a refused model-proxy credential is pinned retryable — **CLOSED**
 
 **This is D-7's shape in a second place, and it is worse.** Measured at `315de25`:
 
@@ -460,12 +544,15 @@ is reachable from the alpha host at all, and `R-4` puts real client documents on
 misconfigured proxy credential is a plausible first failure there, and this is what the
 operator would be shown.
 
-Dispatched to `W16-ERR`, wave 16.
+**Closed 2026-09-18 by `W16-ERR`.** The envelope went from `503 / retryable: true / no details`
+to `500 / retryable: false / {"dependency": "model_provider"}`. Reverting the mapping reddens
+two tests, one of which pins the **envelope** rather than the code name — because the lie was the
+flag, not the name.
 
 Check: `sed -n '222,226p' src/auditmanager/analysis/text/proxy.py`, against
 `codes.dependency_unavailable.retryable` in `contracts/domain/v1/error-codes.json`.
 
-### D-13 — a deployment fault answers as the caller's validation error
+### D-13 — a deployment fault answers as the caller's validation error — **CLOSED**
 
 `StorageBucketMissingError` (`src/auditmanager/storage/errors.py:112`) inherits
 `StorageConfigurationError`, whose `code = "validation_failed"` (line 107). A missing bucket
@@ -475,9 +562,17 @@ is the **deployment's** fault: the caller sent nothing wrong and can do nothing 
 Smaller than D-12 — it does not mislead an automated client about retrying — but it is on
 criterion 10's surface and it is a one-line change if a code fits.
 
-**Whether one fits is the open part.** Dispatched to `W16-ERR` with an explicit instruction to
-stop at the boundary and report if none of the 21 does, rather than force a bad fit to close a
-row. A 22nd code is an owner decision.
+**Closed 2026-09-18 by `W16-ERR`** as `internal_error`, argued from the catalog's own
+`internal_mapping` **rule 1** — the destination for *"adapter code with no declared mapping"* —
+rather than from taste. Envelope `422 validation_failed + {field: S3_BUCKET…}` → `500
+internal_error`, no details. `field` and `constraint` stay on the exception for logs;
+`domain_error_from_storage` narrows them out of the envelope.
+
+**The boundary held.** `dependency_unavailable` was rejected (retryable, and retrying never
+creates a bucket); `dependency_credential_refused` was rejected because nothing refused a
+credential — *borrowing it would repeat D-7 while citing it*. A 22nd **dependency-misconfigured**
+code would say more, and `internal_mapping` rule 4 makes that the owner's. Recorded as a
+candidate, **not proposed as a reseal**.
 
 Check: `sed -n '99,125p' src/auditmanager/storage/errors.py` against the catalog summaries.
 
@@ -489,6 +584,27 @@ the integrator at this commit; the complete bullet is the one that survived.
 
 Reported by a reviewing session rather than found by a reader of the document, which is the
 part worth keeping: §9 is quoted into briefs and nobody quoting it had opened it.
+
+### D-22 — one rule, three hand-copies, and the copies are what ship
+
+**`W16-WEB`'s U-06/07/08 survivors, handed back rather than patched.** The intent-key rule is
+guarded in its pure form as `resolveIntentKey`. Three hooks each carry a **hand-copy** of it, and
+each copy's own comment says it belongs in `shared/lib`.
+
+Mutating any of the three reddens nothing, and **no test can make it**: one render pass with a
+`useRef` that is always fresh means the difference the mutation introduces is unobservable from
+outside. That is "unreddenable by construction" in its exact sense — not an untested rule, an
+untestable duplicate of a tested one.
+
+**So the repair is a `web/src` edit, not a test**: move the rule and have the three call it. Then
+the existing guard on `resolveIntentKey` covers all three call sites and the mutation becomes
+reddenable because there is only one thing left to mutate.
+
+`W16-WEB` correctly declined to make it — D-1.5 is a testing row and `web/src` behaviour was not
+its dispatch.
+
+Check: `grep -rn "resolveIntentKey" web/src` — one definition, and three places that should call it
+and do not.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
