@@ -225,9 +225,9 @@ describe('a 401 from the wire reaches the screen as a 401', () => {
     expect(classifyCreateProjectFailure(write).kind).toBe('not_authenticated');
   });
 
-  it('is a state on every one of the twelve operations, because the seam is on all twelve', () => {
+  it('is a state on every one of the fifteen operations, because the seam is on all fifteen', () => {
     const ids = Object.keys(OPERATIONS);
-    expect(ids).toHaveLength(12);
+    expect(ids).toHaveLength(15);
     for (const id of ids) {
       const descriptor = OPERATIONS[id as keyof typeof OPERATIONS];
       expect([...descriptor.errorStatuses], `${id} cannot return 401`).toContain(401);

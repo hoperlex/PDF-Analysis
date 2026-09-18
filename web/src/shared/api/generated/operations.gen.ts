@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 17ece21beb295c0f0893c5f16956401b5a349e4ebfa5f7c9cd2c4260a08611e1
+ *   sha256 701ecd58a860f53762775bee353cd5461d21c9e56f0bcb8d00b45dbfe685f8fe
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -21,7 +21,9 @@ import type {
   CreateProjectRequest,
   Cursor,
   DecisionEventPage,
+  DocumentUid,
   DocumentVersion,
+  DocumentVersionPage,
   FindingCategory,
   FindingDetail,
   FindingPage,
@@ -32,6 +34,7 @@ import type {
   ProjectUid,
   RunId,
   RunStatus,
+  RunStatusPage,
   StartRunRequest,
   UploadDocumentRequest,
   Verdict,
@@ -47,8 +50,11 @@ export const OPERATION_IDS = [
   'getFinding',
   'getRunStatus',
   'listDecisionHistory',
+  'listDocuments',
   'listProjects',
   'listRunFindings',
+  'listRuns',
+  'listVersions',
   'startRun',
   'streamDocumentVersionContent',
   'uploadDocument',
@@ -230,6 +236,40 @@ export type ListDecisionHistoryInput = {
 export type ListDecisionHistoryResult = DecisionEventPage;
 
 // ------------------------------------------------------------------------------------
+// listDocuments - GET /projects/{project_uid}/documents
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the documents of one project, newest first.
+ *
+ * One item per document, carrying the version the document currently points at -- the one a reader would open, stream or start a run against. A document with no published version is not listed, because there is nothing to address.
+ *
+ * The item is a `DocumentVersion` because that is what `uploadDocument` publishes into this same collection: the `GET` of a collection returns a page of exactly what its `POST` returns, which is the rule `listProjects` follows against `createProject`. This surface has no separate `Document` resource and does not acquire one here.
+ *
+ * An unknown project is `404`, never an empty page: "this project has nothing in it yet" is a different answer from "there is no such project".
+ */
+export type ListDocumentsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listDocuments` (`application/json`, HTTP 200). */
+export type ListDocumentsResult = DocumentVersionPage;
+
+// ------------------------------------------------------------------------------------
 // listProjects - GET /projects
 // ------------------------------------------------------------------------------------
 
@@ -284,6 +324,72 @@ export type ListRunFindingsInput = {
 
 /** Success body of `listRunFindings` (`application/json`, HTTP 200). */
 export type ListRunFindingsResult = FindingPage;
+
+// ------------------------------------------------------------------------------------
+// listRuns - GET /versions/{version_uid}/runs
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the runs of one published version, newest first.
+ *
+ * Runs hang off the version because `startRun` takes a `version_uid` and nothing else that identifies anything -- the project is derived from it. This is the inverse of that direction and not a second way of addressing a run.
+ *
+ * Each item is the whole `RunStatus`, identical to what `getRunStatus` answers for that run. There is no lighter list shape: a second shape of one resource is a second thing to drift.
+ *
+ * An unknown version is `404`, never an empty page.
+ */
+export type ListRunsInput = {
+  /** Path parameters, substituted into `/versions/{version_uid}/runs`. */
+  path: {
+    version_uid: VersionUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listRuns` (`application/json`, HTTP 200). */
+export type ListRunsResult = RunStatusPage;
+
+// ------------------------------------------------------------------------------------
+// listVersions - GET /documents/{document_uid}/versions
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the published versions of one document, newest first.
+ *
+ * Every immutable version of one document, ordered by `version_ordinal` descending. The ordinal is a display and ordering value and is never an identity; the continuation token carries the opaque `version_uid` and nothing else.
+ *
+ * An unknown document is `404`, never an empty page.
+ */
+export type ListVersionsInput = {
+  /** Path parameters, substituted into `/documents/{document_uid}/versions`. */
+  path: {
+    document_uid: DocumentUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listVersions` (`application/json`, HTTP 200). */
+export type ListVersionsResult = DocumentVersionPage;
 
 // ------------------------------------------------------------------------------------
 // startRun - POST /runs
@@ -478,6 +584,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['decisions'],
   },
+  listDocuments: {
+    operationId: 'listDocuments',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents',
+    pathParams: ['project_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['documents'],
+  },
   listProjects: {
     operationId: 'listProjects',
     method: 'GET',
@@ -505,6 +625,34 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['findings'],
+  },
+  listRuns: {
+    operationId: 'listRuns',
+    method: 'GET',
+    path: '/versions/{version_uid}/runs',
+    pathParams: ['version_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['runs'],
+  },
+  listVersions: {
+    operationId: 'listVersions',
+    method: 'GET',
+    path: '/documents/{document_uid}/versions',
+    pathParams: ['document_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['documents'],
   },
   startRun: {
     operationId: 'startRun',

@@ -69,6 +69,7 @@ def test_every_declared_operation_is_reachable(
     """
     samples = {
         "project_uid": "prj_01M2545JSD15ETSNNV904X991F",
+        "document_uid": "doc_01M2545JSD15ETSNNV904X991H",
         "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
         "run_id": "run_01M2545JSD15ETSNNV904X991K",
         "finding_uid": "fnd_01M2545JSD15ETSNNV904X991M",
@@ -88,7 +89,7 @@ def test_every_declared_operation_is_reachable(
                 assert bound[name] == samples[name]
 
 
-def test_no_thirteenth_operation_answers(router: Surface) -> None:
+def test_no_sixteenth_operation_answers(router: Surface) -> None:
     """A path the document does not declare is not a resource.
 
     Includes a method the document does not declare on a path that *is* declared:
