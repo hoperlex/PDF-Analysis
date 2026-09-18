@@ -18,7 +18,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-23** | the contract's prose is unguarded, and one claim is **served** | a cheap guard |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
-| D-9, D-11 | corpus granularity; a licence reading | owner / registered |
+| **D-9** | corpus: the join is local after all; segmentation is the real work | owner — scope |
+| D-11 | a licence reading | registered |
 
 **Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-4, D-12, D-13, D-17, D-19, D-21, and D-14 opened
 and closed in the same pass.
@@ -527,36 +528,45 @@ Found by `pdf-analysis-d9`. Consequence for the reseal: adding a code is a small
 
 Check: the top-level keys of that file.
 
-### D-9 — "paragraph granularity" for the normative corpus is production, not movement
+### D-9 — "paragraph granularity" for the normative corpus — **RE-MEASURED 2026-09-18, and this row was wrong in the favourable direction**
 
-The owner has directed that the normative document corpus be carried into PostgreSQL at
-**paragraph granularity**, so that vectors can be laid over it afterwards. `pdf-analysis-d9`
-measured the corpus against its manifest and reported a shape that makes that sentence mean
-something other than a load. **Verified independently here at `85aaa24`:**
+The owner has directed that the normative corpus be carried into PostgreSQL at **paragraph
+granularity**, so vectors can be laid over it. This row previously said the text and the
+geometry *"live in two places neither of which is joined to the other"* and that the content
+*"sits behind `crop_url`, pointing at an **external service**, not at anything on disk."*
 
-- **674 documents**, per `.local/norms/corpus/MANIFEST.json`, outside git entirely — no diff
-  and no grep of the tree will show them;
-- the per-document `blocks.json` is **page-level**, and a block's complete key set is
-  `block_id, block_type, coords_norm, crop_url, export_status, ordinal, page_index,
-  page_label, polygon_points, shape_type, status`. **There is no field carrying text**;
-- `block_type: "text"` is a *type label*, not content. A substring search for `"text"` finds
-  it and reads as though content were present — I made exactly that mistake and caught it by
-  reading the key set instead. `OPERATING_CONSTRAINTS.md` §12, within the hour of writing it;
-- the recognised content sits behind `crop_url`, pointing at an **external service**
-  (`vibe.cloud-ip.cc`), not at anything on disk. The markdown beside each document is the only
-  local rendering, and it carries no geometry.
+**That is false, and the correction matters because it changes the size of the task.**
 
-So: **no paragraph in that corpus has a bounding box today, and the text and the geometry live
-in two places neither of which is joined to the other.** Producing paragraph granularity means
-segmenting, associating text with geometry, and deciding what to do about a remote dependency
-for the content — that is a task with a design in it, not a migration.
+Measured at `e43e7ea`:
 
-A later task that reads "carry the corpus into PostgreSQL at paragraph granularity" and plans a
-load will lose a session discovering this. That is the shape of the stale premises that have
-cost this programme a session each, which is why it is here before the task exists.
+| | |
+|---|---|
+| documents | **674**, 5.1 GB, under `.local/` — invisible to git |
+| blocks | **~15 500** (median 23 per document, range 1–188); every one `block_type: "text"` in a 60-document sample |
+| local crops | **1106 of 1106** blocks in a random 25-document sample have `crops/<block_id>.pdf` — **zero missing** |
+| text layer | a crop yields **2 865 characters** through `pdfminer` — the crops are not rasters |
 
-Check: `python3 -c "import json;d=json.load(open('.local/norms/corpus/MANIFEST.json'));print(len(d['documents']))"`
-and the key set of `blocks['blocks'][0]` in any document's `blocks.json`.
+So **the join key exists and is local**: `blocks.json` carries the geometry
+(`coords_norm`, `polygon_points`, `page_index`), `crops/<block_id>.pdf` carries the text, and
+`block_id` joins them. **`crop_url` is a convenience, not the only path to the content.** No
+remote dependency is required to build this.
+
+**What remains true, and is the actual work.** A block is **not** a paragraph — 23 blocks for a
+whole normative document, and one crop yielding 2 865 characters, is a region of several
+paragraphs. Paragraph granularity therefore needs **segmentation inside a block**, and each
+paragraph's box derived from the block's box plus its offset within the crop. That is a
+design task, not a load — which is what this row got right.
+
+**Two lessons, and the second is about this row.** `block_type: "text"` is a *type label* and
+a substring search for `"text"` reads as though content were present; the original author made
+that mistake and caught it. But the correction then over-shot: **a `crop_url` field was read as
+evidence that the content is only remote, without listing the directory beside it.** That is
+`OPERATING_CONSTRAINTS.md` §12 once more — a query sharing an assumption with its subject —
+and it is the same shape as `D-4`, where I read a permissive constraint as proof of
+reachability without checking the writer.
+
+Check: `ls .local/norms/corpus/<any>/crops | wc -l` against the block count in that document's
+`blocks.json`, and `pdfminer.high_level.extract_text` on any crop.
 
 ### D-10 — `make mutation-copy` cannot serve a tests-only stream — **CLOSED**
 
