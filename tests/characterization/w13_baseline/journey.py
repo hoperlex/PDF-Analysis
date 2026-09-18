@@ -240,6 +240,60 @@ EXCEPTION_W18SEAL = {
     ),
 }
 
+#: ``DEBT_REGISTER.md`` D-16's other half, under owner ruling `R-10`: `Project` declares
+#: `document_count`, nothing produced it, and a project list rendered `documents --`.
+#: `W15-RUN` raised it; `W18-SEAL` declined it because `R-5` authorised three new
+#: operations and cost, not a change to an existing operation's body. `R-10` authorises
+#: exactly this change and nothing wider.
+#:
+#: **One record moves, and it is a record of an operation that already existed** -- which
+#: is the whole reason this needed a ruling of its own. The three listing records
+#: `W18-SEAL` added carried no exception block, because adding an operation adds a case
+#: and changes none.
+EXCEPTION_W19API = {
+    "debt": ["D-16"],
+    "ruling": (
+        "OWNER_RULINGS_2026-09-17.md section 3.6, R-10 -- populate "
+        "`listProjects.document_count`. The field was already declared by the sealed "
+        "`Project` schema and simply unfilled, so **no reseal is engaged and no contract "
+        "file was touched**; what R-10 authorises is the change to an existing "
+        "operation's response body, which is the owner's act and is why W18-SEAL "
+        "declined it under R-5"
+    ),
+    "status": "taken",
+    "decided_by": "1bb15ae",
+    "decided_by_subject": (
+        "feat(projects): listProjects reports document_count, in one statement, "
+        "under R-10"
+    ),
+    "decided_on": "2026-09-18",
+    "permitted_change": (
+        "Before 1bb15ae every item of a `listProjects` page carried exactly "
+        "`project_uid`, `name` and `created_at`; the optional `document_count` the "
+        "sealed `Project` declares was never emitted, because `_LIST_PROJECTS` selected "
+        "three columns and `ProjectAdapter.list_projects` built `ProjectView` with three "
+        "keyword arguments. Every item now also carries `document_count`, a non-negative "
+        "integer. It counts the documents `listDocuments` would return for that project "
+        "-- `_LIST_PROJECTS` now uses `_LIST_DOCUMENTS`' own join, `document d` to "
+        "`document_version v` on `v.version_uid = d.current_version_uid`, so a document "
+        "with no published version is listed by neither and a screen cannot show a "
+        "number above a shorter list. A project holding nothing reports `0` and never an "
+        "absent field. The whole page still costs one statement. **No property was "
+        "renamed, removed or re-typed, no status or header moved, and `createProject`'s "
+        "body is unchanged** -- it reads no documents and claims no count, so record 01 "
+        "does not move. `additionalProperties: false` on `Project` is satisfied because "
+        "`document_count` is a name the sealed document declares. The only bytes that "
+        "differ are the one added property on each item of this page, and the "
+        "`Content-Length` that follows from it. This is the whole of the permitted "
+        "change; the record is compared byte for byte against the new expectation like "
+        "every other."
+    ),
+    "everything_else": (
+        "Every other difference in this directory is a failure of the wave, whatever "
+        "argument accompanies it."
+    ),
+}
+
 MULTIPART_BOUNDARY = "w13baselineboundary"
 
 #: `T-6`. The credential every request in this journey presents, and the environment
@@ -1212,15 +1266,30 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "listProjects",
         "the page envelope with a bounded page. The listing is newest-first, so the "
         "project of case 01 is the one row, and next_cursor is the opaque continuation "
-        "token -- asserted to decode to exactly that project_uid before it is tokenised",
+        "token -- asserted to decode to exactly that project_uid before it is tokenised. "
+        "Under R-10 the item also carries `document_count`, asserted below against the "
+        "length of this project's own `listDocuments` page rather than against a literal",
         "GET",
         "/projects?limit=1",
         tokens=t,
+        exception=EXCEPTION_W19API,
     )
     listing = json_of(listed)
     assert listing["items"][0]["project_uid"] == project_uid, (
         "the newest-first listing did not put this journey's project first"
     )
+    # `R-10`. The field is asserted **present** here rather than left to the byte
+    # comparison, because a missing optional property reads as a smaller body and the
+    # diff would say "the bytes moved" rather than "the count stopped being produced".
+    assert "document_count" in listing["items"][0], (
+        "the project page carries no `document_count`; the field is declared by the "
+        "sealed `Project` and R-10 ruled that it is filled"
+    )
+    project_document_count = listing["items"][0]["document_count"]
+    assert isinstance(project_document_count, int) and not isinstance(
+        project_document_count, bool
+    ), f"document_count is {project_document_count!r}, which is not an integer"
+    assert project_document_count >= 0, "document_count is negative"
     cursor = listing["page"]["next_cursor"]
     t.add("project_uid", project_uid, "the identity case 01 allocated")
     # Unconditional. The setup project above guarantees a second row, so a null cursor here
@@ -1546,6 +1615,14 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     )
     assert listed_documents["page"]["next_cursor"] is None, (
         "one row and a continuation token; the page is not exhausted when it says it is"
+    )
+    # `R-10`, asserted where both answers are in hand: the number case 16 printed above
+    # this list is the length of the list. Against the length, never against a literal --
+    # a literal would still pass if both halves drifted together.
+    assert project_document_count == len(listed_documents["items"]), (
+        f"listProjects reported {project_document_count} documents for this project and "
+        f"listDocuments returns {len(listed_documents['items'])}; a screen would render "
+        "a count above a list of a different length"
     )
     t.add("project_uid", project_uid, "the identity case 01 allocated")
     t.add("version_uid", version_uid, "the identity case 02 allocated")

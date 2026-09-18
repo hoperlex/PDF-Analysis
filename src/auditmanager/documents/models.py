@@ -34,6 +34,7 @@ __all__ = [
     "ROLE_SOURCE_DOCUMENT",
     "DocumentVersionRecord",
     "ManifestEntry",
+    "ProjectListingRecord",
     "ProjectRecord",
     "UploadOutcome",
 ]
@@ -95,6 +96,34 @@ class ProjectRecord:
     project_uid: ProjectUid
     name: str
     created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectListingRecord:
+    """One row of ``listProjects``: a project, and how many documents it would list.
+
+    A separate type from :class:`ProjectRecord` rather than an optional fourth field on
+    it, because the count is a different kind of fact. ``create_project`` and
+    ``get_project`` read one ``project`` row and know nothing about documents; making
+    them carry a ``document_count`` would mean carrying ``None``, and a record that can
+    answer "I do not know" is a record the serialiser has to interpret. Here the answer
+    is always a number.
+
+    ``document_count`` is an ``int`` and is **never** ``None``. A project with no
+    documents reports ``0``, which is a measurement; omitting the field would be the
+    different and weaker claim that nobody counted. `D-3` is this programme's record of
+    what a flattering default costs.
+
+    **It counts exactly what ``listDocuments`` would return for the same project** --
+    documents whose ``current_version_uid`` points at a published version -- so a screen
+    cannot render "3 documents" above a list of two. See ``_LIST_PROJECTS`` in
+    ``repository.py``, which reuses ``_LIST_DOCUMENTS``' own join to say it.
+    """
+
+    project_uid: ProjectUid
+    name: str
+    created_at: datetime
+    document_count: int
 
 
 @dataclass(frozen=True, slots=True)

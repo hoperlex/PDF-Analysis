@@ -37,6 +37,7 @@ from .models import (
     ROLE_SOURCE_DOCUMENT,
     DocumentVersionRecord,
     ManifestEntry,
+    ProjectListingRecord,
     ProjectRecord,
 )
 
@@ -65,8 +66,35 @@ _LIST_PROJECTS = text(
     # creation order inside a tick: a ULID is monotonic across milliseconds, not within one,
     # so its random tail decides there. Ordering by timestamp is the contract's guarantee;
     # a total order is the implementation's.
-    "SELECT project_uid, name, created_at FROM project "
-    "ORDER BY created_at DESC, project_uid DESC"
+    #
+    # `document_count` is the fourth column, under owner ruling `R-10`. **The two joins are
+    # `_LIST_DOCUMENTS`' join, verbatim**: `document d` to `document_version v` on
+    # `v.version_uid = d.current_version_uid`. That is the whole argument that the count
+    # agrees with `listDocuments` - it is not a second definition of "a document in this
+    # project" that has to be kept in step with the first, it is the same join with the
+    # rows counted instead of returned. A document whose `current_version_uid` is NULL is
+    # not listed by `listDocuments` and is not counted here.
+    #
+    # `LEFT JOIN`, twice, and `count(v.version_uid)` rather than `count(*)`: an inner join
+    # would drop a project with no documents out of the listing entirely, and `count(*)`
+    # over the outer-joined NULL row would report 1 for it. `count` of a column ignores
+    # NULLs, so an empty project reports **0** - a measurement, not an omission. `D-3` is
+    # what a flattering default costs.
+    #
+    # **One statement, not one per project.** A count fetched in a loop over a page of
+    # projects is N+1 round trips at any page size, and the alternative `R-10` rejected was
+    # exactly that shape moved into the browser.
+    #
+    # No row multiplication: `document_version.version_uid` is the primary key, so each
+    # `document` row joins at most one version row, and `GROUP BY p.project_uid` is legal
+    # because it is `project`'s primary key and the other two columns are functionally
+    # dependent on it.
+    "SELECT p.project_uid, p.name, p.created_at, count(v.version_uid) AS document_count "
+    "FROM project p "
+    "LEFT JOIN document d ON d.project_uid = p.project_uid "
+    "LEFT JOIN document_version v ON v.version_uid = d.current_version_uid "
+    "GROUP BY p.project_uid, p.name, p.created_at "
+    "ORDER BY p.created_at DESC, p.project_uid DESC"
 )
 _INSERT_DOCUMENT = text(
     "INSERT INTO document (document_uid, project_uid, display_title) "
@@ -172,6 +200,22 @@ def _project_record(row: Any) -> ProjectRecord:
     )
 
 
+def _project_listing_record(row: Any) -> ProjectListingRecord:
+    """One ``_LIST_PROJECTS`` row. ``count()`` never returns NULL, so this never coerces.
+
+    The cast is to ``int`` because PostgreSQL's ``count`` is ``bigint``; psycopg already
+    hands that back as a Python ``int``, and the call is here so the type is the record's
+    own claim rather than the driver's.
+    """
+    project_uid, name, created_at, document_count = tuple(row)
+    return ProjectListingRecord(
+        project_uid=ProjectUid(project_uid),
+        name=name,
+        created_at=created_at,
+        document_count=int(document_count),
+    )
+
+
 def _version_record(
     row: Any, manifest: tuple[ManifestEntry, ...]
 ) -> DocumentVersionRecord:
@@ -233,9 +277,14 @@ class DocumentRepository:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Project")
         return _project_record(row)
 
-    def list_projects(self, session: Session) -> tuple[ProjectRecord, ...]:
+    def list_projects(self, session: Session) -> tuple[ProjectListingRecord, ...]:
+        """`listProjects`: every project, newest first, each with its document count.
+
+        One statement for the whole listing -- see ``_LIST_PROJECTS``. The count is the
+        number of documents ``listDocuments`` would return for that project.
+        """
         rows = session.execute(_LIST_PROJECTS).all()
-        return tuple(_project_record(row) for row in rows)
+        return tuple(_project_listing_record(row) for row in rows)
 
     # -- documents -----------------------------------------------------------
 

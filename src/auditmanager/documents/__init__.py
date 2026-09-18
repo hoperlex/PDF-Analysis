@@ -19,6 +19,7 @@ from .models import (
     ROLE_SOURCE_DOCUMENT,
     DocumentVersionRecord,
     ManifestEntry,
+    ProjectListingRecord,
     ProjectRecord,
     UploadOutcome,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "DocumentRepository",
     "DocumentVersionRecord",
     "ManifestEntry",
+    "ProjectListingRecord",
     "ProjectRecord",
     "UploadOutcome",
     "constraint_name_of",

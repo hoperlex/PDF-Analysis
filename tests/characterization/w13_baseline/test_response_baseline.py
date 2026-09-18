@@ -135,18 +135,26 @@ def test_every_one_of_the_fifteen_operations_is_covered() -> None:
 #: moved by two debts has to name two. A comma inside a string would have kept the shape
 #: and lost the property: a list of debts is countable and a sentence is not. The record's
 #: own `debt` key is a list on all six for the same reason -- one spelling, not two.
+#:
+#: **`W19-API` added the seventh entry**, record 16, under owner ruling `R-10`: `D-16`'s
+#: other half, `listProjects.document_count`. It is the first entry here for an operation
+#: whose body changed while the contract did not -- the field was declared by the seal and
+#: had no producer -- and `R-10` names that distinction in as many words. The rule is
+#: still the rule: a named debt, a cited commit, a `permitted_change` describing the whole
+#: of the move, and the same byte-for-byte comparison every unmarked record gets.
 PERMITTED_EXCEPTIONS = {
     "03-startRun.success": ("D-19", "D-21"),
     "04-startRun.replay": ("D-19", "D-21"),
     "05-startRun.replay_with_normalised_property": ("D-19", "D-21"),
     "06-getRunStatus.success": ("D-19", "D-21"),
     "07-getRunStatus.correlation_supplied": ("D-19", "D-21"),
+    "16-listProjects.success": ("D-16",),
     "31-streamDocumentVersionContent.storage_credential_refused": ("D-7",),
 }
 
 
 def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
-    """The D-7 path and the D-19 path, and nothing else.
+    """The D-7 path, the D-19 path and the D-16 path, and nothing else.
 
     A safety net with an unnamed exception is one somebody talks their way past at the
     end of a long wave. This is the assertion that makes the exceptions countable.
@@ -160,6 +168,11 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     identical to the microsecond. A record that reproduces a defect byte for byte is
     protecting it. `D-21`: the same five bodies now carry `cost_micros`, `cost_basis` and
     `model_call_count`, the three properties owner ruling `R-5` added to `RunStatus`.
+
+    `D-16` is record 16: every item of a `listProjects` page now carries the
+    `document_count` the sealed `Project` has always declared, filled under owner ruling
+    `R-10`. Nothing in `contracts/**` moved for it, which is exactly the distinction
+    between `R-10` and the `R-5` reseal that declined this change.
     """
     marked = {
         path.stem: json.loads(path.read_text(encoding="utf-8"))["exception"]
@@ -182,6 +195,10 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     for case in PERMITTED_EXCEPTIONS:
         if "D-21" in PERMITTED_EXCEPTIONS[case]:
             assert "R-5" in exceptions[case]["ruling"], case
+    # And record 16 cites the one that authorised *changing an existing operation's body*.
+    # `R-5` explicitly did not, which is why `W18-SEAL` left this field unfilled; citing
+    # it here would be citing an authority that was declined.
+    assert "R-10" in exceptions["16-listProjects.success"]["ruling"]
 
 
 def test_the_five_run_status_records_no_longer_pin_one_instant_for_the_whole_run() -> None:

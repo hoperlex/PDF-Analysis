@@ -1,10 +1,21 @@
 {
   "case": "16-listProjects.success",
   "operation": "listProjects",
-  "purpose": "the page envelope with a bounded page. The listing is newest-first, so the project of case 01 is the one row, and next_cursor is the opaque continuation token -- asserted to decode to exactly that project_uid before it is tokenised",
+  "purpose": "the page envelope with a bounded page. The listing is newest-first, so the project of case 01 is the one row, and next_cursor is the opaque continuation token -- asserted to decode to exactly that project_uid before it is tokenised. Under R-10 the item also carries `document_count`, asserted below against the length of this project's own `listDocuments` page rather than against a literal",
   "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
   "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
-  "exception": null,
+  "exception": {
+    "debt": [
+      "D-16"
+    ],
+    "ruling": "OWNER_RULINGS_2026-09-17.md section 3.6, R-10 -- populate `listProjects.document_count`. The field was already declared by the sealed `Project` schema and simply unfilled, so **no reseal is engaged and no contract file was touched**; what R-10 authorises is the change to an existing operation's response body, which is the owner's act and is why W18-SEAL declined it under R-5",
+    "status": "taken",
+    "decided_by": "1bb15ae",
+    "decided_by_subject": "feat(projects): listProjects reports document_count, in one statement, under R-10",
+    "decided_on": "2026-09-18",
+    "permitted_change": "Before 1bb15ae every item of a `listProjects` page carried exactly `project_uid`, `name` and `created_at`; the optional `document_count` the sealed `Project` declares was never emitted, because `_LIST_PROJECTS` selected three columns and `ProjectAdapter.list_projects` built `ProjectView` with three keyword arguments. Every item now also carries `document_count`, a non-negative integer. It counts the documents `listDocuments` would return for that project -- `_LIST_PROJECTS` now uses `_LIST_DOCUMENTS`' own join, `document d` to `document_version v` on `v.version_uid = d.current_version_uid`, so a document with no published version is listed by neither and a screen cannot show a number above a shorter list. A project holding nothing reports `0` and never an absent field. The whole page still costs one statement. **No property was renamed, removed or re-typed, no status or header moved, and `createProject`'s body is unchanged** -- it reads no documents and claims no count, so record 01 does not move. `additionalProperties: false` on `Project` is satisfied because `document_count` is a name the sealed document declares. The only bytes that differ are the one added property on each item of this page, and the `Content-Length` that follows from it. This is the whole of the permitted change; the record is compared byte for byte against the new expectation like every other.",
+    "everything_else": "Every other difference in this directory is a failure of the wave, whatever argument accompanies it."
+  },
   "unordered": null,
   "request": {
     "method": "GET",
@@ -36,8 +47,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 215,
-      "text": "{\"items\": [{\"project_uid\": \"{{project_uid}}\", \"name\": \"W13 response baseline\", \"created_at\": \"{{ts_4}}\"}], \"page\": {\"next_cursor\": \"{{next_cursor}}\"}}",
+      "length": 236,
+      "text": "{\"items\": [{\"project_uid\": \"{{project_uid}}\", \"name\": \"W13 response baseline\", \"created_at\": \"{{ts_4}}\", \"document_count\": 1}], \"page\": {\"next_cursor\": \"{{next_cursor}}\"}}",
       "note": ""
     }
   },

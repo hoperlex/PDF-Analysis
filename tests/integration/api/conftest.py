@@ -314,12 +314,20 @@ class IngestProjectAdapter:
         # newest -- and nothing caught it, because no test in this suite asserted an
         # order. `test_query_surface.py` asserts it now, over timestamps proved
         # distinct first.
+        #
+        # `document_count` is forwarded for the same reason the order is: this adapter is
+        # the second copy of `bootstrap.adapters.ProjectAdapter`, and the last time the two
+        # disagreed about `list_projects` it served the wrong order for four waves. Under
+        # `R-10` the shipped adapter carries the count the repository measured; if this one
+        # dropped it, every test in this suite that asserts the field would be asserting
+        # against a fake that is no longer the application.
         rows = self._ingest.list_projects()
         return tuple(
             ProjectView(
                 project_uid=str(record.project_uid),
                 name=record.name,
                 created_at=record.created_at,
+                document_count=record.document_count,
             )
             for record in rows
         )
