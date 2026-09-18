@@ -38,6 +38,7 @@ from auditmanager.analysis.text.adapter import (
     ModelResponse,
     ProviderMode,
 )
+from auditmanager.analysis.text.config import DEPENDENCY_NAME
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 #: The values the proxy reads as "I am not choosing a model". Any other string is a real
@@ -220,9 +221,17 @@ def _map_http_failure(exc: urllib.error.HTTPError, model: str) -> DomainError:
     code = (detail.get("error") or {}).get("code", "")
 
     if exc.code == 401:
+        # `dependency_unavailable` is `retryable: true`, so this mapping used to tell a
+        # caller to retry a rejected credential -- an operation that cannot succeed until
+        # an operator changes something, presented as one that will. That is the `D-7`
+        # defect in a second place: `R-3` added `dependency_credential_refused` (500, not
+        # retryable) for exactly this scenario, and the proxy refusing our token is it.
+        # `dependency` carries the stable class name the sibling adapters already use, so
+        # an operator reads *which* credential was refused from one vocabulary.
         return DomainError(
-            ErrorCode.DEPENDENCY_UNAVAILABLE,
-            message="the model proxy refused the token",
+            ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED,
+            message="the model proxy refused the configured credential",
+            dependency=DEPENDENCY_NAME,
         )
     if exc.code == 400 and code == "model_not_allowed":
         # Configuration, not a fault: the proxy names the permitted set and retrying cannot

@@ -109,15 +109,70 @@ class StorageConfigurationError(StorageError):
     allowed_details = frozenset({"field", "constraint"})
 
 
-class StorageBucketMissingError(StorageConfigurationError):
+class StorageBucketMissingError(StorageError):
     """The configured private bucket does not exist.
 
     Not transient, so it is a configuration fault rather than an availability
     one: no amount of retrying creates the bucket, and this adapter never
     creates it either. Bucket provisioning belongs to the local services task.
+
+    **Why this is not** :class:`StorageConfigurationError` **any more.** It was a
+    subclass of it until ``W16-ERR``, and so carried ``validation_failed`` -- the
+    catalog code whose own summary reads *"The request or payload violates a
+    declared schema, enum, format or invariant"*. A missing bucket is the
+    deployment's fault. The caller sent nothing wrong, can change nothing about
+    it, and was being told on a 422 that their payload was the problem. That is
+    the same shape ``D-7`` records one layer down: a class named for one meaning
+    raising the code of another.
+
+    **Why** ``internal_error`` **and not one of the other twenty.** Argued from
+    the catalog's own text, not from taste:
+
+    * ``validation_failed`` describes the *request*. There is no request defect.
+    * ``not_found`` is *"the addressed aggregate does not exist or is not visible
+      to this caller"*. The bucket is not an aggregate of this domain, and the
+      addressed one may exist perfectly well. A 404 here would read as a normal
+      empty result and hide a deployment fault entirely.
+    * ``dependency_unavailable`` is ``retryable: true`` and means *transiently*
+      unavailable. This class's first paragraph is the refutation: retrying never
+      creates a bucket. Taking it would be exactly the untruth ``W16-ERR`` came
+      to remove from the proxy's 401.
+    * ``dependency_credential_refused`` means a dependency *refused the
+      application's own credential*. Nothing was refused; the store answered and
+      the bucket was absent. Borrowing it would repeat ``D-7``'s own mistake in
+      the act of citing it.
+    * ``storage_integrity_error`` requires a comparison. Nothing was compared.
+
+    What is left is ``internal_error``, and it is not a fallback chosen for lack
+    of a better one -- it is the catalog's *declared* destination for this case.
+    ``internal_mapping`` rule 1: *"An internal analysis stage code, adapter code
+    or worker code that has no declared mapping in this catalog is reported
+    externally as internal_error."* This is an adapter code with no declared
+    mapping. 500, not retryable, category ``internal`` -- *"an unclassified
+    server fault"* -- is true of a missing bucket in every particular.
+
+    **The boundary, not crossed.** A dedicated 22nd code (a *dependency
+    misconfigured* code, distinct from a refused credential) would say more than
+    ``internal_error`` does, and the register should carry that as a candidate.
+    It is not taken here: ``internal_mapping`` rule 4 says in its own words that
+    *"giving a recurring internal reason its own stable external code is a
+    deliberate change to this catalog under the versioning policy, not an
+    edge-local or provider-local decision."* That is an owner decision and a
+    reseal, and neither is this wave's.
+
+    ``field`` and ``constraint`` are still carried and still accepted, because
+    ``S3_BUCKET`` is exactly what an operator needs and the raised exception is
+    what the logs get. They no longer reach the envelope:
+    ``internal_error`` declares ``safe_detail_keys: []`` and
+    :func:`auditmanager.ingest.failures.domain_error_from_storage` narrows every
+    detail to the reported code's own list. That is the same place ``R-3`` put
+    the offending environment variable -- behind ``correlation_id``, per the
+    catalog's own safety rule -- rather than into a caller's response.
     """
 
+    code = "internal_error"
     summary = "The configured object storage bucket does not exist."
+    allowed_details = frozenset({"field", "constraint"})
 
 
 # --- availability and authorization ------------------------------------------

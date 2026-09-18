@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from auditmanager.analysis.text.adapter import ModelRequest
+from auditmanager.analysis.text.config import DEPENDENCY_NAME
 from auditmanager.analysis.text.proxy import ProxyAdapter, ProxySettings
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -166,7 +167,7 @@ class TestFailuresMapToTheCatalog:
     @pytest.mark.parametrize(
         ("status", "payload", "expected"),
         [
-            (401, {}, ErrorCode.DEPENDENCY_UNAVAILABLE),
+            (401, {}, ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED),
             (400, {"error": {"code": "model_not_allowed"}}, ErrorCode.ANALYSIS_INPUT_INVALID),
             (400, {"error": {"code": "invalid_request"}}, ErrorCode.ANALYSIS_INPUT_INVALID),
             (413, {}, ErrorCode.ANALYSIS_INPUT_INVALID),
@@ -197,6 +198,36 @@ class TestFailuresMapToTheCatalog:
         with pytest.raises(DomainError) as caught:
             _adapter(unreachable).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
         assert caught.value.code is ErrorCode.DEPENDENCY_UNAVAILABLE
+
+    def test_a_refused_credential_never_tells_the_caller_to_retry(self) -> None:
+        """The `D-7` defect in its second place, and the bytes that prove it is gone.
+
+        Asserting the *code* is not enough: the code is a name and the lie was the
+        `retryable` flag beside it. `dependency_unavailable` is pinned `retryable: true`,
+        so a 401 from the proxy used to answer "retry this" for a rejected credential --
+        an operation that cannot succeed until an operator repairs the configuration.
+        This pins the envelope a caller actually reads, and it is the assertion that goes
+        red if the mapping is put back.
+        """
+
+        def refusing(request: Any, timeout: int | None = None) -> Any:
+            raise urllib.error.HTTPError(
+                "https://proxy.example",
+                401,
+                "",
+                {},  # type: ignore[arg-type]
+                io.BytesIO(b"{}"),
+            )
+
+        with pytest.raises(DomainError) as caught:
+            _adapter(refusing).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        envelope = caught.value.envelope("11111111-1111-4111-8111-111111111111")
+        assert envelope.error_code is ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED
+        assert envelope.retryable is False, "a rejected credential is never retryable"
+        assert envelope.http_status == 500, "the fault is the server's, not the caller's"
+        # The stable dependency class name, so an operator reading this envelope can tell
+        # which credential was refused -- the blob store's or the model proxy's.
+        assert dict(envelope.details) == {"dependency": DEPENDENCY_NAME}
 
     def test_no_failure_message_leaks_the_token_or_the_url(self) -> None:
         """The envelope screen refuses a URL, so a leak here is a hard failure not a review."""
