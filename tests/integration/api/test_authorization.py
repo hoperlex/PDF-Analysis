@@ -37,7 +37,7 @@ from w13_api_driver import TEST_TOKEN, Request, Surface, dispatch
 
 #: The twelve, written out: one request each, shaped so that *authorization* is the only
 #: thing that can refuse it before anything else does.
-TWELVE = (
+FIFTEEN = (
     ("createProject", "POST", "/projects"),
     ("listProjects", "GET", "/projects"),
     ("uploadDocument", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents"),
@@ -54,6 +54,21 @@ TWELVE = (
     ("appendDecision", "POST", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
     ("listDecisionHistory", "GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
     ("exportRunCsv", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
+    # `R-5`. The three list operations are behind the same seam as the twelve. The
+    # top-level `security` declaration is not what enforces it -- the `T-6` dependency is
+    # -- so a new operation is not covered by having been added to the document, and this
+    # tuple is what says so about each one individually.
+    (
+        "listDocuments",
+        "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents",
+    ),
+    (
+        "listVersions",
+        "GET",
+        "/documents/doc_01M2545JSD15ETSNNV904X991H/versions",
+    ),
+    ("listRuns", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/runs"),
 )
 
 #: The catalog's own summary for the code, as a literal. `W13-SEAL` section 8.1 requires
@@ -71,12 +86,12 @@ def _envelope(answer) -> dict:
     return body
 
 
-def test_the_twelve_are_all_behind_the_seam(router: Surface) -> None:
-    """One request per operation, with no credential. Twelve, not eleven."""
-    assert len(TWELVE) == 12
-    assert {operation for operation, _, _ in TWELVE} == router.operation_ids
+def test_the_fifteen_are_all_behind_the_seam(router: Surface) -> None:
+    """One request per operation, with no credential. Fifteen, not fourteen."""
+    assert len(FIFTEEN) == 15
+    assert {operation for operation, _, _ in FIFTEEN} == router.operation_ids
     open_surface = []
-    for operation, method, path in TWELVE:
+    for operation, method, path in FIFTEEN:
         answer = dispatch(router, Request.build(method, path), credential=None)
         if answer.status != 401:
             open_surface.append((operation, answer.status))

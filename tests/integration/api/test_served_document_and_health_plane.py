@@ -31,8 +31,8 @@ OPENAPI = Path(__file__).resolve().parents[3] / "contracts/api/v1/openapi.json"
 OPENAPI_VERSION = "3.1.0"
 BASE_PATH = "/api/v1"
 PATH_COUNT = 10
-OPERATION_COUNT = 12
-SCHEMA_COUNT = 43
+OPERATION_COUNT = 15
+SCHEMA_COUNT = 46
 
 
 class TestTheDocumentedAndTheWiredApplicationAgree:
@@ -96,7 +96,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:
-        """The contract declares no ``default`` on any property of any of the 43 schemas.
+        """The contract declares no ``default`` on any property of any of the 46 schemas.
 
         ``default: null`` on an optional property says the server substitutes ``null``,
         which is not what an absent property means here -- and the conformance gate

@@ -88,7 +88,7 @@ class TestItRefusesToStartRatherThanFailLater:
 class TestWhatItActuallyWires:
     def test_it_builds_all_twelve_frozen_operations(self) -> None:
         app = build_application(environ=_base_env())
-        assert len(app.router.routes) == 12, (
+        assert len(app.router.routes) == 15, (
             "the router does not carry the twelve operations the frozen document declares"
         )
 
@@ -156,7 +156,7 @@ class TestTheProxyIsATransportNotAProvenanceMode:
             "PROXY_LLM_TOKEN": "t",
         }
         app = build_application(environ=env)
-        assert len(app.router.routes) == 12
+        assert len(app.router.routes) == 15
         assert app.settings.provider_mode == "proxy"
 
 

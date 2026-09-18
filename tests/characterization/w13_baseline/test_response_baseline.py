@@ -57,10 +57,15 @@ STATIC_TOKEN = "w13-baseline-static-token"
 
 RECORD_FILES = sorted(journey.RECORDS.glob("*.json"))
 
-#: The frozen document's twelve operationIds, written out rather than read from the
+#: The frozen document's fifteen operationIds, written out rather than read from the
 #: contract: this suite's job is to notice a surface that changed, and an expectation
 #: computed from a file the change could also touch would not.
-TWELVE_OPERATIONS = (
+#:
+#: **`W18-SEAL` moved it from twelve to fifteen** under owner ruling `R-5`. Adding an
+#: operation adds a case and a record; it is not a permitted *change* to any record and
+#: carries no exception block. What changed here is the count, not the rule: every one of
+#: the fifteen still has to be covered by at least one record.
+FIFTEEN_OPERATIONS = (
     "appendDecision",
     "createProject",
     "exportRunCsv",
@@ -71,6 +76,9 @@ TWELVE_OPERATIONS = (
     "listProjects",
     "listRunFindings",
     "startRun",
+    "listDocuments",
+    "listRuns",
+    "listVersions",
     "streamDocumentVersionContent",
     "uploadDocument",
 )
@@ -99,16 +107,16 @@ def test_the_record_set_and_the_journey_agree(exchanges: dict[str, Any]) -> None
     assert recorded, "the baseline is empty"
 
 
-def test_every_one_of_the_twelve_operations_is_covered() -> None:
+def test_every_one_of_the_fifteen_operations_is_covered() -> None:
     covered = set()
     for path in RECORD_FILES:
         operation = json.loads(path.read_text(encoding="utf-8"))["operation"]
         if operation is not None:
             covered.add(operation)
-    assert covered == set(TWELVE_OPERATIONS), (
-        f"operations with no record: {sorted(set(TWELVE_OPERATIONS) - covered)}; "
+    assert covered == set(FIFTEEN_OPERATIONS), (
+        f"operations with no record: {sorted(set(FIFTEEN_OPERATIONS) - covered)}; "
         f"records naming an operation the contract does not declare: "
-        f"{sorted(covered - set(TWELVE_OPERATIONS))}"
+        f"{sorted(covered - set(FIFTEEN_OPERATIONS))}"
     )
 
 
