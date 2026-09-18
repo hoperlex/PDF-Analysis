@@ -11,8 +11,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
-| **D-16** | no screen reaches anything after a page reload | a **reseal** — ruled: do it |
-| **D-21** | cost is recorded and exposed nowhere | the **same reseal** — ruled: do it |
+| **D-16** | the API can list now; **no screen renders it** | `web/src` screens — unblocked |
 | **D-20** | there is no observable `running` state | architecture |
 | **D-18** | two opposite faults share one byte-identical envelope | catalog — owner's, and now a narrow question |
 | **D-22** | one rule, three hand-copies | `web/src` repair |
@@ -20,7 +19,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | D-9, D-11 | corpus granularity; a licence reading | owner / registered |
 
-**Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-4, D-12, D-13, D-17, D-19, and D-14 opened
+**Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-4, D-12, D-13, D-17, D-19, D-21, and D-14 opened
 and closed in the same pass.
 
 **Two rules this register earned the hard way, both on the same day:**
@@ -272,29 +271,44 @@ evidence the programme had sat outside the tree and logged status lines only.
 Check: `docs/program/reviews/W15-RUN.md` §D-5, and the envelopes in `/root/w15run-logs/`
 while they exist.
 
-### D-16 — no screen can reach anything after a page reload
+### D-16 — no screen can reach anything after a page reload — **API HALF CLOSED, SCREENS OPEN**
 
-**`W15RUN-3`, and it is the largest thing the first live journey found. It is not a bug in any
-code.** The twelve operations contain **no `listDocuments`, no `listVersions` and no
-`listRuns`**. Measured in the browser: a project page on a **fresh load** makes **zero API
-calls** and says *"No version published in this session"* — no Start-run control, no route
-back to work that exists.
+**The reseal landed 2026-09-18 under owner ruling `R-5`** (`W18-SEAL`). The contract goes
+**10 paths / 12 operations / 43 schemas → 12 / 15 / 46**:
 
-Every row, object, run, finding and decision survives. **No screen can reach them.** The app
-works only within the session that created the thing.
+| Operation | Path |
+|---|---|
+| `listDocuments` | `GET /projects/{project_uid}/documents` |
+| `listVersions` | `GET /documents/{document_uid}/versions` |
+| `listRuns` | `GET /versions/{version_uid}/runs` |
 
-`PA-01` criterion 8 is **unverifiable through the browser** as a result. Four certifications
-missed it because none of them ever reloaded a page — the same class as wave 13's three
-criterion-10 defects, which survived four certifications because none could construct a
-malformed multipart envelope in process.
+All three take `listProjects`' shape — a `GET` of the collection its `POST` writes into,
+newest first, `cursor`/`limit`, `{items, page: {next_cursor}}` — **because that operation
+already fixes what the shape is.** The only real decisions were what the parent is and what
+the item is, and the existing code answers both. **No new error code:** an unknown parent is
+`not_found`, a malformed cursor is `validation_failed`, both already carrying the detail keys
+these need, so `contracts/domain/v1/**` is byte-identical to `3df17a7`.
 
-Closing it is a **contract change**: a reseal adding list operations, then the screens. It is
-the largest single item between here and a usable alpha, and it is owner-visible work rather
-than a repair.
+**This row does not close, and the remaining half is the one a user feels.** `web/src/app/**`
+is untouched: the typed client is regenerated because the lock guard demands it, and the
+fifteen operations are reachable from `operations.gen.ts`, but **no screen renders them**. A
+project page on a fresh load still makes no listing call. This row's own text said it —
+*"a reseal adding list operations, **then the screens**"* — and only the first clause is done.
 
-Tree: `contracts/api/v1/openapi.json` (frozen) and `web/src`.
+**What the screens now need, and it is no longer blocked on anything:** a project page that
+calls `listDocuments`, a document page that calls `listVersions`, a version page that calls
+`listRuns`, and a route back into a run from each.
 
-Check: load a project page in a new tab against a running stack and count the API calls.
+**One thing `D-20` still owns, stated so it is not mistaken for closed:** because
+`execute_run` is inline, a run is `published` by the time `startRun` answers. `listRuns` makes
+the set of runs reachable; it **cannot** make criterion 4's `running` state observable.
+
+**Flagged for the owner, not decided:** `listProjects.document_count` is still unpopulated, so
+a project list still reads `documents —`. Populating it changes an existing operation's body
+and moves a seventh characterization record, which `R-5` does not authorise. A screen can get
+the number from `listDocuments` at one call per project.
+
+Check: `python3 -c "import json;o=json.load(open('contracts/api/v1/openapi.json'));print(len(o['paths']))"` is 12; and `grep -rn "listDocuments" web/src/app` is empty, which is the open half.
 
 ### D-17 — a restored instance is proved by reading and broken for writing — **CLOSED**
 
@@ -414,14 +428,38 @@ than five minutes returns a gateway error to a browser with a run still executin
 This is an architecture item, not a bug: it is where a queue or a background worker goes, and
 `ADR` authority applies rather than the roadmap's.
 
-### D-21 — cost is recorded and exposed nowhere
+### D-21 — cost is recorded and exposed nowhere — **CLOSED**
 
-**`W15-RUN`, and it blocks a `PA-01` criterion outright.** `model_call.cost_micros` is
-recorded. It appears on **no** operation, in **no** CSV column and on **no** screen:
-`grep -c cost` over the frozen contract returns **1**, and that one is `cost_budget_exceeded`.
+**Closed 2026-09-18 by `W18-SEAL` under `R-5`.** `RunStatus` gains `cost_micros`,
+`cost_basis` and `model_call_count`. `grep -c cost` over the frozen contract goes **1 → 7**.
 
-Criterion 4 requires cost to be visible to a user. It cannot be, so closing this needs a
-reseal — the same reseal `D-16` needs, which is an argument for doing them together.
+**On `RunStatus` and not in the CSV**, argued from the criterion rather than from taste.
+`PA-01` criterion 4 names *"provider mode and cost"* together, and `provider_mode` is already
+a required `RunStatus` property, so a user reading one and navigating elsewhere for the other
+is a user who can fail the criterion by not navigating. Three reasons against the CSV, any one
+sufficient: the seventeen columns are frozen by `OD-11` and named as seventeen by criterion 7,
+which `R-5` does not authorise moving; one CSV row is one **evidence item**, so a run-level
+cost repeated down the column is a number that looks per-row and is not, and summing it
+multiplies the cost by the evidence count; and `exportRunCsv` refuses a run whose terminal
+does not publish, so **a run that spent money and then failed would have its cost invisible
+exactly where an operator most wants it.**
+
+**`D-15` was neither inherited nor repaired.** `stage.py` and `executor.py` are untouched. The
+figure is computed from the `model_call` rows — which `D-15` itself calls the exact ones — and
+**`model_call_count` is published rather than inferred**, which is what answers the ambiguity
+directly: without it a reader cannot tell a run that answered first time from one that was
+retried. `cost_basis` aggregates conservatively (`measured` only when every contributing row
+reported one) and the schema states that rule so a consumer reads it rather than guessing.
+
+Two details that are not decoration: `model_call.cost_micros` is **nullable** and SQL `sum`
+skips NULL silently, so the `FILTER` counts a NULL as unmeasured; and all three are **absent
+rather than zero** when no provider call was made, because *"it cost nothing"* and *"nothing
+was spent here"* are different claims — `D-3` is this programme's record of what inventing the
+flattering one costs.
+
+**Worth carrying forward:** a `recorded` run reports `cost_basis: "estimated"`, because a
+replayed call reports no cost of its own. So the first live `PA-01` run is also the first that
+can print `measured`, which is what makes the field worth reading rather than decorative.
 
 ### D-6 — the contract has no security scheme at all — **CLOSED**
 
