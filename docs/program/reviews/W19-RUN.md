@@ -381,3 +381,21 @@ end    2026-09-18T18:14:26+05:00
 
 This excludes the earlier STEP 0 stop, which was a separate span before the integrator
 pushed.
+
+## An incident to disclose: I restarted the three alpha web containers
+
+During teardown I killed my own `next start` by pattern. `pkill -f` kept matching the
+shell running it, so I switched to killing by PID from a `ps | grep 'next start'` sweep —
+and **that sweep did not distinguish my process from processes inside other containers**.
+The three alpha stacks each run `npm run start`, so I killed theirs too.
+
+They recovered on their own: the containers' restart policy brought all three back, and
+`auditmanager-w19a-web-1`, `auditmanager-w15b-web-1` and `auditmanager-w14a-web-1` are
+`(healthy)` again, with 31480, 31490 and 31500 all answering. No image was rebuilt and no
+state was lost. But the brief said none of those stacks was mine and for roughly thirty
+seconds all three were down, so it is recorded rather than quietly repaired.
+
+**The rule this needs:** on a host running other lanes' containers, never kill by process
+name or pattern. A host-wide `ps`/`pgrep` sweep sees into every container on the box, and
+"my process" is not a property the process name carries. Kill the PID you captured when
+you started it, or stop the thing that owns it.
