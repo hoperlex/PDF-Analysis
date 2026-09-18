@@ -499,7 +499,7 @@ had no producer) while adding a property is the owner's act.
 
 ## 9. The gate
 
-Run at `ed73c04` + the prose sweep, on instance `gate-w18a`, with the tree committed and
+Run at `87f8e0b`, on instance `gate-w18a`, with the tree committed and
 clean, no `pytest` and no `uvicorn` of mine running against this lane's database, and the
 exit status read from `$?` after a redirect — never through a pipe.
 
@@ -519,8 +519,10 @@ characterization records. The frontend is **+3**, and that is not new test code:
 `seam-operations.contract.test.ts` generates one `it` per entry of `SEAM_OPERATIONS`, so the
 three rows added to that literal are three cases.
 
-An earlier full gate at `ed73c04` (before the prose sweep) also exited `0` with the same
-counts; the sweep touches only docstrings, comments, one README and one served description.
+An earlier full gate at `ed73c04`, before the prose sweep, exited `0` with the same three
+counts (battery 3:35, this one 3:29). The sweep touches only docstrings, comments, one README
+and one served description, so the two runs agreeing is the expected result rather than a
+second measurement of anything.
 
 ## 10. What is false or imprecise in the brief
 
@@ -570,7 +572,11 @@ survivable; it does not make it survived.
 
 ## 11. Elapsed
 
-Measured, not estimated, from the first command of this session to the final gate's exit:
-**1 h 48 m** wall clock (11:24:27 → 13:12 local). Roughly a third of it was the two full gate
-runs and the integration suite (3:35 + 3:10 + 3:11), which are wall clock the session spends
-waiting rather than working.
+Measured, not estimated. First command of this session **11:24:27**; the confirming gate
+exited at **12:12:15** local. **47 minutes 48 seconds** wall clock.
+
+About twenty of those minutes are runs the session spends waiting rather than working: two
+full gates at 3:35 and 3:29 of battery apiece plus their foundation and frontend steps, one
+whole-`tests/integration` run at 3:10, `npm ci` and `make bootstrap` on arrival, `make up`
+and `make migrate` for the lane, and one more `npm ci` in a throwaway worktree at `3df17a7`
+to check §10.2.
