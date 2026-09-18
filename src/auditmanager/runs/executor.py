@@ -105,7 +105,12 @@ from auditmanager.findings import (
     run_grounding_gate,
     select_terminal,
 )
-from auditmanager.runs.repository import PC01_STAGES, RunRepository, RunRow
+from auditmanager.runs.repository import (
+    INITIAL_STATE,
+    PC01_STAGES,
+    RunRepository,
+    RunRow,
+)
 from auditmanager.runs.retry import (
     AttemptLedger,
     AttemptSummary,
@@ -586,7 +591,23 @@ def execute_run(
     version = document_repo.get_version(session, VersionUid.parse(run.version_uid))
     source_entry = version.entry(ROLE_SOURCE_DOCUMENT)
 
-    run_repo.advance(session, run_id=run_id, from_state="created", to_state="queued")
+    # `D-20`. Two callers, two starting states, and the row is asked which one this is
+    # rather than a flag being passed that could disagree with it.
+    #
+    # The API path queues the run inside the transaction that *accepts* it -- that is what
+    # lets `startRun` answer `202 queued` without executing -- and hands the queued run to
+    # a carrier, so what arrives here is already `queued`. An in-process caller that
+    # creates and executes in one go (every suite under `tests/integration/runs`, the
+    # export suites, the p02 journey) still hands over a run in `created`.
+    #
+    # Nothing here is tolerant: a run in any other state falls straight through to the
+    # `queued -> running` compare-and-set, which matches no row and raises
+    # `state_transition_not_allowed` naming both states. A second executor picking up a run
+    # that is already `running` is refused by the database, not by this branch.
+    if run.state == INITIAL_STATE:
+        run_repo.advance(
+            session, run_id=run_id, from_state=INITIAL_STATE, to_state="queued"
+        )
     run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
 
     outputs = _StageOutputs()
