@@ -7,22 +7,20 @@ Written 2026-09-17 by the integrator. **Re-measured against the tree at `315de25
 register that had been entirely obsolete while still reading as the list of what was open, and this
 file exists to not become that. It very nearly did anyway; see the two rules below.
 
-**What is open right now**, so a reader does not scan twenty-three rows to find out:
+**What is open right now**, so a reader does not scan twenty-five rows to find out:
 
 | | Row | Needs |
 |---|---|---|
-| **D-16** | the API can list now; **no screen renders it** | `web/src` screens — unblocked |
 | **D-20** | there is no observable `running` state | architecture |
-| **D-18** | two opposite faults share one byte-identical envelope | catalog — owner's, and now a narrow question |
-| **D-22** | one rule, three hand-copies | `web/src` repair |
+| **D-18** | two opposite faults share one byte-identical envelope | **ruled `R-8`**: a second code |
 | **D-23** | the contract's prose is unguarded, and one claim is **served** | a cheap guard |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
-| **D-9** | corpus: the join is local after all; segmentation is the real work | owner — scope |
+| **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
 
-**Closed 2026-09-18:** D-1.5, D-2, D-3, D-5, D-6, D-7, D-10, D-4, D-12, D-13, D-17, D-19, D-21, and D-14 opened
-and closed in the same pass.
+**Closed 2026-09-18** — sixteen rows: D-1.5, D-2, D-3, D-4, D-5, D-6, D-7, D-10, D-12, D-13,
+D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass.
 
 **Two rules this register earned the hard way, both on the same day:**
 
@@ -273,44 +271,48 @@ evidence the programme had sat outside the tree and logged status lines only.
 Check: `docs/program/reviews/W15-RUN.md` §D-5, and the envelopes in `/root/w15run-logs/`
 while they exist.
 
-### D-16 — no screen can reach anything after a page reload — **API HALF CLOSED, SCREENS OPEN**
+### D-16 — no screen can reach anything after a page reload — **CLOSED**
 
-**The reseal landed 2026-09-18 under owner ruling `R-5`** (`W18-SEAL`). The contract goes
-**10 paths / 12 operations / 43 schemas → 12 / 15 / 46**:
+**Both halves closed 2026-09-18.** The API half by `W18-SEAL` under `R-5`
+(10 paths / 12 operations / 43 schemas → **12 / 15 / 46**, adding `listDocuments`,
+`listVersions`, `listRuns`, no new error code). The screens half by `W19-SHELL`.
 
-| Operation | Path |
-|---|---|
-| `listDocuments` | `GET /projects/{project_uid}/documents` |
-| `listVersions` | `GET /documents/{document_uid}/versions` |
-| `listRuns` | `GET /versions/{version_uid}/runs` |
+**The acceptance test was a fresh tab, not navigation** — which is the whole row, because
+four certifications missed this defect by never reloading a page. One separate Chromium
+process per URL, no cache, no storage, no prior client state:
 
-All three take `listProjects`' shape — a `GET` of the collection its `POST` writes into,
-newest first, `cursor`/`limit`, `{items, page: {next_cursor}}` — **because that operation
-already fixes what the shape is.** The only real decisions were what the parent is and what
-the item is, and the existing code answers both. **No new error code:** an unknown parent is
-`not_found`, a malformed cursor is `validation_failed`, both already carrying the detail keys
-these need, so `contracts/domain/v1/**` is byte-identical to `3df17a7`.
+| screen | before | after |
+|---|---|---|
+| project | **0 API calls**, *"No version published in this session"* | **1** — `listDocuments` |
+| document *(new route)* | — | **1** — `listVersions` |
+| version *(new route)* | — | **2** — `listRuns` + `getDocumentVersion` |
+| run | — | **1** |
+| review | — | **5** |
+| unknown project | — | `404` *"There is no such project."*, **not an empty page** |
+| malformed address | — | **0 calls** — *"That is not a version address."* |
 
-**This row does not close, and the remaining half is the one a user feels.** `web/src/app/**`
-is untouched: the typed client is regenerated because the lock guard demands it, and the
-fifteen operations are reachable from `operations.gen.ts`, but **no screen renders them**. A
-project page on a fresh load still makes no listing call. This row's own text said it —
-*"a reseal adding list operations, **then the screens**"* — and only the first clause is done.
+Six addressable screens where there were four, every address built once in
+`shared/lib/routes.ts`, and a route back from every screen — **the review screen had none at
+all**. Eleven mutations, eleven killed, and **M10 re-inserts the defect itself**: putting
+*"No version published in this session"* back is red.
 
-**What the screens now need, and it is no longer blocked on anything:** a project page that
-calls `listDocuments`, a document page that calls `listVersions`, a version page that calls
-`listRuns`, and a route back into a run from each.
+**A frozen document carried the defect as a sentence.** `web/docs/PC01_UI_SEAM.md` §2 is a
+route table that read *"there is no route for a document version"*. That sentence **is** this
+row, and it was amended with its reason in the same commit as the routes.
 
-**One thing `D-20` still owns, stated so it is not mistaken for closed:** because
-`execute_run` is inline, a run is `published` by the time `startRun` answers. `listRuns` makes
-the set of runs reachable; it **cannot** make criterion 4's `running` state observable.
+**The document route is an address, not a step.** The project screen links straight to the
+version, because `listDocuments` already returns it and clicking through a list of one buys
+nothing while `uploadDocument` declares no `document_uid`. The route exists because
+`document_uid` is a value the product **already prints at a user** — a frozen CSV column, a
+field of every `DocumentVersion`, the `aggregate_type` of a `404`. **An identifier a product
+prints and cannot open is `D-16` one aggregate smaller.**
 
-**Flagged for the owner, not decided:** `listProjects.document_count` is still unpopulated, so
-a project list still reads `documents —`. Populating it changes an existing operation's body
-and moves a seventh characterization record, which `R-5` does not authorise. A screen can get
-the number from `listDocuments` at one call per project.
+**What this does not close:** `D-20`. Execution is inline, so a run is `published` by the time
+`startRun` answers; `listRuns` makes the set of runs reachable and **cannot** make criterion
+4's `running` state observable.
 
-Check: `python3 -c "import json;o=json.load(open('contracts/api/v1/openapi.json'));print(len(o['paths']))"` is 12; and `grep -rn "listDocuments" web/src/app` is empty, which is the open half.
+Check: `git grep -l listDocuments -- web/src/_pages web/src/widgets web/src/entities` is
+non-empty (3 files), and the browser journal in `W19-SHELL` §4.
 
 ### D-17 — a restored instance is proved by reading and broken for writing — **CLOSED**
 
@@ -701,57 +703,21 @@ the integrator at this commit; the complete bullet is the one that survived.
 Reported by a reviewing session rather than found by a reader of the document, which is the
 part worth keeping: §9 is quoted into briefs and nobody quoting it had opened it.
 
-### D-22 — one rule, three hand-copies, and the copies are what ship
+### D-22 — one rule, three hand-copies, and the copies are what ship — **CLOSED**
 
-**`W16-WEB`'s U-06/07/08 survivors, handed back rather than patched.** The intent-key rule is
-guarded in its pure form as `resolveIntentKey`. Three hooks each carry a **hand-copy** of it, and
-each copy's own comment says it belongs in `shared/lib`.
+**Closed 2026-09-18 by `W19-SHELL`, on its way past `D-16`.** Three byte-identical
+`useIntentKey` copies deleted; the rule is now **one pure function over an opaque signature**
+in `web/src/shared/lib/intent-key.ts`, with `mint` injected. `entities/expert-decision` keeps
+`intentSignature` and delegates, and its nine tests are unchanged.
 
-Mutating any of the three reddens nothing, and **no test can make it**: one render pass with a
-`useRef` that is always fresh means the difference the mutation introduces is unobservable from
-outside. That is "unreddenable by construction" in its exact sense — not an untested rule, an
-untestable duplicate of a tested one.
+**The point of the row was never the duplication — it was that the duplicates could not be
+tested.** `W16-WEB` measured U-06/07/08 as *"unreddenable by construction"*: one render pass
+with a `useRef` always fresh means a mutation inside a copy changes nothing observable from
+outside. With one definition, **they are reddenable for the first time**, which is the repair
+the row asked for and which `W16-WEB` correctly declined to make (`D-1.5` was a testing row).
 
-**So the repair is a `web/src` edit, not a test**: move the rule and have the three call it. Then
-the existing guard on `resolveIntentKey` covers all three call sites and the mutation becomes
-reddenable because there is only one thing left to mutate.
-
-`W16-WEB` correctly declined to make it — D-1.5 is a testing row and `web/src` behaviour was not
-its dispatch.
-
-Check: `grep -rn "resolveIntentKey" web/src` — one definition, and three places that should call it
-and do not.
-
-### D-23 — the contract's prose is an unguarded hand-copy, in both documents
-
-**Found by `W18-SEAL` while resealing under `R-5`, and it is bigger than that wave.**
-
-The conformance engine verifies the whole **surface** against `app.openapi()` and drops
-`description`, `summary` and `title` as annotation (`N4`). So it verifies **none of the prose
-either document carries** — and the prose makes checkable claims.
-
-`W18-SEAL`'s sweep found **thirty-five statements across twelve files** asserting the surface
-has twelve operations and 43 schemas, after the reseal made it fifteen and 46. Six are in
-`api/app.py` alone, and **one of them is served**: `_DESCRIPTION`, *"The twelve operations of
-the PC-01 surface"*, goes out on `/openapi.json` to every caller. Others sit in
-`build_authorization_dependency`'s docstring (*"guards all twelve operations"*), in
-`declarations.py` (*"four of the twelve declare no 422"*), and in `api/README.md`.
-
-**Not one of them can fail a gate.** They would all have survived the reseal and gone on being
-read as true, including the one on the wire.
-
-This is `D-8` and `D-22` in one place: a name repeated often enough stops being checked, and
-the copies are what ship. All thirty-five were re-measured rather than find-and-replaced —
-*"eight of the twelve"* became **eleven of fifteen** because they were counted, and *"four of
-the twelve declare no 422"* stayed **four**, because that set did not change.
-
-**The standing gap, which is what this row is for:** nothing guards the `info` block or any
-docstring against the surface it describes. A cheap version exists — assert that no file under
-`src/auditmanager/api/` contains a number-word for the operation count that disagrees with the
-document — and it would have caught all thirty-five.
-
-Check: `grep -rn "twelve\|fifteen\|43 \|46 " src/auditmanager/api/ | wc -l`, against the
-operation and schema counts in `contracts/api/v1/openapi.json`.
+Check: `ls web/src/features/*/model/use-intent-key.ts` finds nothing;
+`git grep -c "export function useIntentKey" -- web/src` returns one line.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
