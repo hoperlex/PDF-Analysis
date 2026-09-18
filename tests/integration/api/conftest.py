@@ -390,6 +390,24 @@ class IngestDocumentAdapter:
     def read_content(self, *, version_uid: str) -> bytes:
         return self._ingest.read_source_bytes(VersionUid(version_uid))
 
+    def list_documents(self, *, project_uid: str) -> tuple[DocumentVersionView, ...]:
+        """`R-5`. Delegated, which is exactly what the shipped `DocumentAdapter` does.
+
+        There is no test query here: the rows, the order and the `404` for an unknown
+        project all come from `DocumentRepository`, so a suite driving this adapter is
+        driving the shipped listing and not a second implementation of it.
+        """
+        return tuple(
+            self._view(record)
+            for record in self._ingest.list_documents(ProjectUid(project_uid))
+        )
+
+    def list_versions(self, *, document_uid: str) -> tuple[DocumentVersionView, ...]:
+        return tuple(
+            self._view(record)
+            for record in self._ingest.list_versions(DocumentUid(document_uid))
+        )
+
 
 class DatabaseFindingAdapter:
     """``FindingPort``.
