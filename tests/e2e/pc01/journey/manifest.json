@@ -6,7 +6,7 @@
     "in its own cold browser process, and asserts that what the browser actually requested",
     "matches `expects_api` here.",
     "",
-    "At GATE TIME `tests/e2e/pc01/test_journey_conformance.py` reads the same file with no",
+    "At GATE TIME `tests/e2e/test_pc01_journey_conformance.py` reads the same file with no",
     "browser, no origin and no running stack, and asserts that every `page_module` exists,",
     "that every screen in `web/src/app` is covered by exactly one route here, that the",
     "dynamic segments of `path` match the `[param]` directories of `page_module`, and that",

@@ -162,7 +162,7 @@ stack-free buys that blind spot; running the journey is what closes it.
 A journey that cannot fail is a screenshot, so the proof is a command and not a claim:
 
 ```
-npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:PORT \
+npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:PORT --phase read \
   --manifest ../tests/e2e/pc01/journey/fixtures/redden.manifest.json
 ```
 
@@ -170,6 +170,13 @@ npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:PORT \
 does not exist, and a link the screen never renders. Measured on 2026-09-19 against
 `http://127.0.0.1:31500`: exit `1`, five findings, `routes checked: 3/4` — the walk stops
 at the broken link and says so rather than reporting the route after it as passing.
+Re-measured unchanged on 2026-09-19 by `W22-E2E`.
+
+`--phase read` is needed there and is not decoration: this fixture has no `write` section,
+and a manifest with no write section is itself a **sixth finding** under the default phase
+— *"the journey makes no POST at all, which is exactly what D-30 says the read half cannot
+catch"*. That is the correct verdict on a manifest, and it is not what this fixture is
+being used to demonstrate.
 
 And for the write half, two more — one per property:
 
