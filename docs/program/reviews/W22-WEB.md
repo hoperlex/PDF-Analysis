@@ -351,7 +351,7 @@ the formatting of the thing it inspects is checking a spelling, not a fact.**
 I did not argue it away. The reader now matches a key at the map's own indent however the
 value is written, and stops at the map's closing brace; two new tests pin the single-line
 spelling and the boundary. Re-run, M14 is killed by four assertions at once
-(`d1ab0ea`… committed as its own change so the survivor and its repair are both in the
+(`774d148`, committed as its own change so the survivor and its repair are both in the
 history). `W19-RUN`'s standard — constrain the rendered reason rather than argue the mutant
 equivalent — applied to a guard rather than a screen.
 
@@ -359,16 +359,46 @@ equivalent — applied to a guard rather than a screen.
 
 ## 6. The gate
 
-Full `make gate` on the finished tree, lane `gate-w22b`. Exit code read from `$?`.
+Full `make gate` on the finished tree, lane `gate-w22b`. Exit code read from `$?`, never
+through a pipe.
 
-| component  | base (`313e753`)     | after                | delta                  |
-| ---------- | -------------------- | -------------------- | ---------------------- |
-| battery    | 1817 / 5 sk / 168 st | see §7               | +7 (`D-23` guard)      |
-| foundation | 35                   | 35                   | —                      |
-| frontend   | 681 (47 files)       | see §7               | +36 (2 files)          |
-| exit code  | `0`                  | see §7               |                        |
+| component  | base (`313e753`)     | after (`a0a884b`)    | delta                     |
+| ---------- | -------------------- | -------------------- | ------------------------- |
+| battery    | 1817 / 5 sk / 168 st | 1824 / 5 sk / 168 st | **+7** — the `D-23` guard |
+| foundation | 35                   | 35                   | —                         |
+| frontend   | 681 (47 files)       | 706 (48 files)       | **+25, +1 file**          |
+| exit code  | `0`                  | **`0`**              |                           |
 
----
+`GATE OK: battery, foundation, frontend and whitespace all pass`, in 226.55 s for the
+battery.
+
+### The first run exited 2, and it was not mine
+
+The gate's first run on the finished tree failed with **exit 2**:
+
+```
+E   AssertionError: time order and identity order agree, so this fixture cannot tell
+    `ORDER BY published_at DESC` from `ORDER BY version_uid DESC`
+tests/integration/api/test_listing_surface.py:287
+1823 passed, 5 skipped, 1 warning, 1 error, 168 subtests passed
+```
+
+This is a **latent flake in the `catalogue` fixture**, not a regression, and I did not
+suppress it or re-run until green without saying so.
+
+The fixture asserts that its own data can discriminate: it refuses to let an ordering test
+lean on it unless `published_at` order and `version_uid` order *disagree*. ULIDs are
+monotonic in time, so those two orders agree whenever the versions happen to be created in
+ascending time — which is most of the time. The fixture is therefore non-deterministic by
+construction, and the assertion is a good one: it fails loudly rather than passing an
+ordering test that would have proven nothing.
+
+Measured: it errored once more on an immediate re-run of that file alone, then **passed six
+consecutive times**. Attribution is exact — `git diff --name-only 313e753 HEAD` is 19 files,
+every one under `web/`, `docs/program/reviews/W22-WEB.md` or the one permitted guard. Nothing
+under `src/`, `tests/integration/` or `contracts/` was touched, so nothing I changed can
+reach that fixture. It belongs to whoever owns `tests/integration/api/**`; I did not edit it,
+because I do not own it, and a row for it is not mine to write.
 
 ## 7. What was false in this brief
 
@@ -409,3 +439,8 @@ One measurement at a time on this lane; no subagents dispatched. Every process s
 PID (`388692`, `388750`, `457344`), never by name — this host runs other sessions' browsers
 and stacks. No image built: `next build` produces `.next/`, not an image. Disk 15 GB on
 arrival, 12 GB at the end.
+
+**Elapsed wall clock:** 12:43:58 → 13:34:46 UTC, **3 048 s (50 min 48 s)**, measured from
+`date -u +%s` at provisioning and at the final gate. Two full `make gate` runs (base and
+final, ~6 min each), one flake re-run, two `next build`s and 39 cold browser launches are
+inside that span.
