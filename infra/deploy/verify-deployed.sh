@@ -118,8 +118,12 @@ echo
 # start-up. Measured: both new containers healthy, every path through the proxy 502.
 echo "-- the proxy answers --"
 command -v curl >/dev/null || fail "$UNANSWERABLE" "no curl: the proxy cannot be asked."
+# `|| true` and not `|| echo 000`: curl PRINTS `000` and ALSO exits non-zero when it cannot
+# connect, so the fallback ran too and the refusal read "the proxy answered 000000", which
+# is a confusing message in a script whose whole job is not to be confusing.
 PROXY_CODE="$(curl -s -o /dev/null -m 20 -w '%{http_code}' \
-    "http://127.0.0.1:$HTTP_PORT/api/v1/openapi.json" || echo 000)"
+    "http://127.0.0.1:$HTTP_PORT/api/v1/openapi.json" || true)"
+[ -n "$PROXY_CODE" ] || PROXY_CODE=000
 if [ "$PROXY_CODE" = 502 ] || [ "$PROXY_CODE" = 503 ] || [ "$PROXY_CODE" = 504 ]; then
     fail "$DRIFT" "the proxy answered $PROXY_CODE on /api/v1/openapi.json." \
         "That is nginx holding an upstream that is no longer there -- the shape a rebuild" \

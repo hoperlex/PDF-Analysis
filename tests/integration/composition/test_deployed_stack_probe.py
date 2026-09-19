@@ -110,8 +110,13 @@ if "find" in line:
 sys.exit(0)
 '''
 
+#: A `curl` that answers with the fixture's status. It exits NON-ZERO when it could not
+#: connect, because the real one does -- and it prints `000` as well as failing, which is
+#: how `verify-deployed.sh` came to report "the proxy answered 000000" until this stub was
+#: made to behave like the tool it stands in for.
 CURL_STUB = """#!/bin/sh
 printf '%s' "$STUB_HTTP_CODE"
+[ "$STUB_HTTP_CODE" = 000 ] && exit 7
 exit 0
 """
 
@@ -340,6 +345,7 @@ class TestEveryWayItCannotTellIsAFailure:
         )
         assert completed.returncode == UNANSWERABLE, (completed.stdout, completed.stderr)
         assert "Nothing was compared" in completed.stderr, completed.stderr
+        assert "answered 000 on" in completed.stderr, completed.stderr
 
     def test_no_container_is_not_a_pass(self, world, tmp_path: Path) -> None:
         repo, deploy, image = world
