@@ -12,3 +12,14 @@ a session that dies mid-wave loses nothing.*
 ## Status
 
 In progress.
+
+## Progress log (written as measurements land; the verdicts and evidence are below)
+
+- base gate measured at `0f9989a`: battery 1806 / 5 skipped / 168 subtests, foundation 35,
+  frontend 681 (47 files), `GATE_BASE_EXIT=0`. Log `/root/w21cert-logs/gate-base.log`.
+- criterion 1: `infra/deploy/deploy.sh` does not exist in the tree. Conformance over HTTP
+  against the running process: 0 differences, planted difference reddens.
+- criterion 2: 15/15 operations answer `401 authentication_required` from the application
+  with no credential; `/healthz` 200 without one.
+- criteria 3–7 driven in a real browser: project, upload, live run (`running` → `published`),
+  finding at its quotation, accept/reject/comment history, CSV with BOM and CRLF.
