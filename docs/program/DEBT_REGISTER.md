@@ -19,7 +19,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-27** | nothing notices when the deployed stack drifts from the tree | a probe |
 | **D-28** | an unrouted path answers 200; a status code proves nothing | `web/src/app` |
 | **D-29** | `npm run test:unit` exits 1 though its tests pass | `web/` |
-| **D-30** | the committed journey has no write half — which is what `D-5` was | `tests/e2e` |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
@@ -893,23 +892,46 @@ Beside it, two reservations that are now stale: `web/FRONTEND_LOCK.json` still l
 
 Tree: `web/`.
 
-### D-30 — the committed journey covers the read half only
+### D-30 — the committed journey covered the read half only — **CLOSED**
 
-**Named by `W21-E2E` rather than papered over.** The walk drives seven routes and discovers
-every identifier by following links the pages render. **The write half — create a project,
-upload, start a run — is not built**, because driving it needs a stack the session could
-write to and none was available.
+**Closed 2026-09-19 by `W22-E2E`.** The headline is one request:
 
-It was left **unbuilt and named** rather than written as an unexecuted code path, on the
-argument that unexecuted code is the same defect as an unrun suite. That is the right call
-and the row exists so the gap is visible.
+```
+POST /bff/v1/runs -> 202 Accepted
+{"run_id": "run_01M2WW7N94M2GQG96E9PFVMB2G", "state": "queued", "provider_mode": "recorded"}
+x-correlation-id: cid-686376aa...
+```
 
-**This matters because the write half is what `D-5` actually was**: the 500 that started all
-of this was a `POST /runs`. The journey as committed would not have caught it.
+**That request is `D-5`.** On 2026-09-16 the same operation answered 500 twice through a
+browser; the harness logged status lines only, and the attribution is permanently
+unanswerable. It is now driven by a real click and kept whole on disk.
 
-It is an extension of `manifest.json` plus the walk, not a second instrument.
+Create `201`, upload `201` multipart with `byte_size` **58978** — `ar_baseline.pdf` exactly,
+read by the browser through `DOM.setFileInputFiles` — then the `202`. The read walk then
+walked **the very project the write half had just made**, because the list is newest-first:
+one story end to end, 7/7 routes, 206 exchanges, 5.3 MB of envelope, exit 0.
 
-Check: `tests/e2e/pc01/journey/README.md` names it.
+**The bound is the app's own state, not a sleep.** The journey reads `data-run-outcome`,
+which the run screen's own polling loop writes, and the bound lives in the manifest because
+`polling.ts` deliberately has no deadline. At the bound it produces **a finding with every
+reading attached and exit 1 — never a skip.** A committed fixture with the bound set to
+**1 ms** proves it.
+
+**The guard was widened from 11 tests to 30**, still stack-free, and now checks declared
+statuses against the contract — so a `202` reddens if execution ever moves back inside the
+request. Plus a re-runnable proof that mutates the real manifest ten ways for ten reds.
+
+**What it still cannot see, stated rather than left silent: the guard cannot see a 500.**
+`D-5` itself is invisible at gate time by construction, because the gate runs without a
+stack. That check lives only in the journey, where any `/bff/v1` call returning ≥ 400 during
+a step is a finding carrying its correlation id and body.
+
+**And one of its own controls was wrong when written** — it reddened on an unfillable
+placeholder instead of on the missing-call check. Found by **running** it, which is the same
+trap `W21-E2E` hit the day before and the reason every control gets run rather than read.
+
+Check: `npm run e2e:pc01 -- --phase all` against a writable stack; and
+`.venv/bin/pytest tests/e2e/` is 30 passed with no stack at all.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
