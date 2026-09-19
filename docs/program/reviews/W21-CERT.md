@@ -24,7 +24,7 @@ both outside the worktree. **`df -h /` on arrival** 6.8 GB free of 119 G (94 %).
   new: a wipe rehearsal that under-reports what it would destroy, and a quotation caption that
   prints a document-global offset beside a page number as if the two shared a coordinate system.
 - **The gate at exit 0**, twice: base and final, figures in §5.
-- **Elapsed 12:55:52 → 13:2x +05:00, 2026-09-19.** §6.
+- **Elapsed 12:55:52 → 13:28:30 +05:00, 2026-09-19 — 32 min 38 s.** §8.
 
 | # | Criterion | Verdict |
 |---|---|---|
@@ -681,8 +681,15 @@ GATE_BASE_EXIT=0
 `contracts/` and no `infra/` change, so the figures must not move, and they do not:
 
 ```
-GATE_FINAL_EXIT=0        (figures in the same shape; /root/w21cert-logs/gate-final.log)
+1806 passed, 5 skipped, 1 warning, 168 subtests passed in 213.98s   (battery)
+35 passed in 28.47s                                                 (foundation)
+Test Files  47 passed (47)   Tests  681 passed (681)                (frontend)
+GATE OK: battery, foundation, frontend and whitespace all pass
+GATE_FINAL_EXIT=0
 ```
+
+**Unmoved from the base, figure for figure.** Run on `623bfa6`, the certification record's own
+commit; the only later commit on this branch is this one, which fills these figures in.
 
 `/root/w21cert-logs/gate-base.log`, `/root/w21cert-logs/gate-final.log`.
 
@@ -738,8 +745,8 @@ and the criteria block carries all ten verdicts verbatim.
 
 ## 8. Elapsed, and what is left running
 
-**Measured, not estimated.** Arrival 2026-09-19T12:55:52+05:00; this document complete at the
-timestamp in the record. Roughly: 12 minutes to read the tree and the five prior reviews, 4 to
+**Measured, not estimated.** Arrival 2026-09-19T12:55:52+05:00, `date -Is`; the final gate's
+exit read at 13:28:30 (`stat` on the gate log). **32 min 38 s.** Roughly: 12 minutes to read the tree and the five prior reviews, 4 to
 provision, 4 to the base gate (running while I read), 10 to the live origin and criteria 1–7,
 6 to criteria 8 and 9, 14 to criterion 10 including the harness I had to rebuild, and the rest
 to this document and the final gate.

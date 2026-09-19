@@ -62,11 +62,41 @@
     "9_five_typed_refusals_through_http_and_a_provider_outage_that_fails_the_run": {
       "verdict": "holds",
       "refusals": [
-        {"fixture": "not_a_pdf.txt", "status": 422, "error_code": "validation_failed", "field": "content", "constraint": "pdf_magic_bytes"},
-        {"fixture": "encrypted.pdf", "status": 422, "error_code": "validation_failed", "field": "content", "constraint": "not_encrypted"},
-        {"fixture": "image_only.pdf", "status": 422, "error_code": "validation_failed", "field": "page_text", "constraint": "every_page_has_extractable_text"},
-        {"fixture": "too_many_pages.pdf", "status": 422, "error_code": "validation_failed", "field": "page_count", "constraint": "1 <= page_count <= 30"},
-        {"fixture": "oversize.pdf", "status": 422, "error_code": "validation_failed", "field": "file", "constraint": "max_bytes"}
+        {
+          "fixture": "not_a_pdf.txt",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "content",
+          "constraint": "pdf_magic_bytes"
+        },
+        {
+          "fixture": "encrypted.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "content",
+          "constraint": "not_encrypted"
+        },
+        {
+          "fixture": "image_only.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "page_text",
+          "constraint": "every_page_has_extractable_text"
+        },
+        {
+          "fixture": "too_many_pages.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "page_count",
+          "constraint": "1 <= page_count <= 30"
+        },
+        {
+          "fixture": "oversize.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "file",
+          "constraint": "max_bytes"
+        }
       ],
       "refusals_note": "Five distinct constraints out of five. None is a 500 and none left a version behind: listDocuments on that project answers items: 0 afterwards. Driven through the public origin with curl, which is the instrument the criterion names - it says 'through HTTP', not 'in a browser', and the client-side pre-check would refuse these files before a browser file input could send them.",
       "provider_outage": "The API process restarted with PROXY_LLM_BASE_URL pointing at a dead port - a real unreachable provider, not a stub - and a run started from the browser. UI badge running -> failed. state failed, terminal_reason dependency_unavailable, degradation_set [text_analysis], published_finding_count 0, the three deterministic stages still truthfully succeeded, text_analysis failed with error_code dependency_unavailable after 10.0s. The screen reads 'The run terminated failed. Nothing was published.'"
@@ -82,9 +112,34 @@
     }
   },
   "live_runs": [
-    {"run_id": "run_01M2WB60WZSQP64G5C1YE208MY", "provider_mode": "live", "state": "published", "findings": 3, "cost_micros": 38325, "cost_basis": "measured", "model_call_count": 1, "note": "spent because the first state sampler was wrong; see the review section 3"},
-    {"run_id": "run_01M2WB7T1HJ0RWJSYY1AEX4XTR", "provider_mode": "live", "state": "published", "findings": 3, "cost_micros": 38775, "cost_basis": "measured", "model_call_count": 1, "note": "the certified journey"},
-    {"run_id": "run_01M2WBBKZVX03AJDHG25QHFXE5", "provider_mode": "live", "state": "failed", "terminal_reason": "dependency_unavailable", "findings": 0, "note": "criterion 9's induced provider outage; the provider was unreachable so nothing was spent"}
+    {
+      "run_id": "run_01M2WB60WZSQP64G5C1YE208MY",
+      "provider_mode": "live",
+      "state": "published",
+      "findings": 3,
+      "cost_micros": 38325,
+      "cost_basis": "measured",
+      "model_call_count": 1,
+      "note": "spent because the first state sampler was wrong; see the review section 3"
+    },
+    {
+      "run_id": "run_01M2WB7T1HJ0RWJSYY1AEX4XTR",
+      "provider_mode": "live",
+      "state": "published",
+      "findings": 3,
+      "cost_micros": 38775,
+      "cost_basis": "measured",
+      "model_call_count": 1,
+      "note": "the certified journey"
+    },
+    {
+      "run_id": "run_01M2WBBKZVX03AJDHG25QHFXE5",
+      "provider_mode": "live",
+      "state": "failed",
+      "terminal_reason": "dependency_unavailable",
+      "findings": 0,
+      "note": "criterion 9's induced provider outage; the provider was unreachable so nothing was spent"
+    }
   ],
   "measured_spend_usd": 0.0771,
   "ceiling_usd": 1.0,
@@ -102,13 +157,14 @@
       "note": "identical, figure for figure, to the numbers the dispatch carries"
     },
     "final": {
-      "commit": "the commit of this record",
-      "battery": "PENDING",
-      "foundation": "PENDING",
-      "frontend": "PENDING",
-      "result": "PENDING",
-      "exit": null,
-      "note": "This session adds no test and touches no src/, web/, contracts/, infra/, tests/ or Makefile file, so the figures must not move. Filled in by the one commit after this record, which is the only later commit on this branch."
+      "commit": "623bfa6 -- the record's own commit; the only later commit on this branch is the one that fills these figures in",
+      "battery": "1806 passed, 5 skipped, 1 warning, 168 subtests passed in 213.98s",
+      "foundation": "35 passed in 28.47s",
+      "frontend": "681 passed across 47 files",
+      "whitespace": "clean",
+      "result": "GATE OK: battery, foundation, frontend and whitespace all pass",
+      "exit": 0,
+      "note": "Unmoved from the base, figure for figure, which is the shape a session that adds no test and touches no src/, web/, contracts/, infra/, tests/ or Makefile file must have."
     }
   },
   "limits": {
@@ -123,10 +179,30 @@
     "written_to_the_register": false,
     "why_not": "DEBT_REGISTER.md is the integrator's file and two sessions writing it is how a row gets closed twice. The four rows are proposed in docs/program/reviews/W21-CERT.md section 4, each with its own check command and the commit it was measured at.",
     "rows": [
-      {"id": "W21CERT-1", "tree": "infra/deploy/reset.sh", "summary": "--dry-run under-reports what the wipe would destroy: n_live_tup estimates printed as row counts", "measured_at": "0f9989a"},
-      {"id": "W21CERT-2", "tree": "web/src/entities/finding-observation/model/quotation.ts:53", "summary": "a document-global character offset printed beside a page number as if page-local", "measured_at": "0f9989a"},
-      {"id": "W21CERT-3", "tree": "infra/deploy/proxy/nginx.conf:37", "summary": "the timeout's stated reason stopped being true at W20-EXEC; reported there, still present", "measured_at": "0f9989a"},
-      {"id": "W21CERT-4", "tree": "web/src/app/bff/v1/[...path]/route.ts:16", "summary": "still says twelve paths; the thirty-seventh stale count, the one 636b850 named and left", "measured_at": "0f9989a"}
+      {
+        "id": "W21CERT-1",
+        "tree": "infra/deploy/reset.sh",
+        "summary": "--dry-run under-reports what the wipe would destroy: n_live_tup estimates printed as row counts",
+        "measured_at": "0f9989a"
+      },
+      {
+        "id": "W21CERT-2",
+        "tree": "web/src/entities/finding-observation/model/quotation.ts:53",
+        "summary": "a document-global character offset printed beside a page number as if page-local",
+        "measured_at": "0f9989a"
+      },
+      {
+        "id": "W21CERT-3",
+        "tree": "infra/deploy/proxy/nginx.conf:37",
+        "summary": "the timeout's stated reason stopped being true at W20-EXEC; reported there, still present",
+        "measured_at": "0f9989a"
+      },
+      {
+        "id": "W21CERT-4",
+        "tree": "web/src/app/bff/v1/[...path]/route.ts:16",
+        "summary": "still says twelve paths; the thirty-seventh stale count, the one 636b850 named and left",
+        "measured_at": "0f9989a"
+      }
     ]
   },
   "false_premises_in_the_dispatch_brief": [
@@ -143,5 +219,11 @@
     "harnesses": "/root/w21cert-drive/ - journey.mjs, cold.mjs, evidence.mjs, conformance_over_http.py, census.sh. All outside the worktree, none committed, for W12-WEB's reason. The browser is the chromium-1234 already on this host, driven by the playwright-core at /root/w15run-browser; no repository dependency was added and git status --porcelain stayed empty.",
     "browser_credential": "85+ requests across the journey, 0 carrying an Authorization header, one origin touched."
   },
-  "verdict": "PA-01 is not certifiable as a whole at 0f9989a, and the reason is not the software. Eight criteria were driven to a verdict and none of them failed; criteria 1 and 2 have nothing to drive because there is no deploy script, no host, no certificate and no DNS name, and ALPHA_ROADMAP.md section 9 still lists those as owed by the owner. The application that exists behind that gap does what the checkpoint asks of it, including the two things the programme had most reason to doubt: a client can now watch a run go from running to published, and a wiped instance restored from its own dump accepts the next upload of its own bytes."
+  "verdict": "PA-01 is not certifiable as a whole at 0f9989a, and the reason is not the software. Eight criteria were driven to a verdict and none of them failed; criteria 1 and 2 have nothing to drive because there is no deploy script, no host, no certificate and no DNS name, and ALPHA_ROADMAP.md section 9 still lists those as owed by the owner. The application that exists behind that gap does what the checkpoint asks of it, including the two things the programme had most reason to doubt: a client can now watch a run go from running to published, and a wiped instance restored from its own dump accepts the next upload of its own bytes.",
+  "elapsed": {
+    "arrived": "2026-09-19T12:55:52+05:00",
+    "final_gate_exit_read": "2026-09-19T13:28:30+05:00",
+    "measured": "32 min 38 s",
+    "method": "date -Is on arrival; stat on the final gate log. Measured, not estimated."
+  }
 }
