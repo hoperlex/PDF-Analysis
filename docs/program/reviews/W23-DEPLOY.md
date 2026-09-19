@@ -402,6 +402,12 @@ would mean rebuilding an instance I do not own with `web/` changes I may not tou
 | Clean-clone deploy | 105 s, 0 cached build steps, exit 0 |
 | Second run on the same clone | 16 s, every step `CACHED`, exit 0 |
 | Refusal suite | 39 passed |
+| **Gate**, instance `gate-w23a`, ports 55920/59520/59521 | **exit 0**, taken from `$?` and never through a pipe |
+| — battery | **1904 passed, 5 skipped, 168 subtests**, 249 s |
+| — foundation | **35 passed** |
+| — frontend | **706 passed, 48 files** |
+| Gate delta against the base (1865 / 5 / 168, 35, 706-in-48) | **+39 battery** — exactly this session's new cases; every other figure unchanged |
+| Gate elapsed | 21:42:57 → 21:48:01, 5 min 4 s including `make up` |
 
 Every stack this session created was torn down with `down --volumes`, and both instance
 images were removed. No `w23deploy` container, volume, network or image remains.
