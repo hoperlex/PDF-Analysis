@@ -30,11 +30,34 @@
 #      published port answer, and does the document the process serves conform to the
 #      frozen contract.
 #
-# IT IS IDEMPOTENT BECAUSE EVERY STEP IS, not because it checks whether it has run before.
-# `compose build` rebuilds nothing whose context is unchanged, `compose up -d` recreates
-# nothing whose configuration is unchanged, and all six questions in step 4 are reads. A
-# second run therefore prints the same thing and changes nothing; there is no "already
-# deployed" branch, because a branch like that is a thing that can be wrong.
+# WHAT A SECOND RUN DOES, MEASURED RATHER THAN CLAIMED. This comment said "a second run
+# changes nothing" until it was run twice from a clean clone, and that was false. What is
+# actually true, from the drive recorded in `docs/program/reviews/W23-DEPLOY.md`:
+#
+#   * **no layer is rebuilt.** Every step of both images reports `CACHED`;
+#   * **no data is touched.** `postgres`, `s3` and `proxy` report `Running` and keep their
+#     container IDs; both named volumes keep the creation timestamp of the first run;
+#   * **`api`, `web` and `migrate` ARE recreated**, and the reason is not this script.
+#     BuildKit writes a fresh `created` timestamp into the image config even when every
+#     layer is cached, so a fully cached `compose build` still yields a NEW image ID --
+#     two consecutive builds of an untouched tree gave `df1242a7...` and `3be02972...` --
+#     and `compose up -d` recreates a service whose image id moved. `SOURCE_DATE_EPOCH`
+#     was tried and does not fix it on this compose/BuildKit.
+#
+# So a second run is SAFE and it is not a no-op: it costs the three stateless containers a
+# restart and the stack a few seconds of the proxy pointing at replaced upstreams, which is
+# why `reload-proxy.sh` runs unconditionally below rather than only after a real rebuild.
+# `migrate` re-running is a no-op by construction -- `alembic upgrade head` against a
+# database already at head applies nothing, and `migrations-at-head` proves it afterwards.
+#
+# THE ROADMAP'S "run it twice and the second changes nothing" IS THEREFORE NOT YET TRUE,
+# and it is recorded as not-yet-true rather than worked around. Making it true means
+# keeping the image IDENTITY when the build produced identical content, and that is a
+# mechanism with its own failure modes; it is not smuggled in at the end of a session.
+#
+# What this script does NOT have is an "already deployed" branch. Every step is safe to
+# repeat, and a branch that decided whether to repeat it would be a thing that can be
+# wrong about a stack it did not look at.
 #
 # GUARDS ARE DELIMITED BY MARKERS -- `# >>> guard: <name>` / `# <<< guard: <name>`.
 # `tests/integration/composition/test_deploy_script_refusals.py` reads those markers,
@@ -510,5 +533,7 @@ echo
 
 echo "deploy.sh: $INSTANCE is up at http://127.0.0.1:$HTTP_PORT"
 echo "deploy.sh: every service healthy, the database at head, the served schema conforming."
-echo "deploy.sh: run it again and it will change nothing. Then ask the other question --"
+echo "deploy.sh: running it again is safe -- no layer rebuilds and no data is touched,"
+echo "deploy.sh: but api, web and migrate are recreated. See the note at the top."
+echo "deploy.sh: then ask the other question --"
 echo "  infra/deploy/verify-deployed.sh --env-file $ENV_FILE"
