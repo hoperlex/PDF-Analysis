@@ -138,22 +138,31 @@ describe('a stated anchor that disagrees with its quotation is reported, not ass
 describe('the anchor label states the page, the range, and which convention the range uses', () => {
   /**
    * `D-25`. The offsets are document-global (`Evidence` in the frozen contract), and the
-   * defect was that the caption did not say so: beside the words "page 2", `chars 707-746`
-   * reads as an offset into page 2. `W21-CERT` measured the real case — page 2 of that
-   * document is 539 characters and the quotation sits at page-local 198-237 — so a reader
-   * following the old caption looked 707 characters into a 539-character page.
+   * defect was that the caption did not say so: beside the words "page 2", `chars 712-746`
+   * reads as an offset into page 2.
    *
-   * Every assertion below is written against that reader, not against the string: the
-   * whole label, the convention clause, the page named twice, and the refusal to print a
-   * page-local number anywhere.
+   * `REAL_CASE` is not invented. It is the first quotation of
+   * `run_01M2TB4QP6B784MQ7NN1TFFP79`, read back from the running alpha stack by `W22-WEB`
+   * and rendered in a cold browser as:
+   *
+   *     page 2, characters 712–746 of the whole document, not of page 2
+   *
+   * `W21-CERT` measured page 2 of that document at 539 characters. That figure comes from
+   * the prepared text layer, which is not reachable from the browser, so it is cited and
+   * not re-measured here — and the point does not depend on it being exact: 712 is past
+   * the end of a 539-character page either way.
+   *
+   * Every assertion below is written against the reader who checks the citation by hand,
+   * not against the string: the whole label, the convention clause, the page named twice,
+   * and the refusal to print a page-local number anywhere.
    */
-  const REAL_CASE = item({ quote: 'x', page_number: 2, char_start: 707, char_end: 746 });
+  const REAL_CASE = item({ quote: 'x', page_number: 2, char_start: 712, char_end: 746 });
 
   it('is exactly this string, for the case D-25 was found on', () => {
     // The full label, pinned. U+2013 EN DASH is an escape on purpose: a change to a hyphen
     // is a change to what the reviewer reads and should not pass unnoticed.
     expect(anchorLabel(REAL_CASE)).toBe(
-      'page 2, characters 707–746 of the whole document, not of page 2',
+      'page 2, characters 712–746 of the whole document, not of page 2',
     );
   });
 
@@ -172,12 +181,13 @@ describe('the anchor label states the page, the range, and which convention the 
   });
 
   it('never prints the page-local offsets, which the browser cannot compute anyway', () => {
-    // 198 and 237 are this quotation's page-local offsets. The browser holds neither the
-    // prepared text layer nor the page's start in it, so a caption showing them could only
-    // have guessed. Asserted because "convert it" is the obvious wrong repair.
+    // A page-local offset is char_start minus the page's own start in the prepared text
+    // layer. The browser holds neither, so a caption showing one could only have guessed.
+    // Asserted because "just convert it" is the obvious wrong repair: any page-local
+    // rendering of this anchor is a number strictly below char_start, and none appears.
     const label = anchorLabel(REAL_CASE);
-    expect(label).not.toContain('198');
-    expect(label).not.toContain('237');
+    const printed = [...label.matchAll(/\d+/g)].map((m) => Number(m[0]));
+    expect(printed).toEqual([2, 712, 746, 2]);
   });
 
   it('uses the server page number unchanged', () => {

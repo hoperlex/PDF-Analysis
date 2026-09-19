@@ -95,20 +95,20 @@ describe('each quotation is shown with the anchor it was verified at', () => {
    */
   it('the rendered anchor says the range is the document\u2019s, not the page\u2019s', () => {
     const markup = viewer(
-      anchored({ quote: 'thirty days', page_number: 2, char_start: 707 }),
+      anchored({ quote: 'thirty days', page_number: 2, char_start: 712 }),
       2,
     );
-    expect(markup).toContain('page 2, characters 707\u2013718 of the whole document, not of page 2');
+    expect(markup).toContain('page 2, characters 712\u2013723 of the whole document, not of page 2');
   });
 
   it('the rendered anchor never shows a bare \u201Cchars\u201D range with no convention', () => {
     // The exact pre-repair spelling. It is asserted absent rather than merely different,
-    // because "chars 707-746" beside "page 2" is the wrong reading D-25 names.
+    // because "chars 712-746" beside "page 2" is the wrong reading D-25 names.
     const markup = viewer(
-      anchored({ quote: 'thirty days', page_number: 2, char_start: 707 }),
+      anchored({ quote: 'thirty days', page_number: 2, char_start: 712 }),
       2,
     );
-    expect(markup).not.toContain('chars 707');
+    expect(markup).not.toContain('chars 712');
     expect(markup).toContain('of the whole document');
   });
 });

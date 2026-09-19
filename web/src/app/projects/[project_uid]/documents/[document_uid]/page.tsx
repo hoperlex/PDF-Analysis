@@ -1,16 +1,28 @@
 /**
  * `/projects/{project_uid}/documents/{document_uid}` — one document and its versions.
  *
- * Delegation-only, like every route file here: the route decides nothing.
+ * Delegation-only. See the note in `/projects/page.tsx` for why these three routes were
+ * wired by the integrator rather than by the session that wrote the screens.
  *
- * Added by `W19-SHELL` for `D-16`. `web/docs/PC01_UI_SEAM.md` §2 froze four URLs and said
- * "there is no route for a document version"; that sentence is the defect, and the table
- * is amended in the same commit as this file rather than left to contradict the tree.
+ * **The shape of every dynamic segment is checked here, and a malformed one is a 404.**
+ * `D-28`: a dynamic segment matches any string, so before this an unrouted project path
+ * answered **200** and rendered the screen in an error state. The consequence is not
+ * mainly for users — the screen said the right thing — it is that no journey, probe or
+ * monitor reading a status code could tell *"this screen exists and works"* from *"this
+ * screen exists and is reporting a failure"*. `W21-E2E`'s committed journey reads the
+ * rendered body precisely because of that.
  *
- * The parameter names are the contract's path parameter names exactly — `project_uid`,
- * `document_uid` — and nothing in the UI parses either for meaning.
+ * The check is a pure regex over the contract's own pattern, so it costs no request: a
+ * typo in a pasted address is a *malformed URL*, which is a different thing from a
+ * resource the server says does not exist. The second of those still answers 200 and is
+ * still rendered as an error state — see `docs/program/reviews/W22-WEB.md` §3 for why
+ * that half is not fixed here.
  */
 
+import { notFound } from 'next/navigation';
+
+import { looksLikeProjectUid } from '@/entities/project';
+import { looksLikeDocumentUid } from '@/entities/document-version';
 import { DocumentDetailPage } from '@/_pages/document-detail';
 
 export default async function DocumentRoute({
@@ -19,5 +31,6 @@ export default async function DocumentRoute({
   params: Promise<{ project_uid: string; document_uid: string }>;
 }) {
   const { project_uid, document_uid } = await params;
+  if (!looksLikeProjectUid(project_uid) || !looksLikeDocumentUid(document_uid)) notFound();
   return <DocumentDetailPage projectUid={project_uid} documentUid={document_uid} />;
 }

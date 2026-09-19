@@ -54,11 +54,15 @@ export function anchorMatchesQuotation(evidence: Evidence): boolean {
  * **The caption states its own convention, because the numbers are not the ones a reader
  * assumes.** `char_start`/`char_end` index the *document-global* prepared text layer — the
  * frozen `Evidence` schema says so in as many words, and `model/pages` repeats it. The
- * previous caption read `page 2, chars 707-746`, and next to the words "page 2" that range
- * reads as an offset into page 2. `D-25` was found by `W21-CERT` on a real document whose
- * page 2 holds 539 characters: the quotation actually sits at page-local 198-237, so an
- * expert checking the citation by hand counts 707 characters into a 539-character page,
- * finds nothing, and concludes the tool is fabricating a quotation it had exactly right.
+ * previous caption read `page 2, chars 712-746`, and next to the words "page 2" that range
+ * reads as an offset into page 2. `D-25` was found by `W21-CERT` driving criterion 5, and
+ * the anchor above is the live one: `run_01M2TB4QP6B784MQ7NN1TFFP79`, first quotation,
+ * read back from `GET /v1/runs/{run_id}/findings` by `W22-WEB`. `W21-CERT` measured page
+ * 2 of that document at 539 characters, which is a backend figure -- the prepared text
+ * layer is not reachable from here, so this session did not re-measure it. What matters
+ * needs no re-measuring: **712 is past the end of a 539-character page**, so an expert
+ * checking the citation by hand counts 712 characters into a page that has 539, finds
+ * nothing, and concludes the tool is fabricating a quotation it had exactly right.
  * **The data was correct and the caption was wrong, which is the worse half** — a wrong
  * number invites a re-check, a wrong convention invites a wrong conclusion.
  *

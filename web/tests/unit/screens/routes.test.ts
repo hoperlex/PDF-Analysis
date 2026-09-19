@@ -106,6 +106,84 @@ describe('each route delegates to its screen and to no other', () => {
   });
 });
 
+/**
+ * `D-28`. A dynamic segment matches any string, so `/projects/<anything>` resolved to the
+ * project route and answered **200** while rendering an error state. Only an unrouted
+ * *top-level* path 404'd.
+ *
+ * The consequence is not mainly for users — the screen said the right thing. It is that a
+ * journey, a probe or a monitor reading a status code could not tell *"this screen exists
+ * and works"* from *"this screen exists and is reporting a failure"*. `W21-E2E`'s
+ * committed journey reads the rendered body precisely because of this.
+ *
+ * `notFound()` signals the same way `redirect()` does — by throwing, with the answer in
+ * the digest — so these assert on the throw rather than on a rendered element. Measured on
+ * the wire afterwards: `/projects/nonexistent-abc` answers **404** and
+ * `/projects/{a real uid}` still answers **200**.
+ */
+describe('a malformed address is a 404, not a screen reporting a failure', () => {
+  const BAD = 'nonexistent-abc';
+
+  it('a malformed project address 404s instead of rendering the project screen', async () => {
+    // The digest is how Next carries the answer -- `NEXT_HTTP_ERROR_FALLBACK;404` -- and
+    // it is asserted rather than the mere fact of a throw: `redirect()` throws too, and a
+    // route that redirected to /projects instead would still be a 307 to an instrument.
+    await expect(
+      ProjectRoute({ params: Promise.resolve({ project_uid: BAD }) }),
+    ).rejects.toMatchObject({ digest: 'NEXT_HTTP_ERROR_FALLBACK;404' });
+  });
+
+  it('a malformed run address 404s, for both the run screen and the review screen', async () => {
+    for (const route of [RunRoute, ReviewRoute]) {
+      await expect(
+        route({ params: Promise.resolve({ project_uid: A_PROJECT, run_id: BAD }) }),
+      ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
+    }
+  });
+
+  it('a malformed document or version address 404s', async () => {
+    await expect(
+      DocumentRoute({ params: Promise.resolve({ project_uid: A_PROJECT, document_uid: BAD }) }),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
+    await expect(
+      VersionRoute({ params: Promise.resolve({ project_uid: A_PROJECT, version_uid: BAD }) }),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
+  });
+
+  it('a malformed PARENT 404s even when the child segment is well formed', async () => {
+    // The check is on every segment, not only the last one. A route that validated the
+    // run and trusted the project would answer 200 for /projects/nonsense/runs/<real>.
+    await expect(
+      RunRoute({ params: Promise.resolve({ project_uid: BAD, run_id: A_RUN }) }),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
+    await expect(
+      VersionRoute({ params: Promise.resolve({ project_uid: BAD, version_uid: A_VERSION }) }),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
+  });
+
+  it('a well-formed address is NOT a 404 — the guard is not simply always red', async () => {
+    // The other direction, and the reason the delegation tests above still pass: every
+    // working screen must keep answering 200. This is the assertion that would catch a
+    // shape check inverted or tightened past the contract's own pattern.
+    await expect(
+      ProjectRoute({ params: Promise.resolve({ project_uid: A_PROJECT }) }),
+    ).resolves.toBeDefined();
+    await expect(
+      ReviewRoute({ params: Promise.resolve({ project_uid: A_PROJECT, run_id: A_RUN }) }),
+    ).resolves.toBeDefined();
+  });
+
+  it('a well-formed address the server has never heard of is NOT a 404 here', async () => {
+    // Deliberate, and the half of D-28 this session did not close. Answering 404 for a
+    // resource that does not exist needs the server's answer, which needs a server-side
+    // fetch on a screen that fetches on the client. See docs/program/reviews/W22-WEB.md.
+    const ABSENT = 'run_00000000000000000000000000';
+    await expect(
+      RunRoute({ params: Promise.resolve({ project_uid: A_PROJECT, run_id: ABSENT }) }),
+    ).resolves.toBeDefined();
+  });
+});
+
 describe('/ starts the journey at the project list', () => {
   it('redirects rather than rendering a screen of its own', () => {
     // `redirect()` signals by throwing; Next's digest carries the destination.
