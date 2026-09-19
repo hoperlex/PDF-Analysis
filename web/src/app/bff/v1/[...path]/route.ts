@@ -11,13 +11,26 @@
  * nginx change this session does not own. `/bff/v1` falls under `location /` and reaches
  * the Next server through the proxy wave 14 already deployed, unchanged.
  *
- * **Why every operation and not a route per operation.** `T-6` says the same twelve
+ * **Why every operation and not a route per operation.** `T-6` says the same fifteen
  * operations must keep working when the alpha's static token is replaced by a real
  * issuer. A catch-all forwards the contract rather than restating it: the twelve paths,
  * their methods, their idempotency keys and their error envelopes are decided by
  * `contracts/api/v1/openapi.json` and the generated client, and nothing here knows how
  * many operations there are. Swapping the credential later is an edit to
- * `getApiToken()`'s two lines, not to twelve handlers.
+ * `getApiToken()`'s two lines, not to fifteen handlers.
+ *
+ * Those two figures are **fifteen operations across twelve paths**, which is what the
+ * frozen document has declared since `R-5`. This file said twelve of both, and the paths
+ * figure was the one that happened to stay true. It is the fifth stale count in this
+ * programme, so it is no longer corrected by hand:
+ * `tests/contract/api_v1/test_surface_counts_in_prose.py` now reads this tree and takes
+ * both numbers out of `openapi.json` rather than writing either down, so a reseal moves
+ * the expectation by itself.
+ *
+ * That guard refuses a *historical* count here as readily as a stale one -- a first draft
+ * of this paragraph recalled the pre-`R-5` figures and reddened it. That is the right
+ * answer and the sentence is gone rather than registered as an exception: a file that
+ * narrates a surface the document no longer declares is how the fifth of these was made.
  *
  * This file is deliberately thin. The forwarding rules — the two header allowlists, the
  * path-segment check, the verbatim status and body — are in
