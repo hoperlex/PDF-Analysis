@@ -46,6 +46,11 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCANNED_TREES = (
     REPO_ROOT / "src" / "auditmanager" / "api",
     REPO_ROOT / "infra" / "deploy",
+    # `W22-WEB`, the fifth stale count. The BFF route handler forwards the whole surface
+    # and describes its size in a JSDoc block; it is the only place in `web/` that makes
+    # such a claim, and it was outside every tree this guard read. Widening here is the
+    # cheap repair the row asks for: the sixth is caught rather than corrected by hand.
+    REPO_ROOT / "web" / "src" / "app" / "bff",
 )
 API_SOURCE = SCANNED_TREES[0]
 API_CONTRACT = REPO_ROOT / "contracts" / "api" / "v1" / "openapi.json"
@@ -97,6 +102,13 @@ SURFACE_NOUNS: dict[str, str] = {
     "paths": "paths",
     "code": "codes",
     "codes": "codes",
+    # A count of handlers is a count of operations: the BFF's docstring argued for a
+    # catch-all by saying what a route-per-operation would cost, "not to twelve
+    # handlers", and that number is a claim about the surface exactly as "twelve
+    # operations" is. Without this the sentence was invisible to the guard while
+    # carrying the same stale figure.
+    "handler": "operations",
+    "handlers": "operations",
 }
 
 _NUMBER = r"(?:\d{1,3}|" + "|".join(
@@ -104,7 +116,7 @@ _NUMBER = r"(?:\d{1,3}|" + "|".join(
 ) + r")"
 #: ``forty-six schemas``, ``46 schema names``, ``fifteen-operation surface``.
 _CLAIM = re.compile(
-    rf"\b(?P<number>{_NUMBER})[ -](?P<noun>operations?|schemas?|paths?|codes?)\b",
+    rf"\b(?P<number>{_NUMBER})[ -](?P<noun>operations?|schemas?|paths?|codes?|handlers?)\b",
     re.IGNORECASE,
 )
 
@@ -159,7 +171,7 @@ def _api_source_files() -> list[pathlib.Path]:
         for tree in SCANNED_TREES
         for path in tree.rglob("*")
         if path.is_file()
-        and path.suffix in {".py", ".md"}
+        and path.suffix in {".py", ".md", ".ts", ".tsx"}
         and "__pycache__" not in path.parts
     )
 
@@ -177,8 +189,36 @@ def _contract_info_prose() -> str:
     )
 
 
+#: A line break inside a comment, with whatever continuation marker the language uses.
+#: JSDoc and Python both wrap prose across lines and both put the break *between* the
+#: number and its noun as readily as anywhere else.
+_WRAP = re.compile(r"\n[ \t]*(?:\*(?!/)|#)?[ \t]*")
+
+
+def _unwrap(text: str) -> str:
+    """Join wrapped comment lines so a claim split across two of them is still one claim.
+
+    Measured, not guessed. ``web/src/app/bff/v1/[...path]/route.ts`` said:
+
+        * **Why every operation and not a route per operation.** `T-6` says the same twelve
+        * operations must keep working when the alpha's static token is replaced [...]
+
+    The number ended one line and the noun began the next, behind a ``*`` continuation
+    marker, so the pattern matched nothing at all. Widening the scanned trees without this
+    would have added the file and still missed the defect in it -- the guard would have
+    reported the one claim in that docstring that is **correct** ("twelve paths") and
+    stayed silent on the two that are stale. `D-27`'s lesson, one level down: a claim the
+    checker cannot read is not a claim it is checking.
+
+    The replacement is a single space, so an offset into the unwrapped text is not an
+    offset into the file; nothing here reports positions, only phrases.
+    """
+    return _WRAP.sub(" ", text)
+
+
 def _claims(text: str) -> Iterator[tuple[str, str, int]]:
     """Every count-of-a-surface-noun claim in ``text`` that is not registered as local."""
+    text = _unwrap(text)
     for match in _CLAIM.finditer(text):
         phrase = match.group(0).lower().replace("-", " ")
         number, noun = match.group("number").lower(), match.group("noun").lower()
@@ -253,6 +293,30 @@ def test_the_guard_actually_reaches_the_files_that_carried_the_defect() -> None:
     assert found >= 10, f"the claim pattern matched {found} statements; it is not working"
 
 
+def test_the_guard_reaches_the_bff_route_handler() -> None:
+    """`W22-WEB`: the fifth stale count was in a tree this guard did not read.
+
+    Named by path, not by count: the assertion is that this specific file is in the scan,
+    because "some TypeScript file is scanned" would pass over a rename of it.
+    """
+    scanned = {str(path.relative_to(REPO_ROOT)) for path in _api_source_files()}
+    assert "web/src/app/bff/v1/[...path]/route.ts" in scanned, sorted(
+        name for name in scanned if name.startswith("web/")
+    )
+
+
+def test_the_bff_handler_still_makes_a_claim_this_guard_can_read() -> None:
+    """The file is scanned *and* something in it is being checked.
+
+    A handler that stopped describing the surface would make the widening above a scan of
+    prose with no claims in it, which passes while checking nothing -- `D-27`'s shape.
+    """
+    route = REPO_ROOT / "web" / "src" / "app" / "bff" / "v1" / "[...path]" / "route.ts"
+    claims = list(_claims(route.read_text(encoding="utf-8")))
+    nouns = {noun for _, noun, _ in claims}
+    assert "operations" in nouns and "paths" in nouns, claims
+
+
 # ---------------------------------------------------------------------------
 # The guard, shown able to fail
 # ---------------------------------------------------------------------------
@@ -269,6 +333,11 @@ def test_the_guard_actually_reaches_the_files_that_carried_the_defect() -> None:
         # is the current count, so it would assert a claim that has become true. `R-8`
         # would have made it stale again and was reverted by the owner -- see `D-18`.
         ("its error_code drawn from the twenty-code catalog", "codes"),
+        # `W22-WEB`: the two spellings that were invisible before the widening.
+        # A claim wrapped across a JSDoc continuation line, exactly as route.ts had it.
+        ("`T-6` says the same twelve\n * operations must keep working", "operations"),
+        # A count of handlers is a count of operations.
+        ("not to twelve handlers.", "operations"),
     ],
 )
 def test_a_stale_count_is_caught(prose: str, noun: str) -> None:
@@ -298,6 +367,50 @@ def test_a_current_count_is_not_caught() -> None:
         ("paths", counts["paths"]),
         ("schemas", counts["schemas"]),
     ]
+
+
+def test_a_claim_wrapped_across_a_comment_line_is_still_one_claim() -> None:
+    """`W22-WEB`. The gap that made the fifth stale count invisible, shown closed.
+
+    Before ``_unwrap`` the pattern matched *nothing* in the text below, so widening the
+    scan to `web/` would have added the file and reported only the one figure in it that
+    was correct. Both marker styles are covered: JSDoc's ``*`` and Python's ``#``.
+    """
+    counts = _surface_counts()
+    for wrapped in (
+        "says the same twelve\n * operations must keep working",
+        "says the same twelve\n# operations must keep working",
+        "says the same twelve\n    operations must keep working",
+    ):
+        assert not list(_CLAIM.finditer(wrapped)), "the raw text should not match"
+        claims = list(_claims(wrapped))
+        assert claims, f"_unwrap did not join {wrapped!r}"
+        assert claims[0][1] == "operations" and claims[0][2] == 12
+        assert claims[0][2] != counts["operations"]
+
+
+def test_unwrapping_does_not_invent_a_claim_across_a_blank_line() -> None:
+    """The other direction: a number ending a paragraph is not joined to the next one.
+
+    A normalizer that collapsed everything would manufacture claims out of unrelated
+    sentences, and a guard that reddens on prose nobody wrote is worse than no guard.
+    """
+    assert not list(_claims("there are twelve.\n\n * Operations are forwarded verbatim."))
+    # A `*/` that closes a comment is not a continuation marker either.
+    assert not list(_claims("the same twelve\n */\nconst operations = 1;"))
+
+
+def test_a_handler_count_is_checked_as_an_operation_count() -> None:
+    """`W22-WEB`. ``handlers`` was not a surface noun, so the claim was not read."""
+    counts = _surface_counts()
+    claims = list(_claims("not to twelve handlers"))
+    assert claims == [("twelve handlers", "operations", 12)]
+    assert 12 != counts["operations"]
+    # And the true figure passes, so this is not simply always red.
+    assert all(
+        value == counts["operations"]
+        for _, _, value in _claims(f"not to {counts['operations']} handlers")
+    )
 
 
 def test_a_registered_local_count_is_not_a_surface_claim() -> None:

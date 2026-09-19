@@ -59,8 +59,6 @@
     "makefile": "none. OD-16 forbids adding a Makefile target for the frontend, so every command is `npm --prefix web run ...`."
   },
   "reserved_scripts": {
-    "test:unit": "Gate B sessions B7 and B8",
-    "e2e:pc01": "the P3-QA-01 lane",
     "csv:verify": "the CSV export lane"
   }
 }

@@ -27,6 +27,8 @@ export {
   stageRows,
 } from './model/run-presentation';
 
+export { looksLikeRunId } from './model/address';
+
 export type { RunFailure, RunFailureKind } from './model/run-failure';
 export { classifyRunFailure } from './model/run-failure';
 

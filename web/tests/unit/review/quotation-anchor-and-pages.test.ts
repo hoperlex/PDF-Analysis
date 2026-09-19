@@ -135,13 +135,59 @@ describe('a stated anchor that disagrees with its quotation is reported, not ass
   });
 });
 
-describe('the anchor label states the page and the character range the server sent', () => {
-  it('is the page number, then both ends of the range, separated by an en dash', () => {
-    // U+2013 EN DASH, pinned as an escape: a change to a hyphen is a change to what the
-    // reviewer reads and should not pass unnoticed.
-    expect(
-      anchorLabel(item({ quote: 'x', page_number: 7, char_start: 1200, char_end: 1232 })),
-    ).toBe('page 7, chars 1200\u20131232');
+describe('the anchor label states the page, the range, and which convention the range uses', () => {
+  /**
+   * `D-25`. The offsets are document-global (`Evidence` in the frozen contract), and the
+   * defect was that the caption did not say so: beside the words "page 2", `chars 712-746`
+   * reads as an offset into page 2.
+   *
+   * `REAL_CASE` is not invented. It is the first quotation of
+   * `run_01M2TB4QP6B784MQ7NN1TFFP79`, read back from the running alpha stack by `W22-WEB`
+   * and rendered in a cold browser as:
+   *
+   *     page 2, characters 712–746 of the whole document, not of page 2
+   *
+   * `W21-CERT` measured page 2 of that document at 539 characters. That figure comes from
+   * the prepared text layer, which is not reachable from the browser, so it is cited and
+   * not re-measured here — and the point does not depend on it being exact: 712 is past
+   * the end of a 539-character page either way.
+   *
+   * Every assertion below is written against the reader who checks the citation by hand,
+   * not against the string: the whole label, the convention clause, the page named twice,
+   * and the refusal to print a page-local number anywhere.
+   */
+  const REAL_CASE = item({ quote: 'x', page_number: 2, char_start: 712, char_end: 746 });
+
+  it('is exactly this string, for the case D-25 was found on', () => {
+    // The full label, pinned. U+2013 EN DASH is an escape on purpose: a change to a hyphen
+    // is a change to what the reviewer reads and should not pass unnoticed.
+    expect(anchorLabel(REAL_CASE)).toBe(
+      'page 2, characters 712–746 of the whole document, not of page 2',
+    );
+  });
+
+  it('names the convention, so the reader needs nothing else to act on the number', () => {
+    // The load-bearing clause. Without it the caption is D-25 again, whatever else it says.
+    expect(anchorLabel(REAL_CASE)).toContain('of the whole document');
+  });
+
+  it('denies the page-local reading explicitly, naming the same page again', () => {
+    // "not of page 2", not "not of the page": the page is named a second time so the
+    // negation cannot be read as referring to some other page.
+    expect(anchorLabel(REAL_CASE)).toContain('not of page 2');
+    const other = item({ quote: 'x', page_number: 11, char_start: 5, char_end: 9 });
+    expect(anchorLabel(other)).toContain('not of page 11');
+    expect(anchorLabel(other)).not.toContain('not of page 2');
+  });
+
+  it('never prints the page-local offsets, which the browser cannot compute anyway', () => {
+    // A page-local offset is char_start minus the page's own start in the prepared text
+    // layer. The browser holds neither, so a caption showing one could only have guessed.
+    // Asserted because "just convert it" is the obvious wrong repair: any page-local
+    // rendering of this anchor is a number strictly below char_start, and none appears.
+    const label = anchorLabel(REAL_CASE);
+    const printed = [...label.matchAll(/\d+/g)].map((m) => Number(m[0]));
+    expect(printed).toEqual([2, 712, 746, 2]);
   });
 
   it('uses the server page number unchanged', () => {
@@ -155,6 +201,19 @@ describe('the anchor label states the page and the character range the server se
     const label = anchorLabel(item({ quote: 'x', page_number: 3, char_start: 40, char_end: 95 }));
     expect(label).toContain('40');
     expect(label).toContain('95');
+  });
+
+  it('states the range in the order the server declares it, start before end', () => {
+    const label = anchorLabel(item({ quote: 'x', page_number: 3, char_start: 40, char_end: 95 }));
+    expect(label.indexOf('40')).toBeLessThan(label.indexOf('95'));
+  });
+
+  it('passes both offsets through unchanged, with no off-by-one adjustment', () => {
+    // A well-meaning "+1 to make it 1-based" is exactly the class of edit this caption
+    // must not acquire: the contract's offsets are what the grounding gate verified.
+    expect(anchorLabel(item({ quote: 'x', page_number: 1, char_start: 0, char_end: 0 }))).toContain(
+      'characters 0–0 ',
+    );
   });
 });
 
