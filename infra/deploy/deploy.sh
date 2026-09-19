@@ -1,0 +1,481 @@
+#!/usr/bin/env bash
+# `PA-01` criterion 1 -- bring this clone up, and refuse to call it deployed until the
+# stack has been asked, one question at a time, whether it actually is.
+#
+#   infra/deploy/deploy.sh [--env-file <path>]
+#
+# `ALPHA_ROADMAP.md` §4 gives this file to `W14-OPS`, a stream that was never dispatched;
+# `W21-CERT.md` §"Criterion 1" records the consequence -- *"there is nothing to run"*. This
+# is the thing to run. What it is NOT is the whole of that roadmap row, and the boundary is
+# named in `README.md` rather than blurred here: **fetch, switch and roll back are not in
+# this script**, because all three are claims about a server that has a previous version on
+# it and `R-1`'s host does not exist. What IS here is everything that is testable on a
+# machine that has never run this stack, which is the clause the criterion is named for.
+#
+# `T-4`: a script and not a `make` target. `OD-16` makes a tenth root target an FF-01
+# freeze-break needing an explicit break record, and nothing here needs one.
+#
+# ORDER, AND WHY IT IS THE ORDER:
+#
+#   1. every guard that can be answered from the clone alone, before docker is touched at
+#      all -- the environment, its secrets, the compose file, and whether this clone even
+#      contains the paths the two Dockerfiles copy;
+#   2. whether the published port belongs to somebody else. A deploy that takes another
+#      instance's port is not idempotent, it is a coup;
+#   3. **build, and only then bring up.** These are two steps on purpose. A build that
+#      fails must leave whatever was serving still serving, and that is a property of the
+#      ORDER rather than of anybody's intention -- see `images-built`;
+#   4. up, reload the proxy, and then ask the running stack four questions it can fail:
+#      is every service healthy, is the database at the head THIS code expects, does the
+#      published port answer, and does the document the process serves conform to the
+#      frozen contract.
+#
+# IT IS IDEMPOTENT BECAUSE EVERY STEP IS, not because it checks whether it has run before.
+# `compose build` rebuilds nothing whose context is unchanged, `compose up -d` recreates
+# nothing whose configuration is unchanged, and all six questions in step 4 are reads. A
+# second run therefore prints the same thing and changes nothing; there is no "already
+# deployed" branch, because a branch like that is a thing that can be wrong.
+#
+# GUARDS ARE DELIMITED BY MARKERS -- `# >>> guard: <name>` / `# <<< guard: <name>`.
+# `tests/integration/composition/test_deploy_script_refusals.py` reads those markers,
+# deletes ONE guard block from a copy of this file and shows that the copy no longer
+# refuses. A message can be printed by a guard that is unreachable; a deletion cannot be
+# faked. Do not remove a marker without removing its test.
+
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$HERE/../.." && pwd)"
+COMPOSE_FILE="$HERE/compose.server.yml"
+ENV_FILE="${ALPHA_ENV_FILE:-$HERE/env/alpha.env}"
+ENV_EXAMPLE="$HERE/env/alpha.env.example"
+#: The gate's own conformance engine, mounted into a one-off container in the last guard.
+#: `reset.sh` mounts `object_attrs.py` the same way and for the same reason: the check has
+#: to run where the frozen contract and a python are, which is the image, not the host.
+CONFORMANCE_ENGINE="$REPO/tests/contract/api_v1/openapi_conformance.py"
+
+#: `refuse()`'s exit status, the same one `reset.sh` uses. One code for every refusal; the
+#: reason is carried by the message, because two guards sharing a code must still be told
+#: apart by the operator and by the suite.
+refuse() {
+    printf 'deploy.sh: REFUSED: %s\n' "$1" >&2
+    shift
+    [ "$#" -eq 0 ] || printf '  %s\n' "$@" >&2
+    exit 3
+}
+
+usage() {
+    cat >&2 <<'USAGE'
+usage: deploy.sh [--env-file <path>]
+
+  --env-file <path>   default: infra/deploy/env/alpha.env
+
+Brings this clone's stack up and refuses to report success until the running stack has
+answered for itself. Run it from anywhere; it locates its own repository.
+USAGE
+    exit 2
+}
+
+# >>> guard: known-options
+# An unrecognised option is refused rather than ignored. This script builds images and
+# starts containers, and an operator who typed `--envfile` and was ignored would watch it
+# deploy against the default environment believing it had used theirs.
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --env-file) ENV_FILE="${2:-}"; shift 2 ;;
+        -h|--help) usage ;;
+        *) refuse "unrecognised option: $1" \
+                  "Nothing was read, nothing was built and nothing was started." \
+                  "Run --help." ;;
+    esac
+done
+# <<< guard: known-options
+
+# >>> guard: env-file-present
+# The environment is the operator's, not the clone's: `env/alpha.env` is git-ignored, so a
+# clean clone does NOT have one and must not be given a default. A deploy that invented an
+# environment would deploy something nobody configured.
+if [ ! -r "$ENV_FILE" ]; then
+    refuse "the deployment environment $ENV_FILE is missing or unreadable." \
+           "A clean clone does not carry one -- env/alpha.env is git-ignored on purpose," \
+           "because it holds this instance's secrets. Write it first:" \
+           "    cp infra/deploy/env/alpha.env.example infra/deploy/env/alpha.env" \
+           "    chmod 600 infra/deploy/env/alpha.env    # then edit EVERY value in it"
+fi
+# <<< guard: env-file-present
+
+# Read the configured instance as DATA. The file is never sourced: same shape, same reason
+# and the same reader as `reset.sh` and `verify-deployed.sh`.
+configured() {
+    sed -n "s/^[[:space:]]*\(export[[:space:]]\+\)\?$1=//p" "$ENV_FILE" | tail -1 \
+        | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
+}
+
+INSTANCE="$(configured ALPHA_INSTANCE)"
+HTTP_PORT="$(configured ALPHA_HTTP_PORT)"
+DATABASE="$(configured POSTGRES_DB)"
+BUCKET="$(configured S3_BUCKET)"
+
+# >>> guard: instance-configured
+# The four names every later step addresses the instance by. `compose.server.yml` would
+# refuse an unset `ALPHA_INSTANCE` itself -- `${ALPHA_INSTANCE:?...}` -- but it would do it
+# after the build, in compose's words, and a half-configured environment is worth one
+# sentence before anything is built rather than a substitution error after it.
+if [ -z "$INSTANCE" ] || [ -z "$HTTP_PORT" ] || [ -z "$DATABASE" ] || [ -z "$BUCKET" ]; then
+    refuse "$ENV_FILE does not configure an instance." \
+           "  ALPHA_INSTANCE : ${INSTANCE:-<unset>}" \
+           "  ALPHA_HTTP_PORT: ${HTTP_PORT:-<unset>}" \
+           "  POSTGRES_DB    : ${DATABASE:-<unset>}" \
+           "  S3_BUCKET      : ${BUCKET:-<unset>}" \
+           "Every name below addresses the instance by these. Nothing was built."
+fi
+# <<< guard: instance-configured
+
+# >>> guard: placeholder-secrets
+# THE EXAMPLE FILE'S OWN VALUES, REFUSED BY IDENTITY RATHER THAN BY PATTERN. `cp` the
+# example and forget to edit it and you get a reachable stack whose database password is in
+# git and whose `AUDITMANAGER_API_TOKEN` is the string the example file itself describes as
+# one that "authorizes nothing" -- and `T-6`'s seam is fail-closed, so that stack answers
+# `authentication_required` to all fifteen operations and looks like a broken product.
+#
+# Compared against `alpha.env.example`'s values rather than grepped for `change-me`: a
+# pattern stops being true the day somebody rewrites the example, and the claim this guard
+# actually wants to make is "you did not edit the file you copied".
+#
+# The example is git-tracked, so a clone has it. If it is unreadable the comparison cannot
+# be made, and an unverifiable secret is not a verified one -- it refuses rather than skips.
+if [ ! -r "$ENV_EXAMPLE" ]; then
+    refuse "$ENV_EXAMPLE is missing, so the shipped placeholder values cannot be recognised." \
+           "This guard's whole job is to tell your secrets apart from the example's."
+fi
+for name in POSTGRES_PASSWORD MINIO_ROOT_PASSWORD MINIO_ROOT_USER AUDITMANAGER_API_TOKEN; do
+    mine="$(configured "$name")"
+    theirs="$(sed -n "s/^[[:space:]]*\(export[[:space:]]\+\)\?$name=//p" "$ENV_EXAMPLE" \
+        | tail -1 | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/")"
+    if [ -n "$theirs" ] && [ "$mine" = "$theirs" ]; then
+        refuse "$name is still the value shipped in alpha.env.example." \
+               "  $name = $mine" \
+               "That value is published in this repository. It is a placeholder, not a" \
+               "secret, and alpha.env.example says so beside it. Nothing was built." \
+               "Generate the token with:" \
+               "    python3 -c 'import secrets; print(secrets.token_urlsafe(32))'"
+    fi
+done
+# <<< guard: placeholder-secrets
+
+# >>> guard: compose-file-present
+if [ ! -r "$COMPOSE_FILE" ]; then
+    refuse "$COMPOSE_FILE is missing." \
+           "Every step below runs through it. Without it this script has no stack to" \
+           "build, no instance to start and nothing it is allowed to reach."
+fi
+# <<< guard: compose-file-present
+
+# >>> guard: build-context-complete
+# THE CLEAN-CLONE GUARD, AND IT IS THE ONE THIS SCRIPT EXISTS FOR. "Brings the stack up
+# from a clean clone" fails in exactly one interesting way: the clone is not the tree the
+# Dockerfiles were written against, and the build discovers it three minutes in with a
+# `COPY failed: stat ...: no such file or directory` naming a path halfway through a layer.
+#
+# The paths are read OUT OF THE DOCKERFILES' OWN BYTES -- the idiom `verify-deployed.sh`
+# already uses, which is itself the idiom `Dockerfile.api` uses on the Makefile's
+# `UV_VERSION`. A path newly copied by a Dockerfile is therefore checked without anybody
+# remembering to add it here, and this guard cannot drift from what the build needs.
+#
+# `COPY --from=<stage>` lines are skipped: their source is an earlier stage, not this
+# repository. Everything else is `COPY <src>... <dst>`, so every field but the last is a
+# host path relative to the build context, which `compose.server.yml` sets to the
+# repository root for both images.
+CONTEXT_PATHS="$(
+    awk 'tolower($1) == "copy" && $2 !~ /^--/ {
+             for (i = 2; i < NF; i++) print $i
+         }' "$HERE/Dockerfile.api" "$HERE/Dockerfile.web" | LC_ALL=C sort -u
+)"
+# A parse that found nothing must not read as a complete clone. `src/` is named rather than
+# counted: a threshold is a number to argue with, and the one path this guard may never be
+# blind to is the application's own source.
+if ! printf '%s\n' "$CONTEXT_PATHS" | grep -qx 'src/'; then
+    refuse "the Dockerfiles' COPY lines could not be read, so this clone was not checked." \
+           "This guard derives what it needs from those lines; a parse that found nothing" \
+           "would otherwise report a complete clone. Fix the parse, do not trust it."
+fi
+MISSING=""
+while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    [ -e "$REPO/${path%/}" ] || MISSING="$MISSING $path"
+done <<<"$CONTEXT_PATHS"
+if [ -n "$MISSING" ]; then
+    refuse "this clone is missing paths the two Dockerfiles copy into the images." \
+           "  repository: $REPO" \
+           "  missing   :$MISSING" \
+           "Nothing was built. A partial clone, a sparse checkout or a tarball of part of" \
+           "this tree fails here in one sentence instead of inside a build layer."
+fi
+# <<< guard: build-context-complete
+
+compose() { docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"; }
+
+echo "deploy.sh: instance   $INSTANCE"
+echo "deploy.sh: repository $REPO"
+echo "deploy.sh: port       $HTTP_PORT"
+echo "deploy.sh: database   $DATABASE"
+echo "deploy.sh: bucket     $BUCKET"
+echo
+
+# >>> guard: port-not-foreign
+# `ALPHA_HTTP_PORT` is the one published port, and on a host that already runs an instance
+# it is the one thing two instances can collide on. If something is already listening there
+# and it is NOT this instance's proxy, the choices are to take the port or to stop, and
+# taking it means an unrelated stack stops answering while this one reports success.
+#
+# `docker compose up` would fail on the bind anyway -- but only after the build, and with a
+# message about a port allocation rather than about the other stack. This is cheaper and it
+# is the true sentence.
+#
+# THE OWN-PROXY CASE IS THE IDEMPOTENT ONE and it is why this is not simply "the port must
+# be free": on a second run the port is held by this instance's own proxy, and that must be
+# allowed or the script could never be run twice.
+OWN_PROXY="$(compose ps --quiet proxy 2>/dev/null | head -1 || true)"
+PORT_HELD=no
+# bash's own /dev/tcp rather than `ss`, `lsof` or `netstat`: none of the three is on a slim
+# host by default, and a guard that needs a tool the target may not have is a guard that
+# silently does not run there.
+if (exec 3<>"/dev/tcp/127.0.0.1/$HTTP_PORT") 2>/dev/null; then
+    PORT_HELD=yes
+fi
+if [ "$PORT_HELD" = yes ] && [ -z "$OWN_PROXY" ]; then
+    refuse "port $HTTP_PORT is already in use, and not by $INSTANCE." \
+           "  something answers on 127.0.0.1:$HTTP_PORT" \
+           "  this instance has no proxy container, so it is not ours" \
+           "Nothing was built and nothing was started. Deploying here would either fail on" \
+           "the bind or take the port from whatever is serving on it. Change" \
+           "ALPHA_HTTP_PORT in $ENV_FILE, or stop the other stack on purpose."
+fi
+# <<< guard: port-not-foreign
+
+# --- 1. build, and ONLY then bring up ------------------------------------------------
+echo "-- building the images --"
+BUILD_STATUS=0
+compose build || BUILD_STATUS=$?
+
+# >>> guard: images-built
+# THE TWO STEPS ARE THE ROLLBACK, as far as one exists without a server to switch on.
+# `compose up -d --build` is one command and would have been shorter; it is deliberately
+# not used, because the property worth having is an ORDER: nothing that is serving is
+# replaced until the images that would replace it exist. A build that fails therefore
+# leaves the previous containers running and answering, and that is true of the FIRST
+# failure as well as the hundredth, without a saved image tag or a restore path -- neither
+# of which could be shown to work here, because both are claims about a host that has a
+# previous version on it (`R-1`).
+#
+# The status is not the whole check. A build can exit 0 and leave no image -- a `compose
+# build` naming no services on a file whose services are all `image:`-only does exactly
+# that -- so the images are asked for by name afterwards. `run_checked` in the Makefile
+# makes the same argument about sentinels, and it is the same defect: a zero that means
+# nothing happened.
+if [ "$BUILD_STATUS" -ne 0 ]; then
+    refuse "the image build failed (status $BUILD_STATUS)." \
+           "NOTHING WAS STARTED, REPLACED OR STOPPED. Whatever was serving this instance" \
+           "before this run is still serving it, because images are built before anything" \
+           "is brought up and this run never got past the build."
+fi
+for image in "$INSTANCE-api" "$INSTANCE-web"; do
+    if ! docker image inspect "$image" >/dev/null 2>&1; then
+        refuse "the build reported success and there is no image called $image." \
+               "  expected: $INSTANCE-api and $INSTANCE-web" \
+               "NOTHING WAS STARTED OR REPLACED. A zero exit that built nothing is the" \
+               "one build failure that would otherwise reach the containers."
+    fi
+done
+echo "  $INSTANCE-api and $INSTANCE-web are built"
+echo
+# <<< guard: images-built
+
+# --- 2. up. `migrate` runs once here and `api` waits for it --------------------------
+# Migrations are a deploy step and never something a serving process does on start: two
+# replicas starting together would race the same upgrade. `compose.server.yml` says so and
+# expresses it as `depends_on: migrate: service_completed_successfully`.
+# `up -d` already blocks on the `depends_on` conditions this file declares -- postgres and
+# s3 healthy, s3-init and migrate completed successfully, api and web healthy before the
+# proxy -- so it returns when the stack is up or when it could not be. Its status is
+# printed and NOT acted on: `services-healthy` below is the authority on what is running,
+# and a second opinion here would be a place for the two to disagree.
+echo "-- bringing the stack up --"
+UP_STATUS=0
+compose up -d || UP_STATUS=$?
+[ "$UP_STATUS" -eq 0 ] || echo "deploy.sh: \`compose up -d\` exited $UP_STATUS; the guards below decide."
+echo
+
+# The step after a rebuild that everyone forgets. nginx resolves an upstream once, at
+# worker start-up, and a replaced api or web container that lands on a different address
+# leaves every path through the proxy answering 502 while both new containers are healthy.
+# It is INTERMITTENT -- a replacement usually gets its old address back -- so "the last
+# deploy was fine" is not evidence about this one. `reload-proxy.sh` is its own script and
+# is reused here rather than copied.
+echo "-- reloading the proxy --"
+"$HERE/reload-proxy.sh" --env-file "$ENV_FILE"
+echo
+
+# --- 3. now ask the running stack, and let it fail -----------------------------------
+
+# >>> guard: services-healthy
+# Every long-running service, by name, in the state compose knows it to be in. `up --wait`
+# already waits on the health checks -- this is not a second copy of that, it is the claim
+# that all five containers are still there afterwards, which `--wait` does not say: a
+# container that became healthy and then exited satisfied `--wait` on its way past.
+#
+# `proxy` has no health check of its own and is expected to report `running` with no health
+# state; that is written down rather than special-cased silently, because a proxy that
+# quietly grew a health check should show up here as a question, not as a pass.
+for service in postgres s3 api web proxy; do
+    cid="$(compose ps --quiet "$service" 2>/dev/null | head -1 || true)"
+    if [ -z "$cid" ]; then
+        refuse "the '$service' service of $INSTANCE has no container." \
+               "The stack was brought up and this one is not there. Nothing about this" \
+               "deployment is claimed."
+    fi
+    state="$(docker inspect --format \
+        '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+        "$cid" 2>/dev/null || true)"
+    [ -n "$state" ] || state="unknown/unknown"
+    case "$state" in
+        running/healthy|running/none) printf '  %-9s %s\n' "$service" "$state" ;;
+        *) refuse "the '$service' service of $INSTANCE is $state." \
+                  "  container: $cid" \
+                  "Expected running/healthy, or running/none for the proxy, which has no" \
+                  "health check. Logs:  docker compose logs $service" ;;
+    esac
+done
+echo
+# <<< guard: services-healthy
+
+echo "-- the database is at the head this code expects --"
+CHECK_OUTPUT="$(compose run --rm --no-deps -T --entrypoint python api \
+    -m auditmanager.shared.db.check 2>&1 || true)"
+printf '%s\n' "$CHECK_OUTPUT" | sed 's/^/  /'
+# >>> guard: migrations-at-head
+# THE DATABASE HALF, ASKED BY THE APPLICATION'S OWN CHECK, INSIDE THE APPLICATION'S OWN
+# IMAGE. `auditmanager.shared.db.check` is what `make check-db` runs; running it here
+# rather than re-implementing it is the difference between asking whether the deployed
+# database is at the head THIS code expects and asserting that some migration command
+# exited 0. The image carries `/app/db/`, so the head it compares against is the one the
+# migration scripts in the image declare.
+#
+# THE SENTINEL IS THE EVIDENCE, NOT THE EXIT CODE, and that is the module's own rule --
+# `FOUNDATION-CHECK OK check-db` "must be the last actual output line", printed once, from
+# one place, only after every check has passed. The Makefile's `run_checked` refuses a zero
+# without it for exactly this reason, and a check that silently does nothing must not be
+# able to pass here either.
+if ! printf '%s\n' "$CHECK_OUTPUT" | grep -q '^FOUNDATION-CHECK OK check-db$'; then
+    refuse "the deployed database did not answer the application's own check." \
+           "The stack is up and its schema is not the one this code expects, or could not" \
+           "be read. The full output is above. This is the check \`make check-db\` runs," \
+           "run inside the api image against the deployed database rather than on a host."
+fi
+echo
+# <<< guard: migrations-at-head
+
+echo "-- the published port answers --"
+# The one published port, asked the way a browser would ask. `T-2` puts the API at
+# `/api/v1` and the proxy strips the prefix, so `/api/v1/openapi.json` reaches the
+# application's own root and needs no credential -- `T-3` and the contract's `servers`
+# entry between them are why this particular path is the one to ask for.
+#
+# 502, 503 and 504 are separated from everything else because they are the specific shape
+# of the failure above: nginx holding an upstream that is no longer there. A deploy that
+# ended in a 502 would otherwise be reported as a deploy.
+SERVED="$(mktemp)"
+trap 'rm -f "$SERVED"' EXIT
+# World-readable on purpose: the api image runs as an unprivileged account (uid 10001) and
+# the last guard mounts this file into it. `mktemp` makes it 0600 and owned by whoever ran
+# this, so without this the conformance check would fail on a permission error and read as
+# a non-conforming schema -- a guard reporting the wrong failure is worse than none.
+chmod 644 "$SERVED"
+# `|| true` and not `|| echo 000`: curl PRINTS `000` and ALSO exits non-zero when it cannot
+# connect, so a fallback would run too and the refusal would read "answered 000000".
+PROXY_CODE="$(curl -s -m 30 -o "$SERVED" -w '%{http_code}' \
+    "http://127.0.0.1:$HTTP_PORT/api/v1/openapi.json" || true)"
+[ -n "$PROXY_CODE" ] || PROXY_CODE=000
+# >>> guard: proxy-answers
+if [ "$PROXY_CODE" != 200 ]; then
+    case "$PROXY_CODE" in
+        502|503|504)
+            refuse "the proxy answered $PROXY_CODE on /api/v1/openapi.json." \
+                   "That is nginx holding an upstream that is no longer there. The images" \
+                   "may be perfect and this stack still serves nothing. The reload above" \
+                   "did not fix it; look at:  docker compose logs proxy api" ;;
+        *)
+            refuse "http://127.0.0.1:$HTTP_PORT/api/v1/openapi.json answered $PROXY_CODE, not 200." \
+                   "Every service reported healthy and the one published port does not" \
+                   "serve. Nothing about this deployment is claimed." ;;
+    esac
+fi
+echo "  200 on http://127.0.0.1:$HTTP_PORT/api/v1/openapi.json"
+echo
+# <<< guard: proxy-answers
+
+# >>> guard: schema-conforms
+# `PA-01` CRITERION 1'S SECOND CLAUSE, VERBATIM: *"the schema the running app serves
+# conforms to the frozen `contracts/api/v1/openapi.json` -- the same check the gate runs,
+# re-run against the deployed process rather than against a build artifact"*.
+#
+# THE SAME CHECK, AND THAT IS LOAD-BEARING. `tests/contract/api_v1/openapi_conformance.py`
+# is mounted and its own `surface()` and `differences()` are called. A second comparison
+# written here would be a second authority over the contract, which is the exact objection
+# revision 1 of `ALPHA_ROADMAP.md` raised against FastAPI and which §3 `T-1` answers with
+# "not an assurance but a gate". The engine imports nothing but the standard library, which
+# is what makes mounting it possible; `reset.sh` mounts `object_attrs.py` the same way.
+#
+# IT RUNS IN THE API IMAGE, not on the host: the frozen contract is already there at
+# `/app/contracts/api/v1/openapi.json`, and a deploy host has a python only by luck. The
+# served document has already been fetched by the guard above, through the proxy, so what
+# is compared is what a browser would be served and not what a build artifact contains.
+#
+# WHY THIS IS NOT IN `verify-deployed.sh`: that script compares image bytes to tree bytes
+# and says, in its own header, that the served document is a comparison it deliberately
+# does not make -- because the frozen and generated documents legitimately differ and there
+# is no digest to compare. This is the conformance engine, which is the thing that CAN
+# compare them, and it answers a different question: not "is this stack this tree" but "is
+# what it serves the contract".
+echo "-- the served schema conforms to the frozen contract --"
+if [ ! -r "$CONFORMANCE_ENGINE" ]; then
+    refuse "the gate's conformance engine is not in this clone." \
+           "  expected: $CONFORMANCE_ENGINE" \
+           "The criterion asks for the gate's own check re-run against the deployed" \
+           "process. Without the engine there is no check to re-run, and a deploy that" \
+           "skipped it would report a conformance it never made."
+fi
+CONFORMANCE_DRIVER='
+import json, sys
+sys.path.insert(0, "/engine")
+from openapi_conformance import differences, operation_index, surface
+
+frozen = json.load(open("/app/contracts/api/v1/openapi.json", encoding="utf-8"))
+served = json.load(open("/served.json", encoding="utf-8"))
+report = differences(surface(frozen), surface(served))
+print("frozen ops : %d" % len(operation_index(frozen)))
+print("served ops : %d" % len(operation_index(served)))
+print("differences: %d" % len(report))
+for line in report[:25]:
+    print("  " + line)
+sys.exit(0 if not report else 1)
+'
+CONFORMANCE_STATUS=0
+compose run --rm --no-deps -T \
+    -v "$CONFORMANCE_ENGINE:/engine/openapi_conformance.py:ro" \
+    -v "$SERVED:/served.json:ro" \
+    --entrypoint python api -c "$CONFORMANCE_DRIVER" 2>&1 | sed 's/^/  /' \
+    || CONFORMANCE_STATUS=$?
+if [ "$CONFORMANCE_STATUS" -ne 0 ]; then
+    refuse "the document this stack serves does not conform to the frozen contract." \
+           "The differences are listed above, in the gate's own words. The stack is up and" \
+           "serving; what it serves is not the agreed surface, so no claim about the" \
+           "fifteen operations of this deployment is a claim about PC-01."
+fi
+echo
+# <<< guard: schema-conforms
+
+echo "deploy.sh: $INSTANCE is up at http://127.0.0.1:$HTTP_PORT"
+echo "deploy.sh: every service healthy, the database at head, the served schema conforming."
+echo "deploy.sh: run it again and it will change nothing. Then ask the other question --"
+echo "  infra/deploy/verify-deployed.sh --env-file $ENV_FILE"
