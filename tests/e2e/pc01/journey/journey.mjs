@@ -28,11 +28,19 @@
  * document, version or run id, and it holds no token. `T-6` says the credential lives in
  * the BFF route handler server-side; the journey asserts the browser never presented one.
  *
- * **What it does not do, and why.** It does not create a project, upload a document or
- * start a run -- the write half, which is what `D-5` itself was. Driving those needs a
- * deployed stack this session may write to, and there is none on this host. The step is
- * named in `README.md` rather than written unexecuted, because an untested code path in a
- * test instrument is the same defect as an unrun suite.
+ * **Two phases, one instrument, one exit code.** The *write* half -- create a project,
+ * upload the AR PDF, start a run, wait for the run's terminal -- is `write.mjs`, driven
+ * from the `write` section of the same `manifest.json` and recorded into the same
+ * envelope. `W21-E2E` left it named in `D-30` rather than written unexecuted; `W22-E2E`
+ * built it against a stack it could write to. `--phase read|write|all` selects, and the
+ * default is `all`: a phase that is skipped is printed and recorded as skipped, because a
+ * partial green that does not say so is `D-23` in a different costume.
+ *
+ * **Order: write first, then read.** The read walk discovers every identifier by following
+ * the links the pages render and is handed nothing, so it is not coupled to what the write
+ * half just made -- but running the write half first means the origin has, at minimum, one
+ * project with a document, a version and a published run in it, which is the state the read
+ * walk needs and used to have to assume.
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -40,20 +48,31 @@ import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { withColdBrowser } from './cdp.mjs';
+import { runWritePhase } from './write.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 function parseArgs(argv) {
-  const args = { origin: process.env.E2E_PC01_ORIGIN, manifest: null, out: null };
+  const args = {
+    origin: process.env.E2E_PC01_ORIGIN,
+    manifest: null,
+    out: null,
+    phase: process.env.E2E_PC01_PHASE ?? 'all',
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     if (flag === '--origin') args.origin = argv[++i];
     else if (flag === '--manifest') args.manifest = argv[++i];
     else if (flag === '--out') args.out = argv[++i];
+    else if (flag === '--phase') args.phase = argv[++i];
     else {
       console.error(`e2e:pc01: unknown argument '${flag}'`);
       process.exit(2);
     }
+  }
+  if (!['read', 'write', 'all'].includes(args.phase)) {
+    console.error(`e2e:pc01: --phase must be read, write or all (got '${args.phase}')`);
+    process.exit(2);
   }
   return args;
 }
@@ -116,7 +135,45 @@ function fail(route, message) {
   failures.push(`${route}: ${message}`);
 }
 
-for (const route of manifest.routes) {
+const PHASE = args.phase;
+const REPOSITORY_ROOT = resolve(HERE, '..', '..', '..', '..');
+const STAMP = new Date().toISOString().replace(/[:.]/g, '-');
+
+// ---- the write half ----------------------------------------------------------------
+let write = null;
+if (PHASE === 'read') {
+  console.log('phase: read only -- the write half was NOT run.');
+} else if (manifest.write === undefined) {
+  // A manifest with no write section is a manifest that cannot catch `D-5`. That is a
+  // finding about this journey, not a quiet omission.
+  failures.push(
+    'write: this manifest declares no `write` section, so the journey makes no POST at ' +
+      'all -- which is exactly what D-30 says the read half cannot catch',
+  );
+} else {
+  console.log(`write half: ${manifest.write.steps.length} step(s), fixture ${manifest.write.fixture}\n`);
+  write = await runWritePhase({
+    origin: ORIGIN,
+    manifest,
+    repositoryRoot: REPOSITORY_ROOT,
+    stamp: STAMP,
+  });
+  failures.push(...write.failures);
+  if (write.stopped !== null) {
+    failures.push(
+      `write: the write half stopped at '${write.stopped}'; ` +
+        `${write.records.length} of ${manifest.write.steps.length} step(s) were checked, ` +
+        'and an unfinished write half is not a pass',
+    );
+  }
+  console.log('');
+}
+
+// ---- the read walk -------------------------------------------------------------------
+if (PHASE === 'write') {
+  console.log('phase: write only -- the read walk was NOT run.');
+}
+for (const route of PHASE === 'write' ? [] : manifest.routes) {
   const url = ORIGIN + fill(route.path, captured);
 
   const record = await withColdBrowser(async (page) => {
@@ -287,7 +344,20 @@ writeFileSync(
     {
       origin: ORIGIN,
       manifest: MANIFEST_PATH,
+      phase: PHASE,
       startedAt: new Date().toISOString(),
+      write:
+        write === null
+          ? { ran: false, why: PHASE === 'read' ? 'phase: read' : 'no write section' }
+          : {
+              ran: true,
+              fixture: write.fixture,
+              stepsChecked: write.records.length,
+              stepsDeclared: manifest.write.steps.length,
+              stoppedAt: write.stopped,
+              captured: write.captured,
+              steps: write.records,
+            },
       captured,
       routesChecked: records.length,
       routesDeclared: manifest.routes.length,
@@ -300,9 +370,14 @@ writeFileSync(
 );
 
 console.log(`\nenvelope: ${envelopePath}`);
-console.log(`routes checked: ${records.length}/${manifest.routes.length}`);
+console.log(
+  `write steps checked: ${write === null ? 'not run' : `${write.records.length}/${manifest.write.steps.length}`}`,
+);
+console.log(
+  `routes checked: ${PHASE === 'write' ? 'not run' : `${records.length}/${manifest.routes.length}`}`,
+);
 
-if (records.length < manifest.routes.length) {
+if (PHASE !== 'write' && records.length < manifest.routes.length) {
   failures.push(
     `only ${records.length} of ${manifest.routes.length} routes were reached; ` +
       'an unfinished walk is not a pass',

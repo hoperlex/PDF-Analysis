@@ -1,25 +1,20 @@
 {
   "$comment": [
-    "The PC-01 journey, written down once and read by two checkers.",
+    "A DELIBERATELY WRONG manifest. It exists to prove the write half can go red.",
     "",
-    "At RUN TIME `journey.mjs` walks these routes in order against a deployed origin, each",
-    "in its own cold browser process, and asserts that what the browser actually requested",
-    "matches `expects_api` here.",
+    "Run it and the write half must exit 1 at the FIRST step, with steps checked 1/3 --",
+    "because a write half that goes on after the step it depends on failed is reporting on",
+    "state it never created.",
     "",
-    "At GATE TIME `tests/e2e/test_pc01_journey_conformance.py` reads the same file with no",
-    "browser, no origin and no running stack, and asserts that every `page_module` exists,",
-    "that every screen in `web/src/app` is covered by exactly one route here, that the",
-    "dynamic segments of `path` match the `[param]` directories of `page_module`, and that",
-    "every (method, path, operationId) triple is a real operation in",
-    "`contracts/api/v1/openapi.json`.",
+    "  npm --prefix web run e2e:pc01 -- --origin http://ORIGIN --phase write \\",
+    "    --manifest ../tests/e2e/pc01/journey/fixtures/redden-write.manifest.json",
     "",
-    "That pairing is the anti-rot mechanism. Neither checker asks the application to",
-    "confirm itself: this file is an independent written claim, the gate checks it against",
-    "the route tree and the contract, and the journey checks it against live traffic.",
-    "",
-    "`expects_api` paths are API paths -- the contract's own paths, WITHOUT the `/bff/v1`",
-    "prefix the browser adds. Query strings are not declared and not matched: `?limit=50`",
-    "is a pagination choice, not a seam."
+    "What is wrong here, one per check in write.mjs:",
+    "  - it declares 201 as 200                 -> the status check",
+    "  - it declares the created project_uid is a fixed string -> the response-body check",
+    "  - it declares startRun on the projects screen             -> the missing-call check",
+    "  - it expects text no screen renders      -> the rendered check",
+    "  - it forbids `form`, which the screen does render       -> the forbidden check"
   ],
   "api_prefix": "/bff/v1",
   "identifier_pattern": "[0-9A-HJKMNP-TV-Z]{26}",
@@ -211,14 +206,20 @@
             "method": "POST",
             "path": "/projects",
             "operationId": "createProject",
-            "expect_status": 201
+            "expect_status": 200
+          },
+          {
+            "method": "POST",
+            "path": "/runs",
+            "operationId": "startRun",
+            "expect_status": 202
           }
         ],
         "expects_response": [
           {
             "of": "createProject",
             "json_path": "project_uid",
-            "matches": "^prj_%ID%$"
+            "equals": "prj_THIS_IS_NOT_WHAT_THE_SERVER_ANSWERS"
           }
         ],
         "capture": {
@@ -233,11 +234,10 @@
           "bound_ms": 30000
         },
         "expects_rendered": [
-          "Created"
+          "A sentence no screen in this application renders"
         ],
         "forbids_rendered": [
-          "[role=\"alert\"]",
-          "[data-create-problem]"
+          "form"
         ]
       },
       {

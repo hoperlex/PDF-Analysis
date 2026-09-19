@@ -1,25 +1,17 @@
 {
   "$comment": [
-    "The PC-01 journey, written down once and read by two checkers.",
+    "A DELIBERATELY WRONG manifest, for one property only: the bound on the wait for the",
+    "run's terminal is a FINDING when it is hit, never a skip and never a pass.",
     "",
-    "At RUN TIME `journey.mjs` walks these routes in order against a deployed origin, each",
-    "in its own cold browser process, and asserts that what the browser actually requested",
-    "matches `expects_api` here.",
+    "Steps 1 and 2 are the real ones and must pass. Step 3 declares a bound of 1 ms, which",
+    "no real run can meet, and the journey must exit 1 saying so and printing every reading",
+    "it took before the bound.",
     "",
-    "At GATE TIME `tests/e2e/test_pc01_journey_conformance.py` reads the same file with no",
-    "browser, no origin and no running stack, and asserts that every `page_module` exists,",
-    "that every screen in `web/src/app` is covered by exactly one route here, that the",
-    "dynamic segments of `path` match the `[param]` directories of `page_module`, and that",
-    "every (method, path, operationId) triple is a real operation in",
-    "`contracts/api/v1/openapi.json`.",
+    "  npm --prefix web run e2e:pc01 -- --origin http://ORIGIN --phase write \\",
+    "    --manifest ../tests/e2e/pc01/journey/fixtures/redden-write-bound.manifest.json",
     "",
-    "That pairing is the anti-rot mechanism. Neither checker asks the application to",
-    "confirm itself: this file is an independent written claim, the gate checks it against",
-    "the route tree and the contract, and the journey checks it against live traffic.",
-    "",
-    "`expects_api` paths are API paths -- the contract's own paths, WITHOUT the `/bff/v1`",
-    "prefix the browser adds. Query strings are not declared and not matched: `?limit=50`",
-    "is a pagination choice, not a seam."
+    "It also declares the 202 as a 200 and `state` as `published` rather than `queued`, so",
+    "the same run proves the status and response-body checks on the call D-5 actually was."
   ],
   "api_prefix": "/bff/v1",
   "identifier_pattern": "[0-9A-HJKMNP-TV-Z]{26}",
@@ -328,20 +320,14 @@
             "method": "POST",
             "path": "/runs",
             "operationId": "startRun",
-            "expect_status": 202
+            "expect_status": 200
           }
         ],
         "expects_response": [
           {
             "of": "startRun",
-            "json_path": "run_id",
-            "matches": "^run_%ID%$"
-          },
-          {
-            "of": "startRun",
             "json_path": "state",
-            "equals": "queued",
-            "$why": "W20-EXEC moved execution off the request. 202 alone would not say the run was only accepted, not done."
+            "equals": "published"
           }
         ],
         "capture": {
@@ -373,7 +359,7 @@
           "activity_selector": "[data-run-activity]",
           "activity_attribute": "data-run-activity",
           "activity_when_final": "stopped",
-          "bound_ms": 150000,
+          "bound_ms": 1,
           "poll_ms": 500
         },
         "expects_api_after_terminal": [
