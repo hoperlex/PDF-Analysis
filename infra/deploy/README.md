@@ -23,6 +23,7 @@ down`. This is the deployed stack.
 | `serve.py` | the entry point: **one built application, two ports** |
 | `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, api, web, one proxy |
 | `proxy/nginx.conf` | `T-2` — the web app at `/`, the API at `/api/v1`, one origin |
+| `deploy.sh` | `PA-01` criterion 1 — bring this clone up, and refuse to call it deployed until the stack has answered |
 | `reset.sh` | `T-5` — the guarded wipe, and the restore of its own dump |
 | `verify-deployed.sh` | `D-27` — is the stack in front of you this tree? |
 | `reload-proxy.sh` | `D-27` — the step after a rebuild that everyone forgets |
@@ -41,6 +42,17 @@ chmod 600 infra/deploy/env/alpha.env          # then edit EVERY value in it
 cp infra/deploy/env/provider.env.example infra/deploy/env/provider.env
 chmod 600 infra/deploy/env/provider.env
 
+infra/deploy/deploy.sh
+```
+
+**`deploy.sh` is the command**, and the raw `docker compose` line below is what it runs in
+the middle. Use the script: it refuses a stale environment, an unedited example, an
+incomplete clone and another instance's port *before* it builds anything, and afterwards it
+refuses to report success until the stack itself has answered four questions — see
+**Deploying it** below. The compose invocation is kept here because an operator debugging a
+deployment needs to know what the script is doing, not because it is the way to deploy.
+
+```
 docker compose --env-file infra/deploy/env/alpha.env \
   -f infra/deploy/compose.server.yml up -d --build
 ```
@@ -127,6 +139,59 @@ because `serve.py` builds the application once and hands the *same object* to bo
 a health plane in its own process would report on its own wiring and tell the proxy nothing
 about the process actually serving `/api/v1`.
 
+## Deploying it — `PA-01` criterion 1
+
+```
+infra/deploy/deploy.sh [--env-file <path>]
+```
+
+Exit **0** the stack is up and has answered for itself, **3** it refused and said why,
+**2** the arguments were wrong. Twelve guards, delimited by `# >>> guard:` markers, and
+`tests/integration/composition/test_deploy_script_refusals.py` shows every one of them able
+to fail by deleting it from a copy — the same form as `reset.sh` and for the same reason.
+
+Six refuse **before docker is touched at all**, so an empty `docker` call log is the
+evidence the refusal came first: an unknown option, a missing environment, a
+half-configured instance, **secrets still set to the example file's own published values**,
+a missing compose file, and a clone that does not contain the paths the two Dockerfiles
+copy. That last one is the clean-clone guard: the paths are read out of the Dockerfiles'
+own `COPY` lines, so it cannot drift from what the build needs.
+
+Then `port-not-foreign` — the published port must be free, or held by *this* instance's own
+proxy. Then the build, and **only then** the `up`: two steps on purpose, because nothing
+that is serving should be replaced until the images that would replace it exist.
+
+Then it asks the running stack four questions it can fail: every service healthy;
+**the database at the head this code expects**, asked by running the application's own
+`auditmanager.shared.db.check` inside the api image, with the `FOUNDATION-CHECK OK check-db`
+sentinel as the evidence rather than an exit code; the published port answering 200; and
+**the document the process serves conforming to the frozen `contracts/api/v1/openapi.json`**,
+compared by mounting `tests/contract/api_v1/openapi_conformance.py` — the gate's own engine,
+not a second one — into a one-off container and piping the served bytes to it.
+
+### Running it twice — measured, and not yet "changes nothing"
+
+Driven twice from a clean clone (`W23-DEPLOY.md`): **no layer is rebuilt** (every step
+`CACHED`), **no data is touched** (`postgres`, `s3` and `proxy` keep their container IDs and
+both named volumes keep the first run's creation time) — but `api`, `web` and `migrate`
+*are* recreated. BuildKit writes a fresh `created` timestamp into the image config even when
+every layer is cached, so a fully cached build still yields a new image ID and `up -d`
+replaces the services that use it. `SOURCE_DATE_EPOCH` was tried and does not fix it here.
+
+So a second run is safe and is not a no-op. The roadmap's acceptance clause *"run it twice
+and the second changes nothing"* is **not yet true**, and it is recorded as not-yet-true.
+
+### The served document is piped in, never bind-mounted
+
+`$SERVED` comes from `mktemp`. On a host whose docker is the **snap** build, the daemon's
+mount namespace has `/tmp/snap-private-tmp/snap.docker/tmp` over `/tmp`, so a `-v` source
+under `/tmp` does not resolve — and docker's answer to an unresolvable bind source is to
+create an **empty directory** at the destination and start the container anyway. Measured:
+the first drive of this guard died on `IsADirectoryError: Is a directory: '/served.json'`
+while the identical bind from `/root` delivered the file. This is `reset.sh`'s relative-path
+finding in a second costume — **a `-v` source is resolved by the daemon, not by the shell
+that typed it** — and both fail by producing something plausible.
+
 ## The wipe — `R-4`
 
 The owner ruled that **real client documents may be uploaded and must be wiped at the end
@@ -206,9 +271,10 @@ answers against stubs, including the ones where it is confused.
   `listen 443 ssl` block naming a certificate for a host that does not exist is a document,
   not a deliverable. The proxy terminates HTTP on one port; the TLS layer is added when the
   host is.
-* **`deploy.sh`.** The roadmap's `W14-OPS` row owns the idempotent fetch/build/migrate/
-  health-check/switch with rollback. It cannot be exercised here — "run it twice and the
-  second changes nothing" and "a broken build rolls back and leaves the previous version
-  serving" are both claims about a server.
+* **Fetch, switch and rollback.** `deploy.sh` exists now (below), but it does not fetch a
+  revision, switch between versions or roll one back. All three are claims about a server
+  that has a previous version on it, and `R-1`'s host does not exist. What it does instead
+  is put the build *before* the switch, so a failed build leaves whatever was serving still
+  serving — which is the part of that behaviour a machine with no previous version can show.
 * **A leaner web image.** `output: "standalone"` would roughly halve it. That switch lives
   in `web/next.config.mjs`, which `W14-PKG` does not own.
