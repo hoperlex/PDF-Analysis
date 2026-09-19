@@ -62,6 +62,24 @@ export function findChrome() {
   );
 }
 
+/**
+ * How long to wait for a screen to go quiet before recording it anyway.
+ *
+ * A screen that polls -- the run screen does -- never goes quiet, so this bound is what
+ * ends the wait there. It is not a timeout in the failure sense: whatever the page had
+ * done by then is recorded and checked. `E2E_PC01_SETTLE_TIMEOUT_MS` raises it for a
+ * slower origin.
+ */
+const SETTLE_TIMEOUT_MS = Number(process.env.E2E_PC01_SETTLE_TIMEOUT_MS ?? 10000);
+
+/** Nothing in this instrument may wait forever; a hung journey reports nothing at all. */
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), ms)),
+  ]);
+}
+
 /** One CDP connection, multiplexed over a single WebSocket, with flat session routing. */
 class Connection {
   #socket;
@@ -240,6 +258,7 @@ class Page {
   #pageErrors = [];
   #inFlight = 0;
   #lastActivity = Date.now();
+  #redirectSeq = 0;
 
   constructor(connection, sessionId) {
     this.#connection = connection;
@@ -264,6 +283,35 @@ class Page {
     this.#lastActivity = Date.now();
     if (method === 'Network.requestWillBeSent') {
       const request = params.request;
+      // A redirect does NOT get a new requestId: the protocol reuses the old one and
+      // hands the previous hop's response in `redirectResponse`. Two consequences, both
+      // of which cost a debugging round here:
+      //   - the hop's own status and `location` are only ever seen in THIS event, so a
+      //     handler that overwrites the envelope loses the 307 entirely -- exactly the
+      //     "status lines only" impoverishment D-5 is about, one level down;
+      //   - the in-flight count must NOT be incremented again, or it never drains and
+      //     every navigation through a redirect waits out the full settle timeout.
+      const continuing = params.redirectResponse !== undefined;
+      if (continuing) {
+        const previous = this.#exchanges.get(params.requestId);
+        if (previous !== undefined) {
+          previous.status = params.redirectResponse.status;
+          previous.statusText = params.redirectResponse.statusText;
+          previous.responseHeaders = pick(
+            params.redirectResponse.headers,
+            KEPT_RESPONSE_HEADERS,
+          );
+          previous.mimeType = params.redirectResponse.mimeType;
+          previous.redirectedTo = request.url;
+          // A redirect carries no body to fetch, and saying so is a fact, not an absence.
+          previous.responseBody = null;
+          const key = `${params.requestId}#hop${this.#redirectSeq++}`;
+          this.#exchanges.set(key, previous);
+          this.#exchanges.delete(params.requestId);
+          const at = this.#order.indexOf(params.requestId);
+          if (at >= 0) this.#order[at] = key;
+        }
+      }
       const envelope = {
         requestId: params.requestId,
         resourceType: params.type ?? null,
@@ -282,11 +330,13 @@ class Page {
         mimeType: null,
         responseBody: null,
         responseBodyTruncated: false,
+        redirectedTo: null,
+        finished: false,
         failure: null,
       };
       this.#exchanges.set(params.requestId, envelope);
       this.#order.push(params.requestId);
-      this.#inFlight += 1;
+      if (!continuing) this.#inFlight += 1;
       return;
     }
     if (method === 'Network.responseReceived') {
@@ -301,8 +351,11 @@ class Page {
     if (method === 'Network.loadingFinished' || method === 'Network.loadingFailed') {
       if (this.#inFlight > 0) this.#inFlight -= 1;
       const envelope = this.#exchanges.get(params.requestId);
-      if (envelope !== undefined && method === 'Network.loadingFailed') {
-        envelope.failure = params.errorText ?? 'failed';
+      if (envelope !== undefined) {
+        envelope.finished = true;
+        if (method === 'Network.loadingFailed') {
+          envelope.failure = params.errorText ?? 'failed';
+        }
       }
       return;
     }
@@ -322,22 +375,42 @@ class Page {
   }
 
   /** Navigate, settle, then pull every body the protocol still holds. */
-  async goto(url, { settleMs = 700, timeoutMs = 60000 } = {}) {
+  async goto(url, { settleMs = 700, timeoutMs = SETTLE_TIMEOUT_MS } = {}) {
+    // Kept because W15-RUN's most useful single number was a duration -- eleven seconds of
+    // "Loading the run request..." with no progress -- and a journey that records only
+    // outcomes cannot report that.
+    const t0 = Date.now();
     const result = await this.#send('Page.navigate', { url });
     if (result.errorText) {
       // A navigation that never reached a server is a failure of the journey, not a 0.
       throw new Error(`navigation to ${url} failed: ${result.errorText}`);
     }
+    const t1 = Date.now();
     await this.#settle(settleMs, timeoutMs);
+    const t2 = Date.now();
     await this.#collectBodies();
+    const t3 = Date.now();
+    this.timingsMs = { navigate: t1 - t0, settle: t2 - t1, bodies: t3 - t2 };
     return result;
   }
 
+  /**
+   * Settle on a quiet network, not on an empty one.
+   *
+   * Measured, not assumed: a Next.js screen on this origin leaves at least one request
+   * open after the page is fully rendered -- a streamed response that never emits
+   * `Network.loadingFinished`. Waiting for `inFlight === 0` therefore burned the full
+   * timeout on *every* route, and a journey that always takes its timeout is a journey
+   * nobody will run. Quiet is the honest signal: nothing has happened on this connection
+   * for a while, so the page is done regardless of what is still nominally open.
+   */
   async #settle(settleMs, timeoutMs) {
     const deadline = Date.now() + timeoutMs;
+    const quietEnough = Math.max(settleMs, 1200);
     for (;;) {
       const quietFor = Date.now() - this.#lastActivity;
       if (this.#inFlight === 0 && quietFor >= settleMs) return;
+      if (quietFor >= quietEnough) return;
       if (Date.now() > deadline) return;
       await new Promise((r) => setTimeout(r, 50));
     }
@@ -348,15 +421,30 @@ class Page {
    * 2026-09-16 harness skipped, and skipping it is what made `D-5` unanswerable.
    */
   async #collectBodies() {
-    for (const requestId of this.#order) {
+    // A SNAPSHOT, not the live array. The run screen polls: while bodies are being
+    // fetched it keeps issuing requests, so iterating `this.#order` directly never
+    // terminates -- the list grows at least as fast as it is consumed. Measured, from a
+    // journey that hung on exactly that route.
+    for (const requestId of [...this.#order]) {
       const envelope = this.#exchanges.get(requestId);
       if (envelope === null || envelope === undefined) continue;
+      if (envelope.redirectedTo !== null) continue;
       if (envelope.responseBody !== null || envelope.status === null) continue;
       if (envelope.resourceType === 'Image' || envelope.resourceType === 'Font') continue;
+      if (!envelope.finished) {
+        // `Network.getResponseBody` for a request the browser has not finished simply
+        // never answers -- it does not error. Asking is how this hung. "Still open when
+        // the page settled" is itself a fact worth keeping, so it is recorded as one.
+        envelope.responseBody = null;
+        envelope.responseBodyTruncated = true;
+        envelope.failure = envelope.failure ?? 'still in flight when the page settled';
+        continue;
+      }
       try {
-        const { body, base64Encoded } = await this.#send('Network.getResponseBody', {
-          requestId,
-        });
+        const { body, base64Encoded } = await withTimeout(
+          this.#send('Network.getResponseBody', { requestId: requestId.split('#')[0] }),
+          5000,
+        );
         const text = base64Encoded ? Buffer.from(body, 'base64').toString('utf8') : body;
         if (text.length > 200000) {
           envelope.responseBody = text.slice(0, 200000);

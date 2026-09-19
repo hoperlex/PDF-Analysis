@@ -29,7 +29,10 @@
       "path": "/",
       "page_module": "web/src/app/page.tsx",
       "redirects_to": "/projects",
-      "expects_api": [],
+      "$comment": "A redirect is not a blank page: the browser lands on /projects and that screen lists. Measured -- declaring no call here made the route red, correctly.",
+      "expects_api": [
+        { "method": "GET", "path": "/projects", "operationId": "listProjects" }
+      ],
       "follow": null
     },
     {

@@ -87,6 +87,37 @@ and API calls are unchanged but which renders nothing is invisible to the gate a
 only to this journey. Keeping the gate stack-free buys that blind spot; running the journey
 is what closes it.
 
+## Proving it can fail
+
+A journey that cannot fail is a screenshot, so the proof is a command and not a claim:
+
+```
+npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:PORT \
+  --manifest ../tests/e2e/pc01/journey/fixtures/redden.manifest.json
+```
+
+**Expected: non-zero.** That fixture declares a call the screen does not make, a route that
+does not exist, and a link the screen never renders. Measured on 2026-09-19 against
+`http://127.0.0.1:31500`: exit `1`, five findings, `routes checked: 3/4` — the walk stops
+at the broken link and says so rather than reporting the route after it as passing.
+
+The fixture is not read by the conformance guard, so its three deliberate wrongs never
+redden `make gate`.
+
+## What it costs to run
+
+Measured on 2026-09-19, seven routes against `http://127.0.0.1:31500`: **178 s**, exit `0`,
+134 exchanges recorded, a 3.6 MB envelope.
+
+Almost all of that is **browser startup**: in a warm browser the same navigation takes
+16 ms, against 3.8–25 s for the first navigation in a fresh process. One process per route
+is what makes these cold loads, so the cost *is* the property. Reusing one browser would
+make the suite roughly ten times faster and would stop it being able to find `D-16`.
+
+`E2E_PC01_SETTLE_TIMEOUT_MS` (default 10000) bounds the wait for a screen to go quiet. The
+run screen polls and never goes quiet; the bound is what ends that wait, and whatever the
+page had done by then is still recorded and checked.
+
 ## What this is not
 
 This is **not** the whole of `P3-QA-01`. That lane's task specifies an idempotency spec, a

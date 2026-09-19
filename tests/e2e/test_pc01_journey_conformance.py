@@ -22,12 +22,18 @@ renders nothing is invisible here and visible only to the journey itself. That i
 stated cost of keeping the gate stack-free, and it is why the journey exists rather than
 being replaced by this file.
 
-**Measured limitation.** ``make mutation-copy`` copies ``src/``, ``tests/`` and
-``pyproject.toml`` only. ``web/`` and ``contracts/`` are not copied, so the four tests here
-that read the real tree cannot run inside a mutation copy and must be excluded by path
-alongside the three suites under ``tests/integration/composition``. The negative controls
-below read nothing outside this file and do run there -- they are what proves each check
-can fail.
+**Measured limitation, and the brief that sent this session had it wrong.**
+``make mutation-copy`` copies ``src/``, ``tests/`` and ``pyproject.toml`` and *also*
+provides ``contracts``, ``docs``, ``fixtures``, ``db`` and ``tools`` -- as symlinks to the
+checkout, or as copies under ``FULL=1`` (``Makefile`` lines 551-578). What it does not
+provide is ``web/``, and that is the only thing missing here. So of the four checks below
+that read the real tree, the three that read ``web/src/app`` cannot run inside a mutation
+copy and must be excluded by path alongside the three suites under
+``tests/integration/composition``; the contract check reads only ``tests/`` and the
+symlinked ``contracts/`` and runs there unchanged.
+
+The six negative controls read nothing outside this file and run anywhere -- they are what
+proves each check can fail.
 """
 
 from __future__ import annotations

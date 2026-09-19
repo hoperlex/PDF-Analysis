@@ -142,13 +142,32 @@ for (const route of manifest.routes) {
     };
   });
 
-  // ---- the document itself -------------------------------------------------------
-  const document = record.exchanges.find(
-    (e) => e.resourceType === 'Document' && e.url === url,
+  // ---- the document itself, redirects included -------------------------------------
+  // `/` is a redirect, so "the document" is a chain and not one response. Every hop is
+  // kept with its own status and `location`: a 200 reached through a 307 and a 200 served
+  // directly are different facts, and collapsing them is how a journey stops being
+  // evidence.
+  // Only documents fetched over HTTP. The review screen's PDF pane opens a `blob:` URL
+  // and Chrome's built-in viewer at `chrome-extension://...`, both of which the protocol
+  // reports as documents; treating either as the landing page would mean the route's
+  // verdict came from the viewer rather than from the application.
+  const documents = record.exchanges.filter(
+    (e) => e.resourceType === 'Document' && /^https?:/.test(e.url),
   );
-  record.documentStatus = document?.status ?? null;
+  record.documentChain = documents.map((e) => ({
+    url: e.url,
+    status: e.status,
+    redirectedTo: e.redirectedTo ?? null,
+    location: e.responseHeaders?.location ?? null,
+  }));
+  const landed = documents[documents.length - 1];
+  record.documentStatus = landed?.status ?? null;
   if (record.documentStatus !== 200) {
-    fail(route.name, `the document answered ${record.documentStatus} at ${url}`);
+    fail(
+      route.name,
+      `the document answered ${record.documentStatus} at ${landed?.url ?? url} ` +
+        `(chain: ${record.documentChain.map((h) => `${h.status} ${h.url}`).join(' -> ') || 'none'})`,
+    );
   }
 
   // ---- a declared redirect actually redirected ------------------------------------
