@@ -32,6 +32,21 @@ GATE_EXIT=0                      <- from `$?`, not through a pipe
 
 Identical to the brief's figures in every number.
 
+**And at `51ddf1b`, this branch's head**, same lane, same command:
+
+```
+battery   1870 passed, 5 skipped, 1 warning, 168 subtests passed in 237.22s
+foundation 35 passed in 28.95s
+frontend  Test Files 48 passed (48)   Tests 706 passed (706)
+GATE OK: battery, foundation, frontend and whitespace all pass
+GATE_EXIT=0
+```
+
+`+5` on the battery and nothing else moved: the five guards in §8. Frontend and
+foundation are untouched, as the diff says they should be — this branch changes
+`src/auditmanager/analysis/text/proxy.py`, two test files under
+`tests/integration/analysis_text/` and this document, and nothing else.
+
 ---
 
 ## 2. What produces `partial`, measured
@@ -267,11 +282,13 @@ foreground shell never left `/root/projects/PDF-Analysis`, so `. ./.env` sourced
 `gate-b0`'s** environment and `infra/deploy/serve.py` resolved to the **main checkout's
 unrepaired code**. One API process therefore ran for about three minutes against
 `audit_b0` on port 55460 and bucket `audit-b0`, and added to that lane: two projects
-(`probe`, `W23-PARTIAL induction`), one document version, one blob and two runs
-(`run_01M2X7R9…` region). Additive only — nothing was deleted, edited or migrated, and no
-row of that lane's existing data was touched. **I have not cleaned it up**: deleting rows
-from a lane I do not own is a larger violation than the one I committed. `W23-DEPLOY` or
-whoever owns `gate-b0` should drop those five rows, or ignore them.
+(`prj_01M2X7R9WSKP7FCSTMPP8HWRHH` "probe" and `prj_01M2X7RKHJ0XSX88XQ2NYE2D5P`
+"W23-PARTIAL induction"), one document version (`ver_01M2X7RKX80CZEYXJA29A8PG3W`) with its
+document and blob, and one run (`run_01M2X7RKZ22ZZPJY2F72AR3APS`, state `published`) —
+counted by a read-only query against `audit_b0`, not estimated. Additive only: nothing was
+deleted, edited or migrated, and no row of that lane's existing data was touched. **I have
+not cleaned it up**: deleting rows from a lane I do not own is a larger violation than the
+one I committed. Whoever owns `gate-b0` should drop those rows, or ignore them.
 
 It was caught by reading `/proc/<pid>/environ` when the run came back `published`, and the
 run that §4 reports was re-driven from absolute paths against `audit_w23b` with the
