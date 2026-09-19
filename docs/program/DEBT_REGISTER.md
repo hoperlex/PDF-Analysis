@@ -11,6 +11,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
+| **D-36** | `deploy.sh` twice recreates three services — the one alpha item `R-1` does not block | a mechanism |
 | **D-35** | does criterion 4 need `partial` from inside the journey? | **owner — one yes/no** |
 | **D-18** | a catalog code costs a frontend reseal; built, proved, reverted by **`R-11`** | owner |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
@@ -1055,6 +1056,48 @@ the contract tests that enumerate them — none of them that session's.
 configurable **nowhere**, and `max_output_tokens` is hashed into `PromptBundle.content_sha256`
 and then `AnalysisProfile.content_sha256`, which `ADR-0011` requires immutable. **A configured
 output ceiling is a contract change wearing an environment variable.**
+
+### D-36 — `deploy.sh` run twice recreates three services, and that is the one alpha item `R-1` does not block
+
+**Measured by `W23-DEPLOY` by running its own script twice, which disproved its own header
+comment.** No layer rebuilds and **no data is touched** — postgres, s3 and proxy keep their
+container IDs and both volumes keep the first run's timestamps. But **`api`, `web` and
+`migrate` are recreated**, because a fully cached `compose build` still yields a new image ID:
+BuildKit stamps a fresh `created` into the config, and `SOURCE_DATE_EPOCH` does not fix it
+here.
+
+The roadmap's *"run it twice and the second changes nothing"* is therefore **not yet true**,
+and it is recorded that way rather than worked around.
+
+**This is the one part of criterion 1's row that does not need `R-1`.** Fetch, switch and
+rollback are all claims about a server with a previous version on it; **image identity under
+an identical build is not.** Closing it needs a mechanism that preserves that identity when a
+build produced identical content — which has real failure modes and was deliberately not
+smuggled in at the end of a session.
+
+Check: run `infra/deploy/deploy.sh` twice and compare `docker inspect --format '{{.Id}}'` on
+the api container across the two runs.
+
+### D-37 — a `-v` source is resolved by the daemon, and docker invents a directory rather than refusing
+
+**Found by `W23-DEPLOY` in its own script, and it is `D-31`'s finding in a second costume.**
+
+Guard 12 died on `IsADirectoryError: Is a directory: '/served.json'`. The source came from
+`mktemp`, and **this host's docker is the snap build, whose mount namespace puts a private tmp
+over `/tmp`** — so a `-v` source there does not resolve for the daemon. **Docker's answer is
+not to refuse: it creates an empty directory and starts the container anyway.**
+
+`D-31` was the same class — a *relative* `-v` source is a **volume name** to docker, so
+`reset.sh --restore` put the rows back without the bytes.
+
+**The rule both instances teach: a `-v` source is resolved by the daemon, not by the shell,
+and docker prefers to invent a mount point over failing.** Moving the temp file elsewhere
+would have fixed one path and left the class open, so the mount was removed entirely and the
+document is piped on stdin.
+
+**Carry this to the `R-1` host.** Its docker is probably not a snap build, but the class
+survives the packaging: any `-v` whose source the daemon cannot see becomes an empty directory
+and a green-looking container.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
