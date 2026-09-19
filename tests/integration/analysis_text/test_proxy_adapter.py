@@ -149,11 +149,52 @@ class TestWhatComesBack:
         assert response.output_tokens == 340
         assert response.stop_reason == "end_turn"
 
-    def test_a_length_stop_becomes_truncated(self) -> None:
-        """OpenAI calls it `length`; the provenance vocabulary calls it `truncated`."""
+    def test_a_length_stop_becomes_the_max_tokens_stop_reason(self) -> None:
+        """OpenAI calls it `length`; the *stop-reason* vocabulary calls it `max_tokens`.
+
+        This asserted `"truncated"` until `W23-PARTIAL`. `truncated` is a **call
+        status** from `provenance.py`, derived by `stage.py` from
+        `ModelResponse.truncated`, which is `stop_reason == "max_tokens"`. Writing the
+        derived word into the field the derivation reads meant a proxied reply cut
+        short at the output ceiling reported itself complete. The two guards below
+        assert the decision as well as the string, so the vocabularies cannot be
+        crossed again without a red.
+        """
         capture = _Captured(document=_ok_document(finish="length"))
         response = _adapter(capture).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
-        assert response.stop_reason == "truncated"
+        assert response.stop_reason == "max_tokens"
+
+    def test_an_unrecognised_finish_reason_is_passed_through_not_guessed(self) -> None:
+        """It must not become `max_tokens`: that would manufacture a `partial` run."""
+        capture = _Captured(document=_ok_document(finish="content_filter"))
+        response = _adapter(capture).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        assert response.stop_reason == "content_filter"
+        assert response.truncated is False
+
+    def test_a_length_stop_makes_the_response_report_itself_truncated(self) -> None:
+        """The property that decides `partial`, asserted on the property itself.
+
+        `stop_reason` is a *field*; `ModelResponse.truncated` is the *decision* every
+        consumer reads - `stage.py` chooses `CALL_TRUNCATED`, the salvage branch of
+        `parse_response`, the coverage note and ultimately the `partial` run terminal
+        from it, and from nothing else. A test that pins only the string leaves the
+        decision unguarded, which is how a proxy reply cut short at the output ceiling
+        came to be recorded as a complete one.
+        """
+        capture = _Captured(document=_ok_document(finish="length"))
+        response = _adapter(capture).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        assert response.truncated is True, (
+            "a proxied reply cut short at the output ceiling does not report itself "
+            "truncated, so the stage records the call as succeeded and publishes a "
+            "partial analysis as a complete one"
+        )
+
+    def test_a_normal_stop_does_not_report_itself_truncated(self) -> None:
+        """The anti-vacuity half: an adapter that returned True always would pass above."""
+        response = _adapter(_Captured()).complete(
+            ModelRequest(model_id="m", body=ANTHROPIC_BODY)
+        )
+        assert response.truncated is False
 
     def test_an_empty_choice_list_is_a_failure_not_an_empty_finding_set(self) -> None:
         """Publishing nothing because the proxy said nothing would be a silent success."""
