@@ -1,0 +1,144 @@
+{
+  "$comment": [
+    "The PC-01 journey, written down once and read by two checkers.",
+    "",
+    "At RUN TIME `journey.mjs` walks these routes in order against a deployed origin, each",
+    "in its own cold browser process, and asserts that what the browser actually requested",
+    "matches `expects_api` here.",
+    "",
+    "At GATE TIME `tests/e2e/pc01/test_journey_conformance.py` reads the same file with no",
+    "browser, no origin and no running stack, and asserts that every `page_module` exists,",
+    "that every screen in `web/src/app` is covered by exactly one route here, that the",
+    "dynamic segments of `path` match the `[param]` directories of `page_module`, and that",
+    "every (method, path, operationId) triple is a real operation in",
+    "`contracts/api/v1/openapi.json`.",
+    "",
+    "That pairing is the anti-rot mechanism. Neither checker asks the application to",
+    "confirm itself: this file is an independent written claim, the gate checks it against",
+    "the route tree and the contract, and the journey checks it against live traffic.",
+    "",
+    "`expects_api` paths are API paths -- the contract's own paths, WITHOUT the `/bff/v1`",
+    "prefix the browser adds. Query strings are not declared and not matched: `?limit=50`",
+    "is a pagination choice, not a seam."
+  ],
+  "api_prefix": "/bff/v1",
+  "identifier_pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+  "routes": [
+    {
+      "name": "root",
+      "path": "/",
+      "page_module": "web/src/app/page.tsx",
+      "redirects_to": "/projects",
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "projects",
+      "path": "/projects",
+      "page_module": "web/src/app/projects/page.tsx",
+      "expects_api": [
+        { "method": "GET", "path": "/projects", "operationId": "listProjects" }
+      ],
+      "follow": {
+        "capture": "project_uid",
+        "href_pattern": "^/projects/(prj_%ID%)$"
+      }
+    },
+    {
+      "name": "project",
+      "path": "/projects/{project_uid}",
+      "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}/documents",
+          "operationId": "listDocuments"
+        }
+      ],
+      "follow": {
+        "capture": "document_uid",
+        "href_pattern": "^/projects/prj_%ID%/documents/(doc_%ID%)$"
+      }
+    },
+    {
+      "name": "document",
+      "path": "/projects/{project_uid}/documents/{document_uid}",
+      "page_module": "web/src/app/projects/[project_uid]/documents/[document_uid]/page.tsx",
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/documents/{document_uid}/versions",
+          "operationId": "listVersions"
+        }
+      ],
+      "follow": {
+        "capture": "version_uid",
+        "href_pattern": "^/projects/prj_%ID%/versions/(ver_%ID%)$"
+      }
+    },
+    {
+      "name": "version",
+      "path": "/projects/{project_uid}/versions/{version_uid}",
+      "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}/runs",
+          "operationId": "listRuns"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}",
+          "operationId": "getDocumentVersion"
+        }
+      ],
+      "follow": {
+        "capture": "run_id",
+        "href_pattern": "^/projects/prj_%ID%/runs/(run_%ID%)$"
+      }
+    },
+    {
+      "name": "run",
+      "path": "/projects/{project_uid}/runs/{run_id}",
+      "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
+      "expects_api": [
+        { "method": "GET", "path": "/runs/{run_id}", "operationId": "getRunStatus" }
+      ],
+      "follow": null
+    },
+    {
+      "name": "review",
+      "path": "/projects/{project_uid}/runs/{run_id}/review",
+      "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/review/page.tsx",
+      "expects_api": [
+        { "method": "GET", "path": "/runs/{run_id}", "operationId": "getRunStatus" },
+        {
+          "method": "GET",
+          "path": "/runs/{run_id}/findings",
+          "operationId": "listRunFindings"
+        }
+      ],
+      "optional_api": [
+        {
+          "method": "GET",
+          "path": "/findings/{finding_uid}",
+          "operationId": "getFinding",
+          "$why_optional": "the screen opens the first finding; a run with none makes no call"
+        },
+        {
+          "method": "GET",
+          "path": "/findings/{finding_uid}/decisions",
+          "operationId": "listDecisionHistory",
+          "$why_optional": "follows getFinding, so it is conditional on the same thing"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}/content",
+          "operationId": "streamDocumentVersionContent",
+          "$why_optional": "the document pane fetches the PDF only once a finding is open"
+        }
+      ],
+      "follow": null
+    }
+  ]
+}
