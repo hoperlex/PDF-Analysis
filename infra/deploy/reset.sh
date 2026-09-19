@@ -189,6 +189,26 @@ echo "reset.sh: database   $DATABASE"
 echo "reset.sh: bucket     $BUCKET"
 
 if [ -n "$RESTORE" ]; then
+    # AN ABSOLUTE PATH, AND `W22-OPS` FOUND OUT WHY BY RUNNING IT. The object half mounts
+    # the dump with `docker run -v "$RESTORE:/dump:ro"`, and a RELATIVE path there is not a
+    # directory to docker -- it is a volume NAME, and it is refused:
+    #
+    #   Error response from daemon: create infra/deploy/dumps/auditmanager-...: includes
+    #   invalid characters for a local volume name ... If you intended to pass a host
+    #   directory, use absolute path
+    #
+    # The invocation this script PRINTS at the end of a wipe is relative, and so is the one
+    # in README.md, so the documented way to put a dump back was the way that failed. It
+    # failed after `pg_restore` had already run, which left the exact instance the guard
+    # below calls worse than an empty one: measured on a live lane, one project, one
+    # document and one blob in the database and **zero objects in the bucket**.
+    #
+    # `cd`-and-`pwd` rather than `realpath`: the guard below wants the same path the mount
+    # will get, and a directory that does not exist must reach that guard rather than die
+    # here with a shell error.
+    if [ -d "$RESTORE" ]; then
+        RESTORE="$(cd "$RESTORE" && pwd)"
+    fi
 # >>> guard: restore-complete
     # Both halves or neither. A restore that put the rows back and left the bytes behind
     # would leave an instance that lists a document and cannot serve it, which is worse
@@ -203,8 +223,15 @@ if [ -n "$RESTORE" ]; then
     done
 # <<< guard: restore-complete
     echo "reset.sh: restoring from $RESTORE"
-    compose exec -T postgres pg_restore --clean --if-exists --no-owner \
-        --username "$CONFIGURED_USER" --dbname "$DATABASE" < "$RESTORE/database.dump"
+    # THE BYTES GO BACK FIRST, AND THE ORDER IS THE POINT. A restore is two steps and either
+    # of them can fail, so the question is which half is safer to have done alone. The guard
+    # above already answers it: rows without bytes is an instance that lists a document and
+    # cannot serve it, and it *looks recovered*. Bytes without rows is an instance that looks
+    # exactly as empty as it is, holding some objects nothing refers to. One of those misleads
+    # the person reading the screen and the other does not.
+    #
+    # This was the other half of what `W22-OPS` measured: the object step failed, the database
+    # step had already run, and what was left was the misleading one.
     # `mc mirror` alone is NOT a restore, and this was measured rather than assumed: the
     # bytes come back with no user metadata and `Content-Type: application/octet-stream`,
     # and the storage adapter then refuses the object with `validation_failed` on
@@ -228,6 +255,8 @@ if [ -n "$RESTORE" ]; then
         done < /dump/objects.attrs
         echo "  reset.sh: restored $(wc -l < /dump/objects.attrs) objects"'
     mc_run -v "$RESTORE:/dump:ro" s3-init -c "$MC_ALIAS; $restore_objects"
+    compose exec -T postgres pg_restore --clean --if-exists --no-owner \
+        --username "$CONFIGURED_USER" --dbname "$DATABASE" < "$RESTORE/database.dump"
     echo "reset.sh: restored. Verify with a read of one document version through the API."
     exit 0
 fi
@@ -261,7 +290,10 @@ fi
 #   one table at 10,000,000 rows   0.32-0.47 s      0.15-0.17 s
 #
 # So it is linear in rows and, at every size a pilot will reach, the difference is smaller
-# than the round trip that carries it. Ten million rows buys about two tenths of a second.
+# than the round trip that carries it. One of the seventeen is a VIEW -- `finding_current_verdict`
+# -- so its line runs the view's query rather than a table scan; at the shapes measured above
+# that is in the noise, and a view expensive enough to matter would be a reason to look at
+# the view. Ten million rows buys about two tenths of a second.
 # That is the whole price of the screen telling the truth, and it is worth saying out loud
 # rather than leaving the reader to assume either that it is free or that it is ruinous.
 #

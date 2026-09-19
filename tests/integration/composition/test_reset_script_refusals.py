@@ -117,6 +117,7 @@ def _run(
     tmp_path: Path,
     env_file: Path,
     dump_root: Path | None = None,
+    cwd: Path | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     binary, log = _stub_path(tmp_path)
     environment = dict(os.environ)
@@ -128,6 +129,7 @@ def _run(
         capture_output=True,
         text=True,
         env=environment,
+        cwd=str(cwd) if cwd is not None else None,
         timeout=120,
     )
     return completed, log
@@ -381,6 +383,79 @@ class TestTheRehearsalRefusesRatherThanShowingNoNumbers:
             "the rehearsal is reading the statistics estimate again (D-24)"
         )
         assert "count(*)" in code, "the rehearsal no longer counts anything"
+
+
+class TestTheRestorePutsBothHalvesBack:
+    """`W22-OPS`, and it was found by running the command this script prints.
+
+    A wipe ends by telling the operator how to put the dump back, and the path it prints is
+    relative -- `infra/deploy/dumps/<stamp>` -- as is README.md's. Driven on a live lane,
+    that invocation restored the DATABASE and then died, because the object half mounts the
+    dump with `docker run -v "$RESTORE:/dump:ro"` and a relative path there is a volume
+    NAME to docker, not a directory. What was left was one project, one document and one
+    blob in the database and **zero objects in the bucket** -- precisely the instance
+    `restore-complete`'s own comment calls worse than an empty one, because it looks
+    recovered.
+
+    Two things came out of that, and both are pinned here: the path is made absolute before
+    anything is touched, and the BYTES go back before the ROWS, so that a restore which
+    fails half way leaves the half that does not mislead anybody.
+    """
+
+    def _a_dump(self, directory: Path) -> Path:
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "database.dump").write_bytes(b"PGDMP")
+        (directory / "objects.attrs").write_text(_sidecar(1), encoding="utf-8")
+        (directory / "objects").mkdir(exist_ok=True)
+        return directory
+
+    def test_a_relative_dump_directory_is_mounted_as_an_absolute_path(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        script = _staged(tmp_path)
+        self._a_dump(tmp_path / "dumps" / "an-instance-20260919T000000Z")
+        completed, log = _run(
+            script,
+            ("--database", DATABASE, "--bucket", BUCKET,
+             "--restore", "dumps/an-instance-20260919T000000Z"),
+            tmp_path=tmp_path,
+            env_file=env_file,
+            cwd=tmp_path,
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        calls = log.read_text(encoding="utf-8")
+        mounts = [
+            word
+            for line in calls.splitlines()
+            for word in line.split()
+            if word.endswith(":/dump:ro")
+        ]
+        assert mounts, f"nothing was mounted at /dump: {calls}"
+        for mount in mounts:
+            assert mount.startswith("/"), (
+                f"docker was handed {mount!r}; a relative path there is a volume name and "
+                "is refused, after the database half has already run"
+            )
+
+    def test_the_bytes_go_back_before_the_rows(self, tmp_path: Path, env_file: Path) -> None:
+        """Either half can fail. Rows without bytes looks recovered and is not; bytes
+        without rows looks exactly as empty as it is. So the misleading half goes last."""
+        script = _staged(tmp_path)
+        dump = self._a_dump(tmp_path / "dump")
+        completed, log = _run(
+            script,
+            ("--database", DATABASE, "--bucket", BUCKET, "--restore", str(dump)),
+            tmp_path=tmp_path,
+            env_file=env_file,
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        lines = log.read_text(encoding="utf-8").splitlines()
+        objects = next(i for i, line in enumerate(lines) if ":/dump:ro" in line)
+        rows = next(i for i, line in enumerate(lines) if "pg_restore" in line)
+        assert objects < rows, (
+            "the database was restored before the objects, so a restore that fails half "
+            "way leaves an instance that lists a document and cannot serve it"
+        )
 
 
 class TestItDumpsBeforeItDrops:

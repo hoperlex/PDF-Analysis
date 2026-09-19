@@ -156,6 +156,12 @@ storage adapter refuses it with `validation_failed`, leaving an instance that li
 document and 422s on its bytes. `object_attrs.py` records what `mirror` loses and
 `--restore` puts it back.
 
+**The bytes go back before the rows**, and the order is deliberate: either half can fail, and
+rows without bytes is an instance that lists a document and cannot serve it — it *looks
+recovered* — while bytes without rows looks exactly as empty as it is. `W22-OPS` found that
+by running the relative-path invocation this script prints, which until then restored the
+database and then died on the object half, leaving the misleading one.
+
 The twelve refusals are delimited by `# >>> guard:` markers, and
 `tests/integration/composition/test_reset_script_refusals.py` shows every one of them able
 to fail by deleting it from a copy.
