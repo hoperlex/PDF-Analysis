@@ -760,3 +760,15 @@ as a gate lane's are.
 **Disk:** 6.8 GB free on arrival, 4.8 GB at the low point, and the next session should reclaim
 rather than check. **No image was built or rebuilt**; the one image name this session created
 was a `docker tag` of an existing image and it has been removed.
+
+---
+
+## 9. One thing that moved under this session
+
+`origin/dev` advanced from `0f9989a` to **`c5331f4`** — *docs: close waves 19 and 20* — while
+this certification was being driven. It adds `docs/program/W19_W20_CLOSURE.md` and **nothing
+else**: `git show --name-only c5331f4` matches no path under `src/`, `web/`, `contracts/`,
+`infra/`, `db/`, `tests/` or `Makefile`. So every verdict above still describes the code at the
+tip of `origin/dev`, and the record names `0f9989a` because that is the commit that was driven.
+`agent/w21-cert` branches from `0f9989a`, which is still an ancestor of `origin/dev`, and adds
+exactly two files: this document and the certification record.
