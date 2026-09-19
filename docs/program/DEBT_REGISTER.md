@@ -11,6 +11,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
+| **D-35** | does criterion 4 need `partial` from inside the journey? | **owner — one yes/no** |
 | **D-18** | a catalog code costs a frontend reseal; built, proved, reverted by **`R-11`** | owner |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
@@ -991,6 +992,69 @@ and three ULIDs minted inside one millisecond sort by their **random halves**.
 reversed pairing and an insertion-ordered one both pass, because any single permutation
 differs from the sorted order five times in six. That half rests on the reasoning and the
 observed rate, and no mutation proof is claimed for it.
+
+### D-34 — a truncated analysis published as a complete one, on the live transport
+
+**Found 2026-09-19 by `W23-PARTIAL` while investigating `PA-01` criterion 4's exception, and
+repaired in the same wave. It is recorded because of what it says about how it hid.**
+
+`proxy.py:205` mapped OpenAI's `finish_reason: "length"` to the string **`"truncated"`**. That
+is a word from the **call-status** vocabulary (`succeeded | truncated | failed`) written into
+the **stop-reason** field, whose vocabulary is `end_turn | max_tokens`. `adapter.py:83`
+decides `truncated` by comparing `stop_reason` to `"max_tokens"`, so `ModelResponse.truncated`
+**never saw it**. Verified independently by the integrator.
+
+**The consequence on the live transport — the one `W21-CERT` certified criterion 4 on:**
+
+* the model call recorded `succeeded`;
+* `_pages_analysed` reported **every page**, because its clamp is gated on the same property;
+* the run **published as a complete analysis**.
+
+**A report cut short at the output ceiling was presented as a whole one.**
+
+**How it survived, and this is the part that generalises.** The guard asserted
+`stop_reason == "truncated"` — **the string** — and never `response.truncated`, **the
+decision**. The probe was on the wrong observable, so the test **pinned the defect in place**
+rather than catching it. Its justifying comment was false as well: `stop_reason` is never
+persisted and `ModelCallRecord` has no such field.
+
+This is `OPERATING_CONSTRAINTS.md` §12 in a fifth shape: not a query sharing an assumption
+with its subject, not one read before it finished — **an assertion aimed one field to the left
+of the thing that decides.**
+
+Repaired: `length → max_tokens`, and an unrecognised `finish_reason` is **passed through
+rather than guessed**, so the repair cannot manufacture a `partial`. Driven end to end through
+`serve.py` in proxy mode against a stub of the proxy's own documented contract with nothing in
+the application stubbed — `partial`, `degradation_set ["text_analysis"]`, one published
+finding, `cost_basis measured`, terminal on the first poll 22 ms after `startRun`.
+
+**`PA-01` criterion 4's exception falls with it**, subject to the ruling in `D-35`.
+
+Check: `grep -n 'max_tokens' src/auditmanager/analysis/text/proxy.py` and
+`.venv/bin/pytest tests/integration/analysis_text/test_proxy_truncation_reaches_partial.py`.
+
+### D-35 — one ruling: does criterion 4 need `partial` from inside the operator's journey?
+
+**`W23-PARTIAL` phrased it so it can be answered yes or no, and did not take the route
+itself.** `partial` is now reachable **on the deployed path by a real truncated provider
+call**. It is not reachable **from inside a user's journey**: every route to it belongs to an
+operator of the *deployment* — who the proxy is and what it answers.
+
+> Does criterion 4 require `partial` to be provoked from inside the operator's journey, or is
+> it satisfied by `partial` being reached on the deployed path by a real truncated provider
+> call? **If the former: may `fixtures/recorded/text_analysis` carry a second canonical
+> recording, keyed by a second acceptance document, whose `stop_reason` is `max_tokens`?**
+
+That second route is the only one that puts the lever in a journey **with no contract
+change**, because a recording is keyed by the request and **the document is the one part of
+the request an operator chooses**. It was not taken because it needs a new PDF under
+`fixtures/synthetic/ar/`, a corpus-builder change, `SHA256SUMS`, `expected_issues.json` and
+the contract tests that enumerate them — none of them that session's.
+
+**And the cheap alternative is not cheap**, measured rather than assumed: an output ceiling is
+configurable **nowhere**, and `max_output_tokens` is hashed into `PromptBundle.content_sha256`
+and then `AnalysisProfile.content_sha256`, which `ADR-0011` requires immutable. **A configured
+output ceiling is a contract change wearing an environment variable.**
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
