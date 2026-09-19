@@ -13,11 +13,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 |---|---|---|
 | **D-18** | a catalog code costs a frontend reseal; built, proved, reverted by **`R-11`** | owner |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
-| **D-25** | a quotation's caption gives document-global offsets as page-local | `web/src` |
-| **D-26** | one sentence left (`bff/route.ts`); the nginx half is corrected | `web/src` |
-| **D-32** | `D-23`'s guard reads only `.py` and `.md`; four counts hid in `.conf` and `Dockerfile` | widen it |
-| **D-28** | an unrouted path answers 200; a status code proves nothing | `web/src/app` |
-| **D-29** | `npm run test:unit` exits 1 though its tests pass | `web/` |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
@@ -837,34 +832,31 @@ published attributes intact.
 `grep` never fired), `W22-OPS` (a rehearsal that counted nothing, and this). Every one was
 invisible to reading and visible to running.
 
-### D-25 — a quotation's caption says "page 2, chars 707–746" and those offsets are not page-local
+### D-25 — a quotation's caption gave document-global offsets as page-local — **CLOSED**
 
-**`W21CERT-2`.** `web/src/entities/finding-observation/model/quotation.ts:53` renders the
-character range beside the page number, but the range is **document-global** — the frozen
-`Evidence` schema says so, and `pages.ts:10` already knows it. Page 2's own text is 539
-characters; the quotation sits at page-local 198–237.
+**Closed 2026-09-19 by `W22-WEB`.** The caption now reads **"page 2, characters 712–746 of
+the whole document, not of page 2"**.
 
-**The data is right and the caption is wrong**, which is the more dangerous half: an expert
-checking the citation by hand looks at the wrong place on the right page and concludes the
-tool is lying about something it has correct.
+**The global range is kept and labelled, because the other two options do not exist** —
+established rather than assumed: `Evidence` carries no page-start offset, **no operation in
+the contract returns a page's text**, and the page pane is PDF bytes. So a page-local figure
+cannot be computed on the client at all. Dropping the range would strip the numbers that the
+mismatch alert refers to.
 
-Tree: `web/src`.
+**And my brief was wrong about the way out.** I wrote that `pages.ts` already knows how to
+convert; its own lines 10–12 say the opposite — it knows the **convention**, not a
+conversion. The whole step turned on that.
 
-### D-26 — two sentences that stopped being true and are still in the tree
+### D-26 — two sentences that stopped being true — **CLOSED**
 
-Both were reported by the session that made them false, and neither was that session's to
-edit.
+`nginx.conf:37`'s reason corrected by `W22-OPS` with the number untouched; the `bff/route.ts`
+counts corrected by `W22-WEB`.
 
-- **`infra/deploy/proxy/nginx.conf:37`** — *"A model run is slow. The default 60 s read
-  timeout would cut `startRun` off mid-call."* False since `W20-EXEC`: `startRun` no longer
-  blocks. The 300 s value is still right and now bounds a cap-sized **upload**, measured at
-  0.85–0.87 s. **The number is correct and its stated reason is not.**
-- **`web/src/app/bff/v1/[...path]/route.ts:16`** — still says *"twelve paths"*; the contract
-  has declared **fifteen operations across twelve paths** since `R-5`. This is the **fifth**
-  stale count, the one `636b850` named and left standing because it is outside `src/`.
-
-**The cheap repair for the second is to widen `D-23`'s guard to `web/src/app/bff/`**, which
-already reads its counts from the document and would then catch the sixth.
+**And the second half carried a trap I walked into.** I told the session that `route.ts:16`
+says *"twelve paths"*. **Line 16 is the only correct count in that file** — twelve paths is
+true, fifteen operations is the figure that moved — and the stale statements are on lines 14
+and 20. **Repairing what I named would have broken a true statement.** The session checked
+and repaired the real ones.
 
 ### D-27 — nothing notices when the deployed stack drifts from the tree — **CLOSED**
 
@@ -902,33 +894,30 @@ leaving the 502 in place. **It is intermittent, which is why it survived three w
 Check: `./infra/deploy/verify-deployed.sh`; and
 `.venv/bin/pytest tests/integration/composition/test_deployed_stack_probe.py` is 17 cases.
 
-### D-28 — an unrouted project path answers 200, so a status code cannot tell a screen from a soft error
+### D-28 — an unrouted path answers 200 — **HALF CLOSED, half refused on purpose**
 
-**`W21-E2E`.** `/projects/<anything>` renders the project screen in an error state rather
-than answering `404`, because the dynamic segment matches any string. Only an unrouted
-**top-level** path 404s.
+**Closed for malformed addresses** by `W22-WEB`: `/projects/nonexistent-abc`,
+`…/runs/zzz` and `…/versions/bad` now answer **404 on the wire**, working screens unchanged
+at 200. The mechanism was already proved in the tree — `app/page.tsx` calls `redirect()` from
+a server component and yields a genuine 307, and `notFound()` is the same mechanism.
 
-**The consequence is about instruments, not about users.** A journey, a monitor or a probe
-that reads a status code cannot distinguish *"this screen exists and works"* from *"this
-screen exists and is telling the user something went wrong"*. Every such check on this app
-must read the rendered body, and `W21-E2E`'s journey does — which is why it found this.
+**Refused, deliberately and in writing: the well-formed-but-nonexistent half.** It needs a
+server-side fetch on screens that fetch on the client — **and that client fetch is `D-16`'s
+repair.** Moving it back would touch the credential seam, React Query, streaming and every
+loading state. The refusal is **asserted in `routes.test.ts`**, so it cannot close silently.
 
-Related and measured in the same pass: **no route here is ever network-idle** — at least one
-request per screen never emits `loadingFinished`. Any harness waiting for idle waits forever.
+**The network-idle half of this row was false as I stated it.** Nine of ten routes reach
+`inFlight === 0`; the tenth's single open exchange is **Chrome's bundled PDF-viewer extension
+page** — not the app and not this origin. Every application request finishes.
 
-Tree: `web/src/app`.
+### D-29 — `npm run test:unit` exited 1 while its tests passed — **CLOSED**
 
-### D-29 — `npm run test:unit` exits 1 while the tests it names all pass
+**Closed 2026-09-19 by `W22-WEB`**: 38 files, 567 tests, exit 0. The stale `e2e:pc01` and
+`test:unit` reservations are released from the forwarder and from `web/FRONTEND_LOCK.json`.
 
-**`W21-E2E`, and it is live rot rather than a stale name.** `web/tests/unit/` holds 38 test
-files. They **do** run under `npm test`, so `make gate` covers them and nothing is unguarded
-— but the named command lies, and a person who runs it concludes the suite is broken.
-
-Beside it, two reservations that are now stale: `web/FRONTEND_LOCK.json` still lists
-`e2e:pc01` as reserved for `P3-QA-01`, and `reserved-forwarder.mjs` still carries a dead
-`e2e:pc01` entry. `W21-E2E` took that name and could not edit the lock.
-
-Tree: `web/`.
+**Why the lock drifted is the part worth keeping: no test anywhere referenced
+`reserved_scripts`.** The seal covered its digests and not its content, so that section could
+say anything. A new guard binds `package.json` ↔ forwarder ↔ lock.
 
 ### D-30 — the committed journey covered the read half only — **CLOSED**
 
@@ -971,32 +960,37 @@ trap `W21-E2E` hit the day before and the reason every control gets run rather t
 Check: `npm run e2e:pc01 -- --phase all` against a writable stack; and
 `.venv/bin/pytest tests/e2e/` is 30 passed with no stack at all.
 
-### D-32 — `D-23`'s guard reads only `.py` and `.md`, and four stale counts hid in the rest
+### D-32 — `D-23`'s guard read only `.py` and `.md` — **CLOSED**
 
-**Found by `W22-OPS` while correcting `D-26`.** `tests/contract/api_v1/test_surface_counts_in_prose.py`
-scans `infra/deploy` — but only `.py` and `.md`. Four statements still said *"twelve
-operations"* after `R-5` made it fifteen, in file types the guard cannot read:
+**Closed 2026-09-19.** Four stale counts in `.conf`, `Dockerfile` and `.env.example` were
+corrected by `W22-OPS`; `W22-WEB` widened the guard so the class is readable.
 
-```
-infra/deploy/proxy/nginx.conf:7 and :59
-infra/deploy/Dockerfile.api:1
-infra/deploy/env/alpha.env.example:61
-```
+**Widening needed three changes rather than one**, and the second is the instructive one:
+the file tree and suffixes; **a claim wrapped across a JSDoc line that the pattern could not
+see** — widening alone would have reported the correct figure and stayed **silent on both
+stale ones**; and one more surface noun. The guard also refuses *historical* counts, so a
+first draft reddened and the sentence was **deleted rather than registered as an exception**.
 
-All four are corrected. **The guard still cannot see their class**, so a fifth will arrive
-unnoticed — which is the whole of `D-23`, one file extension over.
+### D-33 — the listing fixture's own anti-vacuity guard was non-deterministic — **CLOSED**
 
-**The repair is to widen `_api_source_files()`** to `.conf`, `.example`, `.yml` and
-`Dockerfile*`. It was not `W22-OPS`'s to do (that file is owned elsewhere this wave), and
-`nginx.conf`'s *"twelve paths"* is **correct** and must survive the widening — twelve paths,
-fifteen operations.
+**Reported by `W22-WEB` on a branch whose diff could not reach it** — two errors, then six
+consecutive passes — and closed by the integrator.
 
-**This is the third time the same shape has been recorded**: `D-8` (a name repeated often
-enough stops being checked), `D-23` (nothing checks the prose at all), and now the guard
-that checks the prose not checking every place prose lives.
+**The non-deterministic thing was an anti-vacuity guard.** The `catalogue` fixture asserts
+that time order and identity order disagree, so an ordering assertion can tell
+`ORDER BY published_at DESC` from `ORDER BY version_uid DESC`. It obtained that disagreement
+**by luck rather than by construction**, and two orderings of three items coincide one time
+in six — matching the observed two failures in eight.
 
-Check: `grep -rn "twelve" infra/deploy/ | grep -v "twelve paths"` is empty, and stays empty
-only if the guard can read those files.
+Two independent sources, both removed: the stamps query **carried no `ORDER BY`** and its
+result was zipped **positionally** against the version list, so the pairing was arbitrary;
+and three ULIDs minted inside one millisecond sort by their **random halves**.
+
+**Shown able to fail** — assigning identities so the two orders agree gives 21 errors.
+**What could not be built is a reliable killer for the positional-zip half alone**: a
+reversed pairing and an insertion-ordered one both pass, because any single permutation
+differs from the sorted order five times in six. That half rests on the reasoning and the
+observed rate, and no mutation proof is claimed for it.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
