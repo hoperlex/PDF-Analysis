@@ -114,10 +114,20 @@ class Catalogue:
         # the document and its first version together.
         self.documents: list[str] = []
         self.current_versions: list[str] = []
+        # Sorted, so identity order is fixed here rather than left to the ULID clock.
+        # `_OFFSETS[:3]` is (30, 90, 60), so newest-first by time is index 0, 2, 1 while
+        # newest-first by identity is 2, 1, 0 -- they disagree BY CONSTRUCTION, which is
+        # what the fixture's own discrimination assertion below requires. Before this,
+        # three ULIDs minted inside one millisecond sorted by their random halves and the
+        # two orders coincided roughly one run in six, so that assertion -- an
+        # anti-vacuity guard -- was itself non-deterministic.
+        minted = sorted(str(VersionUid.new()) for _ in range(3))
         for index in range(3):
             document_uid = str(DocumentUid.new())
             self._document(document_uid, self.project_uid, f"АР {index}")
-            version_uid = self._version(document_uid, ordinal=1, offset=_OFFSETS[index])
+            version_uid = self._version(
+                document_uid, ordinal=1, offset=_OFFSETS[index], uid=minted[index]
+            )
             self._point_at(document_uid, version_uid)
             self.documents.append(document_uid)
             self.current_versions.append(version_uid)
@@ -167,8 +177,15 @@ class Catalogue:
             {"d": document_uid, "p": project_uid, "t": title},
         )
 
-    def _version(self, document_uid: str, *, ordinal: int, offset: int) -> str:
-        version_uid = str(VersionUid.new())
+    def _version(
+        self, document_uid: str, *, ordinal: int, offset: int, uid: str | None = None
+    ) -> str:
+        # `uid` exists so a caller can fix the IDENTITY order independently of the
+        # creation order. A ULID is a millisecond timestamp plus eighty random bits, so
+        # three minted in the same millisecond sort by their random halves -- see the
+        # `catalogue` fixture, which needs identity order and time order to disagree and
+        # cannot get that from minting alone.
+        version_uid = uid if uid is not None else str(VersionUid.new())
         digest = hashlib.sha256(version_uid.encode("utf-8")).hexdigest()
         self.session.execute(
             text(
@@ -264,16 +281,22 @@ class Catalogue:
 def catalogue(session: Session) -> Catalogue:
     built = Catalogue(session)
     # The fixture has to discriminate before any assertion leans on it.
-    stamps = (
+    # `version_uid` is selected WITH the stamp and the two are paired by key. The
+    # previous form selected `published_at` alone and `zip`ped it positionally against
+    # `current_versions` -- but the query carries no ORDER BY, so PostgreSQL was free to
+    # return the rows in any order and the pairing was arbitrary. That is why the
+    # discrimination assertion below was non-deterministic: it compared a shuffled
+    # ordering against a sorted one, and agreed by luck roughly one run in six.
+    stamped = dict(
         session.execute(
             text(
-                "SELECT published_at FROM document_version WHERE version_uid = ANY(:v)"
+                "SELECT version_uid, published_at FROM document_version "
+                "WHERE version_uid = ANY(:v)"
             ),
             {"v": built.current_versions},
-        )
-        .scalars()
-        .all()
+        ).all()
     )
+    stamps = [stamped[uid] for uid in built.current_versions]
     assert len(set(stamps)) == len(built.current_versions), (
         "the documents' current versions share a published_at, so an ordering assertion "
         "over them would be an assertion about the tiebreaker"
