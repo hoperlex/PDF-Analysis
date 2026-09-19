@@ -1,0 +1,60 @@
+{
+  "$comment": [
+    "A DELIBERATELY WRONG manifest. It exists so that 'the journey can fail' is a command",
+    "a later session can run, rather than a claim in a review nobody can re-check.",
+    "",
+    "    npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:PORT \\",
+    "      --manifest ../tests/e2e/pc01/journey/fixtures/redden.manifest.json",
+    "",
+    "Expected: NON-ZERO, with three findings -- one per wrong thing below. If this ever",
+    "exits 0 the journey has stopped checking and every green run it has ever reported is",
+    "worth nothing. A journey that cannot fail is a screenshot.",
+    "",
+    "It is NOT read by tests/e2e/test_pc01_journey_conformance.py: that guard reads",
+    "manifest.json only, so the three wrongs here never redden the gate."
+  ],
+  "api_prefix": "/bff/v1",
+  "identifier_pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+  "routes": [
+    {
+      "name": "wrong-call",
+      "$wrong": "the projects screen calls listProjects, not listRuns. Expect: 'declares GET /bff/v1/runs but the browser did not make it'.",
+      "path": "/projects",
+      "page_module": "web/src/app/projects/page.tsx",
+      "expects_api": [
+        { "method": "GET", "path": "/runs", "operationId": "listRuns" }
+      ],
+      "follow": null
+    },
+    {
+      "name": "route-that-does-not-exist",
+      "$wrong": "no such screen. Expect: 'the document answered 404'.",
+      "$measured": "This was first written as /projects/there-is-no-such-screen and it answered 200, not 404: /projects/[project_uid] matches any segment, so an unrouted PROJECT path renders the project screen in an error state. Only an unrouted TOP-LEVEL path 404s. Confirmed by curl at 2026-09-19: /projects/there-is-no-such-screen -> 200, /projects/prj_01M2T7DTGFN0G83S7PVC2EDM99 -> 200, /there-is-no-such-top-level-route -> 404.",
+      "path": "/there-is-no-such-top-level-route",
+      "page_module": "web/src/app/there-is-no-such-top-level-route/page.tsx",
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "link-that-is-never-rendered",
+      "$wrong": "the projects screen renders no link of this shape, so the walk cannot continue. Expect: 'rendered no link matching ...' and a stop, with the routes after it reported as NOT checked.",
+      "path": "/projects",
+      "page_module": "web/src/app/projects/page.tsx",
+      "expects_api": [
+        { "method": "GET", "path": "/projects", "operationId": "listProjects" }
+      ],
+      "follow": {
+        "capture": "nonexistent_uid",
+        "href_pattern": "^/there/is/no/such/link/(xxx_%ID%)$"
+      }
+    },
+    {
+      "name": "never-reached",
+      "$wrong": "the route after the broken follow. The journey must report it as NOT checked rather than as passing.",
+      "path": "/projects",
+      "page_module": "web/src/app/projects/page.tsx",
+      "expects_api": [],
+      "follow": null
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+# The journey writes its envelopes here. They are evidence of one run against one
+# origin, not source, and they are large. `--out` puts them anywhere else.
+.out/
