@@ -21,6 +21,10 @@ with a stub that records its arguments and exits 0, so even a mutant that runs t
 reaches no database and no bucket. The stub is also the instrument: an empty log is the
 evidence that a refusal happened first.
 
+Two guards -- `dump-verified` and `rehearsal-counted` -- sit **after** a connection is
+attempted, so for those an empty log would be the wrong evidence. Their cases read the log
+for what is *not* in it instead: no `DROP SCHEMA`, and for the rehearsal no `pg_dump` either.
+
 This suite needs no running stack, which is the point -- it is the part of `T-5` that a
 gate can hold, and the dump/restore cycle against a live stack is driven by hand and
 recorded in `docs/program/reviews/W14-PKG.md`.
@@ -312,6 +316,73 @@ class TestTheTwoGuardsThatNeedTheirOwnStaging:
         assert "compose.server.yml is missing" not in completed.stderr
 
 
+class TestTheRehearsalRefusesRatherThanShowingNoNumbers:
+    """`D-24`, the half of it that is not about arithmetic.
+
+    The rehearsal is the screen an operator reads **before** agreeing to destroy real
+    client documents (`R-4`). At `313e753` a `--dry-run` that could not reach the database
+    printed ``(could not read the schema; is the stack up?)``, went on to print an exact
+    bucket listing and a calm closing sentence, and **exited 0**. Measured on a live stack
+    with its postgres container stopped, before this guard existed.
+
+    A table list with no numbers beside it, wrapped in a screen that otherwise looks
+    complete, is the same untruth as ``(0 rows)`` in a different costume. So it refuses.
+
+    The plain stub is exactly the instrument for this: it answers `docker` with silence and
+    exit 0, which is precisely "the count did not come back". Here, unlike the guards above,
+    an empty call log would be the *wrong* evidence -- this guard sits after a connection is
+    attempted, so the log must exist and must contain nothing destructive.
+    """
+
+    ARGS = ("--database", DATABASE, "--bucket", BUCKET, "--dry-run")
+
+    def test_a_rehearsal_that_cannot_count_is_refused(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        completed, log = _run(_staged(tmp_path), self.ARGS, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "could not count what is in" in completed.stderr, completed.stderr
+        calls = log.read_text(encoding="utf-8") if log.exists() else ""
+        # It tried -- so the refusal is this guard and not an earlier one -- and a rehearsal
+        # still touches nothing.
+        assert "psql" in calls, "it refused before even trying to read the database"
+        assert "DROP SCHEMA" not in calls, calls
+        assert "pg_dump" not in calls, calls
+
+    def test_that_guard_is_shown_able_to_fail(self, tmp_path: Path, env_file: Path) -> None:
+        """Delete it and the rehearsal prints a table list with no numbers, and exits 0 --
+        which is what it did at `313e753` and what this row is about."""
+        mutant = _mutant(tmp_path / "mutant", "rehearsal-counted")
+        completed, _ = _run(mutant, self.ARGS, tmp_path=tmp_path, env_file=env_file)
+        assert "could not count what is in" not in completed.stderr
+        assert completed.returncode == 0, (completed.returncode, completed.stderr)
+
+    def test_the_count_is_a_count_and_not_the_statistics_estimate(self) -> None:
+        """The arithmetic half, pinned on the one thing a test with no server can read.
+
+        ``pg_stat_user_tables.n_live_tup`` is an asynchronous estimate. Measured on a live
+        stack at `313e753`: in one session straight after a committed INSERT it said 4 where
+        ``count(*)`` said 5, and with the statistics not yet collected -- a freshly written
+        database, or any server after ``pg_stat_reset()`` -- every table printed
+        ``(0 rows)`` while five projects, a document, a version, a manifest entry and a blob
+        all existed.
+
+        So the rehearsal may not consult that view at all, and must count.
+        """
+        #: The COMMENTS name the estimate on purpose -- they are what records why it is not
+        #: used -- so this reads the executable lines only. A guard that reddened on its own
+        #: explanation would teach the next session to delete the explanation.
+        code = "\n".join(
+            line
+            for line in RESET.read_text(encoding="utf-8").splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert "n_live_tup" not in code, (
+            "the rehearsal is reading the statistics estimate again (D-24)"
+        )
+        assert "count(*)" in code, "the rehearsal no longer counts anything"
+
+
 class TestItDumpsBeforeItDrops:
     """The order `T-5` asks for, asserted on the one thing a stub can prove: an unusable
     dump stops the run, and it stops it before any `DROP`."""
@@ -359,13 +430,15 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", RESET.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 11, markers
+    assert len(markers) == 12, markers
     covered = {guard for guard, _, _ in CASES} | {
         "env-file-present",
         "instance-configured",
         "compose-file-present",
         "dump-verified",
         "restore-complete",
+        # `W22-OPS`, `D-24`: a rehearsal that could not count does not exit 0.
+        "rehearsal-counted",
     }
     assert set(markers) == covered, set(markers) ^ covered
 

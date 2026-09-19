@@ -129,7 +129,7 @@ storage adapter refuses it with `validation_failed`, leaving an instance that li
 document and 422s on its bytes. `object_attrs.py` records what `mirror` loses and
 `--restore` puts it back.
 
-The eleven refusals are delimited by `# >>> guard:` markers, and
+The twelve refusals are delimited by `# >>> guard:` markers, and
 `tests/integration/composition/test_reset_script_refusals.py` shows every one of them able
 to fail by deleting it from a copy.
 
