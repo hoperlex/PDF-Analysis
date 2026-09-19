@@ -1,4 +1,4 @@
-# The API image: the twelve operations under uvicorn, plus `T-3`'s health plane.
+# The API image: the fifteen operations under uvicorn, plus `T-3`'s health plane.
 #
 # Built from the locked toolchain and nothing else. `make bootstrap` syncs `.venv` from
 # `uv.lock` with `--frozen` (no resolution); this does the same thing with the same pinned
