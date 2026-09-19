@@ -23,3 +23,8 @@ In progress.
   with no credential; `/healthz` 200 without one.
 - criteria 3–7 driven in a real browser: project, upload, live run (`running` → `published`),
   finding at its quotation, accept/reject/comment history, CSV with BOM and CRLF.
+- criterion 9: five refusals, five distinct constraints, nothing left behind; a provider
+  outage terminates the run `failed` / `dependency_unavailable` and publishes nothing.
+- criterion 8: census of every table, run, version, decision and object identical across a
+  restart of PostgreSQL, MinIO, the API process and the web process; every screen loads
+  cold afterwards in a fresh browser.
