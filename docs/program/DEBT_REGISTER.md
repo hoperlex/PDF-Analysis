@@ -13,6 +13,10 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 |---|---|---|
 | **D-18** | a catalog code costs a frontend reseal; built, proved, reverted by **`R-11`** | owner |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
+| **D-24** | `--dry-run` under-reports the wipe, in the dangerous direction | `infra/` |
+| **D-25** | a quotation's caption gives document-global offsets as page-local | `web/src` |
+| **D-26** | two sentences that stopped being true | `infra/`, `web/src` |
+| **D-27** | nothing notices when the deployed stack drifts from the tree | a probe |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
@@ -785,6 +789,78 @@ back to twenty-one — so it now uses the pre-`R-3` *"twenty-code"*. The test's 
 had anticipated exactly that: it says so rather than enforcing a claim that has become true.
 
 Check: `.venv/bin/pytest tests/contract/api_v1/test_surface_counts_in_prose.py` is 10 passed.
+
+### D-24 — `reset.sh --dry-run` under-reports what the wipe would destroy
+
+**`W21CERT-1`, and it is wrong in the direction that gets data destroyed.** The rehearsal's
+row counts come from `pg_stat_user_tables.n_live_tup` — an **asynchronous estimate** — printed
+in a column headed *"rows"*.
+
+Measured: on a freshly written database the first rehearsal printed **`(0 rows)` for every
+table** while a project, a document, a version and a manifest entry all existed. Later it
+printed `(2 rows)` where the truth was **4**. The bucket half of the same screen is exact,
+which makes the database half read as though it were too.
+
+**`R-4` is what makes this load-bearing.** The wipe is the commitment that real client
+documents leave the alpha host, and `--dry-run` is the screen an operator reads **before**
+agreeing to destroy them. An operator shown `(0 rows)` may reasonably conclude there is
+nothing to lose.
+
+Tree: `infra/deploy/**`.
+
+Check: write four projects, then `reset.sh … --dry-run | grep '^project '` — it is red while
+that figure is below `select count(*) from project`.
+
+### D-25 — a quotation's caption says "page 2, chars 707–746" and those offsets are not page-local
+
+**`W21CERT-2`.** `web/src/entities/finding-observation/model/quotation.ts:53` renders the
+character range beside the page number, but the range is **document-global** — the frozen
+`Evidence` schema says so, and `pages.ts:10` already knows it. Page 2's own text is 539
+characters; the quotation sits at page-local 198–237.
+
+**The data is right and the caption is wrong**, which is the more dangerous half: an expert
+checking the citation by hand looks at the wrong place on the right page and concludes the
+tool is lying about something it has correct.
+
+Tree: `web/src`.
+
+### D-26 — two sentences that stopped being true and are still in the tree
+
+Both were reported by the session that made them false, and neither was that session's to
+edit.
+
+- **`infra/deploy/proxy/nginx.conf:37`** — *"A model run is slow. The default 60 s read
+  timeout would cut `startRun` off mid-call."* False since `W20-EXEC`: `startRun` no longer
+  blocks. The 300 s value is still right and now bounds a cap-sized **upload**, measured at
+  0.85–0.87 s. **The number is correct and its stated reason is not.**
+- **`web/src/app/bff/v1/[...path]/route.ts:16`** — still says *"twelve paths"*; the contract
+  has declared **fifteen operations across twelve paths** since `R-5`. This is the **fifth**
+  stale count, the one `636b850` named and left standing because it is outside `src/`.
+
+**The cheap repair for the second is to widen `D-23`'s guard to `web/src/app/bff/`**, which
+already reads its counts from the document and would then catch the sixth.
+
+### D-27 — nothing notices when the deployed stack drifts from the tree
+
+**Found by my own false premise, which is the honest provenance.** I told `W21-CERT` that the
+stack on 31500 was *"rebuilt from current code"*. It was not: the image was created at
+**13:25 UTC** and `W20-EXEC` merged at **14:47 UTC**, so `carrier.py` is not in it —
+verified by listing the directory inside the running container.
+
+A session that had trusted me would have driven a stack **without the repair it was
+certifying**, reported criterion 4 exactly as `W15-RUN` did in the morning, and blamed
+`W20-EXEC`.
+
+**This is the third wave running in which "deployed ≠ repository" has had to be re-measured
+by hand.** There is no mechanism that says so. The stack serves `/openapi.json` and the tree
+has a contract; a probe comparing the served document's digest — or simply the commit the
+image was built from — to `HEAD` would answer it in one command.
+
+**Until such a probe exists, every claim about the deployed stack must name the image's build
+time**, and a rebuild is a step in closing a wave rather than an afterthought.
+
+Check: `docker exec <api> ls /app/src/auditmanager/runs/` against `git log -1` for the file
+in question.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
