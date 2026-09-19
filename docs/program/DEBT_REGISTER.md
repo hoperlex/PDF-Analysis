@@ -17,6 +17,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-25** | a quotation's caption gives document-global offsets as page-local | `web/src` |
 | **D-26** | two sentences that stopped being true | `infra/`, `web/src` |
 | **D-27** | nothing notices when the deployed stack drifts from the tree | a probe |
+| **D-28** | an unrouted path answers 200; a status code proves nothing | `web/src/app` |
+| **D-29** | `npm run test:unit` exits 1 though its tests pass | `web/` |
+| **D-30** | the committed journey has no write half — which is what `D-5` was | `tests/e2e` |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
@@ -861,6 +864,52 @@ time**, and a rebuild is a step in closing a wave rather than an afterthought.
 
 Check: `docker exec <api> ls /app/src/auditmanager/runs/` against `git log -1` for the file
 in question.
+
+### D-28 — an unrouted project path answers 200, so a status code cannot tell a screen from a soft error
+
+**`W21-E2E`.** `/projects/<anything>` renders the project screen in an error state rather
+than answering `404`, because the dynamic segment matches any string. Only an unrouted
+**top-level** path 404s.
+
+**The consequence is about instruments, not about users.** A journey, a monitor or a probe
+that reads a status code cannot distinguish *"this screen exists and works"* from *"this
+screen exists and is telling the user something went wrong"*. Every such check on this app
+must read the rendered body, and `W21-E2E`'s journey does — which is why it found this.
+
+Related and measured in the same pass: **no route here is ever network-idle** — at least one
+request per screen never emits `loadingFinished`. Any harness waiting for idle waits forever.
+
+Tree: `web/src/app`.
+
+### D-29 — `npm run test:unit` exits 1 while the tests it names all pass
+
+**`W21-E2E`, and it is live rot rather than a stale name.** `web/tests/unit/` holds 38 test
+files. They **do** run under `npm test`, so `make gate` covers them and nothing is unguarded
+— but the named command lies, and a person who runs it concludes the suite is broken.
+
+Beside it, two reservations that are now stale: `web/FRONTEND_LOCK.json` still lists
+`e2e:pc01` as reserved for `P3-QA-01`, and `reserved-forwarder.mjs` still carries a dead
+`e2e:pc01` entry. `W21-E2E` took that name and could not edit the lock.
+
+Tree: `web/`.
+
+### D-30 — the committed journey covers the read half only
+
+**Named by `W21-E2E` rather than papered over.** The walk drives seven routes and discovers
+every identifier by following links the pages render. **The write half — create a project,
+upload, start a run — is not built**, because driving it needs a stack the session could
+write to and none was available.
+
+It was left **unbuilt and named** rather than written as an unexecuted code path, on the
+argument that unexecuted code is the same defect as an unrun suite. That is the right call
+and the row exists so the gap is visible.
+
+**This matters because the write half is what `D-5` actually was**: the 500 that started all
+of this was a `POST /runs`. The journey as committed would not have caught it.
+
+It is an extension of `manifest.json` plus the walk, not a second instrument.
+
+Check: `tests/e2e/pc01/journey/README.md` names it.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
