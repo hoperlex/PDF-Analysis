@@ -127,9 +127,10 @@ def _require(path: Path) -> Path:
     if not path.exists():
         pytest.fail(
             f"{path} is missing, so this check would prove nothing. "
-            "`make mutation-copy` copies only src/, tests/ and pyproject.toml, so these "
-            "four checks must be excluded by path inside a mutation copy rather than read "
-            "as reds."
+            "Inside a `make mutation-copy` tree this is expected for anything under web/, "
+            "which that target does not provide: exclude the three web/-reading checks in "
+            "this file by path rather than reading them as reds. Measured 2026-09-19 in a "
+            "copy: 3 failed, 7 passed."
         )
     return path
 
@@ -245,6 +246,34 @@ def test_control_a_deleted_screen_is_detected() -> None:
     in_tree: set[str] = set()
     in_manifest = set(screens_in_manifest(_SYNTHETIC_MANIFEST))
     assert in_manifest - in_tree == {"/projects"}
+
+
+def test_control_the_screen_scan_really_reads_a_tree(tmp_path: Path) -> None:
+    """The set arithmetic above is only worth as much as the scan that feeds it.
+
+    Built here rather than read from `web/`, so this control runs in a mutation copy and
+    proves the scan finds nested and dynamic screens and ignores route handlers.
+    """
+    app = tmp_path / "web" / "src" / "app"
+    for relative in (
+        "page.tsx",
+        "projects/page.tsx",
+        "projects/[project_uid]/page.tsx",
+        "projects/[project_uid]/runs/[run_id]/review/page.tsx",
+    ):
+        target = app / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("", encoding="utf-8")
+    handler = app / "bff" / "v1" / "[...path]" / "route.ts"
+    handler.parent.mkdir(parents=True, exist_ok=True)
+    handler.write_text("", encoding="utf-8")
+
+    assert set(screens_in_app_tree(app)) == {
+        "/",
+        "/projects",
+        "/projects/{project_uid}",
+        "/projects/{project_uid}/runs/{run_id}/review",
+    }
 
 
 def test_control_a_renamed_dynamic_segment_changes_the_derived_path() -> None:
