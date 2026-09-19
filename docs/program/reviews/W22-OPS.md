@@ -10,7 +10,7 @@
 | Disk on arrival | `df -h /` — 119G total, 98G used, **15G available**, 87% |
 | Disk at close | 101G used, **12G available**, 90%. **No image was built.** |
 | Started | 2026-09-19 17:43:26 +05 |
-| Finished | 2026-09-19 19:02 +05 — **about 1 h 19 min wall clock** |
+| Finished | 2026-09-19 18:29 +05 — **46 minutes wall clock**, of which about 12 are the three full gate runs |
 
 ```
 make gate                                   # exit 0, read from $?, never through | tail
