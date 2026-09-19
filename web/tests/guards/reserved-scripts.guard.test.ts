@@ -52,8 +52,15 @@ const lock = readJson<Lock>(LOCK_PATH);
  * `process.exit` on the argument it is given.
  */
 function forwarderReservations(source: string): string[] {
-  const block = source.slice(source.indexOf('const RESERVED = {'));
-  return [...block.matchAll(/^ {2}'([^']+)': \{$/gm)].map((m) => m[1] as string);
+  const start = source.indexOf('const RESERVED = {');
+  if (start < 0) throw new Error('reserved-forwarder.mjs has no RESERVED map');
+  const block = source.slice(start, source.indexOf('\n};', start));
+  // A key at the map's own indent, however the value is written. An earlier version of
+  // this required the entry to open a block -- `'name': {` at end of line -- and a
+  // mutation that re-reserved a landed name on a single line SURVIVED the whole guard,
+  // because the reader simply did not see it. The detector must not depend on formatting
+  // the thing it inspects is free to change.
+  return [...block.matchAll(/^ {2}'([^']+)'\s*:/gm)].map((m) => m[1] as string);
 }
 
 /** The scripts routed at the forwarder, whatever name they carry. */
@@ -124,6 +131,22 @@ describe('each detector reddens on the exact drift it exists to catch', () => {
 
   it('reads the reserved names out of the forwarder rather than assuming them', () => {
     expect(forwarderReservations(RESERVED_SOURCE)).toEqual(['csv:verify']);
+  });
+
+  it('sees an entry however it is formatted, block or single line', () => {
+    // The mutation that survived: re-reserving a landed name on one line. The reader now
+    // finds it, so the assertions above can fail on it.
+    expect(
+      forwarderReservations("const RESERVED = {\n  'test:unit': { owner: 'x' },\n};"),
+    ).toEqual(['test:unit']);
+    expect(forwarderReservations("const RESERVED = {\n  'a:b' : {\n},\n};")).toEqual(['a:b']);
+  });
+
+  it('does not read a quoted string from beyond the map as a reservation', () => {
+    // The block ends at the map's closing brace, so prose below it is not scanned.
+    expect(
+      forwarderReservations("const RESERVED = {\n  'a:b': {},\n};\n  'not:a:name': 1"),
+    ).toEqual(['a:b']);
   });
 
   it('a name released in package.json but left in the forwarder is visible', () => {
