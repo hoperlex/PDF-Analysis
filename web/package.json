@@ -21,7 +21,7 @@
     "test": "vitest run",
     "test:guards": "vitest run tests/guards",
     "test:contract": "vitest run tests/contract",
-    "test:unit": "node scripts/reserved-forwarder.mjs test:unit",
+    "test:unit": "vitest run tests/unit",
     "e2e:pc01": "node ../tests/e2e/pc01/journey/journey.mjs",
     "csv:verify": "node scripts/reserved-forwarder.mjs csv:verify"
   },

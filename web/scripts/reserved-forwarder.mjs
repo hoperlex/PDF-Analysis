@@ -10,19 +10,24 @@
  *
  * A later owner replaces the `scripts` entry in package.json with the real command. No
  * one renames a reserved name.
+ *
+ * **Releasing a name is a three-file edit and all three are required.** The `scripts`
+ * entry, the `RESERVED` entry here, and `web/FRONTEND_LOCK.json` `reserved_scripts` must
+ * be changed together, and `web/tests/guards/reserved-scripts.guard.test.ts` holds them
+ * to it. Two names were released by `W22-WEB` because two of the three had drifted:
+ *
+ *   - `test:unit` (`D-29`) exited 1 from this forwarder while all 38 files under
+ *     `web/tests/unit/` passed under `npm test`. Nothing was unguarded -- `make gate`
+ *     runs them -- but the named command lied, and a person who ran it concluded the
+ *     suite was broken. It now runs the directory it is named after;
+ *   - `e2e:pc01` (`D-26`) was taken by `W21-E2E`, whose journey is committed at
+ *     `tests/e2e/pc01/journey/`; `package.json` already pointed at it and only this
+ *     entry and the lock still said the name was unclaimed.
+ *
+ * `csv:verify` is genuinely unclaimed: `web/tests/contract/csv/` does not exist.
  */
 
 const RESERVED = {
-  'test:unit': {
-    owner: 'Gate B sessions B7 and B8',
-    delivers: 'unit tests for the _pages, widgets, features and entities slices',
-    path: 'web/tests/unit/**',
-  },
-  'e2e:pc01': {
-    owner: 'the P3-QA-01 lane',
-    delivers: 'the end-to-end PC-01 journey suite and its Playwright configuration',
-    path: 'tests/e2e/pc01/**',
-  },
   'csv:verify': {
     owner: 'the CSV export lane (B5 produces, B8 downloads)',
     delivers: 'verification of the seventeen frozen CSV columns of P02_SEAMS.md section 6',
