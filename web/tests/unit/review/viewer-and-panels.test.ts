@@ -72,7 +72,7 @@ describe('each quotation is shown with the anchor it was verified at', () => {
       7,
     );
     expect(markup).toContain('am-quotation__anchor');
-    expect(markup).toContain('page 7, chars 1200');
+    expect(markup).toContain('page 7, characters 1200');
     expect(markup).toContain('1211');
   });
 
@@ -81,8 +81,35 @@ describe('each quotation is shown with the anchor it was verified at', () => {
       anchored({ quote: 'forty-five days', page_number: 9, char_start: 40 }),
       9,
     );
-    expect(markup).toContain('page 9, chars 40');
+    expect(markup).toContain('page 9, characters 40');
     expect(markup).toContain('55');
+  });
+
+  /**
+   * `D-25`, asserted where the reviewer actually reads it.
+   *
+   * The unit test on `anchorLabel` constrains the helper; this constrains the *rendered
+   * markup*, because the defect the row is about is what reaches the screen. A repair that
+   * fixed the helper and left the widget printing something else would pass there and fail
+   * here.
+   */
+  it('the rendered anchor says the range is the document\u2019s, not the page\u2019s', () => {
+    const markup = viewer(
+      anchored({ quote: 'thirty days', page_number: 2, char_start: 707 }),
+      2,
+    );
+    expect(markup).toContain('page 2, characters 707\u2013718 of the whole document, not of page 2');
+  });
+
+  it('the rendered anchor never shows a bare \u201Cchars\u201D range with no convention', () => {
+    // The exact pre-repair spelling. It is asserted absent rather than merely different,
+    // because "chars 707-746" beside "page 2" is the wrong reading D-25 names.
+    const markup = viewer(
+      anchored({ quote: 'thirty days', page_number: 2, char_start: 707 }),
+      2,
+    );
+    expect(markup).not.toContain('chars 707');
+    expect(markup).toContain('of the whole document');
   });
 });
 

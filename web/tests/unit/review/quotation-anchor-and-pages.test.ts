@@ -135,13 +135,49 @@ describe('a stated anchor that disagrees with its quotation is reported, not ass
   });
 });
 
-describe('the anchor label states the page and the character range the server sent', () => {
-  it('is the page number, then both ends of the range, separated by an en dash', () => {
-    // U+2013 EN DASH, pinned as an escape: a change to a hyphen is a change to what the
-    // reviewer reads and should not pass unnoticed.
-    expect(
-      anchorLabel(item({ quote: 'x', page_number: 7, char_start: 1200, char_end: 1232 })),
-    ).toBe('page 7, chars 1200\u20131232');
+describe('the anchor label states the page, the range, and which convention the range uses', () => {
+  /**
+   * `D-25`. The offsets are document-global (`Evidence` in the frozen contract), and the
+   * defect was that the caption did not say so: beside the words "page 2", `chars 707-746`
+   * reads as an offset into page 2. `W21-CERT` measured the real case — page 2 of that
+   * document is 539 characters and the quotation sits at page-local 198-237 — so a reader
+   * following the old caption looked 707 characters into a 539-character page.
+   *
+   * Every assertion below is written against that reader, not against the string: the
+   * whole label, the convention clause, the page named twice, and the refusal to print a
+   * page-local number anywhere.
+   */
+  const REAL_CASE = item({ quote: 'x', page_number: 2, char_start: 707, char_end: 746 });
+
+  it('is exactly this string, for the case D-25 was found on', () => {
+    // The full label, pinned. U+2013 EN DASH is an escape on purpose: a change to a hyphen
+    // is a change to what the reviewer reads and should not pass unnoticed.
+    expect(anchorLabel(REAL_CASE)).toBe(
+      'page 2, characters 707–746 of the whole document, not of page 2',
+    );
+  });
+
+  it('names the convention, so the reader needs nothing else to act on the number', () => {
+    // The load-bearing clause. Without it the caption is D-25 again, whatever else it says.
+    expect(anchorLabel(REAL_CASE)).toContain('of the whole document');
+  });
+
+  it('denies the page-local reading explicitly, naming the same page again', () => {
+    // "not of page 2", not "not of the page": the page is named a second time so the
+    // negation cannot be read as referring to some other page.
+    expect(anchorLabel(REAL_CASE)).toContain('not of page 2');
+    const other = item({ quote: 'x', page_number: 11, char_start: 5, char_end: 9 });
+    expect(anchorLabel(other)).toContain('not of page 11');
+    expect(anchorLabel(other)).not.toContain('not of page 2');
+  });
+
+  it('never prints the page-local offsets, which the browser cannot compute anyway', () => {
+    // 198 and 237 are this quotation's page-local offsets. The browser holds neither the
+    // prepared text layer nor the page's start in it, so a caption showing them could only
+    // have guessed. Asserted because "convert it" is the obvious wrong repair.
+    const label = anchorLabel(REAL_CASE);
+    expect(label).not.toContain('198');
+    expect(label).not.toContain('237');
   });
 
   it('uses the server page number unchanged', () => {
@@ -155,6 +191,19 @@ describe('the anchor label states the page and the character range the server se
     const label = anchorLabel(item({ quote: 'x', page_number: 3, char_start: 40, char_end: 95 }));
     expect(label).toContain('40');
     expect(label).toContain('95');
+  });
+
+  it('states the range in the order the server declares it, start before end', () => {
+    const label = anchorLabel(item({ quote: 'x', page_number: 3, char_start: 40, char_end: 95 }));
+    expect(label.indexOf('40')).toBeLessThan(label.indexOf('95'));
+  });
+
+  it('passes both offsets through unchanged, with no off-by-one adjustment', () => {
+    // A well-meaning "+1 to make it 1-based" is exactly the class of edit this caption
+    // must not acquire: the contract's offsets are what the grounding gate verified.
+    expect(anchorLabel(item({ quote: 'x', page_number: 1, char_start: 0, char_end: 0 }))).toContain(
+      'characters 0–0 ',
+    );
   });
 });
 
