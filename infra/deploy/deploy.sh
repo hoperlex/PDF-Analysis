@@ -386,11 +386,6 @@ echo "-- the published port answers --"
 # ended in a 502 would otherwise be reported as a deploy.
 SERVED="$(mktemp)"
 trap 'rm -f "$SERVED"' EXIT
-# World-readable on purpose: the api image runs as an unprivileged account (uid 10001) and
-# the last guard mounts this file into it. `mktemp` makes it 0600 and owned by whoever ran
-# this, so without this the conformance check would fail on a permission error and read as
-# a non-conforming schema -- a guard reporting the wrong failure is worse than none.
-chmod 644 "$SERVED"
 # `|| true` and not `|| echo 000`: curl PRINTS `000` and ALSO exits non-zero when it cannot
 # connect, so a fallback would run too and the refusal would read "answered 000000".
 PROXY_CODE="$(curl -s -m 30 -o "$SERVED" -w '%{http_code}' \
@@ -445,13 +440,47 @@ if [ ! -r "$CONFORMANCE_ENGINE" ]; then
            "process. Without the engine there is no check to re-run, and a deploy that" \
            "skipped it would report a conformance it never made."
 fi
+# THE SERVED DOCUMENT GOES IN ON STDIN AND IS NOT MOUNTED, AND THAT WAS MEASURED RATHER
+# THAN CHOSEN. This guard was written with `-v "$SERVED:/served.json:ro"`, driven from a
+# clean clone, and the container answered:
+#
+#     IsADirectoryError: [Errno 21] Is a directory: '/served.json'
+#
+# `$SERVED` comes from `mktemp`, so it is under `/tmp`. **The docker daemon on that host is
+# the snap build, and its mount namespace has `/tmp/snap-private-tmp/snap.docker/tmp`
+# mounted over `/tmp`** -- so a bind source under `/tmp` is not the file the operator can
+# see, it is nothing, and docker's answer to a bind source that does not exist is to create
+# an empty DIRECTORY at the destination and start the container anyway. Measured on this
+# host, minimally, with the two halves side by side: the identical bind of a file under
+# `/root` arrives as the file and prints its contents.
+#
+# This is `reset.sh`'s `--restore` finding in a second costume -- there, a relative path
+# handed to `docker run -v` was a volume NAME rather than a directory. The lesson is the
+# same one: **a `-v` source is resolved by the daemon, not by the shell that typed it**, and
+# it fails by producing something plausible rather than by stopping.
+#
+# A `mktemp -p` somewhere else would have fixed this one path and left the class open, so
+# the mount is gone instead. `reset.sh` already pipes a file into a container this way
+# (`compose exec -T postgres pg_restore ... < "$DUMP_DIR/database.dump"`) and `-T` is what
+# makes it work. The engine stays a mount because it lives in the repository, which the
+# daemon does see -- the same place `reset.sh` mounts `object_attrs.py` from.
+#
+# EXIT 2 IS A SEPARATE ANSWER FROM EXIT 1 on purpose. "The served document could not be
+# read" and "the served document does not conform" are two different things to tell an
+# operator, and the first reported as the second is exactly the failure this comment is
+# about: a guard that refuses for the wrong reason sends somebody to look at the contract
+# when the fault is in the fetch.
 CONFORMANCE_DRIVER='
 import json, sys
 sys.path.insert(0, "/engine")
 from openapi_conformance import differences, operation_index, surface
 
+try:
+    served = json.load(sys.stdin)
+except ValueError as exc:
+    print("the document served at /api/v1/openapi.json is not JSON: %s" % exc)
+    sys.exit(2)
 frozen = json.load(open("/app/contracts/api/v1/openapi.json", encoding="utf-8"))
-served = json.load(open("/served.json", encoding="utf-8"))
 report = differences(surface(frozen), surface(served))
 print("frozen ops : %d" % len(operation_index(frozen)))
 print("served ops : %d" % len(operation_index(served)))
@@ -463,9 +492,13 @@ sys.exit(0 if not report else 1)
 CONFORMANCE_STATUS=0
 compose run --rm --no-deps -T \
     -v "$CONFORMANCE_ENGINE:/engine/openapi_conformance.py:ro" \
-    -v "$SERVED:/served.json:ro" \
-    --entrypoint python api -c "$CONFORMANCE_DRIVER" 2>&1 | sed 's/^/  /' \
+    --entrypoint python api -c "$CONFORMANCE_DRIVER" < "$SERVED" 2>&1 | sed 's/^/  /' \
     || CONFORMANCE_STATUS=$?
+if [ "$CONFORMANCE_STATUS" -eq 2 ]; then
+    refuse "the published port answered 200 and did not serve a document." \
+           "What came back is above. The stack is up and the conformance check was NOT" \
+           "made, which is a different thing from a check that was made and failed."
+fi
 if [ "$CONFORMANCE_STATUS" -ne 0 ]; then
     refuse "the document this stack serves does not conform to the frozen contract." \
            "The differences are listed above, in the gate's own words. The stack is up and" \

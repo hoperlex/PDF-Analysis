@@ -156,17 +156,11 @@ if argv[:1] == ["compose"]:
             sys.stdout.write(setting("STUB_CHECK_OUTPUT", "FOUNDATION-CHECK OK check-db") + "\n")
             sys.exit(0)
         if "openapi_conformance.py" in joined:
-            # Copy out whatever was mounted at /served.json, AS THE CONTAINER WOULD SEE IT
-            # and while it still exists: deploy.sh removes its own temporary file on exit,
-            # so a test that read it afterwards would be reading nothing.
-            for index, arg in enumerate(rest):
-                if arg == "-v" and rest[index + 1].endswith(":/served.json:ro"):
-                    source = rest[index + 1][: -len(":/served.json:ro")]
-                    with open(source, "rb") as served:
-                        with open(setting("STUB_LOG") + ".served", "wb") as out:
-                            out.write(served.read())
-                    with open(setting("STUB_LOG") + ".served-mode", "w") as mode:
-                        mode.write("%o %s" % (os.stat(source).st_mode & 0o777, source))
+            # The served document arrives on STDIN, not as a mount -- see the comment on
+            # this guard in deploy.sh. Copying it out here is what lets a case prove that
+            # the bytes the proxy served are the bytes the check was given.
+            with open(setting("STUB_LOG") + ".served", "wb") as out:
+                out.write(sys.stdin.buffer.read())
             sys.stdout.write(setting("STUB_CONFORMANCE_OUTPUT", "differences: 0") + "\n")
             sys.exit(int(setting("STUB_CONFORMANCE_STATUS", "0")))
         sys.exit(0)
@@ -769,41 +763,70 @@ class TestTheControl:
         script, env_file = _ready(tmp_path, port)
         completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
-        mounts = [
-            word
-            for line in log.read_text(encoding="utf-8").splitlines()
-            for word in line.split()
-            if word.endswith(":/served.json:ro")
-        ]
-        assert mounts, "the served document was never handed to the conformance check"
-        for mount in mounts:
-            host_path = Path(mount[: -len(":/served.json:ro")])
-            assert host_path.is_absolute(), (
-                f"docker was handed {mount!r}; a relative path there is a volume name, "
-                "which is what W22-OPS found by running reset.sh's own printed command"
-            )
-        # What the stub copied out at the moment of the mount, not afterwards: the script
-        # removes its own temporary file on exit, correctly.
         captured = Path(str(log) + ".served")
-        assert captured.exists(), "nothing was mounted at /served.json"
+        assert captured.exists(), "the served document never reached the conformance check"
         assert json.loads(captured.read_text(encoding="utf-8"))["x-served-by"] == "the-proxy"
 
-    def test_the_served_document_is_readable_by_the_unprivileged_image(
+    def test_the_served_document_is_not_bind_mounted(
         self, tmp_path: Path, serving: tuple[int, type]
     ) -> None:
-        """The api image runs as uid 10001 and `mktemp` makes a file 0600 owned by the
-        operator. Without the chmod the conformance check fails on a permission error and
-        is reported as a schema that does not conform -- a guard that gives the wrong
-        reason is worse than one that is absent, because somebody will act on it."""
+        """MEASURED, NOT PREFERRED. This guard was first written with
+        `-v "$SERVED:/served.json:ro"` and driven from a clean clone, and the container
+        answered `IsADirectoryError: Is a directory: '/served.json'`.
+
+        `$SERVED` comes from `mktemp`, so it is under `/tmp`, and the snap docker daemon's
+        mount namespace has `/tmp/snap-private-tmp/snap.docker/tmp` mounted over `/tmp`. A
+        bind source the daemon cannot resolve is not an error: docker creates an empty
+        DIRECTORY at the destination and starts the container. It is `reset.sh`'s
+        relative-path finding again -- **a `-v` source is resolved by the daemon, not by
+        the shell that typed it** -- and both fail by producing something plausible.
+
+        A `mktemp -p` elsewhere would have fixed the one path and left the class open, so
+        this pins the shape rather than the directory: the served document is piped in.
+        """
         port, _ = serving
         script, env_file = _ready(tmp_path, port)
         completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
-        mode = Path(str(log) + ".served-mode").read_text(encoding="utf-8").split()[0]
-        assert int(mode, 8) & 0o044, (
-            f"the served document was mounted mode {mode}; the image's unprivileged "
-            "account cannot read it"
+        for line in log.read_text(encoding="utf-8").splitlines():
+            for word in line.split():
+                assert not word.endswith(":/served.json:ro"), (
+                    f"the served document is bind-mounted again: {word!r}. Under a daemon "
+                    "whose /tmp is not the operator's it arrives as an empty directory."
+                )
+        # And what IS mounted comes from the repository, which the daemon does resolve --
+        # the same place reset.sh mounts object_attrs.py from.
+        engine_mounts = [
+            word
+            for line in log.read_text(encoding="utf-8").splitlines()
+            for word in line.split()
+            if word.endswith(":/engine/openapi_conformance.py:ro")
+        ]
+        assert engine_mounts, "the conformance engine is no longer mounted"
+        for mount in engine_mounts:
+            source = Path(mount[: -len(":/engine/openapi_conformance.py:ro")])
+            assert source.is_absolute(), mount
+            assert source.exists(), f"{source} is not a path the daemon could resolve"
+
+    def test_a_published_port_that_serves_something_other_than_json_says_so(
+        self, tmp_path: Path, serving: tuple[int, type]
+    ) -> None:
+        """"Could not be read" and "does not conform" are two different things to tell an
+        operator, and the first reported as the second sends somebody to look at the
+        contract when the fault is in the fetch."""
+        port, _ = serving
+        script, env_file = _ready(tmp_path, port)
+        completed, _ = _run(
+            script, tmp_path=tmp_path, env_file=env_file,
+            stub={
+                "STUB_CONFORMANCE_STATUS": "2",
+                "STUB_CONFORMANCE_OUTPUT":
+                    "the document served at /api/v1/openapi.json is not JSON: line 1",
+            },
         )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "answered 200 and did not serve a document" in completed.stderr, completed.stderr
+        assert "does not conform to the frozen contract" not in completed.stderr
 
 
 def test_every_guard_in_the_script_has_a_case_here() -> None:
