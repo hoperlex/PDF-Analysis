@@ -17,9 +17,27 @@
  * hundred lines the programme owns, against a dependency and an instrument that is only
  * half committed.
  *
- * What it deliberately does NOT do: selector engines, auto-waiting, actionability checks,
- * downloads, video. This journey navigates, records and reads text. Anything that needs
- * more than that is a reason to reopen the dependency question, not to grow this file.
+ * What it deliberately does NOT do: auto-waiting, actionability checks, downloads, video,
+ * frame trees, shadow piercing. Anything that needs more than what is here is a reason to
+ * reopen the dependency question, not to grow this file.
+ *
+ * **`W22-E2E` widened it, and that is worth stating rather than hiding in a diff.** The
+ * read half navigates, records and reads text, and needed nothing else. The *write* half
+ * -- create a project, upload a PDF, start a run -- has to press the application's own
+ * controls, so this file grew four primitives (`click`, `fill`, `attachFile`, `waitFor`,
+ * plus a public `settle`) and two protocol domains (`Input`, `DOM`). `W21-E2E` wrote that
+ * the write half would be "an extension of `manifest.json` plus the walk"; measured, the
+ * manifest part is true and the "plus the walk" part is not -- see
+ * `docs/program/reviews/W22-E2E.md` section 2.
+ *
+ * Each new primitive **reads back what it did** and throws when the application did not
+ * take it: a `fill` that the control did not accept, a file the browser did not attach and
+ * a click on a disabled or zero-box control are failures here, not silent no-ops that
+ * surface later as a missing request. A no-op that reports success is the vacuous pass
+ * this programme keeps finding, one layer down.
+ *
+ * `waitFor` takes a **required** bound. There is no default and no unbounded wait: a
+ * primitive that can hang forever reports nothing at all, which is the `D-5` failure mode.
  */
 
 import { spawn } from 'node:child_process';
@@ -259,6 +277,7 @@ class Page {
   #inFlight = 0;
   #lastActivity = Date.now();
   #redirectSeq = 0;
+  #domEnabled = false;
 
   constructor(connection, sessionId) {
     this.#connection = connection;
@@ -277,6 +296,10 @@ class Page {
     await this.#send('Page.enable', {});
     await this.#send('Network.enable', {});
     await this.#send('Runtime.enable', {});
+    // `Input` is needed only by the write half, but enabling it costs nothing and keeps
+    // every page in this instrument the same shape. `DOM` is enabled lazily, in
+    // `attachFile`, because it is the one domain that changes what the browser keeps.
+    await this.#send('Input.setIgnoreInputEvents', { ignore: false });
   }
 
   #handle(method, params) {
@@ -324,6 +347,11 @@ class Page {
           (k) => k.toLowerCase() === 'authorization',
         ),
         requestBody: request.postData ?? null,
+        // The protocol hands `postData` inline only for small bodies. A multipart upload
+        // is not small, and "the browser sent no body" and "we did not ask for it" are
+        // different facts -- so the flag is recorded and the body is fetched separately.
+        requestHasPostData: request.hasPostData === true || request.postData !== undefined,
+        requestBodyTruncated: false,
         status: null,
         statusText: null,
         responseHeaders: {},
@@ -428,6 +456,27 @@ class Page {
     for (const requestId of [...this.#order]) {
       const envelope = this.#exchanges.get(requestId);
       if (envelope === null || envelope === undefined) continue;
+      // The REQUEST body, for anything that carried one. `D-5` was a `POST`: what the
+      // browser sent is half the envelope, and the half the 2026-09-16 harness never had.
+      // Truncated hard, because the multipart body of a PDF upload is the file itself and
+      // storing it would make the envelope the fixture. The truncation keeps the part that
+      // is evidence -- the boundary, the field names, the filename, the declared type.
+      if (envelope.requestHasPostData && envelope.requestBody === null) {
+        try {
+          const { postData } = await withTimeout(
+            this.#send('Network.getRequestPostData', { requestId: requestId.split('#')[0] }),
+            5000,
+          );
+          if (typeof postData === 'string' && postData.length > 4096) {
+            envelope.requestBody = postData.slice(0, 4096);
+            envelope.requestBodyTruncated = true;
+          } else {
+            envelope.requestBody = postData ?? null;
+          }
+        } catch {
+          envelope.requestBodyTruncated = true;
+        }
+      }
       if (envelope.redirectedTo !== null) continue;
       if (envelope.responseBody !== null || envelope.status === null) continue;
       if (envelope.resourceType === 'Image' || envelope.resourceType === 'Font') continue;
@@ -471,6 +520,215 @@ class Page {
       throw new Error(exceptionDetails.text ?? 'evaluate failed');
     }
     return result.value;
+  }
+
+  // ------------------------------------------------------------------------------------
+  // The write half's primitives. `W22-E2E`.
+  //
+  // Everything above this line navigates and observes. Everything below it acts, and every
+  // one of these reads back what the application did with the action -- because a write
+  // primitive that silently does nothing turns a journey green while exercising nothing,
+  // which is exactly the class of defect this instrument exists to find.
+  // ------------------------------------------------------------------------------------
+
+  /**
+   * How the journey names one control.
+   *
+   * A CSS selector, optionally narrowed by the control's own visible text -- which is how
+   * a user names a button ("the one that says Start run") and the only way to address the
+   * Start-run control, since `web/src` gives it no id, no test id and no distinguishing
+   * class. Exact match on trimmed text, never a substring: "Start run" and "Start run
+   * anyway" are different controls.
+   */
+  static locator(selector, text = null) {
+    const sel = JSON.stringify(selector);
+    const txt = text === null ? 'null' : JSON.stringify(text);
+    return `(() => {
+      const all = Array.from(document.querySelectorAll(${sel}));
+      const wanted = ${txt};
+      if (wanted === null) return all.length === 0 ? null : all[0];
+      return all.find((e) => (e.innerText ?? e.value ?? '').trim() === wanted) ?? null;
+    })()`;
+  }
+
+  /** The element behind a locator, as a remote object id, for the node-taking domains. */
+  async #objectIdOf(selector, text, what) {
+    const { result, exceptionDetails } = await this.#send('Runtime.evaluate', {
+      expression: Page.locator(selector, text),
+      returnByValue: false,
+    });
+    if (exceptionDetails) {
+      throw new Error(`${what}: evaluating the locator threw: ${exceptionDetails.text}`);
+    }
+    if (result.objectId === undefined) {
+      throw new Error(`${what}: no element matches ${selector}${text === null ? '' : ` with text ${JSON.stringify(text)}`}`);
+    }
+    return result.objectId;
+  }
+
+  /** What the page can say about a control without acting on it. */
+  async describe(selector, text = null) {
+    return await this.evaluate(`(() => {
+      const el = ${Page.locator(selector, text)};
+      if (el === null) return null;
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      const r = el.getBoundingClientRect();
+      return {
+        tag: el.tagName,
+        type: el.getAttribute('type'),
+        disabled: el.disabled === true,
+        text: (el.innerText ?? '').trim().slice(0, 120),
+        box: { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height },
+      };
+    })()`);
+  }
+
+  /**
+   * Press a control the way a mouse does -- a real `Input` event at the control's own
+   * coordinates, not `element.click()`.
+   *
+   * `element.click()` would reach React's handler too, and would also "work" on a control
+   * that is invisible, zero-sized or covered. Dispatching at coordinates means a control
+   * the user could not press is a control this cannot press either, and a *disabled*
+   * control is a hard failure rather than a click that goes nowhere: `Upload` and `Start
+   * run` are both disabled while their mutation is pending, and pressing one in that state
+   * and recording a pass is how a journey certifies nothing.
+   */
+  async click(selector, { text = null } = {}) {
+    const what = `click ${selector}${text === null ? '' : ` [text=${JSON.stringify(text)}]`}`;
+    const found = await this.describe(selector, text);
+    if (found === null) throw new Error(`${what}: no element matches it`);
+    if (found.disabled) {
+      throw new Error(`${what}: the control is disabled, so pressing it would do nothing`);
+    }
+    if (found.box.w === 0 || found.box.h === 0) {
+      throw new Error(`${what}: the control has a zero box (${found.box.w}x${found.box.h}), so no user could press it`);
+    }
+    const at = { x: found.box.x, y: found.box.y };
+    await this.#send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...at, button: 'none', buttons: 0 });
+    await this.#send('Input.dispatchMouseEvent', { type: 'mousePressed', ...at, button: 'left', buttons: 1, clickCount: 1 });
+    await this.#send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...at, button: 'left', buttons: 0, clickCount: 1 });
+    this.#lastActivity = Date.now();
+    return found;
+  }
+
+  /**
+   * Type into a control through the browser's own editing pipeline, then read the value
+   * back off the control.
+   *
+   * The read-back is the whole point. These are React *controlled* inputs: their `value`
+   * comes from component state, so text that the application's `onChange` did not accept
+   * leaves the control empty however many keystrokes were delivered. Asserting the
+   * read-back turns "the form was never filled" into a failure here, instead of into a
+   * confusing absence of the request three steps later.
+   */
+  async fill(selector, value, { text = null } = {}) {
+    const what = `fill ${selector}`;
+    const found = await this.evaluate(`(() => {
+      const el = ${Page.locator(selector, text)};
+      if (el === null) return null;
+      el.focus();
+      if (typeof el.select === 'function') el.select();
+      return { tag: el.tagName, focused: document.activeElement === el };
+    })()`);
+    if (found === null) throw new Error(`${what}: no element matches it`);
+    if (!found.focused) throw new Error(`${what}: the control refused focus`);
+    await this.#send('Input.insertText', { text: value });
+    const readBack = await this.evaluate(`(${Page.locator(selector, text)}).value`);
+    if (readBack !== value) {
+      throw new Error(
+        `${what}: typed ${JSON.stringify(value)} but the control reads ` +
+          `${JSON.stringify(readBack)} -- the application did not take the keystrokes`,
+      );
+    }
+    this.#lastActivity = Date.now();
+    return readBack;
+  }
+
+  /**
+   * Attach a file from disk to a file input, the way the operating system's file chooser
+   * does -- `DOM.setFileInputFiles`, so the *browser* reads the bytes.
+   *
+   * The alternative was to build a `File` in page script from bytes this process read and
+   * assign it through a `DataTransfer`. That would be the journey uploading its own
+   * construction rather than the browser uploading a file, and the multipart body on the
+   * wire is the thing under test.
+   */
+  async attachFile(selector, absolutePath, { text = null } = {}) {
+    const what = `attachFile ${selector}`;
+    if (!existsSync(absolutePath)) {
+      throw new Error(`${what}: ${absolutePath} does not exist, so nothing would be uploaded`);
+    }
+    if (!this.#domEnabled) {
+      await this.#send('DOM.enable', {});
+      this.#domEnabled = true;
+    }
+    const objectId = await this.#objectIdOf(selector, text, what);
+    await this.#send('DOM.setFileInputFiles', { files: [absolutePath], objectId });
+    const chosen = await this.evaluate(`(() => {
+      const el = ${Page.locator(selector, text)};
+      const f = el === null ? null : (el.files ?? [])[0];
+      return f === undefined || f === null ? null : { name: f.name, size: f.size, type: f.type };
+    })()`);
+    if (chosen === null) {
+      throw new Error(`${what}: the browser reports no file on the input after attaching ${absolutePath}`);
+    }
+    this.#lastActivity = Date.now();
+    return chosen;
+  }
+
+  /**
+   * Wait on something the *application* renders, within a bound this caller must state.
+   *
+   * `boundMs` is required. There is no default, and there is no sleep anywhere in the
+   * write half: a run reaches its terminal asynchronously since `W20-EXEC`, and the only
+   * honest way to know it has is to read the state the app's own poller writes into the
+   * DOM. Hitting the bound is a **finding with the last reading attached**, never a skip
+   * and never a pass -- a journey that gives up quietly is worth less than no journey.
+   *
+   * Every distinct reading is kept with the millisecond it was first seen, so the envelope
+   * carries `queued -> running -> published` as the browser saw it and not just the end.
+   */
+  async waitFor(expression, { boundMs, pollMs = 250, what = 'a condition' } = {}) {
+    if (typeof boundMs !== 'number' || !Number.isFinite(boundMs) || boundMs <= 0) {
+      throw new Error(`waitFor(${what}): boundMs is required and must be a positive number`);
+    }
+    const t0 = Date.now();
+    const readings = [];
+    let value = null;
+    for (;;) {
+      value = await this.evaluate(expression);
+      const seen = JSON.stringify(value) ?? 'undefined';
+      if (readings.length === 0 || readings[readings.length - 1].seen !== seen) {
+        readings.push({ atMs: Date.now() - t0, seen, value });
+      }
+      if (value !== null && value !== undefined && value !== false && value !== '') {
+        return { ok: true, value, waitedMs: Date.now() - t0, boundMs, readings, what };
+      }
+      if (Date.now() - t0 >= boundMs) {
+        return { ok: false, value, waitedMs: Date.now() - t0, boundMs, readings, what };
+      }
+      await new Promise((r) => setTimeout(r, pollMs));
+    }
+  }
+
+  /**
+   * Let the page go quiet after an action, then pull every body the protocol still holds.
+   *
+   * `goto` does this for a navigation; an action needs it too, and for the same reason:
+   * the bodies of the `POST` this session exists to record are evicted when the process
+   * ends. This is the public half of what `goto` already does internally.
+   */
+  async settle({ settleMs = 700, timeoutMs = SETTLE_TIMEOUT_MS } = {}) {
+    const t0 = Date.now();
+    await this.#settle(settleMs, timeoutMs);
+    await this.#collectBodies();
+    return Date.now() - t0;
+  }
+
+  /** Where the browser currently is. A `router.push` moves this without a navigation. */
+  async location() {
+    return await this.evaluate('document.location.pathname + document.location.search');
   }
 
   exchanges() {
