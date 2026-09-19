@@ -1,0 +1,381 @@
+{
+  "$comment": [
+    "A DELIBERATELY WRONG manifest, for one property only: the bound on the wait for the",
+    "run's terminal is a FINDING when it is hit, never a skip and never a pass.",
+    "",
+    "Steps 1 and 2 are the real ones and must pass. Step 3 declares a bound of 1 ms, which",
+    "no real run can meet, and the journey must exit 1 saying so and printing every reading",
+    "it took before the bound.",
+    "",
+    "  npm --prefix web run e2e:pc01 -- --origin http://ORIGIN --phase write \\",
+    "    --manifest ../tests/e2e/pc01/journey/fixtures/redden-write-bound.manifest.json",
+    "",
+    "It also declares the 202 as a 200 and `state` as `published` rather than `queued`, so",
+    "the same run proves the status and response-body checks on the call D-5 actually was."
+  ],
+  "api_prefix": "/bff/v1",
+  "identifier_pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+  "routes": [
+    {
+      "name": "root",
+      "path": "/",
+      "page_module": "web/src/app/page.tsx",
+      "redirects_to": "/projects",
+      "$comment": "A redirect is not a blank page: the browser lands on /projects and that screen lists. Measured -- declaring no call here made the route red, correctly.",
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/projects",
+          "operationId": "listProjects"
+        }
+      ],
+      "follow": null
+    },
+    {
+      "name": "projects",
+      "path": "/projects",
+      "page_module": "web/src/app/projects/page.tsx",
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/projects",
+          "operationId": "listProjects"
+        }
+      ],
+      "follow": {
+        "capture": "project_uid",
+        "href_pattern": "^/projects/(prj_%ID%)$"
+      }
+    },
+    {
+      "name": "project",
+      "path": "/projects/{project_uid}",
+      "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}/documents",
+          "operationId": "listDocuments"
+        }
+      ],
+      "follow": {
+        "capture": "document_uid",
+        "href_pattern": "^/projects/prj_%ID%/documents/(doc_%ID%)$"
+      }
+    },
+    {
+      "name": "document",
+      "path": "/projects/{project_uid}/documents/{document_uid}",
+      "page_module": "web/src/app/projects/[project_uid]/documents/[document_uid]/page.tsx",
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/documents/{document_uid}/versions",
+          "operationId": "listVersions"
+        }
+      ],
+      "follow": {
+        "capture": "version_uid",
+        "href_pattern": "^/projects/prj_%ID%/versions/(ver_%ID%)$"
+      }
+    },
+    {
+      "name": "version",
+      "path": "/projects/{project_uid}/versions/{version_uid}",
+      "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}/runs",
+          "operationId": "listRuns"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}",
+          "operationId": "getDocumentVersion"
+        }
+      ],
+      "follow": {
+        "capture": "run_id",
+        "href_pattern": "^/projects/prj_%ID%/runs/(run_%ID%)$"
+      }
+    },
+    {
+      "name": "run",
+      "path": "/projects/{project_uid}/runs/{run_id}",
+      "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/runs/{run_id}",
+          "operationId": "getRunStatus"
+        }
+      ],
+      "follow": null
+    },
+    {
+      "name": "review",
+      "path": "/projects/{project_uid}/runs/{run_id}/review",
+      "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/review/page.tsx",
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/runs/{run_id}",
+          "operationId": "getRunStatus"
+        },
+        {
+          "method": "GET",
+          "path": "/runs/{run_id}/findings",
+          "operationId": "listRunFindings"
+        }
+      ],
+      "optional_api": [
+        {
+          "method": "GET",
+          "path": "/findings/{finding_uid}",
+          "operationId": "getFinding",
+          "$why_optional": "the screen opens the first finding; a run with none makes no call"
+        },
+        {
+          "method": "GET",
+          "path": "/findings/{finding_uid}/decisions",
+          "operationId": "listDecisionHistory",
+          "$why_optional": "follows getFinding, so it is conditional on the same thing"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}/content",
+          "operationId": "streamDocumentVersionContent",
+          "$why_optional": "the document pane fetches the PDF only once a finding is open"
+        }
+      ],
+      "follow": null
+    }
+  ],
+  "write": {
+    "$comment": [
+      "The WRITE half of the journey. `D-30`, and before it `D-5`.",
+      "",
+      "`D-5` was `POST /api/v1/runs` -> 500, twice, through a browser, on 2026-09-16. The",
+      "read walk above would not have caught it: it makes no POST. These three steps do what",
+      "a user does -- name a project and press Create, choose the AR PDF and press Upload,",
+      "press Start run -- through the app's own controls, on the public origin.",
+      "",
+      "Read by the same two checkers as `routes`. At RUN TIME `write.mjs` presses these",
+      "controls and asserts the request, the status, the response body and what the screen",
+      "rendered afterwards. At GATE TIME the conformance guard asserts that every",
+      "`page_module` and `control_module` exists, that each step's `at` is a route the read",
+      "walk also covers, that every (method, path, operationId) triple is a real contract",
+      "operation, that the fixture is on disk, and that every selector, text and marker",
+      "attribute named here still appears in `web/src`.",
+      "",
+      "That last check is new. `W21-E2E` stated the guard's cost as 'it checks addressing,",
+      "not behaviour'. The write half's handles are not addressing, so leaving them unguarded",
+      "would have meant a renamed id turns the journey red only when someone runs it. The",
+      "check is still not behaviour -- it proves the handle exists in the source, not that",
+      "pressing it does anything -- and that residue is stated rather than closed.",
+      "",
+      "`%STAMP%` is replaced with the run's UTC timestamp. The app mints its idempotency key",
+      "from the typed name, so a fixed name would make every run the same command and the",
+      "second run of the day would assert nothing about creation."
+    ],
+    "fixture": "fixtures/synthetic/ar/ar_baseline.pdf",
+    "steps": [
+      {
+        "name": "create-project",
+        "at": "/projects",
+        "page_module": "web/src/app/projects/page.tsx",
+        "control_module": "web/src/features/create-project/ui/create-project-form.tsx",
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#new-project-name",
+            "value": "W22-E2E write half %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Create"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects",
+            "operationId": "createProject",
+            "expect_status": 201
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "createProject",
+            "json_path": "project_uid",
+            "matches": "^prj_%ID%$"
+          }
+        ],
+        "capture": {
+          "kind": "attribute",
+          "$why": "the screen states what it created, in its own role=status line",
+          "selector": "[data-created-project]",
+          "attribute": "data-created-project",
+          "as": [
+            "project_uid"
+          ],
+          "matches": "^(prj_%ID%)$",
+          "bound_ms": 30000
+        },
+        "expects_rendered": [
+          "Created"
+        ],
+        "forbids_rendered": [
+          "[role=\"alert\"]",
+          "[data-create-problem]"
+        ]
+      },
+      {
+        "name": "upload-document",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
+        "actions": [
+          {
+            "do": "attach_file",
+            "selector": "#upload-file",
+            "fixture": true
+          },
+          {
+            "do": "fill",
+            "selector": "#upload-title",
+            "value": "AR baseline %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Upload"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "uploadDocument",
+            "expect_status": 201
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "uploadDocument",
+            "content_type_starts_with": "multipart/form-data",
+            "body_contains": [
+              "name=\"file\"",
+              "ar_baseline.pdf",
+              "application/pdf"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadDocument",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          },
+          {
+            "of": "uploadDocument",
+            "json_path": "document_uid",
+            "matches": "^doc_%ID%$"
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "$why": "on success the screen navigates to the published version's own address",
+          "pattern": "^/projects/(prj_%ID%)/versions/(ver_%ID%)$",
+          "as": [
+            "project_uid",
+            "version_uid"
+          ],
+          "bound_ms": 30000
+        },
+        "expects_rendered": [
+          "This version"
+        ],
+        "forbids_rendered": [
+          "[data-upload-failure]",
+          "[data-precheck-problem]"
+        ]
+      },
+      {
+        "name": "start-run",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
+        "actions": [
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Start run"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs",
+            "operationId": "startRun",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "startRun",
+            "json_path": "state",
+            "equals": "published"
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "$why": "the 202 reading carries the run, and the screen moves to run progress",
+          "pattern": "^/projects/(prj_%ID%)/runs/(run_%ID%)$",
+          "as": [
+            "project_uid",
+            "run_id"
+          ],
+          "bound_ms": 30000
+        },
+        "await_terminal": {
+          "$comment": [
+            "The run reaches its terminal asynchronously. This does NOT sleep: it reads",
+            "the attribute the run screen's own poller writes, and that poller is the",
+            "application's single `pollRunStatus` loop at its frozen 2s/x1.5/15s schedule.",
+            "`bound_ms` is this journey's bound, not the app's -- `polling.ts` deliberately",
+            "has no deadline. Reaching the bound is a finding with every reading attached,",
+            "and exit 1. It is never a skip and never a pass."
+          ],
+          "outcome_selector": "[data-run-outcome]",
+          "outcome_attribute": "data-run-outcome",
+          "non_terminal_value": "in_flight",
+          "accept": [
+            "published",
+            "partial"
+          ],
+          "activity_selector": "[data-run-activity]",
+          "activity_attribute": "data-run-activity",
+          "activity_when_final": "stopped",
+          "bound_ms": 1,
+          "poll_ms": 500
+        },
+        "expects_api_after_terminal": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}",
+            "operationId": "getRunStatus"
+          }
+        ],
+        "expects_rendered": [
+          "Run"
+        ],
+        "forbids_rendered": [
+          "[data-run-failure]"
+        ]
+      }
+    ]
+  }
+}

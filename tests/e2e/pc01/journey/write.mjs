@@ -218,7 +218,10 @@ export async function runWritePhase({ origin, manifest, repositoryRoot, stamp })
             const el = document.querySelector(${JSON.stringify(spec2.outcome_selector)});
             if (el === null) return null;
             const v = el.getAttribute(${JSON.stringify(spec2.outcome_attribute)});
-            return v === null || v === ${JSON.stringify(spec2.non_terminal_value)} ? null : v;
+            // Three falsy readings that are three different facts, kept apart so the
+            // envelope says which: \`null\` -- the screen has not rendered the outcome yet;
+            // \`false\` -- it has, and the run is still in flight; anything else -- terminal.
+            return v === null ? null : (v === ${JSON.stringify(spec2.non_terminal_value)} ? false : v);
           })()`;
           const waited = await page.waitFor(expression, {
             boundMs: spec2.bound_ms,
