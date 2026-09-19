@@ -28,3 +28,6 @@ In progress.
 - criterion 8: census of every table, run, version, decision and object identical across a
   restart of PostgreSQL, MinIO, the API process and the web process; every screen loads
   cold afterwards in a fresh browser.
+- criterion 10: the four refusals, the rehearsal, the wipe, the empty-and-working instance,
+  the restore, and the re-upload of the restored bytes at 201. One defect found in the
+  rehearsal's row counts.
