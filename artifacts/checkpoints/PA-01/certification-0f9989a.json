@@ -1,0 +1,229 @@
+{
+  "checkpoint_id": "PA-01",
+  "record_type": "certification",
+  "creates_no_acceptance": "This record sits where artifacts/checkpoints/PC-01/report.json sits for that checkpoint, and deliberately is not that file. PC-01's report.json records an ACCEPTED checkpoint; acceptance is the owner's act. PA-01 is not accepted here: two of its ten criteria cannot be established, and both stop at owner ruling R-1's host. The shape follows PC-01's recertification-<commit>.json records, which each name their own commit and edit nothing beside them.",
+  "status": "seven of ten hold, four of those with a named exception; two cannot be established; none was found to fail",
+  "certified_on": "2026-09-19",
+  "certified_commit": "0f9989a",
+  "certified_commit_full": "0f9989a",
+  "worktree_head_on_arrival": "0f9989a",
+  "worktree_head_note": "The tip of origin/dev at provisioning, exactly the commit the dispatch names. `git merge-base --is-ancestor 0f9989a origin/dev` and `git log --oneline -1 origin/dev` both confirmed it before the worktree was created; no stop at STEP 0 was needed.",
+  "what_was_certified": {
+    "by": "session W21-CERT, which authored none of waves 14 through 20 and repaired nothing it measured",
+    "method": "the ten criteria of ALPHA_ROADMAP.md section 5, each driven against this commit's code over a real socket; criteria 3 through 8 driven in a real headless browser clicking the real controls through the public origin",
+    "independent_of_the_integrator": true,
+    "instance": "gate-w21a, POSTGRES_PORT 55870, S3_API_PORT 59470, S3_CONSOLE_PORT 59471, POSTGRES_DB audit_w21a, bucket auditmanager-gate-w21a",
+    "stack_driven": "NOT one of the three alpha stacks. 31480, 31490 and 31500 were left untouched. The dispatch's premise that 31500 is rebuilt from current code is FALSE: its api image was built 2026-09-18T18:25 and contains no src/auditmanager/runs/carrier.py, which W20-EXEC added at 09a14db at 19:47 the same day. This session served this commit's own code instead: infra/deploy/serve.py under the worktree venv on 127.0.0.1:58870 (api) and :58871 (health), and `next build` + `next start` on 127.0.0.1:3921 with the real /bff/v1 route handler holding the credential.",
+    "what_that_arrangement_is_not": "It is not nginx and it is not TLS. The T-2 one-origin proxy and its 300s read timeout were not in the path. Criterion 2's TLS clause is unestablished for reasons that are independent of this, and criterion 1's deploy.sh does not exist at all.",
+    "images_built": 0,
+    "image_names_created": "one, `auditmanager-w21cert-api`, by `docker tag` of an existing image so that reset.sh's one-shot migrate and object_attrs jobs had an interpreter. No layer was built. Removed at teardown."
+  },
+  "criteria": {
+    "1_deploy_from_clean_clone_and_served_schema_conforms": {
+      "verdict": "cannot be established",
+      "first_clause": "infra/deploy/deploy.sh does not exist. `find / -name deploy.sh` finds it only in two unrelated repositories. ALPHA_ROADMAP.md section 4 gives it to W14-OPS; there is no W14-OPS review in docs/program/reviews/; W14_CLOSURE.md:152 records it as owner-blocked on R-1. What is missing is the host of R-1 - a name, a certificate and who holds root - and it is not this session's to fix.",
+      "second_clause": "HOLDS, driven. The running process serves its document at /openapi.json with no credential. The gate's own comparison - tests/contract/api_v1/openapi_conformance.py surface()/differences() - over the frozen document and the served one: 0 differences, 15 operations each side. Shown able to fail: a planted operationId change yields 1 difference."
+    },
+    "2_tls_and_no_token_refused_by_the_application": {
+      "verdict": "cannot be established",
+      "first_clause": "There is no TLS in this system. infra/deploy/proxy/nginx.conf has one listen directive, `listen 8080;`, and its own header at lines 20-22 records why: R-1 is ruled but the host name and certificate do not exist. Same blocker as criterion 1.",
+      "second_clause": "HOLDS, driven, and wider than the criterion asks. All FIFTEEN operations - the criterion says twelve, the contract declares fifteen - answer 401 authentication_required from the application with no credential, and a wrong bearer answers the same. /healthz answers 200 without one, which is T-3 holding. The browser carried 0 Authorization headers across the whole journey and touched one origin.",
+      "why_not_holds": "'Cannot be established' is not a synonym for 'holds'. A reader told criterion 2 passed would conclude the alpha speaks HTTPS. It does not."
+    },
+    "3_project_upload_immutable_version_private_object": {
+      "verdict": "holds",
+      "evidence": "Driven in a real browser: the create form, then #upload-file with fixtures/synthetic/ar/ar_baseline.pdf, then Upload. project prj_01M2WB7GMP33CSMP1GCH8QMNZN, version ver_01M2WB7KTFN8W4SVQM03KHQD4P, ordinal 1, 8 pages, 58978 bytes, sha256 6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f, the manifest declared immutable on screen. The canonical object refuses anonymous GET (403) and anonymous LIST (403) - checked directly against the bucket, not inherited from the foundation check."
+    },
+    "4_live_run_provider_mode_and_cost_visible_and_four_states_distinguished": {
+      "verdict": "holds with a named exception",
+      "evidence": "Live run run_01M2WB7T1HJ0RWJSYY1AEX4XTR through the operated proxy, model anthropic/claude-opus-5: published, 3 findings, cost_micros 38325 and 38775 over two runs, cost_basis measured, model_call_count 1. The run screen shows `published . live . provider mode: live`, `Took 11.6 s`, `Published findings: 3`, and a Cost block reading `0.038775 provider currency units (38775 millionths, the integer the run stored) / Provider calls this total sums 1 / Basis measured`. W15-RUN section 7 recorded cost as visible nowhere and named it a PA-01 blocker; it is closed.",
+      "ui_states_driven": "Read from the [data-run-state] badge in a real browser: running at 160ms, published at 16576ms on the live run; running at 158ms, failed at 16536ms on the outage run of criterion 9.",
+      "named_exception": "`partial` is not inducible through the fifteen operations and was not driven. partial is reached when a provider call returns truncated (runs/executor.py:133 and :293 - a reply cut short at the output ceiling). Nothing in the operator's surface selects a prompt, model or output ceiling, so no request an operator can make provokes one. Same class of limit as PC-01's checksum_mismatch. The four-way distinction is therefore established three ways out of four."
+    },
+    "5_finding_opens_at_its_exact_quotation_beside_its_page": {
+      "verdict": "holds with a named exception",
+      "evidence": "Clicking the first finding row: data-active-page 2, the viewer pane an <object type=application/pdf> whose data is the fetched document blob with #page=2, the quotation pane reading `1.3. Stepen ognestoykosti zdaniya - II.` with `page 2, chars 707-746`, and GET /bff/v1/versions/{V}/content answering 200. Clicking the second declared page moves both panes together to page 6 and its own quotation. The quotations are on the pages they name, checked with pdfminer.high_level.extract_text - an extractor the application does not use - page by page: True for both.",
+      "named_exception": "W21CERT-2. The caption prints a document-global character offset beside a page number as though the two shared a coordinate system. The frozen contract's Evidence schema says char_start/char_end index the document-global sequence, and web/src/entities/finding-observation/model/pages.ts:10 says so too, but quotation.ts:53 renders `page N, chars A-B` with nothing distinguishing them. Page 2's own text is 539 characters; the quotation is at page-local 198..237. The data is right and the caption is wrong."
+    },
+    "6_accept_reject_and_a_later_comment_with_the_history_showing_all_three": {
+      "verdict": "holds",
+      "evidence": "Three clicks on the real controls. Each one 201 POST /bff/v1/findings/{F}/decisions followed by a refetch. The History list rendered: `accept -> accepted 2026-09-19 08:06:56 UTC local-reviewer`, `reject -> rejected 08:06:58 UTC local-reviewer`, `comment 08:07:00 UTC local-reviewer` with its text. The current verdict is the later verdict event; the comment did not replace it."
+    },
+    "7_csv_through_the_browser_resolving_to_the_same_version_and_run": {
+      "verdict": "holds",
+      "evidence": "A real browser download from the real Download control: run_01M2WB7T1HJ0RWJSYY1AEX4XTR-findings.csv, 4137 bytes, BOM ef bb bf present, 6 CRLF and 0 bare LF, 17 columns in the frozen order, 5 data rows over 3 findings (one per evidence item, OD-11). Parsed as RFC 4180 rather than split on commas. Every row carries the project, version and run created in this journey, run_state published, provider_mode live, and the verdict and comment recorded seconds earlier."
+    },
+    "8_restart_and_every_canonical_row_object_and_decision_survives": {
+      "verdict": "holds with a named exception",
+      "evidence": "A 589-line census taken through PostgreSQL and MinIO rather than through the application - every table's row count, every run with state and terminal reason, every version with digest and size, every decision event, every object with its full user metadata. Then both application processes stopped by PID, `docker restart gate-w21a-postgres-1 gate-w21a-s3-1`, both tiers restarted, census retaken. diff exits 0: IDENTICAL. No run was stranded by W20-EXEC's startup reconciler.",
+      "reachability": "Every screen loads cold in a fresh browser process afterwards: projects, project, version, run, review - 1, 1, 2, 1 and 5 bff calls. The run still reads published . live . Took 11.6 s . 3 findings . 0.038775 measured; the review still shows the verdict and all three history events. W15RUN-3, which made this criterion unverifiable through the browser, is closed by the three listing operations of the R-5 reseal and W19-SHELL's screens.",
+      "named_exception": "This is a service and process restart, not a host reboot. The host carries three alpha stacks and two gate lanes belonging to other sessions and rebooting it to satisfy a criterion would break the programme's own rule about other lanes. Every layer above the kernel was restarted, with the volumes as the only thing that persisted. What a reboot would add and this does not cover is the volumes surviving a kernel restart and the containers returning under restart: unless-stopped. That belongs with criterion 1 on the R-1 host."
+    },
+    "9_five_typed_refusals_through_http_and_a_provider_outage_that_fails_the_run": {
+      "verdict": "holds",
+      "refusals": [
+        {
+          "fixture": "not_a_pdf.txt",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "content",
+          "constraint": "pdf_magic_bytes"
+        },
+        {
+          "fixture": "encrypted.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "content",
+          "constraint": "not_encrypted"
+        },
+        {
+          "fixture": "image_only.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "page_text",
+          "constraint": "every_page_has_extractable_text"
+        },
+        {
+          "fixture": "too_many_pages.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "page_count",
+          "constraint": "1 <= page_count <= 30"
+        },
+        {
+          "fixture": "oversize.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "file",
+          "constraint": "max_bytes"
+        }
+      ],
+      "refusals_note": "Five distinct constraints out of five. None is a 500 and none left a version behind: listDocuments on that project answers items: 0 afterwards. Driven through the public origin with curl, which is the instrument the criterion names - it says 'through HTTP', not 'in a browser', and the client-side pre-check would refuse these files before a browser file input could send them.",
+      "provider_outage": "The API process restarted with PROXY_LLM_BASE_URL pointing at a dead port - a real unreachable provider, not a stub - and a run started from the browser. UI badge running -> failed. state failed, terminal_reason dependency_unavailable, degradation_set [text_analysis], published_finding_count 0, the three deterministic stages still truthfully succeeded, text_analysis failed with error_code dependency_unavailable after 10.0s. The screen reads 'The run terminated failed. Nothing was published.'"
+    },
+    "10_reset_dumps_wipes_reinitialises_and_the_dump_restores": {
+      "verdict": "holds with a named exception",
+      "guards_driven": "Four refusals, each exit 3, each before any connection is opened: no destructive flag; a foreign database name (it refused this lane's own gate database typed against the alpha instance's configuration, which is exactly T-5's stale-environment case); a foreign bucket name; an unrecognised option --dryrun.",
+      "cycle": "Seeded through HTTP on an alpha instance of this session's own: one project, one upload, one published run with 3 findings, two decision events. reset.sh --yes-destroy-everything: dump written, object_attrs recorded 7 objects, dump verified 7/7, schema dropped and recreated, migrations re-run to 0005_truncated_call_status, bucket purged and re-initialised private. WIPE_EXIT=0.",
+      "empty_and_working": "In the SAME application process, with no restart: GET /projects -> {items: []}, the wiped version's content -> 404, and then POST /projects -> 201 and an upload -> 201 with the same 58978 bytes and digest.",
+      "restore": "reset.sh --restore: restored 7 objects, RESTORE_EXIT=0. The census before the wipe and after the restore is identical (project 1, document_version 1, audit_run 1, finding 3, expert_decision_event 2, blob 1). The bytes read back 200, 58978, sha256 6d53674f...bd31f. The run reads published with 3 findings and the decision history has both events.",
+      "the_write_back_proof": "RE-UPLOAD OF THOSE SAME BYTES AFTER THE RESTORE -> 201, not 409. The sidecar carries all six fields including blob-id, blob-role and content-size. This is W18-OPS's row re-established by a session that did not write it, against a restore this session took, on a stack this session built. W15-RUN recorded this criterion as false in the direction that looks true; it is now true, and proved by writing rather than by reading.",
+      "named_exception": "W21CERT-1. --dry-run under-reports what it would destroy. Its row counts come from pg_stat_user_tables.n_live_tup, an asynchronously maintained estimate, printed in a column headed 'rows'. On a freshly written database the first rehearsal printed (0 rows) for every table while a project, a document, a version and a manifest entry all existed; later it printed (2 rows) where the true count was 4. The object listing in the same output is exact, so one screen contradicts itself. The wipe is unaffected - it dumps and verifies before it drops - but the rehearsal's whole purpose is to be believed before a destructive act under R-4."
+    }
+  },
+  "live_runs": [
+    {
+      "run_id": "run_01M2WB60WZSQP64G5C1YE208MY",
+      "provider_mode": "live",
+      "state": "published",
+      "findings": 3,
+      "cost_micros": 38325,
+      "cost_basis": "measured",
+      "model_call_count": 1,
+      "note": "spent because the first state sampler was wrong; see the review section 3"
+    },
+    {
+      "run_id": "run_01M2WB7T1HJ0RWJSYY1AEX4XTR",
+      "provider_mode": "live",
+      "state": "published",
+      "findings": 3,
+      "cost_micros": 38775,
+      "cost_basis": "measured",
+      "model_call_count": 1,
+      "note": "the certified journey"
+    },
+    {
+      "run_id": "run_01M2WBBKZVX03AJDHG25QHFXE5",
+      "provider_mode": "live",
+      "state": "failed",
+      "terminal_reason": "dependency_unavailable",
+      "findings": 0,
+      "note": "criterion 9's induced provider outage; the provider was unreachable so nothing was spent"
+    }
+  ],
+  "measured_spend_usd": 0.0771,
+  "ceiling_usd": 1.0,
+  "gate": {
+    "instance": "gate-w21a",
+    "exit_code_read_from": "$? after a redirect, never through | tail",
+    "base": {
+      "commit": "0f9989a",
+      "battery": "1806 passed, 5 skipped, 1 warning, 168 subtests passed in 217.46s",
+      "foundation": "35 passed in 28.86s",
+      "frontend": "681 passed across 47 files",
+      "whitespace": "clean",
+      "result": "GATE OK",
+      "exit": 0,
+      "note": "identical, figure for figure, to the numbers the dispatch carries"
+    },
+    "final": {
+      "commit": "623bfa6 -- the record's own commit; the only later commit on this branch is the one that fills these figures in",
+      "battery": "1806 passed, 5 skipped, 1 warning, 168 subtests passed in 213.98s",
+      "foundation": "35 passed in 28.47s",
+      "frontend": "681 passed across 47 files",
+      "whitespace": "clean",
+      "result": "GATE OK: battery, foundation, frontend and whitespace all pass",
+      "exit": 0,
+      "note": "Unmoved from the base, figure for figure, which is the shape a session that adds no test and touches no src/, web/, contracts/, infra/, tests/ or Makefile file must have."
+    }
+  },
+  "limits": {
+    "partial_run_state": "Not inducible through the fifteen operations. partial requires a truncated provider call and nothing in the operator's surface selects a prompt, a model or an output ceiling.",
+    "host_reboot": "Not performed. The host carries three alpha stacks and two gate lanes belonging to other sessions. Criterion 8 was driven as a restart of both application processes and both stateful containers.",
+    "tls_and_deploy": "Neither exists. Both wait on R-1's host details - a name, a certificate and who holds root - which ALPHA_ROADMAP.md section 9 still lists as owed.",
+    "nginx_not_in_the_path": "The dispatch forbids building images, so the T-2 proxy was not in front of anything this session drove. The single origin and the 300s read timeout are therefore not certified here."
+  },
+  "defects_found_by_certification": {
+    "count": 4,
+    "repaired": 0,
+    "written_to_the_register": false,
+    "why_not": "DEBT_REGISTER.md is the integrator's file and two sessions writing it is how a row gets closed twice. The four rows are proposed in docs/program/reviews/W21-CERT.md section 4, each with its own check command and the commit it was measured at.",
+    "rows": [
+      {
+        "id": "W21CERT-1",
+        "tree": "infra/deploy/reset.sh",
+        "summary": "--dry-run under-reports what the wipe would destroy: n_live_tup estimates printed as row counts",
+        "measured_at": "0f9989a"
+      },
+      {
+        "id": "W21CERT-2",
+        "tree": "web/src/entities/finding-observation/model/quotation.ts:53",
+        "summary": "a document-global character offset printed beside a page number as if page-local",
+        "measured_at": "0f9989a"
+      },
+      {
+        "id": "W21CERT-3",
+        "tree": "infra/deploy/proxy/nginx.conf:37",
+        "summary": "the timeout's stated reason stopped being true at W20-EXEC; reported there, still present",
+        "measured_at": "0f9989a"
+      },
+      {
+        "id": "W21CERT-4",
+        "tree": "web/src/app/bff/v1/[...path]/route.ts:16",
+        "summary": "still says twelve paths; the thirty-seventh stale count, the one 636b850 named and left",
+        "measured_at": "0f9989a"
+      }
+    ]
+  },
+  "false_premises_in_the_dispatch_brief": [
+    "31500 is NOT rebuilt from current code: its api image predates W20-EXEC by 82 minutes and contains no runs/carrier.py. Driving it for criterion 4 would have certified the defect W20-EXEC repaired.",
+    "Criterion 9 is not a browser criterion. It names HTTP, and the five negative fixtures would be refused by the client-side pre-check before a browser could send them.",
+    "The twelve operations are fifteen, since the R-5 reseal added listDocuments, listVersions and listRuns. That also closes W15RUN-3, which made criterion 8 unverifiable through the browser.",
+    "artifacts/checkpoints/PA-01/ did not exist; the shape matched is PC-01's.",
+    "'queued and running were unreachable' is narrower than it reads: W20-EXEC section 11.1 establishes both were written since B5 and invisible only because creation and execution shared one uncommitted transaction."
+  ],
+  "evidence": {
+    "review": "docs/program/reviews/W21-CERT.md",
+    "logs": "/root/w21cert-logs/ - gate-base.log, gate-final.log, served-openapi.json, census-before.txt, census-after.txt, refusal-*.json, reset-wipe2.log, reset-restore.log, dumps2/",
+    "browser_journals": "/root/w21cert-logs/browser/ - journey-live2.json (the certified journey), journey-outage.json, cold-after-restart.json, evidence.json, and the downloaded CSV",
+    "harnesses": "/root/w21cert-drive/ - journey.mjs, cold.mjs, evidence.mjs, conformance_over_http.py, census.sh. All outside the worktree, none committed, for W12-WEB's reason. The browser is the chromium-1234 already on this host, driven by the playwright-core at /root/w15run-browser; no repository dependency was added and git status --porcelain stayed empty.",
+    "browser_credential": "85+ requests across the journey, 0 carrying an Authorization header, one origin touched."
+  },
+  "verdict": "PA-01 is not certifiable as a whole at 0f9989a, and the reason is not the software. Eight criteria were driven to a verdict and none of them failed; criteria 1 and 2 have nothing to drive because there is no deploy script, no host, no certificate and no DNS name, and ALPHA_ROADMAP.md section 9 still lists those as owed by the owner. The application that exists behind that gap does what the checkpoint asks of it, including the two things the programme had most reason to doubt: a client can now watch a run go from running to published, and a wiped instance restored from its own dump accepts the next upload of its own bytes.",
+  "elapsed": {
+    "arrived": "2026-09-19T12:55:52+05:00",
+    "final_gate_exit_read": "2026-09-19T13:28:30+05:00",
+    "measured": "32 min 38 s",
+    "method": "date -Is on arrival; stat on the final gate log. Measured, not estimated."
+  }
+}
