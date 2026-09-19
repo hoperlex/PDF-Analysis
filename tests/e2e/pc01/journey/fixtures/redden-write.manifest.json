@@ -12,7 +12,7 @@
     "What is wrong here, one per check in write.mjs:",
     "  - it declares 201 as 200                 -> the status check",
     "  - it declares the created project_uid is a fixed string -> the response-body check",
-    "  - it declares an operation the screen never calls       -> the missing-call check",
+    "  - it declares startRun on the projects screen             -> the missing-call check",
     "  - it expects text no screen renders      -> the rendered check",
     "  - it forbids `form`, which the screen does render       -> the forbidden check"
   ],
@@ -209,10 +209,10 @@
             "expect_status": 200
           },
           {
-            "method": "GET",
-            "path": "/runs/{run_id}",
-            "operationId": "getRunStatus",
-            "expect_status": 200
+            "method": "POST",
+            "path": "/runs",
+            "operationId": "startRun",
+            "expect_status": 202
           }
         ],
         "expects_response": [
