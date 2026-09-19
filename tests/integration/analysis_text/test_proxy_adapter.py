@@ -155,6 +155,31 @@ class TestWhatComesBack:
         response = _adapter(capture).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
         assert response.stop_reason == "truncated"
 
+    def test_a_length_stop_makes_the_response_report_itself_truncated(self) -> None:
+        """The property that decides `partial`, asserted on the property itself.
+
+        `stop_reason` is a *field*; `ModelResponse.truncated` is the *decision* every
+        consumer reads - `stage.py` chooses `CALL_TRUNCATED`, the salvage branch of
+        `parse_response`, the coverage note and ultimately the `partial` run terminal
+        from it, and from nothing else. A test that pins only the string leaves the
+        decision unguarded, which is how a proxy reply cut short at the output ceiling
+        came to be recorded as a complete one.
+        """
+        capture = _Captured(document=_ok_document(finish="length"))
+        response = _adapter(capture).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        assert response.truncated is True, (
+            "a proxied reply cut short at the output ceiling does not report itself "
+            "truncated, so the stage records the call as succeeded and publishes a "
+            "partial analysis as a complete one"
+        )
+
+    def test_a_normal_stop_does_not_report_itself_truncated(self) -> None:
+        """The anti-vacuity half: an adapter that returned True always would pass above."""
+        response = _adapter(_Captured()).complete(
+            ModelRequest(model_id="m", body=ANTHROPIC_BODY)
+        )
+        assert response.truncated is False
+
     def test_an_empty_choice_list_is_a_failure_not_an_empty_finding_set(self) -> None:
         """Publishing nothing because the proxy said nothing would be a silent success."""
         capture = _Captured(document={"choices": [], "usage": {}})
