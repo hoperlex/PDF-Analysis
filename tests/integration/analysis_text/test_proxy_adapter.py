@@ -149,11 +149,27 @@ class TestWhatComesBack:
         assert response.output_tokens == 340
         assert response.stop_reason == "end_turn"
 
-    def test_a_length_stop_becomes_truncated(self) -> None:
-        """OpenAI calls it `length`; the provenance vocabulary calls it `truncated`."""
+    def test_a_length_stop_becomes_the_max_tokens_stop_reason(self) -> None:
+        """OpenAI calls it `length`; the *stop-reason* vocabulary calls it `max_tokens`.
+
+        This asserted `"truncated"` until `W23-PARTIAL`. `truncated` is a **call
+        status** from `provenance.py`, derived by `stage.py` from
+        `ModelResponse.truncated`, which is `stop_reason == "max_tokens"`. Writing the
+        derived word into the field the derivation reads meant a proxied reply cut
+        short at the output ceiling reported itself complete. The two guards below
+        assert the decision as well as the string, so the vocabularies cannot be
+        crossed again without a red.
+        """
         capture = _Captured(document=_ok_document(finish="length"))
         response = _adapter(capture).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
-        assert response.stop_reason == "truncated"
+        assert response.stop_reason == "max_tokens"
+
+    def test_an_unrecognised_finish_reason_is_passed_through_not_guessed(self) -> None:
+        """It must not become `max_tokens`: that would manufacture a `partial` run."""
+        capture = _Captured(document=_ok_document(finish="content_filter"))
+        response = _adapter(capture).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        assert response.stop_reason == "content_filter"
+        assert response.truncated is False
 
     def test_a_length_stop_makes_the_response_report_itself_truncated(self) -> None:
         """The property that decides `partial`, asserted on the property itself.

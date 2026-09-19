@@ -184,8 +184,8 @@ def _from_openai_response(document: Mapping[str, Any], latency_ms: int) -> Model
     usage = document.get("usage") or {}
     return ModelResponse(
         output_text=message.get("content") or "",
-        # OpenAI's `length` is the truncation stop; the provenance vocabulary calls it
-        # `truncated`, which the migration 0003 CHECK now admits.
+        # OpenAI's `length` is the truncation stop. It is translated into the *stop
+        # reason* vocabulary the seam speaks, not into the call-status vocabulary.
         stop_reason=_stop_reason(choices[0].get("finish_reason")),
         input_tokens=int(usage.get("prompt_tokens") or 0),
         output_tokens=int(usage.get("completion_tokens") or 0),
@@ -202,7 +202,30 @@ def _reported_cost(usage: Mapping[str, Any]) -> float | None:
 
 
 def _stop_reason(finish_reason: str | None) -> str:
-    return {"stop": "end_turn", "length": "truncated"}.get(
+    """OpenAI's `finish_reason` in the stop-reason vocabulary the seam reads.
+
+    **Two vocabularies, and this function belongs to the first one.**
+
+    * `ModelResponse.stop_reason` is what the *provider* said it stopped for, in the
+      Anthropic words `end_turn` and `max_tokens`. `live.py` passes those through
+      unchanged and every recording under `fixtures/recorded/text_analysis` is written
+      in them. `ModelResponse.truncated` — the single decision that reaches
+      `CALL_TRUNCATED`, the salvage branch of `parse_response`, `_pages_analysed` and
+      the `partial` run terminal — is `stop_reason == "max_tokens"` and nothing else.
+    * `truncated` is a **call status** from `provenance.py`, beside `succeeded` and
+      `failed`. It is what `stage.py` *derives*; it is never a stop reason.
+
+    This returned the call-status word `"truncated"` for `length`, so a proxied reply
+    cut short at the output ceiling reported `truncated` as `False`: the call was
+    recorded `succeeded`, `pages_analysed` claimed the whole document, and the run
+    terminated `published` instead of `partial`. The mapping was pinned by a test that
+    asserted the string rather than the decision, which is how it survived. `W23-PARTIAL`.
+
+    An unrecognised `finish_reason` is passed through rather than guessed at: it is not
+    `max_tokens`, so it cannot silently manufacture a `partial`, and it stays visible in
+    the model call record for whoever has to read it.
+    """
+    return {"stop": "end_turn", "length": "max_tokens"}.get(
         finish_reason or "stop", finish_reason or "end_turn"
     )
 
