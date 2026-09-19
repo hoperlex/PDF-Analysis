@@ -13,6 +13,15 @@
 # That was measured on this stack, not reasoned about, and it cost a session an afternoon of
 # looking at the application for a fault that was in front of it.
 #
+# AND IT IS INTERMITTENT, WHICH IS WHY IT SURVIVED THREE WAVES. Driven on this host with a
+# pinned nginx and a throwaway upstream: replacing the upstream container normally gives it
+# back THE SAME address, and then the proxy carries on answering 200 and nothing looks
+# wrong. Only when the replacement lands somewhere else does it break -- forced by moving
+# the name to a different address, the proxy went on connecting to the old one and answered
+# **502** with the DNS name already resolving elsewhere, and `nginx -s reload` put it back
+# to 200 on the next request. So "the last rebuild was fine" is not evidence, and running
+# this after every rebuild costs a second and removes a coin flip.
+#
 # `nginx -s reload` is enough -- the workers restart and resolve the names again -- and it
 # is preferred to restarting the container because it keeps the proxy's own uptime honest.
 # If the configuration is broken the reload is refused and the OLD workers keep serving, so

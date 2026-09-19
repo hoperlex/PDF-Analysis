@@ -57,6 +57,13 @@ it.** So after a rebuild the proxy is still pointing at containers that no longe
 `docker compose` says nothing is wrong. That was measured here, and it cost a session an
 afternoon of looking at the application for a fault that was in the proxy.
 
+**It is intermittent, which is why it kept coming back.** Driven on this host: a replaced
+container usually gets its old address back, and then the proxy carries on answering 200 and
+nothing looks wrong. Only when the replacement lands elsewhere does it break — forced by
+moving the name to a different address, the proxy kept connecting to the old one and
+answered 502 while DNS already said otherwise, and `nginx -s reload` put it back to 200 on
+the next request. *The last rebuild was fine* is therefore not evidence about the next one.
+
 The rebuild is therefore three commands, not one:
 
 ```
