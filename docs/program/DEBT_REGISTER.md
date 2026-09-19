@@ -13,10 +13,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 |---|---|---|
 | **D-18** | a catalog code costs a frontend reseal; built, proved, reverted by **`R-11`** | owner |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
-| **D-24** | `--dry-run` under-reports the wipe, in the dangerous direction | `infra/` |
 | **D-25** | a quotation's caption gives document-global offsets as page-local | `web/src` |
-| **D-26** | two sentences that stopped being true | `infra/`, `web/src` |
-| **D-27** | nothing notices when the deployed stack drifts from the tree | a probe |
+| **D-26** | one sentence left (`bff/route.ts`); the nginx half is corrected | `web/src` |
+| **D-32** | `D-23`'s guard reads only `.py` and `.md`; four counts hid in `.conf` and `Dockerfile` | widen it |
 | **D-28** | an unrouted path answers 200; a status code proves nothing | `web/src/app` |
 | **D-29** | `npm run test:unit` exits 1 though its tests pass | `web/` |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
@@ -792,26 +791,51 @@ had anticipated exactly that: it says so rather than enforcing a claim that has 
 
 Check: `.venv/bin/pytest tests/contract/api_v1/test_surface_counts_in_prose.py` is 10 passed.
 
-### D-24 — `reset.sh --dry-run` under-reports what the wipe would destroy
+### D-24 — `reset.sh --dry-run` under-reports what the wipe would destroy — **CLOSED**
 
-**`W21CERT-1`, and it is wrong in the direction that gets data destroyed.** The rehearsal's
-row counts come from `pg_stat_user_tables.n_live_tup` — an **asynchronous estimate** — printed
-in a column headed *"rows"*.
+**Closed 2026-09-19 by `W22-OPS`, reproduced twice on a database it wrote itself.**
 
-Measured: on a freshly written database the first rehearsal printed **`(0 rows)` for every
-table** while a project, a document, a version and a manifest entry all existed. Later it
-printed `(2 rows)` where the truth was **4**. The bucket half of the same screen is exact,
-which makes the database half read as though it were too.
+* One psql session straight after a committed INSERT: `count(*)` = **5**, `n_live_tup` = **4**
+  — exactly `W21-CERT`'s *"(2 rows) where the truth was 4"*.
+* With statistics not yet collected — **which is what a fresh database is** — **every table
+  printed `(0 rows)`** beside a byte-exact bucket listing.
 
-**`R-4` is what makes this load-bearing.** The wipe is the commitment that real client
-documents leave the alpha host, and `--dry-run` is the screen an operator reads **before**
-agreeing to destroy them. An operator shown `(0 rows)` may reasonably conclude there is
-nothing to lose.
+Now one statement over the seventeen tables. **Cost measured rather than asserted:**
+0.16–0.19 s at pilot size against 0.16–0.17 s for the estimate, 0.32–0.47 s at ten million
+rows. Linear, and at any size a pilot reaches it is **smaller than the round trip carrying
+it**.
 
-Tree: `infra/deploy/**`.
+**A second face of the same untruth, found by stopping the container.** A rehearsal that
+could not reach the database printed *"could not read the schema"*, then an exact bucket
+listing, then a calm closing sentence, and **exited 0**. Now a **twelfth guard**,
+`rehearsal-counted`, exit 3 — driven live before its test was written. Markers **11 → 12**
+with the meta-count and the README.
 
-Check: write four projects, then `reset.sh … --dry-run | grep '^project '` — it is red while
-that figure is below `select count(*) from project`.
+Check: write rows, then `reset.sh … --dry-run`; and `grep -c 'guard:' infra/deploy/reset.sh`
+is 12.
+
+### D-31 — `reset.sh --restore` restored the rows and not the bytes — **CLOSED**
+
+**Found and closed 2026-09-19 by `W22-OPS`, and only driving it found it.** This is the
+`R-4` path.
+
+**The relative path the script itself prints at the end of a wipe** — the one `README.md`
+documents — restored the **database** and then died. The object half mounts with
+`docker run -v "$RESTORE:/dump:ro"`, and a relative path there is a **volume name** to
+docker, not a directory.
+
+Measured aftermath: **1 project, 1 document, 1 blob in the database, 0 objects in the
+bucket** — precisely the instance `restore-complete`'s own comment calls *worse than an empty
+one, because it looks recovered*.
+
+Fixed twice over: the path is made **absolute before anything is touched**, and **the bytes
+now go back before the rows**, so a half-failed restore leaves the half that does not
+mislead. Re-driven with the same relative path: exit 0, 3 objects and 30 rows back, all five
+published attributes intact.
+
+**Three waves have now each found this class in the same script** — `W18-OPS` (a guard whose
+`grep` never fired), `W22-OPS` (a rehearsal that counted nothing, and this). Every one was
+invisible to reading and visible to running.
 
 ### D-25 — a quotation's caption says "page 2, chars 707–746" and those offsets are not page-local
 
@@ -842,27 +866,41 @@ edit.
 **The cheap repair for the second is to widen `D-23`'s guard to `web/src/app/bff/`**, which
 already reads its counts from the document and would then catch the sixth.
 
-### D-27 — nothing notices when the deployed stack drifts from the tree
+### D-27 — nothing notices when the deployed stack drifts from the tree — **CLOSED**
 
-**Found by my own false premise, which is the honest provenance.** I told `W21-CERT` that the
-stack on 31500 was *"rebuilt from current code"*. It was not: the image was created at
-**13:25 UTC** and `W20-EXEC` merged at **14:47 UTC**, so `carrier.py` is not in it —
-verified by listing the directory inside the running container.
+**Closed 2026-09-19 by `W22-OPS` — `infra/deploy/verify-deployed.sh`. Exit 0 it is this
+tree, 6 it is not, 4 the question could not be answered, and 4 is a failure.**
 
-A session that had trusted me would have driven a stack **without the repair it was
-certifying**, reported criterion 4 exactly as `W15-RUN` did in the morning, and blamed
-`W20-EXEC`.
+**The design I proposed does not work, and that is measured rather than argued.** Comparing
+the served `/openapi.json` to the frozen contract fails three ways: there is no digest to
+compare (served and frozen differ in `paths`, `components`, `info` **and** `security` even
+after annotations are stripped — which is why this tree has a conformance *engine*); a commit
+label is the builder's claim and cannot answer for a stack already running; and decisively,
+**the generated document is byte-identical with a line appended to `carrier.py`**. Such a
+probe would have been **green on the exact defect that created this row.**
 
-**This is the third wave running in which "deployed ≠ repository" has had to be re-measured
-by hand.** There is no mechanism that says so. The stack serves `/openapi.json` and the tree
-has a contract; a probe comparing the served document's digest — or simply the commit the
-image was built from — to `HEAD` would answer it in one command.
+What it does instead: reads both Dockerfiles' own `COPY` lines — the idiom `Dockerfile.api`
+already uses on the Makefile's `UV_VERSION` — and compares every git-tracked file under them
+to the bytes **inside the running container**. Against the 18-September container it prints
+`src/auditmanager/runs/carrier.py MISSING FROM THE IMAGE`: the file this row is about, by
+name.
 
-**Until such a probe exists, every claim about the deployed stack must name the image's build
-time**, and a rebuild is a step in closing a wave rather than an afterthought.
+**It caught me on its first live run.** I had told `W22-OPS` the stack was rebuilt from
+current code. The **api** image was; the **web** image carried `package.json` from before
+`W21-E2E`, whose merge landed **eleven minutes after** the build. `D-27` recurring inside the
+brief that asked for its closure. After a rebuild and `reload-proxy.sh` the probe exits 0 and
+prints *"the deployed stack IS this tree (124056d)"* — the first time that claim has been
+made by a command rather than from memory.
 
-Check: `docker exec <api> ls /app/src/auditmanager/runs/` against `git log -1` for the file
-in question.
+**The proxy half was driven rather than inherited, and that changed what was written.** A
+replaced container usually gets its old address back and nothing looks wrong; forced onto a
+new one, the proxy stayed on the old address and answered **502** while DNS already said
+otherwise. `reload-proxy.sh` tests the config first, because a reload with a broken config is
+*refused* and the old workers keep serving — so the naive command would have succeeded at
+leaving the 502 in place. **It is intermittent, which is why it survived three waves.**
+
+Check: `./infra/deploy/verify-deployed.sh`; and
+`.venv/bin/pytest tests/integration/composition/test_deployed_stack_probe.py` is 17 cases.
 
 ### D-28 — an unrouted project path answers 200, so a status code cannot tell a screen from a soft error
 
@@ -932,6 +970,33 @@ trap `W21-E2E` hit the day before and the reason every control gets run rather t
 
 Check: `npm run e2e:pc01 -- --phase all` against a writable stack; and
 `.venv/bin/pytest tests/e2e/` is 30 passed with no stack at all.
+
+### D-32 — `D-23`'s guard reads only `.py` and `.md`, and four stale counts hid in the rest
+
+**Found by `W22-OPS` while correcting `D-26`.** `tests/contract/api_v1/test_surface_counts_in_prose.py`
+scans `infra/deploy` — but only `.py` and `.md`. Four statements still said *"twelve
+operations"* after `R-5` made it fifteen, in file types the guard cannot read:
+
+```
+infra/deploy/proxy/nginx.conf:7 and :59
+infra/deploy/Dockerfile.api:1
+infra/deploy/env/alpha.env.example:61
+```
+
+All four are corrected. **The guard still cannot see their class**, so a fifth will arrive
+unnoticed — which is the whole of `D-23`, one file extension over.
+
+**The repair is to widen `_api_source_files()`** to `.conf`, `.example`, `.yml` and
+`Dockerfile*`. It was not `W22-OPS`'s to do (that file is owned elsewhere this wave), and
+`nginx.conf`'s *"twelve paths"* is **correct** and must survive the widening — twelve paths,
+fifteen operations.
+
+**This is the third time the same shape has been recorded**: `D-8` (a name repeated often
+enough stops being checked), `D-23` (nothing checks the prose at all), and now the guard
+that checks the prose not checking every place prose lives.
+
+Check: `grep -rn "twelve" infra/deploy/ | grep -v "twelve paths"` is empty, and stays empty
+only if the guard can read those files.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
