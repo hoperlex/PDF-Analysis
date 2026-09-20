@@ -11,7 +11,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
-| **D-36** | `deploy.sh` twice recreates three services — the one alpha item `R-1` does not block | a mechanism |
 | **D-35** | does criterion 4 need `partial` from inside the journey? | **owner — one yes/no** |
 | **D-18** | a catalog code costs a frontend reseal; built, proved, reverted by **`R-11`** | owner |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
@@ -1057,26 +1056,51 @@ configurable **nowhere**, and `max_output_tokens` is hashed into `PromptBundle.c
 and then `AnalysisProfile.content_sha256`, which `ADR-0011` requires immutable. **A configured
 output ceiling is a contract change wearing an environment variable.**
 
-### D-36 — `deploy.sh` run twice recreates three services, and that is the one alpha item `R-1` does not block
+### D-36 — `deploy.sh` run twice recreated three services — **CLOSED, and this row named the wrong cause**
 
-**Measured by `W23-DEPLOY` by running its own script twice, which disproved its own header
-comment.** No layer rebuilds and **no data is touched** — postgres, s3 and proxy keep their
-container IDs and both volumes keep the first run's timestamps. But **`api`, `web` and
-`migrate` are recreated**, because a fully cached `compose build` still yields a new image ID:
-BuildKit stamps a fresh `created` into the config, and `SOURCE_DATE_EPOCH` does not fix it
-here.
+**Closed 2026-09-20 by `W24-IDEM`.** Three runs on an unchanged tree: 23 `CACHED` steps each,
+**all seven container IDs identical across all three snapshots**, both image IDs identical,
+both volumes keeping their creation time, `Recreated` for nothing. The entire residue is two
+lines of `diff` — the `StartedAt` of `migrate` and `s3-init`, which are **started again in
+place**, keeping their IDs.
 
-The roadmap's *"run it twice and the second changes nothing"* is therefore **not yet true**,
-and it is recorded that way rather than worked around.
+**This row said the cause was BuildKit stamping a fresh `created` into the config, and that
+`SOURCE_DATE_EPOCH` did not fix it. The two image IDs were real; the explanation was not.**
+Two consecutive fully cached builds give images whose `.Created` is identical **to the
+nanosecond**, whose `.RootFS.Layers` are identical and whose **entire `.Config`** is identical
+— and whose IDs differ anyway. **The ID is the digest of the *manifest*, and BuildKit attaches
+a provenance attestation carrying the build time.** `SOURCE_DATE_EPOCH` addresses timestamps
+*inside* the image, so it was never the lever — which is precisely why `W23-DEPLOY` tried it
+and saw nothing move.
 
-**This is the one part of criterion 1's row that does not need `R-1`.** Fetch, switch and
-rollback are all claims about a server with a previous version on it; **image identity under
-an identical build is not.** Closing it needs a mechanism that preserves that identity when a
-build produced identical content — which has real failure modes and was deliberately not
-smuggled in at the end of a session.
+**A second cause exists and the mechanism handles it separately:** `api` and `migrate` share
+one image and compose writes `com.docker.compose.service` into it — measured coming out
+`migrate` on one build and `api` on the next — so the script compares content and moves the
+tag back.
 
-Check: run `infra/deploy/deploy.sh` twice and compare `docker inspect --format '{{.Id}}'` on
-the api container across the two runs.
+**Two host facts it rests on, both found by failing on them first:** this docker deletes the
+image a tag moved off **at once, even while containers run on it** (so the previous image is
+pinned with a second tag before the build), and **while the old container runs it refuses to
+untag the image that container uses** (so the pin comes off after `up`, not before).
+
+**The risk it introduces was driven, not assumed.** A byte was changed in `serve.py`, the
+wrong retag forced by hand, and the stack brought up on it: `verify-deployed.sh` **exits 6**
+and names `/app/serve.py DIFFERENT BYTES` with both digests. So `D-27`'s probe catches exactly
+the failure this mechanism could cause. Control: a normal run printed `CONTENT CHANGED`,
+recreated only `api` and `migrate`, left `web` alone, and the probe returned to 0.
+
+**Limits, stated by the session rather than found later:** it only helps when the build was
+cached — a cold rebuild is not byte-reproducible (`apt-get` writes timestamps) so the content
+genuinely differs and replacement is correct; `com.docker.compose.*` labels are excluded from
+the comparison by judgment; the provenance attestation is gone from both images and nothing
+here reads one; and it was driven on **one host with one docker**, with both daemon behaviours
+above local to it — the mechanism is written to be a no-op where they do not hold.
+
+Opt-out: `ALPHA_PRESERVE_IMAGE_IDENTITY=no`, with any other value refused before anything is
+built. Guards **12 → 13**.
+
+Check: run `infra/deploy/deploy.sh` twice and compare `docker inspect --format '{{.Id}}'`
+across the two runs.
 
 ### D-37 — a `-v` source is resolved by the daemon, and docker invents a directory rather than refusing
 

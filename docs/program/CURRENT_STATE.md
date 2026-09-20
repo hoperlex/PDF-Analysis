@@ -39,8 +39,10 @@ is owed.
 `DEBT_REGISTER.md` carries the live list with a check command per row. Four need the owner:
 **`D-35`** (one yes/no about criterion 4), **`D-18`** (a catalog code costs a frontend reseal),
 **`D-9`** (the norms corpus, ruled to wait for manual testing), **`D-15`** (a design call).
-One is mine and needs no ruling: **`D-36`**, image identity under an identical build — the
-only part of criterion 1's row that `R-1` does not block.
+**`D-36` closed 2026-09-20** — the one part of criterion 1's row that `R-1` did not block.
+`deploy.sh` run twice now leaves every container ID unchanged, and the row's stated cause
+turned out to be wrong: not a `created` timestamp, but BuildKit's **provenance attestation**
+on the manifest.
 
 ### How work is dispatched
 
