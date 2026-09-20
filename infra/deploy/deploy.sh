@@ -31,29 +31,40 @@
 #      frozen contract.
 #
 # WHAT A SECOND RUN DOES, MEASURED RATHER THAN CLAIMED. This comment said "a second run
-# changes nothing" until it was run twice from a clean clone, and that was false. What is
-# actually true, from the drive recorded in `docs/program/reviews/W23-DEPLOY.md`:
+# changes nothing" until `W23-DEPLOY` ran it twice from a clean clone, and that was false.
+# What that drive found, recorded in `docs/program/reviews/W23-DEPLOY.md` and as `D-36`:
 #
 #   * **no layer is rebuilt.** Every step of both images reports `CACHED`;
 #   * **no data is touched.** `postgres`, `s3` and `proxy` report `Running` and keep their
 #     container IDs; both named volumes keep the creation timestamp of the first run;
-#   * **`api`, `web` and `migrate` ARE recreated**, and the reason is not this script.
+#   * **`api`, `web` and `migrate` WERE recreated**, and the reason was not this script.
 #     BuildKit writes a fresh `created` timestamp into the image config even when every
 #     layer is cached, so a fully cached `compose build` still yields a NEW image ID --
 #     two consecutive builds of an untouched tree gave `df1242a7...` and `3be02972...` --
 #     and `compose up -d` recreates a service whose image id moved. `SOURCE_DATE_EPOCH`
 #     was tried and does not fix it on this compose/BuildKit.
 #
-# So a second run is SAFE and it is not a no-op: it costs the three stateless containers a
-# restart and the stack a few seconds of the proxy pointing at replaced upstreams, which is
-# why `reload-proxy.sh` runs unconditionally below rather than only after a real rebuild.
-# `migrate` re-running is a no-op by construction -- `alembic upgrade head` against a
-# database already at head applies nothing, and `migrations-at-head` proves it afterwards.
+# `W24-IDEM` CLOSES THAT, AND IT DOES IT BY LEAVING THE BUILD ALONE AND MOVING THE TAG.
+# After the build, each image name is compared with what it pointed at BEFORE it -- not by
+# id, which always moves, but by CONTENT: the layer diffIDs plus the runtime configuration.
+# If they are the same, the name is pointed back at the image that was already there and
+# the build's duplicate is discarded, so `compose up -d` sees an image that never moved and
+# recreates nothing. See `# --- 1a.` below and `docs/program/reviews/W24-IDEM.md`.
 #
-# THE ROADMAP'S "run it twice and the second changes nothing" IS THEREFORE NOT YET TRUE,
-# and it is recorded as not-yet-true rather than worked around. Making it true means
-# keeping the image IDENTITY when the build produced identical content, and that is a
-# mechanism with its own failure modes; it is not smuggled in at the end of a session.
+# The one failure mode a mechanism like this has is an image that keeps an old identity
+# after its content genuinely changed, which would leave a stale container running and make
+# `verify-deployed.sh` call it this tree. A diffID is the sha256 of a layer's uncompressed
+# tar, so that would take a collision; and the claim was driven rather than reasoned --
+# §4 of the review forces the wrong retag by hand and reads what the probe then says.
+#
+# It is opt-out, through `ALPHA_PRESERVE_IMAGE_IDENTITY=no` in the environment file, and
+# what an operator loses by turning it off is only this: every run mints a new image, and
+# `api`, `web` and `migrate` are recreated as they were before. Nothing about the build,
+# the data or the guards changes either way.
+#
+# `migrate` re-running, on the runs where it does, is a no-op by construction -- `alembic
+# upgrade head` against a database already at head applies nothing, and `migrations-at-head`
+# proves it afterwards.
 #
 # What this script does NOT have is an "already deployed" branch. Every step is safe to
 # repeat, and a branch that decided whether to repeat it would be a thing that can be
@@ -153,6 +164,32 @@ if [ -z "$INSTANCE" ] || [ -z "$HTTP_PORT" ] || [ -z "$DATABASE" ] || [ -z "$BUC
            "Every name below addresses the instance by these. Nothing was built."
 fi
 # <<< guard: instance-configured
+
+# `ALPHA_PRESERVE_IMAGE_IDENTITY` decides whether a rebuild that produced IDENTICAL
+# content keeps the image ID it already had. It is optional and defaults to `yes`; `no`
+# is the behaviour this script had before `W24-IDEM`, where every build's image is taken
+# as new and `api`, `web` and `migrate` are therefore replaced on every run (`D-36`).
+#
+# A VALUE THIS SCRIPT DOES NOT RECOGNISE IS REFUSED RATHER THAN READ AS THE DEFAULT, and
+# that is `known-options`' argument one layer along: an operator who wrote `false` meaning
+# "off" and was quietly given `yes` would watch nothing be replaced and conclude the
+# switch does not work, or worse, conclude the images are identical when they wanted a
+# forced replacement.
+PRESERVE_IDENTITY="$(configured ALPHA_PRESERVE_IMAGE_IDENTITY)"
+[ -n "$PRESERVE_IDENTITY" ] || PRESERVE_IDENTITY=yes
+
+# >>> guard: identity-policy-known
+case "$PRESERVE_IDENTITY" in
+    yes|no) ;;
+    *) refuse "ALPHA_PRESERVE_IMAGE_IDENTITY is '$PRESERVE_IDENTITY', which is neither yes nor no." \
+              "  yes  (the default) a build whose content is identical to the image that" \
+              "       is already there keeps that image's ID, so a second run of this" \
+              "       script replaces no container at all" \
+              "  no   every build's image is taken as new; api, web and migrate are" \
+              "       recreated on every run, which is what this script did before W24-IDEM" \
+              "Nothing was built and nothing was started." ;;
+esac
+# <<< guard: identity-policy-known
 
 # >>> guard: placeholder-secrets
 # THE EXAMPLE FILE'S OWN VALUES, REFUSED BY IDENTITY RATHER THAN BY PATTERN. `cp` the
@@ -277,6 +314,14 @@ fi
 # <<< guard: port-not-foreign
 
 # --- 1. build, and ONLY then bring up ------------------------------------------------
+# WHAT THE TWO IMAGE NAMES POINT AT BEFORE THE BUILD, read before it rather than after,
+# because `compose build` MOVES the tag and the previous id is not recoverable from the
+# name once it has. A host that has never built these has neither, and an empty value
+# here means exactly that -- there was nothing to preserve. It is not a first run
+# detected by guesswork and it is not an error.
+PREVIOUS_API_ID="$(docker image inspect --format '{{.Id}}' "$INSTANCE-api" 2>/dev/null || true)"
+PREVIOUS_WEB_ID="$(docker image inspect --format '{{.Id}}' "$INSTANCE-web" 2>/dev/null || true)"
+
 echo "-- building the images --"
 BUILD_STATUS=0
 compose build || BUILD_STATUS=$?
@@ -313,6 +358,103 @@ done
 echo "  $INSTANCE-api and $INSTANCE-web are built"
 echo
 # <<< guard: images-built
+
+# --- 1a. an identical rebuild keeps the identity it already had ----------------------
+# `D-36`, AND THE ONE PART OF CRITERION 1'S ROW `R-1` DOES NOT BLOCK. Fetch, switch and
+# roll back are claims about a server with a previous version on it and there is no such
+# host; "run it twice and the second changes nothing" is a claim about THIS host, and it
+# was false for `api`, `web` and `migrate` because a fully cached `compose build` still
+# yields a new image ID -- BuildKit writes a fresh `created` into the config even when
+# every layer reports `CACHED` -- and `compose up -d` recreates a service whose image
+# moved. `SOURCE_DATE_EPOCH` was tried by `W23-DEPLOY` and does not fix it here.
+#
+# So the build is left exactly as it was and the TAG is moved back: if what the build
+# produced has the same content as the image the name pointed at before it, the name is
+# pointed at the old image again and the new one is discarded. Nothing about the build
+# changes, no layer is reused that would not have been, and a build that produced
+# something different is untouched.
+#
+# THE FAILURE MODE THIS MECHANISM WOULD HAVE, NAMED. An image that keeps an old identity
+# after its content genuinely changed would make `verify-deployed.sh` lie -- it compares
+# the bytes inside the RUNNING container against the tree, so a stale container is exactly
+# what it reports on. `fingerprint_of` is what makes that impossible rather than
+# unlikely, and `docs/program/reviews/W24-IDEM.md` records the drive that put a changed
+# byte through this path and read what the probe then said.
+short_id() { printf '%s' "${1#sha256:}" | cut -c1-12; }
+
+# The content of an image and nothing about when it was built.
+#
+# `.RootFS.Layers` is the list of diffIDs -- the sha256 of each layer's UNCOMPRESSED tar.
+# A byte that changed anywhere under any `COPY` or `RUN` changes the layer carrying it and
+# therefore this list. That is the whole safety argument: "the content genuinely changed"
+# cannot present itself as "identical", because it would have to collide a sha256.
+#
+# The runtime configuration is compared too, because a Dockerfile that changed only `CMD`,
+# `ENV`, `USER`, `WORKDIR`, `EXPOSE`, a label or a volume produces the same layers and a
+# different image, and an operator who changed one of those must get it. `.Created` is the
+# one field deliberately left out; it is the field this exists because of.
+fingerprint_of() {
+    docker image inspect --format \
+        '{{.Os}}|{{.Architecture}}|{{.Variant}}|{{range .RootFS.Layers}}{{.}},{{end}}|{{json .Config.Env}}|{{json .Config.Cmd}}|{{json .Config.Entrypoint}}|{{json .Config.WorkingDir}}|{{json .Config.User}}|{{json .Config.ExposedPorts}}|{{json .Config.Labels}}|{{json .Config.Volumes}}|{{json .Config.StopSignal}}|{{json .Config.Healthcheck}}' \
+        "$1" 2>/dev/null || true
+}
+
+# One image name, and what the name pointed at before the build. An empty `previous` is a
+# host that had no such image -- the clean-clone case -- and is not an error.
+keep_identity_if_unchanged() {
+    local name="$1" previous="$2" current before after
+    current="$(docker image inspect --format '{{.Id}}' "$name")"
+    if [ -z "$previous" ]; then
+        printf '  %-28s %s  built; there was no previous image to keep\n' \
+            "$name" "$(short_id "$current")"
+        return 0
+    fi
+    if [ "$previous" = "$current" ]; then
+        printf '  %-28s %s  unchanged; the build did not move the tag\n' \
+            "$name" "$(short_id "$current")"
+        return 0
+    fi
+    before="$(fingerprint_of "$previous")"
+    after="$(fingerprint_of "$current")"
+    if [ -z "$before" ] || [ -z "$after" ]; then
+        printf '  %-28s %s  new image; the previous one could no longer be read, so it is\n' \
+            "$name" "$(short_id "$current")"
+        printf '  %-28s    not claimed to be identical to anything\n' ""
+        return 0
+    fi
+    if [ "$before" != "$after" ]; then
+        printf '  %-28s %s  CONTENT CHANGED; replaces %s\n' \
+            "$name" "$(short_id "$current")" "$(short_id "$previous")"
+        return 0
+    fi
+    if ! docker tag "$previous" "$name"; then
+        printf '  %-28s %s  identical content, and the tag could NOT be moved back to %s.\n' \
+            "$name" "$(short_id "$current")" "$(short_id "$previous")"
+        printf '  %-28s    The containers using it will be recreated; that is safe and it\n' ""
+        printf '  %-28s    is not what this run intended. Nothing else is affected.\n' ""
+        return 0
+    fi
+    printf '  %-28s %s  identical content; kept, and %s discarded\n' \
+        "$name" "$(short_id "$previous")" "$(short_id "$current")"
+    # The build's own image is now untagged and identical to one that is tagged: every
+    # layer is shared, so it costs no space, but one per run would still accumulate as a
+    # dangling entry. It is removed, and a removal that did not happen is SAID rather
+    # than swallowed.
+    if ! docker image rm "$current" >/dev/null 2>&1; then
+        printf '  %-28s    (%s could not be removed; `docker image prune` clears it)\n' \
+            "" "$(short_id "$current")"
+    fi
+}
+
+if [ "$PRESERVE_IDENTITY" = yes ]; then
+    echo "-- image identity --"
+    keep_identity_if_unchanged "$INSTANCE-api" "$PREVIOUS_API_ID"
+    keep_identity_if_unchanged "$INSTANCE-web" "$PREVIOUS_WEB_ID"
+else
+    echo "-- image identity: ALPHA_PRESERVE_IMAGE_IDENTITY=no, so every build is a new"
+    echo "   image and api, web and migrate will be recreated --"
+fi
+echo
 
 # --- 2. up. `migrate` runs once here and `api` waits for it --------------------------
 # Migrations are a deploy step and never something a serving process does on start: two
@@ -533,7 +675,13 @@ echo
 
 echo "deploy.sh: $INSTANCE is up at http://127.0.0.1:$HTTP_PORT"
 echo "deploy.sh: every service healthy, the database at head, the served schema conforming."
-echo "deploy.sh: running it again is safe -- no layer rebuilds and no data is touched,"
-echo "deploy.sh: but api, web and migrate are recreated. See the note at the top."
+if [ "$PRESERVE_IDENTITY" = yes ]; then
+    echo "deploy.sh: running it again against this tree changes nothing -- no layer"
+    echo "deploy.sh: rebuilds, no data is touched, and every container keeps its id."
+else
+    echo "deploy.sh: running it again is safe -- no layer rebuilds and no data is touched,"
+    echo "deploy.sh: but api, web and migrate are recreated, because"
+    echo "deploy.sh: ALPHA_PRESERVE_IMAGE_IDENTITY is no. See the note at the top."
+fi
 echo "deploy.sh: then ask the other question --"
 echo "  infra/deploy/verify-deployed.sh --env-file $ENV_FILE"

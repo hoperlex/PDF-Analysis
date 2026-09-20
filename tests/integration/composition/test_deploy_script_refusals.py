@@ -832,12 +832,13 @@ class TestTheControl:
 def test_every_guard_in_the_script_has_a_case_here() -> None:
     """A guard added without a test is caught here rather than in a deployment.
 
-    The count is a literal for the same reason every other figure in this file is, and it
-    is the same count `reset.sh` carries -- which is a coincidence, not a rule.
+    The count is a literal for the same reason every other figure in this file is. It was
+    12 until `W24-IDEM` added `identity-policy-known`, whose case lives in
+    `test_deploy_image_identity.py` beside this file and is named in the set below.
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 12, markers
+    assert len(markers) == 13, markers
     covered = set(BEFORE_DOCKER) | {
         "port-not-foreign",
         "images-built",
@@ -845,8 +846,17 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
         "migrations-at-head",
         "proxy-answers",
         "schema-conforms",
+        # `W24-IDEM`, and its case is in the file beside this one:
+        # `test_deploy_image_identity.py`. Named here rather than left out, because the
+        # claim this test makes is that every guard has a case SOMEWHERE, and a guard
+        # silently excluded from the set would be a guard nobody tests.
+        "identity-policy-known",
     }
     assert set(markers) == covered, set(markers) ^ covered
+    identity_suite = ROOT / "tests/integration/composition/test_deploy_image_identity.py"
+    assert "identity-policy-known" in identity_suite.read_text(encoding="utf-8"), (
+        "identity-policy-known is excused here against a file that no longer names it"
+    )
 
 
 def test_the_script_is_executable_and_runnable_by_its_documented_path() -> None:
