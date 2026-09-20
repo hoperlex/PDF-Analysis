@@ -37,6 +37,21 @@ redirect and never through `| tail`:
 Provisioning: `make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12` → `bootstrap OK`,
 exit 0; `npm --prefix web ci` → exit 0.
 
+And at the tip of this branch, `586e9d0`, same lane, same way:
+
+| | |
+|---|---|
+| battery | **1932 passed, 5 skipped, 168 subtests**, 264.88s |
+| foundation | **35 passed**, 28.72s |
+| frontend | **706 passed in 48 files** |
+| whitespace | clean |
+| exit code | **0**, `GATE OK` |
+
+**+23 on the battery and nothing else moved**, which is exactly the 23 cases of
+`test_deploy_image_identity.py`. The refusals suite stays at 39: its thirteenth guard's case
+lives in the new file, and its meta-test now pins 13 markers and asserts that the excused
+name is actually present there.
+
 ## 2. `D-36` reproduced, and then reproduced properly
 
 The first drive of this session ran the **unchanged** `deploy.sh` twice on a clean instance.
