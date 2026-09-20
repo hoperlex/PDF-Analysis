@@ -3,7 +3,7 @@
   "record_type": "certification",
   "supersedes": "artifacts/checkpoints/PA-01/certification-0f9989a.json",
   "creates_no_acceptance": "This record sits where artifacts/checkpoints/PC-01/report.json sits for that checkpoint, and deliberately is not that file. PC-01's report.json records an ACCEPTED checkpoint; acceptance is the owner's act. PA-01 is not accepted here: two of its ten criteria still cannot be established, and both stop at owner ruling R-1's host. The shape follows W21-CERT's certification-0f9989a.json, which follows PC-01's recertification-<commit>.json records - each names its own commit and edits nothing beside it.",
-  "status": "eight of ten hold, three of those with a named exception; two cannot be established; none was found to fail",
+  "status": "eight of ten hold, two of those with a named exception; two cannot be established; none was found to fail",
   "certified_on": "2026-09-20",
   "certified_commit": "16d3503",
   "certified_commit_full": "16d3503",
@@ -208,14 +208,14 @@
       "note": "identical, figure for figure, to the numbers the dispatch carries"
     },
     "final": {
-      "commit": "filled in by the commit that carries these figures; the only later commit on this branch",
-      "battery": "FINAL_BATTERY",
-      "foundation": "FINAL_FOUNDATION",
-      "frontend": "FINAL_FRONTEND",
-      "whitespace": "FINAL_WHITESPACE",
-      "result": "FINAL_RESULT",
-      "exit": "FINAL_EXIT",
-      "note": "Expected unmoved from the base, figure for figure, which is the shape a session that adds no test and touches no src/, web/, contracts/, infra/, tests/ or Makefile file must have."
+      "commit": "84399ea -- the review's own commit; the only later commit on this branch is the one that fills these figures in",
+      "battery": "1909 passed, 5 skipped, 1 warning, 168 subtests passed in 238.58s",
+      "foundation": "35 passed in 29.09s",
+      "frontend": "706 passed across 48 files",
+      "whitespace": "clean",
+      "result": "GATE OK: battery, foundation, frontend and whitespace all pass",
+      "exit": 0,
+      "note": "Unmoved from the base, figure for figure, which is the shape a session that adds no test and touches no src/, web/, contracts/, infra/, tests/ or Makefile file must have."
     }
   },
   "limits": {
@@ -244,7 +244,7 @@
         "measured_at": "16d3503"
       }
     ],
-    "note_on_w21certs_four": "W21CERT-1 and W21CERT-2 are confirmed repaired above. W21CERT-3 (nginx.conf's timeout reason) was repaired by W22-OPS - the comment now records D-26 and what the 300 s actually bounds. W21CERT-4 (`route.ts` saying twelve paths) was not re-checked: the frozen document really does declare 12 paths, and 15 operations over them, so `twelve paths` is not by itself the stale count it was reported as."
+    "note_on_w21certs_four": "All four of W21-CERT's rows are closed at this tip. W21CERT-1 and W21CERT-2 are confirmed repaired by the drives above. W21CERT-3 (nginx.conf's timeout reason, dead since W20-EXEC) was repaired by W22-OPS: the comment now records D-26 and what the 300 s actually bounds. W21CERT-4 (`route.ts` saying twelve paths) is repaired too - the file now reads `fifteen operations across twelve paths`, which is exactly what the frozen document declares."
   },
   "false_premises_in_the_dispatch_brief": [
     "None material. Everything the dispatch asserted was checked and held: the base gate figures to the number, the 12/15/46 contract shape, the 21 draft error codes, deploy.sh's existence and its clean-clone proof, verify-deployed.sh exiting 0 on the 31500 stack, and W22's two repairs. The dispatch's own warning about quoting the criteria from the file rather than from the brief was followed and is the reason criterion 1's second clause is about the API schema and not the database schema.",
@@ -260,8 +260,8 @@
   "verdict": "PA-01 is not certifiable as a whole at 16d3503, and the reason is still not the software. Eight criteria were driven to a verdict and none of them failed; one named exception remains on criterion 8 (a container restart is not a host reboot) and one small new one on criterion 10 (the rehearsal's total counts a view). Criteria 1 and 2 still cannot be established, but criterion 1's reason has changed from `there is nothing to run` to `there is nothing left to run it ON`: deploy.sh exists, was driven from a clean clone at this commit by a session that did not write it, and produced a stack that answers for itself. What is missing is a machine that has never run it, a name, a certificate, and a previous version to roll back to - R-1, and the owner's.",
   "elapsed": {
     "arrived": "2026-09-20T10:58:29+05:00",
-    "record_written": "RECORD_WRITTEN",
-    "measured": "MEASURED_ELAPSED",
+    "final_gate_exit_read": "2026-09-20T11:37:10+05:00",
+    "measured": "38 min 41 s",
     "method": "date -Is on arrival; date -Is at the final gate's exit line. Measured, not estimated."
   }
 }
