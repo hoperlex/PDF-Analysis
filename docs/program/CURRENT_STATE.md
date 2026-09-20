@@ -1,5 +1,58 @@
 # Current state
 
+> **Updated 2026-09-20 by the integrator, at `e2dc68f`.** `AGENTS.md` §1.1 makes this file
+> the first thing every agent reads. It had not been touched since 2026-09-14 and still
+> opened with the `P0-PLN-01` planning candidate — **nine waves out of date**. Every session
+> dispatched in that window was oriented by its brief instead, which worked and is not the
+> arrangement this file describes. The history below is kept; this block is what is true now.
+
+## Where the programme is, 2026-09-20
+
+**`origin/dev` = `e2dc68f`. `origin/main` = `9291db6`, tagged `alpha-w18` — a gated tip, not
+a certification.** `make gate` → `GATE OK`, exit 0: battery **1909 passed / 5 skipped / 168
+subtests**, foundation **35**, frontend **706 in 48 files**.
+
+**The application is deployed, drivable by hand, and provably the tree.** One alpha stack
+answers on `127.0.0.1:31500`, brought up by `infra/deploy/deploy.sh`;
+`infra/deploy/verify-deployed.sh` exits 0 and prints *"the deployed stack IS this tree"*.
+A browser creates a project, uploads a PDF, starts a run, watches it go `queued → running →
+published`, opens a finding at its quotation, records an accept, a reject and a comment, and
+downloads the CSV — all through one origin, with **no request carrying a credential**, which
+a server-side route holds instead.
+
+### `PA-01`, certified criterion by criterion
+
+`artifacts/checkpoints/PA-01/certification-0f9989a.json`. **Eight criteria driven to a
+verdict, none failed.** Two cannot be established, and the reason is not the software:
+
+| | |
+|---|---|
+| **criterion 1** | `deploy.sh` now exists and brings the stack up from a clean clone, cold cache, exit 0, served schema conforming with 0 differences. It stays *cannot be established* because **no host here has never run it and there is no previous version to roll back to** — `R-1` alone. |
+| **criterion 2** | no TLS: no host name, no certificate, no DNS. `R-1` alone. The second clause — every operation refusing an absent or wrong credential — **is driven and holds.** |
+
+Criterion 4's named exception was found to be a **defect rather than a limit** and repaired;
+criteria 5 and 10's exceptions were repaired in wave 22. A re-certification at the current tip
+is owed.
+
+### What is open
+
+`DEBT_REGISTER.md` carries the live list with a check command per row. Four need the owner:
+**`D-35`** (one yes/no about criterion 4), **`D-18`** (a catalog code costs a frontend reseal),
+**`D-9`** (the norms corpus, ruled to wait for manual testing), **`D-15`** (a design call).
+One is mine and needs no ruling: **`D-36`**, image identity under an identical build — the
+only part of criterion 1's row that `R-1` does not block.
+
+### How work is dispatched
+
+Waves of parallel sessions, each in its own `git worktree` and its own gate lane. The
+integrator merges, gates, pushes and tags; **no dispatched session tags or pushes to `main`**
+(`AGENTS.md` §5). Reviews land in `docs/program/reviews/`, one per session, and every wave
+has a closure under `docs/program/`.
+
+---
+
+## History below this line
+
 > **P0-PLN-01 candidate, revision 4, 2026-09-10.** On branch `agent/p0-pln-01`,
 > `P0-PLN-01` has produced the detailed P02–P05 plan:
 > `docs/program/PROTOTYPE_EXECUTION_PLAN.md` plus **30 agent-ready task files** — two
