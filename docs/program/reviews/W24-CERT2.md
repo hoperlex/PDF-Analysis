@@ -407,6 +407,27 @@ until the pilot.
 **USD 0.037225**, `cost_basis measured`, against `OD-03`'s USD 1.00 ceiling. Every other run
 reached either nothing or a local stub.
 
+**Credential.** Across the three journeys — 33, 30 and 17 `/bff/v1` calls, every one of them
+2xx — **0 requests carried an `Authorization` header**. Two origins appear in the browser's
+own log, and the second is the `null` origin of the `blob:` URL the PDF viewer builds, not a
+second server.
+
+**Gates.** Base `2126598`: battery 1909 / 5 skipped / 168 subtests, foundation 35, frontend
+706 in 48 files, `GATE OK`, `GATE_EXIT=0`. Final `84399ea`: 1909 / 5 / 168 in 238.58 s,
+foundation 35, frontend 706 in 48 files, `GATE OK`, `GATE_EXIT=0` — **unmoved, figure for
+figure**, which is the shape a session that adds no test must have. Both read from `$?` after
+a redirect.
+
+**Elapsed.** `date -Is` on arrival, `date -Is` at the final gate's exit line:
+`2026-09-20T10:58:29+05:00` → `2026-09-20T11:37:10+05:00`, **38 min 41 s**. Measured, not
+estimated.
+
+**`origin/dev` moved while this ran.** It was `16d3503` on arrival — the commit this record
+certifies — and is `70c66c0` now. That commit adds 29 lines to
+`docs/program/dispatch/OPERATING_CONSTRAINTS.md` and touches nothing else, so **no
+measurement here is stale**; `git merge-tree` shows this branch merges into it with no
+conflict.
+
 **Nothing was repaired.** `src/`, `web/`, `contracts/`, `infra/`, `tests/`, the `Makefile`,
 `DEBT_REGISTER.md` and `CURRENT_STATE.md` are untouched; this branch contains exactly two
 files, this one and `artifacts/checkpoints/PA-01/certification-16d3503.json`. No tag and no
