@@ -146,15 +146,17 @@ infra/deploy/deploy.sh [--env-file <path>]
 ```
 
 Exit **0** the stack is up and has answered for itself, **3** it refused and said why,
-**2** the arguments were wrong. Twelve guards, delimited by `# >>> guard:` markers, and
+**2** the arguments were wrong. Thirteen guards, delimited by `# >>> guard:` markers, and
 `tests/integration/composition/test_deploy_script_refusals.py` shows every one of them able
 to fail by deleting it from a copy — the same form as `reset.sh` and for the same reason.
+The thirteenth, `identity-policy-known`, is `W24-IDEM`'s and its case lives beside that file
+in `test_deploy_image_identity.py`.
 
-Six refuse **before docker is touched at all**, so an empty `docker` call log is the
+Seven refuse **before docker is touched at all**, so an empty `docker` call log is the
 evidence the refusal came first: an unknown option, a missing environment, a
-half-configured instance, **secrets still set to the example file's own published values**,
-a missing compose file, and a clone that does not contain the paths the two Dockerfiles
-copy. That last one is the clean-clone guard: the paths are read out of the Dockerfiles'
+half-configured instance, an `ALPHA_PRESERVE_IMAGE_IDENTITY` that is neither `yes` nor `no`,
+**secrets still set to the example file's own published values**, a missing compose file,
+and a clone that does not contain the paths the two Dockerfiles copy. That last one is the clean-clone guard: the paths are read out of the Dockerfiles'
 own `COPY` lines, so it cannot drift from what the build needs.
 
 Then `port-not-foreign` — the published port must be free, or held by *this* instance's own
@@ -169,17 +171,50 @@ sentinel as the evidence rather than an exit code; the published port answering 
 compared by mounting `tests/contract/api_v1/openapi_conformance.py` — the gate's own engine,
 not a second one — into a one-off container and piping the served bytes to it.
 
-### Running it twice — measured, and not yet "changes nothing"
+### Running it twice — measured, and it does change nothing
 
-Driven twice from a clean clone (`W23-DEPLOY.md`): **no layer is rebuilt** (every step
-`CACHED`), **no data is touched** (`postgres`, `s3` and `proxy` keep their container IDs and
-both named volumes keep the first run's creation time) — but `api`, `web` and `migrate`
-*are* recreated. BuildKit writes a fresh `created` timestamp into the image config even when
-every layer is cached, so a fully cached build still yields a new image ID and `up -d`
-replaces the services that use it. `SOURCE_DATE_EPOCH` was tried and does not fix it here.
+Driven three times in succession on an unchanged tree (`W24-IDEM.md` §6): **no layer is
+rebuilt** (23 `CACHED` steps), **no data is touched**, both named volumes keep their creation
+time, both image IDs are identical, and **all seven container IDs are identical** —
+`postgres`, `s3`, `s3-init`, `migrate`, `api`, `web`, `proxy`. `compose up -d` reports
+`Recreated` for nothing. The one residue: `migrate` and `s3-init` are *started again* in
+place, keeping their container IDs; `alembic upgrade head` against a database already at head
+applies nothing, and `migrations-at-head` proves it afterwards.
 
-So a second run is safe and is not a no-op. The roadmap's acceptance clause *"run it twice
-and the second changes nothing"* is **not yet true**, and it is recorded as not-yet-true.
+`W23-DEPLOY` measured `api`, `web` and `migrate` being recreated and `D-36` recorded it. **The
+cause that row names is wrong**, and `W24-IDEM` measured it: two consecutive fully cached
+builds produce images whose `.Created` is identical *to the nanosecond*, whose
+`.RootFS.Layers` are identical and whose entire `.Config` is identical — and whose ids differ
+anyway, because the id is the digest of the **manifest** and BuildKit attaches a **provenance
+attestation** carrying the build time. `SOURCE_DATE_EPOCH` addresses timestamps inside the
+image and was never going to touch that.
+
+Two things close it, answering two different causes:
+
+1. the build runs with `BUILDX_NO_DEFAULT_ATTESTATIONS=1`, which makes the id a digest of the
+   content. Measured: two consecutive builds, same id, both images. What is given up is the
+   attestation itself, which nothing in this repository reads;
+2. after the build, each image is compared with what its name pointed at **before** it — by
+   the layer diffIDs and the runtime configuration, never by the id — and the name is pointed
+   back at the old image when they are the same. That catches the cause (1) does not: `api`
+   and `migrate` share one image and compose's own `com.docker.compose.service` label was
+   measured coming out `migrate` on one build and `api` on the next.
+
+The previous image has to be **pinned with a second tag** before the build, because this
+host's docker deletes the image a tag moved off at once, even while containers run on it. The
+pin comes off after `up`, because while the old container runs docker refuses to untag the
+image it runs. Both facts are measured in `W24-IDEM.md` §3.
+
+**Turning it off:** `ALPHA_PRESERVE_IMAGE_IDENTITY=no` in `env/alpha.env`. Every run then
+mints a new image and `api`, `web` and `migrate` are recreated, as before. Any value that is
+neither `yes` nor `no` is refused before anything is built. It does not turn off the
+attestation setting, which is about how the image is built rather than about identity.
+
+**The failure mode, and whether the probe catches it.** An image that kept an old identity
+after its content genuinely changed would leave a stale container running.
+`verify-deployed.sh` was driven against exactly that stack — a changed `serve.py`, a rebuild,
+and the old tag forced back by hand — and it exited **6**, naming `/app/serve.py  DIFFERENT
+BYTES` with both digests. `W24-IDEM.md` §4.
 
 ### The served document is piped in, never bind-mounted
 
