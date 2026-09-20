@@ -280,3 +280,32 @@ And the standing one: **a row, a table or a report that says "measured" is worth
 the query behind it is worth, so show the query.** Every row of `DEBT_REGISTER.md` carries one
 for this reason.
 
+### Three more shapes, found in waves 20–23
+
+The first two were self-reported by the sessions that committed them, which is how they came
+to be written down at all.
+
+- **A correct query, read before it finished.** `W20-CODE` swept for stale count assertions
+  with `grep -rn "== 21" tests/ | head -20`, and the first twenty hits were all
+  `assert response.status == 201`. **The query was right; the truncation was read as the
+  answer.** It cost a red gate. A pipe into `head` turns a search into a sample, and a sample
+  cannot support "there are none".
+- **An assertion aimed one field to the left of the thing that decides.** `proxy.py` wrote
+  OpenAI's `length` into `stop_reason` as the string `"truncated"` — a word from the
+  *call-status* vocabulary — while `adapter.py` decides truncation by comparing `stop_reason`
+  to `"max_tokens"`. The guard asserted **the string** and never `response.truncated`, **the
+  decision**. So on the live transport a report cut short at the output ceiling published as a
+  complete one, and **the test pinned the defect in place** rather than catching it. `D-34`.
+  *Assert the value the code branches on, not a value beside it.*
+- **A document nobody reads cannot be checked by anyone reading.** `AGENTS.md` §1.1 makes
+  `docs/program/CURRENT_STATE.md` the first thing every agent reads. It sat **nine waves out
+  of date** because every dispatched session was oriented by its brief instead — so nothing
+  ever reddened, and the gap was invisible *precisely because the stale thing was unread*.
+  `D-23` is the same shape one level down: nothing checks prose against the surface it
+  describes. **Both are cases where the absence of a reader is the absence of a check.**
+
+**And one about this file.** Its path is `docs/program/dispatch/OPERATING_CONSTRAINTS.md`. The
+integrator cited it as `docs/program/OPERATING_CONSTRAINTS.md` in briefs for a week; the
+repository never carried the wrong path, so only dispatched sessions met it. A session that
+took the path literally would have found nothing — **§12 applied to §12's own location.**
+
