@@ -37,22 +37,35 @@
 #   * **no layer is rebuilt.** Every step of both images reports `CACHED`;
 #   * **no data is touched.** `postgres`, `s3` and `proxy` report `Running` and keep their
 #     container IDs; both named volumes keep the creation timestamp of the first run;
-#   * **`api`, `web` and `migrate` WERE recreated**, and the reason was not this script.
-#     BuildKit writes a fresh `created` timestamp into the image config even when every
-#     layer is cached, so a fully cached `compose build` still yields a NEW image ID --
-#     two consecutive builds of an untouched tree gave `df1242a7...` and `3be02972...` --
-#     and `compose up -d` recreates a service whose image id moved. `SOURCE_DATE_EPOCH`
-#     was tried and does not fix it on this compose/BuildKit.
+#   * **`api`, `web` and `migrate` WERE recreated**, because a fully cached `compose build`
+#     still yielded a NEW image ID -- two consecutive builds of an untouched tree gave
+#     `df1242a7...` and `3be02972...` -- and `compose up -d` recreates a service whose
+#     image id moved. `SOURCE_DATE_EPOCH` was tried there and did not fix it.
 #
-# `W24-IDEM` CLOSES THAT, AND IT DOES IT BY LEAVING THE BUILD ALONE AND MOVING THE TAG.
-# After the build, each image name is compared with what it pointed at BEFORE it -- not by
-# id, which always moves, but by CONTENT: the layer diffIDs plus the runtime configuration.
-# If they are the same, the name is pointed back at the image that was already there and
-# the build's duplicate is discarded, so `compose up -d` sees an image that never moved and
-# recreates nothing. See `# --- 1a.` below and `docs/program/reviews/W24-IDEM.md`.
+# `W24-IDEM` CLOSED THAT, AND THE FIRST THING IT FOUND WAS THAT THE STATED CAUSE IS WRONG.
+# `D-36` and this comment both said the id moves because "BuildKit stamps a fresh `created`
+# into the config". Measured here on the same host: two consecutive fully cached builds of
+# an untouched tree produce images whose `.Created`, `.RootFS.Layers` and **entire
+# `.Config`** are byte-identical, and whose ids differ anyway. The id is the digest of the
+# MANIFEST, and BuildKit attaches a **provenance attestation** to every build by default;
+# that attestation carries the time the build ran. `SOURCE_DATE_EPOCH` never touched it,
+# which is exactly why trying it changed nothing.
 #
-# The one failure mode a mechanism like this has is an image that keeps an old identity
-# after its content genuinely changed, which would leave a stale container running and make
+# So this script now does two things, and they answer two different causes:
+#
+#   1. it builds with `BUILDX_NO_DEFAULT_ATTESTATIONS=1`, which makes the id a digest of
+#      the content again. Measured: two consecutive builds, same id, both images;
+#   2. after the build it compares each image with what its name pointed at BEFORE it --
+#      not by id but by CONTENT, the layer diffIDs plus the runtime configuration -- and
+#      points the name back at the old image when they are the same. That catches the
+#      cause (1) does not: `api` and `migrate` are two services sharing one image, and
+#      compose writes `com.docker.compose.service` into it, measured coming out `migrate`
+#      on one run and `api` on the next.
+#
+# See `# --- 1.`, `# --- 1a.` and `# --- 2a.` below, and `docs/program/reviews/W24-IDEM.md`.
+#
+# The one failure mode (2) would have is an image that keeps an old identity after its
+# content genuinely changed, which would leave a stale container running and make
 # `verify-deployed.sh` call it this tree. A diffID is the sha256 of a layer's uncompressed
 # tar, so that would take a collision; and the claim was driven rather than reasoned --
 # §4 of the review forces the wrong retag by hand and reads what the probe then says.
@@ -314,15 +327,57 @@ fi
 # <<< guard: port-not-foreign
 
 # --- 1. build, and ONLY then bring up ------------------------------------------------
-# WHAT THE TWO IMAGE NAMES POINT AT BEFORE THE BUILD, read before it rather than after,
-# because `compose build` MOVES the tag and the previous id is not recoverable from the
-# name once it has. A host that has never built these has neither, and an empty value
-# here means exactly that -- there was nothing to preserve. It is not a first run
-# detected by guesswork and it is not an error.
-PREVIOUS_API_ID="$(docker image inspect --format '{{.Id}}' "$INSTANCE-api" 2>/dev/null || true)"
-PREVIOUS_WEB_ID="$(docker image inspect --format '{{.Id}}' "$INSTANCE-web" 2>/dev/null || true)"
+# WHAT THE TWO IMAGE NAMES POINT AT BEFORE THE BUILD, and A SECOND TAG SO THAT IMAGE IS
+# STILL THERE AFTERWARDS. Both halves are measured rather than assumed:
+#
+#   * `compose build` MOVES the tag, so the previous id is not recoverable from the name
+#     once it has. A host that has never built these has neither, and an empty value here
+#     means exactly that -- there was nothing to preserve. It is not an error;
+#   * **this host's docker DELETES the image the tag moved off**, immediately, even while
+#     containers are running on it. Measured: after a build, `docker image inspect` on the
+#     id read two seconds earlier answers `No such image`, and `docker image ls -a` shows
+#     no dangling entry at all. So reading the id is not enough to keep the image, and the
+#     first version of this step compared a fingerprint against something that no longer
+#     existed and reported "the previous one could no longer be read" on every run. The
+#     second tag is what keeps it, and `# --- 2a.` below takes it off again.
+PREVIOUS_TAG_SUFFIX=deploy-previous
+PREVIOUS_API_ID=""
+PREVIOUS_WEB_ID=""
+if [ "$PRESERVE_IDENTITY" = yes ]; then
+    PREVIOUS_API_ID="$(docker image inspect --format '{{.Id}}' "$INSTANCE-api" 2>/dev/null || true)"
+    PREVIOUS_WEB_ID="$(docker image inspect --format '{{.Id}}' "$INSTANCE-web" 2>/dev/null || true)"
+    for pinned in "$INSTANCE-api:$PREVIOUS_API_ID" "$INSTANCE-web:$PREVIOUS_WEB_ID"; do
+        name="${pinned%%:*}"
+        id="${pinned#*:}"
+        [ -n "$id" ] || continue
+        docker tag "$id" "$name:$PREVIOUS_TAG_SUFFIX" >/dev/null 2>&1 || {
+            printf 'deploy.sh: NOTE: %s could not be pinned before the build. An identical\n' "$name" >&2
+            printf '  rebuild of it will be treated as a new image and its containers replaced,\n' >&2
+            printf '  which is what this script did before W24-IDEM. Nothing else changes.\n' >&2
+        }
+    done
+fi
 
 echo "-- building the images --"
+# NO DEFAULT ATTESTATIONS, AND THIS IS THE ACTUAL CAUSE OF `D-36`.
+#
+# `D-36` and this file's own header said the image id moves because "BuildKit stamps a
+# fresh `created` into the config". **Measured on this host, that is false.** Two
+# consecutive fully cached builds of an untouched tree give images whose `.Created`,
+# `.RootFS.Layers` and entire `.Config` are BYTE-IDENTICAL -- and whose ids still differ.
+# The id is the digest of the image's MANIFEST, and BuildKit attaches a **provenance
+# attestation** to every build by default; that attestation carries the time the build ran,
+# so the manifest digest moves although nothing in the image did. `SOURCE_DATE_EPOCH` does
+# not touch it, which is why `W23-DEPLOY` tried it and saw no change.
+#
+# Turning the default attestations off makes the id what it is supposed to be -- a digest
+# of the content. Measured, same tree, cache warm: two consecutive builds give
+# `1588a443ecf0...` and `1588a443ecf0...` for the api image and `f95c0d54cf31...` twice for
+# the web image. What is given up is the provenance attestation itself: nothing in this
+# repository reads one, `verify-deployed.sh` asks the running container what bytes it holds
+# rather than asking an image what it claims, and the frozen digests in
+# `compose.server.yml` are of third-party images this never touches.
+export BUILDX_NO_DEFAULT_ATTESTATIONS=1
 BUILD_STATUS=0
 compose build || BUILD_STATUS=$?
 
@@ -362,45 +417,54 @@ echo
 # --- 1a. an identical rebuild keeps the identity it already had ----------------------
 # `D-36`, AND THE ONE PART OF CRITERION 1'S ROW `R-1` DOES NOT BLOCK. Fetch, switch and
 # roll back are claims about a server with a previous version on it and there is no such
-# host; "run it twice and the second changes nothing" is a claim about THIS host, and it
-# was false for `api`, `web` and `migrate` because a fully cached `compose build` still
-# yields a new image ID -- BuildKit writes a fresh `created` into the config even when
-# every layer reports `CACHED` -- and `compose up -d` recreates a service whose image
-# moved. `SOURCE_DATE_EPOCH` was tried by `W23-DEPLOY` and does not fix it here.
+# host; "run it twice and the second changes nothing" is a claim about THIS host.
+#
+# `BUILDX_NO_DEFAULT_ATTESTATIONS` above removes the reason the id moved. This is the
+# second half, and it is here because it catches a cause the first half does not: **`api`
+# and `migrate` are two services sharing one image**, and compose writes
+# `com.docker.compose.service` into the image it builds. Measured on this host, that label
+# came out `migrate` on one run and `api` on the next, of the same tree -- so the config,
+# and with it the id, can still move although nothing about the image's content did.
 #
 # So the build is left exactly as it was and the TAG is moved back: if what the build
-# produced has the same content as the image the name pointed at before it, the name is
-# pointed at the old image again and the new one is discarded. Nothing about the build
-# changes, no layer is reused that would not have been, and a build that produced
-# something different is untouched.
+# produced has the same CONTENT as the image the name pointed at before it, the name is
+# pointed at the old image again and the build's duplicate is discarded. `compose up -d`
+# then sees an image that never moved and recreates nothing.
 #
-# THE FAILURE MODE THIS MECHANISM WOULD HAVE, NAMED. An image that keeps an old identity
-# after its content genuinely changed would make `verify-deployed.sh` lie -- it compares
-# the bytes inside the RUNNING container against the tree, so a stale container is exactly
-# what it reports on. `fingerprint_of` is what makes that impossible rather than
-# unlikely, and `docs/program/reviews/W24-IDEM.md` records the drive that put a changed
-# byte through this path and read what the probe then said.
+# THE FAILURE MODE THIS MECHANISM WOULD HAVE, NAMED. An image that kept an old identity
+# after its content genuinely changed would leave a stale container running and make
+# `verify-deployed.sh` call it this tree -- that probe compares the bytes INSIDE the
+# running container against the working tree, so a stale container is exactly what it
+# reports on. `fingerprint_of` is what makes that a sha256 collision rather than a
+# possibility, and `docs/program/reviews/W24-IDEM.md` §4 does not reason about it: it
+# forces the wrong retag by hand, brings the stack up on it and reads what the probe says.
 short_id() { printf '%s' "${1#sha256:}" | cut -c1-12; }
 
-# The content of an image and nothing about when it was built.
+# The content of an image, and nothing about the build that produced it.
 #
 # `.RootFS.Layers` is the list of diffIDs -- the sha256 of each layer's UNCOMPRESSED tar.
 # A byte that changed anywhere under any `COPY` or `RUN` changes the layer carrying it and
-# therefore this list. That is the whole safety argument: "the content genuinely changed"
-# cannot present itself as "identical", because it would have to collide a sha256.
+# therefore this list. That is the whole safety argument: content that genuinely changed
+# cannot present itself as identical without colliding a sha256.
 #
 # The runtime configuration is compared too, because a Dockerfile that changed only `CMD`,
-# `ENV`, `USER`, `WORKDIR`, `EXPOSE`, a label or a volume produces the same layers and a
-# different image, and an operator who changed one of those must get it. `.Created` is the
-# one field deliberately left out; it is the field this exists because of.
+# `ENV`, `USER`, `WORKDIR`, `EXPOSE`, a health check or a volume produces the same layers
+# and a different image, and an operator who changed one of those must get it.
 fingerprint_of() {
     docker image inspect --format \
-        '{{.Os}}|{{.Architecture}}|{{.Variant}}|{{range .RootFS.Layers}}{{.}},{{end}}|{{json .Config.Env}}|{{json .Config.Cmd}}|{{json .Config.Entrypoint}}|{{json .Config.WorkingDir}}|{{json .Config.User}}|{{json .Config.ExposedPorts}}|{{json .Config.Labels}}|{{json .Config.Volumes}}|{{json .Config.StopSignal}}|{{json .Config.Healthcheck}}' \
+        '{{.Os}}/{{.Architecture}}{{range .RootFS.Layers}} {{.}}{{end}} {{json .Config.Env}} {{json .Config.Cmd}} {{json .Config.Entrypoint}} {{json .Config.WorkingDir}} {{json .Config.User}} {{json .Config.ExposedPorts}} {{json .Config.Volumes}} {{json .Config.StopSignal}} {{json .Config.Healthcheck}}' \
         "$1" 2>/dev/null || true
+    # The labels, MINUS compose's own bookkeeping, which is the `api`/`migrate` flip above:
+    # it records which service was credited with the build, which is a fact about the
+    # builder and not about the image. Every other label is compared, so a label a
+    # Dockerfile sets is a changed image.
+    docker image inspect --format \
+        '{{range $name, $value := .Config.Labels}}{{println $name $value}}{{end}}' \
+        "$1" 2>/dev/null | grep -v '^com\.docker\.compose\.' || true
 }
 
-# One image name, and what the name pointed at before the build. An empty `previous` is a
-# host that had no such image -- the clean-clone case -- and is not an error.
+# One image name, what the name pointed at before the build, and the tag that kept that
+# image alive across it. An empty `previous` is a host that had no such image.
 keep_identity_if_unchanged() {
     local name="$1" previous="$2" current before after
     current="$(docker image inspect --format '{{.Id}}' "$name")"
@@ -410,7 +474,7 @@ keep_identity_if_unchanged() {
         return 0
     fi
     if [ "$previous" = "$current" ]; then
-        printf '  %-28s %s  unchanged; the build did not move the tag\n' \
+        printf '  %-28s %s  unchanged; the build did not move the id at all\n' \
             "$name" "$(short_id "$current")"
         return 0
     fi
@@ -419,7 +483,7 @@ keep_identity_if_unchanged() {
     if [ -z "$before" ] || [ -z "$after" ]; then
         printf '  %-28s %s  new image; the previous one could no longer be read, so it is\n' \
             "$name" "$(short_id "$current")"
-        printf '  %-28s    not claimed to be identical to anything\n' ""
+        printf '  %-28s    NOT claimed to be identical to anything\n' ""
         return 0
     fi
     if [ "$before" != "$after" ]; then
@@ -430,8 +494,8 @@ keep_identity_if_unchanged() {
     if ! docker tag "$previous" "$name"; then
         printf '  %-28s %s  identical content, and the tag could NOT be moved back to %s.\n' \
             "$name" "$(short_id "$current")" "$(short_id "$previous")"
-        printf '  %-28s    The containers using it will be recreated; that is safe and it\n' ""
-        printf '  %-28s    is not what this run intended. Nothing else is affected.\n' ""
+        printf '  %-28s    Its containers will be recreated. That is safe, it is what this\n' ""
+        printf '  %-28s    script did before, and it is not what this run intended.\n' ""
         return 0
     fi
     printf '  %-28s %s  identical content; kept, and %s discarded\n' \
@@ -451,8 +515,8 @@ if [ "$PRESERVE_IDENTITY" = yes ]; then
     keep_identity_if_unchanged "$INSTANCE-api" "$PREVIOUS_API_ID"
     keep_identity_if_unchanged "$INSTANCE-web" "$PREVIOUS_WEB_ID"
 else
-    echo "-- image identity: ALPHA_PRESERVE_IMAGE_IDENTITY=no, so every build is a new"
-    echo "   image and api, web and migrate will be recreated --"
+    echo "-- image identity: ALPHA_PRESERVE_IMAGE_IDENTITY=no, so every build is taken as"
+    echo "   a new image and api, web and migrate will be recreated --"
 fi
 echo
 
@@ -470,6 +534,27 @@ UP_STATUS=0
 compose up -d || UP_STATUS=$?
 [ "$UP_STATUS" -eq 0 ] || echo "deploy.sh: \`compose up -d\` exited $UP_STATUS; the guards below decide."
 echo
+
+# --- 2a. the pin comes off ------------------------------------------------------------
+# The second tag from `# --- 1.` exists only so the previous image survives the build. It
+# comes off HERE and not before `up`, and the order is the point: while the old container
+# is still running, this host's docker REFUSES to untag the image it runs -- `conflict:
+# ... container <id> is using its referenced image`, measured -- so removing the pin
+# earlier would have failed on exactly the runs where the content DID change.
+#
+# After `up` there are two cases and both are right. Content identical: the pin and the
+# live name point at the same image, so this drops a tag and nothing else. Content
+# changed: `up` has replaced the containers, the pin is the last tag on the old image, and
+# dropping it deletes that image -- which is what this script did before there was a pin.
+# Neither case is worth failing a deployment over, so a pin that would not come off is
+# reported and left; the next run re-points it.
+for pinned in "$INSTANCE-api" "$INSTANCE-web"; do
+    [ "$PRESERVE_IDENTITY" = yes ] || continue
+    docker image inspect "$pinned:$PREVIOUS_TAG_SUFFIX" >/dev/null 2>&1 || continue
+    docker image rm "$pinned:$PREVIOUS_TAG_SUFFIX" >/dev/null 2>&1 || \
+        echo "deploy.sh: NOTE: $pinned:$PREVIOUS_TAG_SUFFIX is still there. It names the" \
+             "image this run replaced; the next run re-points it."
+done
 
 # The step after a rebuild that everyone forgets. nginx resolves an upstream once, at
 # worker start-up, and a replaced api or web container that lands on a different address

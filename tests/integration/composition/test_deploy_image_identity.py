@@ -140,7 +140,14 @@ if argv[:2] == ["image", "inspect"]:
 
 if argv[:1] == ["tag"]:
     source, destination = argv[1], argv[2]
-    if setting("STUB_TAG_FAILS") == "1":
+    # The PIN taken before the build and the RETAG taken after it fail independently:
+    # they are two different things to be unable to do, and a case that could only fail
+    # both at once could not tell their two messages apart.
+    pinning = destination.endswith(":deploy-previous")
+    if pinning and setting("STUB_PIN_FAILS") == "1":
+        sys.stderr.write("Error response from daemon: no\n")
+        sys.exit(1)
+    if not pinning and setting("STUB_TAG_FAILS") == "1":
         sys.stderr.write("Error response from daemon: no\n")
         sys.exit(1)
     target = resolve(store, source)
@@ -152,11 +159,22 @@ if argv[:1] == ["tag"]:
     sys.exit(0)
 
 if argv[:2] == ["image", "rm"]:
-    target = resolve(store, argv[2])
-    if target is None or target in store["tags"].values():
-        sys.stderr.write("Error: image is referenced\n")
+    if setting("STUB_RM_FAILS") == "1":
+        sys.stderr.write("Error response from daemon: conflict\n")
         sys.exit(1)
-    del store["images"][target]
+    ref = argv[2]
+    target = resolve(store, ref)
+    if target is None:
+        sys.stderr.write("Error: No such image\n")
+        sys.exit(1)
+    if ref in store["tags"]:
+        # A NAME: docker untags it, and deletes the image only if that was its last tag.
+        del store["tags"][ref]
+    elif target in store["tags"].values():
+        sys.stderr.write("Error: image is referenced by a tag\n")
+        sys.exit(1)
+    if target not in store["tags"].values():
+        store["images"].pop(target, None)
     save(store)
     sys.exit(0)
 
@@ -168,6 +186,12 @@ if argv[:1] == ["compose"]:
     sub = argv[5] if len(argv) > 5 else ""
     rest = argv[6:]
     if sub == "build":
+        # What the build was actually given, not what the script says it gives it.
+        with open(os.environ["STUB_LOG"], "a", encoding="utf-8") as handle:
+            handle.write(
+                "environment BUILDX_NO_DEFAULT_ATTESTATIONS=%s\n"
+                % setting("BUILDX_NO_DEFAULT_ATTESTATIONS", "<unset>")
+            )
         if setting("STUB_BUILD_STATUS", "0") != "0":
             sys.exit(int(setting("STUB_BUILD_STATUS")))
         # THE DEFECT, MODELLED: a build always mints a new id, whatever it produced.
@@ -176,8 +200,16 @@ if argv[:1] == ["compose"]:
             name = "%s-%s" % (setting("STUB_INSTANCE"), kind)
             content = setting("STUB_BUILT_%s" % kind.upper(), "the-original-%s" % kind)
             fresh = "sha256:%s%02d" % (kind * 20, serial)
+            displaced = store["tags"].get(name)
             store["images"][fresh] = content
             store["tags"][name] = fresh
+            # AND THIS HOST'S DOCKER DELETES THE IMAGE THE TAG MOVED OFF, at once, even
+            # while containers run on it -- measured, and recorded in `# --- 1.` of
+            # deploy.sh. It is modelled rather than left out, because it is the whole
+            # reason the pin exists: without a second tag there is nothing left to
+            # compare the new image against.
+            if displaced is not None and displaced not in store["tags"].values():
+                store["images"].pop(displaced, None)
         save(store)
         sys.exit(0)
     if sub == "up":
@@ -325,7 +357,10 @@ class _Run:
 
     @property
     def images(self) -> dict[str, str]:
-        return json.loads(self._store.read_text(encoding="utf-8"))["tags"]
+        """The two names compose resolves, without the pin `deploy-previous` tag, which
+        is scaffolding and is expected to move every run."""
+        tags = json.loads(self._store.read_text(encoding="utf-8"))["tags"]
+        return {name: value for name, value in tags.items() if ":" not in name}
 
     @property
     def store(self) -> dict[str, dict[str, str]]:
@@ -464,21 +499,40 @@ class TestAnImageWhoseContentChangedNeverKeepsAnOldIdentity:
     ) -> None:
         """Two unreadable fingerprints are both the empty string, and a comparison that
         only asked whether they were equal would call them identical. `unreadable` is not
-        `identical`, and it is the silent-fallback shape this programme refuses."""
+        `identical`, and it is the silent-fallback shape `AGENTS.md` §4 refuses.
+
+        It is reached the way it is actually reached: the pin could not be taken, so the
+        build deleted the image it displaced and there is nothing left to compare.
+        """
         first = _deploy(tmp_path, port=serving, store=store, run=1)
         assert first.completed.returncode == 0
-        # The previous images are pruned from under the script: the tags still name ids
-        # that no longer exist, which is what `docker image prune` between two runs does.
-        state = json.loads(store.read_text(encoding="utf-8"))
-        state["images"] = {}
-        store.write_text(json.dumps(state), encoding="utf-8")
 
-        second = _deploy(tmp_path, port=serving, store=store, run=2)
+        second = _deploy(
+            tmp_path, port=serving, store=store, run=2, stub={"STUB_PIN_FAILS": "1"}
+        )
         assert second.completed.returncode == 0, second.completed.stderr
         assert "could no longer be read" in second.completed.stdout, second.completed.stdout
-        assert not [call for call in second.calls if call[:1] == ["tag"]], (
-            "an image nobody could read was presented as identical to the new one"
-        )
+        assert "could not be pinned before the build" in second.completed.stderr
+        assert not [
+            call for call in second.calls
+            if call[:1] == ["tag"] and not call[2].endswith(":deploy-previous")
+        ], "an image nobody could read was presented as identical to the new one"
+
+    def test_the_pin_is_taken_before_the_build_or_there_is_nothing_to_compare(
+        self, tmp_path: Path, serving: int, store: Path
+    ) -> None:
+        """The order is the mechanism. This host's docker deletes the image a tag moved
+        off -- the stub models it -- so a pin taken after the build would pin nothing."""
+        _deploy(tmp_path, port=serving, store=store, run=1)
+        second = _deploy(tmp_path, port=serving, store=store, run=2)
+        calls = second.calls
+        pins = [i for i, call in enumerate(calls)
+                if call[:1] == ["tag"] and call[2].endswith(":deploy-previous")]
+        builds = [i for i, call in enumerate(calls)
+                  if call[:1] == ["compose"] and call[5:6] == ["build"]]
+        assert len(pins) == 2, calls
+        assert builds, calls
+        assert max(pins) < min(builds), calls
 
 
 class TestTheFirstRunOnAHostThatHasNeverBuiltThese:
@@ -631,3 +685,75 @@ def test_the_identity_step_runs_after_the_build_and_before_the_stack_is_brought_
     identity = at(r"^    keep_identity_if_unchanged \"\$INSTANCE-api\"")
     up = at(r"^compose up -d \|\| UP_STATUS=")
     assert build < identity < up, (build, identity, up)
+
+
+class TestTheDefaultAttestationsAreOffForTheBuild:
+    """The FIRST half of the fix, and the cause `D-36` misnamed.
+
+    Two consecutive fully cached builds of an untouched tree produce images whose
+    `.Created`, `.RootFS.Layers` and entire `.Config` are byte-identical -- and whose ids
+    differ, because BuildKit attaches a provenance attestation carrying the time the build
+    ran and the id is the digest of the manifest that holds it. `SOURCE_DATE_EPOCH` never
+    touched that, which is why trying it changed nothing. The figures are in
+    `docs/program/reviews/W24-IDEM.md` §3; what is pinned here is that the build is
+    actually given the setting, read out of the build's own environment rather than out of
+    a line in the script that might sit after it or inside an `if`.
+    """
+
+    def test_the_build_is_run_with_it(self, tmp_path: Path, serving: int, store: Path) -> None:
+        run = _deploy(tmp_path, port=serving, store=store, run=1)
+        assert run.completed.returncode == 0, run.completed.stderr
+        given = [call for call in run.calls if call[:1] == ["environment"]]
+        assert given, "no build was run"
+        for call in given:
+            assert call[1] == "BUILDX_NO_DEFAULT_ATTESTATIONS=1", call
+
+    def test_it_is_still_on_when_the_operator_turned_the_retag_off(
+        self, tmp_path: Path, serving: int, store: Path
+    ) -> None:
+        """The two halves are independent. `ALPHA_PRESERVE_IMAGE_IDENTITY=no` turns off
+        the comparison and the retag; it is not a switch for how the image is built."""
+        workspace = tmp_path / "env-off"
+        workspace.mkdir()
+        off = workspace / "alpha.env"
+        off.write_text(_env_text(serving, policy="no"), encoding="utf-8")
+        run = _deploy(tmp_path, port=serving, store=store, run=1, env_file=off)
+        assert run.completed.returncode == 0, run.completed.stderr
+        assert ["environment", "BUILDX_NO_DEFAULT_ATTESTATIONS=1"] in run.calls, run.calls
+
+
+class TestThePinComesOffAfterTheStackIsUp:
+    """`# --- 2a.`, and the order is measured rather than preferred: while the old
+    container is still running, this host's docker REFUSES to untag the image it runs
+    (`conflict: ... container <id> is using its referenced image`). A pin removed before
+    `up` would therefore fail on exactly the runs where the content did change."""
+
+    def test_it_is_removed_and_only_after_up(
+        self, tmp_path: Path, serving: int, store: Path
+    ) -> None:
+        _deploy(tmp_path, port=serving, store=store, run=1)
+        second = _deploy(tmp_path, port=serving, store=store, run=2)
+        assert second.completed.returncode == 0, second.completed.stderr
+        calls = second.calls
+        removals = [i for i, call in enumerate(calls)
+                    if call[:2] == ["image", "rm"] and call[2].endswith(":deploy-previous")]
+        ups = [i for i, call in enumerate(calls)
+               if call[:1] == ["compose"] and call[5:6] == ["up"]]
+        assert len(removals) == 2, calls
+        assert ups, calls
+        assert min(removals) > min(ups), calls
+        assert not [name for name in second.store["tags"] if name.endswith(":deploy-previous")], (
+            second.store["tags"]
+        )
+
+    def test_a_pin_that_will_not_come_off_is_said_and_does_not_fail_the_deployment(
+        self, tmp_path: Path, serving: int, store: Path
+    ) -> None:
+        """It names the image this run replaced, the next run re-points it, and no
+        deployment is failed over a tag."""
+        _deploy(tmp_path, port=serving, store=store, run=1)
+        second = _deploy(
+            tmp_path, port=serving, store=store, run=2, stub={"STUB_RM_FAILS": "1"}
+        )
+        assert second.completed.returncode == 0, second.completed.stderr
+        assert "the next run re-points it" in second.completed.stdout, second.completed.stdout
