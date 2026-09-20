@@ -30,9 +30,14 @@ verdict, none failed.** Two cannot be established, and the reason is not the sof
 | **criterion 1** | `deploy.sh` now exists and brings the stack up from a clean clone, cold cache, exit 0, served schema conforming with 0 differences. It stays *cannot be established* because **no host here has never run it and there is no previous version to roll back to** — `R-1` alone. |
 | **criterion 2** | no TLS: no host name, no certificate, no DNS. `R-1` alone. The second clause — every operation refusing an absent or wrong credential — **is driven and holds.** |
 
-Criterion 4's named exception was found to be a **defect rather than a limit** and repaired;
-criteria 5 and 10's exceptions were repaired in wave 22. A re-certification at the current tip
-is owed.
+**Re-certified 2026-09-20 at `16d3503`** —
+`artifacts/checkpoints/PA-01/certification-16d3503.json`, which supersedes the earlier record.
+Criterion 4's exception is **gone**: `partial` was driven **in a browser on the deployed
+path**, badge `queued → running → partial`. Criterion 5's is **gone**, checked with an
+extractor the application does not use. Criterion 10's is **replaced by a smaller one** — the
+rehearsal's per-table figures are exact and only its *total* counts a view, which over-reports
+and is therefore safe in the direction that matters. Criterion 8's stands: a container restart
+is not a host reboot.
 
 ### What is open
 

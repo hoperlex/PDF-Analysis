@@ -11,6 +11,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
+| **D-38** | a failed deploy names the wrong file | `infra/` |
+| **D-39** | the rehearsal's total counts a view | `infra/` |
 | **D-35** | does criterion 4 need `partial` from inside the journey? | **owner — one yes/no** |
 | **D-18** | a catalog code costs a frontend reseal; built, proved, reverted by **`R-11`** | owner |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
@@ -1122,6 +1124,37 @@ document is piped on stdin.
 **Carry this to the `R-1` host.** Its docker is probably not a snap build, but the class
 survives the packaging: any `-v` whose source the daemon cannot see becomes an empty directory
 and a green-looking container.
+
+### D-38 — a failed `compose up` sends the operator to a file that is fine
+
+**`W24CERT2-1`.** When `compose up` fails, `deploy.sh` prints *"the guards below decide"* and
+then dies at `reload-proxy.sh` telling the operator to **fix `nginx.conf`** — a file that is
+correct. The `services-healthy` guard that would name the real cause **runs after the reload
+and therefore never ran**.
+
+**It refused rather than claiming success** — exit 5, which is the important half — but the
+diagnosis points at the wrong file, and an operator who edits `nginx.conf` on that advice is
+being sent away from the fault.
+
+Tree: `infra/deploy/`.
+
+Check: stop one service of a running instance, re-run `deploy.sh`, read `$?` and the last ten
+lines.
+
+### D-39 — the wipe rehearsal's total counts a view
+
+**`W24CERT2-2`, and it is the residue of `D-24`.** The per-table figures are now exact against
+`count(*)`. The **total** is not: `total: 104 rows in 17 tables` over **100 rows in 16 base
+tables**, the seventeenth being `finding_current_verdict` — a four-row projection of rows
+already counted.
+
+**It over-reports, so it is safe in the direction that matters** — an operator is never told
+there is less to lose than there is. But it is the screen `R-4` asks an operator to believe
+before destroying real client documents, and `D-24` closed on the claim that the figures are
+exact.
+
+Check: `reset.sh … --dry-run | tail -3` beside
+`select table_type, count(*) from information_schema.tables where table_schema='public' group by 1`.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
