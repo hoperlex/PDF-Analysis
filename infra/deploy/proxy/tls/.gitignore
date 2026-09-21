@@ -1,0 +1,16 @@
+# THE CERTIFICATE AND ITS PRIVATE KEY GO HERE, ON THE HOST, PLACED BY THE OWNER.
+#
+#   fullchain.pem   the certificate and its chain
+#   privkey.pem     the private key, mode 600
+#
+# NOTHING IN THIS DIRECTORY IS EVER COMMITTED. The two lines below ignore every file in it
+# except this one, so `git status` cannot tempt anybody and `git add -A` cannot take a key
+# by accident. `tests/integration/composition/test_proxy_tls_path.py` asks
+# `git check-ignore` about both names rather than trusting this comment.
+#
+# THE DIRECTORY ITSELF IS TRACKED -- that is what this file is for. `D-37`: a `-v` source
+# the daemon cannot resolve becomes an INVENTED EMPTY DIRECTORY, not a refusal, so a clean
+# clone that already contains this directory is one fewer way for the mount to be a
+# surprise.
+*
+!.gitignore

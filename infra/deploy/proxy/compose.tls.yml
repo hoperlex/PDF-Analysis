@@ -1,0 +1,47 @@
+# THE TLS OVERLAY. `compose.server.yml` is not edited; this is added beside it.
+#
+#   docker compose --env-file infra/deploy/env/alpha.env \
+#     -f infra/deploy/compose.server.yml \
+#     -f infra/deploy/proxy/compose.tls.yml \
+#     up -d
+#
+# WHY AN OVERLAY AND NOT A CHANGE TO `compose.server.yml`. Two reasons, and the second is
+# the durable one:
+#
+#   1. `W26-OPS` owns that file this wave and `AGENTS.md` section 3 allows it one writer;
+#   2. TLS has to be switchable off, and an overlay is the cleanest OFF there is -- drop
+#      the second `-f` and the stack is byte-for-byte the deployment that was certified.
+#      Nothing has to be un-edited, and the thing that is turned off is not a flag that has
+#      to be read correctly but a file that is not there. See the runbook, section 7.
+#
+# WHAT IT ADDS, and it adds nothing else: one published port and three read-only mounts on
+# the `proxy` service. No service is added, no image changes, no environment name is
+# introduced that could carry a secret -- `ALPHA_HTTPS_PORT` is a port number and the
+# certificate is a PATH, so `docker compose config` on these two files prints where the key
+# is and never what is in it. That is the same shape as the provider credential, which
+# `compose.server.yml` reaches with `env_file:` precisely so it never enters substitution.
+#
+# RELATIVE PATHS BELOW RESOLVE AGAINST `infra/deploy/`, NOT AGAINST THIS FILE. Compose
+# resolves them against the project directory, which is the directory of the FIRST `-f`.
+# That is why `./proxy/tls` and not `./tls`. Two things keep the subtlety from biting:
+# `tests/integration/composition/test_proxy_tls_path.py` asserts the rendered
+# configuration's source paths, and `D-37` means a source the daemon cannot see becomes an
+# empty directory rather than a refusal -- which `enable-tls.sh` reports as TLS IS OFF on
+# the plain port rather than as a stack that will not start.
+
+services:
+  proxy:
+    volumes:
+      # The certificate and its private key, placed on the host by the owner. READ-ONLY:
+      # nothing in this stack ever writes a key.
+      - ./proxy/tls:/etc/nginx/tls:ro
+      # The TLS server block, mounted OUTSIDE conf.d so nginx does not load it by itself.
+      - ./proxy/tls-server.conf:/etc/nginx/tls-server.conf:ro
+      # The switch. The official image runs executable *.sh here before nginx starts.
+      - ./proxy/enable-tls.sh:/docker-entrypoint.d/25-enable-tls.sh:ro
+    ports:
+      # 443 by default because that is what a browser reaching a host name asks for, and
+      # this is the file an operator changes when the host says otherwise. The plain port
+      # `compose.server.yml` publishes is untouched and keeps serving -- see the
+      # "NO REDIRECT" note in `tls-server.conf`.
+      - "${ALPHA_HTTPS_PORT:-443}:8443"
