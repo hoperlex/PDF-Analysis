@@ -48,7 +48,7 @@ describe('the create-project form', () => {
     const markup = form();
     expect(markup).toContain('id="new-project-name"');
     expect(markup).toContain('name="name"');
-    expect(markup).toContain('>Create</button>');
+    expect(markup).toContain('>Создать</button>');
   });
 
   it('claims nothing was created before anything was created', () => {
@@ -93,7 +93,7 @@ describe('the start-run control', () => {
 
   it('offers one button and no provider-mode selector', () => {
     const markup = control();
-    expect(markup).toContain('>Start run</button>');
+    expect(markup).toContain('>Запустить прогон</button>');
     expect(markup).not.toContain('<select');
     expect(markup).not.toContain('type="radio"');
     expect(markup).not.toContain('recorded mode instead');

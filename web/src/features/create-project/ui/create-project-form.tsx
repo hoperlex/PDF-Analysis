@@ -86,7 +86,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
           placeholder="Название проекта"
         />
         <button type="submit" className="am-button" disabled={mutation.isPending}>
-          Create
+          Создать
         </button>
       </div>
 

@@ -79,7 +79,7 @@ export function VersionDetailPage({ projectUid, versionUid }: VersionDetailPageP
           <VersionPanel version={version.data} />
           <p>
             <Link href={routes.document(version.data.project_uid, version.data.document_uid)}>
-              All versions of this document
+              Все версии документа
             </Link>
           </p>
         </>

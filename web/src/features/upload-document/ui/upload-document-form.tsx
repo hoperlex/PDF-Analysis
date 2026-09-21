@@ -92,7 +92,8 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
         />
 
         <label htmlFor="upload-title">
-          Display title <em className="am-form__hint">(необязательно; не идентификатор)</em>
+          Отображаемое название{' '}
+          <em className="am-form__hint">(необязательно; не идентификатор)</em>
         </label>
         <input
           id="upload-title"
