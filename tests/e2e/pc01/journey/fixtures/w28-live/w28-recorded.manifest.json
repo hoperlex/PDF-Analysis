@@ -207,7 +207,7 @@
         "expects_rendered": [
           "Run",
           "The run terminated failed. Nothing was published.",
-          "Terminal reason: dependency_unavailable",
+          "Terminal reason: analysis_input_invalid",
           "This run made no provider call, so it has no cost to report.",
           "There is nothing to review.",
           "Replayed from recordings. This run is not evidence of a live provider call."
