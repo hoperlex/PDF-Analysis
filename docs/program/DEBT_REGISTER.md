@@ -13,8 +13,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 |---|---|---|
 | **D-38** | a failed deploy names the wrong file | `infra/` |
 | **D-39** | the rehearsal's total counts a view | `infra/` |
-| **D-35** | does criterion 4 need `partial` from inside the journey? | **owner — one yes/no** |
-| **D-18** | a catalog code costs a frontend reseal; built, proved, reverted by **`R-11`** | owner |
+| **D-40** | `PC01_ERROR_CODES` is narrower than the surface | `web/src` |
+| **D-41** | two comments in `errors.ts`, one falsified this wave | `web/src` |
 | **D-15** | one `cost_basis` over a figure summed across attempts | design call |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
@@ -357,30 +357,61 @@ the two that do not are the control and the deletion proof, which should not.
 Check: `grep -c 'guard:' infra/deploy/reset.sh` is 11, and
 `.venv/bin/pytest tests/integration/composition/test_reset_script_refusals.py` is 31.
 
-### D-18 — that 409 cannot be diagnosed from the wire — **OPEN, and now a narrow question**
+### D-18 — two opposite faults share one byte-identical envelope — **CLOSED**
 
-**Measured by `W18-OPS` without touching `contracts/`.** `conflict` declares
-`safe_detail_keys: ["aggregate_type", "expected_revision"]`, and `BlobAttributeConflictError`
-raises `blob_id`, `role` and `media_type` — all screened off. **The message goes too**:
-`envelope.py:126` uses the *catalog's* summary, so the class's own distinguishing sentence
-never reaches the wire.
+**Closed 2026-09-21 by `W25-SEAL` under owner ruling `R-13`**, after `R-8` built it, `R-11`
+reverted it, and the owner accepted the cost that revert had declined.
 
-**Exactly two errors in `src/` carry `conflict` with `aggregate_type: "Blob"`:**
+`staged_upload_lost` — **503, `retryable: true`**, category `dependency`, `safe_detail_keys`
+exactly `["dependency"]`. It went to `TemporaryBlobLostError`, which follows from the ruling
+rather than taste: `conflict`'s `retryable: false` is **right** for
+`BlobAttributeConflictError` (published bytes are immutable) and **wrong** for a staged upload
+the store lost. Catalog 21 → 22, `candidate_revision` 6 → 7 across all six domain files
+(`W0-DOM-02`), `conflict` byte-identical to round 6, surface unmoved at 12 / 15 / 46.
 
-| Class | What an operator must do |
-|---|---|
-| `BlobAttributeConflictError` | **stop** — the instance was restored wrong |
-| `TemporaryBlobLostError` | **retry the upload** |
+**The measurement that outlives the row: `R-11`'s cost was a permission boundary, not an
+amount of work.** End to end — cherry-pick, the four mechanical steps, two gates — this took
+**twenty minutes**, about eleven of them waiting on gates. What had stopped it twice was a
+brief that said *"No `web/`"* and a permission classifier that refused
+`web/FRONTEND_LOCK.json`. **Neither of those is time**, and framing the revert as a cost
+conflated the two.
 
-Their envelopes are **byte-identical apart from `correlation_id`** — same status, same code,
-same message, same details, `retryable: false` on both. Opposite operator responses, one
-indistinguishable answer. And `retryable: false` is right for one and arguably wrong for the
-other.
+**The frontend went red first and was watched doing it** —
+`test_the_committed_client_was_generated_from_this_contract` on the old digest against the
+new, and `npm test` at 7 failed / 699 passed — rather than assumed green after a recipe.
 
-**The question for the owner is narrower than "widen the detail keys":** *may a `conflict`
-envelope carry a discriminator between these two, and is that a detail key or a second code?*
-`R-3`'s `dependency_credential_refused` is the same shape and has been ruled once already,
-which is the precedent either way.
+**Zero of 36 characterization records affected, re-measured.** Sixteen carry a non-2xx
+envelope and none carries `conflict`. The method note is worth keeping: **a record stores its
+body as a JSON *string*, so a structural walk for `error_code` finds nothing at all** and
+would have reported the right conclusion for a wrong reason.
+
+Check: `python3 -c "import json;print(len(json.load(open('contracts/domain/v1/error-codes.json'))['codes']))"` is 22.
+
+### D-40 — `PC01_ERROR_CODES` is narrower than the surface it claims to cover
+
+**Raised by `W25-SEAL` and outside its grant.** That list states its own meaning as *"the
+twelve codes a PC-01 screen has to be able to render"*. `uploadDocument` can now emit
+`staged_upload_lost`, which is **in the catalog and not in the list**.
+
+**Nothing breaks** — a code outside the subset is still an `ApiError`, so the envelope and
+`retryable: true` reach the caller. But the list's stated meaning is now narrower than the
+surface, and **this is exactly the shape `W15-AUTH` found**: that same list lacked both
+authorization codes, which was correct before `R-3` and false after it, and nobody widened it.
+
+Widening it is a **screen** decision. Tree: `web/src`.
+
+### D-41 — two comments in `errors.ts`, one of which this wave falsified
+
+**Named by `W25-SEAL` rather than taken, following `W20-CODE`'s precedent.**
+`web/src/shared/api/errors.ts:4` says *"twenty-code catalog"* — stale since `R-3`, not this
+wave's doing. Line 25 says *"the full twenty-one-code catalog"* — **true before `W25-SEAL`
+and false after it.**
+
+Outside that session's `allowed_paths` and read by no test. `D-23`'s guard reads
+`src/auditmanager/api/` and `infra/deploy/`; **`web/src/shared/` is not in its tree**, which
+is `D-32` one directory over.
+
+Check: `grep -n "twenty" web/src/shared/api/errors.ts`.
 
 ### D-19 — a published run reports neither its timings nor its finding count — **CLOSED**
 
@@ -1035,28 +1066,19 @@ finding, `cost_basis measured`, terminal on the first poll 22 ms after `startRun
 Check: `grep -n 'max_tokens' src/auditmanager/analysis/text/proxy.py` and
 `.venv/bin/pytest tests/integration/analysis_text/test_proxy_truncation_reaches_partial.py`.
 
-### D-35 — one ruling: does criterion 4 need `partial` from inside the operator's journey?
+### D-35 — does criterion 4 need `partial` from inside the journey? — **CLOSED**
 
-**`W23-PARTIAL` phrased it so it can be answered yes or no, and did not take the route
-itself.** `partial` is now reachable **on the deployed path by a real truncated provider
-call**. It is not reachable **from inside a user's journey**: every route to it belongs to an
-operator of the *deployment* — who the proxy is and what it answers.
+**Ruled `R-12` on 2026-09-21: the deployed path is enough.** `W24-CERT2` drove `partial` **in
+a browser** — badge `queued → running → partial` at 2334 ms, `degradation_set
+["text_analysis"]`, `model_call.status = truncated` with 16 000 output tokens and no error
+code — against a stub of the proxy's own documented contract on the stack's own network, with
+**nothing in the application stubbed**.
 
-> Does criterion 4 require `partial` to be provoked from inside the operator's journey, or is
-> it satisfied by `partial` being reached on the deployed path by a real truncated provider
-> call? **If the former: may `fixtures/recorded/text_analysis` carry a second canonical
-> recording, keyed by a second acceptance document, whose `stop_reason` is `max_tokens`?**
-
-That second route is the only one that puts the lever in a journey **with no contract
-change**, because a recording is keyed by the request and **the document is the one part of
-the request an operator chooses**. It was not taken because it needs a new PDF under
-`fixtures/synthetic/ar/`, a corpus-builder change, `SHA256SUMS`, `expected_issues.json` and
-the contract tests that enumerate them — none of them that session's.
-
-**And the cheap alternative is not cheap**, measured rather than assumed: an output ceiling is
-configurable **nowhere**, and `max_output_tokens` is hashed into `PromptBundle.content_sha256`
-and then `AnalysisProfile.content_sha256`, which `ADR-0011` requires immutable. **A configured
-output ceiling is a contract change wearing an environment variable.**
+The criterion asks that the UI **distinguish** `running`, `published`, `partial` and `failed`,
+and it does. **The alternative was deliberately not taken**: a second canonical recording
+keyed by a second acceptance document would have cost a new PDF, a corpus-builder change,
+`SHA256SUMS`, `expected_issues.json` and the contract tests that enumerate them — for a lever
+no criterion asks for.
 
 ### D-36 — `deploy.sh` run twice recreated three services — **CLOSED, and this row named the wrong cause**
 
