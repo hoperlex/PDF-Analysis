@@ -285,6 +285,9 @@ envelope carries a location or the caller's own declaration back. `details` is
 Run with the tree committed and `git status --porcelain` empty, on lane `gate-w25a`, **never
 through `| tail`** — the exit code is `$?` after a redirect to a file.
 
+**Run twice: at `8183a0f`, the tree with every code change in it, and again at `49f013d`, the
+tip with this review committed. Both identical, both exit `0`.**
+
 **Exit code: `0`. `GATE OK: battery, foundation, frontend and whitespace all pass`.**
 
 | | the brief's base | measured here |
@@ -293,6 +296,9 @@ through `| tail`** — the exit code is `$?` after a redirect to a file.
 | battery | 1932 passed / 5 skipped / 168 subtests | **1938 passed / 5 skipped / 169 subtests**, 4:25 |
 | frontend | 706 in 48 files | **706 passed / 48 files passed** |
 | exit | 0 | **0** |
+
+The tip run at `49f013d` reported the same four numbers — 35, `1938 passed, 5 skipped, 169
+subtests`, `706 passed (48)` — and finished at **11:33:33**.
 
 **Every delta is accounted for.** `+6` battery tests is exactly
 `test_two_blob_faults_are_two_envelopes.py`; `+1` subtest is `test_error_envelope.py` iterating
@@ -331,7 +337,13 @@ declare `"frozen": false` and `"status": "draft_candidate"`, `R-13` really does 
 
 ## 9. Elapsed
 
-Measured, not estimated. First command **11:14:02**; the gate at the tip reported at the time
-recorded in §7's log. **About one hour** wall clock, of which the two full `make gate` runs, the
-`npm --prefix web ci`, `make bootstrap`, the lane bring-up and the mutation copy are the
-majority — the editing is minutes.
+Measured, not estimated. First command **11:14:02**; the confirming gate at the tip reported at
+**11:33:33**. **About 20 minutes** wall clock.
+
+Of which roughly 11 are the two full `make gate` runs (4:25 and 4:30 of battery apiece, plus
+their foundation sequences and the frontend suite), and most of the rest is `make bootstrap`,
+`npm --prefix web ci`, the lane bring-up, the red measurement and the mutation copy. The editing
+itself is a few minutes: the cherry-pick applied clean, the four steps are mechanical, and every
+digest was already known to be correct before it was written down. **`R-11`'s cost was a
+permission boundary, not an amount of work** — which is worth saying plainly, because the row
+sat open for two waves.
