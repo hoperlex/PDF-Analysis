@@ -130,7 +130,45 @@ the verdict. The repository is byte-identical before and after.
 
 ## 5. What the guard now catches, and what it still cannot
 
-<!-- MEASURED:SCOPE -->
+**Catches, at gate time, with no stack** — each proved by a mutation that was run:
+
+| rot | what reddens |
+|---|---|
+| a screen renames `data-upload-failure` or `data-precheck-problem` | the marker check |
+| `too_large` becomes `over_the_limit` in `upload-envelope.ts` | the marker-**value** check |
+| the pre-check panel is reworded | the sentence check |
+| the *write* half's `"Created"` is reworded | the same check — previously unguarded |
+| `uploadDocument` is renamed or re-mounted | the contract triple check |
+| `422` is dropped from `uploadDocument`'s responses | the status check |
+| a negative fixture is deleted or renamed | the fixture check |
+| the upload screen moves, or leaves the read walk | the screen check |
+| a case is edited to claim the wrong side of the seam | the coherence check |
+| a case is "fixed" by declaring `server_error` | the generic-classification check |
+| the pre-check limit is raised to nginx's | `D-44`'s guard |
+| `client_max_body_size` is lowered, commented out, or joined by a second cap | `D-44`'s guard |
+| `maxBytesLabel` stops matching `maxBytes` | `D-44`'s guard |
+| `oversize.pdf` is replaced by a file under the pre-check limit | `D-44`'s guard |
+
+**Still cannot**, and this is the line the brief asked to be drawn rather than blurred:
+
+- that pressing anything *does* anything. The guard proves a handle and a sentence exist
+  in `web/src`; it cannot prove the panel renders, that `Upload` goes unpressable, or that
+  the `422` arrives. `refusals.mjs` against a live stack is the only instrument for that,
+  and it is unchanged in every respect but where it reads its table from.
+- that the server's envelope really carries the declared `constraint`. `not_encrypted` and
+  `every_page_has_extractable_text` are literals in `src/auditmanager/ingest/envelope.py`,
+  but `1 <= page_count <= 30` is an f-string built from `MIN_PAGES`/`MAX_PAGES` and has no
+  literal anywhere. A guard demanding all three would have been red on the third the
+  moment it ran, so the constraint is **not** checked against `src/`. What is checked is
+  that each case's own `expects_rendered_from_envelope` agrees with its own `constraint`.
+- **`D-44`'s guard reads the config in the tree, not the config nginx loaded.** A stack
+  deployed before a change to `nginx.conf` still serves the old cap. The guard is about
+  what the repository commits to, and `infra/deploy/verify-deployed.sh` is the instrument
+  for what is running.
+- the sentence check is a substring search over all of `web/src`, deliberately coarse for
+  the same reason `application_source` is: a finer check would redden when a file moves.
+  `"Run"` is a weak needle; `"Nothing was sent"` is a strong one. The check is worth what
+  the sentence is specific.
 
 ## 6. Anything false in the task file
 
