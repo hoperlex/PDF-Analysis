@@ -79,7 +79,7 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
         send();
       }}
     >
-      <div style={{ display: 'grid', gap: '0.5rem', maxWidth: '38rem' }}>
+      <div className="am-form">
         <label htmlFor="upload-file">
           <strong>PDF</strong>
         </label>
@@ -92,7 +92,7 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
         />
 
         <label htmlFor="upload-title">
-          Display title <em>(необязательно; не идентификатор)</em>
+          Display title <em className="am-form__hint">(необязательно; не идентификатор)</em>
         </label>
         <input
           id="upload-title"
@@ -100,11 +100,10 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
           type="text"
           value={displayTitle}
           onChange={(event) => setDisplayTitle(event.target.value)}
-          style={{ padding: '0.4rem 0.5rem' }}
         />
 
         {file !== null ? (
-          <p>
+          <p className="am-form__chosen">
             Chosen: {file.name} · {formatBytes(file.size)}
           </p>
         ) : null}

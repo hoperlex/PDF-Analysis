@@ -81,14 +81,14 @@ function Outcome({ status }: { readonly status: RunStatus }) {
   switch (outcome.kind) {
     case 'in_flight':
       return (
-        <p data-run-outcome="in_flight">
+        <p className="am-run__outcome" data-run-outcome="in_flight">
           Прогон в состоянии <code>{outcome.state}</code>. Результат ещё не опубликован и
           не подразумевается.
         </p>
       );
     case 'published':
       return (
-        <div data-run-outcome="published">
+        <div className="am-run__outcome" data-run-outcome="published">
           <p>
             Прогон достиг успешного терминального состояния <code>published</code>.
           </p>
@@ -100,7 +100,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
       );
     case 'partial':
       return (
-        <div data-run-outcome="partial">
+        <div className="am-run__outcome" data-run-outcome="partial">
           <p>
             Прогон завершился как <code>partial</code>. Он опубликовал результат с
             зафиксированной деградацией: часть этапов не выполнена, и это не{' '}
@@ -130,7 +130,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
       // the sentence. `W28-LIVE` measured this block printing only the first.
       const note = terminalReasonNote(outcome.terminalReason);
       return (
-        <div data-run-outcome="failed">
+        <div className="am-run__outcome" data-run-outcome="failed">
           <p>
             The run terminated <code>failed</code>. Nothing was published.
           </p>
@@ -153,7 +153,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
     }
     case 'cancelled':
       return (
-        <p data-run-outcome="cancelled">
+        <p className="am-run__outcome" data-run-outcome="cancelled">
           The run terminated <code>cancelled</code>. Nothing was published.
         </p>
       );
@@ -256,7 +256,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
 
   return (
     <div data-run-id={status.run_id}>
-      <p style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+      <p className="am-run__mode">
         <RunStateBadge state={status.state} providerMode={badgeProviderMode(mode)} />
         <span data-provider-mode={mode}>
           provider mode: <strong>{mode}</strong>
@@ -324,7 +324,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       )}
 
       <h2>Показание окончательное?</h2>
-      <p data-run-activity={animating && polling ? 'polling' : 'stopped'}>
+      <p className="am-run__activity" data-run-activity={animating && polling ? 'polling' : 'stopped'}>
         {animating && polling
           ? 'Идёт опрос следующего показания. Интервал растёт с 2 с до 15 с, срока нет; опрос прекращается, когда прогон достигает терминального состояния.'
           : animating

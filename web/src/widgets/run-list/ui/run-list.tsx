@@ -77,19 +77,19 @@ export function RunList({ projectUid, versionUid, onRunStarted }: RunListProps) 
 
   return (
     <div data-run-count={page.items.length}>
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+      <ul className="am-rows">
         {page.items.map((run) => (
           <RunRow key={run.run_id} run={run} href={routes.run(projectUid, run.run_id)} />
         ))}
       </ul>
-      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+      <div className="am-pager">
         {cursor === undefined ? null : (
-          <button type="button" className="am-button" onClick={() => setCursor(undefined)}>
+          <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(undefined)}>
             First page
           </button>
         )}
         {nextCursor === null ? null : (
-          <button type="button" className="am-button" onClick={() => setCursor(nextCursor)}>
+          <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(nextCursor)}>
             Next page
           </button>
         )}

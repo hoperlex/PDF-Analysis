@@ -4,26 +4,124 @@
  *
  * There is no theming system and no dark mode. PC-01 is a local single-reviewer tool and
  * a theme toggle is a decision nobody has taken.
- */
+ *
+ * ==================================================================================
+ * W31-STYLE, under `R-18`. The token set below is the one `W31-UI` left, EXTENDED and
+ * not replaced. Every name it defined is still defined and still carries a value of the
+ * same kind; what is new is depth, and each depth was added against a measured gap:
+ *
+ *   a third ink level      two existed (`--am-ink`, `--am-ink-muted`) and 41 rules wanted
+ *                          a quieter one than muted for anchors, stamps and identifiers;
+ *   three border levels    one existed (`--am-line`) and was doing the work of a hairline
+ *                          inside a card, a divider between cards and the edge of a
+ *                          control, which is why nothing on a screen had a near or a far;
+ *   a `-light` per hue     the five semantic hues were outline-on-`currentColor`, so a
+ *                          status plaque was a thin ring around small text. The filled
+ *                          form needs a tint per hue and there was none;
+ *   an elevation scale     one shadow existed against 86 usages of it, so everything that
+ *                          lifted lifted by the same amount;
+ *   a motion scale         zero transitions existed against 111 interactive rules;
+ *   radius                 6px for a card and a pill alike; now sm / base / lg / pill;
+ *   a type scale           one size and the browser's own heading ladder, which put an
+ *                          `<h2>` inside a card above the page title in size.
+ *
+ * What was NOT taken from the comparison: the shell. Legacy is sidebar + topbar and this
+ * is a topbar with in-page links; that is a navigation model, it is an owner question,
+ * and nothing below restructures it.
+ *
+ * The typeface line is NOT closed here and is not silently half-done: a self-hosted face
+ * needs a font file, every path that could hold one is outside this task's `allowed_paths`,
+ * and a webfont would be the first UI dependency in thirteen. The scale, the weights and
+ * the tracking are here; the face is still the system stack. `docs/program/W31-STYLE.md`
+ * says so and names whose it is.
+ * ================================================================================== */
 
 :root {
+  /* ---- typeface ---------------------------------------------------------------- */
   --am-font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --am-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
+  /* ---- type scale -------------------------------------------------------------- */
+  --am-text-xs: 11.5px;
+  --am-text-sm: 13px;
+  --am-text-md: 14px;
+  --am-text-base: 15px;
+  --am-text-lg: 17px;
+  --am-text-xl: 20px;
+  --am-text-2xl: 25px;
+  --am-leading-tight: 1.3;
+  --am-leading-base: 1.55;
+  --am-leading-relaxed: 1.65;
+  --am-tracking-caps: 0.07em;
+
+  /* ---- ink: three levels, plus the one that sits on a filled surface ------------ */
   --am-ink: #16191d;
   --am-ink-muted: #5b6470;
+  --am-ink-soft: #8a929d;
+  --am-ink-inverse: #ffffff;
+
+  /* ---- surfaces ---------------------------------------------------------------- */
   --am-paper: #ffffff;
   --am-surface: #f5f6f8;
+  --am-surface-sunken: #eef0f4;
+
+  /* ---- lines: three levels and a grid line ------------------------------------- */
+  --am-line-soft: #ebedf1;
   --am-line: #d9dde3;
+  --am-line-strong: #b4bcc7;
+  --am-grid-line: #e6e9ed;
 
+  /* ---- semantic hues, each with a tint that can carry text --------------------- */
   --am-accent: #1f4f8b;
+  --am-accent-strong: #163a67;
+  --am-accent-light: #e8eef8;
   --am-ok: #1c6b45;
+  --am-ok-light: #e4f1ea;
   --am-degraded: #8a5b00;
+  --am-degraded-light: #fbf0dc;
   --am-failed: #a02020;
+  --am-failed-light: #fae9e9;
   --am-inert: #6b7280;
+  --am-inert-light: #eef0f3;
 
-  --am-radius: 6px;
+  /* ---- elevation --------------------------------------------------------------- */
+  --am-shadow-0: none;
+  --am-shadow-1: 0 1px 2px rgba(22, 25, 29, 0.06);
+  --am-shadow-2: 0 2px 6px rgba(22, 25, 29, 0.08), 0 1px 2px rgba(22, 25, 29, 0.04);
+  --am-shadow-3: 0 10px 28px rgba(22, 25, 29, 0.12), 0 2px 6px rgba(22, 25, 29, 0.06);
+  --am-ring: 0 0 0 3px rgba(31, 79, 139, 0.22);
+
+  /* ---- motion ------------------------------------------------------------------ */
+  --am-motion-fast: 90ms;
+  --am-motion-base: 160ms;
+  --am-motion-slow: 260ms;
+  --am-ease: cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* ---- radius ------------------------------------------------------------------ */
+  --am-radius-sm: 6px;
+  --am-radius: 10px;
+  --am-radius-lg: 14px;
+  --am-radius-pill: 999px;
+
+  /* ---- spacing ----------------------------------------------------------------- */
+  --am-gap-xs: 4px;
+  --am-gap-sm: 8px;
   --am-gap: 16px;
+  --am-gap-lg: 24px;
+  --am-gap-xl: 32px;
+}
+
+/*
+ * A motion scale that cannot be turned off is an accessibility defect, and this one can:
+ * every transition below reads its duration from these tokens and nothing animates with a
+ * literal.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --am-motion-fast: 1ms;
+    --am-motion-base: 1ms;
+    --am-motion-slow: 1ms;
+  }
 }
 
 * {
@@ -38,15 +136,287 @@ body {
 
 body {
   font-family: var(--am-font);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: var(--am-text-base);
+  line-height: var(--am-leading-base);
   color: var(--am-ink);
   background: var(--am-surface);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--am-accent-light);
+}
+
+/* ==================================================================================
+ * The element layer.
+ *
+ * Most of PC-01's markup is plain semantic HTML — `h2`, `dl`, `table`, `p`, `ul`, the
+ * form controls — written by slices that name no class at all. Before this section the
+ * run screen was the browser's own default stylesheet: an `<h2>` inside a card rendered
+ * larger than the page title above it, a `<dl>` rendered as an indented ladder, and a
+ * `<table>` had no rules. Styling the elements is what makes the finish *broad*, which is
+ * what `R-18` asks for, and it costs no markup change anywhere.
+ * -------------------------------------------------------------------------------- */
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--am-ink);
+  line-height: var(--am-leading-tight);
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+/* Inside a page body, `h2` is a section rule, not a title: the title is `am-page__title`. */
+.am-page__body > h2,
+.am-page__body h2 {
+  margin: var(--am-gap-xl) 0 var(--am-gap-sm);
+  padding-bottom: var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+  font-size: var(--am-text-lg);
+  letter-spacing: -0.005em;
+}
+
+.am-page__body > *:first-child > h2:first-child,
+.am-page__body > h2:first-child {
+  margin-top: 0;
+}
+
+h3 {
+  margin: var(--am-gap-lg) 0 var(--am-gap-sm);
+  font-size: var(--am-text-md);
+  letter-spacing: 0.01em;
+}
+
+h4 {
+  margin: var(--am-gap) 0 var(--am-gap-xs);
+  font-size: var(--am-text-sm);
+}
+
+p {
+  margin: 0 0 var(--am-gap-sm);
+  max-width: 78ch;
+}
+
+a {
+  color: var(--am-accent);
+  text-decoration-color: color-mix(in srgb, var(--am-accent) 35%, transparent);
+  text-underline-offset: 0.18em;
+  transition: color var(--am-motion-fast) var(--am-ease);
+}
+
+a:hover {
+  color: var(--am-accent-strong);
+  text-decoration-color: currentColor;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+  border-radius: var(--am-radius-sm);
 }
 
 code {
   font-family: var(--am-font-mono);
-  font-size: 0.9em;
+  font-size: 0.86em;
+}
+
+/*
+ * `R-18` names identifiers set in body text beside content as a defect a manual test must
+ * not meet. Every one of them is inside a `<code>` — the slices already marked them — so
+ * the repair is here and needs no markup: an identifier becomes a quiet chip that reads as
+ * a handle rather than as a sentence, and stops competing with the prose it sits next to.
+ */
+:where(p, li, dd, td, span, h1, h2, h3, .am-state__title, .am-page__subtitle) > code {
+  padding: 0.1em 0.42em;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface-sunken);
+  color: var(--am-ink-muted);
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+
+/* A definition list is a key/value table. It was rendering as an indented ladder. */
+dl {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+  gap: 0;
+  margin: var(--am-gap) 0;
+  border-top: 1px solid var(--am-grid-line);
+}
+
+dt {
+  grid-column: 1;
+  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap-sm) 0;
+  border-bottom: 1px solid var(--am-grid-line);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  font-weight: 600;
+}
+
+dd {
+  grid-column: 2;
+  margin: 0;
+  padding: var(--am-gap-sm) 0;
+  border-bottom: 1px solid var(--am-grid-line);
+  min-width: 0;
+}
+
+dd > p:last-child {
+  margin-bottom: 0;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--am-text-md);
+}
+
+thead th {
+  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap-sm) 0;
+  border-bottom: 1px solid var(--am-line-strong);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+  letter-spacing: var(--am-tracking-caps);
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap-sm) 0;
+  border-bottom: 1px solid var(--am-grid-line);
+  vertical-align: top;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+tbody tr {
+  transition: background var(--am-motion-fast) var(--am-ease);
+}
+
+tbody tr:hover {
+  background: var(--am-surface);
+}
+
+ul,
+ol {
+  margin: 0 0 var(--am-gap-sm);
+  padding-left: 1.25rem;
+}
+
+li {
+  margin-bottom: var(--am-gap-xs);
+}
+
+blockquote {
+  margin: 0;
+}
+
+em {
+  color: var(--am-ink-muted);
+}
+
+hr {
+  height: 1px;
+  margin: var(--am-gap-lg) 0;
+  border: 0;
+  background: var(--am-line-soft);
+}
+
+/* ---- form controls --------------------------------------------------------------
+ * Three inline `style={{ padding: '0.4rem 0.5rem' }}` attributes were the whole of the
+ * form styling in this application. The controls are styled here, by element, so a form
+ * a later slice writes is finished before anyone remembers to style it.
+ */
+
+label {
+  font-size: var(--am-text-sm);
+  font-weight: 600;
+  color: var(--am-ink);
+}
+
+input[type='text'],
+input[type='search'],
+input[type='email'],
+input[type='number'],
+textarea,
+select {
+  font: inherit;
+  padding: 8px 11px;
+  color: var(--am-ink);
+  background: var(--am-paper);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+  transition:
+    border-color var(--am-motion-fast) var(--am-ease),
+    box-shadow var(--am-motion-fast) var(--am-ease);
+}
+
+input[type='text']:hover,
+textarea:hover,
+select:hover {
+  border-color: var(--am-ink-soft);
+}
+
+input[type='text']:focus,
+input[type='search']:focus,
+input[type='email']:focus,
+input[type='number']:focus,
+textarea:focus,
+select:focus {
+  outline: 0;
+  border-color: var(--am-accent);
+  box-shadow: var(--am-ring);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--am-ink-soft);
+}
+
+input[type='file'] {
+  font: inherit;
+  font-size: var(--am-text-sm);
+  padding: 10px 12px;
+  width: 100%;
+  color: var(--am-ink-muted);
+  background: var(--am-surface);
+  border: 1px dashed var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+  transition: border-color var(--am-motion-fast) var(--am-ease);
+}
+
+input[type='file']:hover {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+}
+
+input[type='file']::file-selector-button {
+  font: inherit;
+  font-size: var(--am-text-sm);
+  margin-right: 12px;
+  padding: 6px 12px;
+  color: var(--am-ink);
+  background: var(--am-paper);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+  cursor: pointer;
+  transition: background var(--am-motion-fast) var(--am-ease);
+}
+
+input[type='file']::file-selector-button:hover {
+  background: var(--am-surface-sunken);
 }
 
 /* ---- application frame ---------------------------------------------------------- */
@@ -58,44 +428,61 @@ code {
 }
 
 .am-app__bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding: 12px 24px;
+  padding: 14px 32px;
   border-bottom: 1px solid var(--am-line);
   background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
 }
 
 .am-app__brand {
-  font-weight: 600;
+  font-weight: 650;
+  font-size: var(--am-text-lg);
+  letter-spacing: -0.01em;
   color: var(--am-accent);
   text-decoration: none;
 }
 
 .am-app__context,
 .am-app__instance {
-  font-size: 12px;
+  font-size: var(--am-text-xs);
   color: var(--am-ink-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--am-tracking-caps);
+}
+
+.am-app__context {
+  padding: 2px 8px;
+  border-radius: var(--am-radius-pill);
+  background: var(--am-surface-sunken);
+}
+
+.am-app__instance {
+  margin-left: auto;
 }
 
 .am-app__main {
   flex: 1;
-  padding: 24px;
+  padding: var(--am-gap-xl) var(--am-gap-lg);
 }
 
 .am-app__footer {
-  padding: 12px 24px;
+  padding: var(--am-gap) var(--am-gap-xl);
   border-top: 1px solid var(--am-line);
-  color: var(--am-ink-muted);
-  font-size: 12px;
+  color: var(--am-ink-soft);
+  background: var(--am-paper);
+  font-size: var(--am-text-xs);
 }
 
 /* ---- page shell ------------------------------------------------------------------ */
 
 .am-page {
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
 }
 
@@ -103,46 +490,63 @@ code {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--am-gap);
-  margin-bottom: var(--am-gap);
+  gap: var(--am-gap-lg);
+  margin-bottom: var(--am-gap-lg);
 }
 
 .am-page__title {
   margin: 0;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--am-text-2xl);
+  font-weight: 650;
+  letter-spacing: -0.015em;
 }
 
 .am-page__subtitle {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
+  max-width: 82ch;
   color: var(--am-ink-muted);
-  font-size: 13px;
+  font-size: var(--am-text-sm);
+  line-height: var(--am-leading-base);
 }
 
 .am-page__body {
   background: var(--am-paper);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
-  padding: var(--am-gap);
+  border-radius: var(--am-radius-lg);
+  padding: var(--am-gap-lg);
+  box-shadow: var(--am-shadow-1);
 }
 
 /* ---- the five mandatory states --------------------------------------------------- */
 
 .am-state {
-  border: 1px dashed var(--am-line);
+  border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   padding: var(--am-gap);
   background: var(--am-paper);
 }
 
+/*
+ * A state block announces an outcome, so it is tinted rather than outlined: an outline in
+ * a hue on white is a ring around small text, and it is what made every one of these read
+ * as the same grey panel.
+ */
 .am-state--error {
-  border-color: var(--am-failed);
-  border-style: solid;
+  border-color: color-mix(in srgb, var(--am-failed) 30%, transparent);
+  background: var(--am-failed-light);
+}
+
+.am-state--error .am-state__title {
+  color: var(--am-failed);
 }
 
 .am-state--warning {
-  border-color: var(--am-degraded);
-  border-style: solid;
+  border-color: color-mix(in srgb, var(--am-degraded) 32%, transparent);
+  background: var(--am-degraded-light);
+}
+
+.am-state--warning .am-state__title {
+  color: var(--am-degraded);
 }
 
 .am-state__title {
@@ -151,62 +555,124 @@ code {
 }
 
 .am-state__detail {
-  margin-top: 8px;
+  margin-top: var(--am-gap-sm);
   color: var(--am-ink-muted);
-  font-size: 14px;
+  font-size: var(--am-text-md);
 }
 
 .am-state__detail p {
-  margin: 0 0 8px;
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.am-state__detail p:last-child,
+.am-state__detail ul:last-child {
+  margin-bottom: 0;
 }
 
 .am-state__correlation {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: var(--am-ink-muted);
+  margin: var(--am-gap-sm) 0 0;
+  font-size: var(--am-text-xs);
+  color: var(--am-ink-soft);
 }
 
 .am-state__action {
   margin-top: 12px;
 }
 
+/*
+ * A list row is an `<li class="am-state">` in `entities/**`, which is another session's
+ * tree this wave. So a row arrived carrying the dashed placeholder look of an empty
+ * state, and a project list read as three "nothing here" panels stacked. The element
+ * selector is what separates them without touching that tree: a state is a `div`, a row
+ * is an `li`.
+ */
+li.am-state {
+  margin-bottom: var(--am-gap-sm) !important;
+  border-color: var(--am-line);
+  border-radius: var(--am-radius);
+  box-shadow: var(--am-shadow-1);
+  transition:
+    border-color var(--am-motion-base) var(--am-ease),
+    box-shadow var(--am-motion-base) var(--am-ease),
+    transform var(--am-motion-base) var(--am-ease);
+}
+
+li.am-state:hover {
+  border-color: var(--am-line-strong);
+  box-shadow: var(--am-shadow-2);
+}
+
+li.am-state .am-state__title {
+  font-size: var(--am-text-base);
+}
+
+li.am-state .am-state__title a {
+  text-decoration: none;
+  font-weight: 650;
+}
+
+li.am-state .am-state__title a:hover {
+  text-decoration: underline;
+}
+
+li.am-state .am-state__detail {
+  font-size: var(--am-text-sm);
+}
+
 /* ---- badges ---------------------------------------------------------------------- */
 
+/*
+ * Filled, not outlined. `currentColor` on white was legible only because the type is
+ * small; the tint is what makes a status readable at a glance across a list.
+ */
 .am-badge {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid currentColor;
-  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: var(--am-radius-pill);
+  border: 1px solid transparent;
+  font-size: var(--am-text-xs);
   font-family: var(--am-font-mono);
-  line-height: 1.6;
+  line-height: 1.7;
+  white-space: nowrap;
+  vertical-align: baseline;
 }
 
 .am-badge--pending,
 .am-badge--inert {
   color: var(--am-inert);
+  background: var(--am-inert-light);
+  border-color: color-mix(in srgb, var(--am-inert) 22%, transparent);
 }
 
 .am-badge--active {
   color: var(--am-accent);
+  background: var(--am-accent-light);
+  border-color: color-mix(in srgb, var(--am-accent) 22%, transparent);
 }
 
 .am-badge--ok {
   color: var(--am-ok);
+  background: var(--am-ok-light);
+  border-color: color-mix(in srgb, var(--am-ok) 22%, transparent);
 }
 
 .am-badge--degraded {
   color: var(--am-degraded);
+  background: var(--am-degraded-light);
+  border-color: color-mix(in srgb, var(--am-degraded) 26%, transparent);
 }
 
 .am-badge--failed {
   color: var(--am-failed);
+  background: var(--am-failed-light);
+  border-color: color-mix(in srgb, var(--am-failed) 24%, transparent);
 }
 
 .am-badge__qualifier {
-  opacity: 0.75;
+  opacity: 0.78;
+  font-size: 0.92em;
 }
 
 .am-badge__qualifier::before {
@@ -216,17 +682,36 @@ code {
 /* ---- controls -------------------------------------------------------------------- */
 
 .am-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--am-gap-sm);
   font: inherit;
-  padding: 6px 14px;
-  border-radius: var(--am-radius);
+  font-size: var(--am-text-md);
+  font-weight: 550;
+  padding: 8px 16px;
+  border-radius: var(--am-radius-sm);
   border: 1px solid var(--am-accent);
   background: var(--am-accent);
-  color: var(--am-paper);
+  color: var(--am-ink-inverse);
+  box-shadow: var(--am-shadow-1);
   cursor: pointer;
+  transition:
+    background var(--am-motion-fast) var(--am-ease),
+    border-color var(--am-motion-fast) var(--am-ease),
+    box-shadow var(--am-motion-fast) var(--am-ease),
+    transform var(--am-motion-fast) var(--am-ease);
 }
 
 .am-button:hover {
-  filter: brightness(1.1);
+  background: var(--am-accent-strong);
+  border-color: var(--am-accent-strong);
+  box-shadow: var(--am-shadow-2);
+}
+
+.am-button:active {
+  transform: translateY(1px);
+  box-shadow: var(--am-shadow-0);
 }
 
 .am-button:focus-visible {
@@ -234,13 +719,40 @@ code {
   outline-offset: 2px;
 }
 
+.am-button:disabled {
+  background: var(--am-inert-light);
+  border-color: var(--am-line);
+  color: var(--am-ink-soft);
+  box-shadow: var(--am-shadow-0);
+  cursor: not-allowed;
+}
+
+/* The second rank: a real control that is not the thing to press on this screen. */
+.am-button--quiet {
+  background: var(--am-paper);
+  border-color: var(--am-line-strong);
+  color: var(--am-ink);
+  font-weight: 500;
+}
+
+.am-button--quiet:hover {
+  background: var(--am-surface);
+  border-color: var(--am-ink-soft);
+  color: var(--am-ink);
+}
+
+.am-button--small {
+  padding: 5px 11px;
+  font-size: var(--am-text-sm);
+}
+
 /* ==================================================================================
  * Domain surfaces.
  *
- * Everything above this line styled the frame. Everything below styles what the frame
- * holds, and it exists because the slices already name these classes: 74 `am-` classes
- * were referenced by `src/**` and 28 were defined, so 55 rendered with no rules at all.
- * Two of them did visible damage rather than merely looking plain:
+ * Everything above this line styled the frame and the elements. Everything below styles
+ * what the frame holds, and it exists because the slices already name these classes: 74
+ * `am-` classes were referenced by `src/**` and 28 were defined, so 55 rendered with no
+ * rules at all. Two of them did visible damage rather than merely looking plain:
  *
  *   - `am-finding-row` is written as `className="am-finding-row am-button"`, so with no
  *     rule of its own every finding in the review list rendered as a full-width primary
@@ -257,8 +769,8 @@ code {
 
 .am-review {
   display: grid;
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: var(--am-gap-lg);
   align-items: start;
 }
 
@@ -270,40 +782,110 @@ code {
 
 .am-review__list {
   min-width: 0;
+  position: sticky;
+  top: 86px;
+}
+
+@media (max-width: 900px) {
+  .am-review__list {
+    position: static;
+  }
 }
 
 .am-review__detail {
   min-width: 0;
-  border-left: 1px solid var(--am-line);
-  padding-left: 24px;
+  border-left: 1px solid var(--am-line-soft);
+  padding-left: var(--am-gap-lg);
 }
 
 @media (max-width: 900px) {
   .am-review__detail {
     border-left: 0;
-    border-top: 1px solid var(--am-line);
+    border-top: 1px solid var(--am-line-soft);
     padding-left: 0;
     padding-top: var(--am-gap);
   }
 }
 
 .am-review__finding {
-  margin: 0 0 4px;
-  font-size: 18px;
-  line-height: 1.4;
-  font-weight: 600;
+  margin: 0 0 var(--am-gap);
+}
+
+.am-review__finding h2 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: var(--am-text-xl);
+  line-height: var(--am-leading-tight);
+  letter-spacing: -0.012em;
 }
 
 .am-review__recommendation {
-  margin: 0 0 var(--am-gap);
-  color: var(--am-ink-muted);
+  margin: var(--am-gap-sm) 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--am-accent);
+  border-radius: 0 var(--am-radius-sm) var(--am-radius-sm) 0;
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+  font-size: var(--am-text-md);
 }
 
-.am-review__diagnostics,
+/*
+ * The diagnostic sentence is a qualifier on the run header, not a paragraph in the middle
+ * of the identifiers. It was rendering inline and running into them.
+ */
+.am-review__diagnostics {
+  display: block;
+  margin-top: var(--am-gap-sm);
+  padding: var(--am-gap-sm) 12px;
+  border-left: 3px solid var(--am-line-strong);
+  border-radius: 0 var(--am-radius-sm) var(--am-radius-sm) 0;
+  background: var(--am-surface-sunken);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* The export panel spans the grid: it is about the run, not about the finding. */
 .am-review__export {
-  margin-top: 24px;
+  grid-column: 1 / -1;
+  margin-top: var(--am-gap-lg);
   padding-top: var(--am-gap);
   border-top: 1px solid var(--am-line);
+}
+
+@media (max-width: 900px) {
+  .am-review__export {
+    grid-column: auto;
+  }
+}
+
+/* ---- the identifier line on a screen header -------------------------------------- */
+
+/*
+ * `R-18`: "identifiers such as `prj_01M2WW60H9BH688V7X54VVESYW` set in body text beside
+ * content". On the review header three of them sat in the same sentence as a state badge
+ * and a two-line diagnostic note. They are still all present and still carry their
+ * `data-` attributes — the journey reads those — but they are set as handles.
+ */
+.am-uid-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+}
+
+.am-uid {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface);
+  color: var(--am-ink-soft);
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-xs);
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
 }
 
 /* ---- the finding list ------------------------------------------------------------ */
@@ -318,19 +900,22 @@ code {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 8px;
-  font-size: 12px;
+  gap: var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-sm);
+  font-size: var(--am-text-xs);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--am-tracking-caps);
   color: var(--am-ink-muted);
 }
 
 .am-finding-group__count {
   font-family: var(--am-font-mono);
-  font-size: 12px;
+  font-size: var(--am-text-xs);
   color: var(--am-ink-muted);
+  padding: 1px 8px;
+  border-radius: var(--am-radius-pill);
+  background: var(--am-surface-sunken);
 }
 
 .am-finding-group__items {
@@ -339,46 +924,66 @@ code {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+
+.am-finding-group__items > li {
+  margin: 0;
 }
 
 /* A row is a list entry that happens to be clickable — not a call to action. */
 .am-button.am-finding-row {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--am-gap-sm);
+  align-items: start;
   width: 100%;
   text-align: left;
-  padding: 10px 12px;
+  padding: 11px 13px;
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-paper);
   color: var(--am-ink);
-  font-size: 14px;
+  font-size: var(--am-text-md);
+  font-weight: 400;
   line-height: 1.45;
+  box-shadow: var(--am-shadow-0);
   cursor: pointer;
 }
 
 .am-button.am-finding-row:hover {
-  filter: none;
-  border-color: var(--am-accent);
-  background: var(--am-surface);
+  border-color: var(--am-line-strong);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-2);
+  transform: none;
 }
 
 .am-button.am-finding-row[aria-current='true'] {
   border-color: var(--am-accent);
-  box-shadow: inset 3px 0 0 var(--am-accent);
-  background: var(--am-surface);
+  box-shadow:
+    inset 3px 0 0 var(--am-accent),
+    var(--am-shadow-2);
+  background: var(--am-accent-light);
 }
 
 .am-finding-row__text {
+  grid-column: 1;
   display: block;
 }
 
+.am-button.am-finding-row .am-badge {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+}
+
 .am-finding-row__pages {
+  grid-column: 1 / -1;
   display: block;
-  margin-top: 4px;
+  margin-top: 2px;
   font-family: var(--am-font-mono);
-  font-size: 12px;
-  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  color: var(--am-ink-soft);
 }
 
 /* ---- evidence: the page beside its quotations ------------------------------------ */
@@ -387,6 +992,7 @@ code {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin-top: var(--am-gap-lg);
 }
 
 .am-evidence__pages {
@@ -394,38 +1000,58 @@ code {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  padding-bottom: var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
 }
 
 /* Page tabs are a choice among peers, so they are quiet until chosen. */
 .am-evidence__pages .am-button {
-  padding: 4px 12px;
+  padding: 5px 13px;
   border: 1px solid var(--am-line);
   background: var(--am-paper);
-  color: var(--am-ink);
+  color: var(--am-ink-muted);
   font-family: var(--am-font-mono);
-  font-size: 13px;
+  font-size: var(--am-text-sm);
+  font-weight: 500;
+  box-shadow: var(--am-shadow-0);
 }
 
 .am-evidence__pages .am-button:hover {
-  filter: none;
   border-color: var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-accent);
+  box-shadow: var(--am-shadow-0);
 }
 
-.am-evidence__pages .am-button[aria-current='true'] {
+/*
+ * The chosen page. `aria-current` on these tabs is `"page"`, not `"true"` — the tab is a
+ * page, which is the correct ARIA value and is what `evidence-viewer.tsx` emits. The rule
+ * `W31-UI` wrote asked for `[aria-current='true']`, so it matched nothing and the open
+ * page looked exactly like the closed ones. Both spellings are accepted here and the
+ * widget's own `data-active` is the third, so this cannot silently stop matching again.
+ */
+.am-evidence__pages .am-button[aria-current='page'],
+.am-evidence__pages .am-button[aria-current='true'],
+.am-evidence__pages .am-button[data-active='true'] {
   border-color: var(--am-accent);
   background: var(--am-accent);
-  color: var(--am-paper);
+  color: var(--am-ink-inverse);
+  box-shadow: var(--am-shadow-1);
 }
 
 .am-evidence__provider {
   margin-left: auto;
-  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: var(--am-radius-pill);
+  background: var(--am-surface-sunken);
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-xs);
   color: var(--am-ink-muted);
 }
 
 .am-evidence__panes {
   display: grid;
-  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--am-gap);
   align-items: start;
 }
@@ -439,23 +1065,36 @@ code {
 .am-evidence__page {
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
-  background: var(--am-surface);
-  padding: 8px;
+  background: var(--am-surface-sunken);
+  padding: var(--am-gap-sm);
+  box-shadow: inset 0 1px 3px rgba(22, 25, 29, 0.06);
 }
 
 /* The page itself. It was rendered at thumbnail size and could not be read. */
 .am-evidence__object {
   display: block;
   width: 100%;
-  min-height: 420px;
-  height: 58vh;
+  min-height: 460px;
+  /* Bounded at both ends: a short laptop must still show a readable page, and a tall
+     monitor must not hand back a 1500px-high island with one paragraph on it. */
+  height: clamp(460px, 62vh, 820px);
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--am-radius-sm);
   background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
 }
 
 .am-evidence__quotations {
   min-width: 0;
+}
+
+.am-evidence__quotations h3 {
+  margin-top: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--am-tracking-caps);
 }
 
 .am-evidence__none {
@@ -464,9 +1103,11 @@ code {
 }
 
 .am-evidence__limits {
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: var(--am-ink-muted);
+  margin: var(--am-gap) 0 0;
+  padding-top: var(--am-gap-sm);
+  border-top: 1px dashed var(--am-line);
+  font-size: var(--am-text-xs);
+  color: var(--am-ink-soft);
 }
 
 /* ---- quotations ------------------------------------------------------------------ */
@@ -477,50 +1118,91 @@ code {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--am-gap-sm);
 }
 
+.am-quotation-list > li {
+  margin: 0;
+}
+
+/*
+ * The quotation is the load-bearing half of this screen: it is the evidence, and the page
+ * beside it is context. It is set as a quoted card rather than as a line of body text.
+ */
 .am-quotation {
+  padding: 12px 14px;
+  border: 1px solid var(--am-line);
   border-left: 3px solid var(--am-accent);
-  padding: 2px 0 2px 12px;
+  border-radius: 0 var(--am-radius) var(--am-radius) 0;
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
 }
 
 .am-quotation__text {
   margin: 0;
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: var(--am-text-base);
+  line-height: var(--am-leading-relaxed);
+  white-space: pre-wrap;
 }
 
 .am-quotation__anchor {
   display: block;
-  margin-top: 4px;
+  margin: var(--am-gap-sm) 0 0;
   font-family: var(--am-font-mono);
-  font-size: 12px;
-  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  color: var(--am-ink-soft);
 }
 
 .am-quotation__inconsistent {
+  margin: var(--am-gap-sm) 0 0;
+  padding: var(--am-gap-sm) 10px;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-degraded-light);
+  color: var(--am-degraded);
+  font-size: var(--am-text-sm);
+  border-left-color: var(--am-degraded);
+}
+
+.am-quotation:has(.am-quotation__inconsistent) {
   border-left-color: var(--am-degraded);
 }
 
 /* ---- the decision panel ---------------------------------------------------------- */
 
+/*
+ * The decision is the act this screen exists for, so it is a panel and not a run of
+ * controls after the evidence.
+ */
+.am-decision {
+  margin-top: var(--am-gap-lg);
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+}
+
 .am-decision__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--am-gap-sm);
   margin-bottom: 12px;
 }
 
+.am-decision__header h3 {
+  margin: 0;
+  font-size: var(--am-text-lg);
+}
+
 .am-decision__current {
-  font-size: 13px;
+  font-size: var(--am-text-sm);
   color: var(--am-ink-muted);
 }
 
 .am-decision__verdicts {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--am-gap-sm);
   margin-bottom: var(--am-gap);
 }
 
@@ -531,11 +1213,13 @@ code {
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
+  padding-top: var(--am-gap);
+  border-top: 1px solid var(--am-line);
 }
 
 .am-decision__comment label,
 .am-decision-comment label {
-  font-size: 13px;
+  font-size: var(--am-text-sm);
   font-weight: 600;
 }
 
@@ -543,80 +1227,125 @@ code {
 .am-decision-comment textarea {
   width: 100%;
   min-height: 84px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   font: inherit;
+  font-size: var(--am-text-md);
   color: var(--am-ink);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
   resize: vertical;
 }
 
 .am-decision__comment textarea:focus-visible,
 .am-decision-comment textarea:focus-visible {
-  outline: 2px solid var(--am-accent);
-  outline-offset: 1px;
+  outline: 0;
+  border-color: var(--am-accent);
+  box-shadow: var(--am-ring);
 }
 
 .am-decision__draft {
-  font-size: 12px;
+  font-size: var(--am-text-sm);
   color: var(--am-ink-muted);
 }
 
 .am-decision__note {
-  margin: 12px 0 0;
-  font-size: 13px;
-  color: var(--am-ink-muted);
+  margin: var(--am-gap-sm) 0 0;
+  font-size: var(--am-text-sm);
+  color: var(--am-ink-soft);
 }
 
 .am-decision__refusal {
   margin-top: 12px;
+  padding: var(--am-gap-sm) 12px;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-failed-light);
+  color: var(--am-failed);
+  font-size: var(--am-text-sm);
+  font-weight: 500;
 }
 
 /* ---- decision history ------------------------------------------------------------ */
 
+.am-history {
+  margin-top: var(--am-gap-lg);
+}
+
 .am-history__events {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 var(--am-gap);
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+/*
+ * An append-only ledger reads as a timeline. The marker is what makes "the accept from ten
+ * minutes ago is still there under the comment from just now" visible as an order.
+ */
 .am-history__event {
+  position: relative;
+  margin: 0;
   border-left: 2px solid var(--am-line);
-  padding-left: 12px;
+  padding: 0 0 var(--am-gap-sm) var(--am-gap);
+}
+
+.am-history__event::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--am-radius-pill);
+  background: var(--am-line-strong);
+  box-shadow: 0 0 0 3px var(--am-paper);
+}
+
+.am-history__event[data-verdict='accepted']::before {
+  background: var(--am-ok);
+}
+
+.am-history__event[data-verdict='rejected']::before {
+  background: var(--am-failed);
+}
+
+.am-history__event:last-child {
+  padding-bottom: 0;
 }
 
 .am-history__line {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--am-gap-sm);
+  margin: 0;
 }
 
 .am-history__type {
-  font-size: 12px;
+  font-size: var(--am-text-xs);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--am-tracking-caps);
   color: var(--am-ink-muted);
 }
 
 .am-history__verdict {
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .am-history__author,
 .am-history__at {
   font-family: var(--am-font-mono);
-  font-size: 12px;
-  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  color: var(--am-ink-soft);
 }
 
 .am-history__comment {
-  margin: 4px 0 0;
-  line-height: 1.5;
+  margin: 6px 0 0;
+  line-height: var(--am-leading-base);
+  font-size: var(--am-text-md);
 }
 
 /* ---- export ---------------------------------------------------------------------- */
@@ -626,50 +1355,290 @@ code {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.am-export__header h3 {
+  margin: 0;
+  font-size: var(--am-text-lg);
 }
 
 .am-export__encoding {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--am-text-sm);
   color: var(--am-ink-muted);
 }
 
-/* The seventeen column names are a reference, not a thing to read every visit. */
+/*
+ * `R-18`: "the seventeen CSV columns printed to the user as a list, which is documentation
+ * standing where an interface should be". They are still on the screen, verbatim and from
+ * `CSV_COLUMNS`, and they are now behind the sentence that describes them: a reader who
+ * wants the schema opens it, and a reader who wants the file presses the button.
+ */
+.am-export__disclosure {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface);
+}
+
+.am-export__disclosure > summary {
+  cursor: pointer;
+  list-style: revert;
+  color: var(--am-ink-muted);
+}
+
+.am-export__disclosure > summary::marker {
+  color: var(--am-ink-soft);
+}
+
+.am-export__disclosure[open] > summary {
+  margin-bottom: var(--am-gap-sm);
+  padding-bottom: var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+}
+
 .am-export__columns {
-  margin: 8px 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: 6px;
   font-family: var(--am-font-mono);
-  font-size: 12px;
+  font-size: var(--am-text-xs);
   color: var(--am-ink-muted);
 }
 
+.am-export__columns > li {
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+}
+
 .am-export__last {
-  margin: 8px 0 0;
-  font-size: 12px;
+  margin: 12px 0 0;
+  font-size: var(--am-text-sm);
+  color: var(--am-ok);
+}
+
+/* ---- run progress ---------------------------------------------------------------- */
+
+/*
+ * The run screen names no class of its own and is mostly `h2`, `dl` and `p`; the element
+ * layer above carries it. These three are the exceptions the markup now names, because
+ * the reading a user came for — what the run did — should not be one paragraph among
+ * twelve.
+ */
+.am-run__mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.am-run__outcome {
+  padding: var(--am-gap) var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-left: 4px solid var(--am-inert);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  box-shadow: var(--am-shadow-1);
+}
+
+.am-run__outcome > *:last-child {
+  margin-bottom: 0;
+}
+
+.am-run__outcome[data-run-outcome='published'] {
+  border-left-color: var(--am-ok);
+  background: var(--am-ok-light);
+}
+
+.am-run__outcome[data-run-outcome='partial'] {
+  border-left-color: var(--am-degraded);
+  background: var(--am-degraded-light);
+}
+
+.am-run__outcome[data-run-outcome='failed'] {
+  border-left-color: var(--am-failed);
+  background: var(--am-failed-light);
+}
+
+.am-run__outcome[data-run-outcome='in_flight'] {
+  border-left-color: var(--am-accent);
+  background: var(--am-accent-light);
+}
+
+.am-run__activity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin: 0;
+  padding: var(--am-gap-sm) 12px;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface-sunken);
   color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* ---- lists of rows and the pager under them -------------------------------------- */
+
+/*
+ * Four list widgets carried `style={{ listStyle: 'none', padding: 0, margin: 0 }}` and a
+ * second inline object for the pager. Inline style is a fourth styling mechanism beside
+ * the tokens, the classes and the element layer, and it is the one no token can reach.
+ */
+.am-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---- the pager under every list -------------------------------------------------- */
+
+.am-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  margin-top: 12px;
+}
+
+.am-pager:empty {
+  display: none;
+}
+
+/* ---- forms ----------------------------------------------------------------------- */
+
+.am-form {
+  display: grid;
+  gap: var(--am-gap-sm);
+  max-width: 44rem;
+}
+
+.am-form__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  align-items: center;
+}
+
+.am-form__row > input {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.am-form__field {
+  display: grid;
+  gap: 6px;
+}
+
+.am-form__hint {
+  margin: 0;
+  color: var(--am-ink-soft);
+  font-size: var(--am-text-sm);
+  font-weight: 400;
+}
+
+.am-form__chosen {
+  margin: 0;
+  padding: var(--am-gap-sm) 12px;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+}
+
+.am-form__problem {
+  margin: var(--am-gap-sm) 0 0;
+  padding: var(--am-gap-sm) 12px;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-failed-light);
+  color: var(--am-failed);
+  font-size: var(--am-text-sm);
+}
+
+.am-form__created {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-ok-light);
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+}
+
+/* ---- section wrappers ------------------------------------------------------------ */
+
+.am-section {
+  margin-top: var(--am-gap-xl);
+}
+
+.am-section:first-child {
+  margin-top: 0;
+}
+
+.am-note {
+  margin: var(--am-gap) 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--am-line-strong);
+  border-radius: 0 var(--am-radius-sm) var(--am-radius-sm) 0;
+  background: var(--am-surface);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.am-note em {
+  font-style: normal;
 }
 
 /* ---- odds and ends --------------------------------------------------------------- */
 
+/* The screen's secondary addresses. They are links and they read as a control strip. */
 .am-page__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--am-gap-sm);
+  flex-shrink: 0;
+}
+
+.am-page__actions a {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background var(--am-motion-fast) var(--am-ease),
+    border-color var(--am-motion-fast) var(--am-ease),
+    color var(--am-motion-fast) var(--am-ease);
+}
+
+.am-page__actions a:hover {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-accent);
 }
 
 .am-badge__label {
   font-family: var(--am-font);
+  font-weight: 550;
 }
 
 .am-state--neutral {
-  border-style: dashed;
+  border-style: solid;
   border-color: var(--am-line);
+  background: var(--am-surface);
 }
 
 /* ---- block wrappers -------------------------------------------------------------- */
@@ -686,5 +1655,5 @@ code {
 
 .am-finding-group + .am-finding-group {
   padding-top: var(--am-gap);
-  border-top: 1px solid var(--am-line);
+  border-top: 1px solid var(--am-line-soft);
 }

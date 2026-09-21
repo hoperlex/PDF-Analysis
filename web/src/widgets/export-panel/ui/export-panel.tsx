@@ -71,18 +71,29 @@ export function ExportPanel({
           >
             {isPending === true ? 'Готовлю…' : `Скачать ${csvFileName(runId)}`}
           </button>
-          <p className="am-export__encoding">
-            Колонок: {CSV_COLUMNS.length}; кодировка {CSV_ENCODING.charset}
-            {CSV_ENCODING.byteOrderMark ? ' с меткой порядка байтов' : ''}; экранирование по
-            RFC 4180; одна строка на свидетельство.
-          </p>
-          <ol className="am-export__columns">
-            {CSV_COLUMNS.map((column) => (
-              <li key={column} data-csv-column={column}>
-                {column}
-              </li>
-            ))}
-          </ol>
+          {/*
+            `R-18` names the seventeen column names printed as a list — "documentation
+            standing where an interface should be". They are still here, still taken from
+            `CSV_COLUMNS` and still carrying `data-csv-column`, but behind the sentence
+            that describes them. The summary is the sentence this panel already had; no
+            string is invented, and the disclosure is closed until a reader asks.
+          */}
+          <details className="am-export__disclosure">
+            <summary>
+              <span className="am-export__encoding">
+                Колонок: {CSV_COLUMNS.length}; кодировка {CSV_ENCODING.charset}
+                {CSV_ENCODING.byteOrderMark ? ' с меткой порядка байтов' : ''}; экранирование по
+                RFC 4180; одна строка на свидетельство.
+              </span>
+            </summary>
+            <ol className="am-export__columns">
+              {CSV_COLUMNS.map((column) => (
+                <li key={column} data-csv-column={column}>
+                  {column}
+                </li>
+              ))}
+            </ol>
+          </details>
           {lastFileName !== undefined && lastFileName !== null ? (
             <p className="am-export__last" data-last-file={lastFileName}>
               Downloaded {lastFileName}

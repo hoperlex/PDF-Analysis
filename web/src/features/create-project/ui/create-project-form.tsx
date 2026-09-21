@@ -64,6 +64,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
 
   return (
     <form
+      className="am-form"
       onSubmit={(event) => {
         event.preventDefault();
         submit();
@@ -72,7 +73,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
       <label htmlFor="new-project-name">
         <strong>Новый проект</strong>
       </label>
-      <div style={{ display: 'flex', gap: '0.5rem', margin: '0.4rem 0 0.6rem' }}>
+      <div className="am-form__row">
         <input
           id="new-project-name"
           name="name"
@@ -83,7 +84,6 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
             setLocalProblem(null);
           }}
           placeholder="Название проекта"
-          style={{ flex: '1 1 auto', padding: '0.4rem 0.5rem' }}
         />
         <button type="submit" className="am-button" disabled={mutation.isPending}>
           Create
@@ -91,7 +91,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
       </div>
 
       {localProblem !== null ? (
-        <p role="alert" data-create-problem={localProblem}>
+        <p className="am-form__problem" role="alert" data-create-problem={localProblem}>
           {projectNameProblemMessage(localProblem)}
         </p>
       ) : null}
@@ -119,7 +119,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
       ) : null}
 
       {created !== null ? (
-        <p role="status" data-created-project={created.project_uid}>
+        <p className="am-form__created" role="status" data-created-project={created.project_uid}>
           Created <strong>{created.name}</strong> — <code>{created.project_uid}</code>
         </p>
       ) : null}
