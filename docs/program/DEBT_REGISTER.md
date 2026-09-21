@@ -11,6 +11,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
+| **D-46** | a failed run cannot say *which* dependency | owner — a reseal either way |
+| **D-47** | two sessions wrote logs to one scratchpad path | a brief rule |
 | **D-42** | the provider credential **does** appear in `compose config` | prose + runbook |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
@@ -1316,6 +1318,48 @@ and the runbook now gives it with that reason.
 
 **Also recorded because it cost a session its confidence in a number:** `df` *during* a build
 on this host is worthless — another lane moved free space by gigabytes in both directions.
+
+### D-46 — a failed run cannot say *which* dependency, and the envelope is why
+
+**Registered by `W29-SAY` with its price, rather than worked around.** The screen now
+explains what `dependency_unavailable` **means** — and it still cannot say **which**
+dependency, because the information is not in the envelope.
+
+Neither `RunStatus` nor `StageState` carries a `details` object. The catalog's
+`safe_detail_keys: ["dependency"]` lives on the **error envelope**, and **a 200 run reading is
+not an error envelope**. So the true sentence in `recorded` mode — *your document is fine, the
+provider is fine, this deployment has no recording for it* — is not in the data, and
+inventing it is the one thing that task forbade.
+
+**Two ways to close it, cheapest first, both `contracts/**` and therefore the owner's:**
+
+1. `RunStatus` gains an optional `terminal_detail`, restricted to the reported code's own
+   `safe_detail_keys` — an `openapi.json` reseal plus a column.
+2. A distinct catalog code for a replay miss, on the **`staged_upload_lost` precedent**
+   (`R-8`/`R-13`): two situations demanding opposite operator responses answering one code.
+
+**And a catalog addition is also a frontend reseal** — `D-18` measured that, and `R-13`
+accepted the cost once. Whichever is chosen, it is a two-document change from the start.
+
+Check: `grep -n terminal_reason contracts/api/v1/openapi.json` — it is `oneOf [ErrorCode, null]`
+with no sibling detail object.
+
+### D-47 — two live sessions wrote logs to the same scratchpad path in the same minute
+
+**Reported by `W29-SAY`**, which noticed and moved its work into a private subdirectory.
+Another wave-29 session was writing `bootstrap.log` and `npmci.log` into **the same path**.
+
+**A session that trusted a log file it did not write would read another session's exit
+code.** That is the same class as this programme's other measurement failures — an instrument
+reporting about something other than its subject — and it is worse here, because the reader
+has no way to notice.
+
+**It is why the `import boto3` check earned its place.** A session had `make bootstrap` exit 0
+with a `.venv` holding only `pip`; checking the interpreter rather than the exit code is what
+settles it, and checking a log someone else may have written settles nothing.
+
+**Rule for every future brief: write logs to a path that carries the session's own name**, and
+never read an exit code out of a file you did not create in this session.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 
