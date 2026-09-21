@@ -45,6 +45,33 @@ this application through its own test harness.** A manual test on a live deploym
 cheapest instrument that can still tell us the product is unsound, and it is the only one we
 have not used.
 
+### Amended 2026-09-21 by `R-18`: presentation is in this road
+
+**This section said interface presentation was out of scope. It no longer is.** The owner ruled
+that **the alpha is shown in a finished interface, in Russian**, and that manual testing happens
+on something close to a release version. `OWNER_RULINGS_2026-09-17.md` §3.9 carries the ruling
+and its measured scope.
+
+**The argument is this section's own.** The paragraph above says the point of the alpha is to
+stop judging the application through its own test harness, and that a manual test is the only
+instrument left. §10 risk 3 already names the interface as the least-tested surface, and `P4`
+exists to establish whether the **findings** are professionally useful. An expert handed a
+prototype skeleton reports on interface friction instead — **the one instrument we have left is
+spoiled in exactly the variable it was built to measure.** Presentation was out of scope while
+the alpha was a technical proof; it cannot be out of scope once the alpha is the measurement.
+
+**Breadth of finish beats depth of function.** Some sections and routes may be stubs. A stub is
+permitted where an expert's task does not pass through it; **on the path `upload → run →
+finding at its quotation → verdict → export` there are none.** A stub is a finished section
+carrying an honest line about unavailability — not an empty screen and not an error.
+*(That boundary was proposed by a session and adopted by the integrator. It has not been put to
+the owner in those words; `DEBT_REGISTER.md` §2 carries it as an open question.)*
+
+**The exclusions in the paragraph above are unchanged.** Multiple tenants, user management and
+roles, retention, legal hold, HA, DR, backup rotation, the job/attempt framework, remote workers
+and OCR all stay out. `R-18` is about the **finish and the language of what is shown**, not
+about widening what the application does.
+
 ## 2. The gap, measured at `c96ccf3`
 
 | Missing | Evidence it is missing |
