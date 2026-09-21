@@ -122,11 +122,45 @@ stand-in for `oversize.pdf` at its true size. The guard resolves its repository 
 its own `__file__`, so it reads the copy. `pytest` then runs there and the exit status is
 the verdict. The repository is byte-identical before and after.
 
-<!-- MEASURED:HEADROOM -->
+**Eight mutations, eight reds, and the unmutated pair green** — `.venv/bin/python
+tests/e2e/prove_the_headroom_guard_can_fail.py`, exit 0, `git status` clean before and
+after:
+
+| mutation | result |
+|---|---|
+| raise the pre-check to 32 MiB, nginx untouched — **`D-44`'s own sentence** | RED, 3 failed |
+| raise the pre-check to 64 MiB | RED, 3 failed |
+| lower nginx to `16m`, pre-check untouched | RED, 2 failed |
+| make nginx exactly equal to the pre-check | RED, 2 failed |
+| comment out `client_max_body_size` entirely | RED, 2 failed |
+| move the limit behind a name the parser cannot read | RED, 3 failed |
+| leave `maxBytesLabel` at `25 MiB` while `maxBytes` moves to 30 | RED, 2 failed |
+| shrink `oversize.pdf` under the pre-check limit | RED, 1 failed |
+| **unmutated** | **11 passed** |
+
+**Running the controls found a real hole, exactly as the brief warned.** The first draft
+anchored `client_max_body_size` to the start of a line. nginx accepts
+`server { client_max_body_size 4m; }` on one line, and that second cap — the one that
+would actually decide the effective limit — was **invisible to the parser**. The control
+that was supposed to prove the guard refuses two caps went green, which is how it was
+found. The fix strips `#` comments line by line and then searches unanchored, so a
+commented-out directive is still not read as the cap and an inline one is. Both shapes are
+now controls of their own. Reading the regex would not have found this.
 
 ### `prove_the_guard_can_fail.py` — thirteen more, against the real `manifest.json`
 
-<!-- MEASURED:JOURNEY -->
+`.venv/bin/python tests/e2e/pc01/journey/prove_the_guard_can_fail.py`, exit 0.
+**Twenty-three mutations, twenty-three reds**, and the restored file green at 47 tests.
+Ten are `W22-E2E`'s, unchanged. The thirteen new ones: drop the refusal section; declare
+every refusal happens at the server; rename `uploadDocument`; point a refusal at a fixture
+that is not there; move the refusals off the read walk; call a client-side refusal a server
+one; declare a status `uploadDocument` does not publish; rename the pre-check marker value;
+drop the upload-failure marker; require a sentence no screen renders; **reword the write
+half's own panel**; require an envelope sentence its own constraint contradicts; surrender
+a named fault to the generic classification.
+
+`manifest.json` is restored after each one and again at the end, and `git status` was clean
+before and after the run.
 
 ## 5. What the guard now catches, and what it still cannot
 
@@ -172,12 +206,107 @@ the verdict. The repository is byte-identical before and after.
 
 ## 6. Anything false in the task file
 
-<!-- MEASURED:FALSE -->
+**Three things, and one of them is the premise section 1 is about.**
+
+1. *"`manifest.json` … has `forbids_rendered` and no `requires_rendered`"* — true of the
+   **name** and misleading about the **fact**. `expects_rendered` is exactly that field and
+   has been there since `W22-E2E`. Inherited from `W27-REFUSE`'s review, which the brief
+   correctly told this session to check.
+2. *"its statuses are checked against the contract as **success** statuses"* — **false**.
+   `responses_published_for()` has always returned every published code, so `422` needed no
+   widening. Also inherited.
+3. *"`tests/e2e/test_pc01_journey_conformance.py` … 30 tests"* — correct at `ca16a18`,
+   measured. It is 47 now.
+
+The brief's own base figures were right: battery **1970 / 5 / 169** (1998 − 28 = 1970,
+and 28 is exactly the number of checks added here), foundation **35**, frontend **715 in
+49 files**. `D-44`'s two numbers were right: pre-check **26 214 400**, nginx **33 554 432**.
+
+**One instruction could not be followed exactly, and it is named as the brief asked.**
+*"Stay out of `refusals.mjs`'s driving logic if you can."* The declaration table had to go,
+and with it two one-line reads that are arguably driving: `GENERIC_KINDS` is now built from
+`refusals.generic_kinds`, and the fixture directory is now `refusals.fixture_dir`. Both
+were literals duplicating the manifest; leaving them would have meant the manifest
+**declaring two things nothing read**, which is the defect this session exists to close.
+Everything from `apiExchanges` down — every assertion, every finding message, the browser
+driving, the envelope writing — is byte-identical. **`W28-LIVE` and this session both touch
+`tests/e2e/`**, and the overlap on `refusals.mjs` is the file header, the table, and those
+two lines.
+
+**A provisioning observation worth passing on**, since the brief's own warning is about
+exactly this class. `make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12` in this worktree
+ran `uv sync` **twice** from one invocation and took **~23 minutes**, and for most of that
+`.venv/bin` held only `pip` — the shape the brief warned about. It did resolve: `bootstrap
+exit 0`, `npm ci exit 0`, and `.venv/bin/python -c "import boto3"` prints `1.43.90`. The
+check the brief demanded is the one that settles it; the intermediate state is not
+diagnostic, and a session that gives up on seeing it would be giving up too early.
 
 ## 7. The gate
 
-<!-- MEASURED:GATE -->
+`make gate` on lane `gate-w28b` (`POSTGRES_PORT=56030`, `S3_API_PORT=59630`,
+`S3_CONSOLE_PORT=59631`, `POSTGRES_DB=audit_w28b`, bucket `auditmanager-gate-w28b`),
+redirected to a file, **exit read from `$?`, never through `| tail`**:
+
+```
+GATE OK: battery, foundation, frontend and whitespace all pass
+exit 0
+```
+
+| | base (`ca16a18`) | here |
+|---|---|---|
+| battery | 1970 passed / 5 skipped / 169 subtests | **1998 passed / 5 skipped / 169 subtests** (278.78 s) |
+| foundation | 35 | **35** (28.51 s) |
+| frontend | 715 in 49 files | **715 in 49 files** |
+
+**+28 is the whole of the difference**, and it is exactly what was added: the conformance
+guard goes 30 → 47 (+17) and `test_upload_limit_headroom.py` is 11. No existing test
+changed its outcome, and the skip count and subtest count are untouched.
+
+Provisioning: `make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12` exit 0,
+`npm --prefix web ci` exit 0, and **`.venv/bin/python -c "import boto3"` → `1.43.90`**.
 
 ## 8. Handoff
 
-<!-- MEASURED:HANDOFF -->
+**Files changed** (7, all inside `allowed_paths`):
+
+| file | what |
+|---|---|
+| `tests/e2e/pc01/journey/manifest.json` | new `refusals` section, 6 cases. **Insertions only** — `routes` and `write` are byte-identical. |
+| `tests/e2e/test_pc01_journey_conformance.py` | refusal half: 8 checks + 8 controls; `expects_rendered` check covers the write half too; `operations_claimed_by_manifest` widened; mutation-copy note de-counted. 30 → 47 tests. |
+| `tests/e2e/test_upload_limit_headroom.py` | **new.** `D-44`'s guard, 3 real-tree checks + 8 controls. |
+| `tests/e2e/prove_the_headroom_guard_can_fail.py` | **new.** 8 mutations against a throwaway tree; writes nothing. |
+| `tests/e2e/pc01/journey/prove_the_guard_can_fail.py` | 10 → 23 mutations. |
+| `tests/e2e/pc01/journey/refusals.mjs` | reads its table from the manifest. Driving logic unchanged. |
+| `docs/program/reviews/W28-GUARD.md` | this. |
+
+**Forbidden hotspots untouched**, by `git diff --name-only origin/dev..HEAD`: nothing under
+`src/`, `web/`, `contracts/`, `infra/`, and no `Makefile`, `artifacts/`,
+`DEBT_REGISTER.md` or `CURRENT_STATE.md`. `D-44`'s guard **reads** `nginx.conf` and never
+writes it, and its mutation harness proves the reddening without writing either file.
+No tag, no checkpoint, nothing pushed to `main`.
+
+**Contracts:** none changed. `manifest.json` gains a section; `contracts/**` is untouched.
+`manifest.json`'s format is now three halves, and its own `$comment` documents the new
+one, including what it does **not** claim.
+
+**For the integrator.**
+
+- Branch `agent/w28-guard`, 9 commits on `origin/dev` at `ca16a18`. Merge as usual.
+- **`D-44` can be closed**, and this session did not touch `DEBT_REGISTER.md` because it is
+  a forbidden hotspot here. Its check command is now a test rather than a `grep`:
+  `.venv/bin/pytest tests/e2e/test_upload_limit_headroom.py` → 11 passed, and
+  `.venv/bin/python tests/e2e/prove_the_headroom_guard_can_fail.py` → 8 reds, exit 0.
+- **`W27-REFUSE`'s stated residue is closed**: the six cases are in `manifest.json` and
+  `make gate` reads them. What remains open is what it always was — the *behaviour* half,
+  which needs a stack.
+- If `W28-LIVE` also edited `tests/e2e/`, the only file both could have touched is
+  `refusals.mjs`; the overlap is its header, its table and two constant reads.
+- The lane's stack (`gate-w28b`) is left up; `make down` in `/root/w28guard` stops it.
+
+**Risks and known limitations.** Section 5 is the list. The two worth repeating: the
+sentence check is a substring search over `web/src` and is worth what each sentence is
+specific; and `D-44`'s guard reads the config in the tree, not the config a running nginx
+loaded.
+
+**Elapsed, measured**: 14:31 to 15:00 local, **~1 h 29 min** wall clock, of which
+**~23 minutes** was `make bootstrap` and **~7 minutes** was `make gate`.
