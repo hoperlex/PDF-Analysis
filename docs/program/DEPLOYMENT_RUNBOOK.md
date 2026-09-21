@@ -56,7 +56,46 @@ One optional extra: §2 suggests `python3` for one line that generates a token.
 
 ### Disk
 
-<!-- W26-HOST-DISK -->
+**Measured on 2026-09-21 by `W26-HOST`, on a cold cache, and it is not the figure that
+was being repeated.**
+
+The shared build cache on this host holds another lane's layers, so a build on the default
+builder would have reused them and measured nothing. The instrument was therefore an
+**isolated builder**, which starts with an empty cache and pulls its own base images —
+which is also what a host that has never run this does:
+
+```
+docker buildx create --name w26cold --driver docker-container --bootstrap
+docker buildx --builder w26cold build --load -f infra/deploy/Dockerfile.api -t m-api .
+docker buildx --builder w26cold build --load -f infra/deploy/Dockerfile.web \
+  --build-arg NEXT_PUBLIC_API_BASE_URL=/bff/v1 --build-arg NEXT_PUBLIC_INSTANCE_LABEL=alpha -t m-web .
+docker buildx du --builder w26cold          # the cache the two builds produced
+docker buildx rm w26cold                    # and df before/after each removal
+```
+
+| what | measured |
+|---|---|
+| **build cache**, both images, cold | **2.59 GB** (`buildx du`), confirmed by `df`: **2.42 GiB** freed when the builder was removed |
+| **the two images** | 400 MB + 1.2 GB (`docker images`). Removing both here freed **1.01 GiB**, because this host already had the `python` and `node` bases; a host that does not will pay the full 1.6 GB |
+| the four pinned third-party images compose pulls | **1.08 GB** — postgres 646 MB, MinIO 241 MB, mc 117 MB, nginx 74.5 MB |
+| the clone | 69 MB, with no `.venv` and no `node_modules` |
+| both named volumes, just after a first deploy | ~76 MB, and they grow with the documents |
+| both builds, wall clock, cold | about five minutes |
+
+**One clean-clone cold-cache deploy therefore needs about 5.5 GB**, of which ~2.6 GB is
+build cache that `docker builder prune -af` takes straight back.
+
+**The figure that was being repeated is 8 GB, and it is right as a provisioning number for
+the wrong reason.** It comes from `W24-CERT2` §3c, where two image builds took `/` from
+8.9 GB free to **0 bytes** — on the **third** consecutive deploy, where the cache already
+held earlier generations. That is the thing to plan for: **the cache grows with each build
+whose sources changed, and nothing removes the old generation.** So:
+
+* **≥ 8 GB free before the first deploy**, which leaves room for the second and third;
+* **`docker builder prune -af` after each deploy**, which on that host returned 8.2 GB;
+* a host at 0 bytes does not fail cleanly. MinIO refused a bucket-policy write on its
+  minimum-free-drive threshold, `s3-init` exited 1, `api` never started, and the proxy
+  could not resolve its upstream — a deploy that looks like four unrelated faults.
 
 ---
 
