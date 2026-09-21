@@ -25,10 +25,13 @@
 #   3. **build, and only then bring up.** These are two steps on purpose. A build that
 #      fails must leave whatever was serving still serving, and that is a property of the
 #      ORDER rather than of anybody's intention -- see `images-built`;
-#   4. up, reload the proxy, and then ask the running stack four questions it can fail:
-#      is every service healthy, is the database at the head THIS code expects, does the
-#      published port answer, and does the document the process serves conform to the
-#      frozen contract.
+#   4. up, ask the stack whether it is actually there, reload the proxy, and then ask
+#      three more questions it can fail. The four questions are: is every service
+#      healthy, is the database at the head THIS code expects, does the published port
+#      answer, and does the document the process serves conform to the frozen contract.
+#      The FIRST of them comes before the reload and that is `D-38`: a reload cannot
+#      succeed against a stack that is missing a container, and the message it fails with
+#      names `nginx.conf`, a file that is fine. See `# --- 3.` below.
 #
 # WHAT A SECOND RUN DOES, MEASURED RATHER THAN CLAIMED. This comment said "a second run
 # changes nothing" until `W23-DEPLOY` ran it twice from a clean clone, and that was false.
@@ -528,7 +531,9 @@ echo
 # s3 healthy, s3-init and migrate completed successfully, api and web healthy before the
 # proxy -- so it returns when the stack is up or when it could not be. Its status is
 # printed and NOT acted on: `services-healthy` below is the authority on what is running,
-# and a second opinion here would be a place for the two to disagree.
+# and a second opinion here would be a place for the two to disagree. What that status
+# DOES do is decide whether that guard also reads the one-shot services' exit codes --
+# `$UP_STATUS` is read there and nowhere else.
 echo "-- bringing the stack up --"
 UP_STATUS=0
 compose up -d || UP_STATUS=$?
@@ -556,17 +561,23 @@ for pinned in "$INSTANCE-api" "$INSTANCE-web"; do
              "image this run replaced; the next run re-points it."
 done
 
-# The step after a rebuild that everyone forgets. nginx resolves an upstream once, at
-# worker start-up, and a replaced api or web container that lands on a different address
-# leaves every path through the proxy answering 502 while both new containers are healthy.
-# It is INTERMITTENT -- a replacement usually gets its old address back -- so "the last
-# deploy was fine" is not evidence about this one. `reload-proxy.sh` is its own script and
-# is reused here rather than copied.
-echo "-- reloading the proxy --"
-"$HERE/reload-proxy.sh" --env-file "$ENV_FILE"
-echo
-
 # --- 3. now ask the running stack, and let it fail -----------------------------------
+#
+# THE FIRST OF THESE QUESTIONS COMES BEFORE THE PROXY RELOAD, AND `D-38` IS WHY. Until
+# this commit the reload ran first, and on a run where `up` had failed the script printed
+# *"the guards below decide"* and then died inside `reload-proxy.sh` with
+#
+#     nginx: [emerg] host not found in upstream "api"
+#     reload-proxy.sh: the proxy configuration is not valid. ... Fix proxy/nginx.conf
+#
+# -- exit 5, a refusal rather than a false success, which is the half that was right, and
+# an operator sent to edit a file that is CORRECT. `nginx.conf` cannot resolve `api`
+# because there is no `api` container, and the guard that says so in those words ran after
+# the reload and therefore never ran. Measured again here before the move: `W26-OPS.md` §1.
+#
+# So the order is: ask whether the stack that was brought up is actually there, and only
+# then touch the proxy. A reload that fails AFTER `services-healthy` has passed really is
+# about the proxy's own configuration, which is what its message says.
 
 # >>> guard: services-healthy
 # Every long-running service, by name, in the state compose knows it to be in. `up --wait`
@@ -577,6 +588,34 @@ echo
 # `proxy` has no health check of its own and is expected to report `running` with no health
 # state; that is written down rather than special-cased silently, because a proxy that
 # quietly grew a health check should show up here as a question, not as a pass.
+#
+# WHEN `up` ITSELF FAILED, THE ONE-SHOT SERVICES ARE ASKED FIRST, and they are the reason
+# "the guards below decide" is a true sentence rather than a hope. `s3-init` and `migrate`
+# run once and leave an exit code behind; nothing else in this script looks at them, and
+# they are exactly what a failed `up` is usually about -- `W24-CERT2` measured `s3-init`
+# exiting 1 on a full disk, which is why `api` was never created. They are asked ONLY on a
+# run where `up` was non-zero: on a good run their containers are `exited/0` and reading
+# them would be a second opinion about a success nobody doubts.
+if [ "$UP_STATUS" -ne 0 ]; then
+    for service in s3-init migrate; do
+        #: `--all`, because a one-shot service's container is not running by the time it
+        #: matters. Without it `ps --quiet` prints nothing and the failure reads as absence.
+        cid="$(compose ps --all --quiet "$service" 2>/dev/null | head -1 || true)"
+        [ -n "$cid" ] || continue
+        state="$(docker inspect --format '{{.State.Status}}/{{.State.ExitCode}}' \
+            "$cid" 2>/dev/null || true)"
+        case "$state" in
+            ''|exited/0|running/*|created/*|restarting/*) ;;
+            *) refuse "\`compose up\` failed, and the '$service' service of $INSTANCE is $state." \
+                      "  container: $cid" \
+                      "That is the step that did not complete. Whatever is missing or stale" \
+                      "below follows from it, and the proxy has not been touched. Logs:" \
+                      "  docker compose logs $service" ;;
+        esac
+    done
+fi
+
+echo "-- every service is there, in the state compose knows it to be in --"
 for service in postgres s3 api web proxy; do
     cid="$(compose ps --quiet "$service" 2>/dev/null | head -1 || true)"
     if [ -z "$cid" ]; then
@@ -598,6 +637,16 @@ for service in postgres s3 api web proxy; do
 done
 echo
 # <<< guard: services-healthy
+
+# The step after a rebuild that everyone forgets. nginx resolves an upstream once, at
+# worker start-up, and a replaced api or web container that lands on a different address
+# leaves every path through the proxy answering 502 while both new containers are healthy.
+# It is INTERMITTENT -- a replacement usually gets its old address back -- so "the last
+# deploy was fine" is not evidence about this one. `reload-proxy.sh` is its own script and
+# is reused here rather than copied.
+echo "-- reloading the proxy --"
+"$HERE/reload-proxy.sh" --env-file "$ENV_FILE"
+echo
 
 echo "-- the database is at the head this code expects --"
 CHECK_OUTPUT="$(compose run --rm --no-deps -T --entrypoint python api \
