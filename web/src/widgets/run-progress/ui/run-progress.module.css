@@ -1,0 +1,70 @@
+/*
+ * The first collocated CSS module in this application.
+ *
+ * `globals.css` has promised this architecture in its own header comment since the
+ * bootstrap — "a slice styles itself with a colocated CSS module and consumes the tokens
+ * below" — and `R-18` measured zero such modules against that promise. This is one,
+ * against a slice where it costs nothing to be first: every class below was introduced by
+ * `W31-STYLE` itself, so no test, no browser instrument and no other slice names them.
+ *
+ * What the promise costs everywhere else is measured rather than guessed, and is in
+ * `docs/program/W31-STYLE.md`: eight `am-` class names are asserted by the frontend suite
+ * and `.am-state` is read from the live DOM by `tests/e2e/pc01/journey/refusals.mjs`, so
+ * migrating those is a change to two trees this wave does not own. The tokens stay global
+ * — they are the seam a module consumes, and a module that redefined one would be the
+ * defect this architecture exists to prevent.
+ */
+
+.mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-sm);
+}
+
+/* The reading the user came for. It was one paragraph among twelve. */
+.outcome {
+  padding: var(--am-gap) var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-left: 4px solid var(--am-inert);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  box-shadow: var(--am-shadow-1);
+}
+
+.outcome > *:last-child {
+  margin-bottom: 0;
+}
+
+.outcome[data-run-outcome='published'] {
+  border-left-color: var(--am-ok);
+  background: var(--am-ok-light);
+}
+
+.outcome[data-run-outcome='partial'] {
+  border-left-color: var(--am-degraded);
+  background: var(--am-degraded-light);
+}
+
+.outcome[data-run-outcome='failed'] {
+  border-left-color: var(--am-failed);
+  background: var(--am-failed-light);
+}
+
+.outcome[data-run-outcome='in_flight'] {
+  border-left-color: var(--am-accent);
+  background: var(--am-accent-light);
+}
+
+.activity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin: 0;
+  padding: var(--am-gap-sm) 12px;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface-sunken);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}

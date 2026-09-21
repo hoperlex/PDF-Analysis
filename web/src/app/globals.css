@@ -235,7 +235,7 @@ code {
  * a handle rather than as a sentence, and stops competing with the prose it sits next to.
  */
 :where(p, li, dd, td, span, h1, h2, h3, .am-state__title, .am-page__subtitle) > code {
-  padding: 0.1em 0.42em;
+  padding: 0.08em 0.34em;
   border-radius: var(--am-radius-sm);
   background: var(--am-surface-sunken);
   color: var(--am-ink-muted);
@@ -1425,66 +1425,13 @@ li.am-state .am-state__detail {
   color: var(--am-ok);
 }
 
-/* ---- run progress ---------------------------------------------------------------- */
-
-/*
- * The run screen names no class of its own and is mostly `h2`, `dl` and `p`; the element
- * layer above carries it. These three are the exceptions the markup now names, because
- * the reading a user came for — what the run did — should not be one paragraph among
- * twelve.
+/* ---- run progress ----------------------------------------------------------------
+ *
+ * The run screen's own three classes are NOT here. They live in
+ * `src/widgets/run-progress/ui/run-progress.module.css`, the first collocated module in
+ * this application and the thing this file's header comment has promised since the
+ * bootstrap. The module consumes the tokens above and defines none; that is the seam.
  */
-.am-run__mode {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--am-gap-sm);
-  margin: 0 0 var(--am-gap-sm);
-}
-
-.am-run__outcome {
-  padding: var(--am-gap) var(--am-gap-lg);
-  border: 1px solid var(--am-line);
-  border-left: 4px solid var(--am-inert);
-  border-radius: var(--am-radius);
-  background: var(--am-surface);
-  box-shadow: var(--am-shadow-1);
-}
-
-.am-run__outcome > *:last-child {
-  margin-bottom: 0;
-}
-
-.am-run__outcome[data-run-outcome='published'] {
-  border-left-color: var(--am-ok);
-  background: var(--am-ok-light);
-}
-
-.am-run__outcome[data-run-outcome='partial'] {
-  border-left-color: var(--am-degraded);
-  background: var(--am-degraded-light);
-}
-
-.am-run__outcome[data-run-outcome='failed'] {
-  border-left-color: var(--am-failed);
-  background: var(--am-failed-light);
-}
-
-.am-run__outcome[data-run-outcome='in_flight'] {
-  border-left-color: var(--am-accent);
-  background: var(--am-accent-light);
-}
-
-.am-run__activity {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--am-gap-sm);
-  margin: 0;
-  padding: var(--am-gap-sm) 12px;
-  border-radius: var(--am-radius-sm);
-  background: var(--am-surface-sunken);
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
-}
 
 /* ---- lists of rows and the pager under them -------------------------------------- */
 
