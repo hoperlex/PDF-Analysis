@@ -79,6 +79,19 @@ worktree carries that session's name.** Not the wave's, not the task's kind — 
 `/root/mut`. A brief that hands a session a logs directory hands it a **prefix** within that
 directory, and this is now a line in every brief.
 
+**And the same rule covers the gate lane, which is not a path and is the easier one to
+forget.** `.env` is git-ignored, so a worktree made by `git worktree add` **has none**; a
+session that reaches for `cp .env.example .env` takes the example's `FOUNDATION_INSTANCE`,
+ports and database — and so does every other session that does the same thing, and so do the
+containers already running under that name. §6 is what happens next.
+
+The integrator dispatched both of wave 30's sessions with a private **log prefix** and no
+lane at all, and caught it only while writing this paragraph, before either had run a gate.
+So the checklist a brief satisfies is two items, not one: **a private prefix for everything
+it writes, and the six lane values** — `FOUNDATION_INSTANCE`, `POSTGRES_PORT`, `S3_API_PORT`,
+`S3_CONSOLE_PORT`, `POSTGRES_DB`, `S3_BUCKET`, with `DATABASE_URL` and `S3_ENDPOINT_URL`
+carrying the same ports, which the `Makefile` checks and refuses.
+
 The failure mode is what makes it worth a section rather than a convention. A clobbered log
 does not announce itself. It reads exactly like a run that produced less output than you
 expected, which is the same thing a silently truncated command looks like — and §12 is the
