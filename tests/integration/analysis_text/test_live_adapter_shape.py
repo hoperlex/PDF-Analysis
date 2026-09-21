@@ -188,3 +188,54 @@ def test_the_credential_never_appears_in_a_mapped_failure(request_for_corpus):
 
 def test_the_installed_sdk_is_the_version_the_lock_pins():
     assert anthropic.__version__ == provider_lock().sdk_version
+
+
+def test_every_construction_refusal_is_one_no_second_attempt_could_answer(monkeypatch):
+    """Three ways this adapter refuses to be built, none of them retryable.
+
+    A missing credential, an absent SDK and an SDK at the wrong version are all facts
+    about the deployment this process is running in. None of them changes while the
+    process runs, so none may carry a code the executor's retry policy would ladder.
+    The absent-SDK case reported ``dependency_unavailable`` until ``W29-RETRY`` — the
+    same shape the recorded adapter's missing-recording path had, on the same reasoning
+    — while the two refusals either side of it in the same constructor already reported
+    ``analysis_input_invalid``.
+
+    ``import anthropic`` is defeated through ``builtins.__import__`` rather than by
+    deleting the module, because the SDK is installed in every lane and the branch is
+    otherwise unreachable here.
+    """
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_anthropic(name, *args, **kwargs):
+        if name == "anthropic":
+            raise ImportError("no module named anthropic")
+        return real_import(name, *args, **kwargs)
+
+    refusals: dict[str, DomainError] = {}
+
+    with pytest.raises(DomainError) as raised:
+        LiveAdapter(api_key=None)
+    refusals["provider_credential_missing"] = raised.value
+
+    monkeypatch.setattr(builtins, "__import__", no_anthropic)
+    with pytest.raises(DomainError) as raised:
+        LiveAdapter(api_key="not-a-real-key")
+    refusals["provider_sdk_not_importable"] = raised.value
+    monkeypatch.undo()
+
+    monkeypatch.setattr(anthropic, "__version__", "0.0.0-not-the-pin")
+    with pytest.raises(DomainError) as raised:
+        LiveAdapter(api_key="not-a-real-key")
+    refusals["provider_sdk_version_mismatch"] = raised.value
+
+    for reason, error in refusals.items():
+        assert error.detail_fields.get("reason") == reason
+        assert error.code is ErrorCode.ANALYSIS_INPUT_INVALID
+        # Against the catalog, not a literal: `retryable` is what the policy reads.
+        assert error.code.retryable is False, (
+            f"{reason} reports {error.code.value}, which the catalog marks retryable, "
+            "so the executor would spend the attempt budget on a deployment fault"
+        )

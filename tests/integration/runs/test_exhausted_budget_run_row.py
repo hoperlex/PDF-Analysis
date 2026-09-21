@@ -6,23 +6,27 @@ asserts the *stage* row's `dependency_unavailable` while
 `test_terminal_reason_names_the_cause.py` "reaches the unreachable-provider case by a
 different route", leaving `audit_run.terminal_reason` on the exhausted path unasserted.
 
-**The premise is false, and the first test below is why.** A `RecordedAdapter` over an
-empty directory raises `dependency_unavailable` on every call, which is retryable, so the
-wave-3 fixture does not take a different route — it takes *the* exhausted-budget route,
-spending all three attempts and both pinned backoffs before it terminates. The run row's
-reason on that path was therefore already asserted.
+**The premise was false when `W5-ADV` wrote this file, and `W29-RETRY` made it true.**
+A `RecordedAdapter` over an empty directory used to raise `dependency_unavailable` on
+every call, which is retryable, so the wave-3 fixture took *the* exhausted-budget route,
+spending all three attempts and both pinned backoffs before it terminated. That is a local
+file that is not there, dressed as a provider that could not be reached, and the ladder it
+bought could not change the answer. The adapter now reports `analysis_input_invalid`, the
+fixture is asked exactly once, and the wave-3 suite drives its unreachable-provider case
+with a scripted provider instead.
 
 That leaves two things worth writing down, and both are here rather than in a comment on a
 closure record:
 
 1. the route itself, so that a future reader is not told again that the wave-3 fixture is
-   a short path. If someone makes `dependency_unavailable` non-retryable, or moves the
-   empty-recordings failure onto another code, the wave-3 guard silently stops covering
-   the exhausted path and nothing says so. The first test is what says so.
+   the long path. The first test below asserts one attempt and no wait. If someone gives
+   the empty-recordings failure a retryable code again, it goes red there rather than
+   costing every such run ten seconds in silence.
 2. the run row's reason on an exhausted budget driven by the *scripted* provider, which is
-   the adapter the retry suite uses and which the wave-3 guard never touches. Two
-   independent adapters reaching the same terminal reason is what makes the property a
-   property of the executor rather than of one fixture.
+   the adapter the retry suite uses. That is now the only route to the exhausted path in
+   this file, and the wave-3 suite reaches the same reason through its own scripted
+   provider, which is what makes the property a property of the executor rather than of
+   one fixture.
 
 Shown to fail
 -------------
@@ -141,21 +145,26 @@ def _run_row(session: Session, run_id: str) -> dict:
     )
 
 
-def test_the_recorded_adapter_over_an_empty_directory_exhausts_the_budget(
+def test_the_recorded_adapter_over_an_empty_directory_is_asked_exactly_once(
     session: Session, seeded, blob_store, provider_config, tmp_path
 ):
-    """The wave-3 fixture's route, asserted rather than assumed.
+    """A local miss is not laddered, and the ladder is not merely shortened.
 
-    `test_terminal_reason_names_the_cause.py` builds its unreachable-provider case as a
-    `RecordedAdapter` over an empty directory. That adapter raises
-    `dependency_unavailable`, which `RETRYABLE_STAGE_ERRORS` marks retryable, so the run
-    it drives spends the whole budget and both pinned backoffs. Its terminal is an
-    exhausted-budget terminal.
+    This test asserted the opposite until `W29-RETRY`: that a `RecordedAdapter` over an
+    empty directory spends the whole budget and both pinned backoffs, because the code it
+    raised was `dependency_unavailable`, which the catalog marks retryable. That was true
+    and it was the defect. The file is not on this disk and will not be on this disk in
+    ten seconds, so those three attempts and those ten seconds bought an answer that could
+    not change. `W28-LIVE` measured the cost through a browser: 10.0 s of a 16.1 s run.
 
-    Without this, a change that made the empty-recordings failure non-retryable — or moved
-    it onto another code — would quietly turn that suite into a single-attempt test while
-    it went on claiming to cover the unreachable provider, and the exhausted path would
-    lose its only run-row assertion with nothing going red.
+    The wave-3 guard it used to protect is repaired rather than deleted:
+    `test_terminal_reason_names_the_cause.py` now drives its unreachable-provider case
+    with a provider that is really unreachable, so the exhausted path keeps its run-row
+    assertion. The scripted-provider test below is the other half of that.
+
+    `waits` and `adapter.calls` are both asserted, and they are different claims: one
+    attempt with a wait before it would be a policy that still believed this was
+    retryable and merely had nowhere to go.
     """
     empty = tmp_path / "no-recordings"
     empty.mkdir()
@@ -172,21 +181,36 @@ def test_the_recorded_adapter_over_an_empty_directory_exhausts_the_budget(
         sleep=waits.append,
     )
 
-    assert adapter.calls == ATTEMPT_BUDGET, (
-        f"the empty-recordings adapter was asked {adapter.calls} times, not "
-        f"{ATTEMPT_BUDGET}. It is no longer the exhausted-budget route, so the wave-3 "
-        "guard in test_terminal_reason_names_the_cause.py no longer covers that path"
+    assert adapter.calls == 1, (
+        f"the empty-recordings adapter was asked {adapter.calls} times. Re-asking a "
+        "local directory for a file that is not in it cannot answer differently, and "
+        f"the budget of {ATTEMPT_BUDGET} is for a provider that may come back"
     )
-    assert result.attempts == ATTEMPT_BUDGET
-    assert waits == list(BACKOFF_SECONDS), (
-        "the route must take the pinned ladder; a route that waits differently is not "
-        "the retry loop under test"
+    assert result.attempts == 1
+    assert waits == [], (
+        f"the run waited {waits} before an attempt that could not go differently; the "
+        f"pinned ladder {list(BACKOFF_SECONDS)} belongs to the transport failure"
     )
 
     stage = _stage_row(session, run_id)
     assert stage.error is not None
-    assert stage.error["code"] == ErrorCode.DEPENDENCY_UNAVAILABLE.value
-    assert stage.metrics.get("attempt_budget_exhausted") is True
+    assert stage.error["code"] == ErrorCode.ANALYSIS_INPUT_INVALID.value
+    assert stage.metrics.get("attempts") == 1
+    assert stage.metrics.get("retry_waited_seconds") == 0.0
+    assert stage.metrics.get("attempt_budget_exhausted") is False, (
+        "a stage that was never going to get a second attempt did not run out of "
+        "budget; it never needed one"
+    )
+
+    # The user-visible half. `audit_run.terminal_reason` is CHECK-constrained to the
+    # frozen catalog, so this also proves the new code is one the column admits, and
+    # it is the string the run screen prints verbatim.
+    row = _run_row(session, run_id)
+    assert row["state"] == "failed"
+    assert row["terminal_reason"] == ErrorCode.ANALYSIS_INPUT_INVALID.value, (
+        f"the run row reports {row['terminal_reason']!r}. A retryable reason on a run "
+        "that cannot succeed tells an operator to start it again"
+    )
 
 
 def test_an_exhausted_budget_names_the_transport_failure_on_the_run_row(

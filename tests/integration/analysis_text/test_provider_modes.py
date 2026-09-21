@@ -18,7 +18,6 @@ import socket
 import pytest
 
 from auditmanager.analysis.text import (
-    DEPENDENCY_NAME,
     STATUS_FAILED,
     STATUS_SUCCEEDED,
     LiveAdapter,
@@ -29,6 +28,9 @@ from auditmanager.analysis.text import (
     run_text_analysis,
 )
 from auditmanager.analysis.text.config import ENV_API_KEY, ENV_PROVIDER_MODE
+from auditmanager.analysis.text.lock import STAGE_ID
+from auditmanager.analysis.text.recorded import RECORDING_VERSION
+from auditmanager.runs import RETRYABLE_STAGE_ERRORS
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId
 
@@ -142,10 +144,17 @@ def test_publishing_refuses_a_mode_that_disagrees_with_its_calls(
 # --- the two adapters' own boundaries -------------------------------------------
 
 
-def test_missing_recording_is_dependency_unavailable_and_never_a_live_call(
+def test_missing_recording_is_not_a_transport_failure_and_never_a_live_call(
     text_layer_document, empty_recording_dir
 ):
-    """No recording, no call. The socket guard is active for this whole suite."""
+    """No recording, no call -- and nothing for a retry ladder to do.
+
+    Until `W29-RETRY` this asserted ``dependency_unavailable``, which is
+    ``retryable: true`` in the frozen catalog, so a document with no recording bought
+    three attempts and both pinned backoffs waiting for a file to appear on a local
+    disk. The file is absent and will be absent in ten seconds. The socket guard is
+    active for this whole suite, so "no call" is enforced rather than asserted.
+    """
     outcome = run_text_analysis(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
@@ -154,8 +163,82 @@ def test_missing_recording_is_dependency_unavailable_and_never_a_live_call(
     assert outcome.status == STATUS_FAILED
     assert outcome.artifact is None
     assert outcome.model_calls == ()
-    assert outcome.error.code is ErrorCode.DEPENDENCY_UNAVAILABLE
-    assert outcome.error.detail_fields == {"dependency": DEPENDENCY_NAME}
+    assert outcome.error.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert outcome.error.detail_fields == {
+        "stage_id": STAGE_ID,
+        "reason": "recording_missing",
+    }
+    # The property, against the catalog rather than against a literal: the executor
+    # decides whether to ladder a failure by reading `code.retryable`, and nothing
+    # else. A code that reads True here is a code this failure gets retried on.
+    assert outcome.error.code.retryable is False
+    assert outcome.error.code not in RETRYABLE_STAGE_ERRORS
+
+
+def test_every_way_the_corpus_fails_to_answer_takes_the_same_non_retryable_code(
+    empty_recording_dir, tmp_path
+):
+    """Absent, misfiled, unsupported version, malformed: one class, one code.
+
+    All four are the same fact about the same local directory -- the corpus it holds
+    does not answer this request -- and no second attempt at the same request changes
+    any of them. The test enumerates the adapter's own `recording_*` reason vocabulary
+    so that a fifth member added on a retryable code fails here.
+    """
+    from auditmanager.analysis.text import AR_TEXT_PROFILE, build_request, load_text_layer
+
+    document = json.loads(
+        (
+            RecordedAdapter().recording_dir / "inputs/ar_baseline_text_layer.json"
+        ).read_text(encoding="utf-8")
+    )
+    request = build_request(
+        model_id="claude-opus-5",
+        bundle=AR_TEXT_PROFILE.prompt_bundle,
+        text_layer=load_text_layer(document),
+    )
+
+    corpus = tmp_path / "variants"
+    corpus.mkdir()
+
+    def _written(**overrides) -> RecordedAdapter:
+        body = {
+            "recording_version": RECORDING_VERSION,
+            "request_sha256": request.request_sha256,
+            "model_id": request.model_id,
+            "stop_reason": "end_turn",
+            "output_text": "{}",
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+            "latency_ms": 1,
+            "note": "",
+        }
+        body.update(overrides)
+        directory = tmp_path / f"corpus-{len(list(tmp_path.iterdir()))}"
+        directory.mkdir()
+        (directory / f"{request.request_sha256}.json").write_text(
+            json.dumps(body), encoding="utf-8"
+        )
+        return RecordedAdapter(directory)
+
+    cases = {
+        "recording_missing": RecordedAdapter(empty_recording_dir),
+        "recording_key_mismatch": _written(request_sha256="0" * 64),
+        "recording_version_unsupported": _written(recording_version="0.0.1"),
+        "recording_malformed": _written(latency_ms="not a number"),
+    }
+
+    seen = {}
+    for reason, adapter in cases.items():
+        with pytest.raises(DomainError) as raised:
+            adapter.complete(request)
+        seen[reason] = raised.value.code
+        assert raised.value.detail_fields.get("reason") == reason
+        assert raised.value.code.retryable is False, (
+            f"{reason} reports {raised.value.code.value}, which the catalog marks "
+            "retryable: the executor will ladder a failure that cannot change"
+        )
+
+    assert set(seen.values()) == {ErrorCode.ANALYSIS_INPUT_INVALID}
 
 
 def test_missing_recording_envelope_leaks_no_path_or_payload(empty_recording_dir):
@@ -176,9 +259,11 @@ def test_missing_recording_envelope_leaks_no_path_or_payload(empty_recording_dir
         RecordedAdapter(empty_recording_dir).complete(request)
 
     envelope = raised.value.envelope("corr-b3-test").as_dict()
-    assert envelope["error_code"] == "dependency_unavailable"
-    assert envelope["retryable"] is True
-    assert envelope["details"] == {"dependency": DEPENDENCY_NAME}
+    assert envelope["error_code"] == "analysis_input_invalid"
+    # Read from the catalog by the envelope itself, never a parameter: this is the
+    # value the executor's retry policy acts on.
+    assert envelope["retryable"] is False
+    assert envelope["details"] == {"stage_id": STAGE_ID, "reason": "recording_missing"}
     # The screen already refuses a URL, a path or a credential shape; assert the
     # prompt itself did not travel either.
     assert "Степень" not in envelope["message"]

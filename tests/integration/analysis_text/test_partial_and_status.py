@@ -92,8 +92,29 @@ def test_the_truncated_call_is_recorded_as_truncated(text_layer_document, varian
 
 
 def test_an_unavailable_provider_is_failed_and_never_partial(
+    text_layer_document, unreachable_provider
+):
+    """The transport case, driven by a provider that really is unreachable.
+
+    It used a `RecordedAdapter` over an empty directory until `W29-RETRY`, which is a
+    local miss rather than an outage; the name said one thing and the fixture did
+    another.
+    """
+    outcome = run_text_analysis(
+        run_id=RunId.new(),
+        text_layer_document=text_layer_document,
+        adapter=unreachable_provider,
+    )
+    assert unreachable_provider.calls == 1
+    assert outcome.status == STATUS_FAILED
+    assert outcome.status != STATUS_PARTIAL
+    assert outcome.error.code is ErrorCode.DEPENDENCY_UNAVAILABLE
+
+
+def test_a_corpus_that_cannot_answer_is_failed_and_never_partial(
     text_layer_document, empty_recording_dir
 ):
+    """The other half: `partial` is a strict subset of pages, and none is not a subset."""
     outcome = run_text_analysis(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
@@ -101,7 +122,7 @@ def test_an_unavailable_provider_is_failed_and_never_partial(
     )
     assert outcome.status == STATUS_FAILED
     assert outcome.status != STATUS_PARTIAL
-    assert outcome.error.code is ErrorCode.DEPENDENCY_UNAVAILABLE
+    assert outcome.error.code is ErrorCode.ANALYSIS_INPUT_INVALID
 
 
 def test_the_stage_never_reports_skipped(text_layer_document, recorded_adapter, variant_adapter):
