@@ -11,7 +11,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
-| **D-44** | the pre-check limit must stay below `client_max_body_size` | an invariant nothing records |
 | **D-42** | the provider credential **does** appear in `compose config` | prose + runbook |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
@@ -461,25 +460,48 @@ mutation fixtures — the same reason the guard excludes its own file.
 
 Check: `.venv/bin/pytest tests/contract/api_v1/test_surface_counts_in_prose.py` → 21 passed.
 
-### D-44 — the browser's pre-check is what keeps three refusal screens truthful
+### D-44 — the pre-check keeps three refusal screens truthful — **CLOSED, now enforced**
 
-**Found by `W27-REFUSE` while measuring six negative inputs, and it is an undocumented
-invariant rather than a defect.**
+**Closed 2026-09-21 by `W28-GUARD`.** `tests/e2e/test_upload_limit_headroom.py` reads **both
+numbers from where they live** — the pre-check's limit in `web/src`, `client_max_body_size`
+from `infra/deploy/proxy/nginx.conf` — and reddens when the first is not strictly below the
+second. Neither is restated as a literal.
 
-The upload pre-check refuses at **25 MiB**; `infra/deploy/proxy/nginx.conf` sets
-`client_max_body_size 32m`. **The gap is what stops a user ever meeting nginx's `413`** — and
-that `413` would arrive with **no envelope**, so the screen would classify it as `transport`
-and render *"The upload did not reach the API."*: **a true sentence naming the wrong cause**.
+**It reddens on this row's own sentence**: *raise the pre-check to 32 MiB with nginx
+untouched* → 3 failed. Seven more shapes too: 64 MiB, nginx lowered to 16m, the two made
+exactly equal, the directive commented out, the limit hidden behind a name, a stale label,
+and a fixture shrunk under the limit. **Eight mutations, eight reds**, and the harness builds
+a throwaway tree so the repository is byte-identical afterwards.
 
-**Raise the envelope to 32 MiB without touching nginx and three of the six refusal screens
-quietly become a generic transport failure.** Nothing in the tree records the dependency.
+**Running the controls found a hole in the guard itself.** The first draft anchored
+`client_max_body_size` to the start of a line, so `server { client_max_body_size 4m; }` — which
+nginx accepts and which would decide the effective cap — was **invisible**, and the control
+meant to prove the guard refuses two caps **went green**. Repaired by stripping comments line
+by line and searching unanchored; both shapes are controls now.
 
-A second consequence, measured: criterion 9's `max_bytes` refusal **holds through HTTP and is
-unreachable from a browser**. No user of this application can make that screen appear, and no
-fixture can either.
+**Reading the regex would not have found it.** Running it did.
 
-Check: `grep -n client_max_body_size infra/deploy/proxy/nginx.conf` against the pre-check's
-limit in `web/src`. The first must exceed the second.
+Check: `.venv/bin/pytest tests/e2e/test_upload_limit_headroom.py` → 11 passed, and
+`.venv/bin/python tests/e2e/prove_the_headroom_guard_can_fail.py` → 8 reds, exit 0.
+
+### D-45 — `expects_rendered` was read by one driver and by no guard
+
+**Found by `W28-GUARD` while doing something else, and repaired in the same wave.** Verified
+independently on `dev`: `expects_rendered` appeared in `manifest.json`, in two reddening
+fixtures and in `write.mjs` — **and nowhere else**. The conformance guard, which runs inside
+the battery and exists to stop the journey rotting, **never looked at it**.
+
+So the word `"Created"` could be changed in a screen and **the gate stayed green while the
+write half went quietly red.**
+
+**The sharp part: this is exactly the defect `W27-REFUSE` reported for its six refusal cases
+— and it was already present in the half that session held up as the model.** *"The six live
+in a driver the gate does not run"* was true of the write half too, and nobody had looked.
+
+Closed for both halves at once; the guard went 30 → 47 tests.
+
+**The general form, which is `D-23`'s at a different level:** a declaration that only its own
+consumer reads is not a specification, it is a duplicate. **Ask who else reads it.**
 
 ### D-19 — a published run reports neither its timings nor its finding count — **CLOSED**
 
