@@ -175,13 +175,16 @@ describe('the run vocabulary', () => {
 });
 
 describe('the error catalog', () => {
-  it('is the closed twenty-one-code set', () => {
-    // Twenty-one since the wave-13 reseal: owner ruling `R-3` added
+  it('is the closed twenty-two-code set', () => {
+    // Twenty-two since round 7: owner ruling `R-8`, reinstated by `R-13`, added
+    // `staged_upload_lost` so one 409 stopped meaning two opposite things (`D-18`).
+    // Twenty-one before it, since the wave-13 reseal, where `R-3` added
     // `dependency_credential_refused` so one 403 stopped meaning two things (`D-7`).
-    expect(ERROR_CODE_VALUES).toHaveLength(21);
+    expect(ERROR_CODE_VALUES).toHaveLength(22);
     expect(ERROR_CODE_VALUES).toContain('idempotency_key_in_progress');
     expect(ERROR_CODE_VALUES).toContain('state_transition_not_allowed');
     expect(ERROR_CODE_VALUES).toContain('dependency_credential_refused');
+    expect(ERROR_CODE_VALUES).toContain('staged_upload_lost');
     expect(ERROR_CODE_VALUES).toContain('permission_denied');
   });
 
