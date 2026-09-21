@@ -12,8 +12,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | | Row | Needs |
 |---|---|---|
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
-| D-53 | 20 English strings survive three reports of a translated interface | a **guard**, not a fourth pass |
-| D-55 | `cdp.mjs` cannot screenshot, and R-18 makes rendering evidence structural | ~8 lines on the tree's own instrument |
+| D-53 | **11** English strings left, now **guarded** — a ratchet that may only shrink | the eleven; the guard is done |
+| D-57 | one query key, two shapes: a finished run is polled forever | a decision, then a guard |
+| D-58 | a screen names `uploadDocument` and `document_uid` to a reviewer | one sentence |
 | D-52 | the legacy icon set is at least partly Feather, MIT, notice absent | a `NOTICE` file if we copy; **not** `D-11`'s shape |
 | **D-49** | the stand is on every interface, and `/bff/v1` takes writes with no credential | **owner — a binding decision**; highest severity here |
 | **D-46** | a failed run cannot say *which* dependency | owner — a reseal either way |
@@ -1436,6 +1437,53 @@ sections is the right set or legacy's set is simply what legacy had.
 
 Check: `python3 -c "import json; d=json.load(open('contracts/api/v1/openapi.json')); print(list(d['components']['schemas']['Project']['properties']))"`
 
+### D-57 — one query key holds two incompatible shapes, and a finished run is polled forever
+
+**Found by `W32-SEE` while rendering screens for an unrelated guard. Verified by the
+integrator 2026-09-21. Opened the same day.**
+
+`queryKeys.runs.detail(runId)` is written and read in two different shapes, into one
+`QueryClient`:
+
+| | shape | site |
+|---|---|---|
+| **written** | a bare `RunStatus` | `entities/audit-run/api/use-run-status.ts:79` via `setQueryData`; read back at `:43` and `:59`; also `features/start-run/api/use-start-run.ts:38` |
+| **read** | the generated client's envelope, `{data: RunStatus}` | `_pages/review/ui/review-page.tsx:124`, as `runQuery.data?.data` |
+
+**Two consequences, both reachable by a reviewer:**
+
+1. **The review screen renders its empty branch over a run that is in the cache.** `.data` on
+   a bare `RunStatus` is `undefined`, so the screen behaves as though nothing were loaded.
+   That is `D-16` in reverse — that row was a screen making no call; this is a screen making
+   the call and discarding the answer.
+2. **A finished run is polled forever.** Returning to the run screen reads the wrapped value,
+   gets `undefined`, and `isTerminalRunState(undefined)` is `false` — so the poller never
+   stops on a run that terminated.
+
+**Neither is a type error**, because `getQueryData<RunStatus>` asserts the shape rather than
+checking it, and `useQuery`'s inference comes from the `queryFn`. The key is the only thing the
+two sites share and it carries no shape at all.
+
+**The repair is a decision, not a patch**: either the key carries the envelope everywhere, or
+it carries the bare model everywhere and the review page unwraps at the boundary. A guard
+belongs with it — a key whose value type is not one type is the same class of defect as a list
+narrower than its contract, one level up.
+
+Check: `grep -n "runs.detail" web/src/entities/audit-run/api/use-run-status.ts web/src/_pages/review/ui/review-page.tsx`
+
+### D-58 — a screen tells a reviewer about `uploadDocument` and `document_uid`
+
+**Found by `W32-SEE` 2026-09-21.** `web/src/_pages/version-detail/ui/version-list.tsx:7`
+renders a sentence naming an **operation id** and a **contract field** to the person doing the
+review.
+
+This is the class `D-54` closed twice in wave 31 — the footer that addressed a developer, and
+`RoutePlaceholder` showing developers' notes — **recurring in a third place that no wave-31
+grant covered.** `R-18` names it: the alpha is shown as finished, and a finished application
+does not explain its own transport to the person using it.
+
+Check: the `W32-SEE` guard reports it as part of its outstanding list.
+
 ### D-53 — twenty user-visible English strings survive two waves that each reported the interface translated
 
 **Measured by `W31-STYLE` 2026-09-21, in the course of restyling screens it was told not to
@@ -1486,7 +1534,11 @@ outside its grant, which is the behaviour that makes this recoverable at all.
 Check: for any wave that splits a tree, `find <tree> -maxdepth 2 -type d` and account for
 every entry against the briefs.
 
-### D-55 — the browser instrument cannot take a screenshot, and a brief asked it to
+### D-55 — the browser instrument cannot take a screenshot, and a brief asked it to — **CLOSED**
+
+**Closed 2026-09-21 by `W32-SEE`**, in the commit carrying its fix. `Page.screenshot(path, {fullPage, width, height})` is on `cdp.mjs`, with no dependency added and `Page.enable()` already being sent.
+
+**And the brief's stated obstacle was not the obstacle.** It said `#send` being private was what had to be opened. It did not: `#send` is private **to `Page`**, so it blocks code *outside* the class — which is what `W31-STYLE` hit, having no licence to edit the file. A method **on** `Page` calls `this.#send` like every other primitive. Widening it would have exposed the whole protocol to reach one method.
 
 **Found by `W31-STYLE` 2026-09-21.** `tests/e2e/pc01/journey/cdp.mjs` — this programme's own
 CDP client, built by `W21-E2E` specifically so a browser journey needs no dependency — has no
