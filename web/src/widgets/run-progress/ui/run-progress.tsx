@@ -82,19 +82,19 @@ function Outcome({ status }: { readonly status: RunStatus }) {
     case 'in_flight':
       return (
         <p data-run-outcome="in_flight">
-          The run is in <code>{outcome.state}</code>. No result has been published yet, and
-          none is implied.
+          Прогон в состоянии <code>{outcome.state}</code>. Результат ещё не опубликован и
+          не подразумевается.
         </p>
       );
     case 'published':
       return (
         <div data-run-outcome="published">
           <p>
-            The run reached its success terminal, <code>published</code>.
+            Прогон достиг успешного терминального состояния <code>published</code>.
           </p>
           <p>
             Published findings:{' '}
-            {outcome.findingCount === null ? <em>not reported</em> : outcome.findingCount}
+            {outcome.findingCount === null ? <em>не сообщено</em> : outcome.findingCount}
           </p>
         </div>
       );
@@ -102,17 +102,17 @@ function Outcome({ status }: { readonly status: RunStatus }) {
       return (
         <div data-run-outcome="partial">
           <p>
-            The run terminated <code>partial</code>. It published a result with a recorded
-            degradation; it did not complete every stage, and it is not a{' '}
-            <code>published</code> run.
+            Прогон завершился как <code>partial</code>. Он опубликовал результат с
+            зафиксированной деградацией: часть этапов не выполнена, и это не{' '}
+            <code>published</code>.
           </p>
           {outcome.degradation.length === 0 ? (
             <p>
-              <em>The reading carries no degradation set.</em>
+              <em>Показание не содержит списка деградаций.</em>
             </p>
           ) : (
             <>
-              <p>Missing or degraded stages:</p>
+              <p>Отсутствующие или деградировавшие этапы:</p>
               <ul>
                 {outcome.degradation.map((stageId) => (
                   <li key={stageId} data-degraded-stage={stageId}>
@@ -137,7 +137,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
           <p>
             Terminal reason:{' '}
             {outcome.terminalReason === null ? (
-              <em>not reported</em>
+              <em>не сообщено</em>
             ) : (
               <code data-terminal-reason={outcome.terminalReason}>{outcome.terminalReason}</code>
             )}
@@ -145,8 +145,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
           <p data-terminal-reason-note={note.kind}>{note.sentence}</p>
           {outcome.interrupted === null ? null : (
             <p data-interrupted-reason={outcome.interrupted}>
-              This run was interrupted and reconciled: {outcome.interrupted}. It is not
-              still running.
+              Прогон был прерван и сверен: {outcome.interrupted}. Сейчас он не выполняется.
             </p>
           )}
         </div>
@@ -172,61 +171,61 @@ function Recorded({ status }: { readonly status: RunStatus }) {
 
   return (
     <>
-      <h2>Diagnostic observations</h2>
+      <h2>Диагностические наблюдения</h2>
       <p>
         Recorded:{' '}
         {diagnostics === null ? (
-          <em data-diagnostic-observation-count="not-reported">not reported</em>
+          <em data-diagnostic-observation-count="not-reported">не сообщено</em>
         ) : (
           <strong data-diagnostic-observation-count={diagnostics}>{diagnostics}</strong>
         )}
       </p>
       <p>
-        A diagnostic observation is something the run noticed and did not admit as
-        evidence. It is not a finding, it is not counted as one, and the two totals are
-        never added together.
+        Диагностическое наблюдение — это то, что прогон заметил, но не принял как
+        свидетельство. Это не находка, оно не считается находкой, и два итога никогда
+        не складываются.
       </p>
 
-      <h2>Cost</h2>
+      <h2>Стоимость</h2>
       {cost.kind === 'absent' ? (
         <p data-run-cost="absent">
-          This run made no provider call, so it has no cost to report. That is not a cost
-          of zero — nothing was spent here because nothing was called, and the two are
-          different claims.
+          Прогон не обращался к провайдеру, поэтому сообщать о стоимости нечего. Это не
+          нулевая стоимость: здесь ничего не потрачено, потому что ничего не вызывалось,
+          а это разные утверждения.
         </p>
       ) : cost.kind === 'unreadable' ? (
         <p data-run-cost="unreadable">
-          This reading&apos;s cost cannot be read: {cost.why}. No figure is shown, because
-          a total whose span the reader cannot see is not one they can act on.
+          Стоимость этого показания прочитать нельзя: {cost.why}. Цифра не показана, потому
+          что итог, охват которого читателю не виден, не годится для решений.
         </p>
       ) : (
         <div data-run-cost="reported">
           <dl>
-            <dt>Spent</dt>
+            <dt>Потрачено</dt>
             <dd data-cost-micros={cost.micros}>
-              <strong>{formatCostMicros(cost.micros)}</strong> provider currency units{' '}
+              <strong>{formatCostMicros(cost.micros)}</strong> единиц валюты провайдера{' '}
               <span>
-                (<code>{cost.micros}</code> millionths, the integer the run stored)
+                (<code>{cost.micros}</code> миллионных — целое число, сохранённое прогоном)
               </span>
             </dd>
-            <dt>Provider calls this total sums</dt>
+            <dt>Вызовов провайдера в сумме</dt>
             <dd data-model-call-count={cost.callCount}>{cost.callCount}</dd>
-            <dt>Basis</dt>
+            <dt>Основание</dt>
             <dd data-cost-basis={cost.basis ?? 'unstated'}>
               <code>{cost.basis ?? 'unstated'}</code>
             </dd>
           </dl>
           <p>{costBasisCaption(cost.basis)}</p>
           <p>
-            The total sums every provider call this run made, retries included. The call
-            count is printed beside it so a run that answered first time can be told from
-            one that was retried.
+            Итог суммирует все обращения к провайдеру, включая повторы. Рядом напечатано
+            число вызовов, чтобы прогон, ответивший с первого раза, отличался от того,
+            который пришлось повторять.
           </p>
           {cost.micros === 0 ? (
             <p data-run-cost-zero="reported">
-              This run called the provider{' '}
-              {cost.callCount === 1 ? 'once' : `${cost.callCount} times`} and was charged
-              nothing. This is a reported zero, not an absent cost.
+              Прогон обратился к провайдеру{' '}
+              {cost.callCount === 1 ? 'один раз' : `${cost.callCount} раз`}, и плата не
+              начислена. Это сообщённый ноль, а не отсутствующая стоимость.
             </p>
           ) : null}
         </div>
@@ -244,7 +243,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
         title={failure.title}
         detail={<span data-run-failure={failure.kind}>{failure.detail}</span>}
         correlationId={failure.correlationId}
-        {...(failure.retryable ? { onRetry: retry, retryLabel: 'Try again' } : {})}
+        {...(failure.retryable ? { onRetry: retry, retryLabel: 'Повторить' } : {})}
       />
     );
   }
@@ -266,19 +265,19 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       <p>{providerModeCaption(mode)}</p>
 
       <dl>
-        <dt>Run</dt>
+        <dt>Прогон</dt>
         <dd>
           <code>{status.run_id}</code>
         </dd>
-        <dt>Version</dt>
+        <dt>Версия</dt>
         <dd>
           <code>{status.version_uid}</code>
         </dd>
-        <dt>Created</dt>
+        <dt>Создан</dt>
         <dd>{formatInstant(status.created_at)}</dd>
-        <dt>Terminal at</dt>
+        <dt>Завершён</dt>
         <dd>{formatInstant(status.terminal_at)}</dd>
-        <dt>Took</dt>
+        <dt>Длительность</dt>
         <dd data-run-elapsed={elapsedMs(status.created_at, status.terminal_at) ?? 'unknown'}>
           {formatElapsed(elapsedMs(status.created_at, status.terminal_at))}
         </dd>
@@ -286,51 +285,51 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
 
       <p>
         <Link href={routes.version(status.project_uid, status.version_uid)}>
-          The version this run read
+          Версия, которую читал прогон
         </Link>{' '}
-        — <code>{status.version_uid}</code>. A run never changes the version it read, and
-        that version&apos;s other runs are listed there.
+        — <code>{status.version_uid}</code>. Прогон никогда не меняет прочитанную версию,
+        и остальные её прогоны перечислены там же.
       </p>
 
       <Outcome status={status} />
 
       {interrupted !== null && status.state !== 'failed' ? (
         <p data-interrupted-reason={interrupted}>
-          This run carries an interrupted reason: {interrupted}.
+          У прогона указана причина прерывания: {interrupted}.
         </p>
       ) : null}
 
       <Recorded status={status} />
 
-      <h2>Stages</h2>
+      <h2>Этапы</h2>
       <StageTable rows={stageRows(status)} />
 
-      <h2>Review</h2>
+      <h2>Разбор</h2>
       {runHasPublishedResult(status.state) ? (
         <p>
-          <Link href={routes.review(projectUid, status.run_id)}>Review findings</Link>{' '}
+          <Link href={routes.review(projectUid, status.run_id)}>Разобрать находки</Link>{' '}
           — this run&apos;s provider mode is <strong>{mode}</strong>.
         </p>
       ) : (
         <NotApplicableState
-          title="There is nothing to review."
+          title="Разбирать нечего."
           detail={
             <p>
-              A run has findings only once its terminal publishes a result —{' '}
-              <code>published</code> or <code>partial</code>. This run is{' '}
+              Находки появляются только когда терминальное состояние публикует результат —{' '}
+              <code>published</code> или <code>partial</code>. Этот прогон —{' '}
               <code>{status.state}</code>.
             </p>
           }
         />
       )}
 
-      <h2>Is this reading final?</h2>
+      <h2>Показание окончательное?</h2>
       <p data-run-activity={animating && polling ? 'polling' : 'stopped'}>
         {animating && polling
-          ? 'Polling for the next reading. The interval backs off from 2 s to 15 s and has no deadline; it stops when the run reaches a terminal state.'
+          ? 'Идёт опрос следующего показания. Интервал растёт с 2 с до 15 с, срока нет; опрос прекращается, когда прогон достигает терминального состояния.'
           : animating
-            ? 'Polling has stopped while the run is still open. The reading above is the last one received, not a final one.'
-            : 'Not polling. This reading is final.'}
+            ? 'Опрос остановлен, но прогон ещё открыт. Показание выше — последнее полученное, а не окончательное.'
+            : 'Опрос остановлен, показание окончательное.'}
       </p>
 
       {failure !== null ? (
@@ -338,11 +337,11 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
           title={failure.title}
           detail={
             <span data-run-failure={failure.kind}>
-              {failure.detail} The reading above is the last one received.
+              {failure.detail} Показание выше — последнее полученное.
             </span>
           }
           correlationId={failure.correlationId}
-          {...(failure.retryable ? { onRetry: retry, retryLabel: 'Try again' } : {})}
+          {...(failure.retryable ? { onRetry: retry, retryLabel: 'Повторить' } : {})}
         />
       ) : null}
     </div>

@@ -61,7 +61,7 @@ describe('which runs are offered an export', () => {
       expect(markup).not.toContain('data-intent="export"');
       // No retry affordance: no retry changes a terminal, and a non-terminal run is not
       // refused, it is simply not finished.
-      expect(markup).not.toContain('Try again');
+      expect(markup).not.toContain('Повторить');
     },
   );
 
@@ -93,7 +93,7 @@ describe('the column contract is consumed, not restated', () => {
   });
 
   it('states the column count from the constant', () => {
-    expect(panel('published')).toContain(`${CSV_COLUMNS.length} columns`);
+    expect(panel('published')).toContain(`Колонок: ${CSV_COLUMNS.length}`);
   });
 
   it('states the encoding facts the seam fixes', () => {
@@ -103,7 +103,7 @@ describe('the column contract is consumed, not restated', () => {
     // The BOM is there because the intended reader opens the file in Excel, which
     // otherwise mis-decodes Cyrillic — so the panel says so rather than leaving the user
     // to discover it.
-    expect(markup).toContain('byte-order mark');
+    expect(markup).toContain('меткой порядка байтов');
     expect(markup).toContain(CSV_ENCODING.quoting);
   });
 

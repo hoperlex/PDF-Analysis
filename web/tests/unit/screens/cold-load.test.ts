@@ -131,7 +131,7 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
     const client = newClient();
     const markup = withRouter(client, createElement(ProjectDetailPage, { projectUid: PROJECT_UID }));
 
-    expect(markup).toContain('Loading the documents of this project…');
+    expect(markup).toContain('Загрузка: документы этого проекта…');
     // The exact sentence W15-RUN measured. Its presence is the defect.
     expect(markup).not.toContain('No version published in this session');
   });
@@ -168,7 +168,7 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
       empty,
       createElement(ProjectDetailPage, { projectUid: PROJECT_UID }),
     );
-    expect(emptyMarkup).toContain('No documents in this project yet.');
+    expect(emptyMarkup).toContain('В этом проекте пока нет документов.');
     expect(emptyMarkup).not.toContain('There is no such project.');
 
     const missing = newClient();
@@ -180,7 +180,7 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
     // W18-SEAL made the server answer 404 rather than an empty page, precisely so these
     // two are different answers. A screen that collapsed them would undo that.
     expect(missingMarkup).toContain('There is no such project.');
-    expect(missingMarkup).not.toContain('No documents in this project yet.');
+    expect(missingMarkup).not.toContain('В этом проекте пока нет документов.');
   });
 
   it('offers a route back to the project list', () => {
@@ -209,8 +209,8 @@ describe('the version screen asks the server on a cold load (D-16)', () => {
 
     expect(pendingUnder(client, queryKeys.versions.detail(VERSION_UID))).toBe(true);
     expect(pendingUnder(client, RUNS_KEY)).toBe(true);
-    expect(markup).toContain('Loading this version…');
-    expect(markup).toContain('Loading the runs of this version…');
+    expect(markup).toContain('Загрузка: эту версию…');
+    expect(markup).toContain('Загрузка: прогоны этой версии…');
   });
 
   it('renders the manifest the server returned, with the version identity', () => {
@@ -221,7 +221,7 @@ describe('the version screen asks the server on a cold load (D-16)', () => {
 
     expect(markup).toContain(VERSION_UID);
     expect(markup).toContain('8');
-    expect(markup).toContain('immutable');
+    expect(markup).toContain('неизменяем');
   });
 
   it('offers Start run when the version has no run yet', () => {
@@ -230,7 +230,7 @@ describe('the version screen asks the server on a cold load (D-16)', () => {
     client.setQueryData(RUNS_KEY, runPage([]));
     const markup = screen(client);
 
-    expect(markup).toContain('No run has been started over this version.');
+    expect(markup).toContain('По этой версии прогонов не запускалось.');
     expect(markup).toContain('Start run');
   });
 
@@ -263,8 +263,8 @@ describe('the version screen asks the server on a cold load (D-16)', () => {
     const client = newClient();
     const markup = screen(client, 'ver_lowercase');
 
-    expect(markup).toContain('That is not a version address.');
-    expect(markup).toContain('Nothing was requested.');
+    expect(markup).toContain('Это не адрес версии.');
+    expect(markup).toContain('Запроса не было.');
     // "Nothing was requested" is a claim about the wire, so it is checked against the
     // cache and not against the sentence. React forbids an early return before a hook,
     // so the version query is constructed -- but `enabled: false` keeps it idle, and the
@@ -289,7 +289,7 @@ describe('the document screen asks the server on a cold load (D-16)', () => {
     const markup = screen(client);
 
     expect(pendingUnder(client, VERSIONS_KEY)).toBe(true);
-    expect(markup).toContain('Loading the versions of this document…');
+    expect(markup).toContain('Загрузка: версии этого документа…');
   });
 
   it('renders the versions the server returned, each addressable', () => {
@@ -314,18 +314,18 @@ describe('the document screen asks the server on a cold load (D-16)', () => {
   it('distinguishes an unknown document from a document with no version', () => {
     const empty = newClient();
     empty.setQueryData(VERSIONS_KEY, versionPage([]));
-    expect(screen(empty)).toContain('This document has no published version.');
+    expect(screen(empty)).toContain('У документа нет опубликованных версий.');
 
     const missing = newClient();
     seedError(missing, VERSIONS_KEY, apiError(404, 'not_found'));
     const markup = screen(missing);
     expect(markup).toContain('There is no such document.');
-    expect(markup).not.toContain('This document has no published version.');
+    expect(markup).not.toContain('У документа нет опубликованных версий.');
   });
 
   it('refuses a malformed document address without asking the server about it', () => {
     const client = newClient();
-    expect(screen(client, 'doc_lowercase')).toContain('That is not a document address.');
+    expect(screen(client, 'doc_lowercase')).toContain('Это не адрес документа.');
     expect(client.getQueryCache().getAll()).toHaveLength(0);
   });
 });

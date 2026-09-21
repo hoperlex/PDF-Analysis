@@ -70,7 +70,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
       }}
     >
       <label htmlFor="new-project-name">
-        <strong>New project</strong>
+        <strong>Новый проект</strong>
       </label>
       <div style={{ display: 'flex', gap: '0.5rem', margin: '0.4rem 0 0.6rem' }}>
         <input
@@ -82,7 +82,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
             setName(event.target.value);
             setLocalProblem(null);
           }}
-          placeholder="Project name"
+          placeholder="Название проекта"
           style={{ flex: '1 1 auto', padding: '0.4rem 0.5rem' }}
         />
         <button type="submit" className="am-button" disabled={mutation.isPending}>
@@ -112,7 +112,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
                 onRetry: () => {
                   mutation.mutate({ name: trimmed, idempotencyKey });
                 },
-                retryLabel: 'Retry under the same key',
+                retryLabel: 'Повторить с тем же ключом',
               }
             : {})}
         />

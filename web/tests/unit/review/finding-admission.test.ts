@@ -159,9 +159,9 @@ describe('the finding list', () => {
         integrityFaults: [{ findingUid: FINDING_UID, refusal: 'no_evidence' }],
       }),
     );
-    expect(markup).toContain('Data integrity fault');
+    expect(markup).toContain('Нарушение целостности данных');
     expect(markup).toContain(FINDING_UID);
-    expect(markup).not.toContain('No findings');
+    expect(markup).not.toContain('Находок нет');
   });
 
   it('renders the empty state when the run genuinely published nothing', () => {
@@ -172,7 +172,7 @@ describe('the finding list', () => {
         onSelect: () => {},
       }),
     );
-    expect(markup).toContain('No findings');
-    expect(markup).not.toContain('Data integrity fault');
+    expect(markup).toContain('Находок нет');
+    expect(markup).not.toContain('Нарушение целостности данных');
   });
 });

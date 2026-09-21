@@ -22,7 +22,7 @@ export interface RunPageProps {
 export function RunPage({ projectUid, runId }: RunPageProps) {
   return (
     <PageShell
-      title="Run"
+      title="Прогон"
       subtitle={
         <>
           <code>{runId}</code>
@@ -30,8 +30,8 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
       }
       actions={
         <>
-          <Link href={routes.project(projectUid)}>Back to project</Link>{' '}
-          <Link href={routes.projects()}>All projects</Link>
+          <Link href={routes.project(projectUid)}>К проекту</Link>{' '}
+          <Link href={routes.projects()}>Все проекты</Link>
         </>
       }
     >

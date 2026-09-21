@@ -67,8 +67,8 @@ function QuotationCard({ item }: { item: Evidence }) {
       <p className="am-quotation__anchor">{anchorLabel(item)}</p>
       {consistent ? null : (
         <p className="am-quotation__inconsistent" role="alert">
-          The declared span length does not match this quotation. The anchor is shown as the
-          server sent it and nothing here re-derives it.
+          Заявленная длина фрагмента не совпадает с цитатой. Якорь показан так, как его
+          прислал сервер, и здесь он не пересчитывается.
         </p>
       )}
     </li>
@@ -88,11 +88,11 @@ export function EvidenceViewer({
   if (pages.length === 0) {
     return (
       <ErrorState
-        title="Data integrity fault"
+        title="Нарушение целостности данных"
         detail={
           <p>
-            This finding carries no evidence. The P02 evidence gate makes that impossible, so
-            it is reported rather than rendered as an empty pane.
+            У этой находки нет свидетельств. Шлюз свидетельств P02 делает такое
+            невозможным, поэтому это сообщается, а не показывается пустой панелью.
           </p>
         }
       />
@@ -104,7 +104,7 @@ export function EvidenceViewer({
 
   return (
     <div className="am-evidence" data-active-page={page}>
-      <nav className="am-evidence__pages" aria-label="Declared pages">
+      <nav className="am-evidence__pages" aria-label="Заявленные страницы">
         {pages.map((candidate) => (
           <button
             key={candidate}
@@ -117,7 +117,7 @@ export function EvidenceViewer({
               onPageChange(candidate);
             }}
           >
-            page {candidate}
+            стр. {candidate}
           </button>
         ))}
         <span className="am-evidence__provider" data-provider-mode={observationProviderMode(observation)}>
@@ -132,11 +132,11 @@ export function EvidenceViewer({
           {isLoading !== true && (error === undefined || error === null) ? (
             documentUrl === null ? (
               <ErrorState
-                title="The page could not be displayed"
+                title="Страницу не удалось показать"
                 detail={
                   <p>
-                    The document bytes are not available. This pane never renders a blank
-                    page as if the PDF had no content.
+                    Байты документа недоступны. Эта панель никогда не рисует пустую
+                    страницу так, будто в PDF ничего нет.
                   </p>
                 }
               />
@@ -145,12 +145,12 @@ export function EvidenceViewer({
                 className="am-evidence__object"
                 data={pdfPageUrl(documentUrl, page)}
                 type="application/pdf"
-                aria-label={`Page ${page} of the reviewed document`}
+                aria-label={`Страница ${page} проверяемого документа`}
                 data-viewer-src={pdfPageUrl(documentUrl, page)}
               >
                 <p>
-                  This browser cannot display the PDF inline. The quotation beside this pane
-                  is the evidence; the page is context.
+                  Этот браузер не умеет показывать PDF внутри страницы. Свидетельство —
+                  цитата рядом с панелью; сама страница нужна как контекст.
                 </p>
               </object>
             )
@@ -158,10 +158,10 @@ export function EvidenceViewer({
         </div>
 
         <div className="am-evidence__quotations">
-          <h3>Quotations on page {page}</h3>
+          <h3>Цитаты на странице {page}</h3>
           {quotations.length === 0 ? (
             <p className="am-evidence__none">
-              This observation cites no quotation on page {page}.
+              Это наблюдение не ссылается ни на одну цитату на странице {page}.
             </p>
           ) : (
             <ul className="am-quotation-list">
@@ -171,8 +171,8 @@ export function EvidenceViewer({
             </ul>
           )}
           <p className="am-evidence__limits">
-            Page-level navigation only: no highlight overlay and no bounding box. The
-            quotation above is the exact string the grounding gate verified at its anchor.
+            Навигация только по страницам: без подсветки фрагмента и рамки. Цитата выше —
+            точная строка, которую шлюз привязки проверил по её якорю.
           </p>
         </div>
       </div>

@@ -42,11 +42,11 @@ export function RunList({ projectUid, versionUid, onRunStarted }: RunListProps) 
     />
   );
 
-  if (query.isPending) return <LoadingState what="the runs of this version" />;
+  if (query.isPending) return <LoadingState what="прогоны этой версии" />;
 
   if (query.isError) {
     const failure = classifyListingFailure(query.error, {
-      collection: 'the runs of this version',
+      collection: 'прогоны этой версии',
       parent: 'version',
     });
     return (
@@ -55,7 +55,7 @@ export function RunList({ projectUid, versionUid, onRunStarted }: RunListProps) 
         detail={<span data-list-failure={failure.kind}>{failure.detail}</span>}
         correlationId={failure.correlationId}
         {...(failure.retryable
-          ? { onRetry: () => void query.refetch(), retryLabel: 'Try again' }
+          ? { onRetry: () => void query.refetch(), retryLabel: 'Повторить' }
           : {})}
       />
     );
@@ -66,8 +66,8 @@ export function RunList({ projectUid, versionUid, onRunStarted }: RunListProps) 
   if (page.items.length === 0) {
     return (
       <EmptyState
-        title="No run has been started over this version."
-        detail="The version is published and immutable. Starting a run reads it; it never changes it."
+        title="По этой версии прогонов не запускалось."
+        detail="Версия опубликована и неизменяема. Запуск прогона читает её и никогда не меняет."
         action={startControl}
       />
     );
@@ -94,7 +94,7 @@ export function RunList({ projectUid, versionUid, onRunStarted }: RunListProps) 
           </button>
         )}
       </div>
-      <h3>Start another run</h3>
+      <h3>Запустить ещё один прогон</h3>
       {startControl}
     </div>
   );

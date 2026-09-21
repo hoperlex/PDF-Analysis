@@ -30,11 +30,11 @@ export function DocumentList({ projectUid }: DocumentListProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useDocumentList(projectUid, cursor);
 
-  if (query.isPending) return <LoadingState what="the documents of this project" />;
+  if (query.isPending) return <LoadingState what="документы этого проекта" />;
 
   if (query.isError) {
     const failure = classifyListingFailure(query.error, {
-      collection: 'the documents of this project',
+      collection: 'документы этого проекта',
       parent: 'project',
     });
     return (
@@ -43,7 +43,7 @@ export function DocumentList({ projectUid }: DocumentListProps) {
         detail={<span data-list-failure={failure.kind}>{failure.detail}</span>}
         correlationId={failure.correlationId}
         {...(failure.retryable
-          ? { onRetry: () => void query.refetch(), retryLabel: 'Try again' }
+          ? { onRetry: () => void query.refetch(), retryLabel: 'Повторить' }
           : {})}
       />
     );
@@ -54,8 +54,8 @@ export function DocumentList({ projectUid }: DocumentListProps) {
   if (page.items.length === 0) {
     return (
       <EmptyState
-        title="No documents in this project yet."
-        detail="Upload an annual report PDF above. Nothing was lost: this project genuinely has no published document."
+        title="В этом проекте пока нет документов."
+        detail="Загрузите PDF годового отчёта выше. Ничего не потеряно: в проекте действительно нет опубликованных документов."
       />
     );
   }
@@ -72,7 +72,7 @@ export function DocumentList({ projectUid }: DocumentListProps) {
             href={routes.version(projectUid, version.version_uid)}
             secondary={{
               href: routes.document(projectUid, version.document_uid),
-              label: 'All versions of this document',
+              label: 'Все версии документа',
             }}
           />
         ))}

@@ -72,7 +72,7 @@ describe('each quotation is shown with the anchor it was verified at', () => {
       7,
     );
     expect(markup).toContain('am-quotation__anchor');
-    expect(markup).toContain('page 7, characters 1200');
+    expect(markup).toContain('стр. 7, символы 1200');
     expect(markup).toContain('1211');
   });
 
@@ -81,7 +81,7 @@ describe('each quotation is shown with the anchor it was verified at', () => {
       anchored({ quote: 'forty-five days', page_number: 9, char_start: 40 }),
       9,
     );
-    expect(markup).toContain('page 9, characters 40');
+    expect(markup).toContain('стр. 9, символы 40');
     expect(markup).toContain('55');
   });
 
@@ -98,7 +98,7 @@ describe('each quotation is shown with the anchor it was verified at', () => {
       anchored({ quote: 'thirty days', page_number: 2, char_start: 712 }),
       2,
     );
-    expect(markup).toContain('page 2, characters 712\u2013723 of the whole document, not of page 2');
+    expect(markup).toContain('стр. 2, символы 712\u2013723 по всему документу, а не по странице 2');
   });
 
   it('the rendered anchor never shows a bare \u201Cchars\u201D range with no convention', () => {
@@ -109,7 +109,7 @@ describe('each quotation is shown with the anchor it was verified at', () => {
       2,
     );
     expect(markup).not.toContain('chars 712');
-    expect(markup).toContain('of the whole document');
+    expect(markup).toContain('по всему документу');
   });
 });
 
@@ -120,14 +120,14 @@ describe('an anchor that disagrees with its quotation is said so, in the open', 
       7,
     );
     expect(markup).toContain('am-quotation__inconsistent');
-    expect(markup).toContain('The declared span length does not match this quotation');
+    expect(markup).toContain('Заявленная длина фрагмента не совпадает с цитатой');
     expect(markup).toContain('role="alert"');
   });
 
   it('does not render it when the anchor agrees, so the alert means something', () => {
     const markup = viewer(anchored({ quote: 'thirty days' }), 7);
     expect(markup).not.toContain('am-quotation__inconsistent');
-    expect(markup).not.toContain('The declared span length does not match this quotation');
+    expect(markup).not.toContain('Заявленная длина фрагмента не совпадает с цитатой');
   });
 });
 
@@ -168,7 +168,7 @@ describe('a comment the browser refused to send says so', () => {
   it('renders the refusal when the comment was empty', () => {
     const markup = panel({ refusal: 'empty' });
     expect(markup).toContain('am-decision__refusal');
-    expect(markup).toContain('A comment event needs text. Nothing was sent.');
+    expect(markup).toContain('Событию комментария нужен текст. Ничего не отправлено.');
   });
 
   it('renders nothing of the kind when there was no refusal', () => {
@@ -199,7 +199,7 @@ describe('the verdict on the panel is the server projection, not the button pres
 describe('a finding nobody has judged has an unasked question, not an error', () => {
   it('renders the neutral not-applicable block', () => {
     const markup = render(createElement(DecisionHistory, { events: [] }));
-    expect(markup).toContain('No decisions yet');
+    expect(markup).toContain('Решений пока нет');
     // `NotApplicableState` is neutral and carries `role="status"`. An error block is
     // `am-state--error` with `role="alert"`, and says something went wrong when nothing did.
     expect(markup).toContain('am-state--neutral');

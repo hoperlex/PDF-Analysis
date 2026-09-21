@@ -84,8 +84,8 @@ export function anchorMatchesQuotation(evidence: Evidence): boolean {
  */
 export function anchorLabel(evidence: Evidence): string {
   return (
-    `page ${evidence.page_number}, ` +
-    `characters ${evidence.char_start}–${evidence.char_end} ` +
-    `of the whole document, not of page ${evidence.page_number}`
+    `стр. ${evidence.page_number}, ` +
+    `символы ${evidence.char_start}–${evidence.char_end} ` +
+    `по всему документу, а не по странице ${evidence.page_number}`
   );
 }

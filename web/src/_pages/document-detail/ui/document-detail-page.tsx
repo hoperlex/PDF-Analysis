@@ -30,10 +30,10 @@ export interface DocumentDetailPageProps {
 export function DocumentDetailPage({ projectUid, documentUid }: DocumentDetailPageProps) {
   if (!looksLikeProjectUid(projectUid) || !looksLikeDocumentUid(documentUid)) {
     return (
-      <PageShell title="Document" actions={<Link href={routes.projects()}>All projects</Link>}>
+      <PageShell title="Документ" actions={<Link href={routes.projects()}>Все проекты</Link>}>
         <UnsupportedState
-          title="That is not a document address."
-          detail="A project and a document are each addressed by an opaque identifier. Nothing was requested."
+          title="Это не адрес документа."
+          detail="Проект и документ адресуются непрозрачными идентификаторами. Запроса не было."
         />
       </PageShell>
     );
@@ -41,16 +41,16 @@ export function DocumentDetailPage({ projectUid, documentUid }: DocumentDetailPa
 
   return (
     <PageShell
-      title="Document"
+      title="Документ"
       subtitle={<code>{documentUid}</code>}
       actions={
         <>
-          <Link href={routes.project(projectUid)}>Back to project</Link>{' '}
-          <Link href={routes.projects()}>All projects</Link>
+          <Link href={routes.project(projectUid)}>К проекту</Link>{' '}
+          <Link href={routes.projects()}>Все проекты</Link>
         </>
       }
     >
-      <h2>Published versions</h2>
+      <h2>Опубликованные версии</h2>
       <VersionList projectUid={projectUid} documentUid={documentUid} />
     </PageShell>
   );

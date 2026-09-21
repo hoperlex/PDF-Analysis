@@ -184,7 +184,7 @@ describe('the review screen', () => {
       onRetry: () => {
         retried += 1;
       },
-      retryLabel: 'Try again',
+      retryLabel: 'Повторить',
     });
     expect(props.onRetry).toBeUndefined();
     expect(retried).toBe(0);

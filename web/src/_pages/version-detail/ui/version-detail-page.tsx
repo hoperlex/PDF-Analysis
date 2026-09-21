@@ -43,10 +43,10 @@ export function VersionDetailPage({ projectUid, versionUid }: VersionDetailPageP
 
   if (!wellFormed) {
     return (
-      <PageShell title="Version" actions={<Link href={routes.projects()}>All projects</Link>}>
+      <PageShell title="Версия" actions={<Link href={routes.projects()}>Все проекты</Link>}>
         <UnsupportedState
-          title="That is not a version address."
-          detail="A project and a version are each addressed by an opaque identifier. Nothing was requested."
+          title="Это не адрес версии."
+          detail="Проект и версия адресуются непрозрачными идентификаторами. Запроса не было."
         />
       </PageShell>
     );
@@ -56,21 +56,21 @@ export function VersionDetailPage({ projectUid, versionUid }: VersionDetailPageP
 
   return (
     <PageShell
-      title="Version"
+      title="Версия"
       subtitle={<code>{versionUid}</code>}
       actions={
         <>
-          <Link href={routes.project(ownerProjectUid)}>Back to project</Link>{' '}
-          <Link href={routes.projects()}>All projects</Link>
+          <Link href={routes.project(ownerProjectUid)}>К проекту</Link>{' '}
+          <Link href={routes.projects()}>Все проекты</Link>
         </>
       }
     >
-      <h2>This version</h2>
-      {version.isPending ? <LoadingState what="this version" /> : null}
+      <h2>Эта версия</h2>
+      {version.isPending ? <LoadingState what="эту версию" /> : null}
       {version.isError ? (
         <ErrorState
-          title="This version could not be read."
-          detail="The address may name a version that does not exist, or the API did not answer."
+          title="Эту версию не удалось прочитать."
+          detail="Адрес может указывать на несуществующую версию, либо API не ответил."
           onRetry={() => void version.refetch()}
         />
       ) : null}
@@ -85,7 +85,7 @@ export function VersionDetailPage({ projectUid, versionUid }: VersionDetailPageP
         </>
       )}
 
-      <h2>Runs</h2>
+      <h2>Прогоны</h2>
       <RunList
         projectUid={ownerProjectUid}
         versionUid={versionUid}

@@ -134,8 +134,8 @@ describe('the reason a person actually meets', () => {
     // A repair that broke a neighbouring true sentence would be a net loss. Both of these
     // are `W28-LIVE`'s verbatim readings.
     const markup = failedWith('dependency_unavailable');
-    expect(markup).toContain('This run made no provider call, so it has no cost to report.');
-    expect(markup).toContain('There is nothing to review.');
+    expect(markup).toContain('Прогон не обращался к провайдеру, поэтому сообщать о стоимости нечего.');
+    expect(markup).toContain('Разбирать нечего.');
   });
 });
 
@@ -169,9 +169,9 @@ describe('a reason nobody anticipated still says something true on screen', () =
 });
 
 describe('a failed reading that carries no reason at all', () => {
-  it('keeps "not reported" and adds what the contract obliges', () => {
+  it('keeps "не сообщено" and adds what the contract obliges', () => {
     const markup = failedWith(null);
-    expect(markup).toContain('not reported');
+    expect(markup).toContain('не сообщено');
     expect(markup).toContain('data-terminal-reason-note="absent"');
     expect(markup).toContain(ABSENT_SENTENCE);
   });

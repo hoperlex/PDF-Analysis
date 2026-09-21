@@ -56,7 +56,7 @@ export function ExportPanel({
   return (
     <section className="am-export" data-run-id={runId} data-exportable={exportable ? 'true' : 'false'}>
       <header className="am-export__header">
-        <h3>Export</h3>
+        <h3>Выгрузка</h3>
         <RunStateBadge state={runState} providerMode={providerMode} />
       </header>
 
@@ -69,12 +69,12 @@ export function ExportPanel({
             disabled={isPending === true}
             onClick={onExport}
           >
-            {isPending === true ? 'Preparing…' : `Download ${csvFileName(runId)}`}
+            {isPending === true ? 'Готовлю…' : `Скачать ${csvFileName(runId)}`}
           </button>
           <p className="am-export__encoding">
-            {CSV_COLUMNS.length} columns, {CSV_ENCODING.charset}
-            {CSV_ENCODING.byteOrderMark ? ' with a byte-order mark' : ''}, RFC 4180 quoting,
-            one row per evidence item.
+            Колонок: {CSV_COLUMNS.length}; кодировка {CSV_ENCODING.charset}
+            {CSV_ENCODING.byteOrderMark ? ' с меткой порядка байтов' : ''}; экранирование по
+            RFC 4180; одна строка на свидетельство.
           </p>
           <ol className="am-export__columns">
             {CSV_COLUMNS.map((column) => (
@@ -91,12 +91,13 @@ export function ExportPanel({
         </>
       ) : (
         <NotApplicableState
-          title="This run has no result to export"
+          title="У этого прогона нет результата для выгрузки"
           detail={
             <p>
-              A run is exported when its terminal publishes a result — <code>published</code>{' '}
-              or <code>partial</code>. This run is <code>{runState}</code>, so there are no
-              rows to write. Nothing is retried, because no retry changes a terminal.
+              Прогон выгружается, когда его терминальное состояние публикует результат —{' '}
+              <code>published</code> или <code>partial</code>. Этот прогон —{' '}
+              <code>{runState}</code>, поэтому писать нечего. Повтор не предлагается: он не
+              меняет терминальное состояние.
             </p>
           }
         />

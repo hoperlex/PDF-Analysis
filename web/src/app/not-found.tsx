@@ -31,11 +31,11 @@ import { routes } from '@/shared/lib';
 export default function NotFound() {
   return (
     <PageShell
-      title="Not found"
-      actions={<Link href={routes.projects()}>All projects</Link>}
+      title="Страница не найдена"
+      actions={<Link href={routes.projects()}>Все проекты</Link>}
     >
       <UnsupportedState
-        title="That is not an address in this prototype."
+        title="Такого адреса в приложении нет."
         detail="A project, a document, a version and a run are each addressed by an opaque identifier. This path does not carry one, so nothing was requested — this is not a report that the server could not find something."
       />
     </PageShell>

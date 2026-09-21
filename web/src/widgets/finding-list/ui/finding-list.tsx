@@ -69,12 +69,12 @@ export function FindingList({
   if (total === 0 && faults.length === 0) {
     return (
       <EmptyState
-        title="No findings"
+        title="Находок нет"
         detail={
           <p>
-            This run published no findings. Model items whose quotations did not resolve at
-            their declared anchors are not findings and are retained only as run
-            diagnostics.
+            Прогон не опубликовал ни одной находки. Элементы модели, чьи цитаты не
+            разрешились по заявленным якорям, находками не являются и сохраняются только
+            как диагностика прогона.
           </p>
         }
       />
@@ -85,12 +85,12 @@ export function FindingList({
     <div className="am-finding-list" data-finding-count={total}>
       {faults.length > 0 ? (
         <ErrorState
-          title="Data integrity fault"
+          title="Нарушение целостности данных"
           detail={
             <p>
-              {faults.length} finding(s) arrived with no evidence. The P02 evidence gate
-              makes that impossible, so this is a fault to report rather than an empty
-              pane: {faults.map((fault) => fault.findingUid).join(', ')}
+              Находок без свидетельств: {faults.length}. Шлюз свидетельств P02 делает такое
+              невозможным, поэтому это сообщаемая неисправность, а не пустая панель:{' '}
+              {faults.map((fault) => fault.findingUid).join(', ')}
             </p>
           }
         />
@@ -127,7 +127,7 @@ export function FindingList({
                     </span>
                     <VerdictBadge verdict={finding.current_verdict} />
                     <span className="am-finding-row__pages" data-pages={pages.join(',')}>
-                      {pages.length === 1 ? `page ${pages[0]}` : `pages ${pages.join(', ')}`}
+                      {pages.length === 1 ? `стр. ${pages[0]}` : `стр. ${pages.join(', ')}`}
                     </span>
                   </button>
                 </li>

@@ -14,11 +14,11 @@ import { ProjectList } from '@/widgets/project-list';
 export function ProjectsPage() {
   return (
     <PageShell
-      title="Projects"
-      subtitle="One local reviewer. No authentication, no roles, no tenancy."
+      title="Проекты"
+      subtitle="Один локальный проверяющий. Без аутентификации, ролей и разделения на организации."
     >
       <CreateProjectForm />
-      <h2>All projects</h2>
+      <h2>Все проекты</h2>
       <ProjectList />
     </PageShell>
   );

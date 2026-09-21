@@ -162,22 +162,22 @@ describe('the anchor label states the page, the range, and which convention the 
     // The full label, pinned. U+2013 EN DASH is an escape on purpose: a change to a hyphen
     // is a change to what the reviewer reads and should not pass unnoticed.
     expect(anchorLabel(REAL_CASE)).toBe(
-      'page 2, characters 712–746 of the whole document, not of page 2',
+      'стр. 2, символы 712–746 по всему документу, а не по странице 2',
     );
   });
 
   it('names the convention, so the reader needs nothing else to act on the number', () => {
     // The load-bearing clause. Without it the caption is D-25 again, whatever else it says.
-    expect(anchorLabel(REAL_CASE)).toContain('of the whole document');
+    expect(anchorLabel(REAL_CASE)).toContain('по всему документу');
   });
 
   it('denies the page-local reading explicitly, naming the same page again', () => {
     // "not of page 2", not "not of the page": the page is named a second time so the
     // negation cannot be read as referring to some other page.
-    expect(anchorLabel(REAL_CASE)).toContain('not of page 2');
+    expect(anchorLabel(REAL_CASE)).toContain('а не по странице 2');
     const other = item({ quote: 'x', page_number: 11, char_start: 5, char_end: 9 });
-    expect(anchorLabel(other)).toContain('not of page 11');
-    expect(anchorLabel(other)).not.toContain('not of page 2');
+    expect(anchorLabel(other)).toContain('а не по странице 11');
+    expect(anchorLabel(other)).not.toContain('а не по странице 2');
   });
 
   it('never prints the page-local offsets, which the browser cannot compute anyway', () => {
@@ -192,7 +192,7 @@ describe('the anchor label states the page, the range, and which convention the 
 
   it('uses the server page number unchanged', () => {
     const label = anchorLabel(item({ quote: 'x', page_number: 11, char_start: 0, char_end: 1 }));
-    expect(label).toContain('page 11,');
+    expect(label).toContain('стр. 11,');
     expect(label).not.toContain('page 12');
     expect(label).not.toContain('page 10');
   });
@@ -212,7 +212,7 @@ describe('the anchor label states the page, the range, and which convention the 
     // A well-meaning "+1 to make it 1-based" is exactly the class of edit this caption
     // must not acquire: the contract's offsets are what the grounding gate verified.
     expect(anchorLabel(item({ quote: 'x', page_number: 1, char_start: 0, char_end: 0 }))).toContain(
-      'characters 0–0 ',
+      'символы 0–0 ',
     );
   });
 });
