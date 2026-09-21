@@ -333,6 +333,38 @@ to be written down at all.
   `D-23` is the same shape one level down: nothing checks prose against the surface it
   describes. **Both are cases where the absence of a reader is the absence of a check.**
 
+### A sixth shape, found in wave 31: a correct reading of a file that is not the whole of its subject
+
+**The most expensive one so far, because it reached a dispatched brief.**
+
+Wave 31 exists because `R-18` requires the alpha to be shown in a finished interface. A session
+compared our design tokens against the legacy front end's, read the `:root` block of its
+stylesheet, saw light values, and reported *"legacy is a light theme with a teal accent
+`#008f7e`"*. Every statement about that block was true.
+
+`:root` is the **light** theme. The same stylesheet carries a second full token set under
+`[data-theme="dark"]` — **11 `[data-theme]` blocks** — and the application's own script reads
+`localStorage.getItem('theme') || 'dark'`. **Dark is the default.** The accent in the default
+theme is `#00c2b8`. The comparison had omitted an entire second palette, a toggle and its
+persistence, and it went into `W31-STYLE`'s brief as the target to build against.
+
+**What makes it a §12 shape rather than ordinary carelessness:** the query shared an assumption
+with its subject. Reading `:root` assumes a stylesheet has one theme, which is the very thing a
+theming system contradicts — so the reading could not have revealed its own incompleteness. It
+took **rendering the application** to see it, which the session eventually did with a plain file
+server over the static assets plus empty JSON on `/api`, no legacy backend required.
+
+**And the warning was in writing, in front of two people, and neither acted.** The session said
+plainly, in the same message, that it had compared design systems only and **had not rendered
+legacy**. The integrator read that sentence, repeated it to the stream as a caveat, and
+dispatched anyway. **A stated non-measurement was passed along as a caveat instead of being
+treated as a blocker.** That is the reusable part: when a report names something it did not
+measure, the named gap is the first thing to close, not a footnote to carry forward.
+
+Caught mid-flight; the brief was patched before the palette was built on it, and the decision
+it turned out to hide — whether the alpha is dark by default — was taken out of the stream's
+hands and put to the owner, because it is not a styling decision.
+
 **And one about this file.** Its path is `docs/program/dispatch/OPERATING_CONSTRAINTS.md`. The
 integrator cited it as `docs/program/OPERATING_CONSTRAINTS.md` in briefs for a week; the
 repository never carried the wrong path, so only dispatched sessions met it. A session that

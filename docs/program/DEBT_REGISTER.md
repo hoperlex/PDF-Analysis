@@ -1571,6 +1571,7 @@ other way.
 | `R-9` | the owner drives the application by hand | **`D-9`**, the norms corpus — the owner placed it there deliberately | 2026-09-18 |
 | `OD-18` | three to five named experts with committed slots | `P4-BHV-01`, and it alone | pre-programme |
 | `OD-17` | the shape of the next corpus; PC-02's precision evidence is saturated | the P05 corpus decision. **`R-16`/`R-17` bear on it and do not close it** | pre-programme |
+| `R-18`(c) | **is the alpha dark by default** | the design wave's palette. The legacy reference defaults to dark; `globals.css` says in its own header that *"a theme toggle is a decision nobody has taken"*, and that is still true. **Not a styling decision, so no stream may settle it** | 2026-09-21 |
 | `R-18`(a) | is the **contract vocabulary** translated — `published`, `partial`, `failed`, `cancelled`, `accept`/`accepted`, `recorded`, the finding categories | one pass either way; every badge already carries its machine value in a `data-` attribute, so `PA-01` criterion 4 is unaffected whichever way it goes | 2026-09-21 |
 | `R-18`(b) | is the **stub boundary** the one proposed — no stubs on `upload → run → finding → verdict → export` | the size of the design wave. Proposed by a session, adopted by the integrator, **never put to the owner in those words** | 2026-09-21 |
 
