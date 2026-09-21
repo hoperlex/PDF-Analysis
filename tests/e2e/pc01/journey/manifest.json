@@ -304,7 +304,7 @@
           "bound_ms": 30000
         },
         "expects_rendered": [
-          "This version"
+          "Эта версия"
         ],
         "forbids_rendered": [
           "[data-upload-failure]",
@@ -448,8 +448,8 @@
         "refused_by": "client",
         "precheck_problem": "not_pdf",
         "expects_rendered": [
-          "not a PDF",
-          "Nothing was sent"
+          "не является PDF",
+          "Ничего не отправлено"
         ]
       },
       {
@@ -458,8 +458,8 @@
         "refused_by": "client",
         "precheck_problem": "not_pdf",
         "expects_rendered": [
-          "not a PDF",
-          "Nothing was sent"
+          "не является PDF",
+          "Ничего не отправлено"
         ]
       },
       {
@@ -469,7 +469,7 @@
         "precheck_problem": "too_large",
         "expects_rendered": [
           "25 MiB",
-          "Nothing was sent"
+          "Ничего не отправлено"
         ],
         "$why_the_size_case_is_client_side": "`D-44`. It is client-side only while the pre-check limit stays strictly below nginx's `client_max_body_size`; tests/e2e/test_upload_limit_headroom.py is what keeps that true."
       },
@@ -482,7 +482,7 @@
         "constraint": "not_encrypted",
         "failure_kind": "unsupported_input",
         "expects_rendered": [
-          "outside the accepted envelope"
+          "выходит за допустимые ограничения"
         ],
         "expects_rendered_from_envelope": [
           "not_encrypted"
@@ -497,7 +497,7 @@
         "constraint": "every_page_has_extractable_text",
         "failure_kind": "unsupported_input",
         "expects_rendered": [
-          "outside the accepted envelope"
+          "выходит за допустимые ограничения"
         ],
         "expects_rendered_from_envelope": [
           "every_page_has_extractable_text"
@@ -512,7 +512,7 @@
         "constraint": "1 <= page_count <= 30",
         "failure_kind": "unsupported_input",
         "expects_rendered": [
-          "outside the accepted envelope"
+          "выходит за допустимые ограничения"
         ],
         "expects_rendered_from_envelope": [
           "page_count"

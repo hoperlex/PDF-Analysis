@@ -1097,7 +1097,7 @@ _SYNTHETIC_REFUSALS = {
                 "fixture": "not_a_pdf.txt",
                 "refused_by": "client",
                 "precheck_problem": "not_pdf",
-                "expects_rendered": ["not a PDF", "Nothing was sent"],
+                "expects_rendered": ["не является PDF", "Ничего не отправлено"],
             },
             {
                 "fixture": "encrypted.pdf",
@@ -1106,7 +1106,7 @@ _SYNTHETIC_REFUSALS = {
                 "error_code": "validation_failed",
                 "constraint": "not_encrypted",
                 "failure_kind": "unsupported_input",
-                "expects_rendered": ["outside the accepted envelope"],
+                "expects_rendered": ["выходит за допустимые ограничения"],
                 "expects_rendered_from_envelope": ["not_encrypted"],
             },
         ],
@@ -1194,9 +1194,9 @@ def test_control_a_renamed_marker_value_is_detected() -> None:
 
 def test_control_a_reworded_panel_is_detected() -> None:
     case = _only_refusal("not_a_pdf.txt")
-    source_after_the_rewrite = "That file is not a PDF. We did not upload it."
+    source_after_the_rewrite = "Этот файл не является PDF. Мы его не загрузили."
     missing = [s for s in case["expects_rendered"] if s not in source_after_the_rewrite]
-    assert missing == ["Nothing was sent"]
+    assert missing == ["Ничего не отправлено"]
 
 
 def test_control_an_envelope_sentence_that_contradicts_its_constraint_is_detected() -> None:
