@@ -439,4 +439,9 @@ Provisioning, in that order and not inside a backgrounded subshell:
 * `auditmanager-w28live-api:latest` was only ever a tag on the existing api image; the web
   image this session built was removed with the instance.
 * **31500 was never touched.** No mode change, no restart, no write.
-* Disk: **6.3 GB free on arrival, 2.9 GB at the low point, and more than 6.3 GB on exit.**
+* Disk, measured rather than rounded: **6.3 GB free on arrival, 2.9 GB at the low point
+  during the web build, 4.2 GB on exit** after the instance, its volumes, its images and
+  the gate lane were removed. The 2.1 GB difference from arrival is **this session's
+  worktree, which is still there on purpose**: `/root/w28live` is 941 MB (218 MB `.venv`,
+  576 MB `web/node_modules`), and the remainder is other lanes' churn on a shared host.
+  Removing the worktree after the merge returns it.
