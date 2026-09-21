@@ -33,7 +33,7 @@
       "const": "1.0.0-draft.0"
     },
     "candidate_revision": {
-      "const": 6,
+      "const": 7,
       "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
     },
     "revision_note": {
@@ -214,13 +214,14 @@
         "partial_result_not_publishable",
         "permission_denied",
         "required_norm_unavailable",
+        "staged_upload_lost",
         "stale_attempt",
         "state_transition_not_allowed",
         "storage_integrity_error",
         "unsupported_contract_version",
         "validation_failed"
       ],
-      "minProperties": 21,
+      "minProperties": 22,
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]{2,63}$"
       },

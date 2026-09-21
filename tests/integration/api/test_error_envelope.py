@@ -25,7 +25,11 @@ from .conftest import PublishedRun
 def test_every_catalog_code_renders_a_valid_envelope(
     openapi_document: dict[str, Any], validate_against_schema
 ) -> None:
-    """All twenty codes, each rendered and validated against the frozen envelope.
+    """Every code in the closed enum, rendered and validated against the frozen envelope.
+
+    The count is deliberately not written down: this iterates ``ErrorCode``, whose member
+    set the shared kernel pins to the catalog at import. The docstring said *"all twenty"*
+    for two additions after the catalog had twenty -- `D-8` in one line.
 
     Includes the codes PC-01 has no producer for. They are in the closed enum, and a
     surface that could not render one correctly would be a surface that breaks the day

@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "701ecd58a860f53762775bee353cd5461d21c9e56f0bcb8d00b45dbfe685f8fe",
-    "content_commit": "6398bcc",
-    "content_commit_subject": "feat(api-v1): three list operations and a run's cost, resealed under R-5",
-    "dispatch_named_commit": "876e095",
-    "commit_note": "Resealed 2026-09-18 by W18-SEAL under owner ruling R-5 (docs/program/OWNER_RULINGS_2026-09-17.md section 3.5), closing DEBT_REGISTER.md D-16 and D-21 together. Three list operations were added -- listDocuments (GET /projects/{project_uid}/documents), listVersions (GET /documents/{document_uid}/versions) and listRuns (GET /versions/{version_uid}/runs) -- because before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. Each is the GET of the collection its parent creates into, takes cursor and limit and returns the same {items, page} envelope as listProjects. RunStatus gained three optional properties -- cost_micros, cost_basis and model_call_count -- so what a run spent at the provider is readable by a user for the first time; the figure is summed from the model_call rows and never from stage_result.metrics, whose cost_usd/cost_basis pair is the D-15 ambiguity. Paths, operations and component schemas move from 10 / 12 / 43 to 12 / 15 / 46. No error code was added: an unknown parent is not_found and a malformed cursor is validation_failed, both already in the catalog.",
+    "sha256": "68762ec87931ed03ee8b68d16717533c4f7f68816bc1b490b53ba8a5f50f1513",
+    "content_commit": "c87a630",
+    "content_commit_subject": "feat(errors): a 22nd code for a lost staged upload, settling D-18",
+    "dispatch_named_commit": "b437616",
+    "commit_note": "Resealed 2026-09-18 by W18-SEAL under owner ruling R-5 (docs/program/OWNER_RULINGS_2026-09-17.md section 3.5), closing DEBT_REGISTER.md D-16 and D-21 together. Three list operations were added -- listDocuments (GET /projects/{project_uid}/documents), listVersions (GET /documents/{document_uid}/versions) and listRuns (GET /versions/{version_uid}/runs) -- because before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. Each is the GET of the collection its parent creates into, takes cursor and limit and returns the same {items, page} envelope as listProjects. RunStatus gained three optional properties -- cost_micros, cost_basis and model_call_count -- so what a run spent at the provider is readable by a user for the first time; the figure is summed from the model_call rows and never from stage_result.metrics, whose cost_usd/cost_basis pair is the D-15 ambiguity. Paths, operations and component schemas move from 10 / 12 / 43 to 12 / 15 / 46. No error code was added: an unknown parent is not_found and a malformed cursor is validation_failed, both already in the catalog.\n\nResealed 2026-09-21 by W25-SEAL under owner ruling R-13 (docs/program/OWNER_RULINGS_2026-09-17.md section 3.8), which reinstates R-8 and explicitly authorises this file to move. R-8 adds one error code, staged_upload_lost, because TemporaryBlobLostError and BlobAttributeConflictError both answered conflict with aggregate_type Blob and produced envelopes byte-identical apart from correlation_id, while demanding opposite operator responses -- stop, the instance was restored wrong, against retry the upload. retryable is read from the catalog for the reported code, so a widened safe_detail_keys could not have carried two values; only a separate code can. contracts/api/v1/openapi.json therefore gains that one ErrorCode enum member, plus two prose corrections forced by guards: info.description's twenty-one-code catalog becomes twenty-two (tests/contract/api_v1/test_surface_counts_in_prose.py reads that block), and the 503 response description, which named one code for a status that now carries two. Paths, operations and component schemas do NOT move: still 12 / 15 / 46. The six digests below were re-derived with sha256sum against this tree, not copied from the W20-CODE record; all six agree with it.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
     "paths": 12,
     "operations": 15,
     "component_schemas": 46,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "701ecd58a860f53762775bee353cd5461d21c9e56f0bcb8d00b45dbfe685f8fe",
+    "snapshot_sha256": "68762ec87931ed03ee8b68d16717533c4f7f68816bc1b490b53ba8a5f50f1513",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "9b547281eec29e034bfbfe59e4c31aa936effc4057e472be9b5d8e490bc52e0d",
-      "index.ts": "826456b0e982f90a60d12d727cc9f48097fd3c0b3022dab1e1ae2e808043537c",
-      "operations.gen.ts": "5e1fb92c16fae8092eececd3456118e7e67c2add4fe456dae4eaf6ea4dfaf024",
-      "types.gen.ts": "bb80b32796389a7b45eee418ccff6349b6037b8434a4f6ba5c1c8b172f5363d8"
+      "client.gen.ts": "02811af2f7373fcdfe97b50b1a68641f08bb9057b6eff59dd50df829da0adf17",
+      "index.ts": "364bfce1de63ccb60c06dfbe97b9bb1e94e7a06e22109bef03243c4a0d1e193a",
+      "operations.gen.ts": "7e8b95d5c235ecc0b667fd8f2453b4a1422c2bbf56e50938b99011166e6e3e46",
+      "types.gen.ts": "e064c3176d50f4367fd1329dd1262e8cdc1420e583f9b218fb77b855dca97483"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

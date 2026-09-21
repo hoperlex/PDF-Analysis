@@ -1,9 +1,9 @@
-# Domain contract v1 — candidate `1.0.0-draft.1`, revision 5
+# Domain contract v1 — candidate `1.0.0-draft.1`, revision 7
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner). Status: **candidate draft — committed, not frozen, not ratified.** Every
 catalog in this directory declares `contract_version` `1.0.0-draft.1`,
-`candidate_revision` `5`, `status` `draft_candidate` and `frozen` `false`.
+`candidate_revision` `7`, `status` `draft_candidate` and `frozen` `false`.
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a
@@ -409,7 +409,7 @@ appended a new decision event.
 
 ## Errors
 
-20 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
+22 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
 `summary`, its `safe_detail_keys` and its inventory evidence.
 
 The envelope is:
@@ -718,6 +718,45 @@ assumption.
   - `attempt` gains the `lost` terminal, distinct from `superseded`;
   - the error envelope gains required `contract_version` and required `retryable`;
   - two identifiers are added: `lease_id` (`lse`) and `command_id` (`cmd`).
+
+### What changed in revision 7, and what breaks for a reader of revision 6
+
+Revision 7 carries **owner ruling `R-8`** of 2026-09-18
+([`OWNER_RULINGS_2026-09-17.md`](../../../docs/program/OWNER_RULINGS_2026-09-17.md) §3.6)
+and settles [`DEBT_REGISTER.md`](../../../docs/program/DEBT_REGISTER.md) `D-18`. It adds
+**one code** and widens **one category description**. Nothing is removed, renamed or
+repurposed.
+
+| Change | Consumer impact |
+|---|---|
+| New code `staged_upload_lost`: `503`, **`retryable: true`**, category `dependency`, `safe_detail_keys` exactly `["dependency"]` | **Additive.** A reader with a closed `error_code` enum must add the member. A caller that had special-cased `conflict` with `aggregate_type: "Blob"` now sees this code instead for the lost-staged-upload half, and `retryable` tells it to send the upload again. |
+| The `dependency` category description admits a dependency that **failed to retain bytes the application had staged with it**, alongside a transient outage, a refused credential and an unresolvable reference | **Clarifying.** The category set is unchanged; no existing code changes category. |
+| `error-envelope.schema.json` gains the member in its `error_code` enum and an `allOf` branch pinning `retryable` to `true` for it | **Fail-closed tightening**, in the shape every other code already has. |
+| `candidate_revision` `6` → `7` in all three catalogs and their schemas | Shape-neutral. A consumer pinning `candidate_revision == 6` must move. |
+| Everything else — the other twenty-one codes with their categories, statuses, `retryable` flags, summaries, safe detail keys and evidence, `conflict` included and byte for byte, the envelope declaration, `safety`, `internal_mapping`, all 25 identifiers, six machines and the whole decision and question register | **Unchanged.** |
+
+**Why a code and not a wider `safe_detail_keys` on `conflict`.** The owner was offered
+exactly that and rejected it. `BlobAttributeConflictError` (*stop — the instance was
+restored wrong*) and `TemporaryBlobLostError` (*retry the upload*) both raised `conflict`
+with `aggregate_type: "Blob"`, and because the envelope renders this catalog's summary
+rather than a class's own sentence, their envelopes were **byte-identical apart from
+`correlation_id`**. A detail key would have made them distinguishable and left
+`retryable` wrong for one of them, because the envelope reads that flag from this catalog
+for the reported code and from nowhere else. Only a separate code carries a separate
+value. `R-3`'s `dependency_credential_refused` split the same shape for the same reason.
+
+**This is an addition to a draft candidate, not a freeze-break.** `status` is
+`draft_candidate` and `frozen` is `false`; `D-8` records that the programme's prose had
+been calling this catalog frozen.
+
+**Two residues, recorded rather than hidden.** `W0-DOM-02` permits a single-value write in
+`identifiers.json`, `identifiers.schema.json`, `state-machines.json` and
+`state-machines.schema.json` — the `candidate_revision` integer and its `const` pin and
+nothing else — so those two catalogs advance to revision 7 while their `revision_note`
+text still describes round 4. And **this file had no revision-6 section**: round 6 (`R-3`,
+`e6d0a6a`) advanced the family without writing one here, and it is not this round's to
+narrate. `error-codes.json` → `revision_note` carries the round-7 note for the family,
+and round 6's note is still in that file's history.
 
 ### What changed in revision 5, and what breaks for a reader of revision 4
 

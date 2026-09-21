@@ -270,14 +270,41 @@ class SizeMismatchError(BlobIntegrityError):
 
 
 class TemporaryBlobLostError(StorageError):
-    """A temporary upload disappeared between staging and verification."""
+    """A temporary upload disappeared between staging and verification.
 
-    code = "conflict"
+    Until owner ruling ``R-8`` of 2026-09-18 this carried ``conflict`` -- and so
+    did :class:`BlobAttributeConflictError`, with the same ``aggregate_type``
+    and, because :func:`auditmanager.shared.errors.build` renders the *catalog's*
+    summary rather than the class's own sentence, the same message. The two
+    envelopes were byte-identical apart from ``correlation_id`` while demanding
+    opposite responses: *stop, the instance was restored wrong* against *retry
+    the upload* (``DEBT_REGISTER.md`` ``D-18``).
+
+    The owner was offered a widened ``safe_detail_keys`` on ``conflict`` and
+    rejected it, because **a detail key cannot fix ``retryable``**. That flag is
+    read from the catalog for the reported code and from nowhere else, so two
+    situations sharing a code share its value whatever details they carry.
+    ``conflict`` pins ``retryable: false``, which is right for immutable bytes
+    already published and wrong here: this upload is worth sending again.
+
+    So this case took a code of its own -- ``staged_upload_lost``, 503,
+    ``retryable: true`` -- and ``conflict`` keeps its contract meaning for
+    :class:`BlobAttributeConflictError` alone.
+
+    The detail vocabulary moved with the code. ``aggregate_type`` is gone: the
+    addressed blob is not what failed, and no blob exists to address -- these
+    bytes were never published. What is left is ``dependency``, the stable class
+    name :class:`StorageUnavailableError` and
+    :class:`StorageCredentialRefusedError` already use, so the three blob-store
+    dependency failures are read the same way.
+    """
+
+    code = "staged_upload_lost"
     summary = "The temporary upload is no longer present. Nothing was published."
-    allowed_details = frozenset({"aggregate_type"})
+    allowed_details = frozenset({"dependency"})
 
     def __init__(self, **details: object) -> None:
-        details.setdefault("aggregate_type", "Blob")
+        details.setdefault("dependency", BLOB_STORAGE_DEPENDENCY)
         super().__init__(**details)
 
 
@@ -287,6 +314,13 @@ class BlobAttributeConflictError(StorageError):
     Blob identity is ``(sha256, size)``. Re-publishing those exact bytes under a
     different role or media type is refused rather than silently reinterpreting
     an already-available blob, whose bytes and metadata are immutable.
+
+    This is the half of ``D-18`` that keeps ``conflict``: durable state really
+    does conflict with the request, nothing the caller can do changes that, and
+    ``retryable: false`` is correct. Since ``R-8`` it is the only storage error
+    carrying ``conflict``, so a ``conflict`` envelope with ``aggregate_type``
+    ``Blob`` now means exactly one thing. See :class:`TemporaryBlobLostError`
+    for the other half and why a detail key could not have separated them.
     """
 
     code = "conflict"

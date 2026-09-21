@@ -73,8 +73,9 @@ describe('a code outside the catalog is not a catalog code', () => {
   it('is asked about a catalog the contract actually declares', () => {
     // The authority half: if the catalog shrinks, the two assertions above stop meaning
     // what they say, so the catalog is pinned as well.
-    // Twenty-one since the wave-13 reseal: `R-3` added `dependency_credential_refused`.
-    expect(ERROR_CODE_VALUES).toHaveLength(21);
+    // Twenty-two since round 7: `R-8`, reinstated by `R-13`, added `staged_upload_lost`.
+    // Twenty-one before it, when `R-3` added `dependency_credential_refused`.
+    expect(ERROR_CODE_VALUES).toHaveLength(22);
     expect([...ERROR_CODE_VALUES]).toContain('validation_failed');
     expect([...ERROR_CODE_VALUES]).not.toContain('cost_budget_exhausted');
   });

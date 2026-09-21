@@ -403,7 +403,7 @@ def test_the_error_code_enum_equals_the_frozen_catalog(
 ) -> None:
     declared = openapi_document["components"]["schemas"]["ErrorCode"]["enum"]
     assert set(declared) == set(error_codes_contract["codes"])
-    assert len(declared) == len(set(declared)) == 21
+    assert len(declared) == len(set(declared)) == 22
 
 
 # ---------------------------------------------------------------------------
