@@ -565,6 +565,31 @@ function reviewDetailPendingClient(): Client {
   return client;
 }
 
+/**
+ * A client in which every list came back genuinely empty.
+ *
+ * A state of its own because each of the four list widgets has a third branch -- not
+ * pending, not failed, but empty -- and none of it renders while the cache holds items.
+ * **It was added because a mutation found it missing**: an English sentence put into
+ * `ProjectList`'s `EmptyState` reddened nothing, and the reason was that the guard never
+ * rendered that branch. That is `W31-STYLE`'s "insufficient mutation" the other way
+ * round: the mutation was sound and the coverage was not.
+ */
+function emptyClient(): Client {
+  const client = newClient();
+  const page = { next_cursor: null } as { next_cursor: null };
+  client.setQueryData(KEYS.projects, { items: [], page });
+  client.setQueryData(KEYS.project, project());
+  client.setQueryData(KEYS.documents, { items: [], page });
+  client.setQueryData(KEYS.versions, { items: [], page });
+  client.setQueryData(KEYS.version, version());
+  client.setQueryData(KEYS.runs, { items: [], page });
+  client.setQueryData(KEYS.run, run());
+  client.setQueryData(KEYS.findings, { data: { items: [], page } });
+  client.setQueryData(KEYS.decisions, { data: { items: [], page } });
+  return client;
+}
+
 /** A client in which every question failed. */
 function failedClient(): Client {
   const client = newClient();
@@ -614,12 +639,19 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
     { state: 'partial-run', run: { state: 'partial', degradation_set: ['text_analysis'] } },
     { state: 'running', run: { state: 'running', terminal_at: null, published_finding_count: 0 } },
     { state: 'refused', run: null },
+    { state: 'empty', run: null },
   ];
   for (const screen of SCREENS) {
     const loaded = screen.name === 'review' ? loadedReviewClient : loadedClient;
     for (const { state, run: overrides } of states) {
       const client =
-        state === 'cold' ? newClient() : state === 'refused' ? failedClient() : loaded(overrides ?? {});
+        state === 'cold'
+          ? newClient()
+          : state === 'refused'
+            ? failedClient()
+            : state === 'empty'
+              ? emptyClient()
+              : loaded(overrides ?? {});
       out.push({ where: `${screen.name} (${state})`, markup: renderScreen(client, screen.make()) });
     }
   }
@@ -706,7 +738,7 @@ describe('the guard renders the screens it claims to render', () => {
   const screens = renderedScreens();
 
   it('reaches all six screens in every state, and none of them throws', () => {
-    expect(screens.length).toBe(SCREENS.length * 6 + 1);
+    expect(screens.length).toBe(SCREENS.length * 7 + 1);
     for (const { where, markup } of screens) {
       expect(markup.length, `${where} rendered nothing`).toBeGreaterThan(200);
     }
