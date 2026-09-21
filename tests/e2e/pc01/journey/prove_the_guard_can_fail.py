@@ -14,6 +14,12 @@ It restores the file after every mutation and again at the end. If it is interru
 `git checkout tests/e2e/pc01/journey/manifest.json` puts it back.
 
 Measured 2026-09-19 on `agent/w22-e2e`: ten mutations, ten reds, zero vacuous checks.
+`W28-GUARD` added thirteen more for the refusal half and the sentence check; its figures
+are in `docs/program/reviews/W28-GUARD.md`.
+
+Sibling: `tests/e2e/prove_the_headroom_guard_can_fail.py` does the same for `D-44`'s
+guard, and never writes the tree at all -- the two files it would have to mutate,
+`web/src` and `infra/deploy/proxy/nginx.conf`, are somebody else's.
 """
 
 import json
@@ -66,6 +72,47 @@ mutations = [
   ("accept `succeeded` as a run terminal",
    lambda m: m['write']['steps'][2]['await_terminal'].__setitem__('accept',['succeeded']),
    "test_the_run_states_the_write_half_names_are_the_contract_s_own"),
+  # --- the refusal half. `W28-GUARD`, over `W27-REFUSE`'s six measured drives. ---
+  ("drop the refusal section",
+   lambda m: m.pop('refusals'),
+   "test_the_manifest_has_a_refusal_half_at_all"),
+  ("declare every refusal happens at the server",
+   lambda m: [c.__setitem__('refused_by','server') for c in m['refusals']['cases']],
+   "test_the_manifest_has_a_refusal_half_at_all"),
+  ("rename uploadDocument",
+   lambda m: m['refusals']['api'].__setitem__('operationId','postDocument'),
+   "test_every_api_call_the_journey_declares_is_in_the_contract"),
+  ("point a refusal at a fixture that is not there",
+   lambda m: m['refusals']['cases'][0].__setitem__('fixture','no_such_file.txt'),
+   "test_every_refusal_fixture_the_journey_declares_is_on_disk"),
+  ("move the refusals to a screen the read walk does not cover",
+   lambda m: m['refusals'].__setitem__('at','/nowhere'),
+   "test_every_refusal_stands_on_the_upload_screen_the_read_walk_covers"),
+  ("call a client-side refusal a server one",
+   lambda m: m['refusals']['cases'][0].__setitem__('refused_by','server'),
+   "test_every_refusal_declares_the_fields_that_go_with_where_it_was_refused"),
+  ("declare a status uploadDocument does not publish",
+   lambda m: m['refusals']['cases'][3].__setitem__('expect_status',413),
+   "test_every_status_a_refusal_declares_is_one_the_contract_publishes"),
+  ("rename the pre-check marker value",
+   lambda m: m['refusals']['cases'][2].__setitem__('precheck_problem','over_the_limit'),
+   "test_every_marker_a_refusal_names_still_exists_in_the_application"),
+  ("drop the upload-failure marker",
+   lambda m: m['refusals'].__setitem__('failure_marker','data-upload-verdict'),
+   "test_every_marker_a_refusal_names_still_exists_in_the_application"),
+  ("require a sentence no screen renders",
+   lambda m: m['refusals']['cases'][2].__setitem__(
+       'expects_rendered',['Enter the document password to continue']),
+   "test_every_sentence_the_journey_requires_still_appears_in_the_application"),
+  ("reword the write half's own panel",
+   lambda m: m['write']['steps'][0].__setitem__('expects_rendered',['Project made']),
+   "test_every_sentence_the_journey_requires_still_appears_in_the_application"),
+  ("require an envelope sentence its own constraint contradicts",
+   lambda m: m['refusals']['cases'][3].__setitem__('constraint','a_constraint_no_envelope_carries'),
+   "test_every_envelope_sentence_a_refusal_requires_is_part_of_its_own_constraint"),
+  ("surrender a named fault to the generic classification",
+   lambda m: m['refusals']['cases'][4].__setitem__('failure_kind','server_error'),
+   "test_no_refusal_declares_the_generic_classification_it_exists_to_rule_out"),
 ]
 
 ok = True
