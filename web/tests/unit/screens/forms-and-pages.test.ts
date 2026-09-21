@@ -193,7 +193,11 @@ describe('the application frame', () => {
 
   it('states what this prototype is not, rather than implying it is more', () => {
     const markup = render(createElement(AppFrame, { children: null }));
-    expect(markup).toContain('no authentication');
-    expect(markup).toContain('no tenancy');
+    // The intent of this case is unchanged and is the reason it is not deleted: a reviewer
+    // must not be left assuming their verdicts are attributed to a named account, or that
+    // another reviewer's work is walled off from theirs. `R-18` moved the language, not the
+    // claim -- the English sentence it replaced was a developer's note shown to a reviewer.
+    expect(markup).toContain('без учётных записей');
+    expect(markup).toContain('разделения доступа');
   });
 });
