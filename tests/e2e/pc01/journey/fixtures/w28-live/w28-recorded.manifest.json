@@ -1,0 +1,219 @@
+{
+  "$comment": [
+    "What `recorded` mode does with a document that has no recording, as W28-LIVE MEASURED",
+    "it on 2026-09-21 and then asserted. Exit 0 means the screen still says these five",
+    "things and the run still ends `failed`. Every sentence here was copied out of a",
+    "browser's `innerText`, not out of `web/src`."
+  ],
+  "api_prefix": "/bff/v1",
+  "identifier_pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+  "routes": [],
+  "write": {
+    "$comment": [
+      "See the top-level $comment. Steps are the journey's own; the fixture is not."
+    ],
+    "fixture": "tests/e2e/pc01/journey/fixtures/w28-live/w28_own_document.pdf",
+    "steps": [
+      {
+        "name": "create-project",
+        "at": "/projects",
+        "page_module": "web/src/app/projects/page.tsx",
+        "control_module": "web/src/features/create-project/ui/create-project-form.tsx",
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#new-project-name",
+            "value": "W28-LIVE own document %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Create"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects",
+            "operationId": "createProject",
+            "expect_status": 201
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "createProject",
+            "json_path": "project_uid",
+            "matches": "^prj_%ID%$"
+          }
+        ],
+        "capture": {
+          "kind": "attribute",
+          "$why": "the screen states what it created, in its own role=status line",
+          "selector": "[data-created-project]",
+          "attribute": "data-created-project",
+          "as": [
+            "project_uid"
+          ],
+          "matches": "^(prj_%ID%)$",
+          "bound_ms": 30000
+        },
+        "expects_rendered": [
+          "Created"
+        ],
+        "forbids_rendered": [
+          "[role=\"alert\"]",
+          "[data-create-problem]"
+        ]
+      },
+      {
+        "name": "upload-document",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
+        "actions": [
+          {
+            "do": "attach_file",
+            "selector": "#upload-file",
+            "fixture": true
+          },
+          {
+            "do": "fill",
+            "selector": "#upload-title",
+            "value": "My own AR document %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Upload"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "uploadDocument",
+            "expect_status": 201
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "uploadDocument",
+            "content_type_starts_with": "multipart/form-data",
+            "body_contains": [
+              "name=\"file\"",
+              "w28_own_document.pdf",
+              "application/pdf"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadDocument",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          },
+          {
+            "of": "uploadDocument",
+            "json_path": "document_uid",
+            "matches": "^doc_%ID%$"
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "$why": "on success the screen navigates to the published version's own address",
+          "pattern": "^/projects/(prj_%ID%)/versions/(ver_%ID%)$",
+          "as": [
+            "project_uid",
+            "version_uid"
+          ],
+          "bound_ms": 30000
+        },
+        "expects_rendered": [
+          "This version"
+        ],
+        "forbids_rendered": [
+          "[data-upload-failure]",
+          "[data-precheck-problem]"
+        ]
+      },
+      {
+        "name": "start-run",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
+        "actions": [
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Start run"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs",
+            "operationId": "startRun",
+            "expect_status": 202
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "startRun",
+            "json_path": "run_id",
+            "matches": "^run_%ID%$"
+          },
+          {
+            "of": "startRun",
+            "json_path": "state",
+            "equals": "queued",
+            "$why": "W20-EXEC moved execution off the request. 202 alone would not say the run was only accepted, not done."
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "$why": "the 202 reading carries the run, and the screen moves to run progress",
+          "pattern": "^/projects/(prj_%ID%)/runs/(run_%ID%)$",
+          "as": [
+            "project_uid",
+            "run_id"
+          ],
+          "bound_ms": 30000
+        },
+        "await_terminal": {
+          "$comment": [
+            "`failed` is the ONLY terminal this manifest accepts, because that is what W28-LIVE",
+            "measured `recorded` mode to reach for a document with no recording. A manifest that",
+            "also accepted `published` would pass whatever happened and assert nothing."
+          ],
+          "outcome_selector": "[data-run-outcome]",
+          "outcome_attribute": "data-run-outcome",
+          "non_terminal_value": "in_flight",
+          "accept": [
+            "failed"
+          ],
+          "activity_selector": "[data-run-activity]",
+          "activity_attribute": "data-run-activity",
+          "activity_when_final": "stopped",
+          "bound_ms": 150000,
+          "poll_ms": 500
+        },
+        "expects_api_after_terminal": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}",
+            "operationId": "getRunStatus"
+          }
+        ],
+        "expects_rendered": [
+          "Run",
+          "The run terminated failed. Nothing was published.",
+          "Terminal reason: dependency_unavailable",
+          "This run made no provider call, so it has no cost to report.",
+          "There is nothing to review.",
+          "Replayed from recordings. This run is not evidence of a live provider call."
+        ],
+        "forbids_rendered": []
+      }
+    ]
+  }
+}
