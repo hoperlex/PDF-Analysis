@@ -41,6 +41,12 @@ def cost_budget_exceeded() -> DomainError:
     )
 
 
+#: The two values ``cost_basis`` takes, named once. ``model_call.cost_basis`` holds the
+#: same pair (migration ``0004``) and ``RunStatus.cost_basis`` publishes it.
+BASIS_MEASURED: str = "measured"
+BASIS_ESTIMATED: str = "estimated"
+
+
 @dataclass(slots=True)
 class CostMeter:
     """Accumulated measured spend for one run, against one ceiling."""
@@ -48,10 +54,44 @@ class CostMeter:
     ceiling_usd: float
     spent_usd: float = field(default=0.0)
     call_count: int = field(default=0)
+    #: Contributions to :attr:`spent_usd` the transport did not price. Not a constructor
+    #: argument: a caller cannot declare the provenance of spend it is handing over, and
+    #: :meth:`__post_init__` decides what an opening balance means.
+    unpriced_contributions: int = field(default=0, init=False)
+
+    def __post_init__(self) -> None:
+        # An opening balance is spend this meter did not charge and cannot vouch for.
+        # `execute_run` accepts a meter already carrying spend, so this is a real state
+        # and not a hypothetical. Counting it as unpriced is `D-3` applied to the absent
+        # case: the flattering reading of "no provenance recorded" is `measured`, and it
+        # is the one reading that can be wrong in the direction nobody notices.
+        if self.spent_usd:
+            self.unpriced_contributions += 1
 
     @property
     def remaining_usd(self) -> float:
         return self.ceiling_usd - self.spent_usd
+
+    @property
+    def cost_basis(self) -> str:
+        """How :attr:`spent_usd` was arrived at, over **every** contribution to it.
+
+        ``R-14``, which is the rule ``W18-SEAL`` already gave ``RunStatus.cost_basis``:
+        ``measured`` only when every contributing call reported a cost of its own,
+        ``estimated`` the moment one did not. The two places now say the same thing.
+
+        It describes the *sum*, not the last call. One call's own record carries that
+        call's own basis and can legitimately read ``measured`` while this reads
+        ``estimated`` -- they are answers about different numbers.
+
+        A meter that has charged nothing reports ``estimated`` and never ``measured``:
+        there is no measurement to claim. The stage emits this only after a charge, so
+        that state does not reach the metrics, but the rule is stated rather than left
+        to that coincidence.
+        """
+        if self.unpriced_contributions or self.call_count == 0:
+            return BASIS_ESTIMATED
+        return BASIS_MEASURED
 
     def check_before_call(self) -> None:
         """Halt before spending anything more once the ceiling is reached."""
@@ -84,6 +124,13 @@ class CostMeter:
         )
         self.spent_usd += cost
         self.call_count += 1
+        # Counted here, beside the spend it qualifies, and before the ceiling check for
+        # the same reason the spend is: the call that broke the budget is in
+        # `spent_usd`, so it is in the provenance of `spent_usd`. `W18-SEAL`'s rule for
+        # the `model_call` rows treats a NULL `cost_micros` as unmeasured; `None` here
+        # is that same absence, one layer earlier and before it can be summed away.
+        if reported_cost_usd is None:
+            self.unpriced_contributions += 1
         if self.spent_usd > self.ceiling_usd:
             raise cost_budget_exceeded()
         return cost

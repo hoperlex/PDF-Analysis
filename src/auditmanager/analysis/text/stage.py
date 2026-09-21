@@ -278,12 +278,9 @@ def run_text_analysis(
                 "stage_version": STAGE_VERSION,
                 "provider_mode": mode.value,
                 "cost_usd": round(cost_meter.spent_usd, 8),
-                # Which of the two the figure above is. The transport reports a real number
-                # for a proxied or direct call and reports nothing for a replay, so the
-                # basis is known here and was being discarded one layer later.
-                "cost_basis": (
-                    "measured" if response.reported_cost_usd is not None else "estimated"
-                ),
+                # Which of the two the figure above is -- asked of the meter, because the
+                # figure above is the meter's. `R-14`: see the success path below.
+                "cost_basis": cost_meter.cost_basis,
                 "cost_ceiling_usd": cost_meter.ceiling_usd,
                 "observations_emitted": 0,
                 # The reply was paid for and never parsed. Reporting the spend without
@@ -353,12 +350,19 @@ def run_text_analysis(
         # pins, and a consumer cannot tell which from the number. The overrun branch
         # carried this and the success branch did not, so `metrics["cost_basis"]`
         # answered on the one run that failed its budget and raised `KeyError` on the
-        # run that succeeded - backwards from useful. The response is the only thing
-        # that knows, and it is in scope here as it is there. Same expression, same
-        # values, and the schema admits a string under `metrics`.
-        "cost_basis": (
-            "measured" if response.reported_cost_usd is not None else "estimated"
-        ),
+        # run that succeeded - backwards from useful. `W11-FIX` closed that half.
+        #
+        # `R-14`, closing `D-15`, closes the other half. `cost_usd` above is
+        # `cost_meter.spent_usd` -- the meter's WHOLE spend, and `runs.executor` hands
+        # one meter to every attempt of a run on purpose, so that `OD-03`'s ceiling
+        # binds across them. This used to read `response.reported_cost_usd`: the LAST
+        # response, describing a sum it may be only one part of. The meter is the only
+        # object that sees every contribution, so it is the one that can apply the
+        # conservative rule `W18-SEAL` gave `RunStatus.cost_basis` -- `measured` only
+        # when every contributing call reported a cost. The `_record` call above keeps
+        # reading the response, and that is not an inconsistency: the record's figure is
+        # this call's cost, and this one is the run's.
+        "cost_basis": cost_meter.cost_basis,
         "cost_ceiling_usd": cost_meter.ceiling_usd,
         "latency_ms": response.latency_ms,
     }
