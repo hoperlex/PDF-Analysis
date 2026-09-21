@@ -399,6 +399,16 @@ what actually saves it is that `MissingConfigurationError extends Error` rather 
 the thing that survives review and breaks later**, because nothing about the outcome invites a
 second look.
 
+**A claim of the integrator's that has now been repeated into three waves and is false.**
+*"`web/src/app/**` is nine six-line delegations that never hold behaviour."* It came from
+`W19-SHELL`'s true observation that the screens were not there, hardened into a reason to
+exclude the directory from ownership, and was written into wave-31 briefs. Measured by
+`W31-STYLE`: seven page files of 9–36 lines, `layout.tsx` at 28 **holding `<html lang>`**, and
+`bff/v1/[...path]/route.ts` at **109 lines — the credentialed transport seam**. It matters
+twice over: that route is the one place a credential is added server-side, and `layout.tsx` is
+exactly where theme work would land. **A true observation about why a directory was empty
+became a standing claim about what it contains, and nothing re-measured it for three waves.**
+
 **And one about this file.** Its path is `docs/program/dispatch/OPERATING_CONSTRAINTS.md`. The
 integrator cited it as `docs/program/OPERATING_CONSTRAINTS.md` in briefs for a week; the
 repository never carried the wrong path, so only dispatched sessions met it. A session that

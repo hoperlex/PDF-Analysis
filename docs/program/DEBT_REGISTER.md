@@ -11,6 +11,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
+| D-53 | 20 English strings survive three reports of a translated interface | a **guard**, not a fourth pass |
+| D-55 | `cdp.mjs` cannot screenshot, and R-18 makes rendering evidence structural | ~8 lines on the tree's own instrument |
 | D-52 | the legacy icon set is at least partly Feather, MIT, notice absent | a `NOTICE` file if we copy; **not** `D-11`'s shape |
 | **D-49** | the stand is on every interface, and `/bff/v1` takes writes with no credential | **owner — a binding decision**; highest severity here |
 | **D-46** | a failed run cannot say *which* dependency | owner — a reseal either way |
@@ -1391,6 +1393,74 @@ settles it, and checking a log someone else may have written settles nothing.
 
 **Rule for every future brief: write logs to a path that carries the session's own name**, and
 never read an exit code out of a file you did not create in this session.
+
+### D-53 — twenty user-visible English strings survive two waves that each reported the interface translated
+
+**Measured by `W31-STYLE` 2026-09-21, in the course of restyling screens it was told not to
+re-translate. Opened the same day.** `R-18`'s **first** named defect is mixed language, and
+this is it.
+
+**At least 20 user-visible English strings across 17 modules**, including *"Correlation id"* on
+the very failure layer two reports called finished, *"First page"* / *"Next page"* in **all
+four** list widgets, and five sentences in `run-progress`.
+
+**The pattern is what earns this a row rather than a commit.** Three sessions have now reported
+the interface translated and three have been wrong:
+
+| | claim | found by | what was left |
+|---|---|---|---|
+| `26b960d` | *"every string a reviewer can see"* | itself, next commit | 106 sentences in 16 `.ts` model files |
+| `b0b8148` | the failure layer too | `W31-RUS` | 18 origin groups |
+| after `W31-RUS` | the failure layer, again | `W31-STYLE` | these 20, in 17 modules |
+
+Each session measured honestly and each was working inside a grant that could not see the
+rest. **The defect is not any session's diligence; it is that nothing in the gate asks the
+question.** A guard that fails on a user-visible Latin string outside an allowed list would
+have caught all three rounds, and is the repair — not a fourth translation pass.
+
+Check: a sweep for Latin-script user-facing literals across `web/src/**`, with an explicit
+allowlist for contract vocabulary, identifiers and code spans.
+
+### D-54 — `web/src/_app/**` and `web/src/shared/lib/**` had no owner, and both held reviewer-facing defects
+
+**Registered 2026-09-21, both closed the same day by the integrator.** Kept as a row because
+the **cause** is open even though both instances are shut.
+
+Wave 31 split `web/src` between two streams by naming directories. Two directories were named
+by neither, and both turned out to hold exactly the kind of defect the wave existed to fix:
+`shared/lib/listing-failure.ts` rendered Russian nouns inside English sentence templates, and
+`_app/app-frame.tsx` held the footer `R-18` names **by name**.
+
+**This is the sixth time an ownership line of mine has missed code**, and the previous five are
+recorded in `W19_W20_CLOSURE.md` §2 and `W26_W29_CLOSURE.md` §6. The rule already exists —
+*list the directories from the tree before writing the glob* — and I have now earned it six
+times, which means stating it is not enough.
+
+**The repair is mechanical and is owed to the next wave that splits a tree:** a brief that
+partitions a directory must show the partition is **total**, by listing the directory and
+accounting for every child. `W31-STYLE` found its gap and reported it instead of reaching
+outside its grant, which is the behaviour that makes this recoverable at all.
+
+Check: for any wave that splits a tree, `find <tree> -maxdepth 2 -type d` and account for
+every entry against the briefs.
+
+### D-55 — the browser instrument cannot take a screenshot, and a brief asked it to
+
+**Found by `W31-STYLE` 2026-09-21.** `tests/e2e/pc01/journey/cdp.mjs` — this programme's own
+CDP client, built by `W21-E2E` specifically so a browser journey needs no dependency — has no
+`Page.captureScreenshot` and its `#send` is **private**, so the rendering evidence the brief
+demanded **cannot be produced with the tree's own instrument**.
+
+The session built its own harness outside the tree and delivered the evidence. But a brief that
+asks for something the repository cannot do is a defect in the brief, and the gap is small:
+**a `screenshot()` on `cdp.mjs` is about eight lines.**
+
+`R-18` makes this structural rather than incidental. **Presentation is now an acceptance
+condition, and the gate cannot see a stylesheet.** Every future design wave needs rendered
+evidence, and it should come from the instrument the programme already owns rather than from a
+harness that dies with the session that wrote it.
+
+Check: `grep -n "captureScreenshot" tests/e2e/pc01/journey/cdp.mjs`.
 
 ### D-52 — the legacy icon set is at least partly Feather, and the notice MIT requires is absent
 
