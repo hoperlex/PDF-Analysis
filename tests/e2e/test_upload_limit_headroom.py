@@ -64,9 +64,7 @@ _BINARY_UNITS = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
 
 _MAX_BYTES = re.compile(r"\bmaxBytes:\s*([0-9_ *]+?)\s*,")
 _MAX_BYTES_LABEL = re.compile(r"\bmaxBytesLabel:\s*['\"]([^'\"]+)['\"]")
-_CLIENT_MAX_BODY_SIZE = re.compile(
-    r"^[^\S\n]*client_max_body_size\s+(\d+)([kKmMgG]?)\s*;", re.MULTILINE
-)
+_CLIENT_MAX_BODY_SIZE = re.compile(r"\bclient_max_body_size\s+(\d+)([kKmMgG]?)\s*;")
 _LABEL = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(B|KiB|MiB|GiB)\s*$")
 
 
@@ -119,9 +117,21 @@ def bytes_of_label(label: str) -> int:
     return round(float(match.group(1)) * _BINARY_UNITS[match.group(2)])
 
 
+def uncommented(conf: str) -> str:
+    """The config with `#` comments removed, line by line.
+
+    Measured, and this is why the directive is not anchored to the start of a line: a
+    guard that anchors misses ``server { client_max_body_size 4m; }`` written inline, and
+    a guard that does not strip comments reads a commented-out directive as the cap. The
+    first of those two was a real hole in this file's first draft and only running the
+    control found it.
+    """
+    return "\n".join(line.split("#", 1)[0] for line in conf.splitlines())
+
+
 def nginx_body_limit(conf: str) -> int:
     """``client_max_body_size 32m;`` -> ``33554432``, read out of the served config."""
-    found = _CLIENT_MAX_BODY_SIZE.findall(conf)
+    found = _CLIENT_MAX_BODY_SIZE.findall(uncommented(conf))
     if len(found) != 1:
         raise AssertionError(
             f"expected exactly one `client_max_body_size` directive, found {len(found)}. "
@@ -270,8 +280,6 @@ def test_control_an_unreadable_limit_fails_rather_than_defaulting() -> None:
 
     with pytest.raises(AssertionError):
         nginx_body_limit(_CONF_LIKE.replace("client_max_body_size 32m;", ""))
-    with pytest.raises(AssertionError):
-        nginx_body_limit(_CONF_LIKE + "\nserver { client_max_body_size 4m; }\n")
     for nonsense in ("lots", "25 megabytes", "", "MiB"):
         with pytest.raises(AssertionError):
             bytes_of_label(nonsense)
@@ -284,6 +292,31 @@ def test_control_a_commented_out_directive_is_not_read_as_the_cap() -> None:
     )
     with pytest.raises(AssertionError):
         nginx_body_limit(commented)
+    # and a comment beside a live directive must not hide it, nor be counted twice
+    beside = _CONF_LIKE.replace(
+        "    client_max_body_size 32m;",
+        "    client_max_body_size 32m;  # see D-44: strictly above the pre-check",
+    )
+    assert nginx_body_limit(beside) == 33554432
+
+
+def test_control_a_second_cap_in_another_block_is_not_missed() -> None:
+    """**Found by running the controls**, not by reading the regex.
+
+    The first draft anchored the directive to the start of a line, so a second cap written
+    inline -- ``server { client_max_body_size 4m; }``, which nginx accepts -- was invisible
+    and the guard reported headroom that was not the effective one. Two caps mean the
+    effective limit depends on which block serves the upload, and `D-44` is about the
+    effective limit, so the guard refuses to pick.
+    """
+    for second in (
+        "\nserver { client_max_body_size 4m; }\n",
+        "\nserver {\n    client_max_body_size 4m;\n}\n",
+        "\nlocation /bff/ { client_max_body_size 1m; }\n",
+    ):
+        with pytest.raises(AssertionError) as caught:
+            nginx_body_limit(_CONF_LIKE + second)
+        assert "found 2" in str(caught.value)
 
 
 def test_control_a_missing_input_fails_rather_than_skips(tmp_path: Path) -> None:
