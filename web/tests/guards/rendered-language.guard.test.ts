@@ -777,25 +777,34 @@ describe('the guard renders the screens it claims to render', () => {
  * Each entry carries the module that renders it. Every one of them is another session's to
  * repair, and `docs/program/W32-SEE.md` §4 names whose.
  */
+/*
+ * RATCHET MOVED, 2026-09-21, by the integrator at merge. Eight entries deleted because the
+ * guard said they were gone, not because a diff looked right:
+ *
+ *   All versions of this document · Create · Display title · Published findings: # ·
+ *   Start run · — this run's provider mode is · Загрузка: the document page… ·
+ *   Загрузка: the run…
+ *
+ * They were repaired by `3bd2c82`, the wave-31 tail, which landed AFTER this guard's base at
+ * `cd475cc`. The integrator had told this session "your lane does not read those files, do
+ * not rebase" -- which was wrong, and the session said so: the guard's subject IS `web/src`.
+ * The base it was given is exactly why these eight read as outstanding when they were not.
+ *
+ * The list may only shrink. Nothing was added here and the assertion was not relaxed; the
+ * both-directions check is what forced this edit, by refusing to stay green over a register
+ * describing defects that no longer exist.
+ */
 const OUTSTANDING: readonly { readonly text: string; readonly module: string }[] = [
-  { text: 'All versions of this document', module: 'web/src/_pages/version-detail/ui/version-detail-page.tsx:82' },
   { text: 'Correlation id', module: 'web/src/shared/ui/states.tsx:42, features/start-run/ui/start-run-control.tsx:63, features/upload-document/ui/upload-document-form.tsx:145' },
-  { text: 'Create', module: 'web/src/features/create-project/ui/create-project-form.tsx:89' },
-  { text: 'Display title', module: 'web/src/features/upload-document/ui/upload-document-form.tsx:95' },
-  { text: 'Published findings: #', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:98' },
   { text: 'Recorded:', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:178' },
-  { text: 'Start run', module: 'web/src/features/start-run/ui/start-run-control.tsx:44' },
   { text: 'Terminal reason:', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:140' },
   { text: 'The run terminated', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:137,159' },
   { text: '. Nothing was published.', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:137,159' },
   { text: 'Upload', module: 'web/src/features/upload-document/ui/upload-document-form.tsx:117' },
   { text: 'provider mode:', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:264' },
-  { text: "— this run's provider mode is", module: 'web/src/widgets/run-progress/ui/run-progress.tsx:264' },
   { text: 'Загрузка: findings…', module: 'web/src/widgets/finding-list/ui/finding-list.tsx:63 (LoadingState what=)' },
   { text: 'Загрузка: projects…', module: 'web/src/widgets/project-list/ui/project-list.tsx:24 (LoadingState what=)' },
-  { text: 'Загрузка: the document page…', module: 'web/src/widgets/evidence-viewer/ui/evidence-viewer.tsx:130 (LoadingState what=)' },
   { text: 'Загрузка: the finding…', module: 'web/src/_pages/review/ui/review-page.tsx:198 (LoadingState what=)' },
-  { text: 'Загрузка: the run…', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:253 and _pages/review/ui/review-page.tsx:271 (LoadingState what=)' },
   {
     text:
       'Одна версия на загрузку: этот экран не передаёт `uploadDocument` параметр ' +
