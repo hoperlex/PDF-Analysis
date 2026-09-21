@@ -147,8 +147,8 @@ export class UnrecognizedApiError extends ApiFailure {
 
   constructor(status: number, rawErrorCode: string, message: string, correlationId: string | null) {
     super(
-      `Unrecognized error code '${rawErrorCode}' (HTTP ${status}). ` +
-        'The server reported a code outside this client\'s contract; nothing was retried.',
+      `Нераспознанный код ошибки «${rawErrorCode}» (HTTP ${status}). ` +
+        'Сервер сообщил код вне контракта этого клиента; повтор не выполнялся.',
       correlationId,
     );
     this.name = 'UnrecognizedApiError';

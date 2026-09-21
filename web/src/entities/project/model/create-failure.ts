@@ -17,6 +17,7 @@ import {
   PERMISSION_DENIED_DETAIL,
   TransportError,
   UnrecognizedApiError,
+  catalogMessage,
 } from '@/shared/api';
 
 export type CreateProjectFailureKind =
@@ -72,7 +73,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         presentation: 'unsupported',
         title: 'Сервер отклонил это название проекта.',
         detail:
-          error.envelope.message + classifiers(error.details, ['field', 'constraint', 'aggregate_type']),
+          catalogMessage(error.errorCode) + classifiers(error.details, ['field', 'constraint', 'aggregate_type']),
       };
     case 'dependency_unavailable':
       return {
@@ -81,9 +82,9 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         presentation: 'error',
         title: 'Зависимость недоступна.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['dependency']) +
-          ' Nothing was partially applied. Retrying reuses the same idempotency key.',
+          ' Ничего не применено частично. Повтор использует тот же ключ идемпотентности.',
       };
     case 'authentication_required':
       return {
@@ -110,9 +111,9 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         presentation: 'error',
         title: 'Этот ключ уже использован для другого проекта.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['command_type']) +
-          ' Nothing was created and nothing was resubmitted.',
+          ' Ничего не создано и ничего не отправлено повторно.',
       };
     case 'idempotency_key_in_progress':
       return {
@@ -121,9 +122,9 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         presentation: 'error',
         title: 'Этот проект ещё создаётся.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['command_type']) +
-          ' Retrying asks again under the same key; a new key would create a second project.',
+          ' Повтор спрашивает снова под тем же ключом; новый ключ создал бы второй проект.',
       };
     case 'idempotency_key_stale':
       return {
@@ -132,7 +133,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         presentation: 'error',
         title: 'Записанный результат этого запроса больше недоступен.',
         detail:
-          error.envelope.message + classifiers(error.details, ['command_type']) + ' It is not guessed.',
+          catalogMessage(error.errorCode) + classifiers(error.details, ['command_type']) + ' Он не домысливается.',
       };
     case 'conflict':
       return {
@@ -141,7 +142,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         presentation: 'error',
         title: 'Запрос вошёл в конфликт с инвариантом.',
         detail:
-          error.envelope.message + classifiers(error.details, ['aggregate_type', 'expected_revision']),
+          catalogMessage(error.errorCode) + classifiers(error.details, ['aggregate_type', 'expected_revision']),
       };
     default:
       return {
@@ -149,7 +150,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         kind: 'server_error',
         presentation: 'error',
         title: 'Создание проекта завершилось ошибкой на сервере.',
-        detail: error.envelope.message,
+        detail: catalogMessage(error.errorCode),
       };
   }
 }
@@ -163,7 +164,9 @@ export function classifyCreateProjectFailure(error: unknown): CreateProjectFailu
       kind: 'unrecognized',
       presentation: 'error',
       title: 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.',
-      detail: `Error code '${error.rawErrorCode}' is outside this client's contract. Nothing was retried.`,
+      detail:
+        `Код ошибки «${error.rawErrorCode}» находится вне контракта этого клиента. ` +
+        'Повтор не выполнялся.',
       correlationId: error.correlationId,
       retryable: false,
       errorCode: null,
@@ -175,7 +178,8 @@ export function classifyCreateProjectFailure(error: unknown): CreateProjectFailu
       kind: 'transport',
       presentation: 'error',
       title: 'Запрос не дошёл до API.',
-      detail: `${error.message} Retrying under the same key is safe: it is the same command, not a second one.`,
+      detail:
+        `${error.message} Повтор под тем же ключом безопасен: это та же команда, а не вторая.`,
       correlationId: error.correlationId,
       retryable: error.retryable,
       errorCode: null,

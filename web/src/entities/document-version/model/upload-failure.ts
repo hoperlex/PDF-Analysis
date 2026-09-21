@@ -26,6 +26,7 @@ import {
   PERMISSION_DENIED_DETAIL,
   TransportError,
   UnrecognizedApiError,
+  catalogMessage,
 } from '@/shared/api';
 
 /** The distinguishable outcomes of a failed upload. */
@@ -93,7 +94,7 @@ function fromApiError(error: ApiError): UploadFailure {
         presentation: 'unsupported',
         title: 'Файл выходит за допустимые ограничения.',
         detail:
-          error.envelope.message + classifiers(error.details, ['constraint', 'field', 'aggregate_type']),
+          catalogMessage(error.errorCode) + classifiers(error.details, ['constraint', 'field', 'aggregate_type']),
       };
     case 'storage_integrity_error':
       return {
@@ -102,9 +103,9 @@ function fromApiError(error: ApiError): UploadFailure {
         presentation: 'error',
         title: 'Сохранённые байты не совпали с объявленной контрольной суммой.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['role', 'expected_sha256', 'actual_sha256']) +
-          ' Nothing was published: no version, no manifest and no readable object.',
+          ' Ничего не опубликовано: ни версии, ни манифеста, ни читаемого объекта.',
       };
     case 'dependency_unavailable':
       return {
@@ -113,9 +114,9 @@ function fromApiError(error: ApiError): UploadFailure {
         presentation: 'error',
         title: 'Зависимость, нужная этой загрузке, недоступна.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['dependency']) +
-          ' Nothing was partially applied. Retrying reuses the same idempotency key.',
+          ' Ничего не применено частично. Повтор использует тот же ключ идемпотентности.',
       };
     case 'idempotency_key_reuse':
       return {
@@ -124,9 +125,9 @@ function fromApiError(error: ApiError): UploadFailure {
         presentation: 'error',
         title: 'Этот ключ загрузки уже использован для другого файла.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['command_type']) +
-          ' Nothing was created and nothing was resubmitted. Choose the file again to start a new upload.',
+          ' Ничего не создано и ничего не отправлено повторно. Выберите файл заново, чтобы начать новую загрузку.',
       };
     case 'idempotency_key_in_progress':
       return {
@@ -135,9 +136,9 @@ function fromApiError(error: ApiError): UploadFailure {
         presentation: 'error',
         title: 'Эта загрузка ещё обрабатывается.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['command_type']) +
-          ' Retrying asks about the same upload under the same key; it never starts a second one.',
+          ' Повтор спрашивает о той же загрузке под тем же ключом и никогда не начинает вторую.',
       };
     case 'idempotency_key_stale':
       return {
@@ -146,9 +147,9 @@ function fromApiError(error: ApiError): UploadFailure {
         presentation: 'error',
         title: 'Записанный результат этой загрузки больше недоступен.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['command_type']) +
-          ' It is not guessed. Choose the file again to start a new upload.',
+          ' Он не домысливается. Выберите файл заново, чтобы начать новую загрузку.',
       };
     case 'authentication_required':
       return {
@@ -174,7 +175,7 @@ function fromApiError(error: ApiError): UploadFailure {
         kind: 'project_not_found',
         presentation: 'error',
         title: 'Такого проекта не существует.',
-        detail: error.envelope.message + classifiers(error.details, ['aggregate_type']),
+        detail: catalogMessage(error.errorCode) + classifiers(error.details, ['aggregate_type']),
       };
     case 'conflict':
       return {
@@ -183,7 +184,7 @@ function fromApiError(error: ApiError): UploadFailure {
         presentation: 'error',
         title: 'Загрузка вошла в конфликт с инвариантом.',
         detail:
-          error.envelope.message + classifiers(error.details, ['aggregate_type', 'expected_revision']),
+          catalogMessage(error.errorCode) + classifiers(error.details, ['aggregate_type', 'expected_revision']),
       };
     default:
       return {
@@ -191,7 +192,7 @@ function fromApiError(error: ApiError): UploadFailure {
         kind: 'server_error',
         presentation: 'error',
         title: 'Загрузка завершилась ошибкой на сервере.',
-        detail: error.envelope.message,
+        detail: catalogMessage(error.errorCode),
       };
   }
 }
@@ -211,7 +212,9 @@ export function classifyUploadFailure(error: unknown): UploadFailure {
       kind: 'unrecognized',
       presentation: 'error',
       title: 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.',
-      detail: `Error code '${error.rawErrorCode}' is outside this client's contract. Nothing was retried.`,
+      detail:
+        `Код ошибки «${error.rawErrorCode}» находится вне контракта этого клиента. ` +
+        'Повтор не выполнялся.',
       correlationId: error.correlationId,
       retryable: false,
       errorCode: null,
@@ -223,7 +226,9 @@ export function classifyUploadFailure(error: unknown): UploadFailure {
       kind: 'transport',
       presentation: 'error',
       title: 'Загрузка не дошла до API.',
-      detail: `${error.message} Whether anything was published is unknown; retrying under the same key is safe.`,
+      detail:
+        `${error.message} Было ли что-нибудь опубликовано, неизвестно; повтор под тем же ` +
+        'ключом безопасен.',
       correlationId: error.correlationId,
       retryable: error.retryable,
       errorCode: null,

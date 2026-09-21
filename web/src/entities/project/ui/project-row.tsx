@@ -27,7 +27,7 @@ export function ProjectRow({ project }: ProjectRowProps) {
           <code>{project.project_uid}</code>
         </p>
         <p>
-          Created {formatInstant(project.created_at)} · documents{' '}
+          Создан {formatInstant(project.created_at)} · документов{' '}
           {projectDocumentCountLabel(project)}
         </p>
       </div>

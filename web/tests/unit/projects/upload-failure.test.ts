@@ -52,9 +52,26 @@ describe('the three named criteria are three different states', () => {
     expect(unsupported.errorCode).toBe('validation_failed');
   });
 
-  it('renders the server reason rather than a generic sentence', () => {
-    expect(unsupported.detail).toContain('A caller-safe sentence.');
+  /**
+   * `W31-RUS`, under `R-18`. This asserted the **envelope message** and the classifier.
+   * The message is the API's own English — `contracts/domain/v1/error-codes.json` carries
+   * 22 summaries and not one Cyrillic character — so the screen now renders
+   * `catalogMessage(code)` in its place and keeps `details`.
+   *
+   * The claim in the name survives the change and is what is asserted here: the state is
+   * still **specific**, not generic. The discriminating fact was never in the English
+   * prose — it is `details.constraint`, which is what `tests/e2e/pc01/journey/manifest.json`
+   * checks under `expects_rendered_from_envelope` (`not_encrypted`,
+   * `every_page_has_extractable_text`, `page_count`). So: the constraint is still rendered,
+   * and two different codes still read differently.
+   */
+  it('renders the specific reason, not a sentence every code would get', () => {
     expect(unsupported.detail).toContain('page_count_at_most_30');
+    expect(unsupported.detail).not.toBe(checksum.detail);
+    expect(unsupported.detail).not.toBe(unavailable.detail);
+    // And it is Russian, which is the whole point of the substitution.
+    expect(/[а-яА-ЯёЁ]/u.test(unsupported.detail)).toBe(true);
+    expect(unsupported.detail).not.toContain('A caller-safe sentence.');
   });
 
   it('classifies a checksum failure as its own state, not as an unsupported input', () => {
@@ -62,7 +79,7 @@ describe('the three named criteria are three different states', () => {
     expect(checksum.kind).not.toBe(unsupported.kind);
     expect(checksum.retryable).toBe(false);
     expect(checksum.errorCode).toBe('storage_integrity_error');
-    expect(checksum.detail).toContain('Nothing was published');
+    expect(checksum.detail).toContain('Ничего не опубликовано');
   });
 
   it('classifies an unavailable dependency as its own state, and as retryable', () => {
@@ -110,11 +127,11 @@ describe('the idempotency outcomes stay apart', () => {
 
     expect(inProgress.kind).toBe('in_progress');
     expect(inProgress.retryable).toBe(true);
-    expect(inProgress.detail).toContain('same key');
+    expect(inProgress.detail).toContain('тем же ключом');
 
     expect(reuse.kind).toBe('duplicate_intent');
     expect(reuse.retryable).toBe(false);
-    expect(reuse.detail).toContain('Nothing was created');
+    expect(reuse.detail).toContain('Ничего не создано');
 
     expect(stale.kind).toBe('stale_intent');
     expect(stale.retryable).toBe(false);

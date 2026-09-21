@@ -44,7 +44,7 @@ export function projectNameProblemMessage(problem: ProjectNameProblem): string {
     case 'empty':
       return 'Проекту нужно название.';
     case 'too_long':
-      return `A project name is at most ${PROJECT_NAME_MAX_LENGTH} characters.`;
+      return `Название проекта — не более ${PROJECT_NAME_MAX_LENGTH} символов.`;
   }
 }
 

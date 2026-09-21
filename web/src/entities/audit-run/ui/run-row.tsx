@@ -34,15 +34,15 @@ export function RunRow({ run, href }: RunRowProps) {
       </p>
       <div className="am-state__detail">
         <p>
-          Created {formatInstant(run.created_at)}
+          Создан {formatInstant(run.created_at)}
           {run.terminal_at === undefined || run.terminal_at === null
             ? ''
-            : ` · terminal ${formatInstant(run.terminal_at)}`}
+            : ` · завершён ${formatInstant(run.terminal_at)}`}
         </p>
         <p>
-          Findings{' '}
+          Находок{' '}
           {run.published_finding_count === undefined ? '—' : run.published_finding_count} ·
-          stages {run.stages.length}
+          этапов {run.stages.length}
         </p>
       </div>
     </li>

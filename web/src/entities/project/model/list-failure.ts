@@ -15,6 +15,7 @@ import {
   PERMISSION_DENIED_DETAIL,
   TransportError,
   UnrecognizedApiError,
+  catalogMessage,
 } from '@/shared/api';
 
 export type ProjectListFailureKind =
@@ -43,7 +44,7 @@ export function classifyProjectListFailure(error: unknown): ProjectListFailure {
       correlationId: error.correlationId,
       retryable: error.retryable,
       errorCode: error.errorCode,
-      detail: error.envelope.message,
+      detail: catalogMessage(error.errorCode),
     };
     switch (error.errorCode) {
       case 'validation_failed':
@@ -77,7 +78,9 @@ export function classifyProjectListFailure(error: unknown): ProjectListFailure {
     return {
       kind: 'unrecognized',
       title: 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.',
-      detail: `Error code '${error.rawErrorCode}' is outside this client's contract. Nothing was retried.`,
+      detail:
+        `Код ошибки «${error.rawErrorCode}» находится вне контракта этого клиента. ` +
+        'Повтор не выполнялся.',
       correlationId: error.correlationId,
       retryable: false,
       errorCode: null,

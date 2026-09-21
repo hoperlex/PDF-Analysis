@@ -105,20 +105,20 @@ export function mintForwardCorrelationId(): string {
  */
 export function buildUpstreamPath(segments: readonly string[]): string {
   if (segments.length === 0) {
-    throw new ForwardPathError('The forward needs at least one path segment.');
+    throw new ForwardPathError('Для пересылки нужен хотя бы один сегмент пути.');
   }
   for (const segment of segments) {
     if (segment.length === 0) {
-      throw new ForwardPathError('An empty path segment is not a path.');
+      throw new ForwardPathError('Пустой сегмент пути путём не является.');
     }
     if (segment === '.' || segment === '..') {
       throw new ForwardPathError(
-        `The segment '${segment}' would leave the API base. Nothing above it is offered here.`,
+        `Сегмент «${segment}» вывел бы за пределы базового пути API. Ничего выше него здесь не предлагается.`,
       );
     }
     if (segment.includes('/') || segment.includes('\\')) {
       throw new ForwardPathError(
-        'A path separator inside a single segment is not a path this forwarder builds.',
+        'Разделитель пути внутри одного сегмента — не тот путь, который строит этот пересылающий слой.',
       );
     }
   }
@@ -200,7 +200,7 @@ export async function forwardWithCredential(
       404,
       synthesizedEnvelope(
         'not_found',
-        cause instanceof Error ? cause.message : 'That is not a path this forwarder builds.',
+        cause instanceof Error ? cause.message : 'Это не тот путь, который строит этот пересылающий слой.',
         false,
         request.headers.get('x-correlation-id') ?? mintForwardCorrelationId(),
       ),
@@ -226,8 +226,7 @@ export async function forwardWithCredential(
       503,
       synthesizedEnvelope(
         'dependency_unavailable',
-        'The web server could not reach the API. Nothing was applied and the request may ' +
-          'be retried.',
+        'Веб-сервер не смог связаться с API. Ничего не применено, запрос можно повторить.',
         true,
         request.headers.get('x-correlation-id') ?? mintForwardCorrelationId(),
       ),

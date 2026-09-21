@@ -43,8 +43,8 @@ export function VersionRow({ version, href, secondary }: VersionRowProps) {
           <code>{version.version_uid}</code>
         </p>
         <p>
-          Version {version.version_ordinal} · {version.page_count} pages ·{' '}
-          {formatBytes(version.byte_size)} · published {formatInstant(version.published_at)}
+          Версия {version.version_ordinal} · страниц {version.page_count} ·{' '}
+          {formatBytes(version.byte_size)} · опубликовано {formatInstant(version.published_at)}
         </p>
         {secondary === undefined ? null : (
           <p>

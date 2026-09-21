@@ -10,6 +10,8 @@
  *   transport.ts   the only `fetch` in `web/`
  *   errors.ts      the closed failure surface
  *   authorization.ts  the two refusals of `T-6`'s seam, worded once
+ *   catalog-message.ts  what each catalog code means, in Russian, where a screen
+ *                       would otherwise print the API's own English message
  *   credentialed-forward.ts  server-only; the `/bff/v1` route handler's rules
  *   idempotency.ts one key per intent, reused on every retry
  *   run-state.ts   terminal / non-terminal / exportable, and the `succeeded` split
@@ -40,6 +42,8 @@ export {
   isAuthorizationErrorCode,
   isAuthorizationFailure,
 } from './authorization';
+
+export { UNDESCRIBED_MESSAGE_PREFIX, catalogMessage } from './catalog-message';
 
 export type { Pc01ErrorCode } from './errors';
 export {
