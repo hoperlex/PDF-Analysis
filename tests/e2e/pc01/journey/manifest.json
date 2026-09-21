@@ -391,5 +391,133 @@
         ]
       }
     ]
+  },
+  "refusals": {
+    "$comment": [
+      "The REFUSAL half. `D-44`, and before it `W27-REFUSE`'s six drives.",
+      "",
+      "`routes` and `write` both declare steps that SUCCEED. These six declare what happens",
+      "when a person drops the wrong file into the upload control: where the refusal happened,",
+      "what the screen said, and that the screen named the specific rule rather than a generic",
+      "failure. `W27-REFUSE` drove all six through a browser on 2026-09-18 and all six held --",
+      "and wrote the verdicts into `refusals.mjs`'s own source, where `make gate` cannot see",
+      "them. That is what moving them here fixes.",
+      "",
+      "Read by the same two checkers as the other halves. At RUN TIME `refusals.mjs` attaches",
+      "each fixture at the app's own control and asserts every field below against what the",
+      "browser saw. At GATE TIME the conformance guard asserts, with no stack: the fixture is",
+      "on disk; `refused_by` is `client` or `server` and the case declares the fields that go",
+      "with it and none that do not; the operation triple is a real contract operation and the",
+      "declared status is one the contract publishes FOR THAT OPERATION -- a `422` is as",
+      "declarable as a `201`; every marker attribute and every marker VALUE named here still",
+      "appears in `web/src`; every sentence in `expects_rendered` still appears in `web/src`;",
+      "and no case declares a classification from `generic_kinds`.",
+      "",
+      "WHICH HALF DOES NOT MOVE, stated rather than quietly widened. The gate cannot see that",
+      "the envelope really carries that `constraint`, that the screen really renders it, that",
+      "`Upload` really goes unpressable, or that nothing was published. Those are behaviour and",
+      "they stay with `refusals.mjs` against a running stack. `expects_rendered_from_envelope`",
+      "is the part of the rendered text the SERVER supplies, so it is deliberately not checked",
+      "against `web/src` -- it is checked against the `constraint` beside it instead, which is",
+      "data and therefore guardable.",
+      "",
+      "`fixture` is relative to `fixture_dir`."
+    ],
+    "at": "/projects/{project_uid}",
+    "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+    "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
+    "fixture_dir": "fixtures/synthetic/ar/negative",
+    "api": {
+      "method": "POST",
+      "path": "/projects/{project_uid}/documents",
+      "operationId": "uploadDocument",
+      "$why": "the one call a server-side refusal makes. A client-side refusal makes none, which is half of what these cases assert."
+    },
+    "precheck_marker": "data-precheck-problem",
+    "failure_marker": "data-upload-failure",
+    "generic_kinds": [
+      "server_error",
+      "unknown",
+      "unrecognized",
+      "transport"
+    ],
+    "cases": [
+      {
+        "fixture": "not_a_pdf.txt",
+        "rule": "ENV-PDF",
+        "refused_by": "client",
+        "precheck_problem": "not_pdf",
+        "expects_rendered": [
+          "not a PDF",
+          "Nothing was sent"
+        ]
+      },
+      {
+        "fixture": "companion_archive.zip",
+        "rule": "ENV-PDF",
+        "refused_by": "client",
+        "precheck_problem": "not_pdf",
+        "expects_rendered": [
+          "not a PDF",
+          "Nothing was sent"
+        ]
+      },
+      {
+        "fixture": "oversize.pdf",
+        "rule": "ENV-SIZE",
+        "refused_by": "client",
+        "precheck_problem": "too_large",
+        "expects_rendered": [
+          "25 MiB",
+          "Nothing was sent"
+        ],
+        "$why_the_size_case_is_client_side": "`D-44`. It is client-side only while the pre-check limit stays strictly below nginx's `client_max_body_size`; tests/e2e/test_upload_limit_headroom.py is what keeps that true."
+      },
+      {
+        "fixture": "encrypted.pdf",
+        "rule": "ENV-ENCRYPTED",
+        "refused_by": "server",
+        "expect_status": 422,
+        "error_code": "validation_failed",
+        "constraint": "not_encrypted",
+        "failure_kind": "unsupported_input",
+        "expects_rendered": [
+          "outside the accepted envelope"
+        ],
+        "expects_rendered_from_envelope": [
+          "not_encrypted"
+        ]
+      },
+      {
+        "fixture": "image_only.pdf",
+        "rule": "ENV-TEXT",
+        "refused_by": "server",
+        "expect_status": 422,
+        "error_code": "validation_failed",
+        "constraint": "every_page_has_extractable_text",
+        "failure_kind": "unsupported_input",
+        "expects_rendered": [
+          "outside the accepted envelope"
+        ],
+        "expects_rendered_from_envelope": [
+          "every_page_has_extractable_text"
+        ]
+      },
+      {
+        "fixture": "too_many_pages.pdf",
+        "rule": "ENV-PAGES",
+        "refused_by": "server",
+        "expect_status": 422,
+        "error_code": "validation_failed",
+        "constraint": "1 <= page_count <= 30",
+        "failure_kind": "unsupported_input",
+        "expects_rendered": [
+          "outside the accepted envelope"
+        ],
+        "expects_rendered_from_envelope": [
+          "page_count"
+        ]
+      }
+    ]
   }
 }

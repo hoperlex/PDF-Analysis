@@ -42,14 +42,20 @@ already had, narrowed but not shut.
 ``make mutation-copy`` copies ``src/``, ``tests/`` and ``pyproject.toml`` and *also*
 provides ``contracts``, ``docs``, ``fixtures``, ``db`` and ``tools`` -- as symlinks to the
 checkout, or as copies under ``FULL=1`` (``Makefile`` lines 551-578). What it does not
-provide is ``web/``, and that is the only thing missing here. So of the four checks below
-that read the real tree, the three that read ``web/src/app`` cannot run inside a mutation
-copy and must be excluded by path alongside the three suites under
-``tests/integration/composition``; the contract check reads only ``tests/`` and the
-symlinked ``contracts/`` and runs there unchanged.
+provide is ``web/``, and that is the only thing missing here. So **every check below that
+calls ``_require`` on ``APP_DIR`` or ``WEB_SRC``** cannot run inside a mutation copy and
+must be excluded by path alongside the three suites under
+``tests/integration/composition``; the checks that read only ``tests/`` and the symlinked
+``contracts/`` run there unchanged. That is stated as a property rather than a count
+because the count has now changed twice: the figure measured in a copy on 2026-09-19 --
+3 failed, 7 passed -- predates the refusal half and is no longer this file's shape.
 
-The six negative controls read nothing outside this file and run anywhere -- they are what
-proves each check can fail.
+The negative controls read nothing outside this file and run anywhere -- they are what
+proves each check can fail. ``tests/e2e/pc01/journey/prove_the_guard_can_fail.py`` proves
+the same against the *real* manifest, which a synthetic control cannot.
+
+**`W28-GUARD` widened it again, for the refusal half.** See the section at the foot of
+this file.
 """
 
 from __future__ import annotations
@@ -123,9 +129,11 @@ def operations_in_contract(openapi: dict) -> set[tuple[str, str, str]]:
 def operations_claimed_by_manifest(manifest: dict) -> set[tuple[str, str, str]]:
     """Every operation the journey says a screen calls, required and optional alike.
 
-    Both halves. The write half's three `POST`s go through the same check as the read
+    All three halves. The write half's three `POST`s go through the same check as the read
     walk's `GET`s, so renaming `startRun` -- the operation `D-5` actually was -- reddens
-    the gate rather than waiting for someone to run a browser.
+    the gate rather than waiting for someone to run a browser. `W28-GUARD` added the
+    refusal half's single `uploadDocument`, which is the same `POST` seen from the other
+    side: the six cases assert what it answers when the file is wrong.
     """
     out: set[tuple[str, str, str]] = set()
     for route in manifest["routes"]:
@@ -136,6 +144,9 @@ def operations_claimed_by_manifest(manifest: dict) -> set[tuple[str, str, str]]:
         for group in ("expects_api", "expects_api_after_terminal"):
             for call in step.get(group) or ():
                 out.add((call["method"].upper(), call["path"], call["operationId"]))
+    call = refusal_api(manifest)
+    if call is not None:
+        out.add((call["method"].upper(), call["path"], call["operationId"]))
     return out
 
 
@@ -781,3 +792,425 @@ def test_control_a_write_step_whose_page_module_moved_is_detected() -> None:
     assert route_path_of_page_module(step["page_module"]) == step["at"]
     moved = "web/src/app/projects/[project_uid]/page.tsx"
     assert route_path_of_page_module(moved) != step["at"]
+
+
+# --------------------------------------------------------------------------------------
+# The refusal half. `W28-GUARD`, over `W27-REFUSE`'s six measured drives.
+#
+# `W27-REFUSE` drove six negative fixtures through a browser, all six held, and it wrote
+# the verdicts into `refusals.mjs`'s own source -- where `make gate` could not see them.
+# Its own review named three additions the manifest would need. Measured against the files
+# here, two of the three were already there under other names, and the missing thing was
+# never a field: see `docs/program/reviews/W28-GUARD.md`.
+#
+# What moved to gate time is addressing, declaration coherence, and the handles and
+# sentences the screens own. What did NOT move is behaviour -- that the envelope really
+# carries that constraint, that the screen really renders it, that `Upload` really goes
+# unpressable, that nothing was published. Those stay with `refusals.mjs` against a live
+# stack, and are named in the manifest's own `$comment` rather than quietly claimed here.
+# --------------------------------------------------------------------------------------
+
+
+def refusal_section(manifest: dict) -> dict:
+    return dict((manifest.get("refusals") or {}))
+
+
+def refusal_cases(manifest: dict) -> list[dict]:
+    return list(refusal_section(manifest).get("cases") or ())
+
+
+def refusal_api(manifest: dict) -> dict | None:
+    """The one operation a server-side refusal calls, or ``None`` if none is declared."""
+    call = refusal_section(manifest).get("api")
+    return call if isinstance(call, dict) and "operationId" in call else None
+
+
+#: What each `refused_by` must declare, and what it must not. A client-side refusal has no
+#: status, no envelope and no server classification, because no request was made -- and a
+#: case that declares them anyway is a case nobody has thought through.
+_REFUSAL_FIELDS = {
+    "client": (
+        frozenset({"precheck_problem"}),
+        frozenset(
+            {"expect_status", "error_code", "constraint", "failure_kind",
+             "expects_rendered_from_envelope"}
+        ),
+    ),
+    "server": (
+        frozenset(
+            {"expect_status", "error_code", "constraint", "failure_kind",
+             "expects_rendered_from_envelope"}
+        ),
+        frozenset({"precheck_problem"}),
+    ),
+}
+
+
+def handles_named_by_refusal(case: dict, section: dict) -> set[str]:
+    """Every handle a refusal case names that must exist in ``web/src``.
+
+    The marker ATTRIBUTES the panel is read by, and the marker VALUES the case declares.
+    A value is a handle exactly as much as an attribute is: `data-precheck-problem` could
+    survive a rename of `too_large` to `over_limit`, and the case would then assert a word
+    no screen can produce.
+    """
+    out: set[str] = set()
+    if case["refused_by"] == "client":
+        out.add(section["precheck_marker"])
+        out.add(case["precheck_problem"])
+    else:
+        out.add(section["failure_marker"])
+        out.add(case["failure_kind"])
+    return out
+
+
+def test_the_manifest_has_a_refusal_half_at_all(manifest: dict) -> None:
+    """Six drives that only one person ever saw are not a guard. This is what makes them one."""
+    cases = refusal_cases(manifest)
+    assert cases, (
+        "manifest.json declares no `refusals` section, so `make gate` says nothing about "
+        "what a person sees when they drop the wrong file in -- which is the whole of "
+        "what W27-REFUSE measured and D-44 depends on."
+    )
+    assert refusal_api(manifest) is not None, (
+        "the refusal half declares no `api`, so a renamed `uploadDocument` would not "
+        "redden here."
+    )
+    by_where = {case["refused_by"] for case in cases}
+    assert by_where == {"client", "server"}, (
+        "the refusal half declares refusals at "
+        f"{sorted(by_where)} only. 'the browser never sent it' and 'the server refused it' "
+        "are different products, and a half that measures one of them measures half a "
+        f"screen. Declared: {[(c['fixture'], c['refused_by']) for c in cases]}"
+    )
+
+
+def test_every_refusal_fixture_the_journey_declares_is_on_disk(manifest: dict) -> None:
+    """A refusal case with no file is a case that drives nothing."""
+    section = refusal_section(manifest)
+    for case in refusal_cases(manifest):
+        fixture = REPOSITORY_ROOT / section["fixture_dir"] / case["fixture"]
+        assert fixture.is_file(), (
+            f"refusal case '{case['fixture']}' names {fixture}, which is not on disk. "
+            "There would be nothing to attach and nothing to refuse."
+        )
+        assert fixture.stat().st_size > 0, f"{fixture} is empty"
+
+
+def test_every_refusal_stands_on_the_upload_screen_the_read_walk_covers(
+    manifest: dict,
+) -> None:
+    """The refusals press one control on one screen, and both have to be real."""
+    _require(APP_DIR)
+    section = refusal_section(manifest)
+    module = REPOSITORY_ROOT / section["page_module"]
+    assert module.is_file(), f"the refusal half names {section['page_module']}, absent"
+    derived = route_path_of_page_module(section["page_module"])
+    assert derived == section["at"], (
+        f"the refusal half says it acts at {section['at']} but its page module sits at "
+        f"{derived}"
+    )
+    assert section["at"] in set(screens_in_manifest(manifest)), (
+        f"the refusal half acts at {section['at']}, which the read walk does not cover."
+    )
+    control = REPOSITORY_ROOT / section["control_module"]
+    assert control.is_file(), (
+        f"the refusal half presses controls from {section['control_module']}, which does "
+        "not exist"
+    )
+
+
+def test_every_refusal_declares_the_fields_that_go_with_where_it_was_refused(
+    manifest: dict,
+) -> None:
+    """`refused_by` is the field the six cases exist to assert, so it decides the rest."""
+    wrong: list[str] = []
+    for case in refusal_cases(manifest):
+        where = case.get("refused_by")
+        if where not in _REFUSAL_FIELDS:
+            wrong.append(f"{case.get('fixture')}: refused_by={where!r} is neither client nor server")
+            continue
+        required, forbidden = _REFUSAL_FIELDS[where]
+        for field in sorted(required):
+            if case.get(field) is None:
+                wrong.append(f"{case['fixture']}: refused at the {where} and declares no {field}")
+        for field in sorted(forbidden):
+            if field in case:
+                wrong.append(
+                    f"{case['fixture']}: refused at the {where} and declares {field}, "
+                    "which only the other side can produce"
+                )
+        if not (case.get("expects_rendered") or ()):
+            wrong.append(
+                f"{case['fixture']}: declares no expects_rendered, so it asserts a panel "
+                "appeared and nothing about what it said"
+            )
+    assert not wrong, f"the refusal half declares {len(wrong)} incoherent claim(s): {wrong}"
+
+
+def test_every_status_a_refusal_declares_is_one_the_contract_publishes(
+    manifest: dict, openapi: dict
+) -> None:
+    """A `422` is as declarable as a `201`: the contract decides, not the shape of the half.
+
+    `W27-REFUSE` read the existing status check as accepting success statuses only. It
+    does not -- `responses_published_for` returns every published code -- and this is what
+    holds that open. Drop `422` from `uploadDocument` and the six cases go red here.
+    """
+    call = refusal_api(manifest)
+    assert call is not None
+    published = responses_published_for(openapi, call["method"], call["path"])
+    wrong: list[str] = []
+    for case in refusal_cases(manifest):
+        declared = case.get("expect_status")
+        if declared is None:
+            continue
+        if declared not in published:
+            wrong.append(
+                f"{case['fixture']}: declares {declared}, {call['operationId']} publishes "
+                f"{sorted(published)}"
+            )
+    assert not wrong, (
+        f"the refusal half declares statuses the contract does not publish: {wrong}"
+    )
+
+
+def test_every_marker_a_refusal_names_still_exists_in_the_application(
+    manifest: dict,
+) -> None:
+    """Rename `data-upload-failure` or `too_large` and the six drives read nothing."""
+    _require(WEB_SRC)
+    source = application_source(WEB_SRC)
+    section = refusal_section(manifest)
+    missing: list[tuple[str, str]] = []
+    for case in refusal_cases(manifest):
+        for handle in sorted(handles_named_by_refusal(case, section)):
+            if handle not in source:
+                missing.append((case["fixture"], handle))
+    assert not missing, (
+        f"the refusal half names {len(missing)} marker(s) that no longer appear anywhere "
+        f"in web/src: {missing}. The drives would attach the right files and read nothing."
+    )
+
+
+def test_every_sentence_the_journey_requires_still_appears_in_the_application(
+    manifest: dict,
+) -> None:
+    """The copy-rot check, and it covers the write half too.
+
+    `expects_rendered` was in `manifest.json` from `W22-E2E` and **no checker but
+    `write.mjs` had ever read it** -- so "Created" could be reworded and the gate stayed
+    green while the journey went quietly red. Every sentence here is the application's own
+    words, so the application's own source is where they have to be.
+
+    `expects_rendered_from_envelope` is deliberately NOT checked here: the server supplies
+    those words at run time and they are not in `web/src` at all. They are checked against
+    the declared `constraint` instead, one test down.
+    """
+    _require(WEB_SRC)
+    source = application_source(WEB_SRC)
+    missing: list[tuple[str, str]] = []
+    for step in write_steps(manifest):
+        for sentence in step.get("expects_rendered") or ():
+            if sentence not in source:
+                missing.append((step["name"], sentence))
+    for case in refusal_cases(manifest):
+        for sentence in case.get("expects_rendered") or ():
+            if sentence not in source:
+                missing.append((case["fixture"], sentence))
+    assert not missing, (
+        f"the journey requires {len(missing)} sentence(s) that no longer appear anywhere "
+        f"in web/src: {missing}. A reworded panel turns the journey red only when someone "
+        "runs a browser, which is the rot this file exists to stop."
+    )
+
+
+def test_every_envelope_sentence_a_refusal_requires_is_part_of_its_own_constraint(
+    manifest: dict,
+) -> None:
+    """The half the gate CAN check about server-supplied text: that it is self-consistent.
+
+    The screen echoes the envelope's `details.constraint`. If a case declares that the
+    screen must say `page_count` while declaring the envelope carries `not_encrypted`, one
+    of the two is wrong and no stack is needed to know it.
+    """
+    wrong: list[str] = []
+    for case in refusal_cases(manifest):
+        constraint = case.get("constraint")
+        if constraint is None:
+            continue
+        for sentence in case.get("expects_rendered_from_envelope") or ():
+            if sentence not in constraint:
+                wrong.append(
+                    f"{case['fixture']}: requires the screen to render {sentence!r} from "
+                    f"the envelope, and declares the envelope carries {constraint!r}"
+                )
+    assert not wrong, f"the refusal half contradicts itself in {len(wrong)} place(s): {wrong}"
+
+
+def test_no_refusal_declares_the_generic_classification_it_exists_to_rule_out(
+    manifest: dict,
+) -> None:
+    """The check that stops a red being 'fixed' by declaring defeat.
+
+    `W27-REFUSE`'s point was that a fault the catalog names precisely must not render as
+    `server_error`. The cheapest way to make a failing drive pass is to declare the
+    generic kind here, and that would silently retire the measurement.
+    """
+    section = refusal_section(manifest)
+    generic = set(section.get("generic_kinds") or ())
+    assert generic, "the refusal half declares no `generic_kinds`, so this check is vacuous"
+    declared = {
+        case["fixture"]: case["failure_kind"]
+        for case in refusal_cases(manifest)
+        if case.get("failure_kind") is not None
+    }
+    surrendered = sorted(f for f, kind in declared.items() if kind in generic)
+    assert not surrendered, (
+        f"{surrendered} declare a generic classification ({sorted(generic)}) for a fault "
+        "the catalog names. That is the defect W27-REFUSE went looking for, written down "
+        "as the expectation."
+    )
+
+
+# --------------------------------------------------------------------------------------
+# The refusal half's negative controls. Same rule as the other two: pure functions over
+# synthetic data, each one RUN and watched to catch what it claims to catch.
+# --------------------------------------------------------------------------------------
+
+_SYNTHETIC_REFUSALS = {
+    "refusals": {
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
+        "fixture_dir": "fixtures/synthetic/ar/negative",
+        "api": {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "uploadDocument",
+        },
+        "precheck_marker": "data-precheck-problem",
+        "failure_marker": "data-upload-failure",
+        "generic_kinds": ["server_error", "unknown", "unrecognized", "transport"],
+        "cases": [
+            {
+                "fixture": "not_a_pdf.txt",
+                "refused_by": "client",
+                "precheck_problem": "not_pdf",
+                "expects_rendered": ["not a PDF", "Nothing was sent"],
+            },
+            {
+                "fixture": "encrypted.pdf",
+                "refused_by": "server",
+                "expect_status": 422,
+                "error_code": "validation_failed",
+                "constraint": "not_encrypted",
+                "failure_kind": "unsupported_input",
+                "expects_rendered": ["outside the accepted envelope"],
+                "expects_rendered_from_envelope": ["not_encrypted"],
+            },
+        ],
+    }
+}
+
+_SYNTHETIC_REFUSAL_CONTRACT = {
+    "paths": {
+        "/projects/{project_uid}/documents": {
+            "post": {"operationId": "uploadDocument", "responses": {"201": {}, "422": {}}}
+        }
+    }
+}
+
+
+def _only_refusal(fixture: str) -> dict:
+    return next(
+        case for case in _SYNTHETIC_REFUSALS["refusals"]["cases"] if case["fixture"] == fixture
+    )
+
+
+def test_control_a_manifest_with_no_refusal_half_is_detected() -> None:
+    assert refusal_cases({"routes": []}) == []
+    assert refusal_api({"routes": []}) is None
+    assert len(refusal_cases(_SYNTHETIC_REFUSALS)) == 2
+
+
+def test_control_the_refusal_half_s_operation_reaches_the_contract_check() -> None:
+    claimed = operations_claimed_by_manifest(dict(_SYNTHETIC_MANIFEST, **_SYNTHETIC_REFUSALS))
+    assert ("POST", "/projects/{project_uid}/documents", "uploadDocument") in claimed
+    renamed = {
+        "paths": {
+            "/projects": {"get": {"operationId": "listProjects"}},
+            "/projects/{project_uid}/documents": {"post": {"operationId": "postDocument"}},
+        }
+    }
+    assert claimed - operations_in_contract(renamed) == {
+        ("POST", "/projects/{project_uid}/documents", "uploadDocument")
+    }
+
+
+def test_control_a_refusal_claiming_the_wrong_side_is_detected() -> None:
+    """`W27-REFUSE`'s own reddening fixture in miniature: a client refusal called a server one."""
+    honest = _only_refusal("not_a_pdf.txt")
+    required, forbidden = _REFUSAL_FIELDS[honest["refused_by"]]
+    assert not [f for f in required if honest.get(f) is None]
+    assert not [f for f in forbidden if f in honest]
+
+    lying = dict(honest, refused_by="server")
+    required, forbidden = _REFUSAL_FIELDS["server"]
+    assert sorted(f for f in required if lying.get(f) is None) == [
+        "constraint",
+        "error_code",
+        "expect_status",
+        "expects_rendered_from_envelope",
+        "failure_kind",
+    ]
+    assert sorted(f for f in forbidden if f in lying) == ["precheck_problem"]
+
+
+def test_control_a_status_no_operation_publishes_is_detected() -> None:
+    published = responses_published_for(
+        _SYNTHETIC_REFUSAL_CONTRACT, "POST", "/projects/{project_uid}/documents"
+    )
+    assert published == {201, 422}, (
+        "a refusal declares 422 and the existing status check accepts it unchanged -- "
+        "the third addition W27-REFUSE named was already there"
+    )
+    assert 413 not in published, (
+        "nginx's own 413 is not an operation of this contract, which is exactly why D-44's "
+        "headroom has to hold"
+    )
+
+
+def test_control_a_renamed_marker_value_is_detected() -> None:
+    section = _SYNTHETIC_REFUSALS["refusals"]
+    handles = handles_named_by_refusal(_only_refusal("not_a_pdf.txt"), section)
+    assert handles == {"data-precheck-problem", "not_pdf"}
+    source_after_a_rename = "<p data-precheck-problem={p}>{message(p)}</p> 'not_a_pdf'"
+    assert sorted(h for h in handles if h not in source_after_a_rename) == ["not_pdf"]
+
+    server_handles = handles_named_by_refusal(_only_refusal("encrypted.pdf"), section)
+    assert server_handles == {"data-upload-failure", "unsupported_input"}
+
+
+def test_control_a_reworded_panel_is_detected() -> None:
+    case = _only_refusal("not_a_pdf.txt")
+    source_after_the_rewrite = "That file is not a PDF. We did not upload it."
+    missing = [s for s in case["expects_rendered"] if s not in source_after_the_rewrite]
+    assert missing == ["Nothing was sent"]
+
+
+def test_control_an_envelope_sentence_that_contradicts_its_constraint_is_detected() -> None:
+    case = _only_refusal("encrypted.pdf")
+    assert all(s in case["constraint"] for s in case["expects_rendered_from_envelope"])
+    contradictory = dict(case, constraint="a_constraint_no_envelope_carries")
+    assert [
+        s
+        for s in contradictory["expects_rendered_from_envelope"]
+        if s not in contradictory["constraint"]
+    ] == ["not_encrypted"]
+
+
+def test_control_a_surrendered_classification_is_detected() -> None:
+    generic = set(_SYNTHETIC_REFUSALS["refusals"]["generic_kinds"])
+    assert _only_refusal("encrypted.pdf")["failure_kind"] not in generic
+    assert "server_error" in generic

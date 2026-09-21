@@ -38,15 +38,17 @@
  * 200 and renders an error state. Every verdict below is taken from `innerText` and from
  * the marker attributes `web/src` defines, and the status is evidence beside them.
  *
- * **Why the expectations are written here and not in `manifest.json`.** `manifest.json`'s
- * `write` section declares steps that *succeed* — it has `forbids_rendered` and no
- * `requires_rendered`, and its gate-time guard in
- * `tests/e2e/test_pc01_journey_conformance.py` reads it on that understanding. Extending
- * that format to carry refusals is a real piece of work with a real guard change behind
- * it, and this session's deliverable is the measurement. The cost is stated rather than
- * hidden: **the table below is not read by `make gate`**, so a renamed marker turns this
- * script red only when someone runs it. That is the same residue `W21-E2E` stated for the
- * read walk, one notch worse, and it is the next session's to close.
+ * **Where the expectations live, since `W28-GUARD`.** They were written in this file's own
+ * source, and this file stated the cost: `make gate` could not read them, so a renamed
+ * marker turned the script red only when someone ran it. **They are now
+ * `manifest.json`'s `refusals` section**, read below, and
+ * `tests/e2e/test_pc01_journey_conformance.py` checks them at gate time against the route
+ * tree, the contract and `web/src` — with no browser, no origin and no stack.
+ *
+ * What the gate still cannot see is behaviour: that the envelope really carries that
+ * `constraint`, that the screen really renders it, that `Upload` really goes unpressable,
+ * that nothing was published. **That is what this script is for**, and the split is named
+ * in the manifest's own `$comment` rather than quietly claimed by the guard.
  *
  * Run:
  *
@@ -66,66 +68,46 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..', '..', '..');
 
 /**
- * The six fixtures, and what each one's refusal is claimed to be.
+ * The declaration, read from `manifest.json`. `W28-GUARD`.
  *
  * `rule` is the envelope rule id from `fixtures/synthetic/ar/README.md`. `refused_by` is
- * the claim this session set out to check, taken from `W21-CERT`'s `curl` table plus
+ * the claim `W27-REFUSE` set out to check, taken from `W21-CERT`'s `curl` table plus
  * `precheckUploadFile`'s two browser-visible rules. `must_say` is the substring the screen
- * has to render for the refusal to be *actionable* rather than merely present.
+ * has to render for the refusal to be *actionable* rather than merely present, and the
+ * manifest splits it in two: `expects_rendered` is the application's own words, which the
+ * gate checks against `web/src`, and `expects_rendered_from_envelope` is what the SERVER
+ * supplies, which only a live drive can see. This script needs both, in one list.
+ *
+ * The rest of this file is unchanged, so `--cases` files written against the old shape --
+ * `fixtures/redden-refusals.json` among them -- still declare exactly what they did.
  */
-const CASES = [
-  {
-    fixture: 'not_a_pdf.txt',
-    rule: 'ENV-PDF',
-    refused_by: 'client',
-    precheck_problem: 'not_pdf',
-    must_say: ['not a PDF', 'Nothing was sent'],
-  },
-  {
-    fixture: 'companion_archive.zip',
-    rule: 'ENV-PDF',
-    refused_by: 'client',
-    precheck_problem: 'not_pdf',
-    must_say: ['not a PDF', 'Nothing was sent'],
-  },
-  {
-    fixture: 'oversize.pdf',
-    rule: 'ENV-SIZE',
-    refused_by: 'client',
-    precheck_problem: 'too_large',
-    must_say: ['25 MiB', 'Nothing was sent'],
-  },
-  {
-    fixture: 'encrypted.pdf',
-    rule: 'ENV-ENCRYPTED',
-    refused_by: 'server',
-    status: 422,
-    error_code: 'validation_failed',
-    constraint: 'not_encrypted',
-    failure_kind: 'unsupported_input',
-    must_say: ['outside the accepted envelope', 'not_encrypted'],
-  },
-  {
-    fixture: 'image_only.pdf',
-    rule: 'ENV-TEXT',
-    refused_by: 'server',
-    status: 422,
-    error_code: 'validation_failed',
-    constraint: 'every_page_has_extractable_text',
-    failure_kind: 'unsupported_input',
-    must_say: ['outside the accepted envelope', 'every_page_has_extractable_text'],
-  },
-  {
-    fixture: 'too_many_pages.pdf',
-    rule: 'ENV-PAGES',
-    refused_by: 'server',
-    status: 422,
-    error_code: 'validation_failed',
-    constraint: '1 <= page_count <= 30',
-    failure_kind: 'unsupported_input',
-    must_say: ['outside the accepted envelope', 'page_count'],
-  },
-];
+const REFUSALS = JSON.parse(readFileSync(resolve(HERE, 'manifest.json'), 'utf8')).refusals;
+
+function manifestCases(section) {
+  if (section === undefined || !Array.isArray(section.cases) || section.cases.length === 0) {
+    throw new Error(
+      'manifest.json declares no `refusals` section. It is where the six live since ' +
+        'W28-GUARD, and it is what tests/e2e/test_pc01_journey_conformance.py checks.',
+    );
+  }
+  return section.cases.map((declared) => ({
+    ...declared,
+    // the manifest says `expect_status`, as its write half does; this file says `status`
+    status: declared.expect_status,
+    must_say: [
+      ...(declared.expects_rendered ?? []),
+      ...(declared.expects_rendered_from_envelope ?? []),
+    ],
+  }));
+}
+
+const CASES = manifestCases(REFUSALS);
+
+/** The classifications that mean "the client could not say what went wrong". Declared. */
+const GENERIC_KINDS_DECLARED = REFUSALS?.generic_kinds ?? null;
+
+/** Where the negative fixtures live, declared once and read by both checkers. */
+const FIXTURE_DIR = REFUSALS?.fixture_dir ?? 'fixtures/synthetic/ar/negative';
 
 /**
  * Proving it can fail.
@@ -147,8 +129,16 @@ function casesFrom(path) {
   return declared;
 }
 
-/** The classifications that mean "the client could not say what went wrong". */
-const GENERIC_KINDS = new Set(['server_error', 'unknown', 'unrecognized', 'transport']);
+/**
+ * The classifications that mean "the client could not say what went wrong".
+ *
+ * Declared in `manifest.json` since `W28-GUARD`, so the gate can hold the six cases to
+ * not declaring one of them -- which is the cheapest way to make a failing drive pass.
+ */
+const GENERIC_KINDS = new Set(GENERIC_KINDS_DECLARED ?? []);
+if (GENERIC_KINDS.size === 0) {
+  throw new Error('manifest.json declares no `refusals.generic_kinds`; check 4 would be vacuous.');
+}
 
 const ID = '[0-9A-HJKMNP-TV-Z]{26}';
 const API_PREFIX = '/bff/v1';
@@ -250,7 +240,7 @@ async function seedProject(origin, stamp) {
 
 /** One fixture, one cold browser, at the app's own upload control. */
 async function drive(origin, projectUid, testCase, stamp) {
-  const file = resolve(REPO, 'fixtures/synthetic/ar/negative', testCase.fixture);
+  const file = resolve(REPO, FIXTURE_DIR, testCase.fixture);
   if (!existsSync(file)) {
     return { fixture: testCase.fixture, drivingError: `${file} is not on disk`, findings: [`${testCase.fixture}: the fixture is not on disk at ${file}`] };
   }
