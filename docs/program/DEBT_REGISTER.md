@@ -11,6 +11,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
+| **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
 | D-53 | 20 English strings survive three reports of a translated interface | a **guard**, not a fourth pass |
 | D-55 | `cdp.mjs` cannot screenshot, and R-18 makes rendering evidence structural | ~8 lines on the tree's own instrument |
 | D-52 | the legacy icon set is at least partly Feather, MIT, notice absent | a `NOTICE` file if we copy; **not** `D-11`'s shape |
@@ -1393,6 +1394,47 @@ settles it, and checking a log someone else may have written settles nothing.
 
 **Rule for every future brief: write logs to a path that carries the session's own name**, and
 never read an exit code out of a file you did not create in this session.
+
+### D-56 — project sections are two jobs, and briefing them as one would force a contract reseal nobody asked for
+
+**Raised by `pdf-analysis-84` from the owner directly, 2026-09-21. Verified against the
+contract by the integrator the same day. Registered before anyone briefs it.**
+
+The legacy application organises work by **project section** and carries **14** of them —
+`AR, AI, KM, KJ, OV, EOM, VK, PT, PB, SS, ITP, GP, TX, POS`
+(`backend/app/pipeline/stages/prepare/task_builder.py:1362`). Ours has none. The owner's
+position is that analysing only `AR` today is no reason for the interface not to carry the
+structure — **which is `R-18`'s own stub rule applied to sections**, and is consistent.
+
+**The contract has no project-section field anywhere**, confirmed by reading it rather than by
+taking the report:
+
+```
+CreateProjectRequest -> ['name']
+Project              -> ['project_uid', 'name', 'created_at', 'document_count']
+UploadDocumentRequest-> ['file', 'display_title']
+```
+
+*(A grep for `section` across the schemas returns exactly one hit, in `Evidence` — and it is
+**prose in a `description` about the document's prepared text layer**, not a field and not a
+project section. The claim survives the check; a careless check would have reported it
+refuted.)*
+
+**So this is two jobs with two different prices, and that separation is the whole row:**
+
+| | what it is | cost |
+|---|---|---|
+| **sections as navigation and stubs** | a frontend structure with 14 named sections, 13 of them honest stubs | **pure `web/src`. No contract, no migration, no reseal.** Squarely inside `R-18` |
+| **verdicts aggregated per section** | what legacy's expert screen actually does | **a contract reseal plus a migration.** `Project` and the finding path both need the field, and `web/FRONTEND_LOCK.json` pins the contract's sha256 by hand |
+
+Briefed as one job, the cheap half drags the expensive half along and a wave discovers the
+reseal at the end — which is exactly how `R-11` came to revert `W20-CODE`'s work. **Briefed
+separately, the first half can land in a design wave and the second waits for a ruling.**
+
+Needs the owner: whether the second half is wanted at all for the alpha, and whether 14
+sections is the right set or legacy's set is simply what legacy had.
+
+Check: `python3 -c "import json; d=json.load(open('contracts/api/v1/openapi.json')); print(list(d['components']['schemas']['Project']['properties']))"`
 
 ### D-53 — twenty user-visible English strings survive two waves that each reported the interface translated
 
