@@ -304,3 +304,46 @@ probe, which was run on this session's stack only.
 
 Run once at the end, from a committed-clean tree, on lane `gate-w30a`, with the exit code read
 from `$?` after a redirect and never through a pipe.
+
+```
+make gate > /root/w30-logs/cert3-gate.log 2>&1; echo "EXIT=$?" >> /root/w30-logs/cert3-gate.log
+```
+
+| | |
+|---|---|
+| commit | `46dfbf1` — the record and this report |
+| battery | **2001 passed**, 5 skipped, 1 warning, **169 subtests** in 496.09 s |
+| foundation | 35 passed in 31.64 s |
+| frontend | **764 passed** across 52 files in 15.62 s |
+| whitespace | clean |
+| result | `GATE OK: battery, foundation, frontend and whitespace all pass` |
+| exit | **0** |
+
+**Identical, figure for figure, to the numbers the dispatch carries** — battery 2001, frontend
+764 — which is what a session that adds no test and touches no `src/`, `web/`, `contracts/`,
+`db/`, `tests/`, `infra/` or `Makefile` file should produce. 17:40:36 → 17:50:07 +05.
+
+## 12. For the integrator
+
+- Two files changed, both inside `allowed_paths`:
+  `artifacts/checkpoints/PA-01/certification-ac7c348.json` and `docs/program/W30-CERT3.md`.
+  `git diff --stat ac7c348..HEAD` shows those two and nothing else.
+- **No contract touched.** `contracts/**`, `db/**`, `src/**`, `web/src/**`, `tests/**`,
+  `infra/**`, `DEBT_REGISTER.md`, `CURRENT_STATE.md`, `Makefile` and the root
+  dependency/lock files are untouched.
+- Two git-ignored, untracked files were written outside version control because the
+  deployment needs them and `.env`-class files are how this repository carries them:
+  `/root/w30cert3/.env` (the `gate-w30a` lane the integrator supplied) and
+  `/root/w30cert3/infra/deploy/env/provider.env` (a copy of the stand's, repointed during
+  criterion 9 and restored). `git status --porcelain` is empty at every commit.
+- **Four proposed register rows**, §7, each with its check command. `W30CERT3-4` is against
+  `CURRENT_STATE.md` and is the one worth acting on first, because it is mandatory reading.
+- **This session's own stack, `auditmanager-w30cert3` on 31560, is still running** and holds
+  the restored census. Tear it down with
+  `docker compose --env-file /root/w30-logs/cert3-drive/alpha.env -f infra/deploy/compose.server.yml down -v`
+  and `docker rm -f w30cert3-stub`, plus `docker rmi auditmanager-w30cert3-api
+  auditmanager-w30cert3-web` to give the host back its disk. It was left up deliberately so the
+  evidence can be re-read.
+- **The owner's stand on 31500 is as it was**, plus one project, one document, one live run,
+  three decisions and one refusals project with zero documents. Never reset, wiped, stopped,
+  restarted or removed.

@@ -276,14 +276,14 @@
     "exit_code_read_from": "$? after a redirect to a file, never through | tail",
     "note_on_the_lane": "The dispatch brief assigned a log prefix but no gate lane, and this worktree carries no .env because .env is git-ignored. Copying .env.example unedited would have taken the same FOUNDATION_INSTANCE, ports and database as the concurrently live W30-LISTS session and the gate-b0 containers already on this host. The integrator supplied the lane mid-session and it was set before anything measured.",
     "final": {
-      "commit": null,
-      "battery": null,
-      "foundation": null,
-      "frontend": null,
-      "whitespace": null,
-      "result": null,
-      "exit": null,
-      "note": null
+      "commit": "46dfbf1 -- the record and the report; the only later commit on this branch is the one that fills these figures in",
+      "battery": "2001 passed, 5 skipped, 1 warning, 169 subtests passed in 496.09s",
+      "foundation": "35 passed in 31.64s",
+      "frontend": "764 passed across 52 files in 15.62s",
+      "whitespace": "clean",
+      "result": "GATE OK: battery, foundation, frontend and whitespace all pass",
+      "exit": 0,
+      "note": "Identical, figure for figure, to the numbers the dispatch carries: battery 2001, frontend 764. Foundation 35 and 169 subtests besides. Run ONCE, on lane gate-w30a, from a committed-clean tree at 46dfbf1, 17:40:36 to 17:50:07 +05. That is the shape a session that adds no test and touches no src/, web/, contracts/, db/, tests/, infra/ or Makefile file should produce, and it is what this one produced."
     }
   },
   "limits": {
@@ -348,9 +348,9 @@
   },
   "verdict": "PA-01 is not certifiable as a whole at ac7c348, and the reason is still not the software. Eight criteria were driven to a verdict and none of them failed; one of the eight keeps a named exception, and that exception's reason had to be replaced rather than repeated because the one on record had become false. Criterion 10 lost its exception outright, repaired between the two certifications by a wave that was not trying to move a certification. Criteria 1 and 2 stop where they have stopped since W21-CERT: at R-1's host - a name, a certificate, who holds root, and a machine with no history of this stack on it.",
   "elapsed": {
-    "arrived": null,
-    "final_gate_exit_read": null,
-    "measured": null,
-    "method": "filled by the commit that fills the gate figures"
+    "opened_the_report": "2026-09-21T17:15:13+05:00 (the commit that opened it, before the first measurement)",
+    "final_gate_exit_read": "2026-09-21T17:50:07+05:00",
+    "measured": "34 min 54 s",
+    "method": "The commit timestamp of the opening report file to `date -Is` printed by the shell that read the gate's exit code. Measured, not estimated. No arrival timestamp was taken, so the span begins at the first committed artefact rather than at dispatch, and the real figure is slightly larger."
   }
 }
