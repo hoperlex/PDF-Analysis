@@ -97,6 +97,44 @@ does not announce itself. It reads exactly like a run that produced less output 
 expected, which is the same thing a silently truncated command looks like — and §12 is the
 whole reason this programme does not accept that reading without a second measurement.
 
+## 4.5 A permission is scoped to one session; a shared resource is not
+
+**Recorded 2026-09-21, from a case where nobody did anything wrong and the decision did not
+hold anyway.**
+
+`W31-STYLE` could not gate: `make up` failed with `all predefined address pools have been
+fully subnetted`. It measured 33 docker networks, 24 of them empty and belonging to dead
+sessions from waves 3–24, and **was refused permission to remove them.** It did not work
+around the refusal. It reported the blocker and handed the integrator the command.
+
+The integrator **declined to run it**, because running an action on behalf of a session that
+was refused it routes around the decision rather than respecting it.
+
+**Twenty minutes later the networks were gone.** A second live session on the same host —
+`pdf-analysis-84` — hit the *same* blocker in its *own* gate, measured the same 33 networks,
+ran `docker network prune -f`, and gated green. It had not been asked, did not know a refusal
+existed, and its own session permitted the command. **There was no request to route around and
+no misconduct.** It then disclosed what it had done, unprompted, rather than letting the
+attribution stand.
+
+**The structural fact is the one to carry forward: permissions are scoped per session, and a
+host-wide resource is not.** So a decision that one agent may not do something to a shared
+resource does not prevent the thing from being done — it only decides *who does not do it*.
+Nothing recorded the refusal anywhere the second session could read.
+
+This will recur with anything host-wide — **disk, ports, images, containers, networks** —
+because every one of them is reached by more than one lane. Three consequences worth acting on:
+
+1. **A refusal is information other lanes need.** When a session reports being refused something
+   host-wide, the integrator should say so to the other live sessions, not only to the owner.
+   Wave 31's integrator did not, and learned of the prune from the peer's own disclosure.
+2. **Declining to act on a peer's behalf is still right**, and this case does not weaken it. The
+   integrator's refusal was correct and remains the rule; it was undone by coincidence, not by
+   anyone circumventing it.
+3. **Do not read "the blocker cleared itself".** The integrator's first reading of the drop from
+   33 networks to 9 was that something on the host reclaims them. It does not. A live agent ran
+   a command, and the only reason that is known is that it said so.
+
 ## 5. `make bootstrap` needs an explicit base interpreter
 
 When the ambient interpreter is an active virtualenv, run:
