@@ -74,16 +74,22 @@ interface Registered {
  * carries the arithmetic for both.
  */
 const REGISTERED: readonly Registered[] = [
-  {
-    key: 'text|--am-ink-inverse|--am-accent-light|-|selection',
-    why:
-      "`::selection` paints `--am-accent-light` UNDER whatever colour the text already " +
-      'has and sets no colour of its own, so selecting a primary button label puts ' +
-      '`--am-ink-inverse` (white) on a pale tint at 1.17:1 and the words vanish while ' +
-      'the pointer is down. It is a real legibility defect and it is not a token value: ' +
-      'the repair is a `color` on the `::selection` rule, and `W32-CONTRAST` may change ' +
-      'values, not rules. Reported to the integrator rather than worked around.',
-  },
+  /*
+   * REMOVED, repaired rather than accepted. `W32-CONTRAST` registered
+   * `text|--am-ink-inverse|--am-accent-light|-|selection` because `::selection` set no
+   * `color` of its own, so selecting a primary button label put white on a pale tint at
+   * 1.17:1 and the words vanished under the pointer. It could not fix it: the repair is a
+   * rule, and that session's grant was token values.
+   *
+   * The integrator added `color: var(--am-ink)` to the `::selection` rule — 15.13:1 against
+   * that tint, and the one foreground safe on every surface selection can land on.
+   *
+   * **This row's removal was forced by the guard, not noticed by a person.** The repair made
+   * `every registered pair is still produced and still below its threshold` go red, which is
+   * the both-directions check doing exactly what §4.2's M4 mutation predicted. A one-way
+   * register would have kept a row describing a defect that no longer exists, and the next
+   * reader would have believed it.
+   */
   {
     key: 'edge|--am-line|--am-surface|-|border',
     why:

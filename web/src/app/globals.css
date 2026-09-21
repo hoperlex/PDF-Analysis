@@ -204,7 +204,20 @@ body {
 }
 
 ::selection {
+  /*
+   * `color` is not optional here, and the reason is measured. `::selection` overrides the
+   * BACKGROUND and inherits the foreground, so on a filled control the label keeps
+   * `--am-ink-inverse` (white) and lands on this pale tint at **1.17:1** — the text of a
+   * primary button disappears the moment a reader drags across it. Found by `W32-CONTRAST`
+   * while censusing rendered pairs; it could not repair it, because a rule is not a token.
+   *
+   * `--am-ink` gives 15.13:1 against this tint and is the one foreground that is safe
+   * everywhere, since selection can fall on any surface in the application. Stating it here
+   * rather than per-component is deliberate: a per-component fix would have to be repeated at
+   * every filled control ever added, and the next one added would be the one that forgot.
+   */
   background: var(--am-accent-light);
+  color: var(--am-ink);
 }
 
 /* ==================================================================================
