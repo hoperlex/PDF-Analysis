@@ -1410,12 +1410,27 @@ helper's docstring; this one shaped what got built.
 
 ## 2. Owner-blocked, and not mine
 
-| # | Item | Blocks |
-|---|---|---|
-| `OD-18` | three to five named experts with committed slots | `P4-BHV-01`, and it alone |
-| `OD-17` | the shape of the next corpus; PC-02's precision evidence is saturated | the P05 corpus decision |
-| — | the 21st error code, for "usable output over a strict subset of the input" | nothing today — `W11-RD` deliberately avoided needing it |
-| — | whether `origin/main` advances | nothing; see §3 |
+**Re-measured 2026-09-21.** Two of the four rows this table carried had been **ruled and were
+still listed as open** — the 21st code (`R-8`, reverted by `R-11`, reinstated by `R-13` and
+paid by `W25-SEAL`) and whether `origin/main` advances (`R-7`; it has advanced twice, to
+`alpha-w18` and `alpha-w25`). A table of what the owner still owes that lists things the owner
+already decided is the same failure this register's rule 1 exists to prevent, pointing the
+other way.
+
+| # | Item | Blocks | Since |
+|---|---|---|---|
+| `R-1` | **a host, a name, a certificate, DNS** | `PA-01` **criteria 1 and 2**, and nothing else — `W26-HOST` established that no part of this repository is still a reason | 2026-09-17 |
+| `R-4`(a) | who uploads real client documents to the alpha server | the pilot's start | 2026-09-17 |
+| `R-4`(b) | what event ends the pilot, at which the uploads are wiped | the pilot's end, and `reset.sh`'s trigger | 2026-09-17 |
+| `D-46` | may a failed run name **which** dependency was unavailable | one sentence on one screen; **a reseal either way**, and §1's row says why both answers cost one | 2026-09-21 |
+| `R-9` | the owner drives the application by hand | **`D-9`**, the norms corpus — the owner placed it there deliberately | 2026-09-18 |
+| `OD-18` | three to five named experts with committed slots | `P4-BHV-01`, and it alone | pre-programme |
+| `OD-17` | the shape of the next corpus; PC-02's precision evidence is saturated | the P05 corpus decision | pre-programme |
+
+**`R-9` is the one that moved.** It gated `D-9` on manual testing, and until 2026-09-21 the
+stand was several waves behind the tree, so the owner could not have done that testing against
+current code even if they had sat down to it. As of `ac7c348` the stand **is** the tree, proved
+file by file by `verify-deployed.sh`. The thing in the way was ours and it is gone.
 
 ## 2.5 — the stale-premise count has no register, and two documents disagree
 
