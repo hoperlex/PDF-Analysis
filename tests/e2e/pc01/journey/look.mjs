@@ -13,10 +13,18 @@
  * that also judged would invite the judgement to be written after the reading.
  *
  *     node tests/e2e/pc01/journey/look.mjs --origin http://127.0.0.1:PORT \
- *       --path /projects/prj_.../runs/run_.../findings [--out <dir>]
+ *       --path /projects/prj_.../runs/run_.../findings [--out <dir>] \
+ *       [--shot] [--width 1280] [--height 900]
  *
  * Prints the rendered text to stdout and writes the full envelope -- every request the
  * browser made, with `Authorization` recorded by presence only -- to `<out>/look.json`.
+ *
+ * **`--shot` writes a PNG per path beside the envelope (`D-55`, `W32-SEE`).** It is off by
+ * default and stays off: this tool's contract is that it asserts nothing, and a reading
+ * that silently produced files would change that. The viewport is fixed rather than left
+ * to the browser's default window, so the same screen photographs the same way on two
+ * hosts -- an evidence photograph whose width depends on the machine is not comparable
+ * evidence.
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -28,11 +36,14 @@ import { withColdBrowser } from './cdp.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 function parseArgs(argv) {
-  const args = { origin: undefined, paths: [], out: undefined };
+  const args = { origin: undefined, paths: [], out: undefined, shot: false, width: 1280, height: 900 };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--origin') args.origin = argv[++i];
     else if (argv[i] === '--path') args.paths.push(argv[++i]);
     else if (argv[i] === '--out') args.out = argv[++i];
+    else if (argv[i] === '--shot') args.shot = true;
+    else if (argv[i] === '--width') args.width = Number(argv[++i]);
+    else if (argv[i] === '--height') args.height = Number(argv[++i]);
     else {
       console.error(`look: unknown argument '${argv[i]}'`);
       process.exit(2);
@@ -66,6 +77,14 @@ for (const path of args.paths) {
       reading.bodyText = await page.evaluate(
         "document.body ? document.body.innerText.replace(/\\n{3,}/g, '\\n\\n') : ''",
       );
+      if (args.shot) {
+        const name = (path.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'root') + '.png';
+        reading.screenshot = await page.screenshot(join(OUT_DIR, name), {
+          fullPage: true,
+          width: args.width,
+          height: args.height,
+        });
+      }
       reading.exchanges = page.exchanges();
       reading.consoleErrors = page.consoleErrors();
       reading.pageErrors = page.pageErrors();
@@ -78,6 +97,7 @@ for (const path of args.paths) {
   if (reading.drivingError) console.log(`could not be driven: ${reading.drivingError}`);
   console.log('-'.repeat(72));
   console.log(reading.bodyText ?? '');
+  if (reading.screenshot) console.log(`\nscreenshot: ${reading.screenshot}`);
 }
 
 const envelope = { origin: ORIGIN, at: new Date().toISOString(), readings };
