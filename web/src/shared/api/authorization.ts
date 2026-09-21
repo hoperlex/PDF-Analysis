@@ -40,15 +40,15 @@ void _authorizationCodesAreContractCodes;
  * merely accurate.
  */
 export const AUTHENTICATION_REQUIRED_DETAIL =
-  'The API did not accept a credential for this request. Either this deployment has none ' +
-  'configured, or the one it presents is not one the API accepts. Nothing was applied, ' +
-  'and retrying sends the same credential to the same refusal.';
+  'API не принял учётные данные для этого запроса. Либо в этом развёртывании они не ' +
+  'настроены, либо предъявляемые API не принимает. Ничего не применено, и повтор отправит ' +
+  'те же учётные данные к тому же отказу.';
 
 /** `permission_denied`. The credential was accepted; the subject is not allowed this. */
 export const PERMISSION_DENIED_DETAIL =
-  'The credential was accepted, but it is not permitted this operation on this resource. ' +
-  'Authorization is decided by the API and is not something this screen can grant. ' +
-  'Nothing was applied.';
+  'Учётные данные приняты, но эта операция над этим ресурсом им не разрешена. ' +
+  'Авторизацию решает API, и этот экран её выдать не может. ' +
+  'Ничего не применено.';
 
 /** The shared sentence for one of the two codes. */
 export function authorizationDetail(code: AuthorizationErrorCode): string {

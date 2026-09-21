@@ -44,10 +44,10 @@ describe('the envelope the user is shown is the envelope the contract declares',
     const text = UPLOAD_ENVELOPE_RULES.join(' ');
     expect(text).toContain('25 MiB');
     expect(text).toContain('30 pages');
-    expect(text.toLowerCase()).toContain('password-protected');
-    expect(text.toLowerCase()).toContain('extractable embedded text');
+    expect(text.toLowerCase()).toContain('без пароля');
+    expect(text.toLowerCase()).toContain('извлекаемый встроенный текст');
     // OCR is never silently substituted, and the panel says so up front.
-    expect(text.toLowerCase()).toContain('optical recognition');
+    expect(text.toLowerCase()).toContain('оптическим распознаванием');
   });
 });
 

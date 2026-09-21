@@ -53,28 +53,28 @@ function failedWith(reason: ErrorCode | null): string {
  * chosen to be specific to its own code, so one constant reddens twenty-two named cases.
  */
 const MUST_SAY: Readonly<Record<ErrorCode, string>> = {
-  validation_failed: 'A declared schema, enum, format or invariant was violated',
-  not_found: 'does not exist, or is not visible to the caller that addressed it',
-  authentication_required: 'no valid authenticated subject was presented',
-  permission_denied: 'was not permitted to do something this run needed',
-  conflict: 'lost the optimistic-concurrency check',
-  state_transition_not_allowed: 'a transition the frozen state machine does not declare',
-  idempotency_key_reuse: 'was reused with a different payload',
-  idempotency_key_in_progress: 'the same key and the same payload was still executing',
-  idempotency_key_stale: 'could no longer be established',
-  unsupported_contract_version: 'is unknown to this deployment',
-  storage_integrity_error: 'did not match the bytes that were stored',
-  dependency_unavailable: 'A dependency this run needs was unavailable.',
-  dependency_credential_refused: 'refused a credential belonging to this deployment',
-  staged_upload_lost: 'no longer held the bytes an upload had staged',
-  required_norm_unavailable: 'could not be resolved to an immutable versioned record',
-  analysis_input_invalid: 'declared stage input was not acceptable',
-  analysis_failed: 'ended in the failed terminal state',
-  partial_result_not_publishable: 'was asked for something that requires a run without one',
-  cost_budget_exceeded: 'budget for this run was exhausted',
-  stale_attempt: 'is no longer the publication authority for it',
-  execution_token_invalid: 'was absent, malformed, or not the current one',
-  internal_error: 'An unclassified server fault stopped this run.',
+  validation_failed: 'Нарушены объявленная схема, перечисление, формат или инвариант',
+  not_found: 'не существует либо не видно вызывающей стороне',
+  authentication_required: 'не был предъявлен действительный аутентифицированный',
+  permission_denied: 'не разрешено действие, которое требовалось прогону',
+  conflict: 'проиграла проверку оптимистичной блокировки',
+  state_transition_not_allowed: 'зафиксированная машина состояний из его состояния',
+  idempotency_key_reuse: 'повторно использован с другим телом запроса',
+  idempotency_key_in_progress: 'тем же ключом и тем же телом ещё выполнялась',
+  idempotency_key_stale: 'больше не удалось установить',
+  unsupported_contract_version: 'неизвестна этому развёртыванию',
+  storage_integrity_error: 'не совпали с сохранёнными или переданными байтами',
+  dependency_unavailable: 'Зависимость, нужная прогону, была недоступна.',
+  dependency_credential_refused: 'отвергла учётные данные этого развёртывания',
+  staged_upload_lost: 'больше не содержало байты, подготовленные загрузкой',
+  required_norm_unavailable: 'не удалось разрешить в неизменяемую',
+  analysis_input_invalid: 'объявленный вход этапа оказались неприемлемыми',
+  analysis_failed: 'завершился в терминальном состоянии отказа',
+  partial_result_not_publishable: 'запросили то, что требует прогона без неё',
+  cost_budget_exceeded: 'бюджет стоимости или токенов для этого прогона исчерпан',
+  stale_attempt: 'больше не является для неё публикующей инстанцией',
+  execution_token_invalid: 'отсутствовал, был искажён или не был',
+  internal_error: 'неклассифицированная серверная неисправность',
 };
 
 describe('every catalog reason reaches the screen as a sentence', () => {
@@ -120,13 +120,13 @@ describe('the reason a person actually meets', () => {
    */
   it('names the class the catalog groups, and says it does not know which member', () => {
     const markup = failedWith('dependency_unavailable');
-    expect(markup).toContain('A dependency this run needs was unavailable.');
-    expect(markup).toContain('does not record which of them it was');
+    expect(markup).toContain('Зависимость, нужная прогону, была недоступна.');
+    expect(markup).toContain('не фиксирует, о какой из них шла речь');
   });
 
   it('does not tell the reader the provider is down', () => {
     const markup = failedWith('dependency_unavailable');
-    expect(markup).not.toContain('The provider this run needs is unavailable.');
+    expect(markup).not.toContain('Провайдер, нужный этому прогону, недоступен.');
     expect(markup.toLowerCase()).not.toContain('the provider is down');
   });
 
@@ -153,7 +153,7 @@ describe('a reason nobody anticipated still says something true on screen', () =
     expect(markup).toContain(`data-terminal-reason="${ROGUE}"`);
     expect(markup).toContain('data-terminal-reason-note="undescribed"');
     expect(markup).toContain(UNDESCRIBED_PREFIX);
-    expect(markup).toContain('this client holds no description for it');
+    expect(markup).toContain('описания для него у этого клиента нет');
   });
 
   it('does not borrow the sentence of a code it does know', () => {

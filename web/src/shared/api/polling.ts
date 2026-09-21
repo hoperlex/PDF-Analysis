@@ -35,7 +35,7 @@ function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
     }, ms);
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new TransportError('Run polling was aborted.'));
+      reject(new TransportError('Опрос прогона прерван.'));
     };
     if (signal?.aborted === true) {
       onAbort();
@@ -69,7 +69,7 @@ export async function pollRunStatus(
     await sleep(pollDelayMs(attempt), signal);
 
     if (signal?.aborted === true) {
-      throw new TransportError('Run polling was aborted.');
+      throw new TransportError('Опрос прогона прерван.');
     }
 
     let status: RunStatus;

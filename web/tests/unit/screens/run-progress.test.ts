@@ -428,7 +428,7 @@ describe('an estimated basis is the normal case, not a warning (M-7)', () => {
     for (const alarm of ['am-state--error', 'Warning', 'warning', 'Invalid', 'went wrong']) {
       expect(cost).not.toContain(alarm);
     }
-    expect(markup.toLowerCase()).toContain('not a fault');
+    expect(markup.toLowerCase()).toContain('не неисправность');
   });
 
   it('does not default an unstated basis to measured', () => {

@@ -39,10 +39,10 @@ function panel(): string {
 describe('the upload panel states the envelope before the file picker (U-09)', () => {
   it('renders every rule of the accepted envelope', () => {
     const markup = panel();
-    expect(markup).toContain('One PDF per upload.');
-    expect(markup).toContain('Not password-protected and not encrypted.');
-    expect(markup).toContain('extractable embedded text');
-    expect(markup).toContain('optical recognition');
+    expect(markup).toContain('Один PDF за загрузку.');
+    expect(markup).toContain('Без пароля и без шифрования.');
+    expect(markup).toContain('извлекаемый встроенный текст');
+    expect(markup).toContain('оптическим распознаванием');
   });
 
   it('renders a non-empty list of them, so an emptied source is red', () => {

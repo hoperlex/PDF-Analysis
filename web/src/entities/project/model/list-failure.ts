@@ -47,36 +47,36 @@ export function classifyProjectListFailure(error: unknown): ProjectListFailure {
     };
     switch (error.errorCode) {
       case 'validation_failed':
-        return { ...base, kind: 'request_invalid', title: 'The project list request was refused.' };
+        return { ...base, kind: 'request_invalid', title: 'Запрос списка проектов отклонён.' };
       case 'dependency_unavailable':
         return {
           ...base,
           kind: 'dependency_unavailable',
-          title: 'A dependency the project list needs is unavailable.',
+          title: 'Зависимость, нужная списку проектов, недоступна.',
         };
       case 'authentication_required':
         return {
           ...base,
           kind: 'not_authenticated',
-          title: 'Reading the project list is not authorized.',
+          title: 'Чтение списка проектов не авторизовано.',
           detail: AUTHENTICATION_REQUIRED_DETAIL,
         };
       case 'permission_denied':
         return {
           ...base,
           kind: 'not_permitted',
-          title: 'You are not permitted to read the project list.',
+          title: 'Вам не разрешено читать список проектов.',
           detail: PERMISSION_DENIED_DETAIL,
         };
       default:
-        return { ...base, kind: 'server_error', title: 'The project list could not be read.' };
+        return { ...base, kind: 'server_error', title: 'Список проектов прочитать не удалось.' };
     }
   }
 
   if (error instanceof UnrecognizedApiError) {
     return {
       kind: 'unrecognized',
-      title: 'The server reported an error this client does not recognise.',
+      title: 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.',
       detail: `Error code '${error.rawErrorCode}' is outside this client's contract. Nothing was retried.`,
       correlationId: error.correlationId,
       retryable: false,
@@ -87,7 +87,7 @@ export function classifyProjectListFailure(error: unknown): ProjectListFailure {
   if (error instanceof TransportError) {
     return {
       kind: 'transport',
-      title: 'The project list request did not reach the API.',
+      title: 'Запрос списка проектов не дошёл до API.',
       detail: error.message,
       correlationId: error.correlationId,
       retryable: error.retryable,
@@ -97,11 +97,11 @@ export function classifyProjectListFailure(error: unknown): ProjectListFailure {
 
   return {
     kind: 'unknown',
-    title: 'The project list could not be read.',
+    title: 'Список проектов прочитать не удалось.',
     detail:
       error instanceof ApiFailure
         ? error.message
-        : 'The client received something it could not decode as a contract failure.',
+        : 'Клиент получил нечто, что не смог разобрать как отказ по контракту.',
     correlationId: error instanceof ApiFailure ? error.correlationId : null,
     retryable: false,
     errorCode: null,

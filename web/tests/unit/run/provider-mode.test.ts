@@ -67,11 +67,11 @@ describe('a run with no provider provenance renders `unknown`, never `live`', ()
 
 describe('the caption says what the provenance is not evidence of', () => {
   it('says a recorded run is not evidence of a live provider call', () => {
-    expect(providerModeCaption('recorded').toLowerCase()).toContain('not evidence');
+    expect(providerModeCaption('recorded').toLowerCase()).toContain('не является свидетельством');
   });
 
   it('says an unknown provenance is not treated as live', () => {
-    expect(providerModeCaption(PROVIDER_MODE_UNKNOWN).toLowerCase()).toContain('not treated as live');
+    expect(providerModeCaption(PROVIDER_MODE_UNKNOWN).toLowerCase()).toContain('не считается живым');
   });
 
   it('has a caption for every label', () => {

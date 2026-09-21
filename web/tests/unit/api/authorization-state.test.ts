@@ -84,11 +84,11 @@ describe('the authorization codes are the catalog’s, and are recognised as a p
   });
 
   it('says what the operator can act on, and says retrying will not help', () => {
-    expect(AUTHENTICATION_REQUIRED_DETAIL).toContain('did not accept a credential');
-    expect(AUTHENTICATION_REQUIRED_DETAIL).toContain('none configured');
-    expect(AUTHENTICATION_REQUIRED_DETAIL).toContain('retrying sends the same credential');
-    expect(PERMISSION_DENIED_DETAIL).toContain('credential was accepted');
-    expect(PERMISSION_DENIED_DETAIL).toContain('not permitted this operation');
+    expect(AUTHENTICATION_REQUIRED_DETAIL).toContain('не принял учётные данные');
+    expect(AUTHENTICATION_REQUIRED_DETAIL).toContain('не настроены');
+    expect(AUTHENTICATION_REQUIRED_DETAIL).toContain('повтор отправит те же учётные данные');
+    expect(PERMISSION_DENIED_DETAIL).toContain('Учётные данные приняты');
+    expect(PERMISSION_DENIED_DETAIL).toContain('эта операция над этим ресурсом им не разрешена');
   });
 });
 
@@ -99,11 +99,11 @@ describe('starting or watching a run', () => {
   it('reports a 401 as not authenticated, not as a server error', () => {
     const failure = classifyRunFailure(unauthenticated());
     expect(failure.kind).toBe('not_authenticated');
-    expect(failure.title).toBe('This run is not authorized.');
+    expect(failure.title).toBe('Этот прогон не авторизован.');
     expect(failure.detail).toBe(
-      'The API did not accept a credential for this request. Either this deployment has ' +
-        'none configured, or the one it presents is not one the API accepts. Nothing was ' +
-        'applied, and retrying sends the same credential to the same refusal.',
+      'API не принял учётные данные для этого запроса. Либо в этом развёртывании они не ' +
+        'настроены, либо предъявляемые API не принимает. Ничего не применено, и повтор ' +
+        'отправит те же учётные данные к тому же отказу.',
     );
     expect(failure.retryable).toBe(false);
     expect(failure.errorCode).toBe('authentication_required');
@@ -115,7 +115,7 @@ describe('starting or watching a run', () => {
       forbidden({ aggregate_type: 'AuditRun', required_capability: 'run:start' }),
     );
     expect(failure.kind).toBe('not_permitted');
-    expect(failure.title).toBe('You are not permitted to act on this run.');
+    expect(failure.title).toBe('Вам не разрешено действовать с этим прогоном.');
     expect(failure.detail).toContain('(aggregate_type: AuditRun, required_capability: run:start)');
   });
 });
@@ -124,14 +124,14 @@ describe('creating a project', () => {
   it('reports a 401 as not authenticated', () => {
     const failure = classifyCreateProjectFailure(unauthenticated());
     expect(failure.kind).toBe('not_authenticated');
-    expect(failure.title).toBe('Creating a project is not authorized.');
+    expect(failure.title).toBe('Создание проекта не авторизовано.');
     expect(failure.retryable).toBe(false);
   });
 
   it('reports a 403 as not permitted', () => {
     const failure = classifyCreateProjectFailure(forbidden());
     expect(failure.kind).toBe('not_permitted');
-    expect(failure.title).toBe('You are not permitted to create a project.');
+    expect(failure.title).toBe('Вам не разрешено создавать проект.');
   });
 });
 
@@ -139,7 +139,7 @@ describe('reading the project list', () => {
   it('reports a 401 as not authenticated', () => {
     const failure = classifyProjectListFailure(unauthenticated());
     expect(failure.kind).toBe('not_authenticated');
-    expect(failure.title).toBe('Reading the project list is not authorized.');
+    expect(failure.title).toBe('Чтение списка проектов не авторизовано.');
     expect(failure.retryable).toBe(false);
   });
 
@@ -152,14 +152,14 @@ describe('uploading a document', () => {
   it('reports a 401 as not authenticated', () => {
     const failure = classifyUploadFailure(unauthenticated());
     expect(failure.kind).toBe('not_authenticated');
-    expect(failure.title).toBe('Uploading is not authorized.');
+    expect(failure.title).toBe('Загрузка не авторизована.');
     expect(failure.presentation).toBe('error');
   });
 
   it('reports a 403 as not permitted', () => {
     const failure = classifyUploadFailure(forbidden());
     expect(failure.kind).toBe('not_permitted');
-    expect(failure.title).toBe('You are not permitted to upload to this project.');
+    expect(failure.title).toBe('Вам не разрешено загружать в этот проект.');
   });
 });
 
@@ -168,9 +168,9 @@ describe('the review screen', () => {
     const props = presentFailure(unauthenticated(), { title: 'Findings could not be read.' });
     expect(props.title).toBe('Findings could not be read.');
     expect(props.detail).toBe(
-      'The API did not accept a credential for this request. Either this deployment has ' +
-        'none configured, or the one it presents is not one the API accepts. Nothing was ' +
-        'applied, and retrying sends the same credential to the same refusal.',
+      'API не принял учётные данные для этого запроса. Либо в этом развёртывании они не ' +
+        'настроены, либо предъявляемые API не принимает. Ничего не применено, и повтор ' +
+        'отправит те же учётные данные к тому же отказу.',
     );
     // Not the generic `${code}: ${message}` shape the default branch produces.
     expect(props.detail).not.toContain('authentication_required:');

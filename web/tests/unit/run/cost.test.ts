@@ -102,7 +102,7 @@ describe('a cost is never reported without the count it sums (M-5)', () => {
     // unreadable causes must not collapse into one sentence. Without this, deleting the
     // missing-count guard is an equivalent mutant: the type guard below catches
     // `undefined` too, and only the reason a reader is given changes.
-    expect(reading).toMatchObject({ why: 'it carries a cost with no model call count' });
+    expect(reading).toMatchObject({ why: 'она несёт стоимость без числа вызовов модели' });
   });
 
   it('distinguishes a missing count from a malformed one in what it tells the reader', () => {
@@ -149,14 +149,14 @@ describe('an unstated cost basis is not a measured one (M-10)', () => {
 
   it('does not phrase estimated as a fault', () => {
     const caption = costBasisCaption('estimated').toLowerCase();
-    expect(caption).toContain('not a fault');
+    expect(caption).toContain('не неисправность');
     for (const alarm of ['error', 'warning', 'invalid', 'failed', 'unreliable']) {
       expect(caption).not.toContain(alarm);
     }
   });
 
   it('says what measured actually means', () => {
-    expect(costBasisCaption('measured').toLowerCase()).toContain('every call');
+    expect(costBasisCaption('measured').toLowerCase()).toContain('каждый вызов');
   });
 });
 

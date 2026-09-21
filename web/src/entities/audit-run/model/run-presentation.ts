@@ -63,11 +63,11 @@ export function badgeProviderMode(label: ProviderModeLabel): 'live' | 'recorded'
 export function providerModeCaption(label: ProviderModeLabel): string {
   switch (label) {
     case 'live':
-      return 'Live provider calls were made for this run.';
+      return 'Для этого прогона выполнялись живые вызовы провайдера.';
     case 'recorded':
-      return 'Replayed from recordings. This run is not evidence of a live provider call.';
+      return 'Воспроизведено из записей. Этот прогон не является свидетельством живого вызова провайдера.';
     case PROVIDER_MODE_UNKNOWN:
-      return 'This reading carries no provider mode. It is not treated as live.';
+      return 'Это показание не несёт режима провайдера. Оно не считается живым.';
   }
 }
 
@@ -293,13 +293,13 @@ export function runCost(status: {
   if (micros === undefined || micros === null) return { kind: 'absent' };
 
   if (callCount === undefined || callCount === null) {
-    return { kind: 'unreadable', why: 'it carries a cost with no model call count' };
+    return { kind: 'unreadable', why: 'она несёт стоимость без числа вызовов модели' };
   }
   if (typeof micros !== 'number' || !Number.isInteger(micros) || micros < 0) {
-    return { kind: 'unreadable', why: 'its cost is not a non-negative integer' };
+    return { kind: 'unreadable', why: 'её стоимость не является неотрицательным целым' };
   }
   if (typeof callCount !== 'number' || !Number.isInteger(callCount) || callCount < 1) {
-    return { kind: 'unreadable', why: 'its model call count is not a positive integer' };
+    return { kind: 'unreadable', why: 'её число вызовов модели не является положительным целым' };
   }
 
   const basis = status.cost_basis;
@@ -322,11 +322,15 @@ export function runCost(status: {
 export function costBasisCaption(basis: CostBasis | null): string {
   switch (basis) {
     case 'measured':
-      return 'Every call this figure sums reported its own cost, so the figure is measured.';
+      return 'Каждый вызов, вошедший в эту сумму, сообщил свою стоимость, поэтому величина измерена.';
     case 'estimated':
-      return 'At least one call this figure sums did not report a cost of its own, so the figure is estimated. A recorded run replays calls that carry no cost, which is the ordinary case for this prototype and not a fault.';
+      return (
+        'Как минимум один вызов, вошедший в эту сумму, не сообщил собственной стоимости, ' +
+        'поэтому величина оценочная. Воспроизведённый прогон повторяет вызовы, не несущие ' +
+        'стоимости: для этого прототипа это обычный случай, а не неисправность.'
+      );
     case null:
-      return 'This reading carries no cost basis, so how well the figure is known is unstated.';
+      return 'Это показание не несёт основания стоимости, поэтому точность величины не указана.';
   }
 }
 

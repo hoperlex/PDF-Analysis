@@ -56,10 +56,10 @@ describe('a reason this client does not know still says something true', () => {
 
   it('says the checkable fact about it, and does not guess a cause', () => {
     const note = terminalReasonNote(ROGUE);
-    expect(note.sentence).toContain('this client holds no description for it');
-    expect(note.sentence).toContain('Nothing was published');
+    expect(note.sentence).toContain('описания для него у этого клиента нет');
+    expect(note.sentence).toContain('Ничего не опубликовано');
     // It must not borrow a neighbouring sentence: no catalog wording leaks in.
-    expect(note.sentence).not.toContain('metadata store');
+    expect(note.sentence).not.toContain('хранилище метаданных');
     expect(note.sentence).not.toContain('correlation id');
   });
 
@@ -77,6 +77,6 @@ describe('a failed reading with no reason at all', () => {
       expect(note.kind).toBe('absent');
       expect(note.sentence).toBe(ABSENT_SENTENCE);
     }
-    expect(ABSENT_SENTENCE).toContain('required to record one');
+    expect(ABSENT_SENTENCE).toContain('обязан её записать');
   });
 });
