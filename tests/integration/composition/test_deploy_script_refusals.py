@@ -132,6 +132,13 @@ if argv[:2] == ["image", "inspect"]:
     sys.exit(0 if setting("STUB_IMAGES_EXIST", "1") == "1" else 1)
 
 if argv[:1] == ["inspect"]:
+    # The one-shot services answer separately. `deploy.sh` asks them for
+    # `Status/ExitCode` and the five long-running ones for `Status/Health`, and a case
+    # that could not tell the two apart could not show that a failed `up` is diagnosed
+    # by the service that failed rather than by the proxy.
+    if argv[-1] in ("container-of-s3-init", "container-of-migrate"):
+        sys.stdout.write(setting("STUB_ONESHOT_STATE", "exited/0") + "\n")
+        sys.exit(0)
     sys.stdout.write(setting("STUB_STATE", "running/healthy") + "\n")
     sys.exit(0)
 
@@ -257,8 +264,14 @@ def _stage(
         (deploy / "env").mkdir(exist_ok=True)
         (deploy / "env/alpha.env.example").write_text(_example_text(), encoding="utf-8")
 
+    # `D-38`: it exits 0 as before AND leaves a mark, because the thing that went wrong
+    # was an ORDER -- the guard that names the cause ran after this script and therefore
+    # never ran. An order is only testable if the two steps can be told apart afterwards.
     reload_proxy = deploy / "reload-proxy.sh"
-    reload_proxy.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    reload_proxy.write_text(
+        '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$STUB_LOG.reload"\nexit 0\n',
+        encoding="utf-8",
+    )
     reload_proxy.chmod(0o755)
 
     for path in _context_paths():
@@ -443,6 +456,11 @@ def _ready(tmp_path: Path, port: int, **staging: object) -> tuple[Path, Path]:
     env_file = tmp_path / "alpha.env"
     env_file.write_text(_env_text(EDITED_SECRETS, port=port), encoding="utf-8")
     return _stage(tmp_path / "ready", **staging), env_file  # type: ignore[arg-type]
+
+
+def _reloaded(log: Path) -> bool:
+    """Did the staged `reload-proxy.sh` run? `D-38`'s whole question is when."""
+    return Path(str(log) + ".reload").exists()
 
 
 def _up_calls(log: Path) -> list[str]:
@@ -730,6 +748,94 @@ class TestTheRunningStackIsAskedAndMayFail:
         )
         assert "does not conform to the frozen contract" not in completed.stderr
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
+
+
+class TestAFailedUpIsDiagnosedBeforeTheProxyIsTouched:
+    """`D-38`, and it is an ORDER rather than a message.
+
+    Measured at `7535a17` on `auditmanager-w26a`: `s3-init` exited 1, `api` was therefore
+    never created, and `deploy.sh` printed *"the guards below decide"* and then died in
+    `reload-proxy.sh` with `nginx: [emerg] host not found in upstream "api"` and *"Fix
+    proxy/nginx.conf"* -- **exit 5 against a file that is correct**. It refused rather
+    than claiming success, which is the half that was right; the diagnosis was the wrong
+    one, because `services-healthy` sat after the reload and never ran.
+
+    So these cases assert WHEN, not what: the refusal happens and the staged
+    `reload-proxy.sh` has not run. Against the script as it was, each of them reddens on
+    that last line -- the refusal still arrives, one step too late.
+    """
+
+    def test_an_unhealthy_service_is_named_before_the_proxy_is_reloaded(
+        self, tmp_path: Path, serving: tuple[int, type]
+    ) -> None:
+        port, _ = serving
+        script, env_file = _ready(tmp_path, port)
+        completed, log = _run(
+            script, tmp_path=tmp_path, env_file=env_file,
+            stub={"STUB_STATE": "running/unhealthy"},
+        )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "is running/unhealthy" in completed.stderr, completed.stderr
+        assert not _reloaded(log), (
+            "the proxy was reloaded before the stack was asked whether it is there, which "
+            "is the order D-38 is about"
+        )
+
+    def test_a_failed_up_names_the_one_shot_service_that_failed(
+        self, tmp_path: Path, serving: tuple[int, type]
+    ) -> None:
+        """The shape `W24-CERT2` measured. `s3-init` is the service that failed and
+        nothing else in the script ever looked at it, so the operator was left with the
+        consequence -- a missing `api` -- or, worse, with `nginx.conf`."""
+        port, _ = serving
+        script, env_file = _ready(tmp_path, port)
+        completed, log = _run(
+            script, tmp_path=tmp_path, env_file=env_file,
+            stub={"STUB_UP_STATUS": "1", "STUB_ONESHOT_STATE": "exited/1"},
+        )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "the 's3-init' service" in completed.stderr, completed.stderr
+        assert "exited/1" in completed.stderr, completed.stderr
+        assert "nginx" not in completed.stderr.lower(), completed.stderr
+        assert not _reloaded(log), completed.stderr
+
+    def test_a_good_up_does_not_read_the_one_shot_exit_codes(
+        self, tmp_path: Path, serving: tuple[int, type]
+    ) -> None:
+        """The control for the widening, and it is what keeps it from being a second
+        opinion about a success nobody doubts: `s3-init` from an EARLIER run may sit at
+        any exit code, and on a run where `up` returned 0 that is not this script's
+        business. Without this case, a guard that refused every non-zero one-shot would
+        pass every case above and fail every honest second deployment."""
+        port, _ = serving
+        script, env_file = _ready(tmp_path, port)
+        completed, log = _run(
+            script, tmp_path=tmp_path, env_file=env_file,
+            stub={"STUB_UP_STATUS": "0", "STUB_ONESHOT_STATE": "exited/1"},
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "REFUSED" not in completed.stderr, completed.stderr
+        assert _reloaded(log), "the proxy reload was skipped on a good run"
+
+    def test_that_guard_is_shown_able_to_fail(
+        self, tmp_path: Path, serving: tuple[int, type]
+    ) -> None:
+        """Delete `services-healthy` and a failed `up` runs on into the reload -- which is
+        precisely the run `W24-CERT2` recorded."""
+        port, _ = serving
+        cut = _mutant(tmp_path, "services-healthy")
+        script = _stage(tmp_path / "mutant-oneshot", script=cut)
+        env_file = tmp_path / "alpha.env"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=port), encoding="utf-8")
+        completed, log = _run(
+            script, tmp_path=tmp_path, env_file=env_file,
+            stub={"STUB_UP_STATUS": "1", "STUB_ONESHOT_STATE": "exited/1"},
+        )
+        assert "the 's3-init' service" not in completed.stderr, completed.stderr
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert _reloaded(log), (
+            "the mutant never reached the reload, so this case was not testing the order"
+        )
 
 
 class TestTheControl:
