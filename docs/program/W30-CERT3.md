@@ -346,4 +346,8 @@ make gate > /root/w30-logs/cert3-gate.log 2>&1; echo "EXIT=$?" >> /root/w30-logs
   evidence can be re-read.
 - **The owner's stand on 31500 is as it was**, plus one project, one document, one live run,
   three decisions and one refusals project with zero documents. Never reset, wiped, stopped,
-  restarted or removed.
+  restarted or removed. **One exception to "as it was", stated rather than glossed:** the
+  anonymous-bucket probe for criterion 3 was copied into the stand's api container as
+  `/tmp/anon_probe.py` and could not be removed afterwards — the container runs as a non-root
+  user. It is a fifteen-line read-only script in a container's `/tmp` and it disappears the
+  next time that container is recreated.
