@@ -258,6 +258,7 @@ describe('a request that never reached the API is classified by why it did not',
     ).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(TransportError);
     expect((failure as TransportError).retryable).toBe(false);
-    expect((failure as TransportError).message).toContain('aborted');
+    // `W31-RUS`: the sentence is Russian now; the claim it carries is unchanged.
+    expect((failure as TransportError).message).toContain('прерван');
   });
 });

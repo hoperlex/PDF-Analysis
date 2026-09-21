@@ -39,8 +39,8 @@ describe('creating a project', () => {
 
     expect(inProgress.kind).toBe('in_progress');
     expect(inProgress.retryable).toBe(true);
-    expect(inProgress.detail).toContain('same key');
-    expect(inProgress.detail).toContain('second project');
+    expect(inProgress.detail).toContain('тем же ключом');
+    expect(inProgress.detail).toContain('второй проект');
 
     expect(reuse.kind).toBe('duplicate_intent');
     expect(reuse.retryable).toBe(false);
@@ -50,7 +50,7 @@ describe('creating a project', () => {
     const failure = classifyCreateProjectFailure(apiError(503, 'dependency_unavailable', true));
     expect(failure.kind).toBe('dependency_unavailable');
     expect(failure.retryable).toBe(true);
-    expect(failure.detail).toContain('same idempotency key');
+    expect(failure.detail).toContain('тот же ключ идемпотентности');
   });
 
   it('classifies anything else explicitly and never as retryable', () => {

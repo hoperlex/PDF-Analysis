@@ -79,7 +79,7 @@ function resolveFetch(options: RequestOptions | undefined): FetchLike {
   const globalFetch = globalThis.fetch;
   if (typeof globalFetch !== 'function') {
     throw new ClientUsageError(
-      'No fetch implementation is available in this runtime. Supply one through ' +
+      'В этой среде выполнения нет реализации fetch. Передайте её через ' +
         'RequestOptions.fetch.',
     );
   }
@@ -91,8 +91,8 @@ function buildPath(descriptor: OperationDescriptor, input: OperationInput): stri
     const value = input.path?.[name];
     if (value === undefined || value === '') {
       throw new ClientUsageError(
-        `${descriptor.operationId}: path parameter '${name}' is required by ` +
-          `'${descriptor.path}' and was not supplied.`,
+        `${descriptor.operationId}: параметр пути «${name}» требуется шаблоном ` +
+          `«${descriptor.path}» и не был передан.`,
       );
     }
     return encodeURIComponent(value);
@@ -122,9 +122,9 @@ function buildHeaders(descriptor: OperationDescriptor, input: OperationInput): H
     const key = input.idempotencyKey;
     if (key === undefined || key.length === 0) {
       throw new ClientUsageError(
-        `${descriptor.operationId} is a write and requires an ${IDEMPOTENCY_HEADER}. ` +
-          'Mint one per intent with newIdempotencyKey() and reuse the same value on ' +
-          'every retry: a fresh key is a new command, not a retry.',
+        `${descriptor.operationId} — операция записи, ей требуется ${IDEMPOTENCY_HEADER}. ` +
+          'Выпустите по одному ключу на намерение через newIdempotencyKey() и повторяйте ' +
+          'с тем же значением: новый ключ — это новая команда, а не повтор.',
       );
     }
     headers.set(IDEMPOTENCY_HEADER, key);
@@ -157,7 +157,7 @@ function buildBody(descriptor: OperationDescriptor, input: OperationInput, heade
     const body = input.body;
     if (typeof body !== 'object' || body === null) {
       throw new ClientUsageError(
-        `${descriptor.operationId}: a multipart body must be an object of fields.`,
+        `${descriptor.operationId}: тело multipart должно быть объектом полей.`,
       );
     }
     for (const name of Object.keys(body as Record<string, unknown>).sort()) {
@@ -170,8 +170,8 @@ function buildBody(descriptor: OperationDescriptor, input: OperationInput, heade
   }
 
   throw new ClientUsageError(
-    `${descriptor.operationId}: unsupported request media type ` +
-      `'${descriptor.requestMediaType}'. The transport knows ${JSON_MEDIA_TYPE} and ` +
+    `${descriptor.operationId}: тип содержимого запроса ` +
+      `«${descriptor.requestMediaType}» не поддерживается. Транспорт знает ${JSON_MEDIA_TYPE} и ` +
       `${MULTIPART_MEDIA_TYPE}.`,
   );
 }
@@ -182,14 +182,14 @@ async function decodeFailure(response: Response, correlationId: string | null): 
     payload = await response.json();
   } catch (cause) {
     throw new TransportError(
-      `HTTP ${response.status} with a body that is not the contract error envelope.`,
+      `HTTP ${response.status}: тело ответа не является конвертом ошибки по контракту.`,
       { status: response.status, correlationId, cause },
     );
   }
 
   if (!isErrorEnvelope(payload)) {
     throw new TransportError(
-      `HTTP ${response.status} with a JSON body that is not the contract error envelope.`,
+      `HTTP ${response.status}: тело ответа — JSON, но не конверт ошибки по контракту.`,
       { status: response.status, correlationId },
     );
   }
@@ -230,8 +230,8 @@ export async function request<TResult>(
     const aborted = options?.signal?.aborted === true;
     throw new TransportError(
       aborted
-        ? `${descriptor.operationId} was aborted before a response arrived.`
-        : `${descriptor.operationId} could not reach the API.`,
+        ? `Запрос ${descriptor.operationId} был прерван до получения ответа.`
+        : `Запрос ${descriptor.operationId} не дошёл до API.`,
       { cause, retryable: !aborted },
     );
   }
@@ -249,7 +249,7 @@ export async function request<TResult>(
       return { data: (await response.json()) as TResult, status: response.status, correlationId };
     } catch (cause) {
       throw new TransportError(
-        `${descriptor.operationId} returned HTTP ${response.status} with an undecodable JSON body.`,
+        `Запрос ${descriptor.operationId} вернул HTTP ${response.status} с нечитаемым JSON в теле.`,
         { status: response.status, correlationId, cause },
       );
     }

@@ -43,7 +43,7 @@ describe('the envelope the user is shown is the envelope the contract declares',
   it('names every refusal reason before a file is chosen', () => {
     const text = UPLOAD_ENVELOPE_RULES.join(' ');
     expect(text).toContain('25 MiB');
-    expect(text).toContain('30 pages');
+    expect(text).toContain('30 страниц');
     expect(text.toLowerCase()).toContain('без пароля');
     expect(text.toLowerCase()).toContain('извлекаемый встроенный текст');
     // OCR is never silently substituted, and the panel says so up front.

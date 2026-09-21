@@ -64,7 +64,7 @@ describe('the upload panel states the envelope before the file picker (U-09)', (
   it('names both numeric limits, which is what a later validation_failed refers back to', () => {
     const markup = panel();
     expect(markup).toMatch(/25\s*MiB|25\s*MB/);
-    expect(markup).toMatch(/\d+\s*pages/);
+    expect(markup).toMatch(/\d+\s*страниц/);
   });
 
   it('offers no run control at all: the run is started from the version address (D-16)', () => {

@@ -55,7 +55,7 @@ describe('an unavailable provider is explicit and offers no fallback', () => {
   });
 
   it('says the retry reuses the same key', () => {
-    expect(failure.detail).toContain('same idempotency key');
+    expect(failure.detail).toContain('тот же ключ идемпотентности');
   });
 });
 
@@ -87,15 +87,15 @@ describe('the idempotency outcomes of a run request', () => {
     const failure = classifyRunFailure(apiError(409, 'idempotency_key_in_progress', true));
     expect(failure.kind).toBe('in_progress');
     expect(failure.retryable).toBe(true);
-    expect(failure.detail).toContain('same key');
-    expect(failure.detail).toContain('second run');
+    expect(failure.detail).toContain('тем же ключом');
+    expect(failure.detail).toContain('второй прогон');
   });
 
   it('treats reuse as terminal', () => {
     const failure = classifyRunFailure(apiError(409, 'idempotency_key_reuse', false));
     expect(failure.kind).toBe('duplicate_intent');
     expect(failure.retryable).toBe(false);
-    expect(failure.detail).toContain('No run was created');
+    expect(failure.detail).toContain('Прогон не создан');
   });
 });
 

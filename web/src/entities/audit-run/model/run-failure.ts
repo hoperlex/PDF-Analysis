@@ -21,6 +21,7 @@ import {
   PERMISSION_DENIED_DETAIL,
   TransportError,
   UnrecognizedApiError,
+  catalogMessage,
 } from '@/shared/api';
 
 export type RunFailureKind =
@@ -80,9 +81,9 @@ function fromApiError(error: ApiError): RunFailure {
         presentation: 'error',
         title: 'Провайдер, нужный этому прогону, недоступен.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['dependency']) +
-          ' Nothing was partially applied. Retrying reuses the same idempotency key; ' +
+          ' Ничего не применено частично. Повтор использует тот же ключ идемпотентности, и ' +
           'прогон не запускается вместо этого в другом режиме провайдера.',
       };
     case 'analysis_input_invalid':
@@ -91,7 +92,7 @@ function fromApiError(error: ApiError): RunFailure {
         kind: 'analysis_input_invalid',
         presentation: 'unsupported',
         title: 'Объявленные входные данные анализа неприемлемы.',
-        detail: error.envelope.message + classifiers(error.details, ['stage_id', 'reason']),
+        detail: catalogMessage(error.errorCode) + classifiers(error.details, ['stage_id', 'reason']),
       };
     case 'validation_failed':
       return {
@@ -100,7 +101,7 @@ function fromApiError(error: ApiError): RunFailure {
         presentation: 'unsupported',
         title: 'Этот запрос на прогон недействителен.',
         detail:
-          error.envelope.message + classifiers(error.details, ['constraint', 'field', 'aggregate_type']),
+          catalogMessage(error.errorCode) + classifiers(error.details, ['constraint', 'field', 'aggregate_type']),
       };
     case 'authentication_required':
       return {
@@ -126,7 +127,7 @@ function fromApiError(error: ApiError): RunFailure {
         kind: 'not_found',
         presentation: 'error',
         title: 'Такого прогона или версии не существует.',
-        detail: error.envelope.message + classifiers(error.details, ['aggregate_type']),
+        detail: catalogMessage(error.errorCode) + classifiers(error.details, ['aggregate_type']),
       };
     case 'idempotency_key_reuse':
       return {
@@ -135,9 +136,9 @@ function fromApiError(error: ApiError): RunFailure {
         presentation: 'error',
         title: 'Этот ключ прогона уже использован для другого запроса.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['command_type']) +
-          ' No run was created and nothing was resubmitted.',
+          ' Прогон не создан, и ничего не отправлено повторно.',
       };
     case 'idempotency_key_in_progress':
       return {
@@ -146,9 +147,9 @@ function fromApiError(error: ApiError): RunFailure {
         presentation: 'error',
         title: 'Этот запрос на прогон ещё выполняется.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['command_type']) +
-          ' Retrying asks about the same request under the same key. A new key would be a second run.',
+          ' Повтор спрашивает о том же запросе под тем же ключом. Новый ключ означал бы второй прогон.',
       };
     case 'idempotency_key_stale':
       return {
@@ -157,9 +158,9 @@ function fromApiError(error: ApiError): RunFailure {
         presentation: 'error',
         title: 'Записанный результат этого запроса на прогон больше недоступен.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['command_type']) +
-          ' It is not guessed.',
+          ' Он не домысливается.',
       };
     case 'state_transition_not_allowed':
       return {
@@ -168,7 +169,7 @@ function fromApiError(error: ApiError): RunFailure {
         presentation: 'error',
         title: 'Прогон не в том состоянии, которое это допускает.',
         detail:
-          error.envelope.message +
+          catalogMessage(error.errorCode) +
           classifiers(error.details, ['machine', 'current_state', 'requested_state']),
       };
     case 'conflict':
@@ -178,7 +179,7 @@ function fromApiError(error: ApiError): RunFailure {
         presentation: 'error',
         title: 'Запрос вошёл в конфликт с инвариантом.',
         detail:
-          error.envelope.message + classifiers(error.details, ['aggregate_type', 'expected_revision']),
+          catalogMessage(error.errorCode) + classifiers(error.details, ['aggregate_type', 'expected_revision']),
       };
     case 'analysis_failed':
       return {
@@ -186,7 +187,7 @@ function fromApiError(error: ApiError): RunFailure {
         kind: 'analysis_failed',
         presentation: 'error',
         title: 'Анализ завершился неудачей.',
-        detail: error.envelope.message + classifiers(error.details, ['run_id', 'stage_id']),
+        detail: catalogMessage(error.errorCode) + classifiers(error.details, ['run_id', 'stage_id']),
       };
     default:
       return {
@@ -194,7 +195,7 @@ function fromApiError(error: ApiError): RunFailure {
         kind: 'server_error',
         presentation: 'error',
         title: 'Запрос завершился ошибкой на сервере.',
-        detail: error.envelope.message,
+        detail: catalogMessage(error.errorCode),
       };
   }
 }
@@ -208,7 +209,9 @@ export function classifyRunFailure(error: unknown): RunFailure {
       kind: 'unrecognized',
       presentation: 'error',
       title: 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.',
-      detail: `Error code '${error.rawErrorCode}' is outside this client's contract. Nothing was retried.`,
+      detail:
+        `Код ошибки «${error.rawErrorCode}» находится вне контракта этого клиента. ` +
+        'Повтор не выполнялся.',
       correlationId: error.correlationId,
       retryable: false,
       errorCode: null,
@@ -220,7 +223,9 @@ export function classifyRunFailure(error: unknown): RunFailure {
       kind: 'transport',
       presentation: 'error',
       title: 'Запрос не дошёл до API.',
-      detail: `${error.message} The run state shown, if any, is the last reading and may be stale.`,
+      detail:
+        `${error.message} Показанное состояние прогона, если оно есть, — последнее ` +
+        'снятое показание и может быть устаревшим.',
       correlationId: error.correlationId,
       retryable: error.retryable,
       errorCode: null,

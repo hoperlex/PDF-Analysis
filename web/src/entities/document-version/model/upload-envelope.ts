@@ -36,8 +36,8 @@ export const PC01_UPLOAD_ENVELOPE = {
  */
 export const UPLOAD_ENVELOPE_RULES: readonly string[] = [
   'Один PDF за загрузку. Без архива, без сопутствующего файла и без второго документа.',
-  `At most ${PC01_UPLOAD_ENVELOPE.maxBytesLabel}.`,
-  `At most ${PC01_UPLOAD_ENVELOPE.maxPages} pages.`,
+  `Не более ${PC01_UPLOAD_ENVELOPE.maxBytesLabel}.`,
+  `Не более ${PC01_UPLOAD_ENVELOPE.maxPages} страниц.`,
   'Без пароля и без шифрования.',
   'Каждая страница несёт извлекаемый встроенный текст. Отсканированный или чисто графический PDF отклоняется; текст не восстанавливается оптическим распознаванием.',
 ];
@@ -86,7 +86,7 @@ export function precheckProblemMessage(problem: UploadPrecheckProblem): string {
     case 'empty_file':
       return 'Этот файл пуст.';
     case 'too_large':
-      return `That file is larger than ${PC01_UPLOAD_ENVELOPE.maxBytesLabel}.`;
+      return `Этот файл больше, чем ${PC01_UPLOAD_ENVELOPE.maxBytesLabel}.`;
   }
 }
 
