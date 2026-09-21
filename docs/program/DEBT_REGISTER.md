@@ -11,8 +11,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
-| **D-38** | a failed deploy names the wrong file | `infra/` |
-| **D-39** | the rehearsal's total counts a view | `infra/` |
+| **D-42** | the provider credential **does** appear in `compose config` | prose + runbook |
 | **D-40** | `PC01_ERROR_CODES` is narrower than the surface | `web/src` |
 | **D-41** | two comments in `errors.ts`, one falsified this wave | `web/src` |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
@@ -1163,36 +1162,85 @@ document is piped on stdin.
 survives the packaging: any `-v` whose source the daemon cannot see becomes an empty directory
 and a green-looking container.
 
-### D-38 — a failed `compose up` sends the operator to a file that is fine
+### D-38 — a failed `compose up` sent the operator to a file that is fine — **CLOSED**
 
-**`W24CERT2-1`.** When `compose up` fails, `deploy.sh` prints *"the guards below decide"* and
-then dies at `reload-proxy.sh` telling the operator to **fix `nginx.conf`** — a file that is
-correct. The `services-healthy` guard that would name the real cause **runs after the reload
-and therefore never ran**.
+**Closed 2026-09-21 by `W26-OPS`, and this row's own check command gave a false negative.**
 
-**It refused rather than claiming success** — exit 5, which is the important half — but the
-diagnosis points at the wrong file, and an operator who edits `nginx.conf` on that advice is
-being sent away from the fault.
+The `Check` line said *"stop one service of a running instance, re-run `deploy.sh`"*. That
+**exits 0 on the unrepaired defect**, because `up` simply starts the stopped container again.
+The defect needs a service that **cannot come back**.
 
-Tree: `infra/deploy/`.
+**That is a failure mode this register had not met.** Its header warns about *a row nobody can
+re-measure*. This was **a row whose own command answers green on the live defect** — a session
+following it would have concluded the row was already closed.
 
-Check: stop one service of a running instance, re-run `deploy.sh`, read `$?` and the last ten
-lines.
+Reproduced as `W24-CERT2` measured it — `api` removed and `s3-init` failing on an invalid
+bucket name, so `up` aborts before recreating it: **exit 5** and *"Fix proxy/nginx.conf"*, a
+file that is correct. After: **exit 3**, *"`compose up` failed, and the 's3-init' service is
+exited/1"*, nginx unmentioned, proxy untouched. It still refuses; only the diagnosis moved.
 
-### D-39 — the wipe rehearsal's total counts a view
+**A second face, worse than the first: with the five long-running services healthy and only a
+one-shot failing, the old script exited 0 and called it a deployment.**
 
-**`W24CERT2-2`, and it is the residue of `D-24`.** The per-table figures are now exact against
-`count(*)`. The **total** is not: `total: 104 rows in 17 tables` over **100 rows in 16 base
-tables**, the seventeenth being `finding_current_verdict` — a four-row projection of rows
-already counted.
+**Guard count stayed at 13, forced rather than chosen** — `infra/deploy/README.md` says
+*"Thirteen guards"* and belonged to another session that wave, so a fourteenth marker would
+have made a forbidden file wrong. Widened `services-healthy` instead.
 
-**It over-reports, so it is safe in the direction that matters** — an operator is never told
-there is less to lose than there is. But it is the screen `R-4` asks an operator to believe
-before destroying real client documents, and `D-24` closed on the claim that the figures are
-exact.
+Check: remove the `api` container of a running instance **and** make `s3-init` fail, then
+re-run `deploy.sh`. It must exit **3** naming `s3-init`, never **5** naming `nginx.conf`.
 
-Check: `reset.sh … --dry-run | tail -3` beside
-`select table_type, count(*) from information_schema.tables where table_schema='public' group by 1`.
+### D-39 — the wipe rehearsal's total counted a view — **CLOSED**
+
+**Closed 2026-09-21 by `W26-OPS`.** The total sums `BASE TABLE` rows only, and the view keeps
+its own exact line because `DROP SCHEMA … CASCADE` destroys it too.
+
+**Named limit:** a **materialized** view appears in neither `information_schema.tables` nor
+this check, so it would **under-report** — the dangerous direction. None exists in this schema
+and a case reddens if one appears.
+
+### D-42 — the provider credential does appear in `docker compose config`
+
+**Found by `W26-HOST`, verified independently by the integrator, and it corrects a claim this
+repository has carried since wave 14.**
+
+`compose.server.yml`, `W14_CLOSURE.md` and every brief I wrote said the provider credential is
+kept out of `--env-file` *"and therefore never appears in `docker compose config`"*. **It
+appears.** Measured with a sentinel on **Compose v5.3.1**: `config` resolves `env_file:` into
+`environment:` and prints the value in clear. Independent check:
+
+```
+docker compose --env-file …/alpha.env -f …/compose.server.yml config | grep -c PROXY_LLM_TOKEN
+-> 1
+```
+
+**What keeping it out of `--env-file` actually buys is real but different:** those names never
+enter compose **substitution**. The security claim built on top of it was false.
+
+**`config` output must be treated as a secret** — it also prints the API token and both
+database and object-store passwords. `provider.env.example` and the runbook now say so.
+
+**By contrast the TLS private key genuinely cannot appear there**, because a bind mount is a
+path: sentinel test, **zero** hits for the key material and one for the path.
+
+Check: the command above returns 0 only if a future compose stops resolving `env_file`.
+
+### D-43 — *"about 8 GB"* was a provisioning figure read as the cost of one deploy
+
+**Measured by `W26-HOST` on an isolated builder**, because the shared cache held another
+lane's layers of the same Dockerfiles — a default-builder measurement would have measured
+nothing, and pruning to fix that would have sabotaged a live lane.
+
+| | |
+|---|---|
+| cold build cache, both images | **2.592 GB** |
+| one clean-clone cold-cache deploy | **≈ 5.5 GB**, of which the cache is reclaimed by `docker builder prune -af` |
+
+The repeated **8 GB** came from a **third consecutive** deploy with accumulated cache
+generations. It is **right as a provisioning number and wrong as an account of one deploy**,
+and the runbook now gives it with that reason.
+
+**Also recorded because it cost a session its confidence in a number:** `df` *during* a build
+on this host is worthless — another lane moved free space by gigabytes in both directions.
 
 ## 1.9 — the authority order, ruled 2026-09-17
 

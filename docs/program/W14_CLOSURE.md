@@ -96,7 +96,15 @@ every other name. That instruction would have **broken `make gate`** rather than
 anything, and `api/security.py:33` already recorded that the token is deliberately *"not in
 `.env.example` and not on `AppSettings`"*. The channel is `infra/deploy/env/alpha.env`, one
 step out; the provider credential is one step further out again, in `env/provider.env`,
-which is never passed to `--env-file` and therefore never appears in `docker compose config`.
+which is never passed to `--env-file`.
+
+> **Corrected 2026-09-21 by `W26-HOST`, verified independently.** This sentence used to end
+> *"and therefore never appears in `docker compose config`"*. **It appears.** Compose v5.3.1
+> resolves `env_file:` into `environment:` and prints the value in clear, measured with a
+> sentinel and reproduced by the integrator. What keeping it out of `--env-file` actually
+> buys is real but different: those names never enter compose **substitution**. `config`
+> output must be treated as a secret — it also prints the API token and both passwords.
+> `DEBT_REGISTER.md` `D-42`.
 
 `AppSettings` gains exactly one field, `api_token`, required at construction — so an
 unconfigured deployment has **no application object at all**, rather than a 401 on first
