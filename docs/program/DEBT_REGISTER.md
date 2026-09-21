@@ -11,6 +11,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
+| D-52 | the legacy icon set is at least partly Feather, MIT, notice absent | a `NOTICE` file if we copy; **not** `D-11`'s shape |
 | **D-49** | the stand is on every interface, and `/bff/v1` takes writes with no credential | **owner — a binding decision**; highest severity here |
 | **D-46** | a failed run cannot say *which* dependency | owner — a reseal either way |
 | D-50 | a character offset no second extractor can resolve | registered |
@@ -1390,6 +1391,55 @@ settles it, and checking a log someone else may have written settles nothing.
 
 **Rule for every future brief: write logs to a path that carries the session's own name**, and
 never read an exit code out of a file you did not create in this session.
+
+### D-52 — the legacy icon set is at least partly Feather, and the notice MIT requires is absent
+
+**Found by `pdf-analysis-84` while rendering the legacy front end as a visual reference for
+`R-18`. Verified against the source by the integrator 2026-09-21. Opened the same day.**
+
+`R-18` makes the interface an acceptance condition, and the reference carries **43 inline
+`<svg>`** where `web/src` carries **zero**. Before that becomes a build, it has to be settled
+whether it is a **copy**, because those are different obligations.
+
+**Two conventions in the 43**: 28 at `viewBox="0 0 24 24"` with `stroke-width="2"`, round caps
+and `currentColor`, and 10 at 16×16 with `stroke-width="1.5"` and short hand-drawn paths. The
+16×16 set looks hand-authored — `M4 7v6h3v-3h2v3h3V7` is a house drawn straight onto a 16-unit
+grid.
+
+**The 24×24 set is Feather, and the two candidate matches are not equally strong. That
+distinction is the finding.** Fetched from `feathericons/feather` and compared:
+
+| icon | Feather's source | legacy | verdict |
+|---|---|---|---|
+| `dollar-sign` | `<path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>` | the same string | **byte-identical, 45 characters. Conclusive.** |
+| `chevron-down` | `<polyline points="6 9 12 15 18 9"/>` | `M6 9l6 6 6-6` | **same geometry, re-encoded as a path. Not a copy of the bytes**, and on its own it would prove nothing |
+
+The reporting session offered `chevron-down` as one of two exact matches. It is not one; it is
+a re-encoding. **The conclusion survives anyway on `dollar-sign` alone**, plus Feather's whole
+attribute convention, and it is recorded this way because a row that overstates its evidence
+gets re-opened by the next session that checks it.
+
+**Feather is MIT**, which requires that *"the above copyright notice and this permission notice
+shall be included in all copies or substantial portions of the Software."*
+
+**And that notice is absent from the legacy tree.** No `LICENSE`, no `NOTICE`, and **no icon
+package in `frontend/package.json`** — its dependencies are `eslint`, `typescript`, `vite` and
+`vitest`. The icons arrived by paste.
+
+**Why this is good news rather than bad.** If it is Feather, an icon set stops being a design
+build and becomes **a copy plus a `NOTICE` file** — much cheaper for `R-18`. What it is not is
+free of obligation, and the obligation is not discharged by the legacy tree having skipped it.
+
+**This is deliberately NOT folded into `D-11`**, and the argument is the reporting session's:
+`D-11` is a **resolved dependency with a declared licence** (`certifi`, MPL-2.0, in the test
+group). This is **pasted source with no declaration**. Different shape, different check; one
+row answering both would answer neither.
+
+Check:
+```
+curl -s https://raw.githubusercontent.com/feathericons/feather/main/icons/dollar-sign.svg
+```
+and compare to the `d` attribute of the legacy `dollar-sign`.
 
 ### D-49 — the alpha stand is published to every interface, and one of its two paths takes writes with no credential
 

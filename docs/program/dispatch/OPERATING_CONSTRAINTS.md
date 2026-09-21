@@ -365,6 +365,40 @@ Caught mid-flight; the brief was patched before the palette was built on it, and
 it turned out to hide — whether the alpha is dark by default — was taken out of the stream's
 hands and put to the owner, because it is not a styling decision.
 
+**Three sharper statements of it, from the session that produced the case and then wrote it
+up**, which are better than the integrator's first pass and are kept in its words:
+
+- **A caveat is not a control.** It records that nobody measured; it does not stop anyone
+  acting as though somebody had.
+- **Volume of measurement was read as thoroughness and hid a categorical error.** Twelve
+  figures, every one real and reproducible, sitting around a wrong category.
+- **`record-measured-figures-with-their-method` was fully satisfied and did not help.** The
+  command was given and the tree was named. That rule makes a figure re-checkable; it does not
+  ask whether the span the command covered is the whole subject.
+
+**The check this adds.** Before reporting a property of an artefact, ask **what the artefact
+does when run**, and whether the file you read is the only place that property is decided. For
+anything with themes, modes, environments or feature flags: a `:root` block, a default branch,
+a base config and a dev override are each *a* value and none of them is *the* value. Where the
+artefact can be rendered or executed cheaply, do that once — it answers in one observation what
+a file scan answers only if you already knew which files to read. Where it cannot, **say the
+answer is unverified in the conclusion, not only in the method**: a caveat beside a confident
+table reads as thoroughness rather than as a limit.
+
+**A sibling case, same wave, same week.** `W31-UI` classified `credentialed-forward.ts` as
+server-side and left its sentences in English; `W31-RUS` found six of them reaching a reviewer,
+because `synthesizedEnvelope()` puts them into an envelope **body the browser decodes**. The
+classification asked which process **executes** the module and never asked where its **output**
+is read. *Which process executes a string is not the same question as who reads its output.*
+
+**And a near-miss in the same report, which is the more dangerous shape.** The same session
+classified `env.ts` as server-side too. That verdict **held** — those strings are unreachable —
+but for a different reason than the one given: `getApiBaseUrl()` does run in the browser, and
+what actually saves it is that `MissingConfigurationError extends Error` rather than
+`ApiFailure`, so a Russian fallback masks them first. **A right answer from a wrong premise is
+the thing that survives review and breaks later**, because nothing about the outcome invites a
+second look.
+
 **And one about this file.** Its path is `docs/program/dispatch/OPERATING_CONSTRAINTS.md`. The
 integrator cited it as `docs/program/OPERATING_CONSTRAINTS.md` in briefs for a week; the
 repository never carried the wrong path, so only dispatched sessions met it. A session that
