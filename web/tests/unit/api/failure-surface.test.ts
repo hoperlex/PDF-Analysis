@@ -82,19 +82,28 @@ describe('a code outside the catalog is not a catalog code', () => {
 });
 
 describe('the PC-01 subset is a subset, not the catalog', () => {
-  it('has twelve codes and does not include a code with no PC-01 producer', () => {
-    expect(PC01_ERROR_CODES).toHaveLength(12);
+  it('admits what the surface can return and refuses what it cannot', () => {
+    // No length literal since `D-40`. The membership of this list is derived from the
+    // frozen documents by `tests/contract/pc01-error-codes.contract.test.ts`; what is
+    // tested here is the predicate over it, which is what nothing was reading.
+    expect(PC01_ERROR_CODES.length).toBeGreaterThan(0);
     expect(isPc01ErrorCode('validation_failed')).toBe(true);
     expect(isPc01ErrorCode('dependency_unavailable')).toBe(true);
-    // The two `R-3` added. Since the seam went in front of all twelve operations, every
-    // PC-01 screen can receive either, so every PC-01 screen has to be able to render it.
+    // The two `R-3` added. Since the seam went in front of every operation, every PC-01
+    // screen can receive either, so every PC-01 screen has to be able to render it.
     expect(isPc01ErrorCode('authentication_required')).toBe(true);
     expect(isPc01ErrorCode('permission_denied')).toBe(true);
-    // `storage_integrity_error` is in the catalog and outside the PC-01 render subset.
-    expect(isPc01ErrorCode('storage_integrity_error')).toBe(false);
+    // `storage_integrity_error` is a 422 the `UploadRejected` response names, and
+    // `upload-failure.ts` has rendered it with its own sentence since `W12-WEB`. It was
+    // outside this list until `W27-WEB`, which is `D-40`'s shape a second time over.
+    expect(isPc01ErrorCode('storage_integrity_error')).toBe(true);
+    // Still a subset: `OD-11` exports a `partial` run, so nothing refuses one, and no
+    // operation on this surface declares the 400 that carries a version refusal.
+    expect(isPc01ErrorCode('partial_result_not_publishable')).toBe(false);
+    expect(isPc01ErrorCode('unsupported_contract_version')).toBe(false);
   });
 
-  it('names a code the catalog also names, for each of its twelve', () => {
+  it('names a code the catalog also names, for each of its own', () => {
     for (const code of PC01_ERROR_CODES) {
       expect([...ERROR_CODE_VALUES], `${code} is not a catalog code`).toContain(code);
     }

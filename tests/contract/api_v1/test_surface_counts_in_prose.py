@@ -46,11 +46,16 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCANNED_TREES = (
     REPO_ROOT / "src" / "auditmanager" / "api",
     REPO_ROOT / "infra" / "deploy",
-    # `W22-WEB`, the fifth stale count. The BFF route handler forwards the whole surface
-    # and describes its size in a JSDoc block; it is the only place in `web/` that makes
-    # such a claim, and it was outside every tree this guard read. Widening here is the
-    # cheap repair the row asks for: the sixth is caught rather than corrected by hand.
-    REPO_ROOT / "web" / "src" / "app" / "bff",
+    # `W22-WEB` added `web/src/app/bff` for the fifth stale count and called it "the only
+    # place in `web/` that makes such a claim". That was false: `D-41` found two more in
+    # `web/src/shared/api/errors.ts` and this session found a third next to them in
+    # `authorization.ts`, all outside that subtree. `W27-WEB` therefore reads the whole of
+    # `web/src` -- a claim about the size of this surface is not confined to the directory
+    # that last carried a stale one.
+    #
+    # `web/tests` is deliberately NOT read, for the reason this file is not read either:
+    # a suite that proves a guard can fail has to write the stale spelling down on purpose.
+    REPO_ROOT / "web" / "src",
 )
 API_SOURCE = SCANNED_TREES[0]
 API_CONTRACT = REPO_ROOT / "contracts" / "api" / "v1" / "openapi.json"
@@ -115,8 +120,20 @@ _NUMBER = r"(?:\d{1,3}|" + "|".join(
     sorted((re.escape(w) for w in NUMBER_WORDS), key=len, reverse=True)
 ) + r")"
 #: ``forty-six schemas``, ``46 schema names``, ``fifteen-operation surface``.
+#:
+#: Two things are excluded structurally rather than by registering a phrase, because both
+#: are about what the words *mean* and neither depends on the number (`W27-WEB`):
+#:
+#: * a number that is part of a hyphenated token is not a count of anything --
+#:   ``UTF-16 code units`` read as "16 codes" and was the first thing the widening to
+#:   ``web/src`` reported;
+#: * ``code units`` and ``code points`` are units of text, not entries in a catalog.
+#:
+#: Registering those in :data:`LOCAL_COUNTS` would have worked for the exact numbers seen
+#: and silently let the next one through, which is the literal this guard exists to refuse.
 _CLAIM = re.compile(
-    rf"\b(?P<number>{_NUMBER})[ -](?P<noun>operations?|schemas?|paths?|codes?|handlers?)\b",
+    rf"(?<![\w-])(?P<number>{_NUMBER})[ -](?P<noun>operations?|schemas?|paths?|codes?|handlers?)\b"
+    r"(?![ -](?:unit|point)s?\b)",
     re.IGNORECASE,
 )
 
@@ -317,6 +334,38 @@ def test_the_bff_handler_still_makes_a_claim_this_guard_can_read() -> None:
     assert "operations" in nouns and "paths" in nouns, claims
 
 
+def test_the_guard_reaches_the_shared_api_client() -> None:
+    """`D-41`: both stale comments sat in a tree this guard did not read.
+
+    Named by path for the same reason as the check above it: "some file under `web/src`
+    is scanned" would pass over a move of exactly these two.
+    """
+    scanned = {str(path.relative_to(REPO_ROOT)) for path in _api_source_files()}
+    for name in (
+        "web/src/shared/api/errors.ts",
+        "web/src/shared/api/authorization.ts",
+    ):
+        assert name in scanned, sorted(
+            found for found in scanned if found.startswith("web/")
+        )
+
+
+def test_the_shared_api_client_still_makes_a_claim_this_guard_can_read() -> None:
+    """Scanned *and* checked. `W22-WEB`'s shape, one directory over.
+
+    `errors.ts` states the size of the catalog and `authorization.ts` the size of the
+    operation set. If either stopped saying so, the widening above would be a scan of
+    prose with no claims in it -- green while checking nothing.
+    """
+    shared = REPO_ROOT / "web" / "src" / "shared" / "api"
+    errors = list(_claims((shared / "errors.ts").read_text(encoding="utf-8")))
+    assert any(noun == "codes" for _, noun, _ in errors), errors
+    authorization = list(
+        _claims((shared / "authorization.ts").read_text(encoding="utf-8"))
+    )
+    assert any(noun == "operations" for _, noun, _ in authorization), authorization
+
+
 # ---------------------------------------------------------------------------
 # The guard, shown able to fail
 # ---------------------------------------------------------------------------
@@ -411,6 +460,34 @@ def test_a_handler_count_is_checked_as_an_operation_count() -> None:
         value == counts["operations"]
         for _, _, value in _claims(f"not to {counts['operations']} handlers")
     )
+
+
+def test_a_number_inside_a_hyphenated_token_is_not_a_count() -> None:
+    """`W27-WEB`. The first thing the widening to `web/src` reported was an encoding.
+
+    `entities/finding-observation/model/quotation.ts` says *"counts UTF-16 code units"*,
+    and the pattern read the `16` of `UTF-16` as a count of catalog codes. A phrase in
+    `LOCAL_COUNTS` would have suppressed that exact number and let `UTF-32` through.
+    """
+    assert not list(
+        _claims("`String.prototype.length` counts UTF-16 code units, so a quotation")
+    )
+    assert not list(_claims("a UTF-8 code point"))
+    # The same number written as a count is still read, so this excludes a token and not
+    # a number: nothing here is registered against the value 16.
+    assert list(_claims("16 codes")) == [("16 codes", "codes", 16)]
+
+
+def test_code_units_and_code_points_are_not_catalog_codes() -> None:
+    """A unit of text is not an entry in the error catalog, whatever the number is."""
+    for text in ("a span of 12 code units", "twelve code points", "two code units"):
+        assert not list(_claims(text)), text
+    # ...and the bare noun is still a claim, so the lookahead excludes the units and not
+    # the word `code`.
+    counts = _surface_counts()
+    claims = list(_claims("twelve codes"))
+    assert claims == [("twelve codes", "codes", 12)]
+    assert 12 != counts["codes"]
 
 
 def test_a_registered_local_count_is_not_a_surface_claim() -> None:

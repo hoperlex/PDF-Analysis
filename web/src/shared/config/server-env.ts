@@ -93,8 +93,8 @@ export function getApiUpstreamUrl(): string {
  *
  * @throws {MissingConfigurationError} when unset or blank. Fail-closed, matching the API:
  * `W13_CLOSURE.md` section 7 makes the seam refuse rather than default, and a web tier
- * that forwarded uncredentialed requests instead would turn one clear refusal into twelve
- * confusing ones.
+ * that forwarded uncredentialed requests instead would turn one clear refusal into a
+ * confusing one per operation.
  */
 export function getApiToken(): string {
   const raw = process.env.AUDITMANAGER_API_TOKEN;
