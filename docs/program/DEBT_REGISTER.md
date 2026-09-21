@@ -11,9 +11,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
+| **D-44** | the pre-check limit must stay below `client_max_body_size` | an invariant nothing records |
 | **D-42** | the provider credential **does** appear in `compose config` | prose + runbook |
-| **D-40** | `PC01_ERROR_CODES` is narrower than the surface | `web/src` |
-| **D-41** | two comments in `errors.ts`, one falsified this wave | `web/src` |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
@@ -402,31 +401,85 @@ would have reported the right conclusion for a wrong reason.
 
 Check: `python3 -c "import json;print(len(json.load(open('contracts/domain/v1/error-codes.json'))['codes']))"` is 22.
 
-### D-40 — `PC01_ERROR_CODES` is narrower than the surface it claims to cover
+### D-40 — `PC01_ERROR_CODES` was narrower than the surface — **CLOSED, and it named one code where four were missing**
 
-**Raised by `W25-SEAL` and outside its grant.** That list states its own meaning as *"the
-twelve codes a PC-01 screen has to be able to render"*. `uploadDocument` can now emit
-`staged_upload_lost`, which is **in the catalog and not in the list**.
+**Closed 2026-09-21 by `W27-WEB`.** The row said `staged_upload_lost` was missing. Four were:
+`storage_integrity_error`, `analysis_input_invalid`, `staged_upload_lost` and
+`dependency_credential_refused`.
 
-**Nothing breaks** — a code outside the subset is still an `ApiError`, so the envelope and
-`retryable: true` reach the caller. But the list's stated meaning is now narrower than the
-surface, and **this is exactly the shape `W15-AUTH` found**: that same list lacked both
-authorization codes, which was correct before `R-3` and false after it, and nobody widened it.
+**Two were not theoretical, and the pair is the finding.**
+`entities/document-version/model/upload-failure.ts` has described `storage_integrity_error` as
+its own separate state since `W12-WEB`, and `features/upload-document/ui/upload-document-form.tsx`
+renders it — **while `failure-surface.test.ts` asserted `isPc01ErrorCode('storage_integrity_error')`
+is `false`**, with a comment calling the code *"outside the PC-01 render subset"*. Verified on
+`dev` at lines 93–94 before the repair.
 
-Widening it is a **screen** decision. Tree: `web/src`.
+**A test was pinning the list's falsehood in place.** That is `D-34`'s shape one layer over:
+the assertion was aimed at **what the list said** rather than at **what the screens do**. So
+the list never described the screens it claimed to, and a thirteenth entry would have left
+that true.
 
-### D-41 — two comments in `errors.ts`, one of which this wave falsified
+**It is derived from the contract now, and the derivation is argued.** The contract pins a
+**status per response, never a code per operation** — status-only derivation gives 21 of 22
+codes, which is not a subset. The only place the document says *which* code a response carries
+is the response component's description. Three parts, each proved load-bearing by a mutation
+that empties it: the backticked codes, the component's own name, and the **status filter** —
+which matters because descriptions carry **cross-references**, `PermissionDenied` naming
+`dependency_credential_refused` to say it is *not* that response.
 
-**Named by `W25-SEAL` rather than taken, following `W20-CODE`'s precedent.**
-`web/src/shared/api/errors.ts:4` says *"twenty-code catalog"* — stale since `R-3`, not this
-wave's doing. Line 25 says *"the full twenty-one-code catalog"* — **true before `W25-SEAL`
-and false after it.**
+Sixteen entries: fifteen derived plus `analysis_failed`, which the contract states in words
+rather than backticks, registered in `BLIND_SPOTS` **with that reason** and guarded both ways.
+No count literal survives in the three test files that carried one.
 
-Outside that session's `allowed_paths` and read by no test. `D-23`'s guard reads
-`src/auditmanager/api/` and `infra/deploy/`; **`web/src/shared/` is not in its tree**, which
-is `D-32` one directory over.
+**No behaviour a user sees changed**, and the session said so rather than dressing a
+structural repair as a product one.
 
-Check: `grep -n "twenty" web/src/shared/api/errors.ts`.
+**`W27-REFUSE` reached two of the same four independently**, from the screens rather than from
+the contract.
+
+Check: from `web/`, `npx vitest run tests/contract/pc01-error-codes.contract.test.ts` → 9 passed.
+
+### D-41 — two comments in `errors.ts`, one falsified by its own wave — **CLOSED**
+
+**Closed 2026-09-21 by `W27-WEB`, and there were five stale claims, not two.** The two in
+`errors.ts`, plus `authorization.ts` (*"twelve operations"*), plus two the guard **cannot
+read**.
+
+**The guard's tree grew to `web/src`, and like `W22-WEB`'s widening it needed three changes
+rather than one** — both extras found by **running** it: hyphenated identifiers, where `PC-01`
+was read as *"01 operations"*, and the phrase *"code units"*. Both repaired **structurally**
+rather than by adding phrases to an ignore list, which would have suppressed exactly the
+numbers the guard exists to see.
+
+**One class it still cannot read, repaired by hand and named:** `server-env.ts` said *"one
+clear refusal into twelve confusing ones"* — a count of operations wearing the noun *"ones"*.
+Teaching the guard that noun would redden ordinary prose, so the durable repair was removing
+the number.
+
+**`web/tests` is deliberately not scanned**: four files hold stale spellings **on purpose**, as
+mutation fixtures — the same reason the guard excludes its own file.
+
+Check: `.venv/bin/pytest tests/contract/api_v1/test_surface_counts_in_prose.py` → 21 passed.
+
+### D-44 — the browser's pre-check is what keeps three refusal screens truthful
+
+**Found by `W27-REFUSE` while measuring six negative inputs, and it is an undocumented
+invariant rather than a defect.**
+
+The upload pre-check refuses at **25 MiB**; `infra/deploy/proxy/nginx.conf` sets
+`client_max_body_size 32m`. **The gap is what stops a user ever meeting nginx's `413`** — and
+that `413` would arrive with **no envelope**, so the screen would classify it as `transport`
+and render *"The upload did not reach the API."*: **a true sentence naming the wrong cause**.
+
+**Raise the envelope to 32 MiB without touching nginx and three of the six refusal screens
+quietly become a generic transport failure.** Nothing in the tree records the dependency.
+
+A second consequence, measured: criterion 9's `max_bytes` refusal **holds through HTTP and is
+unreachable from a browser**. No user of this application can make that screen appear, and no
+fixture can either.
+
+Check: `grep -n client_max_body_size infra/deploy/proxy/nginx.conf` against the pre-check's
+limit in `web/src`. The first must exceed the second.
 
 ### D-19 — a published run reports neither its timings nor its finding count — **CLOSED**
 
