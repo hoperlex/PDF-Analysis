@@ -19,9 +19,10 @@ import uuid
 import pytest
 from sqlalchemy import text
 
-from auditmanager.analysis.text import RecordedAdapter
+from auditmanager.analysis.text import ProviderMode
+from auditmanager.analysis.text.config import DEPENDENCY_NAME
 from auditmanager.runs import execute_run, start_audit_run
-from auditmanager.shared.errors import DomainError
+from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
 
 
@@ -78,12 +79,36 @@ def _stage_error_code(session, run_id: str, stage_id: str) -> str | None:
     return None if not error else error.get("code")
 
 
+class _NeverReachable:
+    """A provider that is unreachable for good, raising exactly as ``live.py`` maps it.
+
+    This fixture was a `RecordedAdapter` over an empty directory until `W29-RETRY`. That
+    is a file missing from a local disk, not a provider that could not be reached, and
+    once the adapter stopped calling it a transport failure this suite would have gone on
+    claiming to cover the unreachable provider while driving a single-attempt local miss.
+    The claim is the same; the fixture now produces the failure the claim is about.
+    """
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    @property
+    def provider_mode(self) -> ProviderMode:
+        return ProviderMode.RECORDED
+
+    def complete(self, request):
+        self.calls += 1
+        raise DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            message="the model provider did not return a usable response",
+            dependency=DEPENDENCY_NAME,
+        )
+
+
 @pytest.fixture()
-def unreachable_provider_run(session, seeded, blob_store, provider_config, tmp_path) -> str:
-    """A recorded adapter pointed at an empty directory is the unreachable-provider case."""
-    empty = tmp_path / "no-recordings"
-    empty.mkdir()
-    return _run_against(session, seeded, blob_store, RecordedAdapter(empty), provider_config)
+def unreachable_provider_run(session, seeded, blob_store, provider_config) -> str:
+    """A provider that is never reachable, driven through the whole retry ladder."""
+    return _run_against(session, seeded, blob_store, _NeverReachable(), provider_config)
 
 
 def test_the_stage_really_did_fail_on_the_transport(unreachable_provider_run, session):

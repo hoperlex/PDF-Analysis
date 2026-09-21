@@ -62,13 +62,19 @@ def test_a_declared_checksum_that_does_not_match_is_refused(blob_store):
         )
 
 
-def test_an_unavailable_provider_fails_the_run_without_inventing_a_result(
+def test_a_corpus_with_no_answer_fails_the_run_without_inventing_a_result(
     session_factory, blob_store, provider_config, journey_harness, tmp_path
 ):
-    """A recorded adapter with no recording is the unavailable-dependency case.
+    """A recorded adapter with no recording must produce nothing rather than something.
 
     The run must reach an explicit non-published terminal. It must not fall back to
-    another recording directory, and it must not publish a finding.
+    another recording directory, it must not fall back to a live call, and it must not
+    publish a finding.
+
+    Named the unavailable-dependency case until `W29-RETRY`, when the adapter stopped
+    reporting an absent local file as a transport outage. The claim here never depended
+    on the code; this test now also runs in a fraction of the time, because it injects no
+    `sleep` and so really waited out the pinned `(2.0, 8.0)` ladder on every battery.
     """
     from auditmanager.analysis.text import RecordedAdapter
     from auditmanager.shared.errors import DomainError
