@@ -1,0 +1,872 @@
+/**
+ * No Latin-script word reaches a reviewer from a **rendered** screen, unless a contract
+ * put it there.
+ *
+ * ## Why this renders instead of reading source
+ *
+ * `R-18` requires the alpha in Russian. **Three sessions reported the interface translated
+ * and three were wrong** (`D-53`). The third round is the one that decides this file's
+ * design: `26b960d` scanned `.tsx`, `b0b8148` scanned `.ts`, both were green, and what
+ * found the survivors was rendering the six screens -- `Create`, `Start run`, the version
+ * panel's `label=` props, `Display title`, `Published findings:`, and four `LoadingState
+ * what=` arguments that composed into `Загрузка: the run…`.
+ *
+ * **The misses are not in the text.** `label="Display title"`, `what="the run"` and the
+ * ternaries around them are *arguments*; the string a reviewer reads does not exist until
+ * React composes it. A fourth source sweep would have missed a fourth time. So this guard
+ * renders the screens, takes the text a browser would show, and judges that.
+ *
+ * `presentation-language.guard.test.ts` is the other half and neither replaces the other:
+ * it reads two owned trees and fails on **English prose** -- two or more function words --
+ * which is how it catches a sentence without an allowlist. It cannot see any of `D-53`'s
+ * twenty, because none of them is prose: `Create` has no space, `Start run` and `Display
+ * title` carry no function word at all. This guard is the complement: **any** Latin word,
+ * anywhere on a rendered screen, in **every** module that composes it.
+ *
+ * ## Why the data is Cyrillic
+ *
+ * A rendered screen carries two kinds of string: what the application wrote, and what the
+ * server sent. Only the first is this programme's to translate -- a finding's text is the
+ * analysis's own words and may legitimately be in any language. `tests/unit/review/
+ * fixtures.ts` seeds English finding text on purpose, so it is deliberately **not** reused
+ * here. Every value this file seeds is Cyrillic, or an identifier, or a contract enum.
+ * **Anything Latin left in the output is therefore chrome the application authored**, and
+ * the guard needs no rule for telling content from chrome.
+ *
+ * ## What is allowed to be Latin, and where the permission comes from
+ *
+ * `W30-LISTS` closed eighteen instances of *a hand-maintained subset standing in for
+ * something a contract defines*. An allowlist here is exactly that class, so almost all of
+ * it is **read out of `contracts/api/v1/openapi.json` at run time**: every `enum` in every
+ * schema. That is the run states, the stage ids, the stage statuses, the finding
+ * categories, the verdicts, the decision event types, the provider modes, the cost bases
+ * and all 22 error codes -- **in one rule, with no names written down here.** Add a
+ * twenty-third error code to the contract and it is allowed the moment it is added; take
+ * one away and its appearance on a screen becomes an offence. `DEBT_REGISTER.md` §2 has
+ * the open owner question of whether this vocabulary should be translated at all; this
+ * guard takes no position on it, which is the point of deriving rather than listing.
+ *
+ * What is left over is in `NOT_DERIVABLE` below, and **every entry carries the reason no
+ * contract can supply it.** A long list there is a defect in this guard, not a fact about
+ * the tree.
+ */
+
+import { createElement } from 'react';
+import type { ReactElement } from 'react';
+import { describe, expect, it } from 'vitest';
+
+import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+
+import { ApiError, queryKeys } from '@/shared/api';
+import type {
+  DecisionEvent,
+  DocumentVersion,
+  ErrorCode,
+  ErrorEnvelope,
+  Finding,
+  FindingDetail,
+  Project,
+  RunStatus,
+  StageId,
+} from '@/shared/api';
+import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
+import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
+import { PROJECT_PAGE_LIMIT } from '@/entities/project';
+import { DocumentDetailPage } from '@/_pages/document-detail';
+import { ProjectDetailPage } from '@/_pages/project-detail';
+import { ProjectsPage } from '@/_pages/projects';
+import { ReviewPage } from '@/_pages/review';
+import { RunPage } from '@/_pages/run';
+import { VersionDetailPage } from '@/_pages/version-detail';
+
+import { CONTRACT_PATH, SEAMS_PATH, readJson, readText } from './lib/repo';
+import { join } from 'node:path';
+import { REPO_ROOT } from './lib/repo';
+import { newClient, renderWith, seedError } from '../unit/screens/harness';
+
+// ===================================================================== the vocabulary
+
+interface OpenApi {
+  readonly components: { readonly schemas: Record<string, { readonly enum?: readonly string[] }> };
+}
+
+/**
+ * Every enumerated value the API contract publishes, in one read.
+ *
+ * Derived, not listed: this is `W30-LISTS`'s rule applied to the thing that would
+ * otherwise be the largest hand-maintained set in this file.
+ */
+export function contractEnums(): ReadonlySet<string> {
+  const openapi = readJson<OpenApi>(CONTRACT_PATH);
+  const values = new Set<string>();
+  for (const schema of Object.values(openapi.components.schemas)) {
+    for (const value of schema.enum ?? []) values.add(value);
+  }
+  return values;
+}
+
+/**
+ * The seventeen CSV column names, parsed out of the seam document that freezes them.
+ *
+ * `OD-11` freezes them in `docs/program/P02_SEAMS.md` §6, and
+ * `web/tests/contract/csv-columns.contract.test.ts` already ties that table,
+ * `shared/api/csv-columns.ts` and `exports/serializer.py` together. The export panel
+ * prints the list to the reviewer, so those names are on a screen -- and they are machine
+ * identifiers, not English prose, so this guard reads the same authority the application
+ * does rather than listing them again.
+ *
+ * **`R-18` separately names printing this list to the user as a defect** -- "documentation
+ * standing where an interface should be". That is a question about what the screen shows,
+ * not about what language it is in, and it is reported in `docs/program/W32-SEE.md` rather
+ * than smuggled into this guard.
+ */
+export function csvColumnNames(): ReadonlySet<string> {
+  const document = readText(SEAMS_PATH);
+  const section = document.slice(
+    document.indexOf('## 6. The CSV column contract'),
+    document.indexOf('## 7. API seam'),
+  );
+  const columns = new Set<string>();
+  for (const line of section.split('\n')) {
+    const match = /^\|\s*\d+\s*\|\s*`([a-z0-9_]+)`\s*\|/.exec(line.trim());
+    if (match !== null) columns.add(match[1] as string);
+  }
+  return columns;
+}
+
+interface StageRegistry {
+  readonly stages?: readonly {
+    readonly required_inputs?: readonly { readonly role: string }[];
+    readonly produced_outputs?: readonly { readonly role: string }[];
+  }[];
+  readonly registry?: StageRegistry['stages'];
+}
+
+/**
+ * The input- and output-manifest role names, read from the analysis contract.
+ *
+ * A role reaches a screen: the version panel lists the input manifest and prints each
+ * entry's role. `documents/models.py` derives `MANIFEST_ROLE_SOURCE_DOCUMENT` from exactly
+ * this file and raises at import if the derivation fails -- its docstring records that a
+ * previous session restated the spelling as a constant and diverged from the contract
+ * silently. This reads the same declarations rather than repeating them, for the same
+ * reason.
+ *
+ * Note the spelling the contract actually uses is `source.document`. `src/auditmanager/
+ * documents/models.py:44` separately carries `ROLE_SOURCE_DOCUMENT = "source_document"`,
+ * which is the **blob** role in the storage namespace and a different thing.
+ */
+export function manifestRoles(): ReadonlySet<string> {
+  const path = join(REPO_ROOT, 'contracts', 'analysis', 'v1', 'stage-registry.json');
+  const registry = readJson<StageRegistry>(path);
+  const roles = new Set<string>();
+  for (const stage of registry.stages ?? registry.registry ?? []) {
+    for (const input of stage.required_inputs ?? []) roles.add(input.role);
+    for (const output of stage.produced_outputs ?? []) roles.add(output.role);
+  }
+  return roles;
+}
+
+/** Everything a contract or a frozen seam document puts on a screen. */
+export function contractVocabulary(): ReadonlySet<string> {
+  return new Set([...contractEnums(), ...csvColumnNames(), ...manifestRoles()]);
+}
+
+/**
+ * The residue: Latin that no contract in this repository defines.
+ *
+ * Each entry says why the derivation cannot reach it. An entry whose reason is only "it is
+ * on a screen" is an offence being laundered, and the next reader should delete it.
+ */
+const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] = [
+  {
+    word: 'proxy',
+    why:
+      'A provider mode the application supports and the contract does not publish: ' +
+      '`openapi.json` `ProviderMode` is `live`/`recorded` only, and `W30-LISTS` §1.1 ' +
+      'records `_DECLARED_MODES` as "the only extra is proxy". The owner stand at ' +
+      '127.0.0.1:31500 runs in it. Derivable the day the contract publishes it.',
+  },
+  // ------------------------------------------------------------------------------------
+  // Names of formats, standards and algorithms.
+  //
+  // `W30-LISTS` §1.4 ruled a set out of the hand-maintained-subset class when "no contract
+  // or catalog in this repository defines them, and no authority here can grow" -- that was
+  // AWS's error vocabulary. These are the same shape: the names of things standardised
+  // outside this programme. Nothing in `contracts/` defines what SHA-256 is called, and a
+  // guard that pinned them to a copy of themselves would prove nothing. They are also not
+  // translated in Russian technical writing, which is why they are permitted rather than
+  // reported.
+  // ------------------------------------------------------------------------------------
+  { word: 'PDF', why: 'The document format, and the only one this application accepts. A proper noun in Russian too ("PDF-документ"). `application/pdf` is matched separately as a media type.' },
+  { word: 'CSV', why: 'The export format. RFC 4180 names it, no contract here does, and Russian technical writing does not translate it.' },
+  { word: 'API', why: 'The name of the seam the screens talk to. Universal in Russian technical writing; nothing in `contracts/` defines the word itself.' },
+  { word: 'RFC', why: 'The IETF document series, cited by number beside the CSV escaping rule. A citation, not a label.' },
+  { word: 'SHA', why: 'The digest algorithm family, shown as SHA-256 beside a version. FIPS 180-4 fixes the spelling; no contract here does.' },
+  { word: 'UTF', why: 'The character encoding family, shown as utf-8 in the export description. The IANA charset registry fixes the spelling; matched case-insensitively for that one entry alone.' },
+  { word: 'UTC', why: 'The time-scale designator printed after a timestamp. Where a timestamp precedes it the ISO pattern already consumes it; this entry covers the case where it stands alone.' },
+  {
+    word: 'MiB',
+    why:
+      'A unit symbol. IEC 80000-13 fixes the spelling and it is not localised; the ' +
+      'upload envelope states a size in it. `MB`, `KiB`, `GiB` are matched by the unit ' +
+      'pattern for the same reason; this entry covers a bare one.',
+  },
+];
+
+// ===================================================================== the extraction
+
+/**
+ * Patterns for text that is legitimately Latin because of what it *is*, not what it says.
+ *
+ * Each is matched against the rendered text and removed before any word is judged. A
+ * pattern is here only where the thing it matches has an authority outside this file --
+ * an identifier catalog, an RFC, a checksum algorithm -- so that "what shape is an
+ * identifier" is not a question this guard answers by taste.
+ */
+const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp }[] = [
+  {
+    name: 'prefixed ULID identifiers',
+    // `contracts/domain/v1/identifiers.json` fixes the form: a lowercase prefix, an
+    // underscore, and 26 Crockford base32 characters. Matched by shape rather than by a
+    // list of prefixes, because the catalog gains prefixes and this file must not have to.
+    pattern: /\b[a-z][a-z0-9]{1,7}_[0-9A-HJKMNP-TV-Z]{26}\b/g,
+  },
+  {
+    name: 'bare ULIDs and correlation ids',
+    pattern: /\b[0-9A-HJKMNP-TV-Z]{26}\b|\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g,
+  },
+  { name: 'hex digests', pattern: /\b[0-9a-f]{32,128}\b/g },
+  // RFC 6838. `application/pdf` is the only one this application names, but the shape is
+  // the authority, not the value.
+  { name: 'media types', pattern: /\b[a-z]+\/[a-z0-9.+-]+\b/g },
+  { name: 'URLs and object urls', pattern: /\b(?:https?|blob|data):[^\s"'<>]+/g },
+  // A filename is the server's or the user's, never this application's prose. The
+  // extension is matched with it, so `.pdf` and `.csv` need no entry of their own.
+  { name: 'filenames', pattern: /\S*[^\s.]\.(?:pdf|csv|json|png|txt|zip)\b/gi },
+  { name: 'absolute paths', pattern: /(?:^|[\s(])\/[A-Za-z0-9._~\-/[\]]*/g },
+  // ISO 8601, which is how every timestamp in the contract is written.
+  // ISO 8601, and the `UTC` designator the screens print after the local rendering of it.
+  // The designator is matched only where a timestamp precedes it, so a bare `UTC` in a
+  // sentence is still an offence.
+  { name: 'ISO 8601 timestamps', pattern: /\b\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|\s*UTC)?\b/g },
+  { name: 'the product designation', pattern: /\bPC-\d{2}\b/g },
+  {
+    name: 'units attached to a number',
+    // A unit is Latin because the unit is Latin. Bound to a preceding number so that a
+    // bare `MB` in a sentence is still an offence.
+    // `m` and `s` are here because the run screen renders a duration as "4 m 0 s". They
+    // are bound to a preceding number like every other unit, so a bare `s` is an offence.
+    pattern: /\b\d+(?:[.,]\d+)?\s*(?:[KMGT]i?B|ms|[smhd]|px|rem|%)\b/g,
+  },
+];
+
+/** Entities `renderToStaticMarkup` writes, decoded so `&amp;` is not read as `amp`. */
+function decodeEntities(text: string): string {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCharCode(Number(d)))
+    .replace(/&amp;/g, '&');
+}
+
+/**
+ * Attributes a browser shows to a human. Everything else in the markup is machinery.
+ *
+ * `value` is deliberately absent: on this application's inputs it carries what the *test*
+ * typed, not what the application wrote, so including it would make the guard judge its
+ * own fixtures.
+ */
+const VISIBLE_ATTRIBUTES = ['placeholder', 'title', 'alt', 'aria-label'] as const;
+
+/**
+ * Everything a reviewer could read off this markup: the text nodes, plus the handful of
+ * attributes that are rendered as text.
+ *
+ * `<style>`, `<script>` and `<code>` are handled by the caller's masking rather than
+ * excluded here -- a `<code>` element on these screens carries an identifier or a catalog
+ * code, and both are matched as machine shapes, so excluding the element would hide a
+ * sentence that was merely put in the wrong tag.
+ */
+export function visibleText(markup: string): string[] {
+  const out: string[] = [];
+  const withoutStyle = markup.replace(/<style\b[^>]*>[\s\S]*?<\/style>/g, '');
+  for (const match of withoutStyle.matchAll(/>([^<>]+)</g)) {
+    const text = decodeEntities(match[1] ?? '').trim();
+    if (text.length > 0) out.push(text);
+  }
+  for (const attribute of VISIBLE_ATTRIBUTES) {
+    const pattern = new RegExp(`\\s${attribute}="([^"]*)"`, 'g');
+    for (const match of withoutStyle.matchAll(pattern)) {
+      const text = decodeEntities(match[1] ?? '').trim();
+      if (text.length > 0) out.push(text);
+    }
+  }
+  return out;
+}
+
+/**
+ * The Latin-script words in one visible string that nothing permits.
+ *
+ * Masking order matters and is stated because it is the whole allowlist design: the
+ * machine *shapes* go first, then the contract's *whole values*, and only what survives
+ * both is split into words. `needs_manual_review` is removed as one contract value, so
+ * this guard never learns to allow the bare word `review` -- which is the difference
+ * between deriving an allowlist and writing a bag of words that stops catching things.
+ */
+export function unexplainedLatin(text: string, vocabulary: ReadonlySet<string>): string[] {
+  let residue = text;
+  for (const { pattern } of MACHINE_SHAPES) residue = residue.replace(pattern, ' ');
+
+  // Longest first, so `needs_manual_review` is consumed before `review` could be.
+  const values = [...vocabulary].sort((a, b) => b.length - a.length);
+  for (const value of values) {
+    residue = residue.split(value).join(' ');
+  }
+  // Case-insensitively, because `utf-8` is written lowercase and `UTF` is the registry's
+  // spelling. That is a deliberate widening and it is narrow: it applies only to this
+  // short, closed list of external standard names, never to the contract vocabulary --
+  // where `Recorded:` as a heading must stay an offence while `recorded` as a run's
+  // provider mode does not.
+  for (const { word } of NOT_DERIVABLE) {
+    residue = residue.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ');
+  }
+
+  const words = residue.match(/[A-Za-z][A-Za-z'’]*/g) ?? [];
+  return [...new Set(words)];
+}
+
+// ===================================================================== the screens
+
+function stubRouter(): AppRouterInstance {
+  return {
+    push: () => {}, replace: () => {}, back: () => {}, forward: () => {},
+    refresh: () => {}, prefetch: () => {},
+  } as unknown as AppRouterInstance;
+}
+
+type Client = ReturnType<typeof newClient>;
+
+function renderScreen(client: Client, element: ReactElement): string {
+  return renderWith(
+    client,
+    createElement(AppRouterContext.Provider, { value: stubRouter() }, element),
+  );
+}
+
+// --------------------------------------------------------- Cyrillic-only server data
+
+const ULID = '01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+const PROJECT_UID = `prj_${ULID}`;
+const DOCUMENT_UID = `doc_${ULID}`;
+const VERSION_UID = `ver_${ULID}`;
+const RUN_ID = `run_${ULID}`;
+const FINDING_UID = `fnd_${ULID}`;
+const OBSERVATION_ID = `fobs_${ULID}`;
+const SHA = '6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f';
+
+const project = (): Project => ({
+  project_uid: PROJECT_UID,
+  name: 'Договор поставки',
+  created_at: '2026-09-10T08:00:00.000Z',
+  document_count: 2,
+});
+
+const version = (over: Partial<DocumentVersion> = {}): DocumentVersion => ({
+  version_uid: VERSION_UID,
+  document_uid: DOCUMENT_UID,
+  project_uid: PROJECT_UID,
+  version_ordinal: 1,
+  media_type: 'application/pdf',
+  byte_size: 58978,
+  sha256: SHA,
+  page_count: 8,
+  published_at: '2026-09-18T06:55:52.642022Z',
+  input_manifest: [
+    // The contract's spelling, read from `stage-registry.json` -- not the storage
+    // namespace's `source_document`, which is a different role.
+    { role: 'source.document', media_type: 'application/pdf', sha256: SHA, size_bytes: 58978 },
+  ],
+  display_title: 'Годовой отчёт',
+  source_filename: 'отчёт.pdf',
+  ...over,
+});
+
+const STAGES: readonly StageId[] = [
+  'source_preparation', 'page_geometry_extraction', 'document_context_build', 'text_analysis',
+];
+
+const run = (over: Partial<RunStatus> = {}): RunStatus => ({
+  run_id: RUN_ID,
+  project_uid: PROJECT_UID,
+  version_uid: VERSION_UID,
+  state: 'published',
+  provider_mode: 'recorded',
+  created_at: '2026-09-10T08:00:00.000Z',
+  terminal_at: '2026-09-10T08:04:00.000Z',
+  terminal_reason: null,
+  interrupted_reason: null,
+  stages: STAGES.map((stage_id) => ({
+    stage_id,
+    status: 'succeeded' as const,
+    started_at: '2026-09-10T08:00:00.000Z',
+    finished_at: '2026-09-10T08:01:00.000Z',
+    error_code: null,
+    stage_version: '1.0.0',
+  })),
+  degradation_set: [],
+  published_finding_count: 3,
+  diagnostic_observation_count: 1,
+  analysis_profile_id: `ap_${ULID}`,
+  prompt_bundle_id: `pb_${ULID}`,
+  model_call_count: 4,
+  cost_micros: 1234,
+  cost_basis: 'measured',
+  ...over,
+});
+
+const finding = (over: Partial<Finding> = {}): Finding => ({
+  finding_uid: FINDING_UID,
+  project_uid: PROJECT_UID,
+  version_uid: VERSION_UID,
+  run_id: RUN_ID,
+  category: 'internal_contradiction',
+  current_verdict: 'pending',
+  latest_decision_id: null,
+  decision_recorded_at: null,
+  observation: {
+    finding_observation_id: OBSERVATION_ID,
+    run_id: RUN_ID,
+    category: 'internal_contradiction',
+    // Cyrillic on purpose: a finding's words are the analysis's, not this programme's.
+    finding_text: 'Срок поставки указан как 30 дней в §4 и как 45 дней в §9.',
+    recommendation_text: 'Согласуйте два срока поставки до подписания.',
+    evidence: [
+      {
+        evidence_ordinal: 1,
+        page_number: 7,
+        quote: 'Срок поставки составляет 30 дней.',
+        char_start: 1200,
+        char_end: 1232,
+        block_id: 'b_000042',
+      },
+    ],
+    provenance: {
+      analysis_profile_id: `ap_${ULID}`,
+      prompt_bundle_id: `pb_${ULID}`,
+      stage_id: 'text_analysis',
+      provider_mode: 'recorded',
+      model_call_id: `mc_${ULID}`,
+      model_identity: 'зафиксированная-модель',
+    },
+  },
+  ...over,
+});
+
+const detail = (): FindingDetail => ({
+  ...finding(),
+  decision_event_count: 1,
+  latest_comment: 'Замечание проверяющего.',
+});
+
+const decision = (): DecisionEvent => ({
+  decision_id: `dec_${ULID}`,
+  finding_uid: FINDING_UID,
+  finding_observation_id: OBSERVATION_ID,
+  event_type: 'accept',
+  verdict: 'accepted',
+  comment: 'Подтверждено.',
+  author_label: 'проверяющий',
+  recorded_at: '2026-09-10T09:00:00.000Z',
+});
+
+function apiError(status: number, code: ErrorCode): ApiError {
+  const envelope: ErrorEnvelope = {
+    contract_version: '1.0.0-draft.1',
+    error_code: code,
+    message: 'Сообщение об отказе.',
+    correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    retryable: false,
+  };
+  return new ApiError(status, envelope, '0f0e9d8c-7b6a-4948-b726-150413021100');
+}
+
+const KEYS = {
+  projects: queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT),
+  project: queryKeys.projects.detail(PROJECT_UID),
+  documents: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT),
+  versions: queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT),
+  version: queryKeys.versions.detail(VERSION_UID),
+  content: queryKeys.versions.content(VERSION_UID),
+  runs: queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT),
+  run: queryKeys.runs.detail(RUN_ID),
+  findings: queryKeys.runs.findings(RUN_ID),
+  finding: queryKeys.findings.detail(FINDING_UID),
+  decisions: queryKeys.findings.decisions(FINDING_UID),
+} as const;
+
+/**
+ * A client holding a full, plausible, Cyrillic answer to every question the screens ask.
+ *
+ * **Two shapes, and the split is not this file's choice.** Five of the six screens read a
+ * cache entry as the payload itself -- `useRunStatus` does
+ * `getQueryData<RunStatus>(queryKeys.runs.detail(runId))` and uses `.state`. `ReviewPage`
+ * files `useQuery` under **the same keys** with the generated client's `queryFn`, whose
+ * value is a `{ data }` envelope, and reads `runQuery.data?.data`. So the one cache holds
+ * `RunStatus` for one screen and `{ data: RunStatus }` for another under the identical
+ * key. Seeding one shape renders the other screen blank, which is why there are two
+ * builders here rather than one.
+ *
+ * That is a defect in `web/src`, not in this harness, and `W32-SEE` has no licence to fix
+ * it. `docs/program/W32-SEE.md` §5 reports it; this comment exists so the next reader of
+ * these two functions does not conclude the harness is confused.
+ */
+function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
+  const client = newClient();
+  const page = { next_cursor: null } as { next_cursor: null };
+  client.setQueryData(KEYS.projects, { items: [project()], page });
+  client.setQueryData(KEYS.project, project());
+  client.setQueryData(KEYS.documents, { items: [version()], page });
+  client.setQueryData(KEYS.versions, { items: [version()], page });
+  client.setQueryData(KEYS.version, version());
+  client.setQueryData(KEYS.runs, { items: [run(runOverrides)], page });
+  client.setQueryData(KEYS.run, run(runOverrides));
+  client.setQueryData(KEYS.findings, { items: [finding()], page });
+  client.setQueryData(KEYS.finding, detail());
+  client.setQueryData(KEYS.decisions, { items: [decision()], page });
+  return client;
+}
+
+/** The same readings, in the envelope shape `ReviewPage` unwraps. */
+function loadedReviewClient(runOverrides: Partial<RunStatus> = {}): Client {
+  const client = loadedClient(runOverrides);
+  const page = { next_cursor: null } as { next_cursor: null };
+  client.setQueryData(KEYS.run, { data: run(runOverrides) });
+  client.setQueryData(KEYS.findings, { data: { items: [finding()], page } });
+  client.setQueryData(KEYS.finding, { data: detail() });
+  client.setQueryData(KEYS.decisions, { data: { items: [decision()], page } });
+  return client;
+}
+
+/**
+ * The review screen with a finding selected but its detail and history still in flight.
+ *
+ * A state of its own because two `LoadingState what=` arguments live only here: the
+ * finding's own panel and the decision history. Seeding the list without the detail is
+ * the only way one static pass reaches them.
+ */
+function reviewDetailPendingClient(): Client {
+  const client = loadedReviewClient();
+  client.removeQueries({ queryKey: KEYS.finding });
+  client.removeQueries({ queryKey: KEYS.decisions });
+  return client;
+}
+
+/**
+ * A client in which every list came back genuinely empty.
+ *
+ * A state of its own because each of the four list widgets has a third branch -- not
+ * pending, not failed, but empty -- and none of it renders while the cache holds items.
+ * **It was added because a mutation found it missing**: an English sentence put into
+ * `ProjectList`'s `EmptyState` reddened nothing, and the reason was that the guard never
+ * rendered that branch. That is `W31-STYLE`'s "insufficient mutation" the other way
+ * round: the mutation was sound and the coverage was not.
+ */
+function emptyClient(): Client {
+  const client = newClient();
+  const page = { next_cursor: null } as { next_cursor: null };
+  client.setQueryData(KEYS.projects, { items: [], page });
+  client.setQueryData(KEYS.project, project());
+  client.setQueryData(KEYS.documents, { items: [], page });
+  client.setQueryData(KEYS.versions, { items: [], page });
+  client.setQueryData(KEYS.version, version());
+  client.setQueryData(KEYS.runs, { items: [], page });
+  client.setQueryData(KEYS.run, run());
+  client.setQueryData(KEYS.findings, { data: { items: [], page } });
+  client.setQueryData(KEYS.decisions, { data: { items: [], page } });
+  return client;
+}
+
+/** A client in which every question failed. */
+function failedClient(): Client {
+  const client = newClient();
+  for (const key of Object.values(KEYS)) {
+    seedError(client, key, apiError(503, 'dependency_unavailable'));
+  }
+  return client;
+}
+
+const SCREENS: readonly { readonly name: string; readonly make: () => ReactElement }[] = [
+  { name: 'projects', make: () => createElement(ProjectsPage, {}) },
+  {
+    name: 'project-detail',
+    make: () => createElement(ProjectDetailPage, { projectUid: PROJECT_UID }),
+  },
+  {
+    name: 'document-detail',
+    make: () =>
+      createElement(DocumentDetailPage, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID }),
+  },
+  {
+    name: 'version-detail',
+    make: () =>
+      createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+  },
+  { name: 'run', make: () => createElement(RunPage, { projectUid: PROJECT_UID, runId: RUN_ID }) },
+  {
+    name: 'review',
+    make: () => createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+  },
+];
+
+/**
+ * Every screen in every cache state one static render pass can reach.
+ *
+ * Three states and not one, because `D-53`'s survivors were spread across them: `Загрузка:
+ * the run…` exists only while a question is unanswered, the version panel's labels exist
+ * only once it is answered, and the failure layer -- where `Correlation id` survived two
+ * reports of a translated interface -- exists only when it is refused.
+ */
+export function renderedScreens(): readonly { readonly where: string; readonly markup: string }[] {
+  const out: { where: string; markup: string }[] = [];
+  const states: readonly { readonly state: string; readonly run: Partial<RunStatus> | null }[] = [
+    { state: 'cold', run: null },
+    { state: 'loaded', run: {} },
+    { state: 'failed-run', run: { state: 'failed', terminal_reason: 'analysis_failed', published_finding_count: 0 } },
+    { state: 'partial-run', run: { state: 'partial', degradation_set: ['text_analysis'] } },
+    { state: 'running', run: { state: 'running', terminal_at: null, published_finding_count: 0 } },
+    { state: 'refused', run: null },
+    { state: 'empty', run: null },
+  ];
+  for (const screen of SCREENS) {
+    const loaded = screen.name === 'review' ? loadedReviewClient : loadedClient;
+    for (const { state, run: overrides } of states) {
+      const client =
+        state === 'cold'
+          ? newClient()
+          : state === 'refused'
+            ? failedClient()
+            : state === 'empty'
+              ? emptyClient()
+              : loaded(overrides ?? {});
+      out.push({ where: `${screen.name} (${state})`, markup: renderScreen(client, screen.make()) });
+    }
+  }
+  out.push({
+    where: 'review (detail-pending)',
+    markup: renderScreen(reviewDetailPendingClient(), SCREENS[5]!.make()),
+  });
+  return out;
+}
+
+// ===================================================================== the assertions
+
+const VOCABULARY = contractVocabulary();
+
+describe('the guard reads a contract rather than a list of words', () => {
+  it('derives the whole published vocabulary from openapi.json', () => {
+    // A relationship, never a count: `W30-LISTS`'s rule. These are read back out of the
+    // derivation, so a contract that loses a code makes this red rather than merely
+    // narrowing the allowlist in silence.
+    for (const value of ['published', 'partial', 'failed', 'cancelled', 'queued', 'running',
+      'validating', 'accept', 'accepted', 'rejected', 'pending', 'needs_manual_review',
+      'internal_contradiction', 'explicit_placeholder', 'recorded', 'live', 'text_analysis',
+      'analysis_failed', 'succeeded', 'skipped']) {
+      expect(VOCABULARY.has(value), `${value} is not in the contract's enums`).toBe(true);
+    }
+    // The two derivations that are not openapi enums, asserted as relationships so a
+    // parser that silently returned nothing is red rather than merely permissive.
+    expect(csvColumnNames().size, 'OD-11 freezes seventeen CSV columns').toBe(17);
+    expect(csvColumnNames().has('finding_uid')).toBe(true);
+    expect(manifestRoles().has('source.document'), 'the stage registry declares it').toBe(true);
+
+    // `proxy` must NOT be derivable, or `NOT_DERIVABLE`'s first entry is stale.
+    expect(VOCABULARY.has('proxy'), 'proxy is now in the contract; delete it from NOT_DERIVABLE').toBe(false);
+  });
+
+  it('keeps the hand-written residue small, and every entry reasoned', () => {
+    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(12);
+    for (const { word, why } of NOT_DERIVABLE) {
+      expect(why.length, `${word} has no reason`).toBeGreaterThan(60);
+    }
+  });
+});
+
+describe('the guard can tell an English label from a legitimate Latin string', () => {
+  // Anti-vacuity, in the file itself. A guard whose discriminator nobody exercised is a
+  // guard nobody has watched work.
+  it('calls an English label English', () => {
+    expect(unexplainedLatin('Create', VOCABULARY)).toEqual(['Create']);
+    // `running` is a contract run state; the bare verb `run` is not, and must not become
+    // allowed by being a prefix of one.
+    expect(unexplainedLatin('Start run', VOCABULARY)).toEqual(['Start', 'run']);
+    expect(unexplainedLatin('Display title', VOCABULARY)).toEqual(['Display', 'title']);
+    expect(unexplainedLatin('Загрузка: the run…', VOCABULARY)).toEqual(['the', 'run']);
+    expect(unexplainedLatin('Published findings: 3', VOCABULARY)).toEqual(['Published', 'findings']);
+    expect(unexplainedLatin('Correlation id', VOCABULARY)).toEqual(['Correlation', 'id']);
+  });
+
+  it('does not redden a run state, a verdict, an identifier or a digest', () => {
+    expect(unexplainedLatin('published', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('needs_manual_review', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('analysis_failed', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('text_analysis', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin(`prj_${ULID}`, VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin(SHA, VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('application/pdf', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('Не более 25 MiB.', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('PC-01', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('2026-09-10T08:00:00.000Z', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('Один PDF за загрузку.', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('0f0e9d8c-7b6a-4948-b726-150413021100', VOCABULARY)).toEqual([]);
+  });
+
+  it('does not learn a bare word from a compound contract value', () => {
+    // The masking-order claim, asserted rather than described. If `needs_manual_review`
+    // were split into words, `review` alone would pass -- and a screen saying `review`
+    // would stop being an offence.
+    expect(unexplainedLatin('review', VOCABULARY)).toEqual(['review']);
+    expect(unexplainedLatin('manual', VOCABULARY)).toEqual(['manual']);
+    expect(unexplainedLatin('analysis', VOCABULARY)).toEqual(['analysis']);
+  });
+});
+
+describe('the guard renders the screens it claims to render', () => {
+  const screens = renderedScreens();
+
+  it('reaches all six screens in every state, and none of them throws', () => {
+    expect(screens.length).toBe(SCREENS.length * 7 + 1);
+    for (const { where, markup } of screens) {
+      expect(markup.length, `${where} rendered nothing`).toBeGreaterThan(200);
+    }
+  });
+
+  it('reaches past the loading state into a real reading', () => {
+    // Without this the whole suite could be six spinners and report a clean interface --
+    // the `W12-WEB` failure mode, one level up.
+    const loaded = screens.filter((s) => s.where.endsWith('(loaded)'));
+    expect(loaded.some((s) => s.markup.includes(`data-run-id="${RUN_ID}"`))).toBe(true);
+    expect(loaded.some((s) => s.markup.includes('Договор поставки'))).toBe(true);
+    expect(loaded.some((s) => s.markup.includes('Срок поставки'))).toBe(true);
+  });
+});
+
+/**
+ * The Latin `D-53` left behind at `cd475cc`, as this guard sees it.
+ *
+ * **Why this list exists rather than an empty assertion.** The guard is red on the tree it
+ * was written against, and `W32-SEE` may not fix what it finds: `web/src` belongs to
+ * another live session this wave. Committing a red gate is not an option, and neither is
+ * weakening the guard until it passes. So the outstanding set is written down, and it is
+ * asserted **in both directions**:
+ *
+ *   - nothing outside it  -- a **new** English string on a screen reddens the gate today,
+ *     which is the whole of what `D-53` asked for;
+ *   - nothing missing from it -- **translating one of these also reddens the gate**, with
+ *     a message saying to delete its line.
+ *
+ * That second direction is deliberate. `MEMORY.md`: *characterization can freeze a defect
+ * -- assert, don't just re-capture.* A list that only capped the damage would quietly
+ * outlive the repair and this guard would go back to proving nothing. This one cannot: it
+ * is a ratchet, it may only shrink, and when it is empty the skipped test below is the one
+ * to unskip.
+ *
+ * Each entry carries the module that renders it. Every one of them is another session's to
+ * repair, and `docs/program/W32-SEE.md` §4 names whose.
+ */
+const OUTSTANDING: readonly { readonly text: string; readonly module: string }[] = [
+  { text: 'All versions of this document', module: 'web/src/_pages/version-detail/ui/version-detail-page.tsx:82' },
+  { text: 'Correlation id', module: 'web/src/shared/ui/states.tsx:42, features/start-run/ui/start-run-control.tsx:63, features/upload-document/ui/upload-document-form.tsx:145' },
+  { text: 'Create', module: 'web/src/features/create-project/ui/create-project-form.tsx:89' },
+  { text: 'Display title', module: 'web/src/features/upload-document/ui/upload-document-form.tsx:95' },
+  { text: 'Published findings: #', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:98' },
+  { text: 'Recorded:', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:178' },
+  { text: 'Start run', module: 'web/src/features/start-run/ui/start-run-control.tsx:44' },
+  { text: 'Terminal reason:', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:140' },
+  { text: 'The run terminated', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:137,159' },
+  { text: '. Nothing was published.', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:137,159' },
+  { text: 'Upload', module: 'web/src/features/upload-document/ui/upload-document-form.tsx:117' },
+  { text: 'provider mode:', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:264' },
+  { text: "— this run's provider mode is", module: 'web/src/widgets/run-progress/ui/run-progress.tsx:264' },
+  { text: 'Загрузка: findings…', module: 'web/src/widgets/finding-list/ui/finding-list.tsx:63 (LoadingState what=)' },
+  { text: 'Загрузка: projects…', module: 'web/src/widgets/project-list/ui/project-list.tsx:24 (LoadingState what=)' },
+  { text: 'Загрузка: the document page…', module: 'web/src/widgets/evidence-viewer/ui/evidence-viewer.tsx:130 (LoadingState what=)' },
+  { text: 'Загрузка: the finding…', module: 'web/src/_pages/review/ui/review-page.tsx:198 (LoadingState what=)' },
+  { text: 'Загрузка: the run…', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:253 and _pages/review/ui/review-page.tsx:271 (LoadingState what=)' },
+  {
+    text:
+      'Одна версия на загрузку: этот экран не передаёт `uploadDocument` параметр ' +
+      '`document_uid`, поэтому каждая загрузка начина',
+    module: 'web/src/widgets/version-list/ui/version-list.tsx:7 — a sentence addressed to a developer, on a reviewer\u2019s screen',
+  },
+];
+
+/**
+ * One offence, keyed so the key is stable against the fixture.
+ *
+ * Digits become `#`: `Published findings: 3` is the same defect whatever number the
+ * seeded run carries, and a key that moved with the fixture would make this list a record
+ * of the harness rather than of the application.
+ */
+function offenceKey(text: string): string {
+  return text.slice(0, 120).replace(/\d+/g, '#');
+}
+
+function offencesOnScreens(): Map<string, { readonly words: Set<string>; readonly where: Set<string> }> {
+  const found = new Map<string, { words: Set<string>; where: Set<string> }>();
+  for (const { where, markup } of renderedScreens()) {
+    for (const text of visibleText(markup)) {
+      const words = unexplainedLatin(text, VOCABULARY);
+      if (words.length === 0) continue;
+      const key = offenceKey(text);
+      const entry = found.get(key) ?? { words: new Set<string>(), where: new Set<string>() };
+      for (const word of words) entry.words.add(word);
+      entry.where.add(where.replace(/ \(.*$/, ''));
+      found.set(key, entry);
+    }
+  }
+  return found;
+}
+
+describe('R-18: no Latin word reaches a reviewer that a contract did not put there', () => {
+  const found = offencesOnScreens();
+  const known = new Set(OUTSTANDING.map((entry) => offenceKey(entry.text)));
+
+  it('finds no English on a rendered screen that D-53 has not already recorded', () => {
+    const fresh = [...found.entries()]
+      .filter(([key]) => !known.has(key))
+      .map(([key, { words, where }]) =>
+        `${JSON.stringify(key)}  ${[...words].sort().join(' ')}  [${[...where].sort().join(', ')}]`,
+      )
+      .sort();
+    expect(
+      fresh,
+      'R-18 requires the alpha in Russian, and these words are on a RENDERED screen — a ' +
+        'source scan cannot see them, which is why three sessions missed them (D-53). ' +
+        'Translate them. If one is genuinely machine vocabulary it belongs in a contract, ' +
+        'and then this guard allows it without being edited.',
+    ).toEqual([]);
+  });
+
+  it('still finds every string the outstanding list claims, and no stale ones', () => {
+    const repaired = OUTSTANDING.filter((entry) => !found.has(offenceKey(entry.text))).map(
+      (entry) => `${JSON.stringify(entry.text)}  (${entry.module})`,
+    );
+    expect(
+      repaired,
+      'These strings are in OUTSTANDING and are no longer on any rendered screen. They ' +
+        'have been translated — delete their lines from OUTSTANDING. The list is a ' +
+        'ratchet and may only shrink; leaving a repaired entry in it is how a guard goes ' +
+        'back to proving nothing.',
+    ).toEqual([]);
+  });
+
+  // The state `R-18` actually requires. Skipped, not deleted, and not weakened: it is the
+  // assertion this guard exists to make, and it goes green the day `OUTSTANDING` is empty.
+  it.skip('finds none at all (unskip when OUTSTANDING is empty)', () => {
+    expect([...offencesOnScreens().keys()]).toEqual([]);
+  });
+});

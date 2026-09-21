@@ -41,7 +41,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -724,6 +724,56 @@ class Page {
     await this.#settle(settleMs, timeoutMs);
     await this.#collectBodies();
     return Date.now() - t0;
+  }
+
+  /**
+   * A PNG of what this page is showing, written to `absolutePath`. Returns the path.
+   *
+   * **`D-55`, and why it is eight lines rather than a dependency.** `R-18` makes
+   * presentation an acceptance condition, and the gate cannot see a stylesheet. `W31-STYLE`
+   * was asked for rendered evidence, found this instrument could not produce it, built a
+   * harness outside the tree and reported the gap -- and that harness died with the
+   * session, which is `D-5` again. `Page.captureScreenshot` is in the same stable,
+   * documented half of the protocol as the four domains this file already speaks, and
+   * `Page.enable()` is already called in `enable()`, so nothing new is enabled and no
+   * package is added.
+   *
+   * **`#send` was reported as the obstacle and is not one.** It is private to `Page`, so
+   * code *outside* the class cannot reach the protocol -- which is what `W31-STYLE` ran
+   * into, having no licence to edit this file. A method *on* `Page` is inside the class
+   * and calls `this.#send` like every other primitive here. So the private field stays
+   * private: widening it would have opened the whole protocol to callers in order to reach
+   * one method, and the narrow surface is the property that has kept this file from growing
+   * into a browser library.
+   *
+   * `fullPage` captures past the viewport by asking the page for its own content size,
+   * rather than by trusting the window. `width`/`height` fix the viewport so the same
+   * screen photographs the same way on a host whose default window differs; they are an
+   * override, and omitting them leaves whatever the browser is already showing.
+   *
+   * **One measured property, said here rather than found later.** `cssContentSize` is the
+   * content box, which excludes the scrollbar a taller-than-the-window document brings, so
+   * a `fullPage` capture comes back **narrower than the viewport by the scrollbar's width**
+   * -- 385 for a 400 viewport on this host. DevTools' own full-size capture does the same.
+   * `prove_the_screenshot_sees.mjs` asserts it, so a change in it is visible.
+   */
+  async screenshot(absolutePath, { fullPage = false, width = null, height = null } = {}) {
+    if (width !== null && height !== null) {
+      await this.#send('Emulation.setDeviceMetricsOverride', {
+        width, height, deviceScaleFactor: 1, mobile: false,
+      });
+    }
+    const params = { format: 'png', captureBeyondViewport: fullPage };
+    if (fullPage) {
+      const { cssContentSize } = await this.#send('Page.getLayoutMetrics', {});
+      params.clip = { x: 0, y: 0, ...cssContentSize, scale: 1 };
+    }
+    const { data } = await this.#send('Page.captureScreenshot', params);
+    // An empty capture is a failure that looks exactly like a blank page, so it is named
+    // here rather than written to disk as a zero-byte file the reader has to diagnose.
+    if (!data) throw new Error(`Page.captureScreenshot returned no data for ${absolutePath}`);
+    writeFileSync(absolutePath, Buffer.from(data, 'base64'));
+    return absolutePath;
   }
 
   /** Where the browser currently is. A `router.push` moves this without a navigation. */

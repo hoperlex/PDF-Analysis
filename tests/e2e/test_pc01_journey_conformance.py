@@ -1214,3 +1214,60 @@ def test_control_a_surrendered_classification_is_detected() -> None:
     generic = set(_SYNTHETIC_REFUSALS["refusals"]["generic_kinds"])
     assert _only_refusal("encrypted.pdf")["failure_kind"] not in generic
     assert "server_error" in generic
+
+
+# =====================================================================================
+# `W32-SEE`: the instrument keeps the capability `D-55` was opened for.
+#
+# `D-55` was opened because `cdp.mjs` could not screenshot, so `R-18`'s rendered evidence
+# could only come from a harness outside the tree -- which died with the session that
+# wrote it, `D-5` again. The method exists now. **Nothing in the gate would notice it
+# being deleted**, and a capability nothing checks is a capability that goes away.
+#
+# What these two can and cannot prove is stated rather than implied, because it is the
+# same residue this file already carries for handles: they prove the primitive is
+# **declared and used**, not that it photographs anything. The behavioural proof is
+# `tests/e2e/pc01/journey/prove_the_screenshot_sees.mjs`, which decodes the PNG and
+# checks the pixels -- and needs a Chromium binary, so it cannot live in a stack-free
+# gate any more than the journey can.
+# =====================================================================================
+
+CDP = JOURNEY_DIR / "cdp.mjs"
+LOOK = JOURNEY_DIR / "look.mjs"
+
+
+def test_the_instrument_still_declares_a_screenshot_primitive() -> None:
+    source = _require(CDP).read_text(encoding="utf-8")
+    assert "async screenshot(" in source, (
+        "cdp.mjs no longer declares a screenshot primitive. D-55 was opened because it "
+        "had none and R-18 makes rendered evidence an acceptance condition; removing it "
+        "sends the next design wave back to a harness outside the tree."
+    )
+    assert "Page.captureScreenshot" in source, (
+        "cdp.mjs declares screenshot() but no longer speaks Page.captureScreenshot, so "
+        "whatever it now writes is not a photograph of the page."
+    )
+
+
+def test_the_reading_tool_and_the_instrument_still_agree_about_it() -> None:
+    """The cross-file half, which a single-file check cannot give.
+
+    `look.mjs --shot` is the only caller in the tree. If the method is renamed on one
+    side only, the flag silently stops working -- exactly the rot this module exists to
+    catch for controls and markers. Checked as a pair for the same reason.
+    """
+    look = _require(LOOK).read_text(encoding="utf-8")
+    assert "--shot" in look, "look.mjs no longer offers --shot"
+    assert "page.screenshot(" in look, (
+        "look.mjs declares --shot but calls no screenshot primitive, so the flag writes "
+        "nothing."
+    )
+
+
+def test_control_a_removed_screenshot_is_detected() -> None:
+    """Anti-vacuity: the two checks above, against sources that lost the method."""
+    without_method = "class Page { async goto(url) {} }"
+    assert "async screenshot(" not in without_method
+    renamed = _require(CDP).read_text(encoding="utf-8").replace("async screenshot(", "async capture(")
+    assert "async screenshot(" not in renamed
+    assert "page.screenshot(" not in "  await page.capture(join(OUT_DIR, name));"
