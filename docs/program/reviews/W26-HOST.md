@@ -423,7 +423,23 @@ mentioning neither `tls` nor `443`.
 one-directive mutation in front of the same function the real check uses, which is the only
 form of that proof worth having.
 
-<!-- W26-HOST-GATE -->
+**`make gate`** on lane `gate-w26b` — `POSTGRES_PORT=55990`, `S3_API_PORT=59590`,
+`S3_CONSOLE_PORT=59591`, `POSTGRES_DB=audit_w26b`, bucket `auditmanager-gate-w26b` —
+provisioned with `make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12` (exit 0) and
+`npm --prefix web ci` (exit 0). Output redirected to a file and the status read from `$?`,
+never through a pipe:
+
+```
+battery     1957 passed, 5 skipped, 169 subtests   in 273.32s
+foundation  35 passed                              in 29.64s
+frontend    706 passed in 48 files
+GATE OK: battery, foundation, frontend and whitespace all pass
+GATE EXIT=0
+```
+
+**Against the base of 1948 / 5 / 169, foundation 35, frontend 706-in-48: +9 battery and
+nothing else moved.** Nine is exactly this session's new file. The tree was not touched
+while the gate ran, and the gate ran once.
 
 ## 8. For the integrator
 
