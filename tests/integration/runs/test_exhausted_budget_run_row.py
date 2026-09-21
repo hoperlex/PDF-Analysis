@@ -202,6 +202,16 @@ def test_the_recorded_adapter_over_an_empty_directory_is_asked_exactly_once(
         "budget; it never needed one"
     )
 
+    # The user-visible half. `audit_run.terminal_reason` is CHECK-constrained to the
+    # frozen catalog, so this also proves the new code is one the column admits, and
+    # it is the string the run screen prints verbatim.
+    row = _run_row(session, run_id)
+    assert row["state"] == "failed"
+    assert row["terminal_reason"] == ErrorCode.ANALYSIS_INPUT_INVALID.value, (
+        f"the run row reports {row['terminal_reason']!r}. A retryable reason on a run "
+        "that cannot succeed tells an operator to start it again"
+    )
+
 
 def test_an_exhausted_budget_names_the_transport_failure_on_the_run_row(
     session: Session, seeded, blob_store, provider_config
