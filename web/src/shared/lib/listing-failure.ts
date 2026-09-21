@@ -27,6 +27,7 @@ import {
   PERMISSION_DENIED_DETAIL,
   TransportError,
   UnrecognizedApiError,
+  catalogMessage,
 } from '@/shared/api';
 
 export type ListingFailureKind =
@@ -48,9 +49,29 @@ export type ListingFailureKind =
  * parent a `404` rather than an empty page, and a screen that renders that as "nothing
  * here yet" tells the user the opposite of what the server said.
  */
+/**
+ * The parents a listing can hang off, as a closed set rather than a free string.
+ *
+ * Russian declines, and every sentence below needs this noun in the genitive. A free
+ * `string` cannot be declined, so the noun has to come from a table — and a table keyed on
+ * a free string is the hand-maintained-set defect `W30-LISTS` closed eighteen instances of.
+ * Narrowing the type instead makes the compiler the guard: a fourth parent stops
+ * type-checking at the caller rather than rendering an English word inside a Russian
+ * sentence. That is `run-state.ts`'s pattern, which is this repository's standard for a
+ * hand-maintained set that no contract defines.
+ */
+export type ListingParent = 'project' | 'document' | 'version';
+
+/** The parent in the genitive, which is the case every sentence below puts it in. */
+const PARENT_GENITIVE: Readonly<Record<ListingParent, string>> = {
+  project: 'проекта',
+  document: 'документа',
+  version: 'версии',
+};
+
 export interface ListingSubject {
   readonly collection: string;
-  readonly parent: string;
+  readonly parent: ListingParent;
 }
 
 export interface ListingFailure {
@@ -64,25 +85,29 @@ export interface ListingFailure {
 
 /** Classify anything thrown by `listDocuments`, `listVersions` or `listRuns`. */
 export function classifyListingFailure(error: unknown, subject: ListingSubject): ListingFailure {
-  const { collection, parent } = subject;
+  const { collection } = subject;
+  const parent = PARENT_GENITIVE[subject.parent];
 
   if (error instanceof ApiError) {
     const base = {
       correlationId: error.correlationId,
       retryable: error.retryable,
       errorCode: error.errorCode,
-      detail: error.envelope.message,
+      // The envelope's `message` is the API's own English, rendered from the frozen
+      // catalog's `summary` fields. `W31-RUS` established that a client cannot translate
+      // it and built the restatement this reads instead.
+      detail: catalogMessage(error.errorCode),
     };
     switch (error.errorCode) {
       case 'validation_failed':
-        return { ...base, kind: 'request_invalid', title: `The request for ${collection} was refused.` };
+        return { ...base, kind: 'request_invalid', title: `Запрос на ${collection} отклонён.` };
       case 'not_found':
         return {
           ...base,
           kind: 'parent_not_found',
-          title: `There is no such ${parent}.`,
+          title: `Такого ${parent} не существует.`,
           detail:
-            `The server does not have this ${parent}, so there is nothing here to list. ` +
+            `На сервере нет этого ${parent}, поэтому перечислять здесь нечего. ` +
             'Это не то же самое, что пустой список, и повтор не выполняется.',
           retryable: false,
         };
@@ -90,24 +115,24 @@ export function classifyListingFailure(error: unknown, subject: ListingSubject):
         return {
           ...base,
           kind: 'dependency_unavailable',
-          title: `A dependency needed to read ${collection} is unavailable.`,
+          title: `Зависимость, нужная чтобы прочитать ${collection}, недоступна.`,
         };
       case 'authentication_required':
         return {
           ...base,
           kind: 'not_authenticated',
-          title: `Reading ${collection} is not authorized.`,
+          title: `Чтение: ${collection} — доступ не подтверждён.`,
           detail: AUTHENTICATION_REQUIRED_DETAIL,
         };
       case 'permission_denied':
         return {
           ...base,
           kind: 'not_permitted',
-          title: `You are not permitted to read ${collection}.`,
+          title: `Нет прав на чтение: ${collection}.`,
           detail: PERMISSION_DENIED_DETAIL,
         };
       default:
-        return { ...base, kind: 'server_error', title: `${capitalize(collection)} could not be read.` };
+        return { ...base, kind: 'server_error', title: `Не удалось прочитать ${collection}.` };
     }
   }
 
@@ -115,7 +140,7 @@ export function classifyListingFailure(error: unknown, subject: ListingSubject):
     return {
       kind: 'unrecognized',
       title: 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.',
-      detail: `Error code '${error.rawErrorCode}' is outside this client's contract. Nothing was retried.`,
+      detail: `Код ошибки '${error.rawErrorCode}' вне контракта этого клиента. Повтор не выполнялся.`,
       correlationId: error.correlationId,
       retryable: false,
       errorCode: null,
@@ -125,7 +150,7 @@ export function classifyListingFailure(error: unknown, subject: ListingSubject):
   if (error instanceof TransportError) {
     return {
       kind: 'transport',
-      title: `The request for ${collection} did not reach the API.`,
+      title: `Запрос на ${collection} не дошёл до API.`,
       detail: error.message,
       correlationId: error.correlationId,
       retryable: error.retryable,
@@ -135,7 +160,7 @@ export function classifyListingFailure(error: unknown, subject: ListingSubject):
 
   return {
     kind: 'unknown',
-    title: `${capitalize(collection)} could not be read.`,
+    title: `Не удалось прочитать ${collection}.`,
     detail:
       error instanceof ApiFailure
         ? error.message
@@ -146,6 +171,6 @@ export function classifyListingFailure(error: unknown, subject: ListingSubject):
   };
 }
 
-function capitalize(text: string): string {
-  return text.length === 0 ? text : `${text[0]?.toUpperCase() ?? ''}${text.slice(1)}`;
-}
+// `capitalize` was removed with the English sentences that needed it. The Russian ones put
+// the collection noun mid-sentence, where it is already in the case and case-of-letter the
+// caller supplies, so there is nothing left to capitalise.

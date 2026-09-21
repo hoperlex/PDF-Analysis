@@ -179,7 +179,7 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
     );
     // W18-SEAL made the server answer 404 rather than an empty page, precisely so these
     // two are different answers. A screen that collapsed them would undo that.
-    expect(missingMarkup).toContain('There is no such project.');
+    expect(missingMarkup).toContain('Такого проекта не существует.');
     expect(missingMarkup).not.toContain('В этом проекте пока нет документов.');
   });
 
@@ -319,7 +319,7 @@ describe('the document screen asks the server on a cold load (D-16)', () => {
     const missing = newClient();
     seedError(missing, VERSIONS_KEY, apiError(404, 'not_found'));
     const markup = screen(missing);
-    expect(markup).toContain('There is no such document.');
+    expect(markup).toContain('Такого документа не существует.');
     expect(markup).not.toContain('У документа нет опубликованных версий.');
   });
 
