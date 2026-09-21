@@ -1432,6 +1432,12 @@ iptables -L DOCKER -n | grep 8080
 Driven from this host's **public** address rather than from loopback:
 `GET http://176.12.74.47:31500/bff/v1/projects -> 200`.
 
+**Independently reached from a second origin, by a session that did not know the row existed.**
+`pdf-analysis-84`, working on `agent/w31-ui`, ran a Next dev server on 31690 pointed at
+`AUDITMANAGER_API_UPSTREAM=http://127.0.0.1:31500` and read through `/bff/v1` successfully —
+**from outside the compose network**. That is the direction that matters: the path is not
+reachable only from inside the stack or only from loopback tooling.
+
 **So on this host, today, an unauthenticated read and write path to all fifteen operations is
 bound to every interface, behind a firewall that is not in the path.** Whether a network in
 front of the machine blocks 31500 is not something this repository can measure, and **not
@@ -1564,7 +1570,9 @@ other way.
 | `D-46` | may a failed run name **which** dependency was unavailable | one sentence on one screen; **a reseal either way**, and §1's row says why both answers cost one | 2026-09-21 |
 | `R-9` | the owner drives the application by hand | **`D-9`**, the norms corpus — the owner placed it there deliberately | 2026-09-18 |
 | `OD-18` | three to five named experts with committed slots | `P4-BHV-01`, and it alone | pre-programme |
-| `OD-17` | the shape of the next corpus; PC-02's precision evidence is saturated | the P05 corpus decision | pre-programme |
+| `OD-17` | the shape of the next corpus; PC-02's precision evidence is saturated | the P05 corpus decision. **`R-16`/`R-17` bear on it and do not close it** | pre-programme |
+| `R-18`(a) | is the **contract vocabulary** translated — `published`, `partial`, `failed`, `cancelled`, `accept`/`accepted`, `recorded`, the finding categories | one pass either way; every badge already carries its machine value in a `data-` attribute, so `PA-01` criterion 4 is unaffected whichever way it goes | 2026-09-21 |
+| `R-18`(b) | is the **stub boundary** the one proposed — no stubs on `upload → run → finding → verdict → export` | the size of the design wave. Proposed by a session, adopted by the integrator, **never put to the owner in those words** | 2026-09-21 |
 
 **`R-9` is the one that moved.** It gated `D-9` on manual testing, and until 2026-09-21 the
 stand was several waves behind the tree, so the owner could not have done that testing against
