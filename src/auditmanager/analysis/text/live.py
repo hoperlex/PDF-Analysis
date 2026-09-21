@@ -2,7 +2,7 @@
 
 Live is opt-in per environment and is **never a fallback**. Nothing in this package
 constructs this class on a failure path: the recorded adapter reports
-``dependency_unavailable`` and stops, and the stage does not then try a real call.
+``analysis_input_invalid`` and stops, and the stage does not then try a real call.
 
 ``ANTHROPIC_API_KEY`` is an injected secret. It is read from the process environment,
 never from the lane ``.env``, never written to a file in this repository, and never
@@ -47,10 +47,16 @@ class LiveAdapter:
         try:
             import anthropic
         except ImportError:
+            # Not a transport failure: the SDK is absent from this interpreter and a
+            # second attempt would import the same absence. It joins the two
+            # construction refusals either side of it -- a missing credential and a
+            # version mismatch -- rather than reporting a retryable outage for a
+            # deployment fault that no wait can clear.
             raise DomainError(
-                ErrorCode.DEPENDENCY_UNAVAILABLE,
+                ErrorCode.ANALYSIS_INPUT_INVALID,
                 message="the pinned provider SDK is not importable",
-                dependency=DEPENDENCY_NAME,
+                stage_id=STAGE_ID,
+                reason="provider_sdk_not_importable",
             ) from None
         expected = provider_lock().sdk_version
         installed = getattr(anthropic, "__version__", "")

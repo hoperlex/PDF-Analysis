@@ -7,10 +7,29 @@ runs against and it must be deterministic and offline. Two properties carry that
   would have gone to the provider. A prompt edit, a parameter change or a different
   document changes the key, so a stale recording is reported missing rather than
   replayed against a question it does not answer.
-* **A missing recording is ``dependency_unavailable``, and never a live call.** There
-  is no fallback path in this class: it holds no client, no credential and no network
-  code, so "fall back to live" is not something a future edit can accidentally switch
-  on - it would have to be written from scratch.
+* **A missing recording is never a live call.** There is no fallback path in this
+  class: it holds no client, no credential and no network code, so "fall back to live"
+  is not something a future edit can accidentally switch on - it would have to be
+  written from scratch.
+
+Four ways a corpus fails to answer, one code
+--------------------------------------------
+A recording can be absent, filed under a key it does not declare, written at an
+unsupported version, or malformed. All four are the same fact about the same local
+directory: **the corpus this adapter was given does not answer this request**, and no
+second attempt at the same request can change that. All four therefore report
+``analysis_input_invalid`` with a ``recording_*`` reason.
+
+The absent case used to report ``dependency_unavailable`` instead. That code is
+``retryable: true`` in the frozen catalog, and :mod:`auditmanager.runs.retry` is right to
+ladder it -- for a provider that is unreachable, a second attempt can answer differently.
+A file that is not on this disk will not be on this disk in ten seconds, so the ladder
+bought three attempts and both pinned backoffs, ``W28-LIVE`` measured the cost at 10.0 s
+of a 16.1 s run, and the terminal it reached told an operator to retry a run that cannot
+succeed. The policy was behaving correctly on the information it was given; what was
+wrong was what this adapter said about itself. The code is the whole of that
+classification (``retry.py`` takes it from the catalog and nowhere else), so the code is
+where the repair is.
 
 A recording file carries **no provider mode**. The mode is stamped by this adapter's
 read-only class constant, so a hand-edited recording cannot present itself as a live
@@ -24,7 +43,7 @@ from pathlib import Path
 from typing import Any, Final, Mapping
 
 from auditmanager.analysis.text.adapter import ModelRequest, ModelResponse
-from auditmanager.analysis.text.config import DEPENDENCY_NAME, ProviderMode
+from auditmanager.analysis.text.config import ProviderMode
 from auditmanager.analysis.text.lock import STAGE_ID
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -93,13 +112,15 @@ class RecordedAdapter:
         try:
             raw = path.read_text(encoding="utf-8")
         except OSError:
-            # No recording, no call. The message names the dependency class and no
-            # path: the envelope screen forbids a path, and the catalog note pins the
-            # dependency detail to a stable class name.
+            # No recording, no call - and not a transport failure. An absent file is
+            # the fourth way this corpus fails to answer, and it takes the same code
+            # and the same reason vocabulary as the other three, so nothing ladders it.
+            # The message names no path: the envelope screen forbids one.
             raise DomainError(
-                ErrorCode.DEPENDENCY_UNAVAILABLE,
+                ErrorCode.ANALYSIS_INPUT_INVALID,
                 message="no recorded model response is available for this request",
-                dependency=DEPENDENCY_NAME,
+                stage_id=STAGE_ID,
+                reason="recording_missing",
             ) from None
         return self._response_from(json.loads(raw), expected_key=key)
 
