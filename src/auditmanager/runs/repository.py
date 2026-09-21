@@ -126,12 +126,17 @@ _LIST_RUNS_FOR_VERSION = text(
 
 #: `D-21`. What one run cost, from the `model_call` rows themselves.
 #:
-#: **Deliberately not from `stage_result.metrics`.** `DEBT_REGISTER.md` `D-15` measures
-#: that `metrics["cost_usd"]` is a sum across retry attempts while `metrics["cost_basis"]`
-#: describes the *last* response only, so a run that replayed once and then measured
-#: publishes a two-attempt sum wearing one attempt's provenance. That pair is left exactly
-#: as it is -- repairing it is a design call `D-15` records as not a lane decision -- and
-#: this statement reads the per-call rows instead, which `D-15` itself says are exact:
+#: **Deliberately not from `stage_result.metrics`.** When this statement was written,
+#: `DEBT_REGISTER.md` `D-15` measured that `metrics["cost_usd"]` is a sum over everything
+#: the run's one `CostMeter` charged while `metrics["cost_basis"]` described the *last*
+#: response only, so a summed figure could wear one contribution's provenance. `R-14` has
+#: since ruled that pair onto the rule below, and `W25-COST` moved it there -- the stage
+#: asks its meter, which is the only object that sees every contribution. The two places
+#: now say the same thing, which was the point of the ruling.
+#:
+#: This statement still reads the per-call rows rather than the metrics, and that is not
+#: redundancy: these rows exist for every run in every state, they survive a run whose
+#: stage wrote no metrics at all, and `D-15` itself says they are the exact ones --
 #: "the model-call **records** are exact -- each carries its own basis".
 #:
 #: Three values, computed in one pass so they cannot disagree with each other:
@@ -238,8 +243,9 @@ class RunCost:
     ``basis`` is an **aggregate over every contributing call**, and the rule is the
     conservative one: ``measured`` only when every row reports a measured cost, and
     ``estimated`` the moment one does not. The alternative -- reporting the last call's
-    basis, which is what ``stage_result.metrics["cost_basis"]`` does -- is the `D-15`
-    defect, and inheriting it into a contract would make it permanent.
+    basis -- is the `D-15` defect, and inheriting it into a contract would have made it
+    permanent. `stage_result.metrics["cost_basis"]` did exactly that until `R-14`;
+    `W25-COST` gave it this same rule, over the contributions to its own figure.
     """
 
     model_call_count: int

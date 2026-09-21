@@ -504,3 +504,160 @@ def test_cost_basis_cannot_be_omitted_by_a_call_site() -> None:
         "`_record` gives `cost_basis` a default again. A provenance field states how a "
         "number was arrived at; only the call site knows, so only the call site may say."
     )
+
+
+# --- R-14 and D-15: the metrics basis describes the figure printed beside it ---------
+#
+# `metrics["cost_usd"]` is `cost_meter.spent_usd` -- the meter's WHOLE spend, not this
+# call's cost. `runs.executor` builds one meter per run and hands the same object to
+# every attempt, deliberately, so `OD-03`'s ceiling binds across them. The basis was read
+# off `response.reported_cost_usd` -- the last response alone -- so a figure summed over
+# several contributions wore one contribution's provenance.
+#
+# `R-14` rules the conservative rule, the one `W18-SEAL` gave `RunStatus.cost_basis`:
+# `measured` only when EVERY contributing call reported a cost. The meter is the only
+# object that sees all of them, so the rule lives there and both metric dicts read it.
+
+
+def test_the_metrics_basis_is_estimated_when_an_earlier_charge_reported_nothing() -> None:
+    """The discriminating case: one meter, two calls, and they disagree.
+
+    Built by handing one `CostMeter` to two `run_text_analysis` calls, which is exactly
+    what `_run_text_analysis_stage` does across attempts -- same object, same reason. No
+    retry is staged and nothing sleeps: the accumulation is the mechanism under test and
+    it needs no failure to reach.
+
+    The second call reports its own cost, so `model_calls[0].cost_basis` is `measured`
+    and is *right* -- the row's figure is that call's. The metrics figure is 0.03, which
+    that call did not produce, so the same word would be a claim about 0.01 nobody
+    measured.
+    """
+    meter = CostMeter(ceiling_usd=1.00)
+
+    replayed = _run(_response(_reply(_observation(1, "Выручка выросла"))), meter=meter)
+    assert replayed.status == STATUS_SUCCEEDED
+    assert replayed.metrics["cost_basis"] == "estimated"
+    estimated_spend = meter.spent_usd
+    assert estimated_spend > 0, (
+        "the replayed call charged nothing, so the sum below spans one contribution and "
+        "this test discriminates nothing"
+    )
+
+    reported = _run(
+        _response(_reply(_observation(1, "Выручка выросла")), reported_cost_usd=0.02),
+        meter=meter,
+    )
+    assert reported.status == STATUS_SUCCEEDED
+    assert meter.call_count == 2
+    assert reported.metrics["cost_usd"] == pytest.approx(estimated_spend + 0.02), (
+        "the metrics figure is the meter's whole spend; if it were this call's cost "
+        "alone there would be no provenance question to answer"
+    )
+    assert reported.model_calls[0].cost_basis == "measured", (
+        "this call's own record: the provider priced it, and the row says so"
+    )
+    assert reported.metrics["cost_basis"] == "estimated", (
+        "the sum spans a replayed call the provider never priced; `measured` over it is "
+        "the flattering answer D-3 is this programme's record of"
+    )
+
+
+def test_the_metrics_basis_is_estimated_whichever_order_the_two_calls_came_in() -> None:
+    """The mirror image. A rule keyed on the *last* response passes one of these two."""
+    meter = CostMeter(ceiling_usd=1.00)
+    _run(
+        _response(_reply(_observation(1, "Выручка выросла")), reported_cost_usd=0.02),
+        meter=meter,
+    )
+    replayed = _run(_response(_reply(_observation(1, "Выручка выросла"))), meter=meter)
+    assert replayed.metrics["cost_basis"] == "estimated"
+    assert replayed.model_calls[0].cost_basis == "estimated"
+
+
+def test_the_metrics_basis_is_measured_when_every_charge_reported_its_own_cost() -> None:
+    """The discriminator against hard-wiring `estimated`, which would pass both tests
+    above and would make the key worthless."""
+    meter = CostMeter(ceiling_usd=1.00)
+    first = _run(
+        _response(_reply(_observation(1, "Выручка выросла")), reported_cost_usd=0.02),
+        meter=meter,
+    )
+    second = _run(
+        _response(_reply(_observation(1, "Выручка выросла")), reported_cost_usd=0.03),
+        meter=meter,
+    )
+    assert first.metrics["cost_basis"] == "measured"
+    assert second.metrics["cost_basis"] == "measured"
+    assert second.metrics["cost_usd"] == pytest.approx(0.05)
+
+
+def test_the_overrun_path_answers_by_the_same_rule_as_the_success_path() -> None:
+    """Both metric dicts, because the defect `W11-FIX` closed was a difference between
+    them. The overrunning call reports its cost and the run still says `estimated`,
+    because the sum it is attached to also carries a replayed call.
+    """
+    meter = CostMeter(ceiling_usd=0.05)
+    _run(_response(_reply(_observation(1, "Выручка выросла"))), meter=meter)
+    overrun = _run(
+        _response(_reply(_observation(1, "Выручка выросла")), reported_cost_usd=5.0),
+        meter=meter,
+    )
+    assert overrun.status == STATUS_FAILED
+    assert overrun.error.code is ErrorCode.COST_BUDGET_EXCEEDED
+    assert overrun.metrics["cost_basis"] == "estimated"
+    assert overrun.metrics["cost_usd"] == pytest.approx(meter.spent_usd)
+
+
+def test_a_meter_that_opened_carrying_spend_never_calls_the_sum_measured() -> None:
+    """Spend a meter did not charge has no provenance at all, which is not `measured`.
+
+    `execute_run` accepts a `cost_meter` already carrying spend -- its own docstring says
+    so -- and `tests/integration/runs/test_retry_policy.py` hands it one. Whatever that
+    0.90 was, this meter did not price it and cannot vouch for it.
+    """
+    meter = CostMeter(ceiling_usd=2.00, spent_usd=0.90)
+    outcome = _run(
+        _response(_reply(_observation(1, "Выручка выросла")), reported_cost_usd=0.02),
+        meter=meter,
+    )
+    assert outcome.status == STATUS_SUCCEEDED
+    assert outcome.metrics["cost_usd"] == pytest.approx(0.92)
+    assert outcome.metrics["cost_basis"] == "estimated"
+
+
+# --- the rule on the meter itself ----------------------------------------------------
+
+
+def test_the_meter_calls_one_reported_charge_measured() -> None:
+    pin = ModelPin(model_id=MODEL_ID, input_per_mtok_usd=5.0, output_per_mtok_usd=25.0)
+    meter = CostMeter(ceiling_usd=1.00)
+    meter.charge(pin, input_tokens=1000, output_tokens=200, reported_cost_usd=0.02)
+    assert meter.cost_basis == "measured"
+
+
+def test_one_unreported_charge_is_enough_to_make_the_whole_sum_estimated() -> None:
+    pin = ModelPin(model_id=MODEL_ID, input_per_mtok_usd=5.0, output_per_mtok_usd=25.0)
+    meter = CostMeter(ceiling_usd=1.00)
+    meter.charge(pin, input_tokens=1000, output_tokens=200, reported_cost_usd=0.02)
+    meter.charge(pin, input_tokens=1000, output_tokens=200)
+    assert meter.cost_basis == "estimated"
+    assert meter.call_count == 2
+
+
+def test_a_meter_that_has_charged_nothing_does_not_claim_measured() -> None:
+    """`D-3`, applied to the absent case. Nothing was measured, so nothing may say it
+    was. The stage never emits from a meter in this state -- both sites run after a
+    charge -- and the rule is stated here rather than left to that coincidence.
+    """
+    assert CostMeter(ceiling_usd=1.00).cost_basis == "estimated"
+
+
+def test_the_charge_that_broke_the_budget_counts_towards_the_basis() -> None:
+    """`charge` records the spend before it raises, and the basis follows the same rule:
+    the call is in `spent_usd`, so it is in the provenance of `spent_usd`."""
+    pin = ModelPin(model_id=MODEL_ID, input_per_mtok_usd=5.0, output_per_mtok_usd=25.0)
+    meter = CostMeter(ceiling_usd=0.01)
+    with pytest.raises(DomainError):
+        meter.charge(pin, input_tokens=1000, output_tokens=400)
+    assert meter.call_count == 1
+    assert meter.cost_basis == "estimated"
