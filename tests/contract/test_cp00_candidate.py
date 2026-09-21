@@ -5489,11 +5489,12 @@ class DomainErrorEnumParityTests(unittest.TestCase):
         enum = envelope["properties"]["error_code"]["enum"]
         self.assertEqual(len(enum), len(set(enum)), "the envelope enum repeats a code")
         self.assertEqual(sorted(enum), sorted(catalog["codes"]))
-        # Twenty-one since the wave-13 reseal: owner ruling `R-3` added
-        # `dependency_credential_refused`, settling `D-7`. The catalog declares itself
-        # `"frozen": false, "status": "draft_candidate"` (`D-8`), so this is an addition
-        # to a candidate rather than a break of a freeze.
-        self.assertEqual(len(catalog["codes"]), 21)
+        # Twenty-two since round 7: owner ruling `R-8`, reinstated by `R-13`, added
+        # `staged_upload_lost`, settling `D-18`. Twenty-one before it, since the wave-13
+        # reseal, where `R-3` added `dependency_credential_refused`, settling `D-7`. The
+        # catalog declares itself `"frozen": false, "status": "draft_candidate"` (`D-8`),
+        # so each is an addition to a candidate rather than a break of a freeze.
+        self.assertEqual(len(catalog["codes"]), 22)
 
     def test_every_declared_code_carries_a_status_and_a_retry_flag(self) -> None:
         catalog = _load(f"{DOMAIN}/error-codes.json")

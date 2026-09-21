@@ -409,7 +409,7 @@ appended a new decision event.
 
 ## Errors
 
-20 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
+22 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
 `summary`, its `safe_detail_keys` and its inventory evidence.
 
 The envelope is:
