@@ -66,6 +66,7 @@ import {
   runOutcome,
   runProviderMode,
   stageRows,
+  terminalReasonNote,
   useRunStatus,
 } from '@/entities/audit-run';
 
@@ -123,7 +124,11 @@ function Outcome({ status }: { readonly status: RunStatus }) {
           )}
         </div>
       );
-    case 'failed':
+    case 'failed': {
+      // The identifier and the sentence, in that order and both of them. An operator
+      // quoting the code into an issue needs the code; a person reading the screen needs
+      // the sentence. `W28-LIVE` measured this block printing only the first.
+      const note = terminalReasonNote(outcome.terminalReason);
       return (
         <div data-run-outcome="failed">
           <p>
@@ -137,6 +142,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
               <code data-terminal-reason={outcome.terminalReason}>{outcome.terminalReason}</code>
             )}
           </p>
+          <p data-terminal-reason-note={note.kind}>{note.sentence}</p>
           {outcome.interrupted === null ? null : (
             <p data-interrupted-reason={outcome.interrupted}>
               This run was interrupted and reconciled: {outcome.interrupted}. It is not
@@ -145,6 +151,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
           )}
         </div>
       );
+    }
     case 'cancelled':
       return (
         <p data-run-outcome="cancelled">

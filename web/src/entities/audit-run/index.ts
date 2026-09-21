@@ -27,6 +27,9 @@ export {
   stageRows,
 } from './model/run-presentation';
 
+export type { TerminalReasonNote } from './model/terminal-reason';
+export { ABSENT_SENTENCE, UNDESCRIBED_PREFIX, terminalReasonNote } from './model/terminal-reason';
+
 export { looksLikeRunId } from './model/address';
 
 export type { RunFailure, RunFailureKind } from './model/run-failure';
