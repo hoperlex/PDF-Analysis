@@ -1,0 +1,24 @@
+[
+  {
+    "$why": "not_a_pdf.txt is refused by the browser's own pre-check and no request leaves. Declaring a server refusal here must go red on WHERE, on the pre-check that fired, on the missing request and on the sentence the screen never rendered.",
+    "fixture": "not_a_pdf.txt",
+    "rule": "ENV-PDF",
+    "refused_by": "server",
+    "status": 422,
+    "error_code": "validation_failed",
+    "constraint": "pdf_magic_bytes",
+    "failure_kind": "unsupported_input",
+    "must_say": ["the server examined this file"]
+  },
+  {
+    "$why": "encrypted.pdf really is refused by the server with not_encrypted. Declaring a different constraint, a different classification and a sentence no screen renders must go red on each.",
+    "fixture": "encrypted.pdf",
+    "rule": "ENV-ENCRYPTED",
+    "refused_by": "server",
+    "status": 422,
+    "error_code": "validation_failed",
+    "constraint": "a_constraint_no_envelope_carries",
+    "failure_kind": "checksum_mismatch",
+    "must_say": ["Enter the document password to continue"]
+  }
+]

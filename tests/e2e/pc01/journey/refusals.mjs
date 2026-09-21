@@ -56,7 +56,7 @@
  * envelope file. No dependency: `cdp.mjs`, committed, drives the browser.
  */
 
-import { mkdirSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -126,6 +126,26 @@ const CASES = [
     must_say: ['outside the accepted envelope', 'page_count'],
   },
 ];
+
+/**
+ * Proving it can fail.
+ *
+ * A refusal drive that cannot go red is a screenshot with an exit code. `--cases <file>`
+ * replaces the table above with a declaration read from disk, and
+ * `fixtures/redden-refusals.json` beside this file declares things that are not true of
+ * this application: a client-side refusal claimed to happen at the server, a constraint
+ * the envelope does not carry, and a sentence no screen renders. Expected: non-zero, with
+ * one finding per wrong claim.
+ *
+ * That fixture is not read by anything else, so its deliberate wrongs redden nothing.
+ */
+function casesFrom(path) {
+  const declared = JSON.parse(readFileSync(path, 'utf8'));
+  if (!Array.isArray(declared) || declared.length === 0) {
+    throw new Error(`${path} must hold a non-empty array of case declarations`);
+  }
+  return declared;
+}
 
 /** The classifications that mean "the client could not say what went wrong". */
 const GENERIC_KINDS = new Set(['server_error', 'unknown', 'unrecognized', 'transport']);
@@ -426,13 +446,16 @@ async function main() {
   const outDir = resolve(process.cwd(), arg('out', '.out'));
   mkdirSync(outDir, { recursive: true });
   const only = arg('only');
+  const casesFile = arg('cases');
+  const table = casesFile === null ? CASES : casesFrom(resolve(process.cwd(), casesFile));
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 
   const started = Date.now();
+  if (casesFile !== null) console.log(`cases declared by ${casesFile} (not the built-in table)`);
   const seeded = await seedProject(origin, stamp);
   console.log(`seeded project ${seeded.projectUid} ("${seeded.name}")`);
 
-  const cases = only === null ? CASES : CASES.filter((c) => c.fixture === only);
+  const cases = only === null ? table : table.filter((c) => c.fixture === only);
   const records = [];
   for (const testCase of cases) {
     process.stdout.write(`\n-- ${testCase.fixture} (${testCase.rule}) `);
