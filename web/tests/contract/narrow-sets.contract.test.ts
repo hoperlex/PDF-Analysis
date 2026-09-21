@@ -25,12 +25,19 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { AUTHORIZATION_ERROR_CODES, NON_TERMINAL_RUN_STATES, TERMINAL_RUN_STATES } from '@/shared/api';
+import {
+  AUTHORIZATION_ERROR_CODES,
+  NON_TERMINAL_RUN_STATES,
+  QUERY_NAMESPACES,
+  TERMINAL_RUN_STATES,
+  queryKeys,
+} from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api/generated/types.gen';
-import { REPO_ROOT, readJson } from '../guards/lib/repo';
+import { REPO_ROOT, WEB_ROOT, readJson, readText } from '../guards/lib/repo';
 
 const STATE_MACHINES_PATH = join(REPO_ROOT, 'contracts', 'domain', 'v1', 'state-machines.json');
 const ERROR_CODES_PATH = join(REPO_ROOT, 'contracts', 'domain', 'v1', 'error-codes.json');
+const UI_SEAM_PATH = join(WEB_ROOT, 'docs', 'PC01_UI_SEAM.md');
 
 interface StateMachine {
   readonly initial: string;
@@ -112,5 +119,52 @@ describe('the authorization codes are the catalog category, not a taste', () => 
   it('is a strict narrowing of the catalog', () => {
     // A subset assertion that the whole catalog would also satisfy is half a check.
     expect(AUTHORIZATION_ERROR_CODES.length).toBeLessThan(Object.keys(catalog.codes).length);
+  });
+});
+
+/**
+ * `QUERY_NAMESPACES` is the same shape one level down. Its authority is not a contract but
+ * `web/docs/PC01_UI_SEAM.md` section 6, which fixes four first segments and states the rule
+ * that every key begins with one of them. The existing unit test restates the four names as
+ * a literal, which is a copy of the constant rather than a reading of the document, and the
+ * rule itself was prose only — a fifth family added to `queryKeys` would have been caught by
+ * nothing.
+ */
+describe('the query namespaces are the seam document, and the rule is checked', () => {
+  const section = (): string => {
+    const document = readText(UI_SEAM_PATH);
+    const start = document.indexOf('## 6. Query keys');
+    expect(start, 'section 6 of PC01_UI_SEAM.md was not found').toBeGreaterThan(-1);
+    const end = document.indexOf('\n## ', start + 1);
+    return document.slice(start, end === -1 ? undefined : end);
+  };
+
+  /** The first segment of every key shape the seam table declares. */
+  function segmentsFromSeamDocument(): string[] {
+    const found: string[] = [];
+    for (const line of section().split('\n')) {
+      const match = /^\|\s*`queryKeys\.[^`]+`\s*\|\s*`\['([a-z]+)'/.exec(line.trim());
+      if (match !== null && !found.includes(match[1] as string)) found.push(match[1] as string);
+    }
+    expect(found.length, 'no key shapes parsed out of the section 6 table').toBeGreaterThan(0);
+    return found;
+  }
+
+  it('declares exactly the first segments the seam table uses', () => {
+    expect([...QUERY_NAMESPACES].sort()).toEqual(segmentsFromSeamDocument().sort());
+  });
+
+  it('is the set every builder in the module actually produces', () => {
+    // The rule, not a second copy of the list: walk `queryKeys` itself and read the first
+    // segment off each key it builds. A family added to the object without being added to
+    // QUERY_NAMESPACES reddens here.
+    const probe = 'probe';
+    const produced = new Set<string>();
+    for (const family of Object.values(queryKeys)) {
+      for (const build of Object.values(family as Record<string, (...args: never[]) => readonly unknown[]>)) {
+        produced.add(String((build as (...args: unknown[]) => readonly unknown[])(probe, probe)[0]));
+      }
+    }
+    expect([...produced].sort()).toEqual([...QUERY_NAMESPACES].sort());
   });
 });

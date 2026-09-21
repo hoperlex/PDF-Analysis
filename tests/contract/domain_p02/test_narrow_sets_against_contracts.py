@@ -190,3 +190,27 @@ def test_the_only_configurable_mode_outside_the_contract_is_the_proxy_transport(
 # `allowed_details` and which three of the catalog codes the package raises declare as a
 # safe detail key. Writing the guard would commit a red. W30-LISTS reported it instead of
 # changing the set; see docs/program/W30-LISTS.md.
+
+
+# --- shared.db.schema.SQLSTATE_TO_CATALOG_CODE --------------------------------------
+#
+# Not a subset of the catalog but a map *into* it: three custom SQLSTATEs, each named
+# with the code an edge must report. Two suites already pin its domain and pin its values
+# to one literal; neither says that literal is a code the catalog still declares. A code
+# renamed out of the catalog would leave the edge reporting a word no client can decode,
+# and `internal_mapping` in the catalog forbids exactly that -- "a code that is not in
+# this catalog is never emitted and never invented at the edge".
+
+
+def test_every_sqlstate_maps_to_a_code_the_catalog_declares(
+    error_codes_contract: dict,
+) -> None:
+    from auditmanager.shared.db.schema import SQLSTATE_TO_CATALOG_CODE
+
+    declared = set(error_codes_contract["codes"])
+    reported = set(SQLSTATE_TO_CATALOG_CODE.values())
+    assert reported <= declared, (
+        "shared/db/schema.py maps a custom SQLSTATE to a code that is not in "
+        "contracts/domain/v1/error-codes.json. The catalog's internal_mapping rule is "
+        "that a code outside it is never emitted at the edge."
+    )
