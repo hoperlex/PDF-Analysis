@@ -253,13 +253,177 @@ key — was rejected: it changes what an existing consumer reads.
 TLS block that activates when a certificate appears, the deployment runbook, and the disk
 headroom figure. The corpus (`D-9`) stays where `R-9` put it — after manual testing.
 
+## 3.9 — `R-16`, `R-17`, `R-18`, ruled 2026-09-21 in conversation
+
+**These three were given to a different session than the one holding this file**, which drafted
+them at `.local/handoff/R-16-DRAFT.md` (git-ignored, so invisible to anyone reading the tree)
+and **deliberately did not land them**, on the grounds that this file has one owner per wave and
+that owner was mid-wave. That was the right call and it is why they are here rather than lost.
+Landed by the integrator 2026-09-21 at the close of wave 30. **The draft's measurements are
+reproduced below with the commands that produced them; where a figure is quoted it is the
+draft's, taken on the trees it names, not re-measured here.**
+
+### `R-16` — the corpus is vectorised, both projections, norms first
+
+**Ruled: option C, beginning with B, and not as one task.**
+
+An index of similar cases over expert decisions (`ADR-0012`) and an index over the normative
+corpus are **two different projections** answering two different questions — *"how did we decide
+this before"* and *"what do the norms say"*. Both are built; the corpus is built first.
+
+**Why the corpus first, and this is the part worth keeping.** An index over decisions is empty at
+the start and only gets more expensive as verdicts accumulate. An index over norms is useful on
+day one. And an expert's verdict citing a clause of a norm **produces a labelled case↔norm pair as
+a by-product of the work** — so corpus-first does not merely pay off sooner, it manufactures the
+labelling the decisions index later feeds on. The reverse order throws that source away.
+
+The layout lands on four ADRs already taken and needs no new one: source PDFs and crops in
+private S3 by `blob_id` (`ADR-0006`), chunk text and metadata in PostgreSQL (`ADR-0005`), vectors
+in PostgreSQL via pgvector (`ADR-0005`), and the similar-case index as a **rebuildable projection,
+never a source of truth** (`ADR-0012`).
+
+**Anchoring is by page, not by fragment, and the reason is measured rather than chosen.** Across
+all 28 249 corpus blocks, `coords_norm` is `[0,0,1,1]` for **28 249 of 28 249**, `polygon_points`
+is `null` for every one, and there is exactly **one block per page** across 28 251 pages. The
+"crop region" *is* the whole page; there is no geometric layer in the corpus to anchor to. So the
+anchor is `document + page + offset in the recognised text`, and the expert is shown the whole
+page crop. **Explicitly not to be done:** re-segmenting page images to recover paragraph geometry.
+That is a separate recognition project, costs a multiple of everything else here, and neither
+search nor suggestion needs it — only fragment highlighting would.
+
+Measured scope, from parsing all 674 `results.md` on `f3cd244`: 74.6M characters, 455 907
+paragraph candidates, **136 177 (29%) discarded** as running heads and offcuts, **319 730
+substantive paragraphs** averaging 192 characters, of which 71 934 are numbered clauses;
+**58 021 chunks** at ~1200 characters, **~15.6M tokens** to embed once, **0.11 GB** of vectors as
+`halfvec` 1024 (0.33 GB as float32 1536), ~62 MB of text in the database, and 4.04 GB of crops
+plus 712 MB of source PDFs in S3.
+
+**Segmentation is a markdown parse, not an ML task** — the text in `results.md` already carries
+the structure. ConsultantPlus running heads are noise and are discarded at segmentation,
+confirmed by the owner. **That disposes of the noise, not of the rights question**, which `R-17`
+takes up and does not close either.
+
+### `R-17` — the corpus's provenance is a footnote in an appendix, with no per-document versions
+
+**Ruled**, closing the point `R-16` left open.
+
+Provenance is stated as a **text footnote in an appendix** naming the source and the date the
+corpus was drawn from the ConsultantPlus base. **The footnote appears in the release version —
+not in alpha and not in beta.** Individual documents are **not** pinned to versions and their
+revisions are not qualified: the corpus is dated as a whole.
+
+**The draw date is a window, not a day**, measured from the `Дата сохранения` field across all
+674 documents: 395 on 23.07.2026, 256 on 24.07.2026, 6 on 20.08.2026, and **17 carrying no such
+field at all**. So the correct footnote is *"as at 20.08.2026"* or the window
+*"23.07–20.08.2026"*; **any single date is wrong for part of the corpus.** The same 17 documents
+carry no ConsultantPlus marker in any form — among them `ГОСТ_379-2025`, `ГОСТ_6133-2026`,
+`ГОСТ_Р_72509-2026`, `ПЭУ_7_Изд`, `СП_112.13330.2011` — so a blanket *"source: ConsultantPlus"*
+is inaccurate for them. Whether to qualify the footnote or check those seventeen is a question
+for the moment the appendix is written, not for now.
+
+**One consequence the integrator records as following from the ruling rather than arguing against
+it.** Dropping per-document versions is accepted and it simplifies the work. But it makes the
+**snapshot date the only anchor of provenance**, and it therefore has to live as a **field in the
+data** — a corpus-snapshot identifier on chunk rows — not only as prose in an appendix. Expert
+verdicts will cite clauses of norms; when the corpus is refreshed, GOSTs are superseded and SPs
+reissued, and if the snapshot is not recorded as data **nobody will be able to say which revision
+a past decision was taken against.** The accumulated verdict register would lose its
+interpretability at exactly the moment the corpus is first updated. This is `ADR-0010`'s existing
+move — durable identity lives in the data, the displayed thing is presentation only — and one
+snapshot field per corpus, rather than a version per document, sits inside the owner's ruling and
+costs almost nothing.
+
+**Scope of the footnote.** It settles **attribution**: it names a source and a date. The question
+of **rights to use a particular edition is a separate question and the footnote does not close
+it.** The owner is aware; the decision is recorded in this form as taken.
+
+Check: `grep -c "Дата сохранения" .local/norms/corpus/*/results.md`.
+
+### `R-18` — the alpha is shown in a finished design, in Russian
+
+**Ruled. This amends `ALPHA_ROADMAP.md` §1**, where interface presentation was explicitly out of
+scope for the alpha.
+
+**The alpha must have a fully finished interface. Manual testing happens on something close to the
+release version. A stripped skeleton with layout artefacts is not the state in which the system is
+shown to an expert.** The owner's qualification: **some sections and routes may be closed off with
+stubs. The priority is the Russian version with the final design, not completeness of function
+behind every door.** The rule, in one line: **breadth of finish beats depth of function.**
+
+**Why this is not a matter of taste.** `ALPHA_ROADMAP.md` §10 risk 3 already names the interface
+as the least-tested surface, and `P4` exists to establish the **professional usefulness of the
+findings**. An expert shown a prototype skeleton will report on interface friction rather than on
+finding quality — the measurement is spoiled in precisely the variable it was run for. `PC-01`
+recorded that the usefulness question is **not established** by it.
+
+**The scope, measured on `ca16a18` rather than estimated:** **zero** styling or UI packages among
+thirteen dependencies; **one** CSS file in the whole application, `src/app/globals.css`, with
+**35 rules**; **zero** `*.module.css` collocated modules, though that file's own comment promises
+them; 42 `.tsx` and 94 `.ts` modules; **64** distinguishable user-visible strings; **zero** UI
+source files containing Cyrillic; **no localisation mechanism at all**; and
+`<html lang="en">` at `src/app/layout.tsx:20`.
+
+**What those numbers mean.** The application's entire visual layer is thirty-five CSS rules. The
+styling architecture is described in a comment — a slice with its own collocated module consuming
+tokens — and **is not built**: there are zero such modules. And Russian localisation is not a
+translator's pass: there is no Cyrillic in the UI sources at all, no localisation mechanism, and
+the document declares itself English. **This is introducing a mechanism that does not exist, not
+editing strings.**
+
+Check: `find web/src -name '*.module.css' | wc -l`,
+`grep -rl '[а-яА-Я]' web/src --include=*.tsx --include=*.ts | wc -l`,
+`grep -n 'lang=' web/src/app/layout.tsx`.
+
+**The stub boundary, proposed by the drafting session and adopted here, because "stubs are
+allowed" without a criterion is a way of doing nothing:** a stub is permitted where an expert's
+task does not pass through it. **On the path `upload → run → finding at its quotation → verdict →
+export` there are no stubs.** A stub looks like a finished section carrying an honest line about
+unavailability — not an empty screen and not an error.
+
+**Defects a manual test must not be allowed to meet**, taken from the deployed stand on
+2026-09-21 and kept at `.local/handoff/ui-screenshots/`: mixed language (finding content in
+Russian, labels in English — `Review`, `Decision`, `Export`, `Append a comment`,
+`No decisions yet`); identifiers such as `prj_01M2WW60H9BH688V7X54VVESYW` set in body text beside
+content; layout collisions on the review screen, where the `page 2`/`page 6` tabs overlap the word
+`recorded` and `Append a comment` covers its own input; the seventeen CSV columns printed to the
+user as a list, which is documentation standing where an interface should be; an unreadable page
+thumbnail; and the footer *"Local prototype. One reviewer, no authentication, no tenancy"* on
+every page.
+
+**What `R-18` does to the plan.**
+
+- **`ALPHA_ROADMAP.md` §1 needs amending** — presentation moves from *"not on this road"* to a
+  condition of accepting the alpha. No ADR conflicts: none prescribed an unfinished interface, and
+  `ADR-0009` fixes only the stack. The roadmap is a draft and loses to an ADR, but here there is
+  nothing to lose to.
+- **`R-15` is neither cancelled nor in conflict.** Debts and host readiness live in `infra/`; the
+  design line lives in `web/src`. The trees do not intersect and the lanes can run in parallel.
+- **`web/src` gets one owner per wave** (`AGENTS.md` §3), and the wave will be large.
+- **A frontend reseal is likely.** `R-13` has just paid one; a design wave touches
+  `web/FRONTEND_LOCK.json`, and that is to be planned from the start rather than discovered at
+  the end.
+- **This is not one wave.** Introducing localisation, building the styling layer, and finishing
+  six screens are different pieces of work with different evidence.
+
+**What `R-18` does not mean.** `ALPHA_ROADMAP.md` §1's exclusions stand: multi-tenancy, roles,
+user management, retention, legal hold, HA, DR, backup rotation, the job/attempt framework, remote
+workers and OCR remain out of scope. The requirement is about **the finish and the language of
+what is shown**, not about widening function.
+
 ## 4. Still open, and still the owner's
 
 - **`OD-18`** — three to five named experts with committed slots; `P4-BHV-01` waits on it alone.
-- **`OD-17`** — the next corpus shape.
+- **`OD-17`** — the next corpus shape. **`R-16` and `R-17` bear on this but do not close it**:
+  they settle how the *normative* corpus is vectorised, dated and attributed, not what the next
+  evidence corpus should be.
 - **`R-4`'s two halves** — who uploads a real document, and what event counts as *"the end of the
   pilot"* and therefore triggers the wipe. **`D-17` now bears on this**: the restore is broken for
   writing, so the mechanism the wipe depends on is not yet sound.
 - ~~`D-18`~~ **Settled by `R-13`**: reinstate, and pay the frontend reseal.
-- ~~Whether `origin/main` advances.~~ **Settled by `R-7`**: `main` is at `9291db6`, tagged
-  `alpha-w18`.
+- ~~Whether `origin/main` advances.~~ **Settled by `R-7`.** `main` is at `f96c23a`, tagged
+  `alpha-w30`, as of 2026-09-21. (This line said `9291db6`/`alpha-w18` for twelve waves while
+  `main` advanced three times beneath it — once, to `7535a17`, without a tag at all.)
+- **`R-18`'s stub boundary** — the rule *"no stubs on `upload → run → finding → verdict →
+  export`"* was proposed by the drafting session and adopted by the integrator. **It has not been
+  put to the owner in those words.** If the owner wants a different line, this is the sentence to
+  change.
