@@ -29,6 +29,17 @@
  * is a topbar with in-page links; that is a navigation model, it is an owner question,
  * and nothing below restructures it.
  *
+ * WHY EVERY COLOUR BELOW IS A TOKEN READ AND NONE IS A LITERAL. The sentence above is
+ * still true — there is no theming system here and no dark mode, and adding one is the
+ * owner's decision, not a stream's. What this file does is keep that decision cheap: the
+ * reference system this programme is measured against carries a full second token set
+ * under `[data-theme="dark"]` and defaults to it, so the shape a second theme needs is a
+ * block that overrides VALUES and touches no rule. Measured in this file after the sweep:
+ * **zero** colour literals outside `:root` — `grep -nE '#[0-9a-fA-F]{3,8}|rgba?\(' ` over
+ * everything below `:root` is empty, and every shadow, ring and tint is a token or is
+ * derived from one with `color-mix`. A second palette is therefore additive by
+ * construction. It is not written here, and the default is unchanged.
+ *
  * The typeface line is NOT closed here and is not silently half-done: a self-hosted face
  * needs a font file, every path that could hold one is outside this task's `allowed_paths`,
  * and a webfont would be the first UI dependency in thirteen. The scale, the weights and
@@ -89,6 +100,7 @@
   --am-shadow-1: 0 1px 2px rgba(22, 25, 29, 0.06);
   --am-shadow-2: 0 2px 6px rgba(22, 25, 29, 0.08), 0 1px 2px rgba(22, 25, 29, 0.04);
   --am-shadow-3: 0 10px 28px rgba(22, 25, 29, 0.12), 0 2px 6px rgba(22, 25, 29, 0.06);
+  --am-shadow-inset: inset 0 1px 3px rgba(22, 25, 29, 0.06);
   --am-ring: 0 0 0 3px rgba(31, 79, 139, 0.22);
 
   /* ---- motion ------------------------------------------------------------------ */
@@ -1067,7 +1079,7 @@ li.am-state .am-state__detail {
   border-radius: var(--am-radius);
   background: var(--am-surface-sunken);
   padding: var(--am-gap-sm);
-  box-shadow: inset 0 1px 3px rgba(22, 25, 29, 0.06);
+  box-shadow: var(--am-shadow-inset);
 }
 
 /* The page itself. It was rendered at thumbnail size and could not be read. */
