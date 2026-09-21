@@ -4,7 +4,7 @@
 worktree `/root/w29retry` · lane `gate-w29a` (PostgreSQL 56040, MinIO 59640/59641,
 database `audit_w29a`, bucket `auditmanager-gate-w29a`). No image built. `df -h /` on
 arrival **12 GB**, on exit **9.5 GB** — the mutation copy took most of the difference and
-was deleted. Started 2026-09-21 16:11:33 +05:00.
+was deleted. Started 2026-09-21 16:11:33 +05:00, handed back 16:31 — **20 minutes**, wall-clock, of which the gate is 5:40 and provisioning ~3.
 
 `W28-LIVE` measured a run on a document with no recording: **16.1 s**, of which **10.0 s**
 is the retry ladder, terminal `failed`. Ten of those sixteen seconds were spent waiting for
