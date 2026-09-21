@@ -330,6 +330,46 @@ one input large enough never crosses the wire.
 
 ## 6. Base gate
 
+`make gate FOUNDATION_PYTHON=/usr/bin/python3.12` on the committed, clean tree at `2e4dd31`
+— this branch's tip, base plus the three new files — lane `gate-w27b`,
+`POSTGRES_PORT=56010`, `S3_API_PORT=59610`/`59611`, `POSTGRES_DB=audit_w27b`, bucket
+`auditmanager-gate-w27b`, instance `auditmanager-gate-w27b`. All three ports were checked
+free before `make up`. **Exit code taken from `$?` after a redirect, never through
+`| tail`.**
+
+```
+foundation  35 passed in 28.54s
+battery     1966 passed, 5 skipped, 1 warning, 169 subtests passed in 270.22s
+frontend    Test Files 48 passed (48)   Tests 706 passed (706)
+GATE OK: battery, foundation, frontend and whitespace all pass
+GATE_EXIT=0
+```
+
+**Identical to the dispatch's figures in every number:** 1966 / 5 / 169, 35, 706 in 48
+files. The tree was clean at the moment of measurement and nothing was edited while the
+gate ran. One measurement on this lane.
+
+### Provisioning, and one thing that went wrong in it
+
+`make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12` → exit 0.
+`npm --prefix web ci` → exit 0, 184 packages, 4 s. Both were required; without the second
+the gate stops at the frontend.
+
+**The first `make gate` of this session exited `2`, and not for any reason in this tree:**
+`check-services` died with `ModuleNotFoundError: No module named 'boto3'`. `make bootstrap`
+had exited `0` and its own probe had printed `runtime: boto3 1.43.90`, but `.venv` held
+nothing except `pip`. Re-running `make bootstrap` in the foreground, unchanged, fixed it and
+the gate then ran green. **The cause is not established** — the difference between the two
+runs was that the first was inside a backgrounded subshell — so this is recorded as an
+observation, not a defect, and the remedy is one line: **if `check-services` cannot import
+`boto3`, re-run `make bootstrap` and check `.venv/bin/python -c "import boto3"` before
+believing the exit code.** A bootstrap that reports OK over an incomplete `.venv` is the
+shape this programme keeps finding; here it is one lane's provisioning and not the gate.
+
+The lane was taken down with `make down` after the measurement. **`31500` was never
+restarted, no container belonging to another lane was touched, and nothing was matched by
+process name.** No image was built. Disk at the end: reported in §8.
+
 ## 7. What the next session gets
 
 **The refusal cases are not guarded by `make gate`.** `manifest.json` cannot carry them
@@ -384,4 +424,15 @@ dispatch says it says; `D-28` is real and is why every verdict here is read from
   the same stack; they rule out flake, not a wrong declaration.
 * Every fixture is synthetic (`R-4`); no real client document was in play.
 
-**Elapsed, measured:** wall clock from the first command of this session to the last.
+**Elapsed, measured:** **24 min 23 s** wall clock — `date -Is` at the session's first
+command, `2026-09-21T13:52:04+05:00`, to `date -Is` after `make down`,
+`2026-09-21T14:16:27+05:00`. Of that, roughly **7 min** is the three browser passes (151 s,
+179 s, 82 s — almost all of it Chromium startup, one cold process per fixture, which is the
+property and not the overhead), **8 min** is two `make gate` runs plus two `make bootstrap`
+runs, and the rest is reading.
+
+**Disk:** `df -h /` reported **8.1 G** available at the start and **6.4 G** at the end —
+1.7 G consumed by one worktree, one `.venv`, `node_modules` and two container volumes, all
+but the worktree now released. **No image was built.** `31500` answers
+`/api/v1/openapi.json` with `200` after everything above, and its five containers are the
+five that were running when this session started.
