@@ -43,7 +43,7 @@ export function StartRunControl({ versionUid, onStarted }: StartRunControlProps)
       <button type="button" className="am-button" onClick={send} disabled={mutation.isPending}>
         Start run
       </button>
-      <p>
+      <p className="am-note">
         <em>
           Прогон использует тот режим провайдера, на который настроено это развёртывание.
           Он показан на прогоне и никогда не выбирается здесь.

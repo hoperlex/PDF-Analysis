@@ -64,7 +64,7 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
 
   return (
     <div data-version-count={page.items.length}>
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+      <ul className="am-rows">
         {page.items.map((version) => (
           <VersionRow
             key={version.version_uid}
@@ -73,7 +73,7 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
           />
         ))}
       </ul>
-      <p>
+      <p className="am-note">
         <em>
           Одна версия на загрузку: этот экран не передаёт `uploadDocument` параметр
           `document_uid`, поэтому каждая загрузка начинает новый документ с порядковым
@@ -81,14 +81,14 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
           документа — её удерживает только транспорт.
         </em>
       </p>
-      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+      <div className="am-pager">
         {cursor === undefined ? null : (
-          <button type="button" className="am-button" onClick={() => setCursor(undefined)}>
+          <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(undefined)}>
             First page
           </button>
         )}
         {nextCursor === null ? null : (
-          <button type="button" className="am-button" onClick={() => setCursor(nextCursor)}>
+          <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(nextCursor)}>
             Next page
           </button>
         )}

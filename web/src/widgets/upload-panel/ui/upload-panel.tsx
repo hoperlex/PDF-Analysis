@@ -32,7 +32,7 @@ export interface UploadPanelProps {
 
 export function UploadPanel({ projectUid, onUploaded }: UploadPanelProps) {
   return (
-    <section>
+    <section className="am-section">
       <h2>Загрузка</h2>
 
       <div className="am-state" role="note">

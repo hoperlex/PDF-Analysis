@@ -140,17 +140,22 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
           'Загрузка прогона…'
         ) : (
           <>
-            <RunStateBadge state={run.state} providerMode={run.provider_mode} />{' '}
-            <span data-project-uid={projectUid}>{projectUid}</span>{' '}
-            <span data-run-id={runId}>{runId}</span>
+            <span className="am-uid-row">
+              <RunStateBadge state={run.state} providerMode={run.provider_mode} />{' '}
+              <span className="am-uid" data-project-uid={projectUid}>
+                {projectUid}
+              </span>{' '}
+              <span className="am-uid" data-run-id={runId}>
+                {runId}
+              </span>
+            </span>
             {run.diagnostic_observation_count !== undefined &&
             run.diagnostic_observation_count > 0 ? (
               <span
                 className="am-review__diagnostics"
                 data-diagnostic-observation-count={run.diagnostic_observation_count}
               >
-                {' '}
-                · шлюз привязки отклонил непривязанных элементов модели:{' '}
+                шлюз привязки отклонил непривязанных элементов модели:{' '}
                 {run.diagnostic_observation_count}. Это диагностика, а не находки: их нет ни
                 в списке ниже, ни в строках CSV.
               </span>
