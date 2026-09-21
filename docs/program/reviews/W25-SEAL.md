@@ -347,3 +347,31 @@ itself is a few minutes: the cherry-pick applied clean, the four steps are mecha
 digest was already known to be correct before it was written down. **`R-11`'s cost was a
 permission boundary, not an amount of work** — which is worth saying plainly, because the row
 sat open for two waves.
+
+## 10. Paths, and the one that is outside the list
+
+**Forbidden hotspots: not one was touched.** `git diff --name-only fea3794..HEAD` matches
+nothing under `web/src/app/`, `web/src/_pages/`, `web/src/widgets/`, `infra/`, `tests/e2e/`,
+`artifacts/`, `src/auditmanager/analysis/text/` (where `W25-COST` is live), and does not contain
+`Makefile`, `docs/program/DEBT_REGISTER.md` or `docs/program/CURRENT_STATE.md`. **No screen
+changed. No tag and no checkpoint was created** — `AGENTS.md` §5.
+
+Thirty files moved. Twenty-nine are inside `allowed_paths` — the domain contracts, the one
+`openapi.json`, the three `src/auditmanager/**` modules the brief names, the migration's
+`ERROR_CODES` list, their tests, `web/src/shared/api/generated/**`, `web/openapi/openapi.json`,
+`web/FRONTEND_LOCK.json`, `web/tests/**` and this review.
+
+**The thirtieth is `src/auditmanager/storage/README.md`, and it is declared rather than
+buried.** It is `b437616`'s own byte and it is the table that documents the class → code mapping
+of `storage/errors.py`, which **is** in `allowed_paths`:
+
+```
+| `TemporaryBlobLostError`     | `staged_upload_lost` | ... 503 and retryable: true ... |
+| `BlobAttributeConflictError` | `conflict`           | ... the only storage error carrying conflict ... |
+```
+
+Dropping it from the cherry-pick would have left the module's own documentation saying both
+classes raise `conflict` while the code beside it says otherwise — a falsehood created by this
+change, in the file a reader of `errors.py` reads first, four lines from the class. It is two
+table rows, it names no count and no surface size, and no test reads it. `AGENTS.md` §5 item 6
+is why it is here and not silent.
