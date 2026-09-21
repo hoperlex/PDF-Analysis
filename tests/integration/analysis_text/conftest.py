@@ -16,7 +16,9 @@ from typing import Any
 
 import pytest
 
-from auditmanager.analysis.text import RecordedAdapter
+from auditmanager.analysis.text import ProviderMode, RecordedAdapter
+from auditmanager.analysis.text.config import DEPENDENCY_NAME
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RECORDINGS = REPO_ROOT / "fixtures/recorded/text_analysis"
@@ -65,3 +67,34 @@ def variant_adapter() -> Any:
 def empty_recording_dir(tmp_path: Path) -> Path:
     """A directory with no recordings in it, for the missing-recording case."""
     return tmp_path / "no-recordings"
+
+
+class _UnreachableProvider:
+    """A provider that is genuinely unreachable, raising as ``live.py`` maps it to.
+
+    Distinct from :func:`empty_recording_dir`, and the distinction is the point of
+    ``W29-RETRY``: an absent recording is a local, deterministic miss that reports a
+    non-retryable code, while this is the transport failure the retry ladder exists
+    for. A test about an unreachable provider that used an empty directory was
+    testing the wrong failure under the right name.
+    """
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    @property
+    def provider_mode(self) -> ProviderMode:
+        return ProviderMode.RECORDED
+
+    def complete(self, request: Any) -> Any:
+        self.calls += 1
+        raise DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            message="the model provider did not return a usable response",
+            dependency=DEPENDENCY_NAME,
+        )
+
+
+@pytest.fixture()
+def unreachable_provider() -> _UnreachableProvider:
+    return _UnreachableProvider()
