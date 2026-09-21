@@ -185,10 +185,65 @@ Every mutation was applied to a **committed** tree and reverted with
 
 ## 4. The gate
 
-*(filled below, after the run)*
+Lane `gate-w27a` — `POSTGRES_PORT=56000`, `S3_API_PORT=59600`, `S3_CONSOLE_PORT=59601`,
+`POSTGRES_DB=audit_w27a`, bucket `auditmanager-gate-w27a`, instance
+`auditmanager-gate-w27a`. Provisioned with
+`make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12` (exit 0) and `npm --prefix web ci`
+(exit 0). **No image was built.** Output redirected to a file and the status read from
+`$?`, never through a pipe:
 
----
+```
+battery     1970 passed, 5 skipped, 169 subtests   in 278.31s
+foundation  35 passed                              in 30.60s
+frontend    715 passed in 49 files                 in 4.18s
+GATE OK: battery, foundation, frontend and whitespace all pass
+GATE EXIT=0
+```
+
+**Against the dispatch's base of 1966 / 5 / 169, foundation 35, frontend 706-in-48:
++4 battery, +9 frontend in +1 file, and nothing else moved.** Four is exactly the number of
+tests added to `test_surface_counts_in_prose.py` (17 → 21 in that file, measured by running
+it on `origin/dev` and on this branch); nine is exactly the new
+`pc01-error-codes.contract.test.ts`. **No test was deleted**: two were renamed and their
+literals removed, which is why nothing fell.
+
+The gate ran **once**, on a committed tree, and the tree was not touched while it ran. Every
+mutation in section 3 was run **before** the gate, each reverted and each re-run green.
 
 ## 5. Files changed
 
-*(filled below)*
+| file | why |
+|---|---|
+| `web/src/shared/api/errors.ts` | `D-40` list widened to the derived set; `D-41`'s two stale comments and a third corrected; the doc comment now states the derivation and carries no count of its own |
+| `web/src/shared/api/authorization.ts` | a fourth stale count, found by the widening |
+| `web/src/shared/config/server-env.ts` | a fifth, which the guard **cannot** read; repaired by removing the number |
+| `web/tests/contract/pc01-error-codes.contract.test.ts` | **new.** The derivation and the two-sided guard |
+| `web/tests/contract/seam-operations.contract.test.ts` | the `toHaveLength(12)` literal removed; header count corrected |
+| `web/tests/unit/api/failure-surface.test.ts` | the literal removed, and the assertion that pinned `storage_integrity_error` **outside** the subset corrected |
+| `tests/contract/api_v1/test_surface_counts_in_prose.py` | `D-41`'s repair: tree widened to `web/src`, two structural pattern fixes, four tests |
+| `docs/program/reviews/W27-WEB.md` | this file |
+
+**Forbidden hotspots untouched**, by `git diff --name-only 5b3a040`: nothing under `src/`,
+`contracts/`, `infra/`, `tests/e2e/`, `artifacts/`, no `Makefile`, no `DEBT_REGISTER.md`, no
+`CURRENT_STATE.md`. **`web/FRONTEND_LOCK.json` is unchanged and its guard passes**: the seal
+covers the contract bytes, the toolchain, the generator and the four files under
+`web/src/shared/api/generated/`, and no generated file was edited.
+
+## 6. For the integrator
+
+1. **`W27-REFUSE` overlap.** No rendering file was edited: nothing under `web/src/features`,
+   `web/src/widgets` or `web/src/_pages` is in the diff, and **`upload-panel` is untouched**.
+   The only shared files are `web/src/shared/api/errors.ts` (the list and its comment) and
+   two unit-test files. If `W27-REFUSE` adds a branch for a code, it will find that code
+   already in `PC01_ERROR_CODES` rather than having to widen it.
+2. **Two register rows this session cannot write.** `DEBT_REGISTER.md` is forbidden here.
+   `D-40` and `D-41` are closed by this branch; the check commands that now hold are
+   `.venv/bin/pytest tests/contract/api_v1/test_surface_counts_in_prose.py` (21 passed) and
+   `npx vitest run tests/contract/pc01-error-codes.contract.test.ts` from `web/` (9 passed).
+   `D-41`'s row states the guard's tree as *"`src/auditmanager/api/` and `infra/deploy/`"*,
+   which has been incomplete since `W22-WEB` added `web/src/app/bff`; it is now
+   `src/auditmanager/api/`, `infra/deploy/` and `web/src`.
+3. **What is not repaired.** `InternalError`'s description names `analysis_failed` in words
+   rather than as a code, which is why one entry needs a registered reason. Making the
+   derivation total is a one-sentence `contracts/**` edit and belongs to whoever owns the
+   next reseal. Until then the blind-spot register is guarded in both directions.
