@@ -2,8 +2,8 @@
  * The typed failure surface of the API client.
  *
  * The contract has exactly one failure shape — the `ErrorEnvelope` — and one closed
- * twenty-code catalog. This module turns a non-2xx response into one of three things and
- * never into anything else:
+ * twenty-two-code catalog. This module turns a non-2xx response into one of three things
+ * and never into anything else:
  *
  *   - `ApiError`            the body was a valid envelope carrying a catalog code;
  *   - `UnrecognizedApiError` the body was a valid envelope carrying a code this client
@@ -22,26 +22,45 @@ import { ERROR_CODE_VALUES } from './generated/types.gen';
 /**
  * The subset of the catalog the PC-01 surface can actually return, per `P3-API-01`.
  *
- * The generated `ErrorCode` union is the full twenty-one-code catalog, because that is
- * what the contract declares. These twelve are the ones a PC-01 screen has to be able to
- * render; `P02_SEAMS.md` section 9.4 records why each of the others has no PC-01
- * producer. The union carries no partial-specific refusal: under `OD-11` a `partial` run
- * **is** exported, and a run whose terminal does not publish a result is refused with
- * `state_transition_not_allowed`, which is already in the list.
+ * The generated `ErrorCode` union is the whole catalog, because that is what the contract
+ * declares. This list is the part of it the fifteen PC-01 operations can put in front of a
+ * screen; `P02_SEAMS.md` section 9.4 records why each of the others has no PC-01 producer.
  *
- * `authentication_required` and `permission_denied` were added by `W15-AUTH` and are not
- * a widening of taste. Owner ruling `R-3` put a bearer credential in front of all twelve
- * operations, and `contracts/api/v1/openapi.json` now declares `401` and `403` on every
- * one of them: both codes are reachable from every PC-01 screen, so both are codes a
- * PC-01 screen has to be able to render. The list was ten while nothing could produce
- * them.
+ * **Its size is written down nowhere and it is no longer maintained by hand.**
+ * `web/tests/contract/pc01-error-codes.contract.test.ts` derives the reachable set from
+ * `contracts/api/v1/openapi.json` and `contracts/domain/v1/error-codes.json` — every status
+ * an operation declares, the response component it names there, and the catalog codes that
+ * component's own description names at that status — and reddens when this list is narrower
+ * than what it derives or wider than the surface allows. `D-40` is why: the list said
+ * *twelve* across two reseals that moved the surface underneath it, `W15-AUTH` corrected it
+ * by hand once, and nothing was left behind that would catch the third time.
  *
- * This is a narrowing of the contract, never a replacement for it. A code outside the
- * list but inside the catalog is still an `ApiError`; only a code outside the catalog is
+ * `authentication_required` and `permission_denied` are here because `R-3` put a bearer
+ * credential in front of every operation and the document now declares `401` and `403` on
+ * each one. They are derived like the rest; no reading of taste puts them here.
+ *
+ * `analysis_failed` is the one entry the derivation cannot see. The `InternalError`
+ * response names it in words — *"a declared run failure"* — rather than as a code, so the
+ * guard carries it as a **registered blind spot with that reason** instead of quietly
+ * tolerating it.
+ *
+ * The union carries no partial-specific refusal: under `OD-11` a `partial` run **is**
+ * exported, and a run whose terminal does not publish a result is refused with
+ * `state_transition_not_allowed`, which is in the list.
+ *
+ * **Membership here is not a claim that a screen has bespoke wording for the code.** Each
+ * classifier switches on the codes it has a sentence for and renders the rest as its own
+ * explicit server-error state carrying the envelope's message. Which of these deserve a
+ * sentence of their own is what `W27-REFUSE` is measuring; this list does not decide it.
+ *
+ * This is a narrowing of the contract, never a replacement for it. A code outside the list
+ * but inside the catalog is still an `ApiError`; only a code outside the catalog is
  * unrecognized.
  */
 export const PC01_ERROR_CODES = [
   'validation_failed',
+  'storage_integrity_error',
+  'analysis_input_invalid',
   'not_found',
   'authentication_required',
   'permission_denied',
@@ -51,7 +70,9 @@ export const PC01_ERROR_CODES = [
   'idempotency_key_in_progress',
   'idempotency_key_stale',
   'dependency_unavailable',
+  'staged_upload_lost',
   'analysis_failed',
+  'dependency_credential_refused',
   'internal_error',
 ] as const;
 

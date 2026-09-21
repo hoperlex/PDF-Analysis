@@ -2,7 +2,7 @@
  * Contract guard: the client still carries the PC-01 seam `B6`, `B7` and `B8` agreed on.
  *
  * The drift guard next door proves the client matches the document. This one proves the
- * document still says what `docs/program/P02_SEAMS.md` section 7 says it says — the twelve
+ * document still says what `docs/program/P02_SEAMS.md` section 7 says it says — the fifteen
  * operations at their frozen methods and paths, the field sets a review screen depends on,
  * and the safety rules that must survive any future edit to the contract.
  *
@@ -188,8 +188,12 @@ describe('the error catalog', () => {
     expect(ERROR_CODE_VALUES).toContain('permission_denied');
   });
 
-  it('narrows to the twelve codes a PC-01 screen must render, all of them in the catalog', () => {
-    expect(PC01_ERROR_CODES).toHaveLength(12);
+  it('narrows to the codes a PC-01 screen must render, all of them in the catalog', () => {
+    // No length literal since `D-40`: the subset is derived from the document by
+    // `pc01-error-codes.contract.test.ts`, and a count written here is the hand-kept
+    // figure that row is about. What belongs here is that it is a strict narrowing.
+    expect(PC01_ERROR_CODES.length).toBeGreaterThan(0);
+    expect(PC01_ERROR_CODES.length).toBeLessThan(ERROR_CODE_VALUES.length);
     for (const code of PC01_ERROR_CODES) {
       expect(ERROR_CODE_VALUES as readonly string[]).toContain(code);
     }
