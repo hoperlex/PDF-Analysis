@@ -284,8 +284,15 @@ never a source of truth** (`ADR-0012`).
 
 **Anchoring is by page, not by fragment, and the reason is measured rather than chosen.** Across
 all 28 249 corpus blocks, `coords_norm` is `[0,0,1,1]` for **28 249 of 28 249**, `polygon_points`
-is `null` for every one, and there is exactly **one block per page** across 28 251 pages. The
-"crop region" *is* the whole page; there is no geometric layer in the corpus to anchor to. So the
+is `null` for every one, and there is **one block per page** across 28 251 pages. The
+"crop region" *is* the whole page; there is no geometric layer in the corpus to anchor to.
+
+*(Integrator's note on the arithmetic, because a later session will trip on it: 28 249 blocks
+across 28 251 pages is not "exactly one per page" — **two pages carry no block at all**, and
+they are a known corpus quality flag recorded in `.local/norms/corpus/MANIFEST.json`, in
+`ГОСТ_Р_50030_2-2010`. The two figures agree once that is said. It changes nothing about the
+ruling: page-level anchoring is forced by `coords_norm` being `[0,0,1,1]` for all 28 249, not
+by the block-to-page ratio.)* So the
 anchor is `document + page + offset in the recognised text`, and the expert is shown the whole
 page crop. **Explicitly not to be done:** re-segmenting page images to recover paragraph geometry.
 That is a separate recognition project, costs a multiple of everything else here, and neither
