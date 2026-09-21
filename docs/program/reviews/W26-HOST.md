@@ -201,7 +201,7 @@ A `-v` source is resolved by the **daemon**, not the shell, and docker **invents
 directory rather than refusing**. Pointed at a path that did not exist:
 
 ```
-$ docker run -d -v /root/w26host/infra/deploy/proxy/tls-does-not-exist:/etc/nginx/tls:ro ... 
+$ docker run -d -v /root/w26host/infra/deploy/proxy/tls-does-not-exist:/etc/nginx/tls:ro ...
 state=running
 enable-tls: TLS IS OFF. The stack serves plain HTTP on the published port and nothing else.
 $ ls -ld /root/w26host/infra/deploy/proxy/tls-does-not-exist
