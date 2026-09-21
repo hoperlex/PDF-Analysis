@@ -41,9 +41,10 @@ is not a host reboot.
 
 ### What is open
 
-`DEBT_REGISTER.md` carries the live list with a check command per row. Four need the owner:
-**`D-35`** (one yes/no about criterion 4), **`D-18`** (a catalog code costs a frontend reseal),
-**`D-9`** (the norms corpus, ruled to wait for manual testing), **`D-15`** (a design call).
+`DEBT_REGISTER.md` carries the live list with a check command per row. **`D-15`, `D-18` and
+`D-35` closed on 2026-09-21** under rulings `R-12`, `R-13` and `R-14`. **One still needs the
+owner: `D-9`**, the norms corpus, which `R-9` placed after manual testing. The rest are
+`infra/` and `web/src` repairs with no ruling attached.
 **`D-36` closed 2026-09-20** — the one part of criterion 1's row that `R-1` did not block.
 `deploy.sh` run twice now leaves every container ID unchanged, and the row's stated cause
 turned out to be wrong: not a `created` timestamp, but BuildKit's **provenance attestation**

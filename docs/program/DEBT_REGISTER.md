@@ -15,7 +15,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-39** | the rehearsal's total counts a view | `infra/` |
 | **D-40** | `PC01_ERROR_CODES` is narrower than the surface | `web/src` |
 | **D-41** | two comments in `errors.ts`, one falsified this wave | `web/src` |
-| **D-15** | one `cost_basis` over a figure summed across attempts | design call |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
@@ -218,30 +217,47 @@ than in the query. The name is now a module constant so the mutation lands where
 
 Check: `grep -rn 'sha256 or ""' src/` returns nothing.
 
-### D-15 — one `cost_basis` describes a figure summed over several attempts
+### D-15 — one `cost_basis` over a figure summed across attempts — **CLOSED, and this row's mechanism was impossible**
 
-Found 2026-09-18 while closing D-3. **Measured, not repaired, and the repair is a design call
-rather than a fix.**
+**Closed 2026-09-21 by `W25-COST` under `R-14`.** `metrics["cost_basis"]` is now derived from
+the meter — `measured` only when **every** contribution was priced — which is the rule
+`W18-SEAL` already applied to `RunStatus.cost_basis`. **Two places now say the same thing**,
+which is the reason the ruling gave.
 
-`runs/executor.py:402` calls `run_text_analysis` in a **retry loop with one meter for the
-whole run** — deliberately, so a retry cannot buy a fresh USD 1.00 ceiling (`OD-03`). So a run
-can make several model calls. On both the success and the overrun path the stage then emits:
+**The mechanism this row described cannot happen, and the row is mine.** I wrote *"a run whose
+first attempt replayed and whose second reported a cost"*. `RETRYABLE_STAGE_ERRORS` is exactly
+`dependency_unavailable`, and **every site that raises it raises it inside
+`adapter.complete()`** — verified here: `complete` at `stage.py:226`, `charge` at `:244`. So a
+retried attempt **charged nothing**, and a charged attempt is **never retried**, because
+everything reachable after the charge is `retryable: false`.
 
-* `metrics["cost_usd"] = round(cost_meter.spent_usd, 8)` — the sum **across attempts**;
-* `metrics["cost_basis"] = "measured" if response.reported_cost_usd is not None else …` —
-  the provenance of the **last response only**.
+**The disproof was already in the suite.** `test_retry_provenance_seam.py` asserts
+`control_meter.call_count == 1` after a **three-attempt** run. I wrote the row without reading
+it.
 
-A run whose first attempt replayed and whose second reported a cost therefore publishes a sum
-over both with one attempt's provenance attached to it. The model-call **records** are exact —
-each carries its own basis — so nothing is lost, and this is about a summary field.
+**The defect is real by a different mechanism:** `metrics["cost_usd"]` is the **meter's whole
+spend** — a per-run object handed to every attempt so `OD-03` binds across them — while the
+basis described *this call alone*.
 
-Not repaired here for the reason `W11-FIX` gave about this same field: wave 11 made the two
-paths symmetric on purpose and changing what the key means is not a lane decision. The options
-are to say `estimated` when **any** attempt was, or to drop the key from the metrics and leave
-the records as the only answer. Both change what a consumer reads.
+**And the consequence, which the session raised rather than letting the close overclaim:
+nothing in the deployment can currently emit a wrong `metrics["cost_basis"]`**, because there
+is one charged call per run. This is a **structural guarantee about an accumulating figure**,
+not a production-visible repair.
 
-Check: `grep -n "spent_usd\|cost_basis" src/auditmanager/analysis/text/stage.py` against
-`grep -n "CostMeter(\|run_text_analysis(" src/auditmanager/runs/executor.py`.
+Proved without sleeping and without a clock — a retry could not have produced the case anyway:
+one meter handed to two stage calls, a replay then a priced call, **both orders** asserted,
+with a two-priced-call control that reddens a hard-wired answer. Through `execute_run` against
+real PostgreSQL and MinIO, a meter opened at `0.90` gives `1.40 / estimated` where it read
+`measured` before.
+
+**One divergence deliberately left:** on the overrun path the `model_call` row stores
+`estimated` because its figure is the pin's computation, while metrics may read `measured`.
+Both are true of their own number.
+
+**The same wrong story is quoted verbatim in five characterization records' `permitted_change`
+prose.** Left as-is: that is the record of a past decision, not a live claim.
+
+Check: `grep -n "cost_basis" src/auditmanager/analysis/text/cost.py`.
 
 ### D-5 — the first browser-driven run answered 500, twice — **CLOSED, not reproducible**
 
