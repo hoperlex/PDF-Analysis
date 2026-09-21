@@ -42,14 +42,20 @@ already had, narrowed but not shut.
 ``make mutation-copy`` copies ``src/``, ``tests/`` and ``pyproject.toml`` and *also*
 provides ``contracts``, ``docs``, ``fixtures``, ``db`` and ``tools`` -- as symlinks to the
 checkout, or as copies under ``FULL=1`` (``Makefile`` lines 551-578). What it does not
-provide is ``web/``, and that is the only thing missing here. So of the four checks below
-that read the real tree, the three that read ``web/src/app`` cannot run inside a mutation
-copy and must be excluded by path alongside the three suites under
-``tests/integration/composition``; the contract check reads only ``tests/`` and the
-symlinked ``contracts/`` and runs there unchanged.
+provide is ``web/``, and that is the only thing missing here. So **every check below that
+calls ``_require`` on ``APP_DIR`` or ``WEB_SRC``** cannot run inside a mutation copy and
+must be excluded by path alongside the three suites under
+``tests/integration/composition``; the checks that read only ``tests/`` and the symlinked
+``contracts/`` run there unchanged. That is stated as a property rather than a count
+because the count has now changed twice: the figure measured in a copy on 2026-09-19 --
+3 failed, 7 passed -- predates the refusal half and is no longer this file's shape.
 
-The six negative controls read nothing outside this file and run anywhere -- they are what
-proves each check can fail.
+The negative controls read nothing outside this file and run anywhere -- they are what
+proves each check can fail. ``tests/e2e/pc01/journey/prove_the_guard_can_fail.py`` proves
+the same against the *real* manifest, which a synthetic control cannot.
+
+**`W28-GUARD` widened it again, for the refusal half.** See the section at the foot of
+this file.
 """
 
 from __future__ import annotations
