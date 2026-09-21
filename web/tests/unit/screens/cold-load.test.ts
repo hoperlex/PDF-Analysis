@@ -193,7 +193,7 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
     const client = newClient();
     client.setQueryData(DOCUMENTS_KEY, versionPage([version()]));
     const markup = withRouter(client, createElement(ProjectDetailPage, { projectUid: PROJECT_UID }));
-    expect(markup).not.toContain('Start run');
+    expect(markup).not.toContain('Запустить прогон');
   });
 });
 
@@ -231,7 +231,7 @@ describe('the version screen asks the server on a cold load (D-16)', () => {
     const markup = screen(client);
 
     expect(markup).toContain('По этой версии прогонов не запускалось.');
-    expect(markup).toContain('Start run');
+    expect(markup).toContain('Запустить прогон');
   });
 
   it('lists the runs that exist, each addressable, without waiting for `running`', () => {

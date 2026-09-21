@@ -92,7 +92,7 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
         />
 
         <label htmlFor="upload-title">
-          Display title <em>(необязательно; не идентификатор)</em>
+          Отображаемое название <em>(необязательно; не идентификатор)</em>
         </label>
         <input
           id="upload-title"

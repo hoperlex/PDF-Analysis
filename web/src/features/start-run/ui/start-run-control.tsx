@@ -41,7 +41,7 @@ export function StartRunControl({ versionUid, onStarted }: StartRunControlProps)
   return (
     <div>
       <button type="button" className="am-button" onClick={send} disabled={mutation.isPending}>
-        Start run
+        Запустить прогон
       </button>
       <p>
         <em>

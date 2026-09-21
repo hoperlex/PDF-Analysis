@@ -203,7 +203,7 @@
           {
             "do": "click",
             "selector": "form button[type=\"submit\"]",
-            "text": "Create"
+            "text": "Создать"
           }
         ],
         "expects_api": [
@@ -320,7 +320,7 @@
           {
             "do": "click",
             "selector": "button",
-            "text": "Start run"
+            "text": "Запустить прогон"
           }
         ],
         "expects_api": [

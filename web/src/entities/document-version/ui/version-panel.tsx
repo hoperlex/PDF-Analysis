@@ -45,13 +45,13 @@ export function VersionPanel({ version }: VersionPanelProps) {
         <Field label="Документ">
           <code>{version.document_uid}</code>
         </Field>
-        <Field label="Ordinal">
+        <Field label="Порядковый номер">
           {version.version_ordinal} <em>(только порядок отображения, не идентификатор)</em>
         </Field>
-        <Field label="Media type">{version.media_type}</Field>
-        <Field label="Pages">{version.page_count}</Field>
-        <Field label="Size">
-          {formatBytes(version.byte_size)} ({version.byte_size} bytes)
+        <Field label="Тип содержимого">{version.media_type}</Field>
+        <Field label="Страниц">{version.page_count}</Field>
+        <Field label="Размер">
+          {formatBytes(version.byte_size)} ({version.byte_size} Б)
         </Field>
         <Field label="SHA-256">
           <code>{version.sha256}</code>

@@ -263,7 +263,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
 
         <div className="am-review__export">
           {run === null ? (
-            <LoadingState what="the run" />
+            <LoadingState what="прогон" />
           ) : (
             <ExportPanel
               runId={runId}

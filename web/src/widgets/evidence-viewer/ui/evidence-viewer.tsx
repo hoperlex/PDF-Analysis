@@ -127,7 +127,7 @@ export function EvidenceViewer({
 
       <div className="am-evidence__panes">
         <div className="am-evidence__page">
-          {isLoading === true ? <LoadingState what="the document page" /> : null}
+          {isLoading === true ? <LoadingState what="страницу документа" /> : null}
           {error !== undefined && error !== null ? <ErrorState {...error} /> : null}
           {isLoading !== true && (error === undefined || error === null) ? (
             documentUrl === null ? (

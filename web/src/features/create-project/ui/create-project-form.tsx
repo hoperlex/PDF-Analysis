@@ -86,7 +86,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
           style={{ flex: '1 1 auto', padding: '0.4rem 0.5rem' }}
         />
         <button type="submit" className="am-button" disabled={mutation.isPending}>
-          Create
+          Создать
         </button>
       </div>
 

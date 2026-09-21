@@ -233,7 +233,7 @@ describe('the run state is rendered as the contract names it', () => {
 describe('the three terminals are three different claims', () => {
   it('published states its finding count', () => {
     expect(screen({ state: 'published', published_finding_count: 7 })).toContain(
-      'Published findings',
+      'Опубликованных находок',
     );
     expect(screen({ state: 'published', published_finding_count: 7 })).toContain('7');
   });
@@ -265,7 +265,7 @@ describe('the three terminals are three different claims', () => {
     const markup = screen({ state: 'cancelled', published_finding_count: 0 });
     expect(markup).toContain('data-run-outcome="cancelled"');
     expect(markup).toContain('Nothing was published.');
-    expect(markup).not.toContain('Published findings');
+    expect(markup).not.toContain('Опубликованных находок');
   });
 
   it('an open run implies no result', () => {
@@ -373,7 +373,7 @@ describe('findings and diagnostic observations are two counts, never one (M-6)',
       published_finding_count: 3,
       diagnostic_observation_count: 11,
     });
-    expect(markup).toContain('Published findings');
+    expect(markup).toContain('Опубликованных находок');
     expect(markup).toContain('data-diagnostic-observation-count="11"');
     expect(markup).toContain('3');
     expect(markup).toContain('Диагностические наблюдения');
@@ -407,7 +407,7 @@ describe('findings and diagnostic observations are two counts, never one (M-6)',
       diagnostic_observation_count: 2,
     });
     expect(markup).toContain('data-diagnostic-observation-count="2"');
-    expect(markup).not.toContain('Published findings');
+    expect(markup).not.toContain('Опубликованных находок');
   });
 });
 

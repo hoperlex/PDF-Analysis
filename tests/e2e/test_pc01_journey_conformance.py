@@ -25,7 +25,7 @@ being replaced by this file.
 **`W22-E2E` widened it, because the write half needed it widened.** The read walk is
 addressed entirely by route and operation, so checking addressing covered it. The write
 half presses named *controls* -- ``#new-project-name``, ``#upload-file``, the button whose
-text is ``Start run`` -- and reads named *markers* -- ``data-created-project``,
+text is ``Запустить прогон`` -- and reads named *markers* -- ``data-created-project``,
 ``data-run-outcome``, ``data-run-activity``. None of those is addressing. Rename an id in
 ``web/src`` with the route untouched and the old guard would have stayed green while the
 journey silently stopped being able to press anything, which is the rot this file exists
@@ -603,7 +603,7 @@ _SYNTHETIC_WRITE_MANIFEST = {
                     {
                         "do": "click",
                         "selector": 'form button[type="submit"]',
-                        "text": "Create",
+                        "text": "Создать",
                     },
                 ],
                 "expects_api": [
@@ -628,7 +628,7 @@ _SYNTHETIC_WRITE_MANIFEST = {
                 "at": "/projects",
                 "page_module": "web/src/app/projects/page.tsx",
                 "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
-                "actions": [{"do": "click", "selector": "button", "text": "Start run"}],
+                "actions": [{"do": "click", "selector": "button", "text": "Запустить прогон"}],
                 "expects_api": [
                     {
                         "method": "POST",
@@ -697,9 +697,9 @@ def test_control_the_write_half_s_operations_reach_the_contract_check() -> None:
 
 def test_control_a_renamed_id_is_detected() -> None:
     handles = handles_named_by_write_step(_only_write_step("create-project"))
-    assert handles == {'id="new-project-name"', "data-created-project", "Create"}
+    assert handles == {'id="new-project-name"', "data-created-project", "Создать"}
     source_after_a_rename = (
-        '<input id="newProjectName" /><p data-created-project="x">Created</p>'
+        '<input id="newProjectName" /><p data-created-project="x">Создать</p>'
     )
     missing = sorted(h for h in handles if h not in source_after_a_rename)
     assert missing == ['id="new-project-name"']
@@ -707,8 +707,8 @@ def test_control_a_renamed_id_is_detected() -> None:
 
 def test_control_a_dropped_marker_attribute_is_detected() -> None:
     handles = handles_named_by_write_step(_only_write_step("start-run"))
-    assert handles == {"data-run-outcome", "data-run-activity", "Start run"}
-    source_after_the_marker_went = '<p data-run-activity="stopped">Start run</p>'
+    assert handles == {"data-run-outcome", "data-run-activity", "Запустить прогон"}
+    source_after_the_marker_went = '<p data-run-activity="stopped">Запустить прогон</p>'
     missing = sorted(h for h in handles if h not in source_after_the_marker_went)
     assert missing == ["data-run-outcome"]
 
@@ -718,8 +718,8 @@ def test_control_a_relabelled_button_is_detected() -> None:
     source_after_the_relabel = (
         '<button data-run-outcome data-run-activity>Run the audit</button>'
     )
-    assert "Start run" in handles
-    assert "Start run" not in source_after_the_relabel
+    assert "Запустить прогон" in handles
+    assert "Запустить прогон" not in source_after_the_relabel
 
 
 def test_control_a_generic_selector_claims_nothing() -> None:

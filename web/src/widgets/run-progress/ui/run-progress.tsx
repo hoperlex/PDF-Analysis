@@ -93,7 +93,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
             Прогон достиг успешного терминального состояния <code>published</code>.
           </p>
           <p>
-            Published findings:{' '}
+            Опубликованных находок:{' '}
             {outcome.findingCount === null ? <em>не сообщено</em> : outcome.findingCount}
           </p>
         </div>
@@ -248,7 +248,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
     );
   }
 
-  if (status === null) return <LoadingState what="the run" />;
+  if (status === null) return <LoadingState what="прогон" />;
 
   const mode = runProviderMode(status);
   const animating = isRunAnimating(status);
@@ -308,7 +308,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       {runHasPublishedResult(status.state) ? (
         <p>
           <Link href={routes.review(projectUid, status.run_id)}>Разобрать находки</Link>{' '}
-          — this run&apos;s provider mode is <strong>{mode}</strong>.
+          — режим провайдера этого прогона: <strong>{mode}</strong>.
         </p>
       ) : (
         <NotApplicableState
