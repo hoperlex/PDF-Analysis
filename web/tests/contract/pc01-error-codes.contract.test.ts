@@ -190,7 +190,8 @@ describe('the derivation reads the document and is not vacuous', () => {
 describe('the PC-01 render subset against the surface it claims to cover', () => {
   it('is never narrower than what the document can put in front of a screen', () => {
     // `D-40` itself: on the tree that raised it, this assertion names `staged_upload_lost`.
-    const missing = sorted([...reachableCodes()].filter((code) => !PC01_ERROR_CODES.includes(code as never)));
+    const listed = new Set<string>(PC01_ERROR_CODES);
+    const missing = sorted([...reachableCodes()].filter((code) => !listed.has(code)));
     expect(
       missing,
       'the contract can return these and PC01_ERROR_CODES does not list them. Widen the ' +
@@ -203,7 +204,9 @@ describe('the PC-01 render subset against the surface it claims to cover', () =>
   it('is never wider than the surface, except where the contract says so in words', () => {
     const derived = reachableCodes();
     const unexplained = sorted(
-      PC01_ERROR_CODES.filter((code) => !derived.has(code) && !(code in BLIND_SPOTS)),
+      (PC01_ERROR_CODES as readonly string[]).filter(
+        (code) => !derived.has(code) && !(code in BLIND_SPOTS),
+      ),
     );
     expect(
       unexplained,
