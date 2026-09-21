@@ -540,6 +540,47 @@ export interface Occurrence {
   readonly state: string | null;
   readonly pseudo: string | null;
   readonly site: string;
+  /**
+   * WCAG 1.4.11 is about "user interface components", and the markup says which
+   * elements those are — an interactive tag, or anything carrying a `role`. This is
+   * read off the rendered element rather than decided by a list of class names.
+   */
+  readonly interactive: boolean;
+  /**
+   * True when the element's own fill already reaches 3:1 against what is behind it.
+   * A boundary is only required to identify a component when nothing else does: a
+   * primary button filled `--am-accent` on `--am-surface` at 7.6:1 is identifiable
+   * without its border, and a text field filled `--am-paper` on `--am-paper` is not.
+   */
+  readonly fillDistinguishes: boolean;
+}
+
+/** The tags HTML makes operable on their own. `details` is a container; `summary` operates it. */
+const INTERACTIVE_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary']);
+
+/**
+ * WIDGET roles only.
+ *
+ * An earlier form of this test accepted any `role`, and it was wrong in a way worth
+ * keeping the note for: the only roles this tree uses are `alert`, `note` and `status`,
+ * every one of them a live region or a document role rather than a control. That made
+ * the failure panel and the neutral route placeholder count as "user interface
+ * components", and the guard demanded 1.4.11 of a card's border. 1.4.11 says *user
+ * interface component*, which the specification defines as a part of the content the
+ * user OPERATES — not everything that carries an ARIA attribute.
+ */
+const WIDGET_ROLES = new Set([
+  'button', 'link', 'checkbox', 'radio', 'switch', 'slider', 'spinbutton', 'textbox',
+  'searchbox', 'combobox', 'listbox', 'menuitem', 'menuitemcheckbox', 'menuitemradio',
+  'option', 'tab', 'treeitem',
+]);
+
+export function isInteractive(element: Element): boolean {
+  if (INTERACTIVE_TAGS.has(element.tag) && (element.tag !== 'a' || element.attrs.has('href'))) {
+    return true;
+  }
+  const role = element.attrs.get('role');
+  return (role !== undefined && WIDGET_ROLES.has(role)) || element.attrs.has('tabindex');
 }
 
 export interface Screen {
@@ -579,6 +620,19 @@ export function census(
     const existing = out.get(key);
     if (existing) {
       if (!existing.sites.includes(occurrence.site)) existing.sites.push(occurrence.site);
+      // MERGE TO THE STRICTEST SITE, never to the first one.
+      //
+      // The same pair occurs at many elements. `--am-line` on `--am-surface` at a 1px
+      // border is a decorative card edge at forty of them and the only boundary of an
+      // interactive page-action link at one. Keeping whichever was recorded first made
+      // the guard's verdict depend on the order screens happen to render in, and it
+      // silently exempted the one site that matters. The strictest classification wins:
+      // interactive if ANY site is, and undistinguished-by-fill if ANY site is.
+      out.set(key, {
+        ...existing,
+        interactive: existing.interactive || occurrence.interactive,
+        fillDistinguishes: existing.fillDistinguishes && occurrence.fillDistinguishes,
+      });
     } else out.set(key, { ...occurrence, sites: [occurrence.site] });
   };
 
@@ -634,11 +688,15 @@ export function census(
       if (!background) return;
       const backdrop = tokens.get(background);
       if (!backdrop) return;
+      const interactive = isInteractive(element);
       if (hasText) {
         const colour = colourOf(element, computed);
         const hex = colour ? resolve(colour, tokens, backdrop, backdrop) : null;
         if (colour?.kind === 'token' && hex) {
-          record({ kind: 'text', foreground: colour.token, background, state, pseudo, site });
+          record({
+            kind: 'text', foreground: colour.token, background, state, pseudo, site,
+            interactive, fillDistinguishes: false,
+          });
         }
       }
       // A pseudo-element that paints a background and carries no text is a graphic
@@ -650,12 +708,18 @@ export function census(
           record({
             kind: 'graphic', foreground: computed.background.token,
             background: behind, state, pseudo, site,
+            interactive, fillDistinguishes: false,
           });
         }
       }
       // An edge contrasts with what is OUTSIDE it: the surface the element sits on.
       const outside = backgroundOf(element.parent, null) ?? background;
       const outsideHex = tokens.get(outside);
+      // The element's own fill against what is behind it. `background` is the nearest
+      // self-or-ancestor, so when the element declares none this is the backdrop
+      // against itself — 1:1 — which is the correct reading: it distinguishes nothing.
+      const fillDistinguishes =
+        outsideHex !== undefined && contrastRatio(backdrop, outsideHex) >= 3;
       for (const [property, colour] of computed.edges) {
         if (colour.kind === 'transparent' || colour.kind === 'current' || !outsideHex) continue;
         const hex = resolve(colour, tokens, outsideHex, outsideHex);
@@ -667,6 +731,8 @@ export function census(
           state,
           pseudo: pseudo ?? property,
           site,
+          interactive,
+          fillDistinguishes,
         });
       }
     };
@@ -766,8 +832,36 @@ export function declaredPairs(rules: readonly Rule[]): Map<string, Occurrence & 
       out.set(key, {
         kind: 'text', foreground: colour.token, background: background.token,
         state: null, pseudo: null, site: rule.selector.trim(), sites: [rule.selector.trim()],
+        interactive: false, fillDistinguishes: false,
       });
     }
   }
   return out;
+}
+
+// ============================================================== 9. what a pair must clear
+
+/** WCAG 2.1 AA, small text. Applied to every size: nothing here relies on the 18pt relief. */
+export const AA_TEXT = 4.5;
+/** WCAG 2.1 AA 1.4.11, non-text contrast. */
+export const AA_NON_TEXT = 3;
+
+/**
+ * The threshold a pair answers to, or `null` when WCAG asks nothing of it.
+ *
+ * This is the whole of the classification, and it is a FUNCTION of what the pair is
+ * rather than a list of which pairs matter. Text is text. A graphic that carries meaning
+ * — the verdict dot in the decision history is the only thing that says accepted or
+ * rejected in colour — is 1.4.11. A boundary is 1.4.11 only when it is the sole thing
+ * identifying a control: an interactive element, per the markup, whose own fill does not
+ * already separate it from what is behind it. Everything else is a separator and WCAG
+ * asks nothing of it.
+ */
+export function thresholdFor(occurrence: Occurrence): number | null {
+  if (occurrence.kind === 'text') return AA_TEXT;
+  // 1.4.11 excepts inactive user interface components, in as many words.
+  if (occurrence.state === 'disabled') return null;
+  if (occurrence.kind === 'graphic') return AA_NON_TEXT;
+  if (occurrence.interactive && !occurrence.fillDistinguishes) return AA_NON_TEXT;
+  return null;
 }

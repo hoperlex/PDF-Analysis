@@ -65,10 +65,37 @@
   --am-leading-relaxed: 1.65;
   --am-tracking-caps: 0.07em;
 
-  /* ---- ink: three levels, plus the one that sits on a filled surface ------------ */
+  /*
+   * ---- ink -------------------------------------------------------------------
+   *
+   * `W31-STYLE` left these "chosen by eye, no WCAG figure is claimed". `W32-CONTRAST`
+   * measured them: `tests/unit/styles/contrast.test.ts` computes WCAG 2.1 relative
+   * luminance from these values and from the pairs that actually meet on thirty
+   * rendered screens, and fails when one drops below its threshold. Every number in
+   * these comments is reproducible by that suite.
+   *
+   * THE THIRD INK LEVEL IS SPENT, AND THIS IS THE HONEST FORM OF IT. `--am-ink-soft`
+   * was added so 41 rules could be quieter than muted. At #8a929d it was 3.14 on
+   * paper, 2.91 on surface and **2.68 on `--am-failed-light`**, where it carries the
+   * correlation id under a failure — small text, AA 4.5, failing by a third. It now
+   * clears 4.5 on every surface it meets.
+   *
+   * The cost is that it is no longer a level. Darkest text surface is
+   * `--am-failed-light`; AA 4.5 there caps a foreground at L ≤ 0.1489, and
+   * `--am-ink-muted` already sits at L = 0.1251. The entire window for a compliant
+   * third ink is 1.14:1 wide, and this token spends it: muted→soft was 1.91:1 and is
+   * now **1.10:1**. Two tokens, two values, one visible level.
+   *
+   * What would restore a real ladder, priced and NOT done here: ink→the AA ceiling is
+   * 3.34:1 in total, so two even steps are 1.83:1 each, which puts `--am-ink-muted` at
+   * #3f464e. That moves a token that passes (6.00 on paper) and redistributes a scale
+   * `W31-STYLE` built; it is a redesign, not a repair, and it is the owner's call.
+   * `docs/program/W32-CONTRAST.md` §3 carries the arithmetic.
+   */
   --am-ink: #16191d;
   --am-ink-muted: #5b6470;
-  --am-ink-soft: #8a929d;
+  /* was #8a929d — 2.68 on failed-light, 2.91 on surface, 3.14 on paper. Now ≥ 4.65. */
+  --am-ink-soft: #646a73;
   --am-ink-inverse: #ffffff;
 
   /* ---- surfaces ---------------------------------------------------------------- */
@@ -76,10 +103,29 @@
   --am-surface: #f5f6f8;
   --am-surface-sunken: #eef0f4;
 
-  /* ---- lines: three levels and a grid line ------------------------------------- */
+  /*
+   * ---- lines -------------------------------------------------------------------
+   *
+   * `--am-line-strong` is NOT decoration and that is why it moved. It is the resting
+   * border of every `input`, `textarea` and `select`, of `.am-button--quiet`, and of
+   * `input[type='file']::file-selector-button` — controls whose fill is `--am-paper`
+   * on a `--am-paper` or `--am-surface` page, so the border is the only thing that
+   * says a control is there. WCAG 1.4.11 asks 3:1 of exactly that. It was **1.92 on
+   * paper and 1.77 on surface**; it is now ≥ 3.06 on every surface it borders.
+   *
+   * The other three levels did not move and are separators, not component boundaries:
+   * a card, a table rule, a divider. `--am-line` is the one to argue about — it bounds
+   * three things that ARE interactive (the finding row, the evidence page tabs, the
+   * page-action links), each with a fill that does not distinguish it from the page,
+   * so 1.4.11 reaches it too, at 1.20–1.36. Raising it means L ≤ 0.2568, which is
+   * `--am-line-strong`'s own territory, and a three-level border scale cannot have two
+   * levels at the 1.4.11 ceiling. That is a scale decision, not a value repair, and it
+   * is registered in `docs/program/W32-CONTRAST.md` §3 rather than taken here.
+   */
   --am-line-soft: #ebedf1;
   --am-line: #d9dde3;
-  --am-line-strong: #b4bcc7;
+  /* was #b4bcc7 — 1.92 on paper, 1.77 on surface. Now 3.56 / 3.29, 3.12 on sunken. */
+  --am-line-strong: #838891;
   --am-grid-line: #e6e9ed;
 
   /* ---- semantic hues, each with a tint that can carry text --------------------- */
@@ -92,7 +138,8 @@
   --am-degraded-light: #fbf0dc;
   --am-failed: #a02020;
   --am-failed-light: #fae9e9;
-  --am-inert: #6b7280;
+  /* was #6b7280 — 4.23 on its own tint, in the `pending` badge's label. Now 4.61. */
+  --am-inert: #666c7a;
   --am-inert-light: #eef0f3;
 
   /* ---- elevation --------------------------------------------------------------- */
