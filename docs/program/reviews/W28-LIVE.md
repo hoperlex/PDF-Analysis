@@ -409,3 +409,34 @@ contradicts it.
 
 ## 9. The gate
 
+`make gate FOUNDATION_PYTHON=/usr/bin/python3.12`, on lane **`gate-w28a`** (POSTGRES_PORT
+56020, S3 59620/59621, `audit_w28a`, bucket `auditmanager-gate-w28a`), exit code read from
+`$?` after a redirect and never through a pipe. **15:07:16 → 15:12:50 +05, 5 min 34 s.**
+
+```
+1970 passed, 5 skipped, 1 warning, 169 subtests passed in 278.13s
+35 passed in 29.24s
+Test Files  49 passed (49)     Tests  715 passed (715)
+GATE OK: battery, foundation, frontend and whitespace all pass
+GATE_EXIT=0
+```
+
+**The stated base, to the test: 1970 / 5 / 169, foundation 35, frontend 715 in 49 files.**
+Nothing moved, which is the expected result and also a check — the four files this session
+added sit under `tests/e2e/pc01/journey/fixtures/w28-live/` and in `look.mjs`, and the
+conformance guard reads `manifest.json` alone, so a gate that had moved would have meant one
+of them was being collected.
+
+Provisioning, in that order and not inside a backgrounded subshell:
+`make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12` (exit 0), then
+`npm --prefix web ci` (exit 0, 184 packages, 4 s), then
+**`.venv/bin/python -c "import boto3"` → `boto3 ok 1.43.90` before believing either**.
+
+## 10. Teardown and housekeeping
+
+* Every process and container this session created was stopped by **ID**, never by name.
+* `auditmanager-w28live` and lane `gate-w28a` were both removed, with their volumes.
+* `auditmanager-w28live-api:latest` was only ever a tag on the existing api image; the web
+  image this session built was removed with the instance.
+* **31500 was never touched.** No mode change, no restart, no write.
+* Disk: **6.3 GB free on arrival, 2.9 GB at the low point, and more than 6.3 GB on exit.**
