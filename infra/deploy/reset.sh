@@ -297,6 +297,28 @@ fi
 # That is the whole price of the screen telling the truth, and it is worth saying out loud
 # rather than leaving the reader to assume either that it is free or that it is ruinous.
 #
+# AND THE SEVENTEENTH IS NOT A TABLE -- `D-39`. Until this commit the total line added the
+# view's rows to the tables' and called the result `total: 104 rows in 17 tables`, over a
+# database holding 100 rows in 16 base tables. `finding_current_verdict` is one row per
+# `finding`, so every one of its rows is a projection of rows the line above it already
+# counted. Measured again here before the repair, on a database this session wrote:
+# `total: 37 rows in 17 tables` over 33 rows in 16 base tables and a 4-row view.
+#
+# It over-reported, which is the safe direction -- nobody was ever told there is LESS to
+# lose than there is -- and `D-24` closed on the claim that these figures are exact, so
+# "safe" is not the standard. The total now sums `BASE TABLE` rows only, says `base
+# tables` so the word cannot be read as "everything in the schema", and names the views
+# it did not add. The per-table lines are unchanged except that a view now says it is one:
+# the view IS dropped with the schema and leaving it off the list would be a second
+# untruth in the other direction.
+#
+# `information_schema.tables` is the authority for which is which, and it is the same read
+# the check command in the register uses. A MATERIALIZED view would appear in neither this
+# listing nor that check -- it is not in `information_schema` at all -- so a schema that
+# grows one gets a line here that is simply missing, and the guard below cannot see it.
+# There is none in this schema today; there is a case pinning that in
+# `tests/integration/composition/test_reset_rehearsal_counts_base_tables.py`.
+#
 # `query_to_xml` is how one statement counts a table whose name it does not know until it
 # reads it: `format(%I)` quotes the identifier, so a table name is never concatenated into
 # SQL. The total line is the bucket half's `  total: N objects` in the other half's units --
@@ -304,6 +326,7 @@ fi
 COUNT_ROWS_SQL="
 WITH counts AS (
     SELECT t.table_name AS name,
+           t.table_type AS kind,
            (xpath('/row/c/text()', query_to_xml(
                format('SELECT count(*) AS c FROM %I.%I', t.table_schema, t.table_name),
                false, true, '')))[1]::text::bigint AS n
@@ -311,9 +334,24 @@ WITH counts AS (
      WHERE t.table_schema = 'public'
 )
 SELECT line FROM (
-    SELECT 1 AS ord, name AS key, name || '  (' || n || ' rows)' AS line FROM counts
+    SELECT 1 AS ord, name AS key,
+           name || '  (' || n || ' rows'
+                || CASE WHEN kind = 'BASE TABLE' THEN ''
+                        ELSE ', ' || lower(kind) || ': these rows are counted above' END
+                || ')' AS line
+      FROM counts
     UNION ALL
-    SELECT 2, '', '  total: ' || COALESCE(sum(n), 0) || ' rows in ' || count(*) || ' tables'
+    SELECT 2, '',
+           '  total: ' || COALESCE(sum(n) FILTER (WHERE kind = 'BASE TABLE'), 0)
+                       || ' rows in '
+                       || count(*) FILTER (WHERE kind = 'BASE TABLE') || ' base tables'
+                       || CASE WHEN count(*) FILTER (WHERE kind <> 'BASE TABLE') = 0 THEN ''
+                               ELSE ' (and '
+                                    || count(*) FILTER (WHERE kind <> 'BASE TABLE')
+                                    || CASE WHEN count(*) FILTER (WHERE kind <> 'BASE TABLE') = 1
+                                            THEN ' view' ELSE ' views' END
+                                    || ' listed above, projecting rows already in that number)'
+                          END
       FROM counts
 ) ordered ORDER BY ord, key"
 

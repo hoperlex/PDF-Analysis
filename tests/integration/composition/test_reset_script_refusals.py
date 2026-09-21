@@ -28,6 +28,12 @@ for what is *not* in it instead: no `DROP SCHEMA`, and for the rehearsal no `pg_
 This suite needs no running stack, which is the point -- it is the part of `T-5` that a
 gate can hold, and the dump/restore cycle against a live stack is driven by hand and
 recorded in `docs/program/reviews/W14-PKG.md`.
+
+**What is NOT here, and where it is.** The rehearsal's arithmetic -- `D-24`'s exact counts
+and `D-39`'s total -- cannot be settled by a stub that answers every read with silence, and
+an assertion about the characters of a SQL statement would pass the moment somebody wrote a
+different wrong one. It is driven against a real PostgreSQL in
+`test_reset_rehearsal_counts_base_tables.py` beside this file.
 """
 
 from __future__ import annotations
