@@ -427,6 +427,64 @@ def test_the_cost_ceiling_binds_across_attempts_not_per_attempt(
     )
 
 
+def test_a_persisted_sum_that_spans_unpriced_spend_is_not_called_measured(
+    session: Session, seeded, blob_store, recorded_adapter, provider_config, new_key
+):
+    """`R-14`, closing `D-15`, at the layer that writes the row.
+
+    The executor is where the sum comes from: one meter, every attempt, so that a retry
+    cannot buy a fresh ceiling. The stage's `metrics["cost_usd"]` is that meter's whole
+    spend, and its `cost_basis` used to be the last response's provenance attached to it.
+
+    The discriminating pair is the point, and neither half needs a clock or a wait. The
+    two runs execute the same outage script against the same recording and differ only in
+    what the meter had already spent:
+
+    * a fresh meter, one priced call -- the sum is that call, and the row says `measured`;
+    * a meter opened carrying 0.90 -- the sum is 1.40, of which 0.90 was never priced by
+      anyone, and the row says `estimated`.
+
+    Before `R-14` both rows read `measured`, because both runs ended on a response the
+    transport had priced.
+    """
+    fresh_run = _start(session, seeded, new_key, "basis-priced")
+    execute_run(
+        session,
+        fresh_run,
+        blob_store=blob_store,
+        adapter=_ScriptedProvider(recorded_adapter, outages=1, reported_cost_usd=0.50),
+        provider_config=provider_config,
+        cost_meter=CostMeter(ceiling_usd=2.00),
+        sleep=lambda _seconds: None,
+    )
+    fresh_stage = _stage_row(session, fresh_run)
+    assert fresh_stage.status == "succeeded"
+    assert fresh_stage.metrics.get("attempts") == 2
+    assert fresh_stage.metrics.get("cost_usd") == pytest.approx(0.50)
+    assert fresh_stage.metrics.get("cost_basis") == "measured", (
+        "one priced call and nothing else: the row must still be able to say so, or the "
+        "key has stopped distinguishing anything"
+    )
+
+    carried_run = _start(session, seeded, new_key, "basis-carried")
+    execute_run(
+        session,
+        carried_run,
+        blob_store=blob_store,
+        adapter=_ScriptedProvider(recorded_adapter, outages=1, reported_cost_usd=0.50),
+        provider_config=provider_config,
+        cost_meter=CostMeter(ceiling_usd=2.00, spent_usd=0.90),
+        sleep=lambda _seconds: None,
+    )
+    carried_stage = _stage_row(session, carried_run)
+    assert carried_stage.status == "succeeded"
+    assert carried_stage.metrics.get("cost_usd") == pytest.approx(1.40)
+    assert carried_stage.metrics.get("cost_basis") == "estimated", (
+        "1.40 is published as measured while 0.90 of it was priced by nobody; that is "
+        "D-15, and R-14 rules the conservative answer"
+    )
+
+
 # --- the provenance ----------------------------------------------------------
 
 
