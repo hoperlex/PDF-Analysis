@@ -42,11 +42,44 @@ function failedWith(reason: ErrorCode | null): string {
   return screen({ state: 'failed', terminal_reason: reason, published_finding_count: 0 });
 }
 
+/**
+ * What each code must be seen to say, stated here as a literal and never read back out of
+ * the module under test.
+ *
+ * The first draft of this file asserted `markup).toContain(terminalReasonNote(code).sentence)`,
+ * which is a re-capture and not an assertion: replacing all twenty-two sentences with one
+ * constant left every case green, because the expectation moved with the implementation.
+ * `MEMORY: characterization can freeze a defect` is the same shape. Each phrase below is
+ * chosen to be specific to its own code, so one constant reddens twenty-two named cases.
+ */
+const MUST_SAY: Readonly<Record<ErrorCode, string>> = {
+  validation_failed: 'A declared schema, enum, format or invariant was violated',
+  not_found: 'does not exist, or is not visible to the caller that addressed it',
+  authentication_required: 'no valid authenticated subject was presented',
+  permission_denied: 'was not permitted to do something this run needed',
+  conflict: 'lost the optimistic-concurrency check',
+  state_transition_not_allowed: 'a transition the frozen state machine does not declare',
+  idempotency_key_reuse: 'was reused with a different payload',
+  idempotency_key_in_progress: 'the same key and the same payload was still executing',
+  idempotency_key_stale: 'could no longer be established',
+  unsupported_contract_version: 'is unknown to this deployment',
+  storage_integrity_error: 'did not match the bytes that were stored',
+  dependency_unavailable: 'A dependency this run needs was unavailable.',
+  dependency_credential_refused: 'refused a credential belonging to this deployment',
+  staged_upload_lost: 'no longer held the bytes an upload had staged',
+  required_norm_unavailable: 'could not be resolved to an immutable versioned record',
+  analysis_input_invalid: 'declared stage input was not acceptable',
+  analysis_failed: 'ended in the failed terminal state',
+  partial_result_not_publishable: 'was asked for something that requires a run without one',
+  cost_budget_exceeded: 'budget for this run was exhausted',
+  stale_attempt: 'is no longer the publication authority for it',
+  execution_token_invalid: 'was absent, malformed, or not the current one',
+  internal_error: 'An unclassified server fault stopped this run.',
+};
+
 describe('every catalog reason reaches the screen as a sentence', () => {
   it.each(ERROR_CODE_VALUES)('renders a sentence for %s, beside the code', (code) => {
     const markup = failedWith(code);
-    const note = terminalReasonNote(code);
-    if (note.kind !== 'described') throw new Error(`${code} has no sentence`);
 
     // The code is kept: an operator quoting it into an issue still can.
     expect(markup).toContain(`data-terminal-reason="${code}"`);
@@ -54,7 +87,18 @@ describe('every catalog reason reaches the screen as a sentence', () => {
 
     // And the sentence is beside it, as text, in the failed outcome block.
     expect(markup).toContain('data-terminal-reason-note="described"');
-    expect(markup).toContain(note.sentence);
+    expect(markup, `the screen did not say what ${code} means`).toContain(MUST_SAY[code]);
+  });
+
+  it('gives each code a phrase no other code renders', () => {
+    // Otherwise a mutation that pointed two codes at one sentence could still pass the
+    // per-code cases above.
+    for (const [code, phrase] of Object.entries(MUST_SAY)) {
+      const others = ERROR_CODE_VALUES.filter(
+        (other) => other !== code && failedWith(other).includes(phrase),
+      );
+      expect(others, `${code}'s phrase also appears for ${others.join(', ')}`).toEqual([]);
+    }
   });
 
   it('renders one sentence and not a list of all of them', () => {
