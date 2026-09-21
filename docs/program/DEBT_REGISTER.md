@@ -11,7 +11,10 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
+| **D-49** | the stand is on every interface, and `/bff/v1` takes writes with no credential | **owner — a binding decision**; highest severity here |
 | **D-46** | a failed run cannot say *which* dependency | owner — a reseal either way |
+| D-50 | a character offset no second extractor can resolve | registered |
+| D-51 | criterion 8 is a container restart, for a structural reason | registered; nothing to fix |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
@@ -1387,6 +1390,109 @@ settles it, and checking a log someone else may have written settles nothing.
 
 **Rule for every future brief: write logs to a path that carries the session's own name**, and
 never read an exit code out of a file you did not create in this session.
+
+### D-49 — the alpha stand is published to every interface, and one of its two paths takes writes with no credential
+
+**Found by `W30-CERT3` as `W30CERT3-1`, and measured further by the integrator, who found the
+second half. Opened 2026-09-21. This is the highest-severity row in this register.**
+
+**Half one, the session's.** The published origin carries **two** paths to the same fifteen
+operations, and the credential is in front of only one of them. Measured on the owner's stand:
+
+```
+GET http://127.0.0.1:31500/api/v1/projects   -> 401   (authentication_required)
+GET http://127.0.0.1:31500/bff/v1/projects   -> 200
+POST /bff/v1/projects, no Authorization       -> 201   (W30-CERT3, on its own stack)
+```
+
+**This is the designed posture and criterion 2 does not fail because of it.** The browser is
+meant to hold no credential; `web/`'s server-side BFF route adds it. But `PA-01` criterion 2's
+stated purpose is that the dependency stands *in front of all fifteen operations*, and on the
+origin it stands in front of `/api/v1` and not in front of `/bff/v1`. `16d3503`'s
+certification probed `/api/v1` only, which is why three certifications did not see this.
+
+**Half two, and it is what makes the row urgent rather than architectural.**
+`infra/deploy/compose.server.yml:213` publishes the proxy as
+`"${ALPHA_HTTP_PORT}:8080"` — **with no interface prefix, so Docker binds `0.0.0.0`.** The
+same file's own comment eleven lines above says *"the developer stack publishes `127.0.0.1`
+only; this one publishes nothing at all"*, which is true of `postgres` and `s3` and is not
+true of the proxy.
+
+And `ufw` does not stand in front of it. `ufw status` reports one allowed port, `80/tcp` —
+but a Docker-published port never reaches ufw's `INPUT` chain, because Docker writes its own
+rules into `nat/DOCKER` and `filter/DOCKER`, which are traversed first:
+
+```
+iptables -t nat -L DOCKER -n | grep 31500
+  DNAT  tcp  0.0.0.0/0 -> 0.0.0.0/0  tcp dpt:31500 to:172.27.0.4:8080
+iptables -L DOCKER -n | grep 8080
+  ACCEPT tcp 0.0.0.0/0 -> 172.27.0.4  tcp dpt:8080
+```
+
+Driven from this host's **public** address rather than from loopback:
+`GET http://176.12.74.47:31500/bff/v1/projects -> 200`.
+
+**So on this host, today, an unauthenticated read and write path to all fifteen operations is
+bound to every interface, behind a firewall that is not in the path.** Whether a network in
+front of the machine blocks 31500 is not something this repository can measure, and **not
+knowing is not the same as being protected** — which is the whole of why this is a row.
+
+**What it bears on.** `R-4` says real client documents may be uploaded to the alpha server
+during the pilot. Today that would put them behind an open write path. And `R-1`'s host, when
+it arrives, will run this same compose file.
+
+**Two candidate repairs, and they are not alternatives — the second is needed either way:**
+
+1. **Bind the published port to an interface**, `"127.0.0.1:${ALPHA_HTTP_PORT}:8080"`, and
+   reach the stand over an SSH tunnel. Correct for a developer host; it changes how the owner
+   reaches 31500, so **it is the owner's call and has not been made.**
+2. **Put the credential in front of `/bff/v1` as well**, or state in the runbook that the
+   origin must never be published to an untrusted network without it. The BFF exists so the
+   *browser* holds no credential; that argument says nothing about the *origin*.
+
+Check:
+```
+docker port auditmanager-w19a-proxy-1          # expect 0.0.0.0 today
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:31500/bff/v1/projects   # 200 today
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:31500/api/v1/projects   # 401
+```
+
+### D-50 — a character offset with no coordinate system any second extractor can resolve
+
+**Found by `W30-CERT3` as `W30CERT3-2`. Opened 2026-09-21. Criterion 5 is unaffected** — the
+quotation is exact, occurs once, and is on the page named, confirmed with an extractor the
+application does not use.
+
+The review screen prints *"characters 707–746 of the whole document"*. The offsets are
+length-exact and internally consistent, and **no second extractor resolves them**: pdfminer
+puts the same string at 726, and the drift grows at every page boundary. The number is
+therefore true only in the coordinate system of the extractor that produced it, and that
+system is **not named anywhere the reader can see**.
+
+This is `D-25`'s shape one level down. `W22-WEB` repaired a caption that printed a
+document-global offset beside a page number as though the two shared a coordinate system; this
+row is that the surviving offset does not identify its own system either.
+
+Check: extract the same version with a second library and compare the index of the quotation.
+
+### D-51 — criterion 8 is a container restart, and the reason is now structural
+
+**Raised by `W30-CERT3` as `W30CERT3-3`, replacing a reason that was false.** Registered
+rather than open-for-repair: there is nothing here to fix in the software.
+
+`PA-01` criterion 8 has been certified three times as *holding with a named exception*, and the
+exception said the restart could not be a host reboot because **the host carries three alpha
+stacks**. It carries one, since 2026-09-21 and ruling `R-6`. The real limits, measured:
+
+- the owner drives 31500 by hand, and other lanes' services run on this machine;
+- **the certifying session runs on the host it would have to reboot, and a session cannot
+  witness its own reboot.**
+
+The third is structural and does not go away with a tidier host. What *was* driven is stronger
+than the previous rounds': `docker compose down` without `-v`, all five containers destroyed,
+`deploy.sh` back up, and a 73-line census that **diffs to nothing**.
+
+Check: `artifacts/checkpoints/PA-01/certification-ac7c348.json`, criterion 8.
 
 ### D-48 — a constant that promised a ceiling, and nothing was standing on it — **CLOSED**
 

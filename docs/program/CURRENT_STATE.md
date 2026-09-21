@@ -16,9 +16,13 @@ subtests**, foundation **35**, frontend **764 in 52 files**. Read from
 **The application is deployed, drivable by hand, and provably the tree.** One alpha stack
 answers on `127.0.0.1:31500` — `auditmanager-w19a`, `AUDITMANAGER_PROVIDER_MODE=proxy`,
 brought up by `infra/deploy/deploy.sh`. Redeployed from `ac7c348` on 2026-09-21;
-`infra/deploy/verify-deployed.sh` exits 0 and prints *"the deployed stack IS this tree
-(ac7c348)"*, file by file: 141 in `src/`, 9 in `db/`, 34 in `contracts/`, 223 in `web/`, all
-identical. **It is the only stand on this host** — the two abandoned ones were removed on
+`infra/deploy/verify-deployed.sh` exits 0 and prints *"the deployed stack IS this tree"*, file
+by file: 141 in `src/`, 9 in `db/`, 34 in `contracts/`, 223 in `web/`, all identical. **The sha
+that sentence prints is the repository's working tree at the moment you run it, not a property
+of the stack** — this document quoted `(ac7c348)` as though it were fixed, and `W30-CERT3` read
+`(2fdb12c)` a few commits later and correctly called the sentence false as stated. The script
+is not at fault; it prints the sha *for the record*. **What the script actually certifies is
+that the images and the working tree agree, whatever the sha is.** **It is the only stand on this host** — the two abandoned ones were removed on
 2026-09-21 under ruling `R-6`, and with them the stale worktrees of sixteen merged waves
 (13 GB; every branch kept, `BRANCH_INVENTORY.md` says which).
 A browser creates a project, uploads a PDF, starts a run, watches it go `queued → running →
@@ -28,19 +32,31 @@ a server-side route holds instead.
 
 ### `PA-01`, certified criterion by criterion
 
-`artifacts/checkpoints/PA-01/certification-0f9989a.json`. **Ten criteria driven to a
-verdict, none failed.** Two cannot be established, and the reason is not the software.
-(*This document said "eight" for four waves. The record has ten. Corrected 2026-09-21 by
-counting the keys rather than by trusting the sentence.*)
+**The current record is `artifacts/checkpoints/PA-01/certification-ac7c348.json`**, written
+by `W30-CERT3` on 2026-09-21 and superseding `16d3503`'s, which superseded `0f9989a`'s. **Ten
+criteria driven to a verdict; eight hold, one of those with a named exception; two cannot be
+established; none failed.** Every verdict was re-taken at this tree rather than inherited.
+(*This document said "eight criteria" for four waves. The record has ten, and it also led with
+the superseded `0f9989a` record. Both corrected 2026-09-21, the first by counting the keys
+rather than trusting the sentence, the second because `W30-CERT3` read this file as
+`AGENTS.md` §1.1 requires and found it did not survive contact with the tree.*)
 
 | | |
 |---|---|
 | **criterion 1** | `deploy.sh` now exists and brings the stack up from a clean clone, cold cache, exit 0, served schema conforming with 0 differences. It stays *cannot be established* because **no host here has never run it and there is no previous version to roll back to** — `R-1` alone. |
 | **criterion 2** | no TLS: no host name, no certificate, no DNS. `R-1` alone. The second clause — every operation refusing an absent or wrong credential — **is driven and holds.** |
 
-**Re-certified 2026-09-20 at `16d3503`** —
-`artifacts/checkpoints/PA-01/certification-16d3503.json`, which supersedes the earlier record.
-Criterion 4's exception is **gone**: `partial` was driven **in a browser on the deployed
+**Re-certified 2026-09-21 at `ac7c348`.** Criterion 10's exception is **gone** — `W24CERT2-2`,
+the wipe rehearsal's total counting a view, was repaired by `W26-OPS` **inside the range that
+certification covers**, and the sixteen per-table counts now sum to exactly the printed total.
+Criterion 8's exception survives, but its **reason was false and is replaced**: it said the
+host carries three alpha stacks, and it carries one. The standing reason is structural —
+**a certifying session runs on the host it would have to reboot** (`D-51`). Three findings
+were recorded rather than repaired: **`D-49`** (the published origin, and the highest-severity
+row in the register), `D-50`, `D-51`.
+
+**Previously re-certified 2026-09-20 at `16d3503`** —
+`artifacts/checkpoints/PA-01/certification-16d3503.json`. Criterion 4's exception is **gone**: `partial` was driven **in a browser on the deployed
 path**, badge `queued → running → partial`. Criterion 5's is **gone**, checked with an
 extractor the application does not use. Criterion 10's is **replaced by a smaller one** — the
 rehearsal's per-table figures are exact and only its *total* counts a view, which over-reports
@@ -53,7 +69,11 @@ is not a host reboot.
 `D-35` closed on 2026-09-21** under rulings `R-12`, `R-13` and `R-14`. **One still needs the
 owner: `D-9`**, the norms corpus, which `R-9` placed after manual testing. The rest are
 `infra/` and `web/src` repairs with no ruling attached.
-**`D-42` and `D-47` closed 2026-09-21.** `D-42`'s measurement always stood; its open half was
+**`D-49` is open and is the register's highest-severity row**: the stand is published to every
+interface and `/bff/v1` serves all fifteen operations, writes included, with no credential.
+It needs a decision from the owner about how the stand is reached.
+
+**`D-42`, `D-47` and `D-48` closed 2026-09-21.** `D-42`'s measurement always stood; its open half was
 one review document still carrying the false sentence unqualified, and that document now
 carries an **erratum** rather than a rewrite. `D-47` is now `OPERATING_CONSTRAINTS.md` §4.
 **`D-36` closed 2026-09-20** — the one part of criterion 1's row that `R-1` did not block.
