@@ -6,15 +6,21 @@
 > dispatched in that window was oriented by its brief instead, which worked and is not the
 > arrangement this file describes. The history below is kept; this block is what is true now.
 
-## Where the programme is, 2026-09-20
+## Where the programme is, 2026-09-21
 
-**`origin/dev` = `e2dc68f`. `origin/main` = `9291db6`, tagged `alpha-w18` — a gated tip, not
-a certification.** `make gate` → `GATE OK`, exit 0: battery **1909 passed / 5 skipped / 168
-subtests**, foundation **35**, frontend **706 in 48 files**.
+**`origin/dev` = `ac7c348`. `origin/main` = `9b8c77a`, tagged `alpha-w25` — a gated tip, not
+a certification.** `make gate` → `GATE OK`, exit 0: battery **2001 passed / 5 skipped / 169
+subtests**, foundation **35**, frontend **764 in 52 files**. Read from
+`/root/w19-integrator-logs/gate-w29.log` with `EXIT=0` appended by the shell that ran `make`.
 
 **The application is deployed, drivable by hand, and provably the tree.** One alpha stack
-answers on `127.0.0.1:31500`, brought up by `infra/deploy/deploy.sh`;
-`infra/deploy/verify-deployed.sh` exits 0 and prints *"the deployed stack IS this tree"*.
+answers on `127.0.0.1:31500` — `auditmanager-w19a`, `AUDITMANAGER_PROVIDER_MODE=proxy`,
+brought up by `infra/deploy/deploy.sh`. Redeployed from `ac7c348` on 2026-09-21;
+`infra/deploy/verify-deployed.sh` exits 0 and prints *"the deployed stack IS this tree
+(ac7c348)"*, file by file: 141 in `src/`, 9 in `db/`, 34 in `contracts/`, 223 in `web/`, all
+identical. **It is the only stand on this host** — the two abandoned ones were removed on
+2026-09-21 under ruling `R-6`, and with them the stale worktrees of sixteen merged waves
+(13 GB; every branch kept, `BRANCH_INVENTORY.md` says which).
 A browser creates a project, uploads a PDF, starts a run, watches it go `queued → running →
 published`, opens a finding at its quotation, records an accept, a reject and a comment, and
 downloads the CSV — all through one origin, with **no request carrying a credential**, which
@@ -22,8 +28,10 @@ a server-side route holds instead.
 
 ### `PA-01`, certified criterion by criterion
 
-`artifacts/checkpoints/PA-01/certification-0f9989a.json`. **Eight criteria driven to a
-verdict, none failed.** Two cannot be established, and the reason is not the software:
+`artifacts/checkpoints/PA-01/certification-0f9989a.json`. **Ten criteria driven to a
+verdict, none failed.** Two cannot be established, and the reason is not the software.
+(*This document said "eight" for four waves. The record has ten. Corrected 2026-09-21 by
+counting the keys rather than by trusting the sentence.*)
 
 | | |
 |---|---|
@@ -45,6 +53,9 @@ is not a host reboot.
 `D-35` closed on 2026-09-21** under rulings `R-12`, `R-13` and `R-14`. **One still needs the
 owner: `D-9`**, the norms corpus, which `R-9` placed after manual testing. The rest are
 `infra/` and `web/src` repairs with no ruling attached.
+**`D-42` and `D-47` closed 2026-09-21.** `D-42`'s measurement always stood; its open half was
+one review document still carrying the false sentence unqualified, and that document now
+carries an **erratum** rather than a rewrite. `D-47` is now `OPERATING_CONSTRAINTS.md` §4.
 **`D-36` closed 2026-09-20** — the one part of criterion 1's row that `R-1` did not block.
 `deploy.sh` run twice now leaves every container ID unchanged, and the row's stated cause
 turned out to be wrong: not a `created` timestamp, but BuildKit's **provenance attestation**
