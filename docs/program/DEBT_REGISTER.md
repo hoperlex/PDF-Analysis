@@ -1388,6 +1388,39 @@ settles it, and checking a log someone else may have written settles nothing.
 **Rule for every future brief: write logs to a path that carries the session's own name**, and
 never read an exit code out of a file you did not create in this session.
 
+### D-48 — a constant that promised a ceiling, and nothing was standing on it — **CLOSED**
+
+**Found by `W30-LISTS`, reported rather than repaired because the module claimed two
+derivations that produce different sets. Closed 2026-09-21 by the integrator, in the commit
+carrying its fix.**
+
+`src/auditmanager/storage/errors.py`. `SAFE_DETAIL_KEYS` omitted `aggregate_type` while
+**two of the package's own error classes declare it** in `allowed_details` — and
+`BlobNotFoundError.__init__` sets it by default on **every instance**.
+
+**It was not a leak, and that is what makes it worth a row.** `ingest/failures.py:40` narrows
+details to `code.safe_detail_keys` before an envelope is built, and `envelope.build` refuses
+an undeclared key. So nothing was rendered that should not have been. The defect is that
+`SAFE_DETAIL_KEYS` **had no functional consumer anywhere in `src/`** — exported from
+`storage/__init__.py`, named in two docstrings, read by nothing. It could not redden. A
+reviewer asking it *"may this error carry `aggregate_type`?"* was told **no** by a constant
+that had been wrong since it was written.
+
+**Which of the two derivations the module means was settled from the module's own mechanism,
+not from taste.** `StorageError.__init__` checks a detail against `self.allowed_details`,
+never against `SAFE_DETAIL_KEYS`. So the only claim this set can be making is the one the
+module docstring makes to a reader — *"a name that is not in this set can never be rendered
+into an error message"* — and that is a statement about the **union of the subclasses**, not
+about the catalog. The catalog is where most of these names came from; it is not what the set
+is. `expected_revision` stays out for the same reason: the catalog permits it for `conflict`
+and no class in this package carries it.
+
+The repair is one member and **two guards, which are the set's first consumers**: every
+subclass's `allowed_details` is inside it, and it carries nothing no subclass can use. The
+first was red before `aggregate_type` was added — the D-48 state is its own mutation.
+
+Check: `.venv/bin/python -m pytest tests/contract/domain_p02/test_narrow_sets_against_contracts.py -k safe_detail -q`
+
 ## 1.9 — the authority order, ruled 2026-09-17
 
 **The ADRs and the architecture corpus are the primary source of truth. A roadmap is a draft

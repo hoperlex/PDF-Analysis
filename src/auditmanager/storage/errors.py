@@ -27,15 +27,30 @@ from __future__ import annotations
 
 from typing import ClassVar, Final, Mapping
 
-# The union of every `safe_detail_keys` entry the domain error-code catalog
-# declares for the codes this package raises, plus the two byte-count keys the
-# `storage_integrity_error` summary itself talks about ("a declared checksum,
-# byte size or media type does not match"). A name that is not in this set can
-# never be rendered into an error message.
+# The ceiling on every detail name this package can ever render: the union of the
+# `allowed_details` of every `StorageError` subclass, and nothing else.
+#
+# `__init__` below checks a detail against `self.allowed_details`, not against this
+# set, so this set is what makes the module docstring's claim -- "a name that is not
+# in this set can never be rendered into an error message" -- true of the package as
+# a whole. `test_narrow_sets_against_contracts.py` holds the two together.
+#
+# Most of these names come from the `safe_detail_keys` the domain error-code catalog
+# declares for the codes this package raises. Three do not and are deliberate:
+# `actual_size`, `expected_size` and `media_type` are the three the
+# `storage_integrity_error` summary itself talks about ("a declared checksum, byte
+# size or media type does not match"), and `ingest/failures.py` narrows them away
+# before an envelope is built. `expected_revision` is in the catalog's union for
+# `conflict` and is absent here because no class in this package carries it; this set
+# describes what the code does, not what the catalog would permit.
+#
+# `W30-LISTS` found this set missing `aggregate_type` while two of its own classes
+# declared it, with nothing reading the set to notice. `D-48`.
 SAFE_DETAIL_KEYS: Final[frozenset[str]] = frozenset(
     {
         "actual_sha256",
         "actual_size",
+        "aggregate_type",
         "blob_id",
         "constraint",
         "dependency",

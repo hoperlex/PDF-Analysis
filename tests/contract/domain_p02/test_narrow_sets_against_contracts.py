@@ -185,11 +185,59 @@ def test_the_only_configurable_mode_outside_the_contract_is_the_proxy_transport(
 
 # --- storage.errors.SAFE_DETAIL_KEYS ------------------------------------------------
 #
-# Deliberately NOT guarded here. It does not match its own stated derivation today -- it
-# omits `aggregate_type`, which two of the package's own error classes declare in
-# `allowed_details` and which three of the catalog codes the package raises declare as a
-# safe detail key. Writing the guard would commit a red. W30-LISTS reported it instead of
-# changing the set; see docs/program/W30-LISTS.md.
+# `W30-LISTS` found this set wrong and reported it rather than changing it, because the
+# module claimed two different derivations and they produce different sets. `D-48` settled
+# which one the module's own mechanism means: `StorageError.__init__` checks a detail
+# against `self.allowed_details`, never against `SAFE_DETAIL_KEYS`, so the only claim this
+# set can be making is that it is the CEILING on all of them -- which is exactly what the
+# module docstring promises a reader. The guard below is that promise, and it is the set's
+# first functional consumer. It was red before `aggregate_type` was added.
+
+
+def test_safe_detail_keys_bounds_every_storage_error_class() -> None:
+    from auditmanager.storage import errors as storage_errors
+
+    subclasses = [
+        obj
+        for obj in vars(storage_errors).values()
+        if isinstance(obj, type)
+        and issubclass(obj, storage_errors.StorageError)
+        and obj is not storage_errors.StorageError
+    ]
+    assert subclasses, (
+        "found no StorageError subclasses to check -- the discovery above is reading the "
+        "wrong module, not proving an empty claim"
+    )
+
+    carried = {key for cls in subclasses for key in cls.allowed_details}
+    assert carried <= storage_errors.SAFE_DETAIL_KEYS, (
+        "a StorageError subclass declares an allowed_detail that is not in "
+        "SAFE_DETAIL_KEYS: "
+        f"{sorted(carried - storage_errors.SAFE_DETAIL_KEYS)!r}. The module docstring "
+        "promises that a name outside SAFE_DETAIL_KEYS can never be rendered into an "
+        "error message; __init__ enforces allowed_details, so that promise is only true "
+        "while this holds."
+    )
+
+
+def test_safe_detail_keys_carries_nothing_no_class_can_use() -> None:
+    from auditmanager.storage import errors as storage_errors
+
+    carried = {
+        key
+        for obj in vars(storage_errors).values()
+        if isinstance(obj, type)
+        and issubclass(obj, storage_errors.StorageError)
+        and obj is not storage_errors.StorageError
+        for key in obj.allowed_details
+    }
+    assert storage_errors.SAFE_DETAIL_KEYS <= carried, (
+        "SAFE_DETAIL_KEYS carries a name no StorageError subclass can declare: "
+        f"{sorted(storage_errors.SAFE_DETAIL_KEYS - carried)!r}. This set describes what "
+        "this package's classes can render, not what the catalog would permit -- "
+        "`expected_revision` is in the catalog's union for `conflict` and is absent here "
+        "for exactly that reason."
+    )
 
 
 # --- shared.db.schema.SQLSTATE_TO_CATALOG_CODE --------------------------------------
