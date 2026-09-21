@@ -204,6 +204,55 @@ plus the four steps in its §1.6.
 this cost inside a wave that was already resealing the API contract, so it never showed. Any
 future catalog change should be planned as a two-document change from the start.
 
+## 3.8 — `R-12` … `R-15`, ruled 2026-09-21 by direct poll
+
+### `R-12` — criterion 4 is satisfied; `partial` need not come from a user's journey
+
+**Ruled: yes, the deployed path is enough.** `W24-CERT2` drove `partial` **in a browser** —
+badge `queued → running → partial` at 2334 ms, `degradation_set ["text_analysis"]`,
+`model_call.status = truncated` with 16 000 output tokens and no error code — against a stub
+of the proxy's own documented contract on the stack's own network, with **nothing in the
+application stubbed**.
+
+The criterion asks that *the UI distinguish `running`, `published`, `partial` and `failed`*,
+and it does. **`D-35` closes with no further work**, and the alternative — a second canonical
+recording keyed by a second acceptance document — is **not** taken. That alternative would
+have cost a new PDF, a corpus-builder change, `SHA256SUMS`, `expected_issues.json` and the
+contract tests that enumerate them, for a lever no criterion asks for.
+
+### `R-13` — restore `R-8`, and pay the frontend reseal
+
+**Ruled: reinstate.** `R-8`'s code was built, proved over a real socket and reverted by
+`R-11` when the cost appeared. The owner has now accepted that cost.
+
+Two blob failures demanding **opposite** operator responses — *stop, the instance was restored
+wrong* against *retry the upload* — still produce **byte-identical envelopes** apart from
+`correlation_id`, and `retryable: false` is right for one and wrong for the other. A detail key
+cannot fix `retryable`; only a separate code carries a separate value.
+
+The work is `git cherry-pick b437616 271ba42` plus the four mechanical steps in
+`docs/program/reviews/W20-CODE.md` §1.6, whose six digest values are already computed. **This
+ruling authorises the `web/FRONTEND_LOCK.json` change those steps require** — the thing that
+stopped `W20-CODE` twice over.
+
+### `R-14` — `metrics["cost_basis"]` says `estimated` if any attempt was
+
+**Ruled: the conservative rule.** `D-15` measured that `metrics["cost_usd"]` sums across retry
+attempts while `metrics["cost_basis"]` describes only the last response, so a run whose first
+attempt replayed and whose second reported a cost published a two-attempt sum wearing one
+attempt's provenance.
+
+The rule chosen is the one **`W18-SEAL` already applied to `RunStatus.cost_basis`**:
+`measured` only when **every** contributing call reported a cost. The two places begin saying
+the same thing, which is worth more than either wording alone. The alternative — dropping the
+key — was rejected: it changes what an existing consumer reads.
+
+### `R-15` — the wave after this one is debts and host readiness
+
+**Ruled.** `D-38` and `D-39`, then everything that can be prepared **before** a VPS exists: a
+TLS block that activates when a certificate appears, the deployment runbook, and the disk
+headroom figure. The corpus (`D-9`) stays where `R-9` put it — after manual testing.
+
 ## 4. Still open, and still the owner's
 
 - **`OD-18`** — three to five named experts with committed slots; `P4-BHV-01` waits on it alone.
@@ -211,7 +260,6 @@ future catalog change should be planned as a two-document change from the start.
 - **`R-4`'s two halves** — who uploads a real document, and what event counts as *"the end of the
   pilot"* and therefore triggers the wipe. **`D-17` now bears on this**: the restore is broken for
   writing, so the mechanism the wipe depends on is not yet sound.
-- **`D-18`** — `R-8` ruled a second code; `R-11` reverted it when the frontend-reseal cost
-  appeared. The row is open and now carries a measured price rather than a description.
+- ~~`D-18`~~ **Settled by `R-13`**: reinstate, and pay the frontend reseal.
 - ~~Whether `origin/main` advances.~~ **Settled by `R-7`**: `main` is at `9291db6`, tagged
   `alpha-w18`.
