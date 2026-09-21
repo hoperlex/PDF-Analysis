@@ -92,10 +92,37 @@ constrained by the **whole** catalog. Four catalog codes sit outside it and are 
 the session's own words, keying on it *"would have shipped a list narrower than its surface for
 the third time."*
 
-**Three instances, one shape: a hand-written subset standing in for a set the contract already
-defines, with nothing that fails when the contract grows.** Wave 30's `W30-LISTS` exists to
-close the class rather than its next member, and `web/src/shared/api/run-state.ts` — which
-carries a compile-time partition proof in both directions — is the standard.
+**I wrote here, before wave 30 measured it, that these were three instances of one shape:
+a hand-written subset standing in for a set the contract defines. `W30-LISTS` was asked to
+say so if its census disagreed, and it disagreed. Corrected 2026-09-21; the paragraph above
+is what I thought, and this is what is true.**
+
+They are **three different shapes**, and only the first is the class a guard can close:
+
+- **`D-40` is the class.** A hand-kept list disagreeing with its authority, with nothing
+  reading either to notice.
+- **`D-18` is a hand-maintained *digest*.** `FRONTEND_LOCK.json` records a sha256 by hand. It
+  is not a subset of anything, and its cost appears only at change time.
+- **`W29-SAY` is not a member at all**, and this is the correction that matters. By the time
+  that session was dispatched, `PC01_ERROR_CODES` **had already been derived** — `W27-WEB`'s
+  `D-40` repair had landed, and the derivation is still green. The list was not wrong. What
+  `W29-SAY` avoided was a **consumer reading the wrong authority**, and a perfect guard on
+  `PC01_ERROR_CODES` would have caught nothing. Its defence is a different thing entirely:
+  `Record<ErrorCode, string>`, keyed on the whole catalog, so the type system will not let a
+  reader address a narrower set.
+
+The real common thread is one level up, and it is not something wave 30 could close: **a
+second description of something, maintained by hand, with nothing tying it to the first.** A
+subset is one shape; a digest is another; a consumer reading the wrong description is a third,
+and no guard catches that one — only a session that measures which authority a field is
+actually constrained by.
+
+`web/src/shared/api/run-state.ts` remains the standard for the first shape, with one
+qualification wave 30 added: its compile-time proof shows every state is **classified**, not
+that the classification is **right**, because the generated enum carries no terminal flag. A
+twenty-third state filed into the wrong half would still compile. `state-machines.json` has
+carried `machines.audit_run.terminal` explicitly all along — the split was never unknowable,
+only unread — and both sides of the wire are now pinned to that one clause.
 
 ## 5. The wave that found nothing, and why it is not a wasted wave
 
