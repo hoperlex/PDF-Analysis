@@ -233,3 +233,458 @@ code {
   outline: 2px solid var(--am-ink);
   outline-offset: 2px;
 }
+
+/* ==================================================================================
+ * Domain surfaces.
+ *
+ * Everything above this line styled the frame. Everything below styles what the frame
+ * holds, and it exists because the slices already name these classes: 74 `am-` classes
+ * were referenced by `src/**` and 28 were defined, so 55 rendered with no rules at all.
+ * Two of them did visible damage rather than merely looking plain:
+ *
+ *   - `am-finding-row` is written as `className="am-finding-row am-button"`, so with no
+ *     rule of its own every finding in the review list rendered as a full-width primary
+ *     button — centred white-on-accent, the least readable form available for a list of
+ *     sentences;
+ *   - `am-evidence__pages` had no layout, so the page tabs inside it overlapped the text
+ *     beside them.
+ *
+ * Where a row and a button share an element, the pair selector `.am-button.am-finding-row`
+ * is used so the outcome does not depend on which rule came last in this file.
+ * -------------------------------------------------------------------------------- */
+
+/* ---- review: list on the left, the open finding on the right --------------------- */
+
+.am-review {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .am-review {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.am-review__list {
+  min-width: 0;
+}
+
+.am-review__detail {
+  min-width: 0;
+  border-left: 1px solid var(--am-line);
+  padding-left: 24px;
+}
+
+@media (max-width: 900px) {
+  .am-review__detail {
+    border-left: 0;
+    border-top: 1px solid var(--am-line);
+    padding-left: 0;
+    padding-top: var(--am-gap);
+  }
+}
+
+.am-review__finding {
+  margin: 0 0 4px;
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.am-review__recommendation {
+  margin: 0 0 var(--am-gap);
+  color: var(--am-ink-muted);
+}
+
+.am-review__diagnostics,
+.am-review__export {
+  margin-top: 24px;
+  padding-top: var(--am-gap);
+  border-top: 1px solid var(--am-line);
+}
+
+/* ---- the finding list ------------------------------------------------------------ */
+
+.am-finding-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap);
+}
+
+.am-finding-group__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--am-ink-muted);
+}
+
+.am-finding-group__count {
+  font-family: var(--am-font-mono);
+  font-size: 12px;
+  color: var(--am-ink-muted);
+}
+
+.am-finding-group__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* A row is a list entry that happens to be clickable — not a call to action. */
+.am-button.am-finding-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font-size: 14px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.am-button.am-finding-row:hover {
+  filter: none;
+  border-color: var(--am-accent);
+  background: var(--am-surface);
+}
+
+.am-button.am-finding-row[aria-current='true'] {
+  border-color: var(--am-accent);
+  box-shadow: inset 3px 0 0 var(--am-accent);
+  background: var(--am-surface);
+}
+
+.am-finding-row__text {
+  display: block;
+}
+
+.am-finding-row__pages {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--am-font-mono);
+  font-size: 12px;
+  color: var(--am-ink-muted);
+}
+
+/* ---- evidence: the page beside its quotations ------------------------------------ */
+
+.am-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.am-evidence__pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Page tabs are a choice among peers, so they are quiet until chosen. */
+.am-evidence__pages .am-button {
+  padding: 4px 12px;
+  border: 1px solid var(--am-line);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font-family: var(--am-font-mono);
+  font-size: 13px;
+}
+
+.am-evidence__pages .am-button:hover {
+  filter: none;
+  border-color: var(--am-accent);
+}
+
+.am-evidence__pages .am-button[aria-current='true'] {
+  border-color: var(--am-accent);
+  background: var(--am-accent);
+  color: var(--am-paper);
+}
+
+.am-evidence__provider {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--am-ink-muted);
+}
+
+.am-evidence__panes {
+  display: grid;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  gap: var(--am-gap);
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .am-evidence__panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.am-evidence__page {
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  padding: 8px;
+}
+
+/* The page itself. It was rendered at thumbnail size and could not be read. */
+.am-evidence__object {
+  display: block;
+  width: 100%;
+  min-height: 420px;
+  height: 58vh;
+  border: 0;
+  border-radius: 4px;
+  background: var(--am-paper);
+}
+
+.am-evidence__quotations {
+  min-width: 0;
+}
+
+.am-evidence__none {
+  margin: 0;
+  color: var(--am-ink-muted);
+}
+
+.am-evidence__limits {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--am-ink-muted);
+}
+
+/* ---- quotations ------------------------------------------------------------------ */
+
+.am-quotation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.am-quotation {
+  border-left: 3px solid var(--am-accent);
+  padding: 2px 0 2px 12px;
+}
+
+.am-quotation__text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.am-quotation__anchor {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--am-font-mono);
+  font-size: 12px;
+  color: var(--am-ink-muted);
+}
+
+.am-quotation__inconsistent {
+  border-left-color: var(--am-degraded);
+}
+
+/* ---- the decision panel ---------------------------------------------------------- */
+
+.am-decision__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.am-decision__current {
+  font-size: 13px;
+  color: var(--am-ink-muted);
+}
+
+.am-decision__verdicts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: var(--am-gap);
+}
+
+/* The comment field stacked: its label used to sit on top of the control. */
+.am-decision-comment,
+.am-decision__comment {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.am-decision__comment label,
+.am-decision-comment label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.am-decision__comment textarea,
+.am-decision-comment textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--am-ink);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  resize: vertical;
+}
+
+.am-decision__comment textarea:focus-visible,
+.am-decision-comment textarea:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 1px;
+}
+
+.am-decision__draft {
+  font-size: 12px;
+  color: var(--am-ink-muted);
+}
+
+.am-decision__note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--am-ink-muted);
+}
+
+.am-decision__refusal {
+  margin-top: 12px;
+}
+
+/* ---- decision history ------------------------------------------------------------ */
+
+.am-history__events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.am-history__event {
+  border-left: 2px solid var(--am-line);
+  padding-left: 12px;
+}
+
+.am-history__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.am-history__type {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--am-ink-muted);
+}
+
+.am-history__verdict {
+  font-weight: 600;
+}
+
+.am-history__author,
+.am-history__at {
+  font-family: var(--am-font-mono);
+  font-size: 12px;
+  color: var(--am-ink-muted);
+}
+
+.am-history__comment {
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
+/* ---- export ---------------------------------------------------------------------- */
+
+.am-export__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.am-export__encoding {
+  margin: 0;
+  font-size: 13px;
+  color: var(--am-ink-muted);
+}
+
+/* The seventeen column names are a reference, not a thing to read every visit. */
+.am-export__columns {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-family: var(--am-font-mono);
+  font-size: 12px;
+  color: var(--am-ink-muted);
+}
+
+.am-export__last {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--am-ink-muted);
+}
+
+/* ---- odds and ends --------------------------------------------------------------- */
+
+.am-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.am-badge__label {
+  font-family: var(--am-font);
+}
+
+.am-state--neutral {
+  border-style: dashed;
+  border-color: var(--am-line);
+}
+
+/* ---- block wrappers -------------------------------------------------------------- */
+
+.am-decision,
+.am-export,
+.am-history {
+  display: block;
+}
+
+.am-finding-group {
+  display: block;
+}
+
+.am-finding-group + .am-finding-group {
+  padding-top: var(--am-gap);
+  border-top: 1px solid var(--am-line);
+}

@@ -54,7 +54,7 @@ describe('the harness reaches this widget at all', () => {
       createElement(RunProgress, { projectUid: PROJECT_UID, runId: RUN_ID }),
     );
     expect(markup).not.toContain(`data-run-id="${RUN_ID}"`);
-    expect(markup.toLowerCase()).toContain('loading');
+    expect(markup.toLowerCase()).toContain('загрузка');
   });
 });
 
@@ -94,7 +94,7 @@ describe('a failed run states the catalog code it terminated with (U-01)', () =>
   it('says the reason was not reported rather than inventing one', () => {
     const markup = screen({ state: 'failed', terminal_reason: null, published_finding_count: 0 });
     expect(markup).toContain('data-run-outcome="failed"');
-    expect(markup).toContain('not reported');
+    expect(markup).toContain('не сообщено');
     expect(markup).not.toContain('data-terminal-reason=');
   });
 
@@ -106,7 +106,7 @@ describe('a failed run states the catalog code it terminated with (U-01)', () =>
       published_finding_count: 0,
     });
     expect(markup).toContain('data-interrupted-reason="worker_lost"');
-    expect(markup).toContain('It is not');
+    expect(markup).toContain('Сейчас он не выполняется');
   });
 });
 
@@ -121,7 +121,7 @@ describe('motion stops when the run stops (U-02)', () => {
     const markup = screen({ state, published_finding_count: state === 'published' ? 1 : 0 });
     expect(markup).toContain('data-run-activity="stopped"');
     expect(markup).not.toContain('data-run-activity="polling"');
-    expect(markup).toContain('This reading is final.');
+    expect(markup).toContain('показание окончательное');
   });
 
   it('an open run does show it, so the assertion is not vacuously true of every run', () => {
@@ -156,7 +156,7 @@ describe('review is offered only by a run that published a result (U-03)', () =>
   it.each(REVIEWABLE)('a %s run links to review', (state) => {
     const markup = screen({ state });
     expect(markup).toContain(`/projects/${PROJECT_UID}/runs/${RUN_ID}/review`);
-    expect(markup).toContain('Review findings');
+    expect(markup).toContain('Разобрать находки');
   });
 
   it.each(NOT_REVIEWABLE)('a %s run offers no review link and says why', (state) => {
@@ -169,7 +169,7 @@ describe('review is offered only by a run that published a result (U-03)', () =>
         : {}),
     });
     expect(markup).not.toContain(`/runs/${RUN_ID}/review`);
-    expect(markup).toContain('There is nothing to review.');
+    expect(markup).toContain('Разбирать нечего.');
     expect(markup).toContain(`<code>${state}</code>`);
   });
 });
@@ -196,7 +196,7 @@ describe('the provider mode is on screen, twice, and is never guessed', () => {
 
   it('names the mode again beside the review link, so a reviewer cannot miss it', () => {
     const markup = screen({ state: 'published', provider_mode: 'recorded' });
-    const linkTail = markup.slice(markup.indexOf('Review findings'));
+    const linkTail = markup.slice(markup.indexOf('Разобрать находки'));
     expect(linkTail).toContain('<strong>recorded</strong>');
   });
 });
@@ -240,7 +240,7 @@ describe('the three terminals are three different claims', () => {
 
   it('published with an unreported count says so rather than showing zero', () => {
     const markup = screen({ state: 'published', published_finding_count: null as never });
-    expect(markup).toContain('not reported');
+    expect(markup).toContain('не сообщено');
     expect(markup).not.toContain('Published findings: 0');
   });
 
@@ -257,7 +257,7 @@ describe('the three terminals are three different claims', () => {
   it('partial with an empty set says the reading carries none, and does not pretend to be published', () => {
     const markup = screen({ state: 'partial', degradation_set: [] });
     expect(markup).toContain('data-run-outcome="partial"');
-    expect(markup).toContain('carries no degradation set');
+    expect(markup).toContain('не содержит списка деградаций');
     expect(markup).not.toContain('data-run-outcome="published"');
   });
 
@@ -271,7 +271,7 @@ describe('the three terminals are three different claims', () => {
   it('an open run implies no result', () => {
     const markup = screen({ state: 'running', terminal_at: null });
     expect(markup).toContain('data-run-outcome="in_flight"');
-    expect(markup).toContain('No result has been published yet');
+    expect(markup).toContain('Результат ещё не опубликован');
   });
 });
 
@@ -299,7 +299,7 @@ describe('a run that spent nothing and a run that called nothing read differentl
   it('says a run with no provider call has no cost to report, and does not say zero', () => {
     const markup = screen({ state: 'published', published_finding_count: 3 });
     expect(markup).toContain('data-run-cost="absent"');
-    expect(markup).toContain('made no provider call');
+    expect(markup).toContain('не обращался к провайдеру');
     // The flattering invention this test exists to prevent.
     expect(markup).not.toContain('data-run-cost="reported"');
     expect(markup).not.toContain('data-cost-micros="0"');
@@ -376,7 +376,7 @@ describe('findings and diagnostic observations are two counts, never one (M-6)',
     expect(markup).toContain('Published findings');
     expect(markup).toContain('data-diagnostic-observation-count="11"');
     expect(markup).toContain('3');
-    expect(markup).toContain('Diagnostic observations');
+    expect(markup).toContain('Диагностические наблюдения');
     // A mutation that printed the diagnostic count where the finding count goes, or that
     // summed them, cannot satisfy both of these.
     expect(markup).not.toContain('Published findings: 11');
@@ -385,7 +385,7 @@ describe('findings and diagnostic observations are two counts, never one (M-6)',
 
   it('says in words that an observation is not a finding', () => {
     const markup = screen({ state: 'published', published_finding_count: 1 }).toLowerCase();
-    expect(markup).toContain('is not a finding');
+    expect(markup).toContain('это не находка');
   });
 
   it('reports an unreported diagnostic count as unreported, not as zero', () => {
@@ -428,7 +428,7 @@ describe('an estimated basis is the normal case, not a warning (M-7)', () => {
     for (const alarm of ['am-state--error', 'Warning', 'warning', 'Invalid', 'went wrong']) {
       expect(cost).not.toContain(alarm);
     }
-    expect(markup.toLowerCase()).toContain('not a fault');
+    expect(markup.toLowerCase()).toContain('не неисправность');
   });
 
   it('does not default an unstated basis to measured', () => {
@@ -450,7 +450,7 @@ describe('the cost section is on the screen (M-9)', () => {
     (state) => {
       const markup = screen({ state, published_finding_count: state === 'published' ? 1 : 0 });
       expect(markup).toContain('data-run-cost=');
-      expect(markup).toContain('Diagnostic observations');
+      expect(markup).toContain('Диагностические наблюдения');
     },
   );
 });

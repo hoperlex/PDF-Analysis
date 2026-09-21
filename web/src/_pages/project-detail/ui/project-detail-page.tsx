@@ -37,10 +37,10 @@ export function ProjectDetailPage({ projectUid }: ProjectDetailPageProps) {
 
   if (!looksLikeProjectUid(projectUid)) {
     return (
-      <PageShell title="Project" actions={<Link href={routes.projects()}>All projects</Link>}>
+      <PageShell title="Проект" actions={<Link href={routes.projects()}>Все проекты</Link>}>
         <UnsupportedState
-          title="That is not a project address."
-          detail="A project is addressed by an opaque identifier. Nothing was requested."
+          title="Это не адрес проекта."
+          detail="Проект адресуется непрозрачным идентификатором. Запроса не было."
         />
       </PageShell>
     );
@@ -52,11 +52,11 @@ export function ProjectDetailPage({ projectUid }: ProjectDetailPageProps) {
 
   return (
     <PageShell
-      title="Project"
+      title="Проект"
       subtitle={<code>{projectUid}</code>}
-      actions={<Link href={routes.projects()}>All projects</Link>}
+      actions={<Link href={routes.projects()}>Все проекты</Link>}
     >
-      <h2>Documents</h2>
+      <h2>Документы</h2>
       <DocumentList projectUid={projectUid} />
 
       <UploadPanel projectUid={projectUid} onUploaded={goToVersion} />

@@ -78,19 +78,19 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'provider_unavailable',
         presentation: 'error',
-        title: 'The provider this run needs is unavailable.',
+        title: 'Провайдер, нужный этому прогону, недоступен.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['dependency']) +
           ' Nothing was partially applied. Retrying reuses the same idempotency key; ' +
-          'the run is not started in a different provider mode instead.',
+          'прогон не запускается вместо этого в другом режиме провайдера.',
       };
     case 'analysis_input_invalid':
       return {
         ...base,
         kind: 'analysis_input_invalid',
         presentation: 'unsupported',
-        title: 'The declared analysis inputs are not acceptable.',
+        title: 'Объявленные входные данные анализа неприемлемы.',
         detail: error.envelope.message + classifiers(error.details, ['stage_id', 'reason']),
       };
     case 'validation_failed':
@@ -98,7 +98,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'request_invalid',
         presentation: 'unsupported',
-        title: 'This run request is not valid.',
+        title: 'Этот запрос на прогон недействителен.',
         detail:
           error.envelope.message + classifiers(error.details, ['constraint', 'field', 'aggregate_type']),
       };
@@ -107,7 +107,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'not_authenticated',
         presentation: 'error',
-        title: 'This run is not authorized.',
+        title: 'Этот прогон не авторизован.',
         detail: AUTHENTICATION_REQUIRED_DETAIL,
       };
     case 'permission_denied':
@@ -115,7 +115,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'not_permitted',
         presentation: 'error',
-        title: 'You are not permitted to act on this run.',
+        title: 'Вам не разрешено действовать с этим прогоном.',
         detail:
           PERMISSION_DENIED_DETAIL +
           classifiers(error.details, ['aggregate_type', 'required_capability']),
@@ -125,7 +125,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'not_found',
         presentation: 'error',
-        title: 'This run or version does not exist.',
+        title: 'Такого прогона или версии не существует.',
         detail: error.envelope.message + classifiers(error.details, ['aggregate_type']),
       };
     case 'idempotency_key_reuse':
@@ -133,7 +133,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'duplicate_intent',
         presentation: 'error',
-        title: 'This run key was already used for a different request.',
+        title: 'Этот ключ прогона уже использован для другого запроса.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['command_type']) +
@@ -144,7 +144,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'in_progress',
         presentation: 'error',
-        title: 'This run request is still executing.',
+        title: 'Этот запрос на прогон ещё выполняется.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['command_type']) +
@@ -155,7 +155,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'stale_intent',
         presentation: 'error',
-        title: 'The recorded outcome of this run request is no longer available.',
+        title: 'Записанный результат этого запроса на прогон больше недоступен.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['command_type']) +
@@ -166,7 +166,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'not_allowed',
         presentation: 'error',
-        title: 'The run is not in a state that allows this.',
+        title: 'Прогон не в том состоянии, которое это допускает.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['machine', 'current_state', 'requested_state']),
@@ -176,7 +176,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'conflict',
         presentation: 'error',
-        title: 'The request conflicted with an invariant.',
+        title: 'Запрос вошёл в конфликт с инвариантом.',
         detail:
           error.envelope.message + classifiers(error.details, ['aggregate_type', 'expected_revision']),
       };
@@ -185,7 +185,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'analysis_failed',
         presentation: 'error',
-        title: 'The analysis failed.',
+        title: 'Анализ завершился неудачей.',
         detail: error.envelope.message + classifiers(error.details, ['run_id', 'stage_id']),
       };
     default:
@@ -193,7 +193,7 @@ function fromApiError(error: ApiError): RunFailure {
         ...base,
         kind: 'server_error',
         presentation: 'error',
-        title: 'The request failed on the server.',
+        title: 'Запрос завершился ошибкой на сервере.',
         detail: error.envelope.message,
       };
   }
@@ -207,7 +207,7 @@ export function classifyRunFailure(error: unknown): RunFailure {
     return {
       kind: 'unrecognized',
       presentation: 'error',
-      title: 'The server reported an error this client does not recognise.',
+      title: 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.',
       detail: `Error code '${error.rawErrorCode}' is outside this client's contract. Nothing was retried.`,
       correlationId: error.correlationId,
       retryable: false,
@@ -219,7 +219,7 @@ export function classifyRunFailure(error: unknown): RunFailure {
     return {
       kind: 'transport',
       presentation: 'error',
-      title: 'The request did not reach the API.',
+      title: 'Запрос не дошёл до API.',
       detail: `${error.message} The run state shown, if any, is the last reading and may be stale.`,
       correlationId: error.correlationId,
       retryable: error.retryable,
@@ -230,11 +230,11 @@ export function classifyRunFailure(error: unknown): RunFailure {
   return {
     kind: 'unknown',
     presentation: 'error',
-    title: 'The request failed for an unclassified reason.',
+    title: 'Запрос не выполнен по неклассифицированной причине.',
     detail:
       error instanceof ApiFailure
         ? error.message
-        : 'The client received something it could not decode as a contract failure.',
+        : 'Клиент получил нечто, что не смог разобрать как отказ по контракту.',
     correlationId: error instanceof ApiFailure ? error.correlationId : null,
     retryable: false,
     errorCode: null,

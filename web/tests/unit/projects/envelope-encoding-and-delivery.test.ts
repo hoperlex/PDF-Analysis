@@ -110,9 +110,9 @@ describe('the stated envelope names the one-file rule the contract enforces', ()
 
   it('is on screen before a file is chosen', () => {
     const text = UPLOAD_ENVELOPE_RULES.join(' ');
-    expect(text).toContain('One PDF per upload');
-    expect(text.toLowerCase()).toContain('archive');
-    expect(text.toLowerCase()).toContain('second document');
+    expect(text).toContain('Один PDF за загрузку');
+    expect(text.toLowerCase()).toContain('архива');
+    expect(text.toLowerCase()).toContain('второго документа');
   });
 
   it('leaves the other four rules in place beside it', () => {

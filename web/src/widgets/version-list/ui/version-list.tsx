@@ -30,11 +30,11 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useVersionList(documentUid, cursor);
 
-  if (query.isPending) return <LoadingState what="the versions of this document" />;
+  if (query.isPending) return <LoadingState what="версии этого документа" />;
 
   if (query.isError) {
     const failure = classifyListingFailure(query.error, {
-      collection: 'the versions of this document',
+      collection: 'версии этого документа',
       parent: 'document',
     });
     return (
@@ -43,7 +43,7 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
         detail={<span data-list-failure={failure.kind}>{failure.detail}</span>}
         correlationId={failure.correlationId}
         {...(failure.retryable
-          ? { onRetry: () => void query.refetch(), retryLabel: 'Try again' }
+          ? { onRetry: () => void query.refetch(), retryLabel: 'Повторить' }
           : {})}
       />
     );
@@ -54,8 +54,8 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
   if (page.items.length === 0) {
     return (
       <EmptyState
-        title="This document has no published version."
-        detail="A document whose upload never completed has nothing to open, stream or run against."
+        title="У документа нет опубликованных версий."
+        detail="У документа, загрузка которого не завершилась, нечего открыть, отдать или проверить."
       />
     );
   }
@@ -75,10 +75,10 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
       </ul>
       <p>
         <em>
-          One version per upload: this surface gives `uploadDocument` no `document_uid`, so
-          every upload starts a new document at ordinal 1. The service underneath already
-          publishes a second version onto an existing document; only the transport withholds
-          it.
+          Одна версия на загрузку: этот экран не передаёт `uploadDocument` параметр
+          `document_uid`, поэтому каждая загрузка начинает новый документ с порядковым
+          номером 1. Служба под ним уже умеет публиковать вторую версию существующего
+          документа — её удерживает только транспорт.
         </em>
       </p>
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>

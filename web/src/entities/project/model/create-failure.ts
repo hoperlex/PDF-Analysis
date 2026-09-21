@@ -70,7 +70,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'invalid_name',
         presentation: 'unsupported',
-        title: 'The server refused this project name.',
+        title: 'Сервер отклонил это название проекта.',
         detail:
           error.envelope.message + classifiers(error.details, ['field', 'constraint', 'aggregate_type']),
       };
@@ -79,7 +79,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'dependency_unavailable',
         presentation: 'error',
-        title: 'A dependency is unavailable.',
+        title: 'Зависимость недоступна.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['dependency']) +
@@ -90,7 +90,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'not_authenticated',
         presentation: 'error',
-        title: 'Creating a project is not authorized.',
+        title: 'Создание проекта не авторизовано.',
         detail: AUTHENTICATION_REQUIRED_DETAIL,
       };
     case 'permission_denied':
@@ -98,7 +98,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'not_permitted',
         presentation: 'error',
-        title: 'You are not permitted to create a project.',
+        title: 'Вам не разрешено создавать проект.',
         detail:
           PERMISSION_DENIED_DETAIL +
           classifiers(error.details, ['aggregate_type', 'required_capability']),
@@ -108,7 +108,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'duplicate_intent',
         presentation: 'error',
-        title: 'This key was already used for a different project.',
+        title: 'Этот ключ уже использован для другого проекта.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['command_type']) +
@@ -119,7 +119,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'in_progress',
         presentation: 'error',
-        title: 'This project is still being created.',
+        title: 'Этот проект ещё создаётся.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['command_type']) +
@@ -130,7 +130,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'stale_intent',
         presentation: 'error',
-        title: 'The recorded outcome of this request is no longer available.',
+        title: 'Записанный результат этого запроса больше недоступен.',
         detail:
           error.envelope.message + classifiers(error.details, ['command_type']) + ' It is not guessed.',
       };
@@ -139,7 +139,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'conflict',
         presentation: 'error',
-        title: 'The request conflicted with an invariant.',
+        title: 'Запрос вошёл в конфликт с инвариантом.',
         detail:
           error.envelope.message + classifiers(error.details, ['aggregate_type', 'expected_revision']),
       };
@@ -148,7 +148,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'server_error',
         presentation: 'error',
-        title: 'Creating the project failed on the server.',
+        title: 'Создание проекта завершилось ошибкой на сервере.',
         detail: error.envelope.message,
       };
   }
@@ -162,7 +162,7 @@ export function classifyCreateProjectFailure(error: unknown): CreateProjectFailu
     return {
       kind: 'unrecognized',
       presentation: 'error',
-      title: 'The server reported an error this client does not recognise.',
+      title: 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.',
       detail: `Error code '${error.rawErrorCode}' is outside this client's contract. Nothing was retried.`,
       correlationId: error.correlationId,
       retryable: false,
@@ -174,7 +174,7 @@ export function classifyCreateProjectFailure(error: unknown): CreateProjectFailu
     return {
       kind: 'transport',
       presentation: 'error',
-      title: 'The request did not reach the API.',
+      title: 'Запрос не дошёл до API.',
       detail: `${error.message} Retrying under the same key is safe: it is the same command, not a second one.`,
       correlationId: error.correlationId,
       retryable: error.retryable,
@@ -185,11 +185,11 @@ export function classifyCreateProjectFailure(error: unknown): CreateProjectFailu
   return {
     kind: 'unknown',
     presentation: 'error',
-    title: 'Creating the project failed for an unclassified reason.',
+    title: 'Создать проект не удалось по неклассифицированной причине.',
     detail:
       error instanceof ApiFailure
         ? error.message
-        : 'The client received something it could not decode as a contract failure.',
+        : 'Клиент получил нечто, что не смог разобрать как отказ по контракту.',
     correlationId: error instanceof ApiFailure ? error.correlationId : null,
     retryable: false,
     errorCode: null,

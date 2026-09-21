@@ -35,11 +35,11 @@ export const PC01_UPLOAD_ENVELOPE = {
  * recognisable as the rule that was on screen rather than as a surprise.
  */
 export const UPLOAD_ENVELOPE_RULES: readonly string[] = [
-  'One PDF per upload. No archive, no companion file and no second document.',
+  'Один PDF за загрузку. Без архива, без сопутствующего файла и без второго документа.',
   `At most ${PC01_UPLOAD_ENVELOPE.maxBytesLabel}.`,
   `At most ${PC01_UPLOAD_ENVELOPE.maxPages} pages.`,
-  'Not password-protected and not encrypted.',
-  'Every page carries extractable embedded text. A scanned or image-only PDF is refused; text is never recovered by optical recognition instead.',
+  'Без пароля и без шифрования.',
+  'Каждая страница несёт извлекаемый встроенный текст. Отсканированный или чисто графический PDF отклоняется; текст не восстанавливается оптическим распознаванием.',
 ];
 
 /**
@@ -82,9 +82,9 @@ export function precheckUploadFile(file: ChosenFile): UploadPrecheckProblem | nu
 export function precheckProblemMessage(problem: UploadPrecheckProblem): string {
   switch (problem) {
     case 'not_pdf':
-      return 'That file is not a PDF. PC-01 accepts one unencrypted PDF and nothing else.';
+      return 'Этот файл не является PDF. Принимается один незашифрованный PDF и ничего больше.';
     case 'empty_file':
-      return 'That file is empty.';
+      return 'Этот файл пуст.';
     case 'too_large':
       return `That file is larger than ${PC01_UPLOAD_ENVELOPE.maxBytesLabel}.`;
   }

@@ -189,7 +189,7 @@ describe('a failure is explicit, never a blank page', () => {
       }),
     );
 
-    expect(markup).toContain('The page could not be displayed');
+    expect(markup).toContain('Страницу не удалось показать');
     expect(markup).not.toContain('<object');
   });
 
@@ -218,7 +218,7 @@ describe('a failure is explicit, never a blank page', () => {
       }),
     );
 
-    expect(markup).toContain('Data integrity fault');
+    expect(markup).toContain('Нарушение целостности данных');
     expect(markup).not.toContain('<object');
   });
 });

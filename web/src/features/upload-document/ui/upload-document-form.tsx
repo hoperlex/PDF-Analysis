@@ -92,7 +92,7 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
         />
 
         <label htmlFor="upload-title">
-          Display title <em>(optional; never an identity)</em>
+          Display title <em>(необязательно; не идентификатор)</em>
         </label>
         <input
           id="upload-title"
@@ -122,11 +122,11 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
 
       {precheck !== null ? (
         <UnsupportedState
-          title="This file is outside the accepted envelope."
+          title="Файл выходит за допустимые ограничения."
           detail={
             <>
               <p data-precheck-problem={precheck}>{precheckProblemMessage(precheck)}</p>
-              <p>Nothing was sent. Choose a different file.</p>
+              <p>Ничего не отправлено. Выберите другой файл.</p>
             </>
           }
         />
@@ -145,7 +145,7 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
                   Correlation id <code>{failure.correlationId}</code>
                 </p>
               )}
-              <p>No version was published and no run was started.</p>
+              <p>Версия не опубликована, прогон не запущен.</p>
             </>
           }
         />
@@ -159,7 +159,7 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
           {...(failure.retryable
             ? {
                 onRetry: send,
-                retryLabel: 'Retry under the same key',
+                retryLabel: 'Повторить с тем же ключом',
               }
             : {})}
         />

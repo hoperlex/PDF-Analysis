@@ -109,14 +109,14 @@ describe('the one sentence whose value is what it refuses to say', () => {
   const note = terminalReasonNote('dependency_unavailable');
 
   it('names the catalog class rather than one member of it', () => {
-    expect(note.sentence).toContain('metadata store');
-    expect(note.sentence).toContain('blob storage');
-    expect(note.sentence).toContain('model provider');
-    expect(note.sentence).toContain('worker transport');
+    expect(note.sentence).toContain('хранилище метаданных');
+    expect(note.sentence).toContain('хранилище объектов');
+    expect(note.sentence).toContain('провайдера модели');
+    expect(note.sentence).toContain('транспорт исполнителя');
   });
 
   it('says out loud that the reading does not record which one', () => {
-    expect(note.sentence).toContain('does not record which of them it was');
+    expect(note.sentence).toContain('не фиксирует, о какой из них шла речь');
   });
 
   it('never asserts that the provider is the thing that failed', () => {
@@ -125,13 +125,13 @@ describe('the one sentence whose value is what it refuses to say', () => {
     expect(lower).not.toContain('the provider this run needs is unavailable');
     // The catalog's own retryable flag is a permission. `W28-LIVE` measured three of
     // three recorded-mode runs where no retry could ever succeed.
-    expect(note.sentence).toContain('rather than a prediction');
+    expect(note.sentence).toContain('а не предсказание');
   });
 
   it('is not the startRun classifier sentence, which this path never reaches', () => {
-    // run-failure.ts:76 says "The provider this run needs is unavailable." It is real UI
+    // run-failure.ts:76 says "Провайдер, нужный этому прогону, недоступен." It is real UI
     // text and it is reachable only when startRun itself answers an error envelope. Here
     // startRun answered 202 and the stage failed asynchronously.
-    expect(note.sentence).not.toContain('The provider this run needs is unavailable.');
+    expect(note.sentence).not.toContain('Провайдер, нужный этому прогону, недоступен.');
   });
 });

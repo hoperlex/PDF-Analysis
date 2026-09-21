@@ -39,10 +39,10 @@ function panel(): string {
 describe('the upload panel states the envelope before the file picker (U-09)', () => {
   it('renders every rule of the accepted envelope', () => {
     const markup = panel();
-    expect(markup).toContain('One PDF per upload.');
-    expect(markup).toContain('Not password-protected and not encrypted.');
-    expect(markup).toContain('extractable embedded text');
-    expect(markup).toContain('optical recognition');
+    expect(markup).toContain('Один PDF за загрузку.');
+    expect(markup).toContain('Без пароля и без шифрования.');
+    expect(markup).toContain('извлекаемый встроенный текст');
+    expect(markup).toContain('оптическим распознаванием');
   });
 
   it('renders a non-empty list of them, so an emptied source is red', () => {
@@ -54,7 +54,7 @@ describe('the upload panel states the envelope before the file picker (U-09)', (
 
   it('states the envelope above the picker, not only after a refusal', () => {
     const markup = panel();
-    const envelopeAt = markup.indexOf('What this accepts');
+    const envelopeAt = markup.indexOf('Что принимается');
     const pickerAt = markup.indexOf('id="upload-file"');
     expect(envelopeAt).toBeGreaterThanOrEqual(0);
     expect(pickerAt).toBeGreaterThanOrEqual(0);
@@ -79,7 +79,7 @@ describe('the upload panel states the envelope before the file picker (U-09)', (
   });
 
   it('says a published version is immutable rather than offering to replace one', () => {
-    expect(panel()).toContain('immutable');
+    expect(panel()).toContain('неизменяем');
   });
 
   it('keeps no copy of what it just published', () => {
@@ -128,22 +128,22 @@ function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError
 describe('the project list renders each read outcome as a different state', () => {
   it('in flight is a loading state, not silence', () => {
     const markup = list();
-    expect(markup.toLowerCase()).toContain('loading');
-    expect(markup).not.toContain('No projects yet.');
+    expect(markup.toLowerCase()).toContain('загрузка');
+    expect(markup).not.toContain('Проектов пока нет.');
   });
 
   it('a genuinely empty list says so, and does not look like a failure', () => {
     const markup = list((c) => c.setQueryData(LIST_KEY, page([])));
-    expect(markup).toContain('No projects yet.');
+    expect(markup).toContain('Проектов пока нет.');
     expect(markup).not.toContain('data-list-failure');
-    expect(markup.toLowerCase()).not.toContain('loading');
+    expect(markup.toLowerCase()).not.toContain('загрузка');
   });
 
   it('a failure says so with its correlation id, and does not look like an empty list', () => {
     const markup = list((c) => seedError(c, LIST_KEY, apiError(503, 'dependency_unavailable', true)));
     expect(markup).toContain('data-list-failure');
     expect(markup).toContain('corr-list-1');
-    expect(markup).not.toContain('No projects yet.');
+    expect(markup).not.toContain('Проектов пока нет.');
   });
 
   it('offers a retry only when the decoded envelope said retryable', () => {
@@ -153,8 +153,8 @@ describe('the project list renders each read outcome as a different state', () =
     const notRetryable = list((c) =>
       seedError(c, LIST_KEY, apiError(422, 'validation_failed', false)),
     );
-    expect(retryable).toContain('Try again');
-    expect(notRetryable).not.toContain('Try again');
+    expect(retryable).toContain('Повторить');
+    expect(notRetryable).not.toContain('Повторить');
   });
 
   it('renders each project as a row carrying its own opaque identity', () => {

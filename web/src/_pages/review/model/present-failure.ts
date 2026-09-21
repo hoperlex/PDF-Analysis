@@ -43,8 +43,8 @@ export function presentFailure(error: unknown, options: PresentFailureOptions): 
     return {
       title,
       detail:
-        'The server returned an error code this client does not recognize. Nothing was ' +
-        'retried. Report the correlation id below.',
+        'Сервер вернул код ошибки, который этот клиент не распознаёт. Повтор не ' +
+        'выполнялся. Сообщите идентификатор корреляции ниже.',
       correlationId: error.correlationId,
     };
   }
@@ -83,7 +83,7 @@ export function presentFailure(error: unknown, options: PresentFailureOptions): 
 
   return {
     title,
-    detail: 'An error outside the API contract occurred. Nothing was retried.',
+    detail: 'Произошла ошибка вне контракта API. Повтор не выполнялся.',
     correlationId: null,
   };
 }

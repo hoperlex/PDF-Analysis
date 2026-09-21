@@ -35,7 +35,7 @@ function StatusCell({
   readonly errorCode: string | null;
 }) {
   if (status === null) {
-    return <em data-stage-status="not-reported">not started</em>;
+    return <em data-stage-status="not-reported">не начинался</em>;
   }
   return <StageStatusBadge status={status} errorCode={errorCode} />;
 }
@@ -46,11 +46,11 @@ export function StageTable({ rows }: StageTableProps) {
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead>
           <tr>
-            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Stage</th>
-            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Status</th>
-            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Started</th>
-            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Finished</th>
-            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Took</th>
+            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Этап</th>
+            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Статус</th>
+            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Начало</th>
+            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Окончание</th>
+            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Длительность</th>
           </tr>
         </thead>
         <tbody>
@@ -58,7 +58,7 @@ export function StageTable({ rows }: StageTableProps) {
             <tr key={row.stageId} data-stage-id={row.stageId}>
               <td style={{ padding: '0.35rem 0.75rem 0.35rem 0' }}>
                 <code>{row.stageId}</code>
-                {row.expected ? null : <em> (not scheduled by PC-01)</em>}
+                {row.expected ? null : <em> (на этом этапе не планируется)</em>}
               </td>
               <td style={{ padding: '0.35rem 0.75rem 0.35rem 0' }}>
                 <StatusCell status={row.status} errorCode={row.errorCode} />

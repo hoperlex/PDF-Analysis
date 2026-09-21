@@ -292,7 +292,7 @@ describe('the root layout wires the providers outside the frame', () => {
     const marker = 'the screen';
     const html = RootLayout({ children: marker });
     expect(html.type).toBe('html');
-    expect(html.props.lang).toBe('en');
+    expect(html.props.lang).toBe('ru');
 
     const body = html.props.children as { type: unknown; props: { children: unknown } };
     expect(body.type).toBe('body');
@@ -308,7 +308,7 @@ describe('the root layout wires the providers outside the frame', () => {
   it('names the product and says what this build is', () => {
     expect(String(metadata.title)).toContain('AuditManager');
     expect(String(metadata.title)).toContain('PC-01');
-    expect(String(metadata.description)).toContain('one AR PDF');
+    expect(String(metadata.description)).toContain('одного PDF');
   });
 });
 

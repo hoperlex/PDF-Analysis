@@ -69,7 +69,7 @@ describe('presenting a failure', () => {
     );
     expect(presented.onRetry).toBeUndefined();
     expect(presented.correlationId).toBe('corr-4');
-    expect(presented.detail).toContain('does not recognize');
+    expect(presented.detail).toContain('не распознаёт');
   });
 
   it('carries the correlation id through every failure kind', () => {

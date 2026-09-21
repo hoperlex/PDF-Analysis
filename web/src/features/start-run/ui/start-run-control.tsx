@@ -45,8 +45,8 @@ export function StartRunControl({ versionUid, onStarted }: StartRunControlProps)
       </button>
       <p>
         <em>
-          The run uses the provider mode this deployment is configured for. It is shown on
-          the run, and it is never chosen here.
+          Прогон использует тот режим провайдера, на который настроено это развёртывание.
+          Он показан на прогоне и никогда не выбирается здесь.
         </em>
       </p>
 
@@ -63,7 +63,7 @@ export function StartRunControl({ versionUid, onStarted }: StartRunControlProps)
                   Correlation id <code>{failure.correlationId}</code>
                 </p>
               )}
-              <p>No run was started.</p>
+              <p>Прогон не запущен.</p>
             </>
           }
         />
@@ -74,7 +74,7 @@ export function StartRunControl({ versionUid, onStarted }: StartRunControlProps)
           title={failure.title}
           detail={<span data-run-failure={failure.kind}>{failure.detail}</span>}
           correlationId={failure.correlationId}
-          {...(failure.retryable ? { onRetry: send, retryLabel: 'Retry under the same key' } : {})}
+          {...(failure.retryable ? { onRetry: send, retryLabel: 'Повторить с тем же ключом' } : {})}
         />
       ) : null}
     </div>

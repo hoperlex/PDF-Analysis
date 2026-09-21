@@ -62,83 +62,88 @@ import type { ErrorCode } from '@/shared/api';
  */
 const CATALOG_SENTENCES: Readonly<Record<ErrorCode, string>> = {
   validation_failed:
-    'A declared schema, enum, format or invariant was violated, so the run stopped rather ' +
-    'than record something that does not conform. The reason does not name which rule; the ' +
-    'stage table below shows which stage carried it.',
+    'Нарушены объявленная схема, перечисление, формат или инвариант, поэтому прогон ' +
+    'остановился, а не записал несоответствующее. Причина не называет конкретное правило; ' +
+    'таблица этапов ниже показывает, на каком этапе это произошло.',
   not_found:
-    'Something this run addressed does not exist, or is not visible to the caller that ' +
-    'addressed it. The reason does not name what it was: the catalog forbids an answer that ' +
-    'reveals a resource the caller may not see.',
+    'То, к чему обращался прогон, не существует либо не видно вызывающей стороне. Причина ' +
+    'не называет, что именно: каталог запрещает ответ, раскрывающий ресурс, который ' +
+    'вызывающей стороне видеть не положено.',
   authentication_required:
-    'The run stopped because no valid authenticated subject was presented. The reason ' +
-    'carries no hint about what was addressed.',
+    'Прогон остановился, потому что не был предъявлен действительный аутентифицированный ' +
+    'субъект. Причина не содержит указаний на то, к чему обращались.',
   permission_denied:
-    'An authenticated subject was not permitted to do something this run needed. ' +
-    'Authorization is decided on the server, and the reading does not record which ' +
-    'capability was required.',
+    'Аутентифицированному субъекту не разрешено действие, которое требовалось прогону. ' +
+    'Авторизация решается на сервере, и показание не фиксирует, какое именно право ' +
+    'требовалось.',
   conflict:
-    'A concurrent write lost the optimistic-concurrency check, or a uniqueness invariant ' +
-    'would have been violated. The catalog uses this reason only where no more specific ' +
-    'conflict applies, so it does not say which invariant.',
+    'Параллельная запись проиграла проверку оптимистичной блокировки, либо был бы нарушен ' +
+    'инвариант уникальности. Каталог использует эту причину только там, где не подходит ' +
+    'более точный конфликт, поэтому она не называет инвариант.',
   state_transition_not_allowed:
-    'The run asked for a transition the frozen state machine does not declare from the ' +
-    'state it was in. This is the fail-closed answer to every undeclared transition, and no ' +
-    'flag overrides it.',
+    'Прогон запросил переход, который зафиксированная машина состояний из его состояния ' +
+    'не объявляет. Это отказ по умолчанию для любого необъявленного перехода, и ни один ' +
+    'флаг его не отменяет.',
   idempotency_key_reuse:
-    'An idempotency key was reused with a different payload. Nothing was created or ' +
-    'changed, and no duplicate was made under the key.',
+    'Ключ идемпотентности был повторно использован с другим телом запроса. Ничего не ' +
+    'создано и не изменено, дубликат под этим ключом не появился.',
   idempotency_key_in_progress:
-    'A command with the same key and the same payload was still executing. The remedy is to ' +
-    'ask again under that same key; a new key would be a second command.',
+    'Команда с тем же ключом и тем же телом ещё выполнялась. Средство — повторить запрос ' +
+    'под тем же ключом; новый ключ означал бы вторую команду.',
   idempotency_key_stale:
-    'The recorded outcome for an idempotency key could no longer be established, so the ' +
-    'command failed closed instead of running a second time on a guess.',
+    'Записанный результат для ключа идемпотентности больше не удалось установить, поэтому ' +
+    'команда отказала, а не выполнилась второй раз наугад.',
   unsupported_contract_version:
-    'A declared contract or schema version is unknown to this deployment. There is no ' +
-    'tolerant fallback and no best-effort interpretation.',
+    'Объявленная версия контракта или схемы неизвестна этому развёртыванию. Снисходительного ' +
+    'отката нет, и приблизительной трактовки тоже.',
   storage_integrity_error:
-    'A declared checksum, byte size or media type did not match the bytes that were stored ' +
-    'or delivered, or a required manifest role was missing. Nothing was published.',
+    'Объявленная контрольная сумма, размер в байтах или тип содержимого не совпали с ' +
+    'сохранёнными или переданными байтами, либо отсутствовала обязательная роль манифеста. ' +
+    'Ничего не опубликовано.',
   dependency_unavailable:
-    'A dependency this run needs was unavailable. The catalog groups the metadata store, ' +
-    'blob storage, a model provider and the worker transport into that one reason, and this ' +
-    'reading does not record which of them it was — so on its own it is not evidence that ' +
-    'the model provider is down. The catalog marks the reason retryable, which is permission ' +
-    'to start the run again rather than a prediction that a second run gets further.',
+    'Зависимость, нужная прогону, была недоступна. Каталог объединяет в эту одну причину ' +
+    'хранилище метаданных, хранилище объектов, провайдера модели и транспорт исполнителя, а ' +
+    'показание не фиксирует, о какой из них шла речь, — поэтому само по себе оно не ' +
+    'свидетельствует о недоступности провайдера модели. Каталог помечает причину повторяемой: ' +
+    'это разрешение запустить прогон снова, а не предсказание, что второй прогон продвинется ' +
+    'дальше.',
   dependency_credential_refused:
-    'A dependency refused a credential belonging to this deployment. No user of this API did ' +
-    'anything wrong, and starting the run again does not change the outcome until an ' +
-    'operator repairs the credential.',
+    'Зависимость отвергла учётные данные этого развёртывания. Никто из пользователей API ' +
+    'ничего не сделал неправильно, и повторный запуск не изменит исхода, пока оператор не ' +
+    'починит учётные данные.',
   staged_upload_lost:
-    'The blob store no longer held the bytes an upload had staged with it. Nothing was ' +
-    'published and nothing was changed; sending the same upload again is the remedy.',
+    'Хранилище объектов больше не содержало байты, подготовленные загрузкой. Ничего не ' +
+    'опубликовано и не изменено; средство — отправить ту же загрузку заново.',
   required_norm_unavailable:
-    'An authoritative reference this run depends on could not be resolved to an immutable ' +
-    'versioned record. No unversioned, partial or substitute source was used in its place.',
+    'Нормативный источник, от которого зависит прогон, не удалось разрешить в неизменяемую ' +
+    'версионированную запись. Неверсионированный, частичный или замещающий источник вместо ' +
+    'него не использовался.',
   analysis_input_invalid:
-    'A delivered analysis package or a declared stage input was not acceptable. The reading ' +
-    'does not record which field; the stage table below shows which stage carried it.',
+    'Переданный пакет анализа или объявленный вход этапа оказались неприемлемыми. Показание ' +
+    'не фиксирует конкретное поле; таблица этапов ниже показывает, на каком этапе это было.',
   analysis_failed:
-    'The analysis ended in the failed terminal state. This is the general execution failure: ' +
-    'it names the outcome rather than one cause, and where the stages recorded codes of ' +
-    'their own those codes are in the stage table below.',
+    'Анализ завершился в терминальном состоянии отказа. Это общий сбой исполнения: он ' +
+    'называет исход, а не одну причину, и если этапы записали собственные коды, эти коды ' +
+    'есть в таблице этапов ниже.',
   partial_result_not_publishable:
-    'A run that terminated with a recorded degradation was asked for something that requires ' +
-    'a run without one. The degraded outcome and its missing set stay visible instead of ' +
-    'being quietly filled in.',
+    'У прогона, завершившегося с зафиксированной деградацией, запросили то, что требует ' +
+    'прогона без неё. Деградировавший исход и список недостающего остаются видимыми, а не ' +
+    'дополняются молча.',
   cost_budget_exceeded:
-    'The declared cost or token budget for this run was exhausted. Execution stopped ' +
-    'explicitly rather than silently degrade what it produced.',
+    'Объявленный бюджет стоимости или токенов для этого прогона исчерпан. Исполнение ' +
+    'остановилось явно, а не стало молча ухудшать результат.',
   stale_attempt:
-    'The attempt that submitted this work is no longer the publication authority for it. ' +
-    'What was delivered is kept as immutable evidence and is never applied to project state.',
+    'Попытка, отправившая эту работу, больше не является для неё публикующей инстанцией. ' +
+    'Переданное сохраняется как неизменяемое свидетельство и никогда не применяется к ' +
+    'состоянию проекта.',
   execution_token_invalid:
-    'The execution authority presented for this work was absent, malformed, or not the ' +
-    'current one. The value itself is never echoed back, so the reason does not show it.',
+    'Предъявленный для этой работы токен исполнения отсутствовал, был искажён или не был ' +
+    'текущим. Само значение никогда не возвращается обратно, поэтому причина его не ' +
+    'показывает.',
   internal_error:
-    'An unclassified server fault stopped this run. The run still carries a stable code and ' +
-    'a correlation id; the internal detail stays in protected diagnostics and no path, ' +
-    'query or stack content is shown here.',
+    'Прогон остановила неклассифицированная серверная неисправность. При этом прогон несёт ' +
+    'устойчивый код и идентификатор корреляции; внутренние подробности остаются в защищённой ' +
+    'диагностике, и ни путь, ни запрос, ни содержимое стека здесь не показываются.',
 };
 
 /**
@@ -148,13 +153,14 @@ const CATALOG_SENTENCES: Readonly<Record<ErrorCode, string>> = {
  * assertion that no catalog sentence begins this way is a comparison against the same
  * bytes the screen renders.
  */
-export const UNDESCRIBED_PREFIX = 'This screen has no description for that reason and does not guess one.';
+export const UNDESCRIBED_PREFIX =
+  'У этого экрана нет описания для такой причины, и он его не выдумывает.';
 
 /** The sentence a `failed` reading that carries no reason at all gets. */
 export const ABSENT_SENTENCE =
-  'This reading carries no terminal reason. A failed run is required to record one, so ' +
-  'this reading is missing something the contract obliges it to carry. Nothing is assumed ' +
-  'in its place.';
+  'Это показание не несёт терминальной причины. Отказавший прогон обязан её записать, ' +
+  'поэтому показанию не хватает того, что контракт обязывает нести. Ничего не ' +
+  'домысливается взамен.';
 
 /** What the screen can say about the reason a `failed` run terminated with. */
 export type TerminalReasonNote =
@@ -192,8 +198,8 @@ export function terminalReasonNote(reason: string | null | undefined): TerminalR
     kind: 'undescribed',
     code: reason,
     sentence:
-      `${UNDESCRIBED_PREFIX} The code above is the word the run recorded, and this client ` +
-      'holds no description for it. Nothing was published, and the stage table below shows ' +
-      'which stage carried it.',
+      `${UNDESCRIBED_PREFIX} Код выше — то слово, которое записал прогон, и описания ` +
+      'для него у этого клиента нет. Ничего не опубликовано, а таблица этапов ниже ' +
+      'показывает, на каком этапе это произошло.',
   };
 }

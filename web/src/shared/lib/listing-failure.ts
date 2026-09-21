@@ -83,7 +83,7 @@ export function classifyListingFailure(error: unknown, subject: ListingSubject):
           title: `There is no such ${parent}.`,
           detail:
             `The server does not have this ${parent}, so there is nothing here to list. ` +
-            'That is a different answer from an empty list, and it is not retried.',
+            'Это не то же самое, что пустой список, и повтор не выполняется.',
           retryable: false,
         };
       case 'dependency_unavailable':
@@ -114,7 +114,7 @@ export function classifyListingFailure(error: unknown, subject: ListingSubject):
   if (error instanceof UnrecognizedApiError) {
     return {
       kind: 'unrecognized',
-      title: 'The server reported an error this client does not recognise.',
+      title: 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.',
       detail: `Error code '${error.rawErrorCode}' is outside this client's contract. Nothing was retried.`,
       correlationId: error.correlationId,
       retryable: false,
@@ -139,7 +139,7 @@ export function classifyListingFailure(error: unknown, subject: ListingSubject):
     detail:
       error instanceof ApiFailure
         ? error.message
-        : 'The client received something it could not decode as a contract failure.',
+        : 'Клиент получил нечто, что не смог разобрать как отказ по контракту.',
     correlationId: error instanceof ApiFailure ? error.correlationId : null,
     retryable: false,
     errorCode: null,

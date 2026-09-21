@@ -12,12 +12,12 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'AuditManager — PC-01',
-  description: 'Local review of one AR PDF: run, findings, decisions, CSV.',
+  description: 'Локальный разбор одного PDF: прогон, находки, решения, выгрузка CSV.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="ru">
       <body>
         <AppProviders>
           <AppFrame>{children}</AppFrame>

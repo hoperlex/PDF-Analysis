@@ -31,7 +31,7 @@ export function ProjectList() {
         detail={<span data-list-failure={failure.kind}>{failure.detail}</span>}
         correlationId={failure.correlationId}
         {...(failure.retryable
-          ? { onRetry: () => void query.refetch(), retryLabel: 'Try again' }
+          ? { onRetry: () => void query.refetch(), retryLabel: 'Повторить' }
           : {})}
       />
     );
@@ -42,8 +42,8 @@ export function ProjectList() {
   if (page.items.length === 0) {
     return (
       <EmptyState
-        title="No projects yet."
-        detail="Create one above, then upload the annual report PDF you want checked."
+        title="Проектов пока нет."
+        detail="Создайте проект выше, затем загрузите PDF годового отчёта для проверки."
       />
     );
   }

@@ -91,7 +91,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'unsupported_input',
         presentation: 'unsupported',
-        title: 'This file is outside the accepted envelope.',
+        title: 'Файл выходит за допустимые ограничения.',
         detail:
           error.envelope.message + classifiers(error.details, ['constraint', 'field', 'aggregate_type']),
       };
@@ -100,7 +100,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'checksum_mismatch',
         presentation: 'error',
-        title: 'The stored bytes did not match their declared checksum.',
+        title: 'Сохранённые байты не совпали с объявленной контрольной суммой.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['role', 'expected_sha256', 'actual_sha256']) +
@@ -111,7 +111,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'dependency_unavailable',
         presentation: 'error',
-        title: 'A dependency this upload needs is unavailable.',
+        title: 'Зависимость, нужная этой загрузке, недоступна.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['dependency']) +
@@ -122,7 +122,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'duplicate_intent',
         presentation: 'error',
-        title: 'This upload key was already used for a different file.',
+        title: 'Этот ключ загрузки уже использован для другого файла.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['command_type']) +
@@ -133,7 +133,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'in_progress',
         presentation: 'error',
-        title: 'This upload is still being processed.',
+        title: 'Эта загрузка ещё обрабатывается.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['command_type']) +
@@ -144,7 +144,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'stale_intent',
         presentation: 'error',
-        title: 'The recorded outcome of this upload is no longer available.',
+        title: 'Записанный результат этой загрузки больше недоступен.',
         detail:
           error.envelope.message +
           classifiers(error.details, ['command_type']) +
@@ -155,7 +155,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'not_authenticated',
         presentation: 'error',
-        title: 'Uploading is not authorized.',
+        title: 'Загрузка не авторизована.',
         detail: AUTHENTICATION_REQUIRED_DETAIL,
       };
     case 'permission_denied':
@@ -163,7 +163,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'not_permitted',
         presentation: 'error',
-        title: 'You are not permitted to upload to this project.',
+        title: 'Вам не разрешено загружать в этот проект.',
         detail:
           PERMISSION_DENIED_DETAIL +
           classifiers(error.details, ['aggregate_type', 'required_capability']),
@@ -173,7 +173,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'project_not_found',
         presentation: 'error',
-        title: 'This project does not exist.',
+        title: 'Такого проекта не существует.',
         detail: error.envelope.message + classifiers(error.details, ['aggregate_type']),
       };
     case 'conflict':
@@ -181,7 +181,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'conflict',
         presentation: 'error',
-        title: 'The upload conflicted with an invariant.',
+        title: 'Загрузка вошла в конфликт с инвариантом.',
         detail:
           error.envelope.message + classifiers(error.details, ['aggregate_type', 'expected_revision']),
       };
@@ -190,7 +190,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'server_error',
         presentation: 'error',
-        title: 'The upload failed on the server.',
+        title: 'Загрузка завершилась ошибкой на сервере.',
         detail: error.envelope.message,
       };
   }
@@ -210,7 +210,7 @@ export function classifyUploadFailure(error: unknown): UploadFailure {
     return {
       kind: 'unrecognized',
       presentation: 'error',
-      title: 'The server reported an error this client does not recognise.',
+      title: 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.',
       detail: `Error code '${error.rawErrorCode}' is outside this client's contract. Nothing was retried.`,
       correlationId: error.correlationId,
       retryable: false,
@@ -222,7 +222,7 @@ export function classifyUploadFailure(error: unknown): UploadFailure {
     return {
       kind: 'transport',
       presentation: 'error',
-      title: 'The upload did not reach the API.',
+      title: 'Загрузка не дошла до API.',
       detail: `${error.message} Whether anything was published is unknown; retrying under the same key is safe.`,
       correlationId: error.correlationId,
       retryable: error.retryable,
@@ -233,11 +233,11 @@ export function classifyUploadFailure(error: unknown): UploadFailure {
   return {
     kind: 'unknown',
     presentation: 'error',
-    title: 'The upload failed for an unclassified reason.',
+    title: 'Загрузка не выполнена по неклассифицированной причине.',
     detail:
       error instanceof ApiFailure
         ? error.message
-        : 'The client received something it could not decode as a contract failure.',
+        : 'Клиент получил нечто, что не смог разобрать как отказ по контракту.',
     correlationId: error instanceof ApiFailure ? error.correlationId : null,
     retryable: false,
     errorCode: null,

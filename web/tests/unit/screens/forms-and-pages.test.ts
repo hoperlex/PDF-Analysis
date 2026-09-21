@@ -77,7 +77,7 @@ describe('the upload form', () => {
 
   it('says the display title is optional and is never an identity', () => {
     const markup = form();
-    expect(markup).toContain('optional; never an identity');
+    expect(markup).toContain('необязательно; не идентификатор');
   });
 
   it('states no refusal before a file has been chosen', () => {
@@ -100,7 +100,7 @@ describe('the start-run control', () => {
   });
 
   it('says the provider mode is the deployment’s and is never chosen here', () => {
-    expect(control()).toContain('never chosen here');
+    expect(control()).toContain('не выбирается здесь');
   });
 
   it('offers no cancel and no re-run carryover, which PC-01 rules out', () => {
@@ -115,9 +115,9 @@ describe('the start-run control', () => {
 describe('/projects', () => {
   it('composes the create form and the list under one frame', () => {
     const markup = renderWith(newClient(), createElement(ProjectsPage, {}));
-    expect(markup).toContain('>Projects</h1>');
+    expect(markup).toContain('>Проекты</h1>');
     expect(markup).toContain('id="new-project-name"');
-    expect(markup).toContain('All projects');
+    expect(markup).toContain('Все проекты');
   });
 });
 
@@ -146,24 +146,24 @@ describe('/projects/{project_uid}', () => {
 
   it('refuses a malformed address without asking the server about it', () => {
     const markup = detail('not-a-project-address');
-    expect(markup).toContain('That is not a project address.');
-    expect(markup).toContain('Nothing was requested.');
+    expect(markup).toContain('Это не адрес проекта.');
+    expect(markup).toContain('Запроса не было.');
     // A malformed address must not reach the upload screen.
-    expect(markup).not.toContain('What this accepts');
+    expect(markup).not.toContain('Что принимается');
   });
 
   it.each(['proj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', 'prj_lowercase', 'prj_', ''])(
     'refuses %s',
     (bad) => {
-      expect(detail(bad)).toContain('That is not a project address.');
+      expect(detail(bad)).toContain('Это не адрес проекта.');
     },
   );
 
   it('shows the upload screen for a well-shaped address', () => {
     const markup = detail(PROJECT_UID);
-    expect(markup).toContain('What this accepts');
+    expect(markup).toContain('Что принимается');
     expect(markup).toContain(PROJECT_UID);
-    expect(markup).not.toContain('That is not a project address.');
+    expect(markup).not.toContain('Это не адрес проекта.');
   });
 });
 
@@ -176,7 +176,7 @@ describe('/projects/{project_uid}/runs/{run_id}', () => {
       client,
       createElement(RunPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
     );
-    expect(markup).toContain('>Run</h1>');
+    expect(markup).toContain('>Прогон</h1>');
     expect(markup).toContain(`href="/projects/${PROJECT_UID}"`);
     expect(markup).toContain(`data-run-id="${RUN_ID}"`);
   });

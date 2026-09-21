@@ -57,9 +57,9 @@ export function DecisionPanel({
   return (
     <section className="am-decision" data-observation-id={observationId}>
       <header className="am-decision__header">
-        <h3>Decision</h3>
+        <h3>Решение</h3>
         <span className="am-decision__current">
-          current verdict <VerdictBadge verdict={currentVerdict} />
+          текущий вердикт <VerdictBadge verdict={currentVerdict} />
         </span>
       </header>
 
@@ -73,7 +73,7 @@ export function DecisionPanel({
             onAccept(observationId);
           }}
         >
-          {pendingIntent === 'accept' ? 'Accepting…' : 'Accept'}
+          {pendingIntent === 'accept' ? 'Принимаю…' : 'Принять'}
         </button>
         <button
           type="button"
@@ -84,12 +84,12 @@ export function DecisionPanel({
             onReject(observationId);
           }}
         >
-          {pendingIntent === 'reject' ? 'Rejecting…' : 'Reject'}
+          {pendingIntent === 'reject' ? 'Отклоняю…' : 'Отклонить'}
         </button>
       </div>
 
       <div className="am-decision__comment">
-        <label htmlFor="am-decision-comment">Append a comment</label>
+        <label htmlFor="am-decision-comment">Добавить комментарий</label>
         <textarea
           id="am-decision-comment"
           className="am-decision__draft"
@@ -109,15 +109,15 @@ export function DecisionPanel({
             setDraft('');
           }}
         >
-          {pendingIntent === 'comment' ? 'Appending…' : 'Append comment'}
+          {pendingIntent === 'comment' ? 'Добавляю…' : 'Добавить'}
         </button>
         <p className="am-decision__note">
-          A comment is a new event. It never replaces the verdict above and never edits an
-          earlier event.
+          Комментарий — это новое событие. Он никогда не заменяет вердикт выше и не
+          редактирует более раннее событие.
         </p>
         {refusal === 'empty' ? (
           <p className="am-decision__refusal" role="alert">
-            A comment event needs text. Nothing was sent.
+            Событию комментария нужен текст. Ничего не отправлено.
           </p>
         ) : null}
       </div>

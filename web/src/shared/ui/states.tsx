@@ -53,7 +53,7 @@ export interface LoadingStateProps {
 }
 
 export function LoadingState({ what }: LoadingStateProps) {
-  return <StateBlock tone="neutral" title={what === undefined ? 'Loading…' : `Loading ${what}…`} />;
+  return <StateBlock tone="neutral" title={what === undefined ? 'Загрузка…' : `Загрузка: ${what}…`} />;
 }
 
 export interface EmptyStateProps {
@@ -92,7 +92,7 @@ export function ErrorState({ title, detail, correlationId, onRetry, retryLabel }
       action={
         onRetry === undefined ? undefined : (
           <button type="button" className="am-button" onClick={onRetry}>
-            {retryLabel ?? 'Try again'}
+            {retryLabel ?? 'Повторить'}
           </button>
         )
       }

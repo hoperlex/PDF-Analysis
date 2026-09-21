@@ -40,15 +40,15 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
   if (ordered.length === 0) {
     return (
       <NotApplicableState
-        title="No decisions yet"
-        detail={<p>Nobody has judged this finding. Accepting or rejecting appends the first event.</p>}
+        title="Решений пока нет"
+        detail={<p>Эту находку ещё никто не оценивал. Принятие или отклонение создаст первое событие.</p>}
       />
     );
   }
 
   return (
     <section className="am-history" data-event-count={ordered.length}>
-      <h3>History</h3>
+      <h3>История</h3>
       <ol className="am-history__events">
         {ordered.map((event) => (
           <li

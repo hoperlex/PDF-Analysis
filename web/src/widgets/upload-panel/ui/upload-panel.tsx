@@ -33,10 +33,10 @@ export interface UploadPanelProps {
 export function UploadPanel({ projectUid, onUploaded }: UploadPanelProps) {
   return (
     <section>
-      <h2>Upload</h2>
+      <h2>Загрузка</h2>
 
       <div className="am-state" role="note">
-        <p className="am-state__title">What this accepts</p>
+        <p className="am-state__title">Что принимается</p>
         <div className="am-state__detail">
           <ul>
             {UPLOAD_ENVELOPE_RULES.map((rule) => (
@@ -44,14 +44,14 @@ export function UploadPanel({ projectUid, onUploaded }: UploadPanelProps) {
             ))}
           </ul>
           <p>
-            A file outside this envelope is refused with the reason on screen. Text is
-            never recovered by optical recognition instead, and a partially readable
-            document is never accepted quietly. The limits are{' '}
-            {PC01_UPLOAD_ENVELOPE.maxBytesLabel} and {PC01_UPLOAD_ENVELOPE.maxPages} pages.
+            Файл за пределами этих ограничений отклоняется с указанием причины на экране.
+            Текст не восстанавливается оптическим распознаванием, а частично читаемый
+            документ никогда не принимается молча. Ограничения:{' '}
+            {PC01_UPLOAD_ENVELOPE.maxBytesLabel} и {PC01_UPLOAD_ENVELOPE.maxPages} страниц.
           </p>
           <p>
-            A published version is immutable: nothing here edits or replaces one. A second
-            upload publishes a second document, and both stay addressable.
+            Опубликованная версия неизменяема: здесь ничто её не редактирует и не заменяет.
+            Повторная загрузка публикует второй документ, и оба остаются адресуемыми.
           </p>
         </div>
       </div>

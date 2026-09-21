@@ -36,17 +36,17 @@ export function VersionPanel({ version }: VersionPanelProps) {
   return (
     <div className="am-state" data-version-uid={version.version_uid}>
       <p className="am-state__title">
-        {version.display_title ?? version.source_filename ?? 'Published version'}
+        {version.display_title ?? version.source_filename ?? 'Опубликованная версия'}
       </p>
       <div className="am-state__detail">
-        <Field label="Version">
+        <Field label="Версия">
           <code>{version.version_uid}</code>
         </Field>
-        <Field label="Document">
+        <Field label="Документ">
           <code>{version.document_uid}</code>
         </Field>
         <Field label="Ordinal">
-          {version.version_ordinal} <em>(display order only, never an identity)</em>
+          {version.version_ordinal} <em>(только порядок отображения, не идентификатор)</em>
         </Field>
         <Field label="Media type">{version.media_type}</Field>
         <Field label="Pages">{version.page_count}</Field>
@@ -59,11 +59,11 @@ export function VersionPanel({ version }: VersionPanelProps) {
         <Field label="Published">{formatInstant(version.published_at)}</Field>
         {version.source_filename !== undefined && version.source_filename !== null ? (
           <Field label="Uploaded as">
-            {version.source_filename} <em>(for display; never an identity)</em>
+            {version.source_filename} <em>(для отображения, не идентификатор)</em>
           </Field>
         ) : null}
         <p>
-          <strong>Input manifest</strong>
+          <strong>Входной манифест</strong>
         </p>
         <ul>
           {version.input_manifest.map((entry) => (
@@ -75,8 +75,7 @@ export function VersionPanel({ version }: VersionPanelProps) {
         </ul>
         <p>
           <em>
-            This version and its manifest are immutable. There is no endpoint that changes
-            either.
+            Эта версия и её манифест неизменяемы. Ни один метод API их не меняет.
           </em>
         </p>
       </div>

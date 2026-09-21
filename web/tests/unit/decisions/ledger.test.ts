@@ -284,6 +284,6 @@ describe('the decision panel offers no way to overwrite', () => {
     const markup = render(createElement(DecisionHistory, { events: [] }));
     // shared/ui names this exact case as the not-applicable one: the question has not been
     // asked yet, which is different from the answer being none.
-    expect(markup).toContain('No decisions yet');
+    expect(markup).toContain('Решений пока нет');
   });
 });

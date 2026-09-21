@@ -134,10 +134,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
 
   return (
     <PageShell
-      title="Review"
+      title="Разбор"
       subtitle={
         run === null ? (
-          'Loading run…'
+          'Загрузка прогона…'
         ) : (
           <>
             <RunStateBadge state={run.state} providerMode={run.provider_mode} />{' '}
@@ -150,9 +150,9 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 data-diagnostic-observation-count={run.diagnostic_observation_count}
               >
                 {' '}
-                · {run.diagnostic_observation_count} ungrounded model item(s) were rejected by
-                the grounding gate. They are diagnostics, not findings, and appear in no list
-                below and in no CSV row.
+                · шлюз привязки отклонил непривязанных элементов модели:{' '}
+                {run.diagnostic_observation_count}. Это диагностика, а не находки: их нет ни
+                в списке ниже, ни в строках CSV.
               </span>
             ) : null}
           </>
@@ -160,9 +160,9 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       }
       actions={
         <>
-          <Link href={routes.run(projectUid, runId)}>Back to the run</Link>{' '}
-          <Link href={routes.project(projectUid)}>Back to project</Link>{' '}
-          <Link href={routes.projects()}>All projects</Link>
+          <Link href={routes.run(projectUid, runId)}>К прогону</Link>{' '}
+          <Link href={routes.project(projectUid)}>К проекту</Link>{' '}
+          <Link href={routes.projects()}>Все проекты</Link>
         </>
       }
     >
@@ -176,7 +176,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             }}
             isLoading={findingsQuery.isPending}
             error={presentFailureOrNull(findingsQuery.error, {
-              title: 'The findings could not be loaded',
+              title: 'Не удалось загрузить находки',
               onRetry: () => {
                 void findingsQuery.refetch();
               },
@@ -194,11 +194,11 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
           ) : detailQuery.error !== null ? (
             <ErrorState
               {...(presentFailureOrNull(detailQuery.error, {
-                title: 'The finding could not be loaded',
+                title: 'Не удалось загрузить находку',
                 onRetry: () => {
                   void detailQuery.refetch();
                 },
-              }) ?? { title: 'The finding could not be loaded' })}
+              }) ?? { title: 'Не удалось загрузить находку' })}
             />
           ) : detail === null ? null : (
             <>
@@ -218,7 +218,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 documentUrl={evidence.objectUrl}
                 isLoading={evidence.isLoading}
                 error={presentFailureOrNull(evidence.error, {
-                  title: 'The document page could not be loaded',
+                  title: 'Не удалось загрузить страницу документа',
                   onRetry: evidence.refetch,
                 })}
               />
@@ -239,10 +239,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 refusal={comment.refusal}
                 error={
                   presentFailureOrNull(verdict.error, {
-                    title: 'The verdict was not recorded',
+                    title: 'Вердикт не записан',
                   }) ??
                   presentFailureOrNull(comment.error, {
-                    title: 'The comment was not appended',
+                    title: 'Комментарий не добавлен',
                   })
                 }
               />
@@ -251,7 +251,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 events={historyQuery.data?.data.items ?? []}
                 isLoading={historyQuery.isPending}
                 error={presentFailureOrNull(historyQuery.error, {
-                  title: 'The decision history could not be loaded',
+                  title: 'Не удалось загрузить историю решений',
                   onRetry: () => {
                     void historyQuery.refetch();
                   },
@@ -273,7 +273,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
               isPending={exporter.isPending}
               lastFileName={exporter.lastFileName}
               error={presentFailureOrNull(exporter.error, {
-                title: 'The export was refused',
+                title: 'В выгрузке отказано',
               })}
             />
           )}
