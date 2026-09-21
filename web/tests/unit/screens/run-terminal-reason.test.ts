@@ -153,7 +153,7 @@ describe('a reason nobody anticipated still says something true on screen', () =
     expect(markup).toContain(`data-terminal-reason="${ROGUE}"`);
     expect(markup).toContain('data-terminal-reason-note="undescribed"');
     expect(markup).toContain(UNDESCRIBED_PREFIX);
-    expect(markup).toContain('not in the error catalog this client was built from');
+    expect(markup).toContain('this client holds no description for it');
   });
 
   it('does not borrow the sentence of a code it does know', () => {

@@ -56,7 +56,7 @@ describe('a reason this client does not know still says something true', () => {
 
   it('says the checkable fact about it, and does not guess a cause', () => {
     const note = terminalReasonNote(ROGUE);
-    expect(note.sentence).toContain('not in the error catalog this client was built from');
+    expect(note.sentence).toContain('this client holds no description for it');
     expect(note.sentence).toContain('Nothing was published');
     // It must not borrow a neighbouring sentence: no catalog wording leaks in.
     expect(note.sentence).not.toContain('metadata store');

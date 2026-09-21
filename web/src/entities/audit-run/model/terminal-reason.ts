@@ -50,7 +50,6 @@
  */
 
 import type { ErrorCode } from '@/shared/api';
-import { ERROR_CODE_VALUES } from '@/shared/api';
 
 /**
  * One sentence per catalog code, each a restatement of that code's own `summary` in
@@ -166,8 +165,6 @@ export type TerminalReasonNote =
   /** The reason is outside the catalog this client was built from. */
   | { readonly kind: 'undescribed'; readonly code: string; readonly sentence: string };
 
-const CATALOG: ReadonlySet<string> = new Set<string>(ERROR_CODE_VALUES);
-
 /**
  * Turn a run reading's `terminal_reason` into something a person can read.
  *
@@ -182,15 +179,21 @@ export function terminalReasonNote(reason: string | null | undefined): TerminalR
   if (reason === null || reason === undefined || reason === '') {
     return { kind: 'absent', sentence: ABSENT_SENTENCE };
   }
-  if (CATALOG.has(reason)) {
+  // Membership is read from the sentence table itself and never from a second copy of
+  // the catalog. An earlier draft tested `ERROR_CODE_VALUES.has(reason)` and then indexed
+  // the table, so a code present in the generated enum and absent from the table returned
+  // `sentence: undefined` and the screen rendered an empty paragraph — the silent hole
+  // this module exists to close, reintroduced by the check meant to close it. Mutation M5
+  // is that case, run.
+  if (Object.prototype.hasOwnProperty.call(CATALOG_SENTENCES, reason)) {
     return { kind: 'described', code: reason, sentence: CATALOG_SENTENCES[reason as ErrorCode] };
   }
   return {
     kind: 'undescribed',
     code: reason,
     sentence:
-      `${UNDESCRIBED_PREFIX} The code above is the word the run recorded, and it is not in ` +
-      'the error catalog this client was built from. Nothing was published, and the stage ' +
-      'table below shows which stage carried it.',
+      `${UNDESCRIBED_PREFIX} The code above is the word the run recorded, and this client ` +
+      'holds no description for it. Nothing was published, and the stage table below shows ' +
+      'which stage carried it.',
   };
 }
