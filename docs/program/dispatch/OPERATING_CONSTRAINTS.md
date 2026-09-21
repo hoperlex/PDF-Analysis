@@ -68,6 +68,22 @@ own guard.
 Name your scratch directory for your session — `<session-id>-scratch`, never a shared
 `mutation/` or `scratch/`.
 
+**It happened again in wave 29, to log files rather than to mutation trees, and that is why
+this section now names logs too.** Two live sessions wrote run logs to the same path within
+the same minute; the second truncated the first, and the first session's reading of its own
+run was gone before anyone read it. `D-47`.
+
+The rule, stated so it covers both shapes: **every path a session writes outside its own
+worktree carries that session's name.** Not the wave's, not the task's kind — the session's.
+`/root/w30-logs/cert3-gate.log`, not `/root/w30-logs/gate.log`; `/root/w30lists-mut`, not
+`/root/mut`. A brief that hands a session a logs directory hands it a **prefix** within that
+directory, and this is now a line in every brief.
+
+The failure mode is what makes it worth a section rather than a convention. A clobbered log
+does not announce itself. It reads exactly like a run that produced less output than you
+expected, which is the same thing a silently truncated command looks like — and §12 is the
+whole reason this programme does not accept that reading without a second measurement.
+
 ## 5. `make bootstrap` needs an explicit base interpreter
 
 When the ambient interpreter is an active virtualenv, run:

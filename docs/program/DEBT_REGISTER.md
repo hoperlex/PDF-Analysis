@@ -12,11 +12,11 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | | Row | Needs |
 |---|---|---|
 | **D-46** | a failed run cannot say *which* dependency | owner — a reseal either way |
-| **D-47** | two sessions wrote logs to one scratchpad path | a brief rule |
-| **D-42** | the provider credential **does** appear in `compose config` | prose + runbook |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
+
+**Closed 2026-09-21** — D-42 (the prose half; the measurement always stood) and D-47.
 
 **Closed 2026-09-18** — sixteen rows: D-1.5, D-2, D-3, D-4, D-5, D-6, D-7, D-10, D-12, D-13,
 D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass.
@@ -1275,7 +1275,26 @@ its own exact line because `DROP SCHEMA … CASCADE` destroys it too.
 this check, so it would **under-report** — the dangerous direction. None exists in this schema
 and a case reddens if one appears.
 
-### D-42 — the provider credential does appear in `docker compose config`
+### D-42 — the provider credential does appear in `docker compose config` — **CLOSED**
+
+**Closed 2026-09-21 by the integrator**, in the commit carrying its last repair. The
+measurement below always stood; what was open was the **prose**, and specifically whether the
+false sentence survived anywhere a reader would still meet it unqualified.
+
+Swept across every site that can produce it — `*.md`, `*.yml`, `*.example`, `*.sh`, `*.py` —
+and **four** carry the sentence. Three of them (`W14_CLOSURE.md`, `W26-HOST.md`, and this row)
+quote it in order to correct it. **One carried it live**: `docs/program/reviews/W14-PKG.md`,
+the wave-14 review that first made the claim.
+
+**A review record is history and is not rewritten.** It now carries an `## Erratum` block at
+its head and an `[ERRATUM E-1]` marker on the sentence itself, so a reader who arrives at the
+line — or who already quoted it — finds the correction at the same address rather than in a
+register they may never open. That mechanism is the one `D-1.6` says the integrator owes
+PC-01's accepted artifacts; this is its first use, on a document loose enough to try it on.
+
+Check: `grep -rn "never appears in .docker compose config" docs/ | grep -v ERRATUM` returns
+only lines that go on to correct themselves.
+
 
 **Found by `W26-HOST`, verified independently by the integrator, and it corrects a claim this
 repository has carried since wave 14.**
@@ -1344,7 +1363,15 @@ accepted the cost once. Whichever is chosen, it is a two-document change from th
 Check: `grep -n terminal_reason contracts/api/v1/openapi.json` — it is `oneOf [ErrorCode, null]`
 with no sibling detail object.
 
-### D-47 — two live sessions wrote logs to the same scratchpad path in the same minute
+### D-47 — two live sessions wrote logs to the same scratchpad path in the same minute — **CLOSED**
+
+**Closed 2026-09-21 by the integrator.** The rule is now `OPERATING_CONSTRAINTS.md` §4, which
+already covered mutation trees and now covers every path a session writes outside its own
+worktree — logs included — with this incident as its second recorded case. Wave 30's two
+briefs were the first to hand each session a **prefix** rather than a directory.
+
+Check: `grep -c "carries that session's name" docs/program/dispatch/OPERATING_CONSTRAINTS.md`.
+
 
 **Reported by `W29-SAY`**, which noticed and moved its work into a private subdirectory.
 Another wave-29 session was writing `bootstrap.log` and `npmci.log` into **the same path**.

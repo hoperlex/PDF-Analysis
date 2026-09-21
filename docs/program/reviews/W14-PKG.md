@@ -9,6 +9,23 @@
 Everything below was built **and driven** on this host. Nothing was deployed; §6 names where
 that boundary bit.
 
+> ## Erratum — 2026-09-21, by the integrator
+>
+> **A review record is history and is not rewritten; it is annotated.** This file states one
+> thing that was measured to be false, twelve waves after it was written, and the sentence is
+> left standing below with an `[ERRATUM E-1]` marker so that anyone who has already quoted it
+> finds the correction at the same address.
+>
+> **`E-1` (§2, the provider-credential channel).** The claim that a credential kept out of
+> `--env-file` *"therefore never appears in `docker compose config` output"* is wrong in its
+> second half. **It appears.** Compose v5.3.1 resolves `env_file:` into `environment:` and
+> prints the value in clear; measured with a sentinel, `config | grep -c PROXY_LLM_TOKEN`
+> returns `1`. What the channel genuinely buys is that those names never enter compose
+> **substitution** — real, and not what the sentence said. `config` output must be treated as a
+> secret: it also prints the API token and both the database and object-store passwords. The
+> full measurement, and the contrasting result for the TLS private key (a bind mount is a path;
+> **zero** hits for the key material), are `DEBT_REGISTER.md` D-42, found by `W26-HOST`.
+
 ## 1. What was built
 
 | Path | What it is |
@@ -111,7 +128,8 @@ So the channel is `infra/deploy/env/alpha.env.example`, which is what the roadma
 row asked for: *"a documented environment that never places a provider credential in the `.env`
 the Makefile allow-lists"*. The provider credential goes one step further out, into
 `env/provider.env`, which is written on the host by the owner, is never passed to `--env-file`,
-and therefore never appears in `docker compose config` output — `OWNER_RULINGS` §3 and
+and therefore never appears in `docker compose config` output **[ERRATUM E-1: the second
+clause is false — see the erratum at the head of this file]** — `OWNER_RULINGS` §3 and
 `LIVE_RUN_INSTRUCTIONS.md` §2.
 
 **What changed in `src/`, and it is one field.** `AppSettings` gains `api_token: str`, resolved
