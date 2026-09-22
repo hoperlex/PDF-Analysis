@@ -614,6 +614,7 @@ D-16).
 | `listDocuments` | `GET /projects/{project_uid}/documents` |
 | `listVersions` | `GET /documents/{document_uid}/versions` |
 | `listRuns` | `GET /versions/{version_uid}/runs` |
+| `listDecisions` | `GET /decisions` |
 
 Rules that hold across the whole surface:
 

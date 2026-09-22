@@ -51,6 +51,10 @@ REQUIRED_OPERATIONS = {
     "listVersions",
     "listRuns",
     "issueToken",
+    # `W38-KB`, under `R-24`. The decision journal across findings: the knowledge base
+    # `R-23` requires reads it, and before it `listDecisionHistory` answered for one
+    # finding only, so the only source was a client-side walk over every run.
+    "listDecisions",
 }
 
 #: The operations a caller reaches while holding no credential. Exactly one, and it is
@@ -65,6 +69,7 @@ PAGINATED_OPERATIONS = {
     "listProjects",
     "listRunFindings",
     "listDecisionHistory",
+    "listDecisions",
     "listDocuments",
     "listVersions",
     "listRuns",

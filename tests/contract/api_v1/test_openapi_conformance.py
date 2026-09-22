@@ -86,16 +86,17 @@ surface = conformance.surface
 
 #: `ALPHA_ROADMAP.md` §3 `T-1` and the measurement in the `W13-CONF` brief.
 FROZEN_OPENAPI_VERSION = "3.1.0"
-FROZEN_OPERATION_COUNT = 16
-FROZEN_SCHEMA_COUNT = 48
+FROZEN_OPERATION_COUNT = 17
+FROZEN_SCHEMA_COUNT = 50
 FROZEN_SERVER_URL = "/api/v1"
 
-#: The sixteen operations, written out. Deliberately not derived from the document: an
+#: The seventeen operations, written out. Deliberately not derived from the document: an
 #: operation that disappears from the contract has to fail *here*, not silently reduce the
 #: size of the thing both sides are compared through.
 #:
-#: Twelve until the `R-5` reseal of 2026-09-18 added the three listings, and fifteen until
-#: `W34-CONTRACT` added the credential exchange on 2026-09-22.
+#: Twelve until the `R-5` reseal of 2026-09-18 added the three listings, fifteen until
+#: `W34-CONTRACT` added the credential exchange on 2026-09-22, and sixteen until `W38-KB`
+#: added the decision journal under `R-24` the same day.
 FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("POST", "/projects", "createProject"),
     ("GET", "/projects", "listProjects"),
@@ -113,11 +114,13 @@ FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("GET", "/documents/{document_uid}/versions", "listVersions"),
     ("GET", "/versions/{version_uid}/runs", "listRuns"),
     ("POST", "/auth/token", "issueToken"),
+    ("GET", "/decisions", "listDecisions"),
 )
 
-#: The forty-eight `components.schemas` keys, written out. Forty-three until the `R-5`
-#: reseal, which added `DocumentVersionPage`, `RunStatusPage` and `CostBasis`, and
-#: forty-six until `W34-CONTRACT` added `IssueTokenRequest` and `IssueTokenResponse`.
+#: The fifty `components.schemas` keys, written out. Forty-three until the `R-5`
+#: reseal, which added `DocumentVersionPage`, `RunStatusPage` and `CostBasis`,
+#: forty-six until `W34-CONTRACT` added `IssueTokenRequest` and `IssueTokenResponse`, and
+#: forty-eight until `W38-KB` added `DecisionRecord` and `DecisionRecordPage`.
 #: These are the names the
 #: Pydantic models must carry (`ALPHA_ROADMAP.md` §4, stage 2: *"named exactly as the
 #: contract's `components.schemas` keys"*). If FastAPI splits a model into `X-Input` and
@@ -134,6 +137,8 @@ FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
         "Cursor",
         "DecisionEvent",
         "DecisionEventPage",
+        "DecisionRecord",
+        "DecisionRecordPage",
         "DecisionEventType",
         "DecisionId",
         "DocumentUid",
