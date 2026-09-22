@@ -17,7 +17,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
 | D-61 | the journey guard still matches by substring against concatenated source | compare against **rendered** output |
-| D-57 | one query key, two shapes: a finished run is polled forever | a decision, then a guard |
 | D-58 | a screen names `uploadDocument` and `document_uid` to a reviewer | one sentence |
 | D-52 | the legacy icon set is at least partly Feather, MIT, notice absent | a `NOTICE` file if we copy; **not** `D-11`'s shape |
 | **D-46** | a failed run cannot say *which* dependency | owner — a reseal either way |
@@ -1633,7 +1632,46 @@ server. A pilot that ends cannot be made to end for a token already issued.
 
 Needs the owner: which of these belong in the alpha and which wait for user management.
 
-### D-57 — one query key holds two incompatible shapes, and a finished run is polled forever
+### D-57 — one query key holds two incompatible shapes — **CLOSED** — and three things this row said were wrong
+
+**Closed 2026-09-22 by `W37-D57`. The key carries the bare `RunStatus`; the review screen
+unwraps at its transport boundary.** The argument is from the tree rather than from taste:
+all four readers want the run and nobody reads `status` or `correlationId`, which is the only
+thing the envelope adds — and `versions.detail` had already settled the same question the same
+way, so choosing the envelope would have set two `detail` keys against each other to reconcile
+one key with itself.
+
+**What this row got wrong, all three corrected by measurement:**
+
+1. **`features/start-run/api/use-start-run.ts` does not exist.** The file is in `model/`; the
+   slice has no `api/` directory at all. The row's own check command named two files of three
+   and missed it — **exactly how `D-4` was closed early.**
+2. **"Four write sites, one read" is not the tree.** In `web/src` there are **two** writers and
+   **three** readers, and **one reader IS the second writer** — `useQuery` in
+   `review-page.tsx:74` puts its `queryFn`'s result into the key and never calls
+   `setQueryData`. Four was the number of *seeding sites in tests*. **A guard watching
+   `setQueryData` would have caught neither the defect nor its return.**
+3. **"Polled forever" understates it.** At `b0e5c07` the run screen **crashes first** —
+   `TypeError: Cannot read properties of undefined (reading 'map')` in `stageRows` — before
+   any polling decision is reached.
+
+**The type system carries half of it and the half it drops is where the defect lived.**
+`DataTag` on the key makes both halves stop compiling — `TS2345` on writing an envelope,
+`TS2339: Property 'data' does not exist on type 'RunStatus'`, which is literally
+`runQuery.data?.data`. But **`useQuery` ignores the tag in this version**: `InferDataFromTag`
+ships in `query-core` and not in `react-query`, and `useQuery` is precisely how the review
+screen ever filled that key. Closed instead by a source rule — one module names the key as a
+`queryKey`, and its `queryFn` declares `Promise<RunStatus>`.
+
+**And the guards were sound and blind again.** Under the mutation that restores the exact
+defect, `rendered-language.guard.test.ts` — which renders every screen and reads every
+sentence — **stayed green, because the empty branch is also in Russian.** `W32-SEE` saw that
+empty screen with its own eyes and had no test that would argue with it; its correct diagnosis
+survived only as a comment in that guard.
+
+Check: `grep -n "runs.detail" web/src/entities/audit-run/api/*.ts web/src/features/start-run/model/*.ts web/src/_pages/review/ui/review-page.tsx`
+
+
 
 **Found by `W32-SEE` while rendering screens for an unrelated guard. Verified by the
 integrator 2026-09-21. Opened the same day.**

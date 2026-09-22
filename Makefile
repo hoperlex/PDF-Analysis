@@ -517,6 +517,28 @@ run_frontend() {
     "A linked worktree does not inherit it -- node_modules is git-ignored -- and the gate" \
     "will not borrow another checkout's modules, because that would run a dependency set" \
     "this tree never declared."
+  # TYPES ARE PART OF THE GATE, AND FOR FOUR WAVES THEY WERE NOT.
+  #
+  # `npm test` is vitest, vitest transforms TypeScript with esbuild, and esbuild does not
+  # typecheck. So every rule this repository expresses in the type system -- the FSD
+  # boundaries, the contract-derived unions, `W37-D57`'s tagged query keys -- was guarded by
+  # a command the gate never ran, and a type error could reach `main` green and fail at
+  # `next build`. `W37-D57` found it while proving its own repair: a mutation writing the
+  # wrong shape into a query key was GREEN across the whole frontend battery.
+  #
+  # It runs BEFORE the suite: a tree that does not typecheck cannot produce a suite result
+  # worth reading, and four seconds spent here saves a confusing red below.
+  #
+  # It is stated here rather than left as a case inside the suite, deliberately. A gate
+  # should say what it checks; an obligation hidden inside a test is the shape this
+  # programme keeps finding -- `OPERATING_CONSTRAINTS.md` Â§12's "a document nobody reads
+  # cannot be checked by anyone reading". `web/tests/guards/query-key-shape.guard.test.ts`
+  # keeps its own case, which now asserts THIS LINE exists, so the obligation cannot quietly
+  # leave the gate.
+  npm --prefix web run typecheck || fail \
+    "GATE: web/ does not typecheck." \
+    "vitest transforms TypeScript with esbuild and esbuild does not typecheck, so the" \
+    "suite below can be green while the tree is not buildable. Run: npm --prefix web run typecheck"
   npm --prefix web test || fail "GATE: the frontend suite failed."
 }
 

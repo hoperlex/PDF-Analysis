@@ -537,18 +537,19 @@ const KEYS = {
 /**
  * A client holding a full, plausible, Cyrillic answer to every question the screens ask.
  *
- * **Two shapes, and the split is not this file's choice.** Five of the six screens read a
- * cache entry as the payload itself -- `useRunStatus` does
- * `getQueryData<RunStatus>(queryKeys.runs.detail(runId))` and uses `.state`. `ReviewPage`
- * files `useQuery` under **the same keys** with the generated client's `queryFn`, whose
- * value is a `{ data }` envelope, and reads `runQuery.data?.data`. So the one cache holds
- * `RunStatus` for one screen and `{ data: RunStatus }` for another under the identical
- * key. Seeding one shape renders the other screen blank, which is why there are two
- * builders here rather than one.
+ * **`runs.detail` used to need two builders and now needs one.** `W32-SEE` recorded here
+ * that the one cache held a `RunStatus` for the run screen and a `{ data: RunStatus }`
+ * envelope for `ReviewPage` under the identical key, that seeding one shape rendered the
+ * other screen blank, and that it had no licence to repair it. That was `D-57`, and
+ * `W37-D57` repaired it: the key carries its value type, `runStatusQueryOptions` is the
+ * only query that fills it, and both screens read the model. `KEYS.run` is therefore
+ * seeded once, below, and `loadedReviewClient` no longer overwrites it.
  *
- * That is a defect in `web/src`, not in this harness, and `W32-SEE` has no licence to fix
- * it. `docs/program/W32-SEE.md` §5 reports it; this comment exists so the next reader of
- * these two functions does not conclude the harness is confused.
+ * **Three keys still hold envelopes**, and that is a property of those keys rather than a
+ * disagreement about one: `runs.findings`, `findings.detail` and `findings.decisions` are
+ * filled by `ReviewPage`'s own `useQuery`s with the generated `queryFn` and read back as
+ * `.data`, by that screen and by nothing else. One writer, one reader, one shape. They
+ * are the reason `loadedReviewClient` still exists.
  */
 function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   const client = newClient();
@@ -566,11 +567,15 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   return client;
 }
 
-/** The same readings, in the envelope shape `ReviewPage` unwraps. */
+/**
+ * The finding readings, in the envelope shape `ReviewPage`'s three finding queries unwrap.
+ *
+ * `KEYS.run` is deliberately absent: it is seeded by `loadedClient` in the one shape that
+ * key now holds, and overwriting it here is what `D-57` looked like from inside a test.
+ */
 function loadedReviewClient(runOverrides: Partial<RunStatus> = {}): Client {
   const client = loadedClient(runOverrides);
   const page = { next_cursor: null } as { next_cursor: null };
-  client.setQueryData(KEYS.run, { data: run(runOverrides) });
   client.setQueryData(KEYS.findings, { data: { items: [finding()], page } });
   client.setQueryData(KEYS.finding, { data: detail() });
   client.setQueryData(KEYS.decisions, { data: { items: [decision()], page } });
