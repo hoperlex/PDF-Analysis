@@ -48,13 +48,40 @@ export interface RunStateBadgeProps {
   readonly providerMode?: 'live' | 'recorded' | undefined;
 }
 
+/**
+ * The Russian label for each contract state.
+ *
+ * The owner ruled by direct poll on 2026-09-21 that every value a reviewer can read is
+ * shown in Russian. This is **not** the rename this file's header forbids: the contract
+ * value stays intact in `data-run-state`, which is what `PA-01` criterion 4 was re-driven
+ * against by `W30-CERT3`, and what the browser journey reads. A label is not an identity.
+ *
+ * Keyed on `RunState`, so a state added to the contract fails to compile until it is
+ * given a label rather than silently rendering its own identifier.
+ */
+const STATE_LABELS: Readonly<Record<RunState, string>> = {
+  created: 'создан',
+  queued: 'в очереди',
+  running: 'выполняется',
+  validating: 'проверяется',
+  published: 'опубликован',
+  partial: 'частично',
+  failed: 'отказ',
+  cancelled: 'отменён',
+};
+
+const PROVIDER_MODE_LABELS: Readonly<Record<'live' | 'recorded', string>> = {
+  live: 'живой вызов',
+  recorded: 'из записи',
+};
+
 export function RunStateBadge({ state, providerMode }: RunStateBadgeProps) {
   return (
     <span className={`am-badge am-badge--${toneFor(state)}`} data-run-state={state}>
-      <span className="am-badge__label">{state}</span>
+      <span className="am-badge__label">{STATE_LABELS[state]}</span>
       {providerMode !== undefined ? (
         <span className="am-badge__qualifier" data-provider-mode={providerMode}>
-          {providerMode}
+          {PROVIDER_MODE_LABELS[providerMode]}
         </span>
       ) : null}
     </span>

@@ -52,10 +52,28 @@ export function contrastRatio(a: string, b: string): number {
 
 export type TokenName = `--am-${string}`;
 
-/** Every custom property declared in the first `:root` block, by name. */
-export function parseTokens(css: string): Map<TokenName, string> {
-  const body = /:root\s*\{([\s\S]*?)\}/.exec(stripComments(css));
-  if (!body) throw new Error('no :root block');
+/**
+ * The palettes this stylesheet declares, and the block each one lives in.
+ *
+ * `W33-THEME` made the token set TWO sets. Every measurement below therefore answers to a
+ * theme: a pair's ratio is a property of the palette, not of the stylesheet, and a census
+ * taken over one palette says nothing about the other. What is NOT theme-dependent is the
+ * set of pairs — the same elements meet on the same screens whichever values the tokens
+ * carry — which is why the same census machinery runs twice rather than twice over.
+ */
+export const THEMES = ['light', 'dark'] as const;
+export type Theme = (typeof THEMES)[number];
+
+/** The block carrying the dark values for an explicit choice. */
+export const DARK_SELECTOR = ":root[data-theme='dark']";
+/** The block carrying the same values for a visitor who has chosen nothing. */
+export const DARK_MEDIA_SELECTOR = ":root:not([data-theme='light'])";
+
+/** Every custom property declared in the first block with this exact selector, by name. */
+export function parseTokensIn(css: string, selector: string): Map<TokenName, string> {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const body = new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\}`).exec(stripComments(css));
+  if (!body) throw new Error(`no ${selector} block`);
   const out = new Map<TokenName, string>();
   for (const decl of (body[1] ?? '').split(';')) {
     const at = decl.indexOf(':');
@@ -66,13 +84,42 @@ export function parseTokens(css: string): Map<TokenName, string> {
   return out;
 }
 
-/** Colour tokens: the ones whose value is a hex literal. */
-export function colourTokens(css: string): Map<TokenName, string> {
+/** Every custom property declared in the first `:root` block, by name. */
+export function parseTokens(css: string): Map<TokenName, string> {
+  return parseTokensIn(css, ':root');
+}
+
+function hexOnly(tokens: ReadonlyMap<TokenName, string>): Map<TokenName, string> {
   const out = new Map<TokenName, string>();
-  for (const [name, value] of parseTokens(css)) {
+  for (const [name, value] of tokens) {
     if (/^#[0-9a-fA-F]{3,8}$/.test(value)) out.set(name, value);
   }
   return out;
+}
+
+/** Colour tokens of the default (light) palette: the ones whose value is a hex literal. */
+export function colourTokens(css: string): Map<TokenName, string> {
+  return hexOnly(parseTokens(css));
+}
+
+/** Colour tokens declared in one block, whatever its selector. */
+export function colourTokensIn(css: string, selector: string): Map<TokenName, string> {
+  return hexOnly(parseTokensIn(css, selector));
+}
+
+/**
+ * The colour tokens in force under one theme.
+ *
+ * `dark` is the light set with the dark block laid over it, which is exactly what the
+ * cascade does — and it is why a token added to `:root` without a dark value is not a
+ * missing token but a LIGHT colour in a dark interface. `theme.test.ts` is the guard that
+ * refuses that; this function is deliberately not the one that hides it, so a caller that
+ * measures the dark palette measures what a browser would paint.
+ */
+export function palette(css: string, theme: Theme): Map<TokenName, string> {
+  const base = colourTokens(css);
+  if (theme === 'light') return base;
+  return new Map([...base, ...colourTokensIn(css, DARK_SELECTOR)]);
 }
 
 function stripComments(css: string): string {

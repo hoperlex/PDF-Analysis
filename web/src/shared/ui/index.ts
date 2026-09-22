@@ -32,3 +32,6 @@ export { PageShell } from './page-shell';
 
 export type { RoutePlaceholderProps } from './route-placeholder';
 export { RoutePlaceholder } from './route-placeholder';
+
+export type { IconName, IconProps } from './icon';
+export { FEATHER_SOURCE, ICON_NAMES, Icon } from './icon';

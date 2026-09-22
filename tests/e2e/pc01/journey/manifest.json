@@ -384,7 +384,7 @@
           }
         ],
         "expects_rendered": [
-          "Run"
+          "Прогон"
         ],
         "forbids_rendered": [
           "[data-run-failure]"

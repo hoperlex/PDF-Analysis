@@ -183,12 +183,16 @@ describe('/projects/{project_uid}/runs/{run_id}', () => {
 });
 
 describe('the application frame', () => {
-  it('carries the product name, the prototype label and the one navigation target', () => {
+  it('carries the product name and the one navigation target, and no checkpoint code', () => {
     const markup = render(createElement(AppFrame, { children: 'the screen' }));
     expect(markup).toContain('AuditManager');
-    expect(markup).toContain('PC-01');
     expect(markup).toContain('href="/projects"');
     expect(markup).toContain('the screen');
+    // `PC-01` was asserted here until 2026-09-22. It is the programme's own checkpoint
+    // code: it told a reviewer nothing and named the thing `R-18` says the alpha must
+    // stop looking like. Asserted absent rather than merely dropped, so it cannot return
+    // by accident.
+    expect(markup).not.toContain('PC-01');
   });
 
   it('states what this prototype is not, rather than implying it is more', () => {

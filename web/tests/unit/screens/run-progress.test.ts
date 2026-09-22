@@ -202,7 +202,7 @@ describe('the provider mode is on screen, twice, and is never guessed', () => {
 });
 
 /** The state vocabulary is the contract's word: no "in progress", no "done", no "OK". */
-describe('the run state is rendered as the contract names it', () => {
+describe('the run state is labelled in Russian and carries the contract value', () => {
   const ALL: readonly RunState[] = [
     'created',
     'queued',
@@ -214,10 +214,24 @@ describe('the run state is rendered as the contract names it', () => {
     'cancelled',
   ];
 
-  it.each(ALL)('%s appears on the badge as itself', (state) => {
+  /**
+   * The owner ruled by direct poll on 2026-09-21 that a reviewer reads Russian, and the
+   * contract value lives in the attribute. This suite asserted the opposite until then —
+   * `>${state}</span>` — so its premise was overturned rather than its wording.
+   *
+   * BOTH halves are asserted, and the second is the load-bearing one: `W30-CERT3`
+   * re-drove `PA-01` criterion 4 by reading `[data-run-state]`, and the browser journey
+   * reads it too. A later change that translates the attribute reddens here.
+   */
+  it.each(ALL)('%s carries its contract value in the attribute', (state) => {
     const markup = screen({ state, published_finding_count: 0 });
     expect(markup).toContain(`data-run-state="${state}"`);
-    expect(markup).toContain(`>${state}</span>`);
+  });
+
+  it.each(ALL)('%s is labelled in Russian, not as its identifier', (state) => {
+    const markup = screen({ state, published_finding_count: 0 });
+    expect(markup).not.toContain(`>${state}</span>`);
+    expect(markup).toMatch(/<span class="am-badge__label">[а-яё]/i);
   });
 
   it('invents no friendly synonym anywhere on the screen', () => {
@@ -264,7 +278,9 @@ describe('the three terminals are three different claims', () => {
   it('cancelled published nothing and says so', () => {
     const markup = screen({ state: 'cancelled', published_finding_count: 0 });
     expect(markup).toContain('data-run-outcome="cancelled"');
-    expect(markup).toContain('Nothing was published.');
+    // Translated by `W33-SECT`; the claim is the same one and the machine value is
+    // still `data-run-outcome`, which is what an instrument reads.
+    expect(markup).toContain('Ничего не опубликовано.');
     expect(markup).not.toContain('Опубликованных находок');
   });
 

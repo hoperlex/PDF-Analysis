@@ -42,10 +42,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AA_NON_TEXT,
+  AA_TEXT,
+  DARK_MEDIA_SELECTOR,
+  THEMES,
   census,
-  colourTokens,
   contrastRatio,
   declaredPairs,
+  palette,
   parseRules,
   readColour,
   relativeLuminance,
@@ -53,7 +56,7 @@ import {
   thresholdFor,
   unsupported,
 } from './contrast';
-import type { Occurrence, TokenName } from './contrast';
+import type { Occurrence, Theme, TokenName } from './contrast';
 import { screens } from './screens';
 
 const WEB = fileURLToPath(new URL('../../..', import.meta.url));
@@ -62,16 +65,30 @@ const MODULES = [join(WEB, 'src', 'widgets', 'run-progress', 'ui', 'run-progress
 
 // --------------------------------------------------------------------------- the register
 
+/**
+ * A pair is measured ONCE PER PALETTE, and an exemption is granted the same way.
+ *
+ * `W33-THEME` gave this stylesheet a second token set, and a one-theme register would have
+ * been the exact failure this file was built to refuse. The ratios are a property of the
+ * VALUES: `--am-ink-soft` on `--am-accent-light` is 4.68:1 in the light palette and 4.78:1
+ * in the dark one, and a pair may pass in one and fail in the other with nothing on screen
+ * to say which. A register keyed only by pair would have let the failing half of any such
+ * pair sit behind the passing half's row, silently — so each row names the themes it
+ * excuses, and an unexcused failure in ANY theme is red.
+ */
 interface Registered {
   readonly key: string;
+  /** The palettes this exemption covers. A failure in a palette not named here is a failure. */
+  readonly themes: readonly Theme[];
   readonly why: string;
 }
 
 /**
- * Below threshold, measured, and knowingly not repaired by `W32-CONTRAST`.
+ * Below threshold, measured, and knowingly not repaired.
  *
  * Each row is a decision with an owner, not a silence. `docs/program/W32-CONTRAST.md` §3
- * carries the arithmetic for both.
+ * carries the arithmetic for the light palette; the dark one is in the second-palette
+ * comment at the head of `globals.css`.
  */
 const REGISTERED: readonly Registered[] = [
   /*
@@ -92,46 +109,58 @@ const REGISTERED: readonly Registered[] = [
    */
   {
     key: 'edge|--am-line|--am-surface|-|border',
+    themes: ['light', 'dark'],
     why:
-      '`--am-line` at 1.26:1 on `--am-surface`. It is a separator at forty sites and the ' +
-      'ONLY boundary at three interactive ones whose fill does not distinguish them from ' +
-      'the page: the finding row, the evidence page tabs and the page-action links. ' +
-      '1.4.11 reaches those three. Raising it needs L ≤ 0.2568, which is ' +
-      "`--am-line-strong`'s own territory — a three-level border scale cannot carry two " +
-      'levels at the 1.4.11 ceiling. That is a scale decision, not a value repair, and ' +
-      'it would darken every card, table rule and divider in the tree. W32-CONTRAST §3.',
+      '`--am-line` at 1.26:1 on `--am-surface` in the light palette and 1.44:1 in the ' +
+      'dark one. It is a separator at forty sites and the ONLY boundary at three ' +
+      'interactive ones whose fill does not distinguish them from the page: the finding ' +
+      'row, the evidence page tabs and the page-action links. 1.4.11 reaches those three. ' +
+      'Raising it needs `--am-line-strong`\u2019s own territory in EITHER palette — a ' +
+      'three-level border scale cannot carry two levels at the 1.4.11 ceiling — and it ' +
+      'would darken (or lighten) every card, table rule and divider in the tree. That is ' +
+      'one scale decision, it has the same answer in both themes, and `W33-THEME` did not ' +
+      'take it either. W32-CONTRAST §3.',
   },
   {
     key: 'edge|--am-line|--am-surface|hover|border',
+    themes: ['light', 'dark'],
     why:
-      'The same token on the same three controls, hovered. 1.4.11 covers states as well ' +
-      'as components, so the hovered boundary is in scope for the same reason and is ' +
-      'left for the same reason. The hover CHANGE is carried by `--am-line-strong` and ' +
-      'by `--am-accent`, both of which now clear 3:1; only this resting edge does not.',
+      'The same token on the same three controls, hovered, in both palettes. 1.4.11 covers ' +
+      'states as well as components, so the hovered boundary is in scope for the same ' +
+      'reason and is left for the same reason. The hover CHANGE is carried by ' +
+      '`--am-line-strong` and by `--am-accent`, both of which clear 3:1 in both themes; ' +
+      'only this resting edge does not.',
   },
   {
     key: 'edge|--am-line|--am-surface|focus-visible|border',
+    themes: ['light', 'dark'],
     why:
-      'The same token, focused. What indicates focus is the `--am-accent` outline at ' +
-      '7.62:1, which passes and is the thing 2.4.7 and 1.4.11 actually ask for here; ' +
-      'this row is the resting border still showing underneath it, and repairing it ' +
-      'would change nothing a keyboard user can see. Registered for completeness.',
+      'The same token, focused, in both palettes. What indicates focus is the ' +
+      '`--am-accent` outline — 7.62:1 light, 7.67:1 dark — which passes and is the thing ' +
+      '2.4.7 and 1.4.11 actually ask for here; this row is the resting border still ' +
+      'showing underneath it, and repairing it would change nothing a keyboard user can see.',
   },
   {
     key: 'edge|--am-line|--am-surface|active|border',
+    themes: ['light', 'dark'],
     why:
-      'The same token, on the finding row while the pointer is down. The active state is ' +
-      'indicated by the shadow dropping to `--am-shadow-0`, not by this border, and the ' +
-      'row is `--am-accent-light` with an inset `--am-accent` rail once selected. Same ' +
-      'token, same scale decision, same owner. W32-CONTRAST §3.',
+      'The same token, on the finding row while the pointer is down, in both palettes. The ' +
+      'active state is indicated by the shadow dropping to `--am-shadow-0`, not by this ' +
+      'border, and the row is `--am-accent-light` with an inset `--am-accent` rail once ' +
+      'selected. Same token, same scale decision, same owner. W32-CONTRAST §3.',
   },
 ];
 
+/** Is this pair excused in this palette? A pair excused in one is not excused in the other. */
+function isRegistered(key: string, theme: Theme): boolean {
+  return REGISTERED.some((row) => row.key === key && row.themes.includes(theme));
+}
+
 // ------------------------------------------------------------------------- the measurement
 
-function everyPair(): Map<string, Occurrence & { sites: string[] }> {
+function everyPair(theme: Theme): Map<string, Occurrence & { sites: string[] }> {
   const globals = readFileSync(GLOBALS, 'utf8');
-  const tokens = colourTokens(globals);
+  const tokens = palette(globals, theme);
   const rules = [
     ...parseRules(globals, 'globals.css'),
     ...MODULES.map((path) => parseRules(readFileSync(path, 'utf8'), path)).flat(),
@@ -160,9 +189,17 @@ interface Measured {
   readonly threshold: number | null;
 }
 
-function measured(): Measured[] {
-  const tokens = colourTokens(readFileSync(GLOBALS, 'utf8'));
-  return [...everyPair()].map(([key, occurrence]) => {
+/**
+ * Rendering thirty screens twice is the cost of a second palette, so each palette is
+ * rendered once and the result kept. Nothing here mutates a `Measured`.
+ */
+const MEASURED = new Map<Theme, Measured[]>();
+
+function measured(theme: Theme): Measured[] {
+  const cached = MEASURED.get(theme);
+  if (cached) return cached;
+  const tokens = palette(readFileSync(GLOBALS, 'utf8'), theme);
+  const rows = [...everyPair(theme)].map(([key, occurrence]) => {
     const backdrop = tokens.get(occurrence.background) as string;
     const foreground = hexFor(occurrence.foreground, backdrop, tokens);
     return {
@@ -172,6 +209,8 @@ function measured(): Measured[] {
       threshold: thresholdFor(occurrence),
     };
   });
+  MEASURED.set(theme, rows);
+  return rows;
 }
 
 // ======================================================================= the formula itself
@@ -199,7 +238,7 @@ describe('the census is taken over rendered screens, not over a list', () => {
   it('reaches enough of the application to be worth calling a census', () => {
     const rendered = screens();
     expect(rendered.length).toBeGreaterThanOrEqual(25);
-    const pairs = everyPair();
+    const pairs = everyPair('light');
     expect(pairs.size).toBeGreaterThanOrEqual(90);
     // Every page and every widget in `web/src` renders into it.
     const names = rendered.map((s) => s.name).join(' ');
@@ -214,15 +253,36 @@ describe('the census is taken over rendered screens, not over a list', () => {
   });
 
   it('names every selector it declined to evaluate, so a skipped rule is not a passing one', () => {
-    everyPair();
-    // `:has()` is the one construct this matcher does not implement. The rule it guards
-    // sets `border-left-color` on `.am-quotation` to the same `--am-degraded` its own
-    // child already declares, so the pair it would contribute is in the census anyway.
-    expect(unsupported()).toEqual(['.am-quotation:has(.am-quotation__inconsistent)']);
+    everyPair('light');
+    everyPair('dark');
+    // `:has()` and `:not()` are the two constructs this matcher does not implement.
+    //
+    // `:has()` guards a rule that sets `border-left-color` on `.am-quotation` to the same
+    // `--am-degraded` its own child already declares, so the pair it would contribute is in
+    // the census anyway.
+    //
+    // `:not()` appears exactly once, in `W33-THEME`'s dark block under
+    // `@media (prefers-color-scheme: dark)`, and the assertion below is what makes that
+    // decline cost nothing: the rule declares CUSTOM PROPERTIES and no colour-bearing
+    // property at all, so there is no pair for the matcher to have missed. Its values are
+    // measured — they are the dark palette — but through `palette()`, which reads the
+    // block, not through the cascade, which cannot match the selector.
+    expect(unsupported()).toEqual([
+      '.am-quotation:has(.am-quotation__inconsistent)',
+      DARK_MEDIA_SELECTOR,
+    ]);
+
+    const declined = parseRules(readFileSync(GLOBALS, 'utf8'), 'globals.css').filter(
+      (rule) => rule.selector.trim() === DARK_MEDIA_SELECTOR,
+    );
+    expect(declined.length).toBe(1);
+    const properties = [...(declined[0] as (typeof declined)[number]).declarations.keys()];
+    expect(properties.length).toBeGreaterThan(0);
+    expect(properties.filter((name) => !name.startsWith('--am-'))).toEqual([]);
   });
 
   it('finds the pairs a reading of the token block alone cannot', () => {
-    const pairs = everyPair();
+    const pairs = everyPair('light');
     // Each of these meets only through inheritance or through an ancestor's background:
     // no rule declares either half beside the other.
     for (const key of [
@@ -237,56 +297,121 @@ describe('the census is taken over rendered screens, not over a list', () => {
       expect({ key, found: pairs.has(key) }).toEqual({ key, found: true });
     }
   });
+
+  it('produces the same pairs, and asks the same threshold of each, in both palettes', () => {
+    // A second palette must not be a second CENSUS. The elements are the same, the rules
+    // are the same and the cascade is the same: only the values differ. If this list is
+    // ever non-empty, the two themes are being judged against different questions and the
+    // per-theme comparison below would be comparing nothing.
+    const light = new Map(measured('light').map((m) => [m.key, m.threshold]));
+    const dark = new Map(measured('dark').map((m) => [m.key, m.threshold]));
+    const disagreement = [...new Set([...light.keys(), ...dark.keys()])]
+      .filter((key) => light.get(key) !== dark.get(key) || light.has(key) !== dark.has(key))
+      .map((key) => ({ key, light: light.get(key) ?? 'absent', dark: dark.get(key) ?? 'absent' }));
+    expect(
+      disagreement,
+      'A pair is present, or answers to a threshold, in one palette and not the other. ' +
+        'Threshold is a function of the MARKUP (is it text, is it interactive, does its ' +
+        'own fill distinguish it) — the only way a palette can change it is by moving a ' +
+        'surface across the 3:1 line that decides `fillDistinguishes`. Say which, and why.',
+    ).toEqual([]);
+  });
 });
 
 // ========================================================================== the assertion
 
 describe('every pair that meets on a screen clears the threshold its role asks of it', () => {
-  it('holds, and names the ratio of anything that does not', () => {
-    const failing = measured()
-      .filter((m) => m.threshold !== null && !(m.ratio >= m.threshold))
-      .filter((m) => !REGISTERED.some((r) => r.key === m.key))
-      .map((m) => ({
-        pair: m.key,
-        ratio: Number(m.ratio.toFixed(2)),
-        needs: m.threshold,
-        where: m.occurrence.sites[0],
-      }))
-      .sort((a, b) => a.ratio - b.ratio);
+  it('holds in BOTH palettes, and names the theme and the ratio of anything that does not', () => {
+    // One list over both palettes rather than one test each, so that a failure in the
+    // theme nobody is looking at is as loud as a failure in the other.
+    const failing = THEMES.flatMap((theme) =>
+      measured(theme)
+        .filter((m) => m.threshold !== null && !(m.ratio >= m.threshold))
+        .filter((m) => !isRegistered(m.key, theme))
+        .map((m) => ({
+          theme,
+          pair: m.key,
+          ratio: Number(m.ratio.toFixed(2)),
+          needs: m.threshold,
+          where: m.occurrence.sites[0],
+        })),
+    ).sort((a, b) => a.ratio - b.ratio);
     expect(failing).toEqual([]);
   });
 
-  it('measures something: the thresholds are not all `null`', () => {
-    const subject = measured().filter((m) => m.threshold !== null);
-    expect(subject.filter((m) => m.occurrence.kind === 'text').length).toBeGreaterThanOrEqual(30);
-    expect(subject.filter((m) => m.occurrence.kind !== 'text').length).toBeGreaterThanOrEqual(3);
+  it('measures something in each palette: the thresholds are not all `null`', () => {
+    for (const theme of THEMES) {
+      const subject = measured(theme).filter((m) => m.threshold !== null);
+      expect({ theme, text: subject.filter((m) => m.occurrence.kind === 'text').length >= 30 })
+        .toEqual({ theme, text: true });
+      expect({ theme, other: subject.filter((m) => m.occurrence.kind !== 'text').length >= 3 })
+        .toEqual({ theme, other: true });
+    }
+  });
+
+  it('the two palettes disagree about at least one ratio, so this is two measurements', () => {
+    // Anti-vacuity. If `palette('dark')` silently returned the light values — a typo in the
+    // block selector would do it — every assertion above would still pass and would be
+    // measuring the light theme twice. This is the check that the second measurement is a
+    // second measurement.
+    const light = new Map(measured('light').map((m) => [m.key, m.ratio]));
+    const differing = measured('dark').filter((m) => Math.abs((light.get(m.key) as number) - m.ratio) > 0.01);
+    expect(differing.length).toBeGreaterThan(20);
   });
 });
 
-describe('the register is held to the census in both directions', () => {
-  it('every registered pair is still produced and still below its threshold', () => {
-    const all = new Map(measured().map((m) => [m.key, m]));
-    const stale = REGISTERED.filter((r) => {
-      const m = all.get(r.key);
-      return m === undefined || m.threshold === null || m.ratio >= m.threshold;
-    }).map((r) => r.key);
-    // A row that has been repaired, or whose rule has gone, must be DELETED from the
-    // register rather than left standing as an excuse for something else.
-    expect(stale).toEqual([]);
+describe('the register is held to the census in both directions, and in both palettes', () => {
+  it('every registered row is still produced and still below its threshold, in every theme it names', () => {
+    const stale: string[] = [];
+    for (const row of REGISTERED) {
+      for (const theme of row.themes) {
+        const m = measured(theme).find((entry) => entry.key === row.key);
+        if (m === undefined || m.threshold === null || m.ratio >= m.threshold) {
+          stale.push(`${theme}: ${row.key}`);
+        }
+      }
+    }
+    // A row that has been repaired IN ONE PALETTE, or whose rule has gone, must lose that
+    // palette from its `themes` rather than keep it as an excuse for the other one.
+    expect(
+      stale,
+      'These rows excuse a pair that now passes, or that no screen produces, in the named ' +
+        'palette. Drop the theme from the row — and the row, if it names no theme left.',
+    ).toEqual([]);
   });
 
-  it('every registered pair carries a reason a reader can act on', () => {
+  it('every registered row names at least one palette and carries a reason a reader can act on', () => {
     for (const row of REGISTERED) {
       expect({ key: row.key, long: row.why.length > 80 }).toEqual({ key: row.key, long: true });
+      expect({ key: row.key, themes: row.themes.length > 0 }).toEqual({ key: row.key, themes: true });
+      for (const theme of row.themes) expect(THEMES).toContain(theme);
     }
   });
 });
 
-// =================================================== the two claims this wave's repair makes
+// ============================================ the claims each palette makes about its ink
 
-describe('the repaired tokens say what they are for', () => {
-  it('the third ink level is AA everywhere, and is no longer a level', () => {
-    const tokens = colourTokens(readFileSync(GLOBALS, 'utf8'));
+describe('the ink ladder says, per palette, how many levels it actually has', () => {
+  /** The luminance a foreground may not cross to stay AA on every text surface it meets. */
+  function aaBound(theme: Theme, token: TokenName): { readonly bound: number; readonly luminance: number } {
+    const tokens = palette(readFileSync(GLOBALS, 'utf8'), theme);
+    const surfaces = measured(theme)
+      .filter((m) => m.occurrence.kind === 'text' && m.occurrence.foreground === token)
+      .map((m) => relativeLuminance(tokens.get(m.occurrence.background) as string));
+    expect(surfaces.length).toBeGreaterThan(0);
+    const luminance = relativeLuminance(tokens.get(token) as string);
+    // Light theme: dark ink on the DARKEST surface it meets caps it from above.
+    // Dark theme: light ink on the LIGHTEST surface it meets floors it from below.
+    const surface = theme === 'light' ? Math.min(...surfaces) : Math.max(...surfaces);
+    const bound =
+      theme === 'light'
+        ? (surface + 0.05) / AA_TEXT - 0.05
+        : AA_TEXT * (surface + 0.05) - 0.05;
+    return { bound, luminance };
+  }
+
+  it('the light palette has two visible levels and three tokens, and that is the honest form of it', () => {
+    const tokens = palette(readFileSync(GLOBALS, 'utf8'), 'light');
     const soft = tokens.get('--am-ink-soft') as string;
     const muted = tokens.get('--am-ink-muted') as string;
     // It is not `ink-muted` under another name: two tokens, two values.
@@ -295,24 +420,55 @@ describe('the repaired tokens say what they are for', () => {
     // test is the point: if a later wave believes it has three ink levels, this fails.
     expect(contrastRatio(soft, muted)).toBeLessThan(1.3);
     // The reason: AA on the darkest surface it carries text over caps it just above
-    // `ink-muted`. Derived from the tokens, so a surface change moves both sides.
-    const darkestTextSurface = tokens.get('--am-failed-light') as string;
-    const ceiling = (relativeLuminance(darkestTextSurface) + 0.05) / 4.5 - 0.05;
-    expect(relativeLuminance(soft)).toBeLessThanOrEqual(ceiling);
-    expect(relativeLuminance(muted)).toBeLessThan(ceiling);
+    // `ink-muted`. Derived from the census, so a surface change moves both sides.
+    expect(aaBound('light', '--am-ink-soft').luminance).toBeLessThanOrEqual(aaBound('light', '--am-ink-soft').bound);
+    expect(aaBound('light', '--am-ink-muted').luminance).toBeLessThan(aaBound('light', '--am-ink-muted').bound);
   });
 
+  it('the dark palette has three, because nothing in it was already pinned', () => {
+    const tokens = palette(readFileSync(GLOBALS, 'utf8'), 'dark');
+    const ink = tokens.get('--am-ink') as string;
+    const muted = tokens.get('--am-ink-muted') as string;
+    const soft = tokens.get('--am-ink-soft') as string;
+    // Two steps a reader can see, where the light palette has one. This is the assertion
+    // that would redden if someone "unified" the two palettes by copying light's values.
+    expect(contrastRatio(ink, muted)).toBeGreaterThanOrEqual(1.5);
+    expect(contrastRatio(muted, soft)).toBeGreaterThanOrEqual(1.5);
+    // And the quietest level is still AA on the LIGHTEST surface it lands on — which in a
+    // dark theme is the most ELEVATED one, the opposite end from the light theme's worst
+    // case. Copying the reference system's #4d6070 here would be 2.60:1 and this fails.
+    const bound = aaBound('dark', '--am-ink-soft');
+    expect(bound.luminance).toBeGreaterThanOrEqual(bound.bound);
+    expect(relativeLuminance('#4d6070')).toBeLessThan(bound.bound);
+  });
+});
+
+describe('the border scale says the same thing in both palettes', () => {
   it('the strong line clears 1.4.11 on every surface a control sits on', () => {
-    const tokens = colourTokens(readFileSync(GLOBALS, 'utf8'));
-    const line = tokens.get('--am-line-strong') as string;
-    for (const surface of ['--am-paper', '--am-surface', '--am-surface-sunken', '--am-accent-light'] as const) {
-      const value = tokens.get(surface) as string;
-      expect({ surface, ok: contrastRatio(line, value) >= AA_NON_TEXT }).toEqual({ surface, ok: true });
+    for (const theme of THEMES) {
+      const tokens = palette(readFileSync(GLOBALS, 'utf8'), theme);
+      const line = tokens.get('--am-line-strong') as string;
+      for (const surface of ['--am-paper', '--am-surface', '--am-surface-sunken', '--am-accent-light'] as const) {
+        const value = tokens.get(surface) as string;
+        expect({ theme, surface, ok: contrastRatio(line, value) >= AA_NON_TEXT })
+          .toEqual({ theme, surface, ok: true });
+      }
     }
-    // And the three-level border scale still has three levels.
-    const soft = tokens.get('--am-line-soft') as string;
-    const base = tokens.get('--am-line') as string;
-    expect(relativeLuminance(soft)).toBeGreaterThan(relativeLuminance(base));
-    expect(relativeLuminance(base)).toBeGreaterThan(relativeLuminance(line));
+  });
+
+  it('the three border levels are three levels, measured as contrast and not as luminance', () => {
+    // `W32-CONTRAST` stated this as a luminance order — soft lighter than base lighter than
+    // strong — which is true of a light palette and FALSE of a dark one, where a border
+    // becomes visible by getting lighter rather than darker. The property it meant is
+    // theme-independent: each level stands out from the surface more than the one below it.
+    for (const theme of THEMES) {
+      const tokens = palette(readFileSync(GLOBALS, 'utf8'), theme);
+      const against = tokens.get('--am-surface') as string;
+      const step = (name: TokenName): number => contrastRatio(tokens.get(name) as string, against);
+      expect({ theme, ordered: step('--am-line-soft') < step('--am-line') })
+        .toEqual({ theme, ordered: true });
+      expect({ theme, ordered: step('--am-line') < step('--am-line-strong') })
+        .toEqual({ theme, ordered: true });
+    }
   });
 });

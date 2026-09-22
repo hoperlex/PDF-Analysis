@@ -1,0 +1,34 @@
+/*
+ * Layout for the section navigation. Colour is deliberately absent.
+ *
+ * The open section is marked by the classes the design system already declares — a
+ * primary `.am-button` against the quiet ones — and by `aria-current`, so this module
+ * introduces no ink/paper pair of its own. That is not shyness: the contrast census in
+ * `tests/unit/styles` measures pairs by crossing `globals.css` with rendered markup, and
+ * a colour declared in a collocated module is a colour that census cannot see. Layout is
+ * safe to keep here; colour belongs where it is measured.
+ *
+ * Every length below is a global token, as `globals.css` promises a collocated module
+ * will consume rather than redefine.
+ */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  margin: 0 0 var(--am-gap);
+  padding: 0;
+  list-style: none;
+}
+
+/* The designer's mark, which a reviewer scans for before reading the name. */
+.abbr {
+  font-weight: 700;
+}
+
+.rule {
+  margin: 0 0 var(--am-gap-lg);
+  max-width: 82ch;
+  font-size: var(--am-text-sm);
+  line-height: var(--am-leading-base);
+}
