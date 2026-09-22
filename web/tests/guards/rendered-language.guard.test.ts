@@ -644,17 +644,40 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
  * only once it is answered, and the failure layer -- where `Correlation id` survived two
  * reports of a translated interface -- exists only when it is refused.
  */
+export const CACHE_STATES: readonly {
+  readonly state: string;
+  readonly run: Partial<RunStatus> | null;
+}[] = [
+  { state: 'cold', run: null },
+  { state: 'loaded', run: {} },
+  { state: 'failed-run', run: { state: 'failed', terminal_reason: 'analysis_failed', published_finding_count: 0 } },
+  { state: 'partial-run', run: { state: 'partial', degradation_set: ['text_analysis'] } },
+  { state: 'running', run: { state: 'running', terminal_at: null, published_finding_count: 0 } },
+  { state: 'refused', run: null },
+  { state: 'empty', run: null },
+  /*
+   * The other four run states, added 2026-09-22 after a mutation failed to redden.
+   *
+   * Putting `cancelled` back as a raw contract value left this guard GREEN, and the rule is
+   * to establish whether the guard is weak or the mutation insufficient. It was the
+   * mutation: the `cancelled` arm is reached only by a cancelled run, and this matrix
+   * rendered four of the eight run states. The guard was sound and BLIND — four arms of
+   * `run-progress` had never been rendered by it, and an English string in any of them would
+   * have passed.
+   *
+   * Same shape as `W32-SEE`'s own first mutation, which reddened nothing because no list
+   * widget's empty branch was ever rendered. **A mutation that dies quietly is a coverage
+   * report, not a clean bill.**
+   */
+  { state: 'cancelled-run', run: { state: 'cancelled', published_finding_count: 0 } },
+  { state: 'created-run', run: { state: 'created', terminal_at: null, published_finding_count: 0 } },
+  { state: 'queued-run', run: { state: 'queued', terminal_at: null, published_finding_count: 0 } },
+  { state: 'validating-run', run: { state: 'validating', terminal_at: null, published_finding_count: 0 } },
+];
+
 export function renderedScreens(): readonly { readonly where: string; readonly markup: string }[] {
   const out: { where: string; markup: string }[] = [];
-  const states: readonly { readonly state: string; readonly run: Partial<RunStatus> | null }[] = [
-    { state: 'cold', run: null },
-    { state: 'loaded', run: {} },
-    { state: 'failed-run', run: { state: 'failed', terminal_reason: 'analysis_failed', published_finding_count: 0 } },
-    { state: 'partial-run', run: { state: 'partial', degradation_set: ['text_analysis'] } },
-    { state: 'running', run: { state: 'running', terminal_at: null, published_finding_count: 0 } },
-    { state: 'refused', run: null },
-    { state: 'empty', run: null },
-  ];
+  const states = CACHE_STATES;
   for (const screen of SCREENS) {
     const loaded = screen.name === 'review' ? loadedReviewClient : loadedClient;
     for (const { state, run: overrides } of states) {
@@ -826,7 +849,15 @@ describe('the guard renders the screens it claims to render', () => {
   const screens = renderedScreens();
 
   it('reaches all six screens in every state, and none of them throws', () => {
-    expect(screens.length).toBe(SCREENS.length * 7 + 1);
+    // A RELATIONSHIP, not a number. This read `SCREENS.length * 7 + 1` and went red the
+    // moment the matrix grew, which teaches the next reader to update a literal — exactly how
+    // a vacuity check stops checking. `W30-LISTS` ruled against hard-coded counts two waves
+    // ago and this was one of them.
+    expect(screens.length).toBe(SCREENS.length * CACHE_STATES.length + 1);
+    // And both factors are non-trivial, so a matrix that silently emptied is red rather than
+    // trivially satisfied.
+    expect(SCREENS.length).toBeGreaterThan(1);
+    expect(CACHE_STATES.length).toBeGreaterThan(1);
     for (const { where, markup } of screens) {
       expect(markup.length, `${where} rendered nothing`).toBeGreaterThan(200);
     }
