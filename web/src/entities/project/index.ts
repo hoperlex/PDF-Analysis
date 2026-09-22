@@ -15,6 +15,14 @@ export {
   validateProjectName,
 } from './model/project';
 
+export type { ProjectSection, ProjectSectionCode } from './model/section';
+export {
+  ANALYSED_SECTION_CODE,
+  PROJECT_SECTIONS,
+  findProjectSection,
+  projectSectionTitle,
+} from './model/section';
+
 export type { CreateProjectFailure, CreateProjectFailureKind } from './model/create-failure';
 export { classifyCreateProjectFailure } from './model/create-failure';
 

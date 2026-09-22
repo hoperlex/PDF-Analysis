@@ -26,6 +26,7 @@ import { PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
 import { DocumentList } from '@/widgets/document-list';
+import { ProjectSections } from '@/widgets/project-sections';
 import { UploadPanel } from '@/widgets/upload-panel';
 
 export interface ProjectDetailPageProps {
@@ -56,10 +57,12 @@ export function ProjectDetailPage({ projectUid }: ProjectDetailPageProps) {
       subtitle={<code>{projectUid}</code>}
       actions={<Link href={routes.projects()}>Все проекты</Link>}
     >
-      <h2>Документы</h2>
-      <DocumentList projectUid={projectUid} />
+      <ProjectSections route={routes.project(projectUid)}>
+        <h2>Документы</h2>
+        <DocumentList projectUid={projectUid} />
 
-      <UploadPanel projectUid={projectUid} onUploaded={goToVersion} />
+        <UploadPanel projectUid={projectUid} onUploaded={goToVersion} />
+      </ProjectSections>
     </PageShell>
   );
 }
