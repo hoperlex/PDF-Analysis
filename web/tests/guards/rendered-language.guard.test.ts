@@ -517,7 +517,7 @@ const decision = (): DecisionEvent => ({
  * `decision_event_count: 2` on purpose: the singular and the plural of that sentence are
  * different strings, and the plural is the one a knowledge base is read for.
  */
-const record = (): DecisionRecord => ({
+const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
   ...decision(),
   project_uid: PROJECT_UID,
   run_id: RUN_ID,
@@ -525,6 +525,7 @@ const record = (): DecisionRecord => ({
   finding_text: 'Срок поставки указан как 30 дней в §4 и как 45 дней в §9.',
   current_verdict: 'accepted',
   decision_event_count: 2,
+  ...over,
 });
 
 function apiError(status: number, code: ErrorCode): ApiError {
@@ -583,7 +584,23 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.findings, { items: [finding()], page });
   client.setQueryData(KEYS.finding, detail());
   client.setQueryData(KEYS.decisions, { items: [decision()], page });
-  client.setQueryData(KEYS.journal, { items: [record()], page });
+  /*
+   * TWO records, and the second one is not decoration.
+   *
+   * `W38-KB` put an English string in the knowledge base's SINGULAR branch -- "одно решение
+   * по находке" against "решений по находке: N" -- and this guard stayed GREEN, because the
+   * one seeded record carried `decision_event_count: 2` and the singular arm was never
+   * rendered. The mutation was sound; the coverage was not. Same shape as the empty-list
+   * branch `W32-SEE` found and the four run states a wave-33 judge found: **a mutation that
+   * reddens nothing is a coverage report, not a clean bill.**
+   *
+   * So one record per arm of that sentence. Both are rendered by one static pass, and an
+   * English word in either is now an offence.
+   */
+  client.setQueryData(KEYS.journal, {
+    items: [record(), record({ decision_id: `dec_${ULID}A`, decision_event_count: 1 })],
+    page,
+  });
   return client;
 }
 
@@ -639,6 +656,29 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.findings, { data: { items: [], page } });
   client.setQueryData(KEYS.decisions, { data: { items: [], page } });
   client.setQueryData(KEYS.journal, { items: [], page });
+  return client;
+}
+
+/**
+ * A client in which every listing has a next page.
+ *
+ * The cursor is opaque and this one is never sent anywhere: it exists so the pager's
+ * `next_cursor !== null` branch renders. `page` is the only thing that differs from the
+ * loaded client, so anything new on these screens is the pager and nothing else.
+ *
+ * It takes the loaded builder rather than calling `loadedClient` itself, because the
+ * review screen's three finding queries hold the transport envelope and the other screens
+ * hold the bare model. Seeding the wrong one renders a screen blank -- which is `D-57`
+ * seen from inside a test, and is exactly what the first version of this function did.
+ */
+function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
+  const client = loaded();
+  const page = { next_cursor: 'Y3Vyc29y' } as { next_cursor: string };
+  client.setQueryData(KEYS.projects, { items: [project()], page });
+  client.setQueryData(KEYS.documents, { items: [version()], page });
+  client.setQueryData(KEYS.versions, { items: [version()], page });
+  client.setQueryData(KEYS.runs, { items: [run()], page });
+  client.setQueryData(KEYS.journal, { items: [record()], page });
   return client;
 }
 
@@ -741,6 +781,20 @@ export const CACHE_STATES: readonly {
   { state: 'refused', run: null },
   { state: 'empty', run: null },
   /*
+   * A state in which every listing has a NEXT page, added 2026-09-22 by `W38-KB`.
+   *
+   * Eight English words were on these screens -- `Next page` and `First page` in four list
+   * widgets -- and this guard rendered none of them, because every seeded page carried
+   * `next_cursor: null` and the pager renders nothing at all when it does. Same shape as
+   * the empty branch `W32-SEE` found and the four run states a wave-33 judge found: the
+   * guard was sound and BLIND, and the blind spot was a whole control rather than a label.
+   *
+   * `First page` is still beyond a static pass: it renders only when the widget's own
+   * `cursor` state is set, and one render cannot set it. That half is stated as a limit
+   * rather than left to look like coverage.
+   */
+  { state: 'paged', run: null },
+  /*
    * The other four run states, added 2026-09-22 after a mutation failed to redden.
    *
    * Putting `cancelled` back as a raw contract value left this guard GREEN, and the rule is
@@ -773,7 +827,9 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
             ? failedClient()
             : state === 'empty'
               ? emptyClient()
-              : loaded(overrides ?? {});
+              : state === 'paged'
+                ? pagedClient(loaded)
+                : loaded(overrides ?? {});
       out.push({ where: `${screen.name} (${state})`, markup: renderScreen(client, screen.make()) });
     }
   }
