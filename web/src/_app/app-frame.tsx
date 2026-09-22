@@ -3,13 +3,16 @@
  * navigation the four PC-01 routes hang off.
  *
  * A server component. It reads the cosmetic instance label from configuration and holds
- * no state, so nothing here forces the whole tree into the client bundle.
+ * no state, so nothing here forces the whole tree into the client bundle — the one control
+ * that needs state, the theme toggle, is its own client component.
  */
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { getInstanceLabel } from '@/shared/config';
+
+import { ThemeToggle } from './theme-toggle';
 
 export interface AppFrameProps {
   readonly children: ReactNode;
@@ -25,6 +28,12 @@ export function AppFrame({ children }: AppFrameProps) {
         </Link>
         <span className="am-app__context">PC-01</span>
         {instance !== null ? <span className="am-app__instance">{instance}</span> : null}
+        {/*
+         * The only client component in the frame. `AppFrame` itself stays a server
+         * component: the theme control holds the state, so nothing else in the tree is
+         * pushed into the client bundle by it.
+         */}
+        <ThemeToggle />
       </header>
       <main className="am-app__main">{children}</main>
       <footer className="am-app__footer">
