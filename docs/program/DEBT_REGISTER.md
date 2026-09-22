@@ -12,6 +12,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | | Row | Needs |
 |---|---|---|
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
+| **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
+| D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
 | D-53 | **11** English strings left, now **guarded** — a ratchet that may only shrink | the eleven; the guard is done |
 | D-57 | one query key, two shapes: a finished run is polled forever | a decision, then a guard |
 | D-58 | a screen names `uploadDocument` and `document_uid` to a reviewer | one sentence |
@@ -1435,6 +1437,65 @@ Needs the owner: whether the second half is wanted at all for the alpha, and whe
 sections is the right set or legacy's set is simply what legacy had.
 
 Check: `python3 -c "import json; d=json.load(open('contracts/api/v1/openapi.json')); print(list(d['components']['schemas']['Project']['properties']))"`
+
+### D-59 — the normative corpus carries leaked English LLM reasoning as document body
+
+**Found by `W33-CORPUS` 2026-09-22 while segmenting for `R-16`. Nothing in `R-16`, `R-17` or
+the brief mentions it. Opened the same day, and it is the largest open quality question in the
+corpus programme.**
+
+**34 documents of 674 carry 79 occurrences of `The user wants me to …`** — the recognition
+model's own reasoning, written into `results.md` as though it were the document. The **single
+longest paragraph in the entire corpus**, 62 359 characters, opens with:
+
+> *"The user wants me to act as a strict transcription engine…"*
+
+**Vectorising the corpus as it stands would embed that as normative text**, and an index built
+on it would return a model's instructions to an expert asking what a norm says.
+
+**Measured independently of the phrase, so the row does not rest on one grep:** 706 paragraphs
+of 200 characters or more across 201 documents are predominantly Latin script. **Some of those
+are legitimate** — LaTeX formulae, ISO references — and some are English figure descriptions
+the model wrote. The two cannot be separated by a rule over characters.
+
+**It was deliberately not filtered, and that was right.** Telling a recognition artefact from a
+legitimately Latin clause is a **judgement**, not a markdown parse, and `R-16` is explicit that
+segmentation is the latter. A session that had guessed would have silently deleted real clauses
+or silently kept model output; it reported instead.
+
+**What it bears on.** `R-17` dates the corpus as a whole and attributes it to one source. This
+row says the corpus also contains text **no source wrote**. That is a different question from
+provenance and the footnote does not cover it.
+
+Needs a decision before embeddings are paid for: filter, re-recognise the 34, or accept and
+record. The cheapest honest option is to record the affected documents as data, the way the
+snapshot identifier already is.
+
+Check: `grep -rlc "The user wants me to" .local/norms/corpus/*/results.md | wc -l`
+
+### D-60 — three estimates inside `R-16` are wrong in the same direction, and one is a Cyrillic character count
+
+**Measured by `W33-CORPUS` 2026-09-22.** `R-16`'s **decisions** all hold — both checkable
+figures reproduced exactly, and the geometric premise completely. These are its **estimates**,
+and they are what a later wave would budget against.
+
+| `R-16` says | measured | why it differs |
+|---|---|---|
+| *"~62 MB of text in the database"* | **103 MB** | a character count read as bytes, over a **Cyrillic** corpus where most characters are two bytes in UTF-8 |
+| *"~15.6M tokens to embed once"* | **15.3–24.4M** | rests on 3.99 chars/token, a **Latin** ratio. At 2.5–3.5 for Cyrillic it is up to **1.6×** |
+| *"0.11 GB of vectors"* | **0.114 GB** | correct |
+
+**The token figure is the one that costs money**, and it is unverifiable without a real
+tokeniser, which the segmentation lane was forbidden to add. **The embedding stream's first act
+is to count tokens with the actual tokeniser**, before anything is spent.
+
+Also measured: **6.58% of chunks (3 666) exceed 1200 characters**, the longest being the 62 359
+of `D-59`. The chunker does not split a paragraph — cutting mid-sentence hands an expert a
+quotation that does not end — so what to do with the long tail (split tables by row, embed a
+summary, accept truncation) belongs to the embedding stream and is left explicit rather than
+silently truncated.
+
+Check: `docs/program/W33-CORPUS.md` §1.2 carries the reconciliation table and every command.
 
 ### D-57 — one query key holds two incompatible shapes, and a finished run is polled forever
 

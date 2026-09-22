@@ -259,6 +259,24 @@ and confirm they are green before you trust a single red. The target prints that
 and it is not decoration — a red from a copy you never baselined is not evidence. No list of
 directories is safe against the next path someone resolves from the root; a baseline is.
 
+### 10.2 A fast mutation sweep reads stale bytecode, and the symptom looks like a broken guard
+
+**Found by `W33-CORPUS` 2026-09-22, reproduced in isolation.**
+
+CPython validates a `.pyc` against its source by **mtime in whole seconds, plus size**. So two
+mutations of **the same length** into **the same file** inside **one second** leave the first
+one's bytecode live: the second case executes the *first* case's mutation.
+
+**The symptom is what makes this worth a section.** The sweep reports a red naming a test from
+the **previous** case. Case `G4` ran `G3`'s mutation and reddened `G3`'s test. That reads
+exactly like *"this guard is too broad"* — a plausible, wrong, and expensive conclusion, since
+the natural next step is to weaken a guard that was never at fault.
+
+An automated sweep is precisely the thing that mutates fast enough to hit this. A person
+editing by hand never will.
+
+**The fix:** `PYTHONDONTWRITEBYTECODE=1`, and clear `__pycache__` between cases.
+
 ### 10.1 What no copy can mutate
 
 `FULL=1` copies the five directories instead of symlinking them, so a mutation to a
