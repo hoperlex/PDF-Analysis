@@ -120,7 +120,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
 
       {created !== null ? (
         <p className="am-form__created" role="status" data-created-project={created.project_uid}>
-          Created <strong>{created.name}</strong> — <code>{created.project_uid}</code>
+          Создан <strong>{created.name}</strong> — <code>{created.project_uid}</code>
         </p>
       ) : null}
     </form>

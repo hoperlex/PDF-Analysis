@@ -1005,6 +1005,45 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
 
   // The state `R-18` actually requires. Skipped, not deleted, and not weakened: it is the
   // assertion this guard exists to make, and it goes green the day `OUTSTANDING` is empty.
+  it('every button the browser journey presses by text is actually rendered', () => {
+    /*
+     * `D-61`'s open half, closed with the instrument that already exists.
+     *
+     * `tests/e2e/pc01/journey/manifest.json` drives the real browser and finds two of its
+     * controls BY THEIR TEXT. `tests/e2e/test_pc01_journey_conformance.py` checks those
+     * strings by substring containment against a CONCATENATION of `web/src` -- so when the
+     * upload button became `Загрузить`, the manifest still said `Upload`, the journey would
+     * have failed to find the button, and the guard stayed green because `Upload` still
+     * occurs inside `uploadDocument` and `UploadFailure`. The wave-33 judges found the same
+     * shape with `Run` matching inside `RunPage`.
+     *
+     * A source scan cannot tell a label from an identifier. A render can: this asserts the
+     * click target exists in the markup a browser would receive.
+     */
+    const manifest = readJson<{
+      readonly write?: { readonly steps?: readonly { readonly actions?: readonly { readonly text?: string }[] }[] };
+    }>(join(REPO_ROOT, 'tests/e2e/pc01/journey/manifest.json'));
+
+    const texts = (manifest.write?.steps ?? [])
+      .flatMap((step) => step.actions ?? [])
+      .map((action) => action.text)
+      .filter((text): text is string => typeof text === 'string' && text.length > 0);
+
+    // Non-vacuous: a manifest that stopped naming click targets would otherwise pass here
+    // by having nothing to check, which is the failure mode this case exists to prevent.
+    expect(texts.length, 'the manifest names no click target by text').toBeGreaterThan(1);
+
+    const markup = renderedScreens().map((s) => s.markup).join('\n');
+    for (const text of texts) {
+      expect(
+        markup.includes(`>${text}<`) || markup.includes(`>${text} <`) || markup.includes(`> ${text}<`),
+        `the journey presses a control labelled "${text}" and no rendered screen carries it ` +
+          'as element text. Either the label moved and the manifest did not, or the reverse. ' +
+          'A substring check against web/src cannot see this -- it is why D-61 exists.',
+      ).toBe(true);
+    }
+  });
+
   it('finds none at all', () => {
     expect([...offencesOnScreens().keys()]).toEqual([]);
   });

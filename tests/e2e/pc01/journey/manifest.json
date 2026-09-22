@@ -233,7 +233,7 @@
           "bound_ms": 30000
         },
         "expects_rendered": [
-          "Created"
+          "Создан"
         ],
         "forbids_rendered": [
           "[role=\"alert\"]",
@@ -259,7 +259,7 @@
           {
             "do": "click",
             "selector": "form button[type=\"submit\"]",
-            "text": "Upload"
+            "text": "Загрузить"
           }
         ],
         "expects_api": [
