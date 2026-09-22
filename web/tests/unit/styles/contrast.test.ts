@@ -91,7 +91,7 @@ const GLOBALS = join(WEB, 'src', 'app', 'globals.css');
  *
  * The scoped name is read from the module's own export rather than reconstructed: the
  * mapping is the bundler's, and a guard that guessed its format would be measuring its own
- * guess. Scoping four module rules into the cascade takes the census from 118 pairs to 122
+ * guess. Scoping the module rules into the cascade takes the census from 118 pairs to 123
  * and introduces no failure in either palette.
  */
 const MODULE_EXPORTS = import.meta.glob('../../../src/**/*.module.css', { eager: true }) as Record<
