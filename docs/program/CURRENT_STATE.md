@@ -6,11 +6,25 @@
 > dispatched in that window was oriented by its brief instead, which worked and is not the
 > arrangement this file describes. The history below is kept; this block is what is true now.
 
-## Where the programme is, 2026-09-21
+## Where the programme is, 2026-09-22
 
-**`origin/dev` = `ac7c348`. `origin/main` = `9b8c77a`, tagged `alpha-w25` — a gated tip, not
-a certification.** `make gate` → `GATE OK`, exit 0: battery **2001 passed / 5 skipped / 169
-subtests**, foundation **35**, frontend **764 in 52 files**. Read from
+**`origin/dev` = `b0e5c07`. `origin/main` = `f96c23a`, tagged `alpha-w30` — a gated tip, not
+a certification.** `make gate` → `GATE OK`: battery **2193 passed / 5 skipped / 169
+subtests**, foundation **35**, frontend **959 in 68 files**.
+
+**The application has authorization.** Wave 34 added `POST /auth/token`, a sign-in screen and
+migration `0006_app_user`, and resealed the contract: **12 paths / 15 operations / 46 schemas
+→ 13 / 16 / 48**, with the contract, the generated client, the mirror, the migration and
+`web/FRONTEND_LOCK.json` moving in one change — the three-document coupling `D-18` named and
+the first wave to plan for it rather than discover it.
+
+**Driven on the stand, not inferred:** `GET /bff/v1/projects` without a session answered `200`
+**with write access** that morning and answers **`401`** now; zero `Authorization` headers
+leave the BFF; a sign-in screen exists. That closes the operative half of `D-49`.
+
+**The interface is Russian and finished enough to show.** Both palettes, a sun/moon theme
+control, an icon set under `web/NOTICE`, the thirteen project sections, and a language guard
+that renders the screens and fails on one English word a contract did not put there. Read from
 `/root/w19-integrator-logs/gate-w29.log` with `EXIT=0` appended by the shell that ran `make`.
 
 **The application is deployed, drivable by hand, and provably the tree.** One alpha stack

@@ -200,6 +200,25 @@ before the merge. Only the judge measuring the **merged** tree got the list that
 
 **Never accept a count of what a change left behind from the branch that made the change.**
 
+### And a commit count against a rewritten branch measures object identity, not landing
+
+Same day, same host, same shape. Clearing ten merged worktrees, a session ran
+`git log origin/dev..HEAD` in each and **four reported 2–3 commits outstanding**, which reads
+as unmerged work about to be destroyed.
+
+**None of it was outstanding.** That session had rebased its integration branch onto a moving
+base three times, so the agent branches point at **pre-rebase objects** whose patches are in
+`dev` under different hashes. `git cherry -v` prefixes every one with `-`, meaning an
+equivalent patch is already upstream.
+
+**A commit count against a rewritten branch answers "are these objects reachable", and the
+question asked was "did this work land".** Those are different questions and the number looks
+like an answer to both.
+
+So: **before removing a worktree or a branch, verify by content — `git cherry -v <upstream>
+<branch>` — not by counting commits.** `merge-base --is-ancestor` has the same blind spot for
+the same reason.
+
 ## 5. `make bootstrap` needs an explicit base interpreter
 
 When the ambient interpreter is an active virtualenv, run:
