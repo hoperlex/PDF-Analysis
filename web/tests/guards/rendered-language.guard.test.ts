@@ -61,6 +61,7 @@ import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.
 import { ApiError, queryKeys } from '@/shared/api';
 import type {
   DecisionEvent,
+  DecisionRecord,
   DocumentVersion,
   ErrorCode,
   ErrorEnvelope,
@@ -71,12 +72,14 @@ import type {
   StageId,
 } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
+import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { DocumentDetailPage } from '@/_pages/document-detail';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { AppFrame } from '@/_app';
 import { ProjectsPage } from '@/_pages/projects';
+import { KnowledgeBasePage } from '@/_pages/knowledge-base';
 import { ReviewPage } from '@/_pages/review';
 import { SignInPage } from '@/_pages/sign-in';
 import { RunPage } from '@/_pages/run';
@@ -509,6 +512,21 @@ const decision = (): DecisionEvent => ({
   recorded_at: '2026-09-10T09:00:00.000Z',
 });
 
+/**
+ * One journal record. Cyrillic everywhere the application did not author the string, and
+ * `decision_event_count: 2` on purpose: the singular and the plural of that sentence are
+ * different strings, and the plural is the one a knowledge base is read for.
+ */
+const record = (): DecisionRecord => ({
+  ...decision(),
+  project_uid: PROJECT_UID,
+  run_id: RUN_ID,
+  category: 'internal_contradiction',
+  finding_text: 'Срок поставки указан как 30 дней в §4 и как 45 дней в §9.',
+  current_verdict: 'accepted',
+  decision_event_count: 2,
+});
+
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
     contract_version: '1.0.0-draft.1',
@@ -532,6 +550,7 @@ const KEYS = {
   findings: queryKeys.runs.findings(RUN_ID),
   finding: queryKeys.findings.detail(FINDING_UID),
   decisions: queryKeys.findings.decisions(FINDING_UID),
+  journal: queryKeys.findings.journal({ limit: JOURNAL_PAGE_LIMIT }),
 } as const;
 
 /**
@@ -564,6 +583,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.findings, { items: [finding()], page });
   client.setQueryData(KEYS.finding, detail());
   client.setQueryData(KEYS.decisions, { items: [decision()], page });
+  client.setQueryData(KEYS.journal, { items: [record()], page });
   return client;
 }
 
@@ -618,6 +638,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.run, run());
   client.setQueryData(KEYS.findings, { data: { items: [], page } });
   client.setQueryData(KEYS.decisions, { data: { items: [], page } });
+  client.setQueryData(KEYS.journal, { items: [], page });
   return client;
 }
 
@@ -687,6 +708,17 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
   { name: 'sign-in', make: () => createElement(SignInPage, {}) },
   { name: 'sign-in-refused', make: () => createElement(SignInPage, { refusal: 'credentials' }) },
   { name: 'sign-in-open', make: () => createElement(SignInPage, { login: 'проверяющий' }) },
+  /*
+   * The knowledge base, `R-23`, APPENDED for the reason stated above: `renderedScreens()`
+   * reaches the review screen by index, so a screen inserted anywhere but the end renders
+   * a different page under the review screen's name.
+   *
+   * One entry and not three, unlike the sign-in screen: its two filters are `select`
+   * elements whose every option is rendered in a single static pass, so the labels a
+   * reviewer can choose between are all in this markup. What one pass cannot reach is the
+   * *result* of choosing one, and that is a query key rather than a string.
+   */
+  { name: 'knowledge-base', make: () => createElement(KnowledgeBasePage, {}) },
 ];
 
 /**

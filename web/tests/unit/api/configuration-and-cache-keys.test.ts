@@ -209,16 +209,21 @@ describe('every cache key starts in its own namespace', () => {
   });
 });
 
-describe('an appended decision invalidates all three entries the seam names', () => {
-  it('invalidates the decision history, the finding detail and the run finding list', () => {
+describe('an appended decision invalidates every entry the seam names', () => {
+  it('invalidates the history, the detail, the run finding list and the journal', () => {
     const keys = decisionCacheKeys(FINDING_UID, RUN_ID).map((key) => JSON.stringify(key));
 
-    expect(keys).toHaveLength(3);
+    expect(keys).toHaveLength(4);
     expect(keys).toContain(JSON.stringify(['findings', 'decisions', FINDING_UID]));
     expect(keys).toContain(JSON.stringify(['findings', 'detail', FINDING_UID]));
     // The third is the one that gets forgotten: the verdict projection is in the list row
     // as well as in the detail panel.
     expect(keys).toContain(JSON.stringify(['runs', 'findings', RUN_ID, {}]));
+    // The fourth, `W38-KB`: the knowledge base is the journal of every decision, so the
+    // event just appended belongs at the top of it. A reviewer who accepts a finding and
+    // then opens the knowledge base without seeing their own decision has no way to tell
+    // a stale cache from a lost write.
+    expect(keys).toContain(JSON.stringify(['findings', 'journal', {}]));
   });
 
   it('builds the run key with default filters, so it matches every filtered list', () => {
