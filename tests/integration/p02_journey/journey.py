@@ -66,6 +66,9 @@ RECORDINGS = REPOSITORY_ROOT / "fixtures" / "recorded" / "text_analysis"
 #: migrated something would show up here and nowhere else.
 P02_TABLES = (
     "alembic_version",
+    # `0006_app_user`. A journey writes no user, so its count is expected to be
+    # unchanged across one -- which is a claim worth counting rather than skipping.
+    "app_user",
     "audit_event",
     "audit_run",
     "blob",

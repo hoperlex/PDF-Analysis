@@ -173,6 +173,14 @@ def test_every_state_column_carries_the_transition_guard(migrated_engine: Engine
 #: ``sequence_no`` is a server row order, ``aggregate_id`` holds any prefix by design,
 #: ``correlation_id`` is declared ``is_entity_identity: false``, ``block_id`` and
 #: ``section_id`` are anchors inside one artifact, and ``stage_id`` is a registry name.
+#:
+#: ``user_uid`` (``0006_app_user``) is here for a different reason: it IS an identity,
+#: but ``usr`` is not a prefix in ``contracts/domain/v1/identifiers.json`` -- that
+#: catalog is frozen at twenty-five entries and has no user aggregate -- so the sweep
+#: below, which resolves each column through a contract prefix, has nothing to resolve
+#: it against. Its format CHECK is asserted directly in
+#: ``test_app_user_migration.py::test_the_identity_column_carries_the_contract_shaped_format_check``,
+#: so excluding it here loses no coverage. When users are contracted, delete this entry.
 NON_CONTRACT_IDENTITY_COLUMNS = {
     "aggregate_id",
     "block_id",
@@ -180,6 +188,7 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     "section_id",
     "sequence_no",
     "stage_id",
+    "user_uid",
 }
 
 
