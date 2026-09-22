@@ -3,7 +3,19 @@
     "What `recorded` mode does with a document that has no recording, as W28-LIVE MEASURED",
     "it on 2026-09-21 and then asserted. Exit 0 means the screen still says these five",
     "things and the run still ends `failed`. Every sentence here was copied out of a",
-    "browser's `innerText`, not out of `web/src`."
+    "browser's `innerText`, not out of `web/src`.",
+    "",
+    "AMENDED 2026-09-22 by `W33-SECT`, and the amendment is weaker than the original —",
+    "say so rather than let a later reader assume otherwise. `R-18` translated this screen:",
+    "two of these sentences were this session's own doing (`The run terminated failed.`,",
+    "`Terminal reason:`) and four were already stale before it (`Run`, the cost sentence,",
+    "`There is nothing to review.`, the recorded-mode caption). The Russian replacements",
+    "were read out of a STATIC server render of the same components, not out of a browser:",
+    "this session had no stack to run against. So exit 0 here still means what it meant,",
+    "but the sentences are derived rather than measured until someone runs this manifest",
+    "against a live origin once. The three sibling manifests in this directory are still",
+    "English and still stale; they assert live-provider outcomes this session could not",
+    "measure, and leaving them visibly wrong is better than guessing them right."
   ],
   "api_prefix": "/bff/v1",
   "identifier_pattern": "[0-9A-HJKMNP-TV-Z]{26}",
@@ -129,7 +141,7 @@
           "bound_ms": 30000
         },
         "expects_rendered": [
-          "This version"
+          "Эта версия"
         ],
         "forbids_rendered": [
           "[data-upload-failure]",
@@ -205,12 +217,12 @@
           }
         ],
         "expects_rendered": [
-          "Run",
-          "The run terminated failed. Nothing was published.",
-          "Terminal reason: analysis_input_invalid",
-          "This run made no provider call, so it has no cost to report.",
-          "There is nothing to review.",
-          "Replayed from recordings. This run is not evidence of a live provider call."
+          "Прогон",
+          "Прогон завершился как failed. Ничего не опубликовано.",
+          "Терминальная причина: analysis_input_invalid",
+          "Прогон не обращался к провайдеру, поэтому сообщать о стоимости нечего.",
+          "Разбирать нечего.",
+          "Воспроизведено из записей. Этот прогон не является свидетельством живого вызова провайдера."
         ],
         "forbids_rendered": []
       }
