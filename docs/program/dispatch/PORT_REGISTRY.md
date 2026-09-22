@@ -31,6 +31,9 @@ delegates the choice to a session that cannot see the other lanes.**
 | `55480`, `59110/59111` | `gate-w34judge` | 2026-09-22 | wave 34 merges |
 | `56140` | `gate-w34dom` | 2026-09-22 | wave 34 merges |
 | `56148`, `59740/59741` | `gate-w35a` | 2026-09-22 | wave 35 merged; **released** |
+| `55470–55490`, `59100–59120`, `56140` | wave 34 | 2026-09-22 | **released** — wave 34 merged at `31a8a53` |
+| `56150`, `59750/59751` | `gate-w37a` | 2026-09-22 | wave 37 merges |
+| `56160`, `59760/59761` | `gate-w37b` | 2026-09-22 | wave 37 merges |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
