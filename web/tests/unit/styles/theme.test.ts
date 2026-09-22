@@ -208,36 +208,60 @@ describe('a theme choice is read, kept and applied', () => {
 describe('the theme control is Russian to read and machine-readable to test', () => {
   const markup = (): string => renderToStaticMarkup(createElement(ThemeToggle, {}));
 
-  it('offers every choice, each labelled in Russian', () => {
+  /*
+   * The control is TWO buttons now, sun and moon, on the owner's instruction of 2026-09-22.
+   * `system` is still a `ThemeChoice` and still the default — it is simply no longer a
+   * button, so these cases assert over the two that render rather than over all three.
+   */
+  const SHOWN: readonly ThemeChoice[] = ['light', 'dark'];
+
+  it('offers the two schemes, each labelled in Russian', () => {
     const rendered = markup();
-    for (const choice of THEME_CHOICES) {
-      const label = THEME_LABELS[choice as ThemeChoice];
-      expect({ choice, shown: rendered.includes(label) }).toEqual({ choice, shown: true });
-      // The label is Russian; R-18 requires the alpha in Russian and this control is new.
+    for (const choice of SHOWN) {
+      const label = THEME_LABELS[choice];
+      // Icon-only buttons, so the label reaches a reader through `aria-label`, which is also
+      // where the rendered-language guard looks — it cannot silently become English.
+      expect({ choice, shown: rendered.includes(`aria-label="${label}"`) }).toEqual({
+        choice,
+        shown: true,
+      });
       expect({ choice, cyrillic: /[Ѐ-ӿ]/.test(label) }).toEqual({ choice, cyrillic: true });
       expect({ choice, latin: /[A-Za-z]/.test(label) }).toEqual({ choice, latin: false });
     }
+    // The icon is what a sighted reviewer sees, so assert it is actually there.
+    expect((rendered.match(/<svg/g) ?? []).length).toBe(SHOWN.length);
+  });
+
+  it('keeps `system` a real choice even though it is not a button', () => {
+    // The cost of two controls instead of three is that there is no way BACK to `system`
+    // from the interface. It must still be the default, or the OS preference stops being
+    // honoured at all — which would be a different and much larger change.
+    expect(THEME_CHOICES).toContain('system');
+    expect(markup()).not.toContain('data-theme-choice="system"');
   });
 
   it('carries the machine value beside the label, where the journey reads it', () => {
     const rendered = markup();
-    for (const choice of THEME_CHOICES) {
+    for (const choice of SHOWN) {
       expect(rendered).toContain(`data-theme-choice="${choice}"`);
     }
   });
 
-  it('renders the default choice pressed, and exactly one', () => {
+  it('renders nothing pressed, because the default is not a button', () => {
     const rendered = markup();
     // The server has no storage, so the markup it produces is the default — and the first
     // client render must agree with it or React discards the tree.
-    expect((rendered.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
-    expect(rendered).toMatch(/data-theme-choice="system"[^>]*aria-pressed="true"/);
+    // The default is `system`, which is no longer a button — so NOTHING is pressed, and
+    // that is the assertion. A pressed control in the server markup would mean the default
+    // had silently become an explicit choice.
+    expect((rendered.match(/aria-pressed="true"/g) ?? []).length).toBe(0);
+    expect((rendered.match(/aria-pressed="false"/g) ?? []).length).toBe(SHOWN.length);
   });
 
-  it('is a labelled group of buttons rather than three loose controls', () => {
+  it('is a labelled group of buttons rather than loose controls', () => {
     const rendered = markup();
     expect(rendered).toContain('role="group"');
-    expect((rendered.match(/<button/g) ?? []).length).toBe(THEME_CHOICES.length);
+    expect((rendered.match(/<button/g) ?? []).length).toBe(SHOWN.length);
     expect(rendered).toContain('type="button"');
   });
 });

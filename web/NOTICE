@@ -77,6 +77,8 @@ rather than by Feather's name for the shape.
 | `warning`    | `alert-triangle` | Feather |
 | `error`      | `alert-circle`   | Feather |
 | `success`    | `check-circle`   | Feather |
+| `light`      | `sun`            | Feather |
+| `dark`       | `moon`           | Feather |
 
 
 --------------------------------------------------------------------------------
@@ -101,8 +103,8 @@ compared against it.
 `web/tests/unit/icon-convention.test.ts` reads this file and fails if the table and
 `FEATHER_SOURCE` stop agreeing, so this notice cannot silently fall behind the set.
 
-The copy itself is checked too. `web/tests/unit/icon-feather-source.ts` holds the sixteen
-Feather documents as they were fetched, each with the `sha256` of the fetched bytes, and
+The copy itself is checked too. `web/tests/unit/icon-feather-source.ts` holds every
+Feather document as it was fetched, each with the `sha256` of the fetched bytes, and
 `web/tests/unit/icon-provenance.test.ts` compares what the component renders against them.
 A path edited after the fact would make this notice wrong about what was copied, which is
 the failure `D-52` was opened over, so it fails the suite instead.

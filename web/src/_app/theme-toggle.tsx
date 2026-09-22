@@ -24,9 +24,11 @@
 
 import { useEffect, useState } from 'react';
 
+import { Icon } from '@/shared/ui';
+
 import type { ThemeChoice } from './theme';
 import {
-  THEME_CHOICES,
+
   THEME_LABELS,
   applyThemeChoice,
   readThemeChoice,
@@ -51,21 +53,37 @@ export function ThemeToggle() {
 
   return (
     <div className="am-theme" role="group" aria-label="Оформление">
-      {THEME_CHOICES.map((value) => (
+      {/*
+        * TWO buttons, sun and moon, asked for by the owner 2026-09-22.
+        *
+        * `THEME_CHOICES` still has three members and `system` is still the default: it is the
+        * state you are in until you press one of these, `readThemeChoice` returns it, and the
+        * OS preference is honoured the whole time. What it no longer is, is a BUTTON.
+        *
+        * THE CONSEQUENCE, NAMED RATHER THAN DISCOVERED: once a reviewer picks light or dark,
+        * there is no way back to "follow the system" from the interface. That is the cost of
+        * two controls instead of three and it is the owner's call; reversing it is one entry
+        * in the array below.
+        *
+        * Icon-only, so each carries an `aria-label`. Those labels are Russian and the
+        * rendered-language guard reads `aria-label`, so this cannot silently become English.
+        */}
+      {(['light', 'dark'] as const).map((value) => (
         <button
           key={value}
           type="button"
           className="am-theme__option"
           /*
-           * The machine value, kept beside the translated label. The browser journey and the
-           * PA-01 criterion-4 evidence select on this attribute, so the wording above it is
-           * free to be Russian and free to change.
+           * The machine value, kept beside the icon. The browser journey and the PA-01
+           * criterion-4 evidence select on this attribute, so the wording is free to change.
            */
           data-theme-choice={value}
           aria-pressed={value === choice}
+          aria-label={THEME_LABELS[value]}
+          title={THEME_LABELS[value]}
           onClick={() => pick(value)}
         >
-          {THEME_LABELS[value]}
+          <Icon name={value} />
         </button>
       ))}
     </div>

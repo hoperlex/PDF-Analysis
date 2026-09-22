@@ -62,7 +62,9 @@ export type IconName =
   | 'arrow'
   | 'warning'
   | 'error'
-  | 'success';
+  | 'success'
+  | 'light'
+  | 'dark';
 
 /**
  * The Feather file each name was copied from.
@@ -88,6 +90,8 @@ export const FEATHER_SOURCE: Readonly<Record<IconName, string>> = {
   warning: 'alert-triangle',
   error: 'alert-circle',
   success: 'check-circle',
+  light: 'sun',
+  dark: 'moon',
 };
 
 /** The set, in a fixed order, for tests and for anything that enumerates it. */
@@ -123,6 +127,27 @@ const GEOMETRY: Readonly<Record<IconName, ReactNode>> = {
       <polygon points="10 8 16 12 10 16 10 8" />
     </>
   ),
+  /*
+   * The day/night pair, asked for by the owner 2026-09-22 for the theme control.
+   *
+   * Copied from Feather's `sun.svg` and `moon.svg` and fetched from the source rather than
+   * recalled, because `D-52` established that every icon here is Feather's and `web/NOTICE`
+   * says so. An icon written from memory would make that notice false.
+   */
+  light: (
+    <>
+      <circle cx="12" cy="12" r="5" />
+      <line x1="12" y1="1" x2="12" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="23" />
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+      <line x1="1" y1="12" x2="3" y2="12" />
+      <line x1="21" y1="12" x2="23" y2="12" />
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+    </>
+  ),
+  dark: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,
   finding: (
     <>
       <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />

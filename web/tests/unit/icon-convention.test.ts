@@ -67,8 +67,13 @@ function children(html: string): string {
 }
 
 describe('the icon set renders one convention', () => {
-  it('has sixteen icons, each named once', () => {
-    expect(ICON_NAMES).toHaveLength(16);
+  it('names every icon once and derives the list rather than counting it', () => {
+    // This asserted `toHaveLength(16)` and went red when the owner asked for a sun and a
+    // moon — a hard-coded count that reddens on a correct change and teaches the next reader
+    // to bump the literal. `W30-LISTS` ruled against exactly this two waves ago and this was
+    // one of them. The relationship below is what the case was for: the names and the source
+    // map describe the same set, and neither may quietly gain a member the other lacks.
+    expect(ICON_NAMES.length).toBeGreaterThan(1);
     expect(new Set(ICON_NAMES).size).toBe(ICON_NAMES.length);
     expect([...ICON_NAMES].sort()).toEqual(Object.keys(FEATHER_SOURCE).sort());
   });
