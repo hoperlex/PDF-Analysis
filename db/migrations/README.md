@@ -10,11 +10,12 @@ One migration head owner per wave. Use forward migrations and expand→backfill�
 | `0002_pc01_schema` | `0001_baseline` | the complete PC-01 schema: 15 tables, 1 view, 5 trigger functions |
 | `0003_open_items` | `0002_pc01_schema` | three owner-ruled corrections: the blob index comment, `model_call.status` widened to admit `truncated`, a CHECK on `ungrounded_reason` |
 | `0004_cost_basis` | `0003_open_items` | `model_call.cost_basis` — whether `cost_micros` was measured or derived |
-| `0005_truncated_call_status` | `0004_cost_basis` | **head** — the two invariants that give `truncated` content: it carries a response checksum and no error code |
+| `0005_truncated_call_status` | `0004_cost_basis` | the two invariants that give `truncated` content: it carries a response checksum and no error code |
+| `0006_app_user` | `0005_truncated_call_status` | **head** — `app_user`: a login, a salted PBKDF2-SHA256 digest with its parameters, and one seeded account (`admin`) flagged `is_default_credential` |
 
-**One head, one owner.** `A1` owns it until Gate A closes, then the integrator. No
-Gate B session writes DDL. A schema need is submitted as a test plus the constraint it
-asks for; see `docs/program/P02_SEAMS.md` §10.
+**One head, one owner.** `A1` owns it until Gate A closes, then the integrator; `W34-DOM`
+holds it for wave 34 and wrote `0006_app_user`. No Gate B session writes DDL. A schema
+need is submitted as a test plus the constraint it asks for; see `docs/program/P02_SEAMS.md` §10.
 
 The table list, the SQLSTATE codes and the declared state topology are documented in
 `docs/program/P02_SEAMS.md` §3, which is the register Gate B consumes. This file
