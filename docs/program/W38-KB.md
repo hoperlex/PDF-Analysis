@@ -187,7 +187,7 @@ start. Wave 34 got it right; this follows it.
 
 | item | before | after |
 |---|---|---|
-| `contracts/api/v1/openapi.json` | `37425dff…6041a9` | `976df5c1…e20461 9` (see below) |
+| `contracts/api/v1/openapi.json` | `37425dff…6041a9` | `976df5c1…e20461` (in full below) |
 | `web/openapi/openapi.json` (mirror) | same digest | same digest |
 | `web/src/shared/api/generated/*.ts` | 4 files | regenerated, `api:verify` OK, 17 operations |
 | `web/FRONTEND_LOCK.json` | 13 / 16 / 48 | 14 / 17 / 50, six digests recomputed |
@@ -458,7 +458,7 @@ Every case above was reverted and re-run green before the next one.
 
 ## 6. The gate delta, case by case
 
-`make gate > /root/w38-logs/w38kb-gate2.log 2>&1`, on a clean tree at `9d2d0f2`, lane
+`make gate > /root/w38-logs/w38kb-gate2.log 2>&1`, on a clean tree at `edb9825`, lane
 `gate-w38a`. **`GATE OK` does not appear in the log.**
 
 | | baseline `ebf5430` | here | accounted |
