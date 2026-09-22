@@ -18,6 +18,9 @@ export {
 
 export { decisionCacheKeys } from './model/cache';
 
+/** The Russian label for a verdict, so no consumer renders the contract value as prose. */
+export { VERDICT_LABELS } from './ui/verdict-badge';
+
 export type { IntentRecord } from './model/intent';
 export { intentSignature, resolveIntentKey } from './model/intent';
 

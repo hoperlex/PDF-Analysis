@@ -39,7 +39,7 @@ function StateBlock({ title, detail, correlationId, action, tone, role }: StateB
       {detail !== undefined ? <div className="am-state__detail">{detail}</div> : null}
       {correlationId !== undefined && correlationId !== null ? (
         <p className="am-state__correlation">
-          Correlation id <code>{correlationId}</code>
+          Идентификатор корреляции <code>{correlationId}</code>
         </p>
       ) : null}
       {action !== undefined ? <div className="am-state__action">{action}</div> : null}

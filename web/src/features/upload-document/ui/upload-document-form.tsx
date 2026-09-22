@@ -115,7 +115,7 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
             className="am-button"
             disabled={file === null || precheck !== null || mutation.isPending}
           >
-            Upload
+            Загрузить
           </button>
         </div>
       </div>
@@ -142,7 +142,7 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
               <p data-upload-failure={failure.kind}>{failure.detail}</p>
               {failure.correlationId === null ? null : (
                 <p>
-                  Correlation id <code>{failure.correlationId}</code>
+                  Идентификатор корреляции <code>{failure.correlationId}</code>
                 </p>
               )}
               <p>Версия не опубликована, прогон не запущен.</p>

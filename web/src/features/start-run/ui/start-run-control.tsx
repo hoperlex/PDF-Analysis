@@ -60,7 +60,7 @@ export function StartRunControl({ versionUid, onStarted }: StartRunControlProps)
               <p data-run-failure={failure.kind}>{failure.detail}</p>
               {failure.correlationId === null ? null : (
                 <p>
-                  Correlation id <code>{failure.correlationId}</code>
+                  Идентификатор корреляции <code>{failure.correlationId}</code>
                 </p>
               )}
               <p>Прогон не запущен.</p>

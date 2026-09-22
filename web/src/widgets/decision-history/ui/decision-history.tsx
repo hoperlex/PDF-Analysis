@@ -23,7 +23,7 @@ import type { DecisionEvent } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, LoadingState, NotApplicableState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
-import { orderEvents } from '@/entities/expert-decision';
+import { VERDICT_LABELS, orderEvents } from '@/entities/expert-decision';
 
 export interface DecisionHistoryProps {
   readonly events: readonly DecisionEvent[];
@@ -61,7 +61,10 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
             <p className="am-history__line">
               <span className="am-history__type">{event.event_type}</span>
               {event.verdict !== null && event.verdict !== undefined ? (
-                <span className="am-history__verdict"> → {event.verdict}</span>
+                <span className="am-history__verdict" data-verdict={event.verdict}>
+                  {' → '}
+                  {VERDICT_LABELS[event.verdict]}
+                </span>
               ) : null}
               <span className="am-history__at"> {formatInstant(event.recorded_at)}</span>
               <span className="am-history__author"> {event.author_label}</span>

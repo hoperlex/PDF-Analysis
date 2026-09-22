@@ -59,7 +59,12 @@ export interface RunStateBadgeProps {
  * Keyed on `RunState`, so a state added to the contract fails to compile until it is
  * given a label rather than silently rendering its own identifier.
  */
-const STATE_LABELS: Readonly<Record<RunState, string>> = {
+/**
+ * Exported for the same reason `VERDICT_LABELS` was: a private table is one the next
+ * consumer renders around. `run-progress` printed `<code>{status.state}</code>` in three
+ * places of explanatory prose, so a reviewer read a Russian sentence ending in `published`.
+ */
+export const STATE_LABELS: Readonly<Record<RunState, string>> = {
   created: 'создан',
   queued: 'в очереди',
   running: 'выполняется',

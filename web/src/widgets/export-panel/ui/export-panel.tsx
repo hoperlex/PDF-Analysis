@@ -30,7 +30,7 @@
 import type { ProviderMode, RunId, RunState } from '@/shared/api';
 import { CSV_COLUMNS, CSV_ENCODING, csvFileName, isExportableRunState } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
-import { ErrorState, NotApplicableState, RunStateBadge } from '@/shared/ui';
+import { ErrorState, NotApplicableState, RunStateBadge, STATE_LABELS } from '@/shared/ui';
 
 export interface ExportPanelProps {
   readonly runId: RunId;
@@ -106,8 +106,9 @@ export function ExportPanel({
           detail={
             <p>
               Прогон выгружается, когда его терминальное состояние публикует результат —{' '}
-              <code>published</code> или <code>partial</code>. Этот прогон —{' '}
-              <code>{runState}</code>, поэтому писать нечего. Повтор не предлагается: он не
+              <span data-run-state="published">{STATE_LABELS.published}</span> или{' '}
+              <span data-run-state="partial">{STATE_LABELS.partial}</span>. Этот прогон —{' '}
+              <span data-run-state={runState}>{STATE_LABELS[runState]}</span>, поэтому писать нечего. Повтор не предлагается: он не
               меняет терминальное состояние.
             </p>
           }

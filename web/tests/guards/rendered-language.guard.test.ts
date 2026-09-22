@@ -322,9 +322,23 @@ export function unexplainedLatin(text: string, vocabulary: ReadonlySet<string>):
   for (const { pattern } of MACHINE_SHAPES) residue = residue.replace(pattern, ' ');
 
   // Longest first, so `needs_manual_review` is consumed before `review` could be.
+  //
+  // AND ON A WORD BOUNDARY, which `split`/`join` did not do. `accept` is a permitted
+  // `DecisionEventType`, so a screen rendering `accepted` had its permitted prefix eaten and
+  // reported the residue `ed` -- a word no reviewer can see, in a report meant to name what
+  // they can. The offence was found; its NAME was wrong, which is worse than a miss because
+  // it sends the reader looking for a string that is not there.
+  //
+  // It is the same defect the wave-33 judges found in `test_pc01_journey_conformance.py`,
+  // where `Run` matched inside `RunPage` and let a manifest assert a title no screen renders.
+  // **Substring containment deceiving a guard is now this programme's third instance**, so it
+  // is fixed here rather than noted.
   const values = [...vocabulary].sort((a, b) => b.length - a.length);
   for (const value of values) {
-    residue = residue.split(value).join(' ');
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // A contract value is `[a-z_]`, so a Latin letter on either side means this is a longer
+    // word that merely starts or ends with one -- `accepted`, not `accept`.
+    residue = residue.replace(new RegExp(`(?<![A-Za-z])${escaped}(?![A-Za-z])`, 'g'), ' ');
   }
   // Case-insensitively, because `utf-8` is written lowercase and `UTF` is the registry's
   // spelling. That is a deliberate widening and it is narrow: it applies only to this
@@ -664,18 +678,74 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
 
 // ===================================================================== the assertions
 
-const VOCABULARY = contractVocabulary();
+/**
+ * The enumerated schemas the owner's 2026-09-22 ruling put ON SCREEN IN RUSSIAN.
+ *
+ * WHY THIS SET HAS TO EXIST, and it is the guard correcting itself rather than being
+ * extended. `contractVocabulary()` permits every `enum` value in `openapi.json` as visible
+ * text. Under the previous rule -- contract vocabulary is not translated, because the
+ * certification was driven by reading those words off the badges -- that was exactly right.
+ *
+ * The owner then ruled the other way: translate everything visible, and keep the machine
+ * value in the `data-` attribute. `W30-CERT3` re-drove `PA-01` criterion 4 by reading
+ * `[data-run-state]`, which is why that ruling costs the certification nothing.
+ *
+ * **And this guard went on permitting the English.** A whole integration pass translated
+ * `published`, `pending`, `partial` and `accepted`, and the guard stayed green throughout --
+ * green because it could not see a difference it was built to see. A judge then mutated a
+ * label back to English and it stayed green again. **A guard that legitimises the class it
+ * was built to catch is worse than no guard, because its silence is read as coverage.**
+ *
+ * These four schemas are the ones the ruling reaches. The others stay permitted and each for
+ * a stated reason: `ErrorCode` and `StageId` are identifiers a reviewer is deliberately shown
+ * beside a sentence -- `terminal-reason.ts` renders the code AND its meaning; `CostBasis` and
+ * `DecisionEventType` are not rendered as bare words today, and forbidding a value nothing
+ * renders would be a claim this guard cannot support.
+ *
+ * `visibleText()` reads text nodes and four attributes and **never `data-*`**, so the machine
+ * value keeps its home and only the rendered word is judged.
+ */
+const TRANSLATED_SCHEMAS = ['RunState', 'StageStatus', 'Verdict', 'FindingCategory'] as const;
+
+function translatedVocabulary(): ReadonlySet<string> {
+  const openapi = readJson<OpenApi>(CONTRACT_PATH);
+  const values = new Set<string>();
+  for (const name of TRANSLATED_SCHEMAS) {
+    const schema = openapi.components.schemas[name];
+    if (schema === undefined) {
+      throw new Error(
+        `openapi.json declares no schema ${name}. This guard names it because the owner's ` +
+          'ruling reaches it; a renamed schema must be re-argued here, not silently dropped.',
+      );
+    }
+    for (const value of schema.enum ?? []) values.add(value);
+  }
+  return values;
+}
+
+const TRANSLATED = translatedVocabulary();
+
+const VOCABULARY = new Set([...contractVocabulary()].filter((word) => !TRANSLATED.has(word)));
 
 describe('the guard reads a contract rather than a list of words', () => {
   it('derives the whole published vocabulary from openapi.json', () => {
     // A relationship, never a count: `W30-LISTS`'s rule. These are read back out of the
     // derivation, so a contract that loses a code makes this red rather than merely
     // narrowing the allowlist in silence.
-    for (const value of ['published', 'partial', 'failed', 'cancelled', 'queued', 'running',
-      'validating', 'accept', 'accepted', 'rejected', 'pending', 'needs_manual_review',
-      'internal_contradiction', 'explicit_placeholder', 'recorded', 'live', 'text_analysis',
-      'analysis_failed', 'succeeded', 'skipped']) {
+    // Still permitted as visible text, and each for a stated reason: identifiers a reviewer
+    // is deliberately shown, and modes nothing renders as a bare word.
+    for (const value of ['recorded', 'live', 'text_analysis', 'analysis_failed', 'accept']) {
       expect(VOCABULARY.has(value), `${value} is not in the contract's enums`).toBe(true);
+    }
+    // NO LONGER permitted as visible text, because the owner ruled them translated. The
+    // assertion runs in both directions on purpose: the value is still in the contract, and
+    // it is no longer in the permitted set. A schema renamed out of `TRANSLATED_SCHEMAS`
+    // would make the first half red rather than silently re-permitting the word.
+    for (const value of ['published', 'partial', 'failed', 'cancelled', 'queued', 'running',
+      'validating', 'accepted', 'rejected', 'pending', 'needs_manual_review',
+      'internal_contradiction', 'explicit_placeholder', 'succeeded', 'skipped']) {
+      expect(TRANSLATED.has(value), `${value} left the translated schemas`).toBe(true);
+      expect(VOCABULARY.has(value), `${value} is permitted as visible text again`).toBe(false);
     }
     // The two derivations that are not openapi enums, asserted as relationships so a
     // parser that silently returned nothing is red rather than merely permissive.
@@ -710,8 +780,10 @@ describe('the guard can tell an English label from a legitimate Latin string', (
   });
 
   it('does not redden a run state, a verdict, an identifier or a digest', () => {
-    expect(unexplainedLatin('published', VOCABULARY)).toEqual([]);
-    expect(unexplainedLatin('needs_manual_review', VOCABULARY)).toEqual([]);
+    // `published` and `needs_manual_review` USED TO BE HERE, asserting that a run state and
+    // a verdict never redden. Under the 2026-09-22 ruling they must, so they moved to the
+    // case below rather than being deleted -- a control that quietly loses a case is how a
+    // guard stops proving what its name says.
     expect(unexplainedLatin('analysis_failed', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('text_analysis', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin(`prj_${ULID}`, VOCABULARY)).toEqual([]);
@@ -722,6 +794,22 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('2026-09-10T08:00:00.000Z', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('Один PDF за загрузку.', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('0f0e9d8c-7b6a-4948-b726-150413021100', VOCABULARY)).toEqual([]);
+  });
+
+  it('now reddens the contract words the owner ruled translated', () => {
+    // The other direction, and the reason this guard was changed at all: it permitted these
+    // while an entire integration pass translated them, and stayed green when a judge put one
+    // back in English. Silence from a guard is read as coverage, so a guard that cannot see
+    // the class it was built for is worse than none.
+    expect(unexplainedLatin('published', VOCABULARY)).toEqual(['published']);
+    expect(unexplainedLatin('needs_manual_review', VOCABULARY)).toEqual(['needs', 'manual', 'review']);
+    expect(unexplainedLatin('→ accepted', VOCABULARY)).toEqual(['accepted']);
+    expect(unexplainedLatin('internal_contradiction', VOCABULARY)).toEqual(['internal', 'contradiction']);
+    // And the machine value keeps its home: `visibleText` reads text nodes and four
+    // attributes and never `data-*`, so a badge carrying its contract value is untouched.
+    expect(visibleText('<span data-run-state="published">Опубликован</span>')).toEqual([
+      'Опубликован',
+    ]);
   });
 
   it('does not learn a bare word from a compound contract value', () => {
@@ -811,8 +899,17 @@ describe('the guard renders the screens it claims to render', () => {
  * Nothing was added, no assertion was relaxed and no permission was widened.
  */
 const OUTSTANDING: readonly { readonly text: string; readonly module: string }[] = [
-  { text: 'Correlation id', module: 'web/src/shared/ui/states.tsx:42, features/start-run/ui/start-run-control.tsx:63, features/upload-document/ui/upload-document-form.tsx:145' },
-  { text: 'Upload', module: 'web/src/features/upload-document/ui/upload-document-form.tsx:117' },
+  /*
+   * EMPTY, 2026-09-22. `D-53` is closed: nineteen strings became eleven, then two, then none.
+   *
+   * The list may only shrink and it never grew. Everything removed from it was removed
+   * because the guard said the string was gone from a RENDERED screen, never because a diff
+   * looked convincing -- which is the whole reason three earlier sessions each reported the
+   * interface translated and each were wrong.
+   *
+   * `finds none at all` below is no longer skipped. From here a single English word reaching
+   * a reviewer is a red gate, and this array staying empty is the assertion.
+   */
 ];
 
 /**
@@ -877,7 +974,7 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
 
   // The state `R-18` actually requires. Skipped, not deleted, and not weakened: it is the
   // assertion this guard exists to make, and it goes green the day `OUTSTANDING` is empty.
-  it.skip('finds none at all (unskip when OUTSTANDING is empty)', () => {
+  it('finds none at all', () => {
     expect([...offencesOnScreens().keys()]).toEqual([]);
   });
 });

@@ -49,7 +49,7 @@ import Link from 'next/link';
 
 import type { RunStatus } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
-import { ErrorState, LoadingState, NotApplicableState, RunStateBadge } from '@/shared/ui';
+import { ErrorState, LoadingState, NotApplicableState, RunStateBadge, STATE_LABELS } from '@/shared/ui';
 import styles from './run-progress.module.css';
 
 import {
@@ -84,15 +84,17 @@ function Outcome({ status }: { readonly status: RunStatus }) {
     case 'in_flight':
       return (
         <p className={styles.outcome} data-run-outcome="in_flight">
-          Прогон в состоянии <code>{outcome.state}</code>. Результат ещё не опубликован и
-          не подразумевается.
+          Прогон в состоянии{' '}
+          <span data-run-state={outcome.state}>{STATE_LABELS[outcome.state]}</span>. Результат
+          ещё не опубликован и не подразумевается.
         </p>
       );
     case 'published':
       return (
         <div className={styles.outcome} data-run-outcome="published">
           <p>
-            Прогон достиг успешного терминального состояния <code>published</code>.
+            Прогон достиг успешного терминального состояния{' '}
+            <span data-run-state="published">{STATE_LABELS.published}</span>.
           </p>
           <p>
             Опубликованных находок:{' '}
@@ -104,9 +106,9 @@ function Outcome({ status }: { readonly status: RunStatus }) {
       return (
         <div className={styles.outcome} data-run-outcome="partial">
           <p>
-            Прогон завершился как <code>partial</code>. Он опубликовал результат с
+            Прогон завершился как <span data-run-state="partial">{STATE_LABELS.partial}</span>. Он опубликовал результат с
             зафиксированной деградацией: часть этапов не выполнена, и это не{' '}
-            <code>published</code>.
+            <span data-run-state="published">{STATE_LABELS.published}</span>.
           </p>
           {outcome.degradation.length === 0 ? (
             <p>
@@ -134,7 +136,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
       return (
         <div className={styles.outcome} data-run-outcome="failed">
           <p>
-            Прогон завершился как <code>failed</code>. Ничего не опубликовано.
+            Прогон завершился как <span data-run-state="failed">{STATE_LABELS.failed}</span>. Ничего не опубликовано.
           </p>
           <p>
             Терминальная причина:{' '}
@@ -156,7 +158,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
     case 'cancelled':
       return (
         <p className={styles.outcome} data-run-outcome="cancelled">
-          Прогон завершился как <code>cancelled</code>. Ничего не опубликовано.
+          Прогон завершился как <span data-run-state="cancelled">{STATE_LABELS.cancelled}</span>. Ничего не опубликовано.
         </p>
       );
   }
@@ -318,8 +320,9 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
           detail={
             <p>
               Находки появляются только когда терминальное состояние публикует результат —{' '}
-              <code>published</code> или <code>partial</code>. Этот прогон —{' '}
-              <code>{status.state}</code>.
+              <span data-run-state="published">{STATE_LABELS.published}</span> или{' '}
+              <span data-run-state="partial">{STATE_LABELS.partial}</span>. Этот прогон —{' '}
+              <span data-run-state={status.state}>{STATE_LABELS[status.state]}</span>.
             </p>
           }
         />

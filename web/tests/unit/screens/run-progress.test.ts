@@ -2,7 +2,8 @@
  * `widgets/run-progress` — the screen PC-01 criterion 4 is about, and the screen no test
  * reached.
  *
- * `W12-WEB` §10 ran ten mutations inside the region `web/tests` does not import. Three of
+ * `W12-WEB` §10 ran ten mutations inside the region `web/tests` does not import { STATE_LABELS } from '@/shared/ui';
+import. Three of
  * them are in this file's subject and all three survived with the whole frontend suite
  * green:
  *
@@ -25,6 +26,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ErrorCode, RunState, RunStatus } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
+import { STATE_LABELS } from '@/shared/ui';
 import { RunProgress } from '@/widgets/run-progress';
 
 import { PROJECT_UID, RUN_ID, runStatus } from '../review/fixtures';
@@ -170,7 +172,15 @@ describe('review is offered only by a run that published a result (U-03)', () =>
     });
     expect(markup).not.toContain(`/runs/${RUN_ID}/review`);
     expect(markup).toContain('Разбирать нечего.');
-    expect(markup).toContain(`<code>${state}</code>`);
+    // Used to assert `<code>${state}</code>`. Under the owner's 2026-09-22 ruling the state
+    // is rendered as its Russian label, and the contract value keeps its home in
+    // `data-run-state` -- which is what `PA-01` criterion 4 was re-driven against, so the
+    // certification is unaffected. Both halves are asserted: a reader sees the label, and a
+    // machine still finds the value. Asserting only the label would let the attribute be
+    // dropped, which is what the journey and the certification read.
+    expect(markup).toContain(`data-run-state="${state}"`);
+    expect(markup).toContain(STATE_LABELS[state]);
+    expect(markup).not.toContain(`<code>${state}</code>`);
   });
 });
 
