@@ -23,6 +23,13 @@ would break `make gate` rather than configure anything. ``settings.py`` records 
 reasoning for ``AUDITMANAGER_PROVIDER_MODE``. Its channel is the deployment environment
 beside the compose file, and the assertions below are over that file's bytes.
 
+**What the value means changed in wave 34; where it comes from did not.** `W34-API`
+replaced the seam's body, so this name no longer holds a credential a caller presents --
+it holds the deployment secret the credential signer is derived from
+(``api/security.py``). Every sentence above survives the change unaltered: one name, no
+``.env`` entry, required at construction, unconfigured means refused. That is the whole
+reason it was worth deriving a key rather than asking deployments for a second secret.
+
 Every expected value here is a **literal**. `OPERATING_CONSTRAINTS.md` section 12: a value
 read from the thing it is checking cannot tell you the thing changed.
 """
@@ -118,7 +125,7 @@ class TestAMissingTokenRefusesAtConstruction:
         """
         application = build_application(environ=_base_env())
         assert application.settings.api_token == _A_TOKEN
-        assert len(application.router.routes) == 15
+        assert len(application.router.routes) == 16
 
     def test_settings_alone_refuses_too(self) -> None:
         """The refusal is in ``load``, so anything that resolves settings inherits it."""

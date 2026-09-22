@@ -86,10 +86,11 @@ class TestItRefusesToStartRatherThanFailLater:
 
 
 class TestWhatItActuallyWires:
-    def test_it_builds_all_twelve_frozen_operations(self) -> None:
+    def test_it_builds_all_the_frozen_operations(self) -> None:
         app = build_application(environ=_base_env())
-        assert len(app.router.routes) == 15, (
-            "the router does not carry the twelve operations the frozen document declares"
+        assert len(app.router.routes) == 16, (
+            "the router does not carry the sixteen operations the frozen document "
+            "declares -- fifteen until `W34-CONTRACT` added the credential exchange"
         )
 
     def test_the_wired_mode_is_the_configured_one(self) -> None:
@@ -149,14 +150,14 @@ class TestTheProxyIsATransportNotAProvenanceMode:
         with pytest.raises(ConfigurationError, match="PROXY_LLM_BASE_URL"):
             build_application(environ=env)
 
-    def test_a_proxied_application_wires_all_twelve_operations(self) -> None:
+    def test_a_proxied_application_wires_all_the_operations(self) -> None:
         env = _base_env() | {
             PROVIDER_MODE_ENV: "proxy",
             "PROXY_LLM_BASE_URL": "https://proxy.example",
             "PROXY_LLM_TOKEN": "t",
         }
         app = build_application(environ=env)
-        assert len(app.router.routes) == 15
+        assert len(app.router.routes) == 16
         assert app.settings.provider_mode == "proxy"
 
 
