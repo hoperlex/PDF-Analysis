@@ -105,17 +105,29 @@ export function selectedAriaCurrent(css: string, scope: string): string[] {
 // ------------------------------------------------------------------- 3. colour literals
 
 /**
- * Colour literals outside `:root`.
+ * Colour literals outside a TOKEN BLOCK.
  *
- * `@media (prefers-reduced-motion)` carries a second `:root`, and a comment may quote a
- * hex value while describing one, so both are removed before the search. What remains is
- * declarations inside rules, which is exactly the thing that makes a second theme cost
- * more than a block of values.
+ * A token block is a block whose whole selector is `:root`, optionally qualified by the
+ * theme attribute: `:root`, `:root[data-theme='dark']`, `:root:not([data-theme='light'])`.
+ * Those are the only places a colour may be spelled, and between them they are the
+ * palettes. `@media (prefers-reduced-motion)` and `@media (prefers-color-scheme: dark)`
+ * each carry one, and a comment may quote a hex value while describing one, so comments go
+ * first.
+ *
+ * WHAT THIS DELIBERATELY DOES NOT EXEMPT, and it is the whole point of the shape of the
+ * pattern: `[data-theme='dark'] .am-badge { color: #fff }` is a RULE, not a palette. The
+ * selector must END at the block brace for the block to be a token block, so a theme
+ * qualifier in front of a class buys nothing. Theming by adding a dark-mode rule beside
+ * every light one is exactly the cost `W31-STYLE` spent a sweep avoiding and `W33-THEME`
+ * spent none of; this is what keeps it spent.
  */
+const TOKEN_BLOCK =
+  /(?:^|\n)[ \t]*:root(?:\[data-theme=['"][\w-]+['"]\]|:not\(\[data-theme=['"][\w-]+['"]\]\))?\s*\{[^}]*\}/g;
+
 export function colourLiteralsOutsideTokens(css: string): string[] {
   const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
-  const withoutRoot = withoutComments.replace(/:root\s*\{[^}]*\}/g, '');
-  return withoutRoot.match(/#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)|\bhsla?\([^)]*\)/g) ?? [];
+  const withoutTokenBlocks = withoutComments.replace(TOKEN_BLOCK, '\n');
+  return withoutTokenBlocks.match(/#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)|\bhsla?\([^)]*\)/g) ?? [];
 }
 
 // ================================================================================ tests
@@ -166,7 +178,7 @@ describe('a rule that marks the open page tab selects a value the widget emits',
   });
 });
 
-describe('every colour is a token read, so a second theme is additive', () => {
+describe('every colour is a token read, so the second theme stayed additive', () => {
   it('can fail: a colour spelled inside a rule', () => {
     expect(
       colourLiteralsOutsideTokens(':root { --am-ok: #1c6b45; }\n.am-badge { color: #1c6b45; }'),
@@ -174,6 +186,34 @@ describe('every colour is a token read, so a second theme is additive', () => {
     expect(
       colourLiteralsOutsideTokens('.x { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }'),
     ).toEqual(['rgba(0, 0, 0, 0.2)']);
+  });
+
+  it('can fail the way a THEME would break it: a colour in a rule that carries a theme selector', () => {
+    // The exemption is for a palette, and a palette is a block whose selector ends at the
+    // brace. Everything else is a rule and is judged as one, whatever it selects on.
+    expect(
+      colourLiteralsOutsideTokens("[data-theme='dark'] .am-badge { color: #e2e8f0; }"),
+    ).toEqual(['#e2e8f0']);
+    expect(
+      colourLiteralsOutsideTokens(":root[data-theme='dark'] .am-app__bar { background: #151d28; }"),
+    ).toEqual(['#151d28']);
+    // A nested rule inside the dark media query is a rule too.
+    expect(
+      colourLiteralsOutsideTokens(
+        '@media (prefers-color-scheme: dark) {\n  .am-badge { color: #e2e8f0; }\n}',
+      ),
+    ).toEqual(['#e2e8f0']);
+  });
+
+  it('exempts the palettes themselves, and only in the shape this stylesheet writes them', () => {
+    expect(
+      colourLiteralsOutsideTokens(":root[data-theme='dark'] { --am-ink: #e2e8f0; }"),
+    ).toEqual([]);
+    expect(
+      colourLiteralsOutsideTokens(
+        "@media (prefers-color-scheme: dark) {\n  :root:not([data-theme='light']) { --am-ink: #e2e8f0; }\n}",
+      ),
+    ).toEqual([]);
   });
 
   it('holds over globals.css and every collocated module', () => {

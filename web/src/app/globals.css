@@ -2,8 +2,11 @@
  * The one global stylesheet. `web/src/app/**` has a single writer, and that includes this
  * file: a slice styles itself with a colocated CSS module and consumes the tokens below.
  *
- * There is no theming system and no dark mode. PC-01 is a local single-reviewer tool and
- * a theme toggle is a decision nobody has taken.
+ * `W33-THEME` gave this file a second palette. The decision the two comments below said
+ * nobody had taken is taken: the application has a light theme and a dark one, the dark
+ * one is a block of token VALUES under `[data-theme='dark']` and under the system
+ * preference, and no rule below was rewritten to get it. The shape those comments
+ * predicted is the shape it took.
  *
  * ==================================================================================
  * W31-STYLE, under `R-18`. The token set below is the one `W31-UI` left, EXTENDED and
@@ -29,16 +32,15 @@
  * is a topbar with in-page links; that is a navigation model, it is an owner question,
  * and nothing below restructures it.
  *
- * WHY EVERY COLOUR BELOW IS A TOKEN READ AND NONE IS A LITERAL. The sentence above is
- * still true — there is no theming system here and no dark mode, and adding one is the
- * owner's decision, not a stream's. What this file does is keep that decision cheap: the
- * reference system this programme is measured against carries a full second token set
- * under `[data-theme="dark"]` and defaults to it, so the shape a second theme needs is a
- * block that overrides VALUES and touches no rule. Measured in this file after the sweep:
- * **zero** colour literals outside `:root` — `grep -nE '#[0-9a-fA-F]{3,8}|rgba?\(' ` over
- * everything below `:root` is empty, and every shadow, ring and tint is a token or is
- * derived from one with `color-mix`. A second palette is therefore additive by
- * construction. It is not written here, and the default is unchanged.
+ * WHY EVERY COLOUR BELOW IS A TOKEN READ AND NONE IS A LITERAL. `W31-STYLE` kept that
+ * discipline so a second palette would cost a block of values rather than a sweep of
+ * rules, and `W33-THEME` spent exactly that: **not one rule below the token blocks
+ * changed colour**, and the dark theme is the `[data-theme='dark']` block plus the same
+ * values under `@media (prefers-color-scheme: dark)`. The invariant that made it cheap is
+ * now guarded in both directions — `tests/unit/styles/styling-layer.test.ts` fails on a
+ * colour literal outside a TOKEN BLOCK, and a literal written into
+ * `[data-theme='dark'] .am-badge` is still an offence, because it is a rule and not a
+ * palette.
  *
  * The typeface line is NOT closed here and is not silently half-done: a self-hosted face
  * needs a font file, every path that could hold one is outside this task's `allowed_paths`,
@@ -181,6 +183,144 @@
     --am-motion-base: 1ms;
     --am-motion-slow: 1ms;
   }
+}
+
+/*
+ * ================================ the second palette ================================
+ *
+ * `W33-THEME`. A dark theme, as a block of token VALUES and nothing else. No rule below
+ * changed, no selector gained a theme qualifier, and no component reads a colour: that
+ * was the whole point of `W31-STYLE`'s literal sweep and of `W32-CONTRAST`'s measurement,
+ * and this is the wave that spends both.
+ *
+ * WHY THE VALUES ARE NOT THE REFERENCE SYSTEM'S. The legacy interface was the starting
+ * point — #0d1219 behind, #151d28 on top, #e2e8f0 / #8896a6 / #4d6070 for three levels of
+ * ink — and two of those five colours did not survive being measured:
+ *
+ *   #4d6070 (third ink)   is **2.60:1** on #151d28. It is the quietest ink on the most
+ *                         ELEVATED surface, which in a dark theme is the LIGHTEST one, so
+ *                         it is the worst text pair in the palette and not the safest.
+ *                         AA 4.5 on the lightest surface a quiet ink lands on
+ *                         (`--am-accent-light`, L = 0.0154) floors it at L ≥ 0.2443, and
+ *                         #4d6070 sits at L = 0.1111. It became #838d9c, 4.78:1 there.
+ *   #8896a6 (second ink)  clears AA at 5.62:1 on #151d28, but the ladder below it then has
+ *                         no room. It moved up to #abb6c5 so the three ink levels are
+ *                         evenly spaced; see the next paragraph.
+ *
+ * WHAT THE DARK THEME HAS THAT THE LIGHT ONE DOES NOT: three ink levels that a reader can
+ * tell apart. `W32-CONTRAST` §3.1 measured the light ladder at 2.94:1 then **1.10:1** —
+ * two tokens, one visible level — because AA against the darkest light-theme text surface
+ * caps any foreground just above `--am-ink-muted`, and moving `--am-ink-muted` would have
+ * been a redesign that task declined. This palette is new, so nothing was pinned: ink to
+ * the AA floor is 2.72:1 in total and it is spent in two even steps, **1.67:1** and
+ * **1.64:1**. The light theme's collapsed third level is therefore not a property of the
+ * token set; it is a property of one value nobody has been allowed to move.
+ *
+ * `--am-line` fails 1.4.11 in this theme for the same reason and by the same arithmetic it
+ * fails in the light one — 1.44:1 on `--am-surface` here, 1.26:1 there. It is registered
+ * per theme in `tests/unit/styles/contrast.test.ts`, not repaired, because raising it is a
+ * change to the three-level border SCALE and that is the same owner decision in both
+ * palettes.
+ *
+ * WHY THE BORDER TOKENS ARE OPAQUE HEX AND NOT WHITE AT LOW ALPHA, which is what the
+ * reference system uses: `tests/unit/styles/contrast.ts` resolves a token to a measurable
+ * colour only when its value is a hex literal, so a `rgba(255, 255, 255, 0.08)` border
+ * would drop out of the census and read as passing by being invisible to the measurement.
+ * The composited result is the same colour; the difference is only whether the guard can
+ * see it.
+ *
+ * WHY THE VALUES APPEAR TWICE. A user who has chosen nothing must still get the theme
+ * their system asks for, and the choice must still win over it. In plain CSS that is two
+ * blocks — one under the media query, one under the attribute — and the risk is that they
+ * drift apart. `tests/unit/styles/theme.test.ts` asserts they declare exactly the same
+ * tokens with exactly the same values, so drift is a red test rather than a theme that is
+ * almost right.
+ * ==================================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  /*
+   * The default for a first visit: the system's preference, with no flash and no script.
+   * `:not([data-theme='light'])` is what lets an explicit LIGHT choice override a dark
+   * system, and it is the only `:not()` in this file.
+   */
+  :root:not([data-theme='light']) {
+    /* ---- ink ---------------------------------------------------------------------- */
+    --am-ink: #e2e8f0;
+    --am-ink-muted: #abb6c5;
+    --am-ink-soft: #838d9c;
+    --am-ink-inverse: #0d1219;
+
+    /* ---- surfaces ----------------------------------------------------------------- */
+    --am-paper: #151d28;
+    --am-surface: #0d1219;
+    --am-surface-sunken: #0a0f16;
+
+    /* ---- lines -------------------------------------------------------------------- */
+    --am-line-soft: #1b2431;
+    --am-line: #27323f;
+    --am-line-strong: #6b7a8d;
+    --am-grid-line: #212b38;
+
+    /* ---- semantic hues, each with a tint that can carry text ---------------------- */
+    --am-accent: #7aa9e0;
+    --am-accent-strong: #9cc2f0;
+    --am-accent-light: #142234;
+    --am-ok: #5fd39a;
+    --am-ok-light: #0e2419;
+    --am-degraded: #e0b050;
+    --am-degraded-light: #241b07;
+    --am-failed: #f08b8b;
+    --am-failed-light: #2a1316;
+    --am-inert: #98a2b3;
+    --am-inert-light: #182029;
+
+    /* ---- elevation ---------------------------------------------------------------- */
+    --am-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --am-shadow-2: 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
+    --am-shadow-3: 0 10px 28px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.45);
+    --am-shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+    --am-ring: 0 0 0 3px rgba(122, 169, 224, 0.35);
+  }
+}
+
+/* An explicit choice. Same specificity as the block above, and later, so it wins. */
+:root[data-theme='dark'] {
+  /* ---- ink ---------------------------------------------------------------------- */
+  --am-ink: #e2e8f0;
+  --am-ink-muted: #abb6c5;
+  --am-ink-soft: #838d9c;
+  --am-ink-inverse: #0d1219;
+
+  /* ---- surfaces ----------------------------------------------------------------- */
+  --am-paper: #151d28;
+  --am-surface: #0d1219;
+  --am-surface-sunken: #0a0f16;
+
+  /* ---- lines -------------------------------------------------------------------- */
+  --am-line-soft: #1b2431;
+  --am-line: #27323f;
+  --am-line-strong: #6b7a8d;
+  --am-grid-line: #212b38;
+
+  /* ---- semantic hues, each with a tint that can carry text ---------------------- */
+  --am-accent: #7aa9e0;
+  --am-accent-strong: #9cc2f0;
+  --am-accent-light: #142234;
+  --am-ok: #5fd39a;
+  --am-ok-light: #0e2419;
+  --am-degraded: #e0b050;
+  --am-degraded-light: #241b07;
+  --am-failed: #f08b8b;
+  --am-failed-light: #2a1316;
+  --am-inert: #98a2b3;
+  --am-inert-light: #182029;
+
+  /* ---- elevation ---------------------------------------------------------------- */
+  --am-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --am-shadow-2: 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --am-shadow-3: 0 10px 28px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.45);
+  --am-shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+  --am-ring: 0 0 0 3px rgba(122, 169, 224, 0.35);
 }
 
 * {
@@ -542,6 +682,58 @@ input[type='file']::file-selector-button:hover {
   flex: 1;
   padding: var(--am-gap-xl) var(--am-gap-lg);
 }
+
+/*
+ * The theme control. Every colour it uses is a token, so it is the one control in this
+ * file that is guaranteed to look deliberate in the palette it switches TO.
+ */
+.am-theme {
+  display: inline-flex;
+  align-self: center;
+  /* Right-aligned when it is the only thing that claims the free space. */
+  margin-left: auto;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-surface);
+}
+
+/* When the instance label is present IT claims the free space, and this follows it. */
+.am-app__instance + .am-theme {
+  margin-left: var(--am-gap-sm);
+}
+
+.am-theme__option {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: var(--am-radius-pill);
+  background: none;
+  color: var(--am-ink-muted);
+  font: inherit;
+  font-size: var(--am-text-xs);
+  line-height: 1.5;
+  cursor: pointer;
+  transition:
+    color var(--am-motion-fast) var(--am-ease),
+    background var(--am-motion-fast) var(--am-ease);
+}
+
+.am-theme__option:hover {
+  color: var(--am-ink);
+}
+
+.am-theme__option[aria-pressed='true'] {
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
+  color: var(--am-ink);
+}
+
+.am-theme__option:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 1px;
+}
+
 
 .am-app__footer {
   padding: var(--am-gap) var(--am-gap-xl);
