@@ -11,7 +11,9 @@
  *
  * Each reading is written into the query cache under the frozen
  * `queryKeys.runs.detail(runId)` key, which is how the review slice reads run state
- * without polling.
+ * without polling. That key carries its value type since `D-57`, so the reading written
+ * here and the reading the review slice files are the same shape by construction rather
+ * than by agreement between two files.
  *
  * The loop stops on any terminal state, on unmount, and on a non-retryable failure. A
  * retryable failure is absorbed by the loop itself and never surfaces here as an error.
@@ -39,8 +41,11 @@ export interface RunStatusPolling {
 
 export function useRunStatus(runId: RunId): RunStatusPolling {
   const queryClient = useQueryClient();
+  // No type argument. `queryKeys.runs.detail` carries its value type, so this is the
+  // compiler reading the key rather than this line asserting what it hopes is there --
+  // which is what `getQueryData<RunStatus>(...)` did, and why `D-57` was not a type error.
   const [status, setStatus] = useState<RunStatus | null>(
-    () => queryClient.getQueryData<RunStatus>(queryKeys.runs.detail(runId)) ?? null,
+    () => queryClient.getQueryData(queryKeys.runs.detail(runId)) ?? null,
   );
   const [failure, setFailure] = useState<RunFailure | null>(null);
   const [polling, setPolling] = useState(true);
@@ -56,7 +61,7 @@ export function useRunStatus(runId: RunId): RunStatusPolling {
     const controller = new AbortController();
     let live = true;
 
-    const seeded = queryClient.getQueryData<RunStatus>(queryKeys.runs.detail(runId)) ?? null;
+    const seeded = queryClient.getQueryData(queryKeys.runs.detail(runId)) ?? null;
     if (seeded !== null) {
       setStatus(seeded);
       if (isTerminalRunState(seeded.state)) {

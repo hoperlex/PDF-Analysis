@@ -38,6 +38,8 @@ export { classifyRunFailure } from './model/run-failure';
 
 export { RUN_PAGE_LIMIT, useRunList } from './api/use-run-list';
 
+export { runStatusQueryOptions } from './api/run-status-query';
+
 export type { RunStatusPolling } from './api/use-run-status';
 export { useRunStatus } from './api/use-run-status';
 

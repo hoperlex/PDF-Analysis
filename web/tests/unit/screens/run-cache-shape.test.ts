@@ -21,10 +21,15 @@
  *             envelope, `seeded.state` was `undefined`, `isTerminalRunState(undefined)`
  *             was `false`, and the loop restarted on a run that had finished.
  *
- * `D-57.2` fills the cache by running the review screen's own query — the same options
- * object that screen hands `useQuery` — against a stubbed `fetch`, so whatever shape that
- * screen files is the shape this test reads back. Seeding an envelope by hand here would
- * make this a test of a literal in this file.
+ * `D-57.2` fills the cache by running the review screen's own query — `runStatusQueryOptions`,
+ * literally the options object that screen hands `useQuery` — against a stubbed `fetch`, so
+ * whatever shape that screen files is the shape this test reads back. Seeding an envelope
+ * by hand here would make this a test of a literal in this file, and changing the screen
+ * would leave it green.
+ *
+ * Before the repair this file was identical except that those three cases built the same
+ * options inline, because the screen built them inline; `/root/w37-logs/d57-before.log`
+ * records that run.
  */
 
 import { createElement } from 'react';
@@ -34,7 +39,7 @@ import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.
 
 import type { RunStatus } from '@/shared/api';
 import { isTerminalRunState, queryKeys } from '@/shared/api';
-import { getRunStatus } from '@/shared/api';
+import { runStatusQueryOptions } from '@/entities/audit-run';
 import { ReviewPage } from '@/_pages/review';
 import { RunProgress } from '@/widgets/run-progress';
 
@@ -52,15 +57,6 @@ function stubRouter(): AppRouterInstance {
     forward: () => {},
     prefetch: () => {},
   } as unknown as AppRouterInstance;
-}
-
-/** The review screen's own run query. One definition, used by that screen and by this test. */
-function reviewScreenRunQuery(runId: string) {
-  return {
-    queryKey: queryKeys.runs.detail(runId),
-    queryFn: ({ signal }: { signal: AbortSignal }) =>
-      getRunStatus({ path: { run_id: runId } }, { signal }),
-  };
 }
 
 let served: RunStatus;
@@ -137,7 +133,7 @@ describe('the review screen shows the run that is in the cache (D-57.1)', () => 
 describe('a terminal run is not polled again after the review screen ran (D-57.2)', () => {
   it('shows a stopped run on the run screen, not one still being polled', async () => {
     const client = newClient();
-    await client.fetchQuery(reviewScreenRunQuery(RUN_ID));
+    await client.fetchQuery(runStatusQueryOptions(RUN_ID));
 
     const markup = renderWith(
       client,
@@ -152,7 +148,7 @@ describe('a terminal run is not polled again after the review screen ran (D-57.2
 
   it('leaves the loop with a true stop condition, which is the value it branches on', async () => {
     const client = newClient();
-    await client.fetchQuery(reviewScreenRunQuery(RUN_ID));
+    await client.fetchQuery(runStatusQueryOptions(RUN_ID));
 
     // `useRunStatus` reads exactly this and stops on `isTerminalRunState(seeded.state)`.
     const seeded = client.getQueryData<RunStatus>(queryKeys.runs.detail(RUN_ID));
@@ -164,7 +160,7 @@ describe('a terminal run is not polled again after the review screen ran (D-57.2
   it('keeps polling an open run, so the stop is a reading and not a constant', async () => {
     served = runStatus({ state: 'running', terminal_at: null });
     const client = newClient();
-    await client.fetchQuery(reviewScreenRunQuery(RUN_ID));
+    await client.fetchQuery(runStatusQueryOptions(RUN_ID));
 
     const markup = renderWith(
       client,

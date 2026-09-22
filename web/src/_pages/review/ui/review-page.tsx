@@ -38,7 +38,6 @@ import { useMemo, useState } from 'react';
 import type { FindingObservationId, FindingUid, ProjectUid, RunId } from '@/shared/api';
 import {
   getFinding,
-  getRunStatus,
   listDecisionHistory,
   listRunFindings,
   queryKeys,
@@ -55,6 +54,7 @@ import { useEvidenceDocument } from '@/features/open-evidence';
 import { useExportRun } from '@/features/export-run';
 import type { DecisionIntent } from '@/widgets/decision-panel';
 import { useRecordVerdict } from '@/features/record-verdict';
+import { runStatusQueryOptions } from '@/entities/audit-run';
 import { admitFindings, groupByCategory } from '@/entities/finding';
 import { firstDeclaredPage } from '@/entities/finding-observation';
 
@@ -70,10 +70,11 @@ export interface ReviewPageProps {
 export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const [selection, setSelection] = useState<ReviewSelection | null>(null);
 
-  const runQuery = useQuery({
-    queryKey: queryKeys.runs.detail(runId),
-    queryFn: ({ signal }) => getRunStatus({ path: { run_id: runId } }, { signal }),
-  });
+  // `D-57`: this query used to build its own options, and its `queryFn` filed the
+  // transport envelope under a key the run screen fills with the model. One shape per
+  // key is now decided in one place -- `runStatusQueryOptions` -- and this screen reads
+  // whatever that place writes.
+  const runQuery = useQuery(runStatusQueryOptions(runId));
 
   const findingsQuery = useQuery({
     queryKey: queryKeys.runs.findings(runId),
@@ -121,7 +122,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const comment = useAppendComment({ findingUid: boundFindingUid, runId });
   const exporter = useExportRun({ runId });
 
-  const run = runQuery.data?.data ?? null;
+  const run = runQuery.data ?? null;
 
   const pendingIntent: DecisionIntent | null = verdict.isPending
     ? 'accept'

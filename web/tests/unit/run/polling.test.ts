@@ -259,7 +259,14 @@ describe('this slice adds no second polling loop', () => {
     // So a direct call site is allowed only when it is named here. Naming them keeps the
     // guard real: a new screen reaching the run endpoint is a visible decision rather
     // than silent drift, and a named site that starts scheduling still reddens above.
-    const ALLOWED_ONE_SHOT = [join('_pages', 'review', 'ui', 'review-page.tsx')];
+    //
+    // The entry was `_pages/review/ui/review-page.tsx` until `W37-D57`. The call did not
+    // multiply, it MOVED: that screen built its own query options and filed the transport
+    // envelope under a key the run screen fills with the model (`D-57`), so the one-shot
+    // now lives beside the key it fills, as `runStatusQueryOptions`, and the screen calls
+    // that. This assertion reddened on the move, which is the guard working -- the list is
+    // where the run endpoint is reached, and that place changed.
+    const ALLOWED_ONE_SHOT = [join('entities', 'audit-run', 'api', 'run-status-query.ts')];
 
     const direct = sources.filter((file) => /\bgetRunStatus\s*\(/.test(code(file)));
     const unexpected = direct.filter(
