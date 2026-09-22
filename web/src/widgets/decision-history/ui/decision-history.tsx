@@ -19,7 +19,7 @@
  * one. The question has not been asked yet, which is different from the answer being none.
  */
 
-import type { DecisionEvent } from '@/shared/api';
+import type { DecisionEvent, DecisionEventType, Verdict } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, LoadingState, NotApplicableState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
@@ -30,6 +30,24 @@ export interface DecisionHistoryProps {
   readonly isLoading?: boolean | undefined;
   readonly error?: ErrorStateProps | null | undefined;
 }
+
+/**
+ * Russian labels. Contract values stay in `data-event-type` and on the decision itself;
+ * see `RunStateBadge` for why the owner's ruling does not touch the machine value.
+ */
+const EVENT_TYPE_LABELS: Readonly<Record<DecisionEventType, string>> = {
+  accept: 'приём',
+  reject: 'отклонение',
+  comment: 'комментарий',
+  revoke: 'отзыв',
+};
+
+const VERDICT_LABELS: Readonly<Record<Verdict, string>> = {
+  pending: 'не решено',
+  accepted: 'принято',
+  rejected: 'отклонено',
+  needs_manual_review: 'нужен ручной разбор',
+};
 
 export function DecisionHistory({ events, isLoading, error }: DecisionHistoryProps) {
   if (isLoading === true) return <LoadingState what="the decision history" />;
@@ -59,9 +77,9 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
             data-verdict={event.verdict ?? 'none'}
           >
             <p className="am-history__line">
-              <span className="am-history__type">{event.event_type}</span>
+              <span className="am-history__type">{EVENT_TYPE_LABELS[event.event_type]}</span>
               {event.verdict !== null && event.verdict !== undefined ? (
-                <span className="am-history__verdict"> → {event.verdict}</span>
+                <span className="am-history__verdict"> → {VERDICT_LABELS[event.verdict]}</span>
               ) : null}
               <span className="am-history__at"> {formatInstant(event.recorded_at)}</span>
               <span className="am-history__author"> {event.author_label}</span>
