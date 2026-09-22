@@ -38,10 +38,18 @@ export interface VerdictBadgeProps {
   readonly verdict: Verdict;
 }
 
+/** Russian labels. The contract value stays in `data-verdict`; see `RunStateBadge`. */
+const VERDICT_LABELS: Readonly<Record<Verdict, string>> = {
+  pending: 'не решено',
+  accepted: 'принято',
+  rejected: 'отклонено',
+  needs_manual_review: 'нужен ручной разбор',
+};
+
 export function VerdictBadge({ verdict }: VerdictBadgeProps) {
   return (
     <span className={`am-badge am-badge--${toneFor(verdict)}`} data-verdict={verdict}>
-      <span className="am-badge__label">{verdict}</span>
+      <span className="am-badge__label">{VERDICT_LABELS[verdict]}</span>
     </span>
   );
 }

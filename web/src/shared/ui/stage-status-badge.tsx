@@ -35,11 +35,19 @@ export interface StageStatusBadgeProps {
   readonly errorCode?: string | null | undefined;
 }
 
+/** Russian labels. The contract value stays in `data-stage-status`; see `RunStateBadge`. */
+const STAGE_STATUS_LABELS: Readonly<Record<StageStatus, string>> = {
+  succeeded: 'выполнен',
+  partial: 'частично',
+  failed: 'отказ',
+  skipped: 'пропущен',
+};
+
 export function StageStatusBadge({ status, errorCode }: StageStatusBadgeProps) {
   const reason = status === 'succeeded' ? null : (errorCode ?? null);
   return (
     <span className={`am-badge am-badge--${toneFor(status)}`} data-stage-status={status}>
-      <span className="am-badge__label">{status}</span>
+      <span className="am-badge__label">{STAGE_STATUS_LABELS[status]}</span>
       {reason !== null ? <span className="am-badge__qualifier">{reason}</span> : null}
     </span>
   );

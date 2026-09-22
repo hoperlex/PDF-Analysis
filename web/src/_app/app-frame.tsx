@@ -26,7 +26,14 @@ export function AppFrame({ children }: AppFrameProps) {
         <Link className="am-app__brand" href="/projects">
           AuditManager
         </Link>
-        <span className="am-app__context">PC-01</span>
+        {/*
+         * `PC-01` stood here and is gone. It is the programme's own checkpoint code — it
+         * told a reviewer nothing and it named the thing `R-18` says the alpha must stop
+         * looking like. The integrator translated the footer for the same reason
+         * (`D-54`, `2e90899`) and stopped at the sentence `R-18` names; this is the other
+         * half of the same defect. The instance label below stays: it distinguishes one
+         * stand from another and an operator needs it.
+         */}
         {instance !== null ? <span className="am-app__instance">{instance}</span> : null}
         {/*
          * The only client component in the frame. `AppFrame` itself stays a server

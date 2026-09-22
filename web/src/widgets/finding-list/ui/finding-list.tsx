@@ -44,9 +44,9 @@ export interface FindingListProps {
 function categoryHeading(category: FindingCategory): string {
   switch (category) {
     case 'internal_contradiction':
-      return 'internal_contradiction';
+      return 'Внутреннее противоречие';
     case 'explicit_placeholder':
-      return 'explicit_placeholder';
+      return 'Явный пропуск';
     default:
       return category;
   }
