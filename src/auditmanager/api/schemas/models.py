@@ -1,4 +1,4 @@
-"""The 46 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
+"""The 50 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
 
 `T-1` makes FastAPI generate the served document, and `W13-CONF`'s conformance gate compares
 that document against the frozen contract. **The contract stays the authority**: every class
@@ -24,7 +24,7 @@ Three spellings in here are deliberate and are the reason the generated document
   these as ``$ref``s into ``components.schemas``. A resolved ``$ref`` is exactly the drift
   `W13-CONF` refuses to normalize away (`N1` resolves component *parameters*, *responses*
   and *headers*, and deliberately not schemas).
-* **``extra="forbid"`` on every object**, because all 46 object schemas in the contract
+* **``extra="forbid"`` on every object**, because every object schema in the contract
   declare ``additionalProperties: false``. There is no object schema here that does not.
 
 Nothing in this module renders a response. The wire bytes are produced by the ``*_body``
@@ -52,6 +52,8 @@ __all__ = [
     "Cursor",
     "DecisionEvent",
     "DecisionEventPage",
+    "DecisionRecord",
+    "DecisionRecordPage",
     "DecisionEventType",
     "DecisionId",
     "DocumentUid",
@@ -567,4 +569,38 @@ class AppendDecisionResponse(_Object):
 
 class DecisionEventPage(_Object):
     items: list[DecisionEvent]
+    page: PageInfo
+
+
+class DecisionRecord(_Object):
+    """``DecisionEvent``'s property set restated, plus the finding context.
+
+    Restated and not composed with ``allOf``, for the reason ``FindingDetail`` gives:
+    under JSON Schema 2020-12 an ``additionalProperties: false`` sees only its own schema
+    object's properties, so an ``allOf`` branch over the closed ``DecisionEvent`` would
+    reject the six this adds.
+
+    The six are required, and ``FindingDetail.decision_event_count`` is not: there the
+    count describes a finding that may never have been decided, and here every record IS
+    an event, so the count is at least one and its absence would mean nothing.
+    """
+
+    decision_id: DecisionId
+    finding_uid: FindingUid
+    finding_observation_id: FindingObservationId
+    event_type: DecisionEventType
+    verdict: Verdict | None = Field(default=None, json_schema_extra=optional_property)
+    comment: str | None = Field(default=None, json_schema_extra=optional_property)
+    author_label: Annotated[str, Field(min_length=1, max_length=128)]
+    recorded_at: datetime
+    project_uid: ProjectUid
+    run_id: RunId
+    category: FindingCategory
+    finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    current_verdict: Verdict
+    decision_event_count: Annotated[int, Field(ge=0)]
+
+
+class DecisionRecordPage(_Object):
+    items: list[DecisionRecord]
     page: PageInfo

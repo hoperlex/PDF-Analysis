@@ -20,9 +20,11 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
     "DecisionEventView",
+    "DecisionRecordView",
     "append_decision_body",
     "check_comment_is_present_for_a_comment_event",
     "decision_event_body",
+    "decision_record_body",
 ]
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +53,54 @@ def decision_event_body(view: DecisionEventView) -> dict[str, Any]:
         "comment": view.comment,
         "author_label": view.author_label,
         "recorded_at": timestamp(view.recorded_at),
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionRecordView:
+    """Exactly the frozen ``DecisionRecord``.
+
+    ``DecisionEventView``'s fields and the finding context the journal carries beside
+    them. It does not *compose* ``DecisionEventView``, for the same reason the contract's
+    ``DecisionRecord`` does not compose ``DecisionEvent`` with ``allOf``: both shapes are
+    closed, and a nested view would render a nested body.
+    """
+
+    decision_id: str
+    finding_uid: str
+    finding_observation_id: str
+    event_type: str
+    author_label: str
+    recorded_at: datetime
+    project_uid: str
+    run_id: str
+    category: str
+    finding_text: str
+    current_verdict: str
+    decision_event_count: int
+    verdict: str | None = None
+    comment: str | None = None
+
+
+def decision_record_body(view: DecisionRecordView) -> dict[str, Any]:
+    """``DecisionRecord``: one journal entry, event and finding context together."""
+    return {
+        "decision_id": view.decision_id,
+        "finding_uid": view.finding_uid,
+        "finding_observation_id": view.finding_observation_id,
+        "event_type": view.event_type,
+        # `oneOf [<value>, null]`, as on ``DecisionEvent``: a comment event carries a null
+        # verdict, and that is a fact about the event rather than a missing field.
+        "verdict": view.verdict,
+        "comment": view.comment,
+        "author_label": view.author_label,
+        "recorded_at": timestamp(view.recorded_at),
+        "project_uid": view.project_uid,
+        "run_id": view.run_id,
+        "category": view.category,
+        "finding_text": view.finding_text,
+        "current_verdict": view.current_verdict,
+        "decision_event_count": view.decision_event_count,
     }
 
 
