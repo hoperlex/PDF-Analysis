@@ -940,6 +940,42 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         )
         assert appended.status == 201, appended.body
 
+    # `listDecisions` is deployment-wide and only decided findings reach it, so the shared
+    # `category` case -- every value of the filter returns a non-empty, homogeneous page --
+    # needs a decision on a finding of EACH category. The loop above decides one finding;
+    # this decides one whose category differs from it, and asserts the difference rather
+    # than assuming the fixture still publishes both.
+    by_category = {
+        item["finding_uid"]: item["category"]
+        for item in ok(get(shipped_router, f"/runs/{mixed_run.run_id}/findings?limit=200"))[
+            "items"
+        ]
+    }
+    first = mixed_run.findings[0]
+    other = next(
+        finding
+        for finding in mixed_run.findings
+        if by_category[finding.finding_uid] != by_category[first.finding_uid]
+    )
+    appended = dispatch(
+        shipped_router,
+        Request.build(
+            "POST",
+            f"/findings/{other.finding_uid}/decisions",
+            headers={
+                "Content-Type": "application/json",
+                "Idempotency-Key": "qs-journal-other-category",
+            },
+            body=json.dumps(
+                {
+                    "event_type": "accept",
+                    "finding_observation_id": other.finding_observation_id,
+                }
+            ).encode("utf-8"),
+        ),
+    )
+    assert appended.status == 201, appended.body
+
     for operation_id, names in declared.items():
         target = targets[operation_id]
         baseline = ok(get(shipped_router, f"{target}?limit=200"))
