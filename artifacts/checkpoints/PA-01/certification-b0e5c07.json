@@ -1,0 +1,548 @@
+{
+  "checkpoint_id": "PA-01",
+  "record_type": "certification",
+  "supersedes": "artifacts/checkpoints/PA-01/certification-ac7c348.json",
+  "creates_no_acceptance": "This record sits where artifacts/checkpoints/PC-01/report.json sits for that checkpoint, and deliberately is not that file. PC-01's report.json records an ACCEPTANCE. This records ten verdicts and the evidence behind each. Two criteria still cannot be established, so PA-01 is not accepted here and no tag is cut by this session (AGENTS.md section 5).",
+  "status": "eight of ten hold, one of those with a named exception; two cannot be established; none was found to fail. NO VERDICT MOVED. Criterion 2's second clause lost its named qualification W30CERT3-1, which is the substantive change: the credential-free path through /bff/v1 to all fifteen guarded operations is closed, measured on both surfaces with a positive control.",
+  "certified_on": "2026-09-22",
+  "certified_commit": "b0e5c07",
+  "certified_commit_full": "b0e5c07dce989ad230b18eabae74131b79851329",
+  "worktree_head_on_arrival": "b0e5c07",
+  "worktree_head_note": "The commit the dispatch names. This session added two files and no code, so the head at the end of the session is b0e5c07 plus docs/program/W37-CERT4.md and this record. The owner's alpha stand was deployed from 31a8a53; `git diff --name-only 31a8a53..b0e5c07` is ONE FILE, docs/program/dispatch/PORT_REGISTRY.md, and nothing outside docs/. infra/deploy/verify-deployed.sh then compared the BYTES inside the running containers against this worktree and exited 0 on that stand -- 156 src/, 10 db/, 34 contracts/, 7 fixtures/recorded/, docs/program/P02_LOCK.json, infra/deploy/serve.py and 262 web/ files identical. So every reading taken from the owner's stand is a reading about the code at b0e5c07. Measured, not assumed.",
+  "what_was_certified": {
+    "by": "session W37-CERT4, which authored none of waves 30 through 36 and repaired nothing it measured",
+    "method": "the ten criteria of ALPHA_ROADMAP.md section 5, READ FROM THAT FILE and not from the dispatch brief. Section 5 carries TEN. Criterion 1's second clause is the API schema conforming to the frozen contract, not the DB schema -- the brief warned that an integrator had misquoted this once, and the file agrees with the brief.",
+    "independent_of_the_integrator": true,
+    "nothing_inherited": "Every one of the ten verdicts was re-taken at this tree. The previous record's evidence is about a different tree and a different security posture: the application gained authorization in waves 33-36 (POST /auth/token, migration 0006_app_user, a sign-in screen, an HttpOnly session cookie) and criterion 2's second clause is about exactly that.",
+    "gate_lane": "gate-w37b, POSTGRES_PORT 56160, S3_API_PORT 59760, S3_CONSOLE_PORT 59761, POSTGRES_DB audit_w37b, S3_BUCKET auditmanager-gate-w37b. .env written from .env.example with all six set and DATABASE_URL and S3_ENDPOINT_URL carrying the same ports.",
+    "stacks_driven": {
+      "the_owners_stand": "auditmanager-w19a on 127.0.0.1:31500, AUDITMANAGER_PROVIDER_MODE=proxy - THE OWNER'S STAND. Never reset, wiped, stopped, restarted or removed. It received additive product data only: projects, a document, runs, decisions, and five refused uploads. Criterion 1's served-schema conformance, criterion 2's whole sixteen-operation probe and the in-container bypass, the certified live journey behind criteria 3-7, criterion 9's five refusals, and W37CERT4-4's nine requests.",
+      "this_sessions_own_stack": "auditmanager-w37cert4 on 127.0.0.1:31570, built by deploy.sh from this worktree, ALPHA_HTTP_PORT 31570, POSTGRES_DB auditmanager_w37cert4, S3_BUCKET auditmanager-w37cert4, env file OUTSIDE the tree at /root/w37-logs/cert4-drive/alpha.env. Criterion 4's running, partial and failed; criterion 8's destroy-and-recreate; criterion 9's outage and its same-stack control; criterion 10's entire cycle. TORN DOWN with `down -v` at the end and both its images removed.",
+      "why_two": "Criterion 4's partial and failed, criterion 9's outage and criterion 10's wipe all require changing or removing the provider, or destroying data. None of that may be done to the owner's stand."
+    },
+    "verify_deployed_on_both": "infra/deploy/verify-deployed.sh exits 0 on BOTH stacks against this worktree. Logs: /root/w37-logs/cert4-verify-own.log, /root/w37-logs/cert4-verify-stand.log.",
+    "images_built": 2,
+    "image_names_created": "auditmanager-w37cert4-api and auditmanager-w37cert4-web, by deploy.sh's own build. Both removed at the end.",
+    "what_that_arrangement_is_not": "It is not TLS. The running proxy container's /etc/nginx/conf.d/ holds exactly one file, default.conf, with exactly one listen directive, `listen 8080;`. infra/deploy/proxy/tls-server.conf (`listen 8443 ssl`), compose.tls.yml and enable-tls.sh exist in the tree and are INERT: the running container does not load them. There is no host name and no certificate.",
+    "one_file_written_into_the_worktree_and_it_is_git_ignored": "infra/deploy/env/provider.env, matched by .gitignore:34 (infra/deploy/env/*.env). It is the file compose.server.yml names as env_file and the only way to point an api container at a different provider. Removed at the end. `git status --short` was empty after every write and no tracked file under infra/ was touched."
+  },
+  "criteria": {
+    "1_deploy_from_clean_clone_and_served_schema_conforms": {
+      "verdict": "cannot be established",
+      "verdict_changed_from_ac7c348": false,
+      "reason_changed": false,
+      "blocker": "R-1. No machine here has never run this stack; this host has run it since wave 14. There is no host name, no certificate and no owner of root on a server.",
+      "first_clause": "DRIVEN AS FAR AS THIS HOST ALLOWS, AND IT WORKS, re-taken at b0e5c07. deploy.sh brought a complete stack up from THIS WORKTREE, which had never carried one: five services healthy, the database migrated to head 0006_app_user, the published port answering, and deploy.sh's OWN conformance check reporting `frozen ops: 16, served ops: 16, differences: 0`. Run a SECOND time against the same tree it rebuilt no layer and kept the image by CONTENT rather than by id -- `auditmanager-w37cert4-api f0e8206e4f6f identical content; kept, and 2f6b052cab76 discarded`. That is the idempotency the criterion's first half is really about.",
+      "second_clause": "HOLDS. The schema the RUNNING PROCESS serves, fetched over HTTP from http://127.0.0.1:31500/api/v1/openapi.json (68402 bytes), compared against contracts/api/v1/openapi.json by the gate's own engine tests/contract/api_v1/openapi_conformance.py (surface() then differences()): ZERO differences, 16 operations on both sides, 13 paths and 48 schemas on both sides. The two documents are NOT byte-identical and cannot be -- canonical digests served b65177b5..., frozen de213e7e... -- which is why verify-deployed.sh refuses to compare them by digest and why this is a conformance engine.",
+      "anti_vacuity": "Three plants into the SERVED document, three reds, one green control: delete /auth/token -> 1 difference; POST /projects response 201 -> 299 -> 2 differences; an extra key on schema AnalysisProfileId -> 1 difference; unmutated -> 0. The comparison can fail, on the served document, on a semantic change.",
+      "why_not_holds": "`cannot be established` is not a synonym for `holds`. The missing half is a machine that has never run this stack, and it is R-1's, not the software's.",
+      "stack": "both; the served-schema comparison on the owner's stand, the clean-start and the idempotency on this session's own stack"
+    },
+    "2_tls_and_no_token_refused_by_the_application": {
+      "verdict": "cannot be established",
+      "verdict_changed_from_ac7c348": false,
+      "reason_changed": false,
+      "what_changed": "NOT THE VERDICT AND NOT THE BLOCKER -- THE SECOND CLAUSE'S SUBSTANCE. At ac7c348 this clause held WITH A NAMED QUALIFICATION, W30CERT3-1: the published origin carried a second, credential-free path to all fifteen operations through /bff/v1, severity `low now, high on the day R-1 lands`. THAT PATH IS CLOSED AT b0e5c07. The qualification is withdrawn on measurement, not inherited.",
+      "first_clause": "NOT ESTABLISHED. Measured INSIDE the running proxy container: /etc/nginx/conf.d/ holds exactly one file with exactly one `listen 8080;`. `docker port auditmanager-w19a-proxy-1` publishes 8080/tcp -> 127.0.0.1:31500 and nothing else. The TLS path in the tree is inert. No host name, no certificate. R-1.",
+      "second_clause": "HOLDS, and driven wider than the criterion asks. ALL SIXTEEN declared operations driven over HTTP through the published origin, on BOTH /api/v1 AND /bff/v1, in six credential conditions each. Over the 15 guarded operations: no Authorization header -> 15/15 401 authentication_required; a forged am1. credential with a wrong tag -> 15/15; a credential that is not even the right shape -> 15/15; /bff/v1 with no session cookie -> 15/15; /bff/v1 with a cookie naming no live session -> 15/15. POSITIVE CONTROL: the same fifteen requests with a credential the stand minted reach the operation on 15/15 (200, 404 or 422, never 401), so the 401 is the seam and not a routing miss. issueToken -- the one operation in UNAUTHENTICATED_OPERATIONS and the one the contract publishes with an empty security requirement -- answers 200 without a credential on /api/v1, and 404 not_found on /bff/v1, because the browser tier refuses to forward the exchange at all.",
+      "refused_by_the_application_not_by_the_proxy": "PROVED BY REMOVING THE PROXY. From inside the api container, http://127.0.0.1:8000/projects -> 401 with a full ErrorEnvelope carrying authentication_required. From inside the web container, http://127.0.0.1:3000/bff/v1/projects -> 401 authentication_required with a web- correlation id. nginx is not in either path.",
+      "the_previous_qualification_that_is_withdrawn": "W30CERT3-1 is repaired at b0e5c07 by web/src/app/bff/v1/[...path]/route.ts's noSession(): a browser with no live session gets 401 and the deployment credential is not forwarded. Measured, not read.",
+      "why_not_holds": "Unchanged and worth repeating: a reader told criterion 2 passed would conclude the alpha is reachable over TLS. It is not. The clause about the application is now true; the clause about the transport is not.",
+      "browser_evidence": "Zero Authorization headers left the browser across every journey in this session. The session cookie am_session is HttpOnly, SameSite=Strict, Path=/, 64 characters, and does NOT carry the minted am1. token. Secure=false, which is a consequence of this criterion's first clause and not a separate defect.",
+      "stack": "owner's stand for the sixteen-operation probe and both in-container bypasses"
+    },
+    "3_project_upload_immutable_version_private_object": {
+      "verdict": "holds",
+      "verdict_changed_from_ac7c348": false,
+      "evidence": "Driven in a real Chromium process through the owner's stand at 127.0.0.1:31500, and the journey now BEGINS AT THE SIGN-IN SCREEN, which is new since ac7c348: /login, #sign-in-login=admin, #sign-in-password=password, a real <form method=\"post\">. Project prj_01M34RWTX9GXAG69X21VZQ8TY4, document doc_01M34RWZ28C484W579CMVS2V4G, version ver_01M34RWZ29KMC4F60RSS5YH0N3, created through the real controls.",
+      "immutable": "THREE independent readings. (1) The frozen contract declares ONLY `get` on every path that addresses a version -- /versions/{uid}, /versions/{uid}/content, /versions/{uid}/runs, /documents/{uid}/versions. There is no write method to call. (2) Re-uploading the SAME BYTES answered 201 with a NEW document_uid and a NEW version_uid: it created an aggregate, it did not replace one. (3) The original version re-read afterwards is unchanged field for field, byte_size 58978, sha256 6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f, 8 pages, published_at intact.",
+      "private_object": "Checked against the bucket itself. `docker port auditmanager-w19a-s3-1` publishes NOTHING. Inside the compose network, with the application's own credentials, bucket auditmanager-alpha holds 49 objects under content-addressed keys; exactly one is 58978 bytes, blobs/7K/DZ/7KDZE8SQTZ9K23JYB742HG7K8J, and its sha256 IS the version's sha256. An ANONYMOUS GET of that exact key answers 403 Forbidden; an anonymous bucket listing answers 403 AccessDenied.",
+      "stack": "owner's stand"
+    },
+    "4_live_run_provider_mode_and_cost_visible_and_four_states_distinguished": {
+      "verdict": "holds",
+      "verdict_changed_from_ac7c348": false,
+      "live_run": "run_01M34RX7PH00Y6J6Y6E8RDJRJZ on the OWNER'S STAND, through the operated proxy. state published, provider_mode live, four stages all succeeded, published_finding_count 3, model_call_count 1, cost_micros 38350, cost_basis measured, text_analysis 12.4 s.",
+      "provider_mode_visible": "Read from the attribute and not from prose: four [data-provider-mode=\"live\"] nodes across the run and review screens, rendering the Russian label `живой вызов` and the sentence `режим провайдера: живой вызов`.",
+      "cost_visible": "The run screen prints the spend; cost_micros 38350 with cost_basis measured is the integer behind it.",
+      "ui_states_driven": "FIVE distinct contract values read from span.am-badge[data-run-state] on the run's OWN screen: queued (`в очереди`), running (`выполняется`), published (`опубликован`), partial (`частично`), failed (`отказ`). running was CAUGHT LIVE, following run_01M34TD3NGG30J1HSNKCNDSJR1 from the moment its control was clicked: queued -> running -> failed.",
+      "the_selector_matters": "A first pass read every [data-run-state] on the page and got three states on one run's screen. run-progress.tsx and export-panel.tsx render BARE <span data-run-state=\"published\"> inside explanatory prose, and the version screen lists every prior run's badge. Only span.am-badge[data-run-state], which is what RunStateBadge emits, is the run's own state. The previous record's sentence -- `read from the [data-run-state] badge, never from page prose` -- names the right intention and a selector that is too wide.",
+      "the_partial_run": "run_01M34T6DET614KYYZ90NTXYNZA on this session's own stack. state partial, degradation_set [\"text_analysis\"], the text_analysis stage `partial`, 1 finding published, cost_basis measured.",
+      "the_failed_runs": "TWO, by two different causes. run_01M34T7HJ5AWGSM6K3BFMAYCXK: the provider's port unreachable, terminal_reason dependency_unavailable, 0 findings. run_01M34T1JMDNJRATRHAJDBGFMD3: its api process was replaced mid-flight, and the application RECONCILED it rather than leaving it in memory -- state failed, terminal_reason analysis_failed, interrupted_reason executor_process_ended_before_terminal.",
+      "how_partial_was_reached": "A local stub of the proxy's own documented OpenAI-compatible contract, answering finish_reason `length`, run as a CONTAINER ON THE COMPOSE NETWORK (w37cert4-stub) so the real ProxyAdapter really opens a socket to it. Nothing in the application is stubbed.",
+      "stack": "owner's stand for the certified live run, its provider mode and its cost; this session's own stack for running, partial and failed"
+    },
+    "5_finding_opens_at_its_exact_quotation_beside_its_page": {
+      "verdict": "holds",
+      "verdict_changed_from_ac7c348": false,
+      "evidence": "Clicking a finding row on the review screen of the owner's stand: fnd_01M34RXKTCW6WNY74RMJTKKT8C selected with data-selected=\"true\"; .am-evidence carries data-active-page=\"3\"; the page navigation offers 3 and 7 with data-active=\"true\" on 3; the PDF pane's data-viewer-src is blob:http://127.0.0.1:31500/...#page=3; and the quotation's data-evidence-quote attribute and its VISIBLE TEXT are byte-identical: `2.4. Из надземной части здания предусмотрено два эвакуационных выхода.`",
+      "checked_with_an_extractor_the_application_does_not_use": "pdfminer.high_level.extract_text (pdfminer 20260107), page by page, over the bytes the API served back (GET /versions/{uid}/content, 58978 bytes, sha256 matching). The quotation occurs on PAGE 3 AND ON NO OTHER PAGE OF THE EIGHT. The CSV's own evidence_page for the same finding is also 3 and its evidence_quote is byte-identical to the screen's.",
+      "what_the_second_extractor_could_not_confirm": "The anchor also says `символы 1282–1352 по всему документу`. pdfminer's whole-document text puts the same quotation at offset 1320. A character offset is defined relative to an extractor's own text stream, and this is not the extractor the application uses, so the difference is NOT evidence of a defect and NOT evidence the number is right. ALREADY REGISTERED AS D-50; this session reproduces the condition and confirms that row rather than opening a second one.",
+      "stack": "owner's stand"
+    },
+    "6_accept_reject_and_a_later_comment_with_the_history_showing_all_three": {
+      "verdict": "holds",
+      "verdict_changed_from_ac7c348": false,
+      "evidence": "Three clicks on the real controls of the owner's stand, on finding fnd_01M34RXKTCW6WNY74RMJTKKT8C: button[data-intent=\"accept\"] (`Принять`), button[data-intent=\"reject\"] (`Отклонить`), then #am-decision-comment filled and button[data-intent=\"comment\"] (`Добавить`). Each a separate POST /bff/v1/findings/{uid}/decisions answering 201, seen in the browser's own response log.",
+      "the_verdict_badge": "не решено -> принято -> отклонено -> отклонено. The comment is the LATER event and the verdict did not move for it, which is the half a three-row history alone would not prove.",
+      "history": "Three [data-decision-id] events rendered in order, none replacing another: dec_01M34S62R2E4KGNYW68V3SPBWH ПРИЁМ -> принято 14:44:12 UTC local-reviewer; dec_01M34S65RCM0XV0WFTA2KBSJKA ОТКЛОНЕНИЕ -> отклонено 14:44:15 UTC; dec_01M34S6944WVAV73TSF0TYXWCE КОММЕНТАРИЙ 14:44:18 UTC with the comment text.",
+      "stack": "owner's stand"
+    },
+    "7_csv_through_the_browser_resolving_to_the_same_version_and_run": {
+      "verdict": "holds",
+      "verdict_changed_from_ac7c348": false,
+      "evidence": "A real browser download from the real button[data-intent=\"export\"] (`Скачать run_...-findings.csv`), saved by the browser's own download handler. 4628 bytes, suggested filename run_01M34RX7PH00Y6J6Y6E8RDJRJZ-findings.csv.",
+      "seventeen_columns": "17 header fields: project_uid, document_uid, version_uid, run_id, run_state, provider_mode, finding_uid, finding_observation_id, category, finding_text, recommendation_text, evidence_page, evidence_quote, current_verdict, latest_comment, latest_decision_id, decision_recorded_at.",
+      "bom": "first three bytes EF BB BF",
+      "crlf": "6 CRLF, 0 bare LF",
+      "resolves_back": "All 5 data rows carry run_id run_01M34RX7PH00Y6J6Y6E8RDJRJZ and version_uid ver_01M34RWZ29KMC4F60RSS5YH0N3.",
+      "stack": "owner's stand"
+    },
+    "8_restart_and_every_canonical_row_object_and_decision_survives": {
+      "verdict": "holds with a named exception",
+      "verdict_changed_from_ac7c348": false,
+      "reason_for_the_exception_changed": false,
+      "what_was_driven": "On this session's own stack, entirely. A 43-line census taken BELOW the application -- straight from PostgreSQL and from MinIO, never through the tier under test -- then `docker compose down` WITHOUT -v (all seven containers removed, both named volumes kept; the published port answered 000, so the stack was genuinely gone), then deploy.sh again, then the same census. EVERY ONE OF THE SEVEN CONTAINER IDS DIFFERS (api 5400e88a144f -> 8ad34b705309). THE CENSUS DIFFS TO NOTHING.",
+      "census": "17 base tables, migration head 0006_app_user, 1 project, 1 version (6d53674f..., 58978 bytes, 8 pages), 1 run, 1 model call, 3 findings, 5 evidence rows, 3 decision events (accept, reject, comment) and 7 objects by exact key and size -- identical on both sides.",
+      "reachability": "Afterwards every screen loads cold in a FRESH BROWSER PROCESS per screen, each signing in from scratch: projects, project, version, run, review, document -- 6/6 answer 200 and carry their canonical identifiers.",
+      "named_exception": "W37CERT4-1. THIS IS A CONTAINER DESTRUCTION AND RECREATION, NOT A HOST REBOOT. The reason on record (D-51, raised as W30CERT3-3) is that a certifying session runs on the host it would have to reboot and cannot witness its own reboot. RE-MEASURED AT b0e5c07 AND STILL TRUE, and narrower than when written: it is structural, and a SECOND reason now stands beside it that did not exist in wave 30 -- the peer stream W37-D57 (gate-w37a) had services up on this host throughout, as did gate-b0 and gate-w35a, and a reboot is a host-wide action on a shared resource. The false reason the brief names (`the host carries three alpha stacks`) is confirmed false: ONE alpha stack was running when this session arrived and one is running as it leaves.",
+      "stack": "this session's own stack, entirely - the owner's stand was never restarted, recreated or stopped"
+    },
+    "9_five_typed_refusals_through_http_and_a_provider_outage_that_fails_the_run": {
+      "verdict": "holds",
+      "verdict_changed_from_ac7c348": false,
+      "which_five_and_where_that_came_from": "Read from the roadmap, not inherited. ALPHA_ROADMAP.md section `Stage 1 - W13-BASE` names `the five refusals with their distinct details.constraint values`. They are the five upload constraints, and they are five because the constraints are five.",
+      "refusals": [
+        {
+          "fixture": "not_a_pdf.txt",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "content",
+          "constraint": "pdf_magic_bytes"
+        },
+        {
+          "fixture": "encrypted.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "content",
+          "constraint": "not_encrypted"
+        },
+        {
+          "fixture": "image_only.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "page_text",
+          "constraint": "every_page_has_extractable_text"
+        },
+        {
+          "fixture": "too_many_pages.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "page_count",
+          "constraint": "1 <= page_count <= 30"
+        },
+        {
+          "fixture": "oversize.pdf",
+          "status": 422,
+          "error_code": "validation_failed",
+          "field": "file",
+          "constraint": "max_bytes"
+        }
+      ],
+      "refusals_note": "Five distinct constraints out of five, driven with curl through the OWNER'S STAND's nginx origin -- the instrument the criterion names; it says `through HTTP` -- each with a VALID CREDENTIAL, so what refuses is the validation and not the seam. Five distinct correlation_ids, every one retryable:false. Afterwards the project they were uploaded to lists ZERO documents: nothing half-created survived a refusal.",
+      "what_a_provider_outage_is_at_this_commit": "ESTABLISHED BY READING THE TREE, because W29-RETRY moved the boundary and it must not be inherited. src/auditmanager/runs/retry.py: RETRYABLE_STAGE_ERRORS is exactly {DEPENDENCY_UNAVAILABLE}, narrower than the frozen catalog's retryable set, and RetryPolicy.__post_init__ refuses to construct over any code the catalog does not mark retryable -- so a policy that retries analysis_failed is NOT EXPRESSIBLE without editing a frozen contract. ATTEMPT_BUDGET 3, BACKOFF_SECONDS (2.0, 8.0).",
+      "provider_outage": "HOLDS. On this session's own stack, PROXY_LLM_BASE_URL was pointed at http://w37cert4-stub:59991, a port nothing listens on inside the compose network. run_01M34T7HJ5AWGSM6K3BFMAYCXK: state failed, terminal_reason dependency_unavailable, published_finding_count 0, NO model_call rows at all because no answer ever came, terminal in 13 s.",
+      "the_control_that_proves_the_boundary": "Driven minutes later on the SAME stack, same version, same stub container, differing ONLY in whether the port was the one the stub listens on: run_01M34T980709YBN41J4J9KYJ2C -> partial, 1 finding published. So the failed above is the outage and not the stack.",
+      "stack": "owner's stand for the five refusals; this session's own stack for the outage and its control"
+    },
+    "10_reset_dumps_wipes_reinitialises_and_the_dump_restores": {
+      "verdict": "holds",
+      "verdict_changed_from_ac7c348": false,
+      "guards_driven": "SEVEN refusals, each exit 3 read from $? after a redirect to a file and never through a pipe: no mode flag; --dry-run and --yes-destroy-everything together; no --database/--bucket; a database that is not the configured one; a bucket that is not the configured one; a missing env file; an unrecognised option. TWO of those seven were driven with the OWNER'S ACTUAL NAMES (auditmanager_alpha, auditmanager-alpha) -- they are the guard that would stop a session wiping the owner's stand by typing its names, and they refused.",
+      "rehearsal": "--dry-run, exit 0. 17 base tables listed by name with counts, `total: 111 rows in 17 base tables (and 1 view listed above, projecting rows already in that number)` -- W26-OPS's D-39 repair, which moved this criterion from an exception to holds at ac7c348, is STILL IN PLACE and was re-read rather than assumed. 11 objects listed exactly by key, size and time. Nothing touched.",
+      "cycle": "--yes-destroy-everything, exit 0. A dump was written under infra/deploy/dumps/auditmanager-w37cert4-20260922T150754Z (database.dump 103434 bytes, objects/, objects.attrs, objects.stat.json), `object_attrs: recorded 11 objects`, `dump verified -- database.dump readable, 11/11 objects mirrored`, then drop, recreate, migrate to 0006_app_user, purge, and re-initialise the bucket PRIVATE. The dumps directory is git-ignored (.gitignore:35) and was removed afterwards.",
+      "empty_and_working": "IN THE SAME API PROCESS, WITH NO RESTART - proved, not asserted: the api container's id was e8b617bad7fe before the wipe and e8b617bad7fe after it. POST /auth/token with admin/password mints a credential (the seeded account came back with the migrations, and the migration logged its own warning about the default password). GET /projects -> 0 projects. A project was then created and ar_baseline.pdf uploaded -> 201, a new version, 58978 bytes, 6d53674f... Empty AND working.",
+      "restore": "--restore with the RELATIVE path (the shape D-31 broke on), exit 0, `restored 11 objects`. The census after the restore DIFFS TO NOTHING against the census taken before the wipe, and the post-wipe project that existed between the two is gone.",
+      "the_write_back_proof": "GET /versions/{uid}/content after the restore returns 58978 bytes whose sha256 is 6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f. Re-uploading exactly those bytes AFTER the restore answers 201 and not 409, with a new version_uid: the restored instance is writable, not a read-only replay.",
+      "stack": "this session's own stack, entirely. The owner's stand was never a candidate for this criterion."
+    }
+  },
+  "anti_vacuity": {
+    "why_two_sweeps": "Criterion 2 is the verdict whose substance moved, and it rests on two instruments: the conformance engine behind criterion 1's second clause, and the authorization seam behind criterion 2's second clause.",
+    "the_conformance_engine": "Three plants into the SERVED document, three reds, one green control. See criterion 1.",
+    "the_authorization_seam": {
+      "method": "make mutation-copy MUT=/root/w37cert4-mut, the copy proved to be the imported tree (auditmanager.api.security.__file__ resolves under the copy), PYTHONDONTWRITEBYTECODE=1 and __pycache__ cleared between cases (OPERATING_CONSTRAINTS section 10.2), baseline green FIRST. Suites: tests/integration/api/test_authorization.py, tests/integration/auth, tests/integration/composition/test_api_token_channel.py.",
+      "cases": [
+        {
+          "id": "CTRL",
+          "mutation": "unmutated copy",
+          "result": "77 passed"
+        },
+        {
+          "id": "M1",
+          "mutation": "verify() accepts every credential",
+          "result": "RED - the suite refuses to collect: 'this case is only a case if the credential really has expired'"
+        },
+        {
+          "id": "M2",
+          "mutation": "UNAUTHENTICATED_OPERATIONS also holds listProjects",
+          "result": "RED - 15 failed, 62 passed"
+        },
+        {
+          "id": "M3",
+          "mutation": "the expiry check removed",
+          "result": "RED - the same collection-time precondition"
+        },
+        {
+          "id": "M4",
+          "mutation": "hmac.compare_digest replaced by !=",
+          "result": "GREEN - BLIND, see W37CERT4-6"
+        },
+        {
+          "id": "M5",
+          "mutation": "an unreadable route is EXEMPTED instead of guarded",
+          "result": "GREEN - BLIND, see W37CERT4-5"
+        },
+        {
+          "id": "M6",
+          "mutation": "an empty deployment secret derives a key anyway",
+          "result": "RED - 3 failed, 74 passed"
+        },
+        {
+          "id": "REV",
+          "mutation": "reverted to the original bytes",
+          "result": "77 passed"
+        }
+      ],
+      "the_answer_the_brief_asked_for": "SOUND ON THE SUBSTANCE, BLIND ON TWO STATED PROPERTIES. Four of six redden. The two that do not are each a property the module states in prose and nothing can check. The sweep did not manufacture a red: the baseline and the revert are both 77 green on the same copy.",
+      "the_copy_was_removed": true
+    }
+  },
+  "live_runs": [
+    {
+      "run_id": "run_01M34RX7PH00Y6J6Y6E8RDJRJZ",
+      "stack": "owner's stand 31500",
+      "provider_mode": "live",
+      "transport": "proxy, the operated proxyllm.fvds.ru",
+      "state": "published",
+      "findings": 3,
+      "cost_micros": 38350,
+      "cost_basis": "measured",
+      "model_call_count": 1,
+      "note": "the certified journey; criteria 3, 5, 6 and 7 hang off it, and criterion 4's live half"
+    },
+    {
+      "run_id": "run_01M34SPD64EM0YY0JPZQBYX8C2",
+      "stack": "own 31570",
+      "provider_mode": "recorded",
+      "transport": "none",
+      "state": "published",
+      "findings": 3,
+      "cost_micros": 34400,
+      "cost_basis": "estimated",
+      "model_call_count": 1,
+      "note": "free; the seed for criterion 8's census and criterion 10's dump"
+    },
+    {
+      "run_id": "run_01M34T6DET614KYYZ90NTXYNZA",
+      "stack": "own 31570",
+      "provider_mode": "live",
+      "transport": "local stub container on the compose network",
+      "state": "partial",
+      "findings": 1,
+      "cost_micros": 41200,
+      "cost_basis": "measured",
+      "model_call_count": 1,
+      "note": "free; criterion 4's partial. The cost is the stub's fiction, not a payment"
+    },
+    {
+      "run_id": "run_01M34T7HJ5AWGSM6K3BFMAYCXK",
+      "stack": "own 31570",
+      "provider_mode": "live",
+      "transport": "an unreachable port",
+      "state": "failed",
+      "findings": 0,
+      "cost_micros": null,
+      "cost_basis": null,
+      "model_call_count": 0,
+      "note": "free; criterion 9's outage, terminal_reason dependency_unavailable"
+    },
+    {
+      "run_id": "run_01M34T980709YBN41J4J9KYJ2C",
+      "stack": "own 31570",
+      "provider_mode": "live",
+      "transport": "local stub container, reachable again",
+      "state": "partial",
+      "findings": 1,
+      "cost_micros": 41200,
+      "cost_basis": "measured",
+      "model_call_count": 1,
+      "note": "free; THE CONTROL that proves the outage was the outage"
+    },
+    {
+      "run_id": "run_01M34T1JMDNJRATRHAJDBGFMD3",
+      "stack": "own 31570",
+      "provider_mode": "live",
+      "transport": "a host address the container cannot reach",
+      "state": "failed",
+      "findings": 0,
+      "cost_micros": null,
+      "cost_basis": null,
+      "model_call_count": 0,
+      "note": "free; its api process was replaced mid-flight and the application RECONCILED it - interrupted_reason executor_process_ended_before_terminal"
+    },
+    {
+      "run_id": "run_01M34TD3NGG30J1HSNKCNDSJR1",
+      "stack": "own 31570",
+      "provider_mode": "live",
+      "transport": "an unreachable port",
+      "state": "failed",
+      "findings": 0,
+      "cost_micros": null,
+      "cost_basis": null,
+      "model_call_count": 0,
+      "note": "free; the run whose OWN screen was watched from the click, giving queued -> running -> failed"
+    }
+  ],
+  "measured_spend_usd": 0.03835,
+  "ceiling_usd": 1.0,
+  "spend_note": "ONE paid provider call, USD 0.038350 in total, against a ceiling of 1.00. Everything else ran in recorded mode or against a local stub container this session ran, and cost nothing. The brief's figure -- `the last live run cost USD 0.038` -- is confirmed.",
+  "gate": {
+    "instance": "gate-w37b",
+    "lane": "POSTGRES_PORT 56160, S3_API_PORT 59760, S3_CONSOLE_PORT 59761, POSTGRES_DB audit_w37b, S3_BUCKET auditmanager-gate-w37b",
+    "asserted_on": "the string `GATE OK` appearing in the output, which only the gate itself prints - never on a number a wrapper handed back (OPERATING_CONSTRAINTS section 4.6)",
+    "log": "/root/w37-logs/cert4-gate.log",
+    "run_once": true,
+    "commit": "e76eb82 -- the report; the only later commit on this branch is the one that adds this record",
+    "tree_was_committed_clean": true,
+    "battery": "2193 passed, 5 skipped, 1 warning, 169 subtests passed in 336.72s",
+    "foundation": "35 passed in 35.36s",
+    "frontend": "959 passed across 68 files",
+    "whitespace": "clean",
+    "result": "GATE OK: battery, foundation, frontend and whitespace all pass",
+    "note": "IDENTICAL, FIGURE FOR FIGURE, to the numbers the dispatch brief carries: battery 2193 / 5 / 169, foundation 35, frontend 959 in 68 files. This session changed no code, so any difference would have been a finding; there is none.",
+    "read_at": "2026-09-22T20:26:24+05:00"
+  },
+  "limits": {
+    "host_reboot": "Not performed. W37CERT4-1. The reason was re-measured at this commit and still holds, with a second reason beside it.",
+    "tls_and_the_never_run_machine": "Neither exists here. Both wait on R-1's host details - a name, a certificate, who holds root.",
+    "clean_clone": "deploy.sh was driven from this session's worktree, which had never carried a stack, rather than from a machine that had never run one. The difference is R-1's and it is why criterion 1 is `cannot be established` rather than `holds`.",
+    "real_documents": "None. The fixtures are synthetic, as R-4 requires until the pilot.",
+    "the_character_offset": "Unverifiable from outside. Already D-50; this session reproduced the condition and did not open a second row.",
+    "premise_13_of_the_brief": "`this morning: GET /bff/v1/projects with no session -> 200` could not be re-measured, because the stand was redeployed since. It is consistent with W30CERT3-1 and is taken on that record's evidence rather than on this session's own.",
+    "disk": "The host went from 17 GB free to 13 GB free building this session's two images, and its own stack and images were removed at the end.",
+    "contention": "Three other gate lanes had services up throughout (gate-b0, gate-w35a, gate-w37a - the peer stream W37-D57). Nothing came back red that was not mutated on purpose, so no re-run-alone comparison was needed."
+  },
+  "defects_found_by_certification": {
+    "count": 8,
+    "repaired": 0,
+    "written_to_the_register": false,
+    "why_not": "DEBT_REGISTER.md is the integrator's file and a forbidden hotspot for this task. All eight are written in docs/program/W37-CERT4.md with the command a later session re-runs. Two of them (W37CERT4-1 on criterion 8, and the character offset) are CONFIRMATIONS of existing rows D-51 and D-50 rather than new rows.",
+    "rows": [
+      {
+        "id": "W37CERT4-1",
+        "tree": "none - a property of the certifying arrangement",
+        "summary": "criterion 8 is a container destruction and recreation, not a host reboot; the reason re-measured and still true, with a second reason beside it",
+        "severity": "the named exception on criterion 8; nothing to repair",
+        "already_registered_as": "D-51",
+        "measured_at": "b0e5c07"
+      },
+      {
+        "id": "W37CERT4-2",
+        "tree": "web/src/_app/app-frame.tsx:70",
+        "summary": "the footer of EVERY screen, including /login, tells the reviewer there are no accounts and no access separation, while the application has an account and refuses all fifteen guarded operations without one",
+        "severity": "medium - a statement about the SECURITY POSTURE rendered to whoever uses the alpha, and now the opposite of the truth",
+        "check": "grep -n 'без учётных записей' web/src/_app/app-frame.tsx",
+        "measured_at": "b0e5c07"
+      },
+      {
+        "id": "W37CERT4-3",
+        "tree": "web/src/app/bff/v1/[...path]/route.ts lines 39-45",
+        "summary": "the file that holds the credential still documents the behaviour it replaced: its own header says a browser with no session cookie gets the deployment's own credential and `nothing about the alpha's behaviour changes`, and 160 lines later the same file documents and implements the opposite",
+        "severity": "medium - OPERATING_CONSTRAINTS section 4.7's exact shape one level in. 4.7 repaired the stale instruction in infra/deploy/README.md and DEPLOYMENT_RUNBOOK.md, BOTH VERIFIED CORRECT at b0e5c07, and left the same claim standing inside the module that holds the key",
+        "check": "sed -n '39,46p' 'web/src/app/bff/v1/[...path]/route.ts' against sed -n '195,218p' of the same file",
+        "measured_at": "b0e5c07"
+      },
+      {
+        "id": "W37CERT4-4",
+        "tree": "the listRunFindings and listDecisions operations",
+        "summary": "two of nine collection endpoints answer 200 with an empty page for a well-formed parent identifier that names nothing, while the other seven and the parents' own GETs answer 404 not_found; a client cannot tell `no findings` from `no such run`",
+        "severity": "low-to-medium",
+        "check": "GET /runs/run_01M34N4H18E6570C3HTMXA0000/findings (200, items 0) beside GET /runs/run_01M34N4H18E6570C3HTMXA0000 (404) and GET /runs/run_01M34N4H18E6570C3HTMXA0000/export.csv (404), with a valid credential",
+        "measured_at": "b0e5c07"
+      },
+      {
+        "id": "W37CERT4-5",
+        "tree": "src/auditmanager/api/security.py, _operation_of and require_authorization",
+        "summary": "the seam's fail-closed default for a route it cannot identify is stated in the module docstring and guarded by nothing: mutation M5 inverts it and the three suites stay at 77 passed. All 16 routes carry an operation_id today, so the claim is true and nothing would redden on the day it stops being",
+        "severity": "low now, high the first time a route is added without an operation_id",
+        "check": "make mutation-copy, then replace `if _operation_of(request) in UNAUTHENTICATED_OPERATIONS:` with `if _operation_of(request) is None or _operation_of(request) in UNAUTHENTICATED_OPERATIONS:` and run the three suites: still green",
+        "measured_at": "b0e5c07"
+      },
+      {
+        "id": "W37CERT4-6",
+        "tree": "src/auditmanager/api/security.py, TokenSigner.verify",
+        "summary": "the credential tag's constant-time comparison is unguarded: replacing hmac.compare_digest with != leaves the three suites at 77 passed. A property with a stated reason in a comment and no test",
+        "severity": "low",
+        "check": "as W37CERT4-5, with that substitution",
+        "measured_at": "b0e5c07"
+      },
+      {
+        "id": "W37CERT4-7",
+        "tree": "web/ - no favicon asset and no icon export",
+        "summary": "/favicon.ico answers 404 on both stacks, and it is the ONE console error every screen load in every journey of this session produced",
+        "severity": "cosmetic; recorded only because R-18 asks for a finished interface. It is NOT a /bff/v1 failure - all 11 BFF responses in the certified journey were 200, 201 or 303",
+        "check": "curl -o /dev/null -w '%{http_code}' http://127.0.0.1:31500/favicon.ico",
+        "measured_at": "b0e5c07"
+      },
+      {
+        "id": "W37CERT4-8",
+        "tree": "docs/program/ALPHA_ROADMAP.md - A FORBIDDEN HOTSPOT for this task, recorded and not repaired",
+        "summary": "the roadmap says `twelve operations` in NINE places, one of them INSIDE criterion 2 itself (`in front of all twelve`). The surface is 13 paths / 16 operations / 48 schemas since the wave-34 reseal. A criterion that names a count the contract no longer declares can be satisfied by probing the wrong surface",
+        "severity": "medium for certification correctness",
+        "check": "grep -c 'twelve operations' docs/program/ALPHA_ROADMAP.md against the counts in contracts/api/v1/openapi.json",
+        "measured_at": "b0e5c07"
+      }
+    ]
+  },
+  "false_premises_in_the_dispatch_brief": [
+    {
+      "premise": "Authorization headers leaving the BFF -> 0",
+      "verdict": "FALSE AS WRITTEN",
+      "measured": "Zero Authorization headers leave the BROWSER, across every journey - that is almost certainly what was meant. But the BFF must and does present a credential to the API on every authenticated forward: GET /bff/v1/projects with a live session -> 200, while GET /api/v1/projects with no Authorization header -> 401. What IS zero is the deployment credential leaving the BFF on an ANONYMOUS request, which is the JUDGE-SEC repair and a different sentence. The distinction matters because W37CERT4-3 is a stale paragraph in that very file claiming the opposite of the repair."
+    },
+    {
+      "premise": "this morning: GET /bff/v1/projects with no session -> 200, and POST created a project",
+      "verdict": "NOT RE-MEASURABLE",
+      "measured": "The stand was redeployed from 31a8a53 since. Consistent with W30CERT3-1, and taken on that record's evidence rather than on this session's own. Said so rather than reporting it as verified."
+    },
+    {
+      "premise": "12 paths / 15 operations / 46 schemas -> 13 / 16 / 48",
+      "verdict": "TRUE",
+      "measured": "git show ac7c348:contracts/api/v1/openapi.json -> 12/15/46; b0e5c07 -> 13/16/48"
+    },
+    {
+      "premise": "GET /bff/v1/projects with no session -> 401",
+      "verdict": "TRUE",
+      "measured": "401 authentication_required, and 15/15 guarded operations do the same"
+    },
+    {
+      "premise": "the sign-in screen is present",
+      "verdict": "TRUE",
+      "measured": "/login, a real <form method=\"post\"> posting to /bff/v1/session"
+    },
+    {
+      "premise": "ALPHA_ROADMAP.md section 5 carries TEN criteria, not eight",
+      "verdict": "TRUE",
+      "measured": "ten, read from the file"
+    },
+    {
+      "premise": "criterion 1's second clause is the API schema conforming to the frozen contract, not the DB schema",
+      "verdict": "TRUE",
+      "measured": "quoted from ALPHA_ROADMAP.md section 5"
+    },
+    {
+      "premise": "the previous record's verdicts were 1 and 2 cannot be established, 3-7 and 9-10 hold, 8 holds with a named exception",
+      "verdict": "TRUE",
+      "measured": "read from certification-ac7c348.json"
+    },
+    {
+      "premise": "criterion 8's exception rested on a false reason - the host carries one alpha stack, not three",
+      "verdict": "TRUE",
+      "measured": "one alpha stack running on arrival and one on departure"
+    },
+    {
+      "premise": "the replacement reason is structural: a certifying session cannot witness its own reboot",
+      "verdict": "TRUE AND STILL TRUE",
+      "measured": "re-taken at b0e5c07, with a second reason beside it - three other lanes' services were live on this host throughout"
+    },
+    {
+      "premise": "the integrator redeployed the stand from 31a8a53 and verify-deployed.sh exits 0",
+      "verdict": "TRUE",
+      "measured": "re-run by this session against this worktree: exit 0, every file identical in both images"
+    },
+    {
+      "premise": "the stand binds loopback only since D-49",
+      "verdict": "TRUE",
+      "measured": "docker port -> 127.0.0.1:31500 and nothing else"
+    },
+    {
+      "premise": "the last live run cost USD 0.038",
+      "verdict": "TRUE",
+      "measured": "this session's live run cost 0.038350"
+    }
+  ],
+  "evidence": {
+    "report": "docs/program/W37-CERT4.md",
+    "logs": "/root/w37-logs/cert4-* - gate.log, conformance.log, auth.log, criterion2.json, refusals.log, csv.log, quote.log, object.log, run.json, run-partial.json, run-outage.json, census-before/after/prewipe/postwipe/restored.txt, containers-before/after.txt, reset-guards.log, reset-dryrun.log, reset-destroy.log, reset-restore.log, mutation.log, mutation-summary.log, verify-own.log, verify-stand.log, deploy.log, deploy2.log, nonexistent-parent.log",
+    "browser_journals": "/root/w37-logs/cert4-browser/ - review-main.json (the certified journey on the owner's stand), recon.json, cold-after-restart.json, run-states.json, running-watch.json, export-main.csv",
+    "harnesses": "/root/w37-logs/cert4-drive/ - journey.mjs, review.mjs, cold.mjs, states.mjs, running.mjs, recon.mjs, criterion2.py, census.sh, mutate.sh, stub_proxy.py, record.py, alpha.env",
+    "browser_credential": "0 requests carrying an Authorization header across every journey and every cold screen load. The only origins contacted were http://127.0.0.1:31500 (or 31570) and the blob: the PDF viewer makes."
+  },
+  "verdict": "PA-01 is not certifiable as a whole at b0e5c07, and the reason is still not the software: TLS, a host name, a certificate and a machine that has never run this stack are all R-1's, and R-1 is unruled. Eight of ten hold. What changed since ac7c348 is not a verdict but the thing underneath one: the published origin no longer carries a credential-free path to the operations, and criterion 2's clause about the application is true for the first time in this programme.",
+  "elapsed": {
+    "opened_the_report": "2026-09-22T19:27:58+05:00 (the commit that opened it, before the first measurement)",
+    "final_gate_exit_read": "2026-09-22T20:26:24+05:00",
+    "method": "The commit timestamp of the opening report file to the timestamp printed by the shell that read the gate log.",
+    "measured": "58 min 26 s"
+  },
+  "diff_against_certification_ac7c348": {
+    "verdicts_that_changed": [],
+    "verdicts_that_changed_note": "NONE. Ten for ten identical to ac7c348. That is the honest headline and it is not the interesting one.",
+    "verdicts_that_did_not_change_but_whose_SUBSTANCE_did": [
+      {
+        "criterion": 2,
+        "verdict_both_times": "cannot be established",
+        "clause": "the second - a request carrying no token refused with authentication_required FROM THE APPLICATION",
+        "from": "HOLDS **with a named qualification**, W30CERT3-1: the published origin carried a second, credential-free path to all fifteen operations through /bff/v1, including the writes. Severity recorded as `low now, high on the day R-1 lands`.",
+        "to": "HOLDS, no qualification. 15/15 guarded operations refuse an absent credential and a wrong one on BOTH /api/v1 and /bff/v1, with a positive control proving the same fifteen requests are not refused when the credential is good.",
+        "the_waves_that_moved_it": "33-36: the contract reseal adding POST /auth/token, migration 0006_app_user, src/auditmanager/api/security.py, the sign-in screen, and web/src/app/bff/v1/[...path]/route.ts's noSession().",
+        "the_measurement_that_moved_it": "/root/w37-logs/cert4-criterion2.json - sixteen operations x six credential conditions, driven over HTTP through the published origin, plus two in-container bypasses proving the refusal is the application's and not the proxy's.",
+        "why_the_verdict_still_does_not_move": "The first clause is TLS, and there is still exactly one `listen 8080;` in the running proxy, no host name and no certificate. R-1."
+      },
+      {
+        "criterion": 1,
+        "verdict_both_times": "cannot be established",
+        "clause": "the second - the served schema conforms to the frozen contract",
+        "from": "0 differences over a 15-operation surface",
+        "to": "0 differences over a 16-operation surface, and this session showed the comparison can fail against the SERVED document with three plants",
+        "the_waves_that_moved_it": "34, the reseal: 12 paths / 15 operations / 46 schemas -> 13 / 16 / 48",
+        "why_the_verdict_still_does_not_move": "No machine here has never run this stack. R-1."
+      },
+      {
+        "criterion": 3,
+        "verdict_both_times": "holds",
+        "what_moved": "The journey it is driven through now begins at a sign-in screen that did not exist at ac7c348, and the immutability half was taken three ways rather than two - the contract declaring no write method on any version path is a reading the previous record did not take."
+      },
+      {
+        "criterion": 4,
+        "verdict_both_times": "holds",
+        "what_moved": "Nothing in the application. What moved is the INSTRUMENT: the previous record read `[data-run-state]` and this session found that selector too wide - explanatory prose and a run list both emit that attribute. Re-driven against span.am-badge[data-run-state] on each run's own screen, and `running` caught live rather than inferred."
+      }
+    ],
+    "exceptions_and_qualifications_now_withdrawn": [
+      {
+        "id": "W30CERT3-1",
+        "was": "criterion 2's second clause held only with a named qualification: /bff/v1 reached all fifteen operations with no credential",
+        "now": "WITHDRAWN ON MEASUREMENT. 15/15 refuse on that surface."
+      }
+    ],
+    "exceptions_carried_forward_with_their_reason_re_measured": [
+      {
+        "id": "W37CERT4-1 (was W30CERT3-3, registered as D-51)",
+        "criterion": 8,
+        "reason_re_measured": "still true, and now has a second reason beside it: three other lanes' services were live on this host throughout, and a reboot is a host-wide action on a shared resource (OPERATING_CONSTRAINTS section 4.5)."
+      }
+    ],
+    "what_ac7c348_recorded_that_this_session_found_no_longer_true": [
+      "W30CERT3-1, the credential-free path through /bff/v1. Repaired.",
+      "`read from the [data-run-state] badge in a real browser, never from page prose` - the intention is right and the selector is too wide; three states appear on one run's screen when it is used literally."
+    ],
+    "what_ac7c348_recorded_that_this_session_re_measured_and_confirmed": [
+      "D-39's repair to the reset rehearsal's total: `111 rows in 17 base tables (and 1 view listed above, projecting rows already in that number)`.",
+      "D-50, the character offset no second extractor can resolve: reproduced, not re-opened.",
+      "D-51's structural reason for criterion 8's exception.",
+      "W29-RETRY's narrowing of what dependency_unavailable means, re-established from the tree rather than inherited."
+    ]
+  }
+}

@@ -791,4 +791,45 @@ purpose. It is recorded because it is also the second reason behind `W37CERT4-1`
 
 ## 7. Gate
 
-*pending — run once, at the end, from a committed-clean tree.*
+Run **once**, at the end, from a committed-clean tree at `e76eb82`, in lane `gate-w37b`.
+**Asserted on the string `GATE OK` appearing in the output**, which only the gate itself prints
+— never on a number a wrapper handed back (`OPERATING_CONSTRAINTS.md` §4.6).
+`/root/w37-logs/cert4-gate.log`.
+
+| | the brief expects | measured |
+|---|---|---|
+| battery | 2193 / 5 / 169 | **2193 passed, 5 skipped, 1 warning, 169 subtests passed** in 336.72 s |
+| foundation | 35 | **35 passed** in 35.36 s |
+| frontend | 959 in 68 files | **959 passed across 68 files** |
+| whitespace | — | **clean** |
+
+```
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+**Identical, figure for figure.** This session changed no code, so any difference would have
+been a finding; there is none.
+
+The only commit after `e76eb82` on this branch is the one that adds
+`artifacts/checkpoints/PA-01/certification-b0e5c07.json` and this section.
+
+## 8. What the integrator should do with this
+
+1. **Read `W37CERT4-3` first.** It is the one finding with a security edge: the module that
+   holds the credential still tells its reader that an anonymous browser is served the
+   deployment's own credential. `§4.7` was written about exactly this shape and repaired the
+   two documents it found; this is the third copy, inside the code.
+2. **`W37CERT4-2` is one sentence** and it is rendered to every reviewer on every screen.
+3. **`W37CERT4-8` touches `ALPHA_ROADMAP.md`, which this task may not edit.** Nine occurrences
+   of *"twelve operations"*, one of them inside criterion 2. Until it is corrected, every future
+   certification of criterion 2 has to notice the discrepancy by itself, and this one only did
+   because the dispatch gave the right numbers.
+4. **`W37CERT4-5` and `W37CERT4-6` are two guards that do not exist**, found by mutation. Both
+   are properties the seam states in prose. Neither is exploitable at `b0e5c07`.
+5. **`W37CERT4-4`** is a two-endpoint inconsistency against seven that behave.
+6. **Nothing here was repaired and no tag was cut.** `AGENTS.md` §5: this task is not
+   `W*-INT-*`.
+7. **The owner's stand is as it was**, plus additive product data. This session's own stack and
+   both its images are gone; `infra/deploy/env/provider.env` and `infra/deploy/dumps/` were
+   removed; the mutation copy at `/root/w37cert4-mut` was reverted to the original bytes and
+   deleted.
