@@ -44,4 +44,8 @@ services:
       # this is the file an operator changes when the host says otherwise. The plain port
       # `compose.server.yml` publishes is untouched and keeps serving -- see the
       # "NO REDIRECT" note in `tls-server.conf`.
-      - "${ALPHA_HTTPS_PORT:-443}:8443"
+      # Same binding rule as `compose.server.yml`'s plain port and for the same reason
+      # (`D-49`): the interface is explicit and defaults to loopback. A host that is
+      # genuinely meant to serve TLS to the world sets `ALPHA_BIND_ADDRESS=0.0.0.0` in
+      # `alpha.env` once, and it then applies to both ports rather than to one of them.
+      - "${ALPHA_BIND_ADDRESS:-127.0.0.1}:${ALPHA_HTTPS_PORT:-443}:8443"

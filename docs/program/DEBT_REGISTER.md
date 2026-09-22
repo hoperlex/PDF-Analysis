@@ -16,7 +16,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-57 | one query key, two shapes: a finished run is polled forever | a decision, then a guard |
 | D-58 | a screen names `uploadDocument` and `document_uid` to a reviewer | one sentence |
 | D-52 | the legacy icon set is at least partly Feather, MIT, notice absent | a `NOTICE` file if we copy; **not** `D-11`'s shape |
-| **D-49** | the stand is on every interface, and `/bff/v1` takes writes with no credential | **owner — a binding decision**; highest severity here |
 | **D-46** | a failed run cannot say *which* dependency | owner — a reseal either way |
 | D-50 | a character offset no second extractor can resolve | registered |
 | D-51 | criterion 8 is a container restart, for a structural reason | registered; nothing to fix |
@@ -1605,7 +1604,27 @@ curl -s https://raw.githubusercontent.com/feathericons/feather/main/icons/dollar
 ```
 and compare to the `d` attribute of the legacy `dollar-sign`.
 
-### D-49 — the alpha stand is published to every interface, and one of its two paths takes writes with no credential
+### D-49 — the alpha stand is published to every interface, and one of its two paths takes writes with no credential — **CLOSED**
+
+**Ruled by the owner 2026-09-22: bind to `127.0.0.1` and reach the stand over an SSH tunnel.
+Closed the same day, in the commit carrying the fix.**
+
+`compose.server.yml` and `compose.tls.yml` now publish on
+`${ALPHA_BIND_ADDRESS:-127.0.0.1}`, so **the safe value is what you get from an omission** and
+publishing is a decision someone has to write down. Driven after redeploying:
+
+```
+docker port auditmanager-w19a-proxy-1      -> 8080/tcp -> 127.0.0.1:31500
+curl http://<host public ip>:31500/...     -> 000  (was 200)
+curl http://127.0.0.1:31500/...            -> 200
+```
+
+**The second half of the row is not closed by this and is not meant to be.** `/bff/v1` still
+serves all fifteen operations without a credential; that is the designed posture, and what
+changed is who can reach the origin. `PA-01` criterion 2's purpose — the dependency standing
+in front of all fifteen — is still only true of `/api/v1`. If `R-1`'s host ever sets
+`ALPHA_BIND_ADDRESS`, that question returns immediately, which is why the runbook says to
+verify a firewall **against Docker's own chains** rather than against `ufw status`.
 
 **Found by `W30-CERT3` as `W30CERT3-1`, and measured further by the integrator, who found the
 second half. Opened 2026-09-21. This is the highest-severity row in this register.**

@@ -209,5 +209,22 @@ services:
       - ./proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     # THE ONE PUBLISHED PORT. `T-2`: one origin, the web app at `/` and the API at
     # `/api/v1`, so there is no cross-origin surface at all.
+    #
+    # BOUND TO 127.0.0.1 BY DEFAULT, ruled by the owner 2026-09-22 closing `D-49`.
+    #
+    # This line used to read `"${ALPHA_HTTP_PORT}:8080"` with no interface, which binds
+    # `0.0.0.0`. That was measured, not supposed: `GET http://<host public ip>:31500/bff/v1/projects`
+    # answered **200**, and `/bff/v1` serves all fifteen operations — writes included — with
+    # no credential, because the BFF adds it server-side. `ufw` was not in the way and could
+    # not be: a Docker-published port never reaches ufw's `INPUT` chain, since Docker writes
+    # its own `nat/DOCKER` and `filter/DOCKER` rules, which are traversed first. `ufw status`
+    # said one port was open while this one answered the world.
+    #
+    # Reaching the stand is now `ssh -L 31500:127.0.0.1:31500 <host>` and opening
+    # `http://127.0.0.1:31500` locally. `ALPHA_BIND_ADDRESS` exists so a host that genuinely
+    # should publish — one behind a real firewall, serving TLS on `ALPHA_HTTPS_PORT` under
+    # `R-1` — can say so deliberately in `alpha.env`, rather than getting it by default from
+    # an omission. **The default is the safe value and changing it is a decision someone has
+    # to write down.**
     ports:
-      - "${ALPHA_HTTP_PORT:?ALPHA_HTTP_PORT is unset.}:8080"
+      - "${ALPHA_BIND_ADDRESS:-127.0.0.1}:${ALPHA_HTTP_PORT:?ALPHA_HTTP_PORT is unset.}:8080"

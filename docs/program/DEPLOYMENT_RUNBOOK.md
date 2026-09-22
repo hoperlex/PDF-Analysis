@@ -54,6 +54,48 @@ One optional extra: §2 suggests `python3` for one line that generates a token.
   compose network and publish nothing;
 * **one more if TLS is turned on**, `ALPHA_HTTPS_PORT`, default `443` (§6).
 
+**Both are bound to `127.0.0.1` unless you say otherwise, and you reach the stand over an SSH
+tunnel.** Ruled by the owner 2026-09-22, closing `D-49`:
+
+```
+ssh -L 31500:127.0.0.1:31500 <host>        # then open http://127.0.0.1:31500 locally
+```
+
+**Why the default is loopback, measured rather than assumed.** The compose file used to
+publish with no interface at all, which binds `0.0.0.0`. On this host the stand answered
+**`200`** on its **public** address, at `/bff/v1` — which serves all fifteen operations,
+**writes included**, with no credential, because the browser deliberately holds no secret and
+the BFF route adds it server-side. The origin is unauthenticated *by design*; nothing but the
+network was keeping anyone out.
+
+**`ufw` was not keeping anyone out either, and structurally could not.** `ufw status` reported
+a single open port while this one answered the world, because **a Docker-published port never
+reaches ufw's `INPUT` chain** — Docker writes its own rules into `nat/DOCKER` and
+`filter/DOCKER`, and those are traversed first:
+
+```
+iptables -t nat -L DOCKER -n | grep 31500
+  DNAT  tcp  0.0.0.0/0 -> 0.0.0.0/0  tcp dpt:31500 to:<container>:8080
+```
+
+**Do not read a green `ufw status` as evidence about a published container port.** It is
+evidence about traffic ufw sees, and this traffic does not reach it.
+
+**`ALPHA_BIND_ADDRESS` is how a host that genuinely should publish says so** — one behind a
+firewall you have *verified against the chains above*, serving TLS under `R-1`. It governs
+both ports, so a host is published or not published rather than published on one by accident.
+`R-4` puts real client documents on the pilot server, and this is the line that decides who
+can reach them.
+
+Check, after any deploy:
+
+```
+docker port <instance>-proxy-1                 # expect 127.0.0.1:<port>, not 0.0.0.0
+curl -s -o /dev/null -w '%{http_code}\n' http://<this host's own ip>:<port>/bff/v1/projects
+```
+
+The second must fail to connect. On this host it printed `200` before the fix and `000` after.
+
 ### Disk
 
 **Measured on 2026-09-21 by `W26-HOST`, on a cold cache, and it is not the figure that
