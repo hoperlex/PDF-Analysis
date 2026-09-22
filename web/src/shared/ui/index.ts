@@ -22,7 +22,7 @@ export {
 } from './states';
 
 export type { RunStateBadgeProps } from './run-state-badge';
-export { STATE_LABELS, RunStateBadge } from './run-state-badge';
+export { COST_BASIS_LABELS, PROVIDER_MODE_LABELS, PROVIDER_MODE_UNKNOWN_LABEL, STATE_LABELS, RunStateBadge } from './run-state-badge';
 
 export type { StageStatusBadgeProps } from './stage-status-badge';
 export { StageStatusBadge } from './stage-status-badge';

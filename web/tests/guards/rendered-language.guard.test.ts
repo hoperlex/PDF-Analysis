@@ -762,7 +762,29 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
  * `visibleText()` reads text nodes and four attributes and **never `data-*`**, so the machine
  * value keeps its home and only the rendered word is judged.
  */
-const TRANSLATED_SCHEMAS = ['RunState', 'StageStatus', 'Verdict', 'FindingCategory', 'StageId'] as const;
+/*
+ * `ProviderMode` and `CostBasis` joined this list on 2026-09-22, and the reason is a
+ * correction to my own argument. When the list was written I left them out saying they are
+ * "not rendered as bare words today, and forbidding a value nothing renders would be a claim
+ * this guard cannot support."
+ *
+ * A PHOTOGRAPH OF THE RUN SCREEN FALSIFIED THAT. `live` rendered twice and `measured` once,
+ * in Russian sentences, to a Russian reviewer — and this guard permitted every one of them
+ * because they were in the permitted vocabulary. It rendered the screen, saw the words, and
+ * had been told they were allowed.
+ *
+ * That is the second time an argument of mine about what renders excused real untranslated
+ * text — `StageId` was the first. **I reasoned about what renders instead of looking.**
+ */
+const TRANSLATED_SCHEMAS = [
+  'RunState',
+  'StageStatus',
+  'Verdict',
+  'FindingCategory',
+  'StageId',
+  'ProviderMode',
+  'CostBasis',
+] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
   const openapi = readJson<OpenApi>(CONTRACT_PATH);
@@ -791,7 +813,7 @@ describe('the guard reads a contract rather than a list of words', () => {
     // narrowing the allowlist in silence.
     // Still permitted as visible text, and each for a stated reason: identifiers a reviewer
     // is deliberately shown, and modes nothing renders as a bare word.
-    for (const value of ['recorded', 'live', 'analysis_failed', 'accept']) {
+    for (const value of ['analysis_failed', 'accept']) {
       expect(VOCABULARY.has(value), `${value} is not in the contract's enums`).toBe(true);
     }
     // NO LONGER permitted as visible text, because the owner ruled them translated. The
@@ -805,7 +827,11 @@ describe('the guard reads a contract rather than a list of words', () => {
       // than quietly re-permitting the word on a screen.
       'source_preparation', 'page_geometry_extraction', 'document_context_build',
       'text_analysis', 'block_analysis', 'finding_merge', 'finding_review',
-      'finding_correction', 'norm_verification']) {
+      'finding_correction', 'norm_verification',
+      // `ProviderMode` and `CostBasis`, added the same day after a PHOTOGRAPH of the run
+      // screen showed `live` twice and `measured` once as bare words in Russian prose --
+      // which this guard had rendered, seen, and been told to permit.
+      'live', 'recorded', 'measured', 'estimated']) {
       expect(TRANSLATED.has(value), `${value} left the translated schemas`).toBe(true);
       expect(VOCABULARY.has(value), `${value} is permitted as visible text again`).toBe(false);
     }

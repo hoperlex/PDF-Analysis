@@ -2,7 +2,7 @@
  * `widgets/run-progress` — the screen PC-01 criterion 4 is about, and the screen no test
  * reached.
  *
- * `W12-WEB` §10 ran ten mutations inside the region `web/tests` does not import { STATE_LABELS } from '@/shared/ui';
+ * `W12-WEB` §10 ran ten mutations inside the region `web/tests` does not import { PROVIDER_MODE_LABELS, STATE_LABELS } from '@/shared/ui';
 import. Three of
  * them are in this file's subject and all three survived with the whole frontend suite
  * green:
@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ErrorCode, RunState, RunStatus } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
-import { STATE_LABELS } from '@/shared/ui';
+import { PROVIDER_MODE_LABELS, STATE_LABELS } from '@/shared/ui';
 import { RunProgress } from '@/widgets/run-progress';
 
 import { PROJECT_UID, RUN_ID, runStatus } from '../review/fixtures';
@@ -193,8 +193,15 @@ describe('the provider mode is on screen, twice, and is never guessed', () => {
     const markup = screen({ provider_mode: mode });
     expect(markup).toContain(`data-provider-mode="${mode}"`);
     // Once on the badge qualifier, once in the sentence beside it.
-    expect(markup.split(`data-provider-mode="${mode}"`).length - 1).toBe(2);
-    expect(markup).toContain(`<strong>${mode}</strong>`);
+    // Was 2 — the badge and the review sentence. It is 4 since 2026-09-22, because the two
+    // places that printed the CONTRACT VALUE as a bare word now print the Russian label and
+    // carry the machine value in the attribute instead. The count is what says the attribute
+    // followed the label rather than being dropped with it.
+    expect(markup.split(`data-provider-mode="${mode}"`).length - 1).toBe(4);
+    // Was `<strong>${mode}</strong>` — the contract value as a bare word in a Russian
+    // sentence, which a photograph of the run screen caught and no test did.
+    expect(markup).toContain(`<strong data-provider-mode="${mode}">${PROVIDER_MODE_LABELS[mode]}`);
+    expect(markup).not.toContain(`<strong>${mode}</strong>`);
   });
 
   it('calls an unrecognised mode unknown rather than live', () => {
@@ -207,7 +214,11 @@ describe('the provider mode is on screen, twice, and is never guessed', () => {
   it('names the mode again beside the review link, so a reviewer cannot miss it', () => {
     const markup = screen({ state: 'published', provider_mode: 'recorded' });
     const linkTail = markup.slice(markup.indexOf('Разобрать находки'));
-    expect(linkTail).toContain('<strong>recorded</strong>');
+    // Was `<strong>recorded</strong>`. The owner ruled contract vocabulary translated, and a
+    // photograph of the run screen showed this sentence still reading `live` in Russian prose.
+    expect(linkTail).toContain(PROVIDER_MODE_LABELS.recorded);
+    expect(linkTail).toContain('data-provider-mode="recorded"');
+    expect(linkTail).not.toContain('<strong>recorded</strong>');
   });
 });
 

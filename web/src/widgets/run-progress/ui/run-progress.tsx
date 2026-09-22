@@ -56,6 +56,9 @@ import {
   RunStateBadge,
   STAGE_LABELS,
   STATE_LABELS,
+  COST_BASIS_LABELS,
+  PROVIDER_MODE_LABELS,
+  PROVIDER_MODE_UNKNOWN_LABEL,
 } from '@/shared/ui';
 import styles from './run-progress.module.css';
 
@@ -232,7 +235,9 @@ function Recorded({ status }: { readonly status: RunStatus }) {
             <dd data-model-call-count={cost.callCount}>{cost.callCount}</dd>
             <dt>Основание</dt>
             <dd data-cost-basis={cost.basis ?? 'unstated'}>
-              <code>{cost.basis ?? 'unstated'}</code>
+              {cost.basis === null || cost.basis === undefined
+                ? 'не указано'
+                : COST_BASIS_LABELS[cost.basis]}
             </dd>
           </dl>
           <p>{costBasisCaption(cost.basis)}</p>
@@ -279,7 +284,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       <p className={styles.mode}>
         <RunStateBadge state={status.state} providerMode={badgeProviderMode(mode)} />
         <span data-provider-mode={mode}>
-          режим провайдера: <strong>{mode}</strong>
+          режим провайдера: <strong data-provider-mode={mode}>{mode === 'unknown' ? PROVIDER_MODE_UNKNOWN_LABEL : PROVIDER_MODE_LABELS[mode]}</strong>
         </span>
       </p>
       <p>{providerModeCaption(mode)}</p>
@@ -328,7 +333,8 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       {runHasPublishedResult(status.state) ? (
         <p>
           <Link href={routes.review(projectUid, status.run_id)}>Разобрать находки</Link>{' '}
-          — режим провайдера этого прогона: <strong>{mode}</strong>.
+          — режим провайдера этого прогона:{' '}
+          <strong data-provider-mode={mode}>{mode === 'unknown' ? PROVIDER_MODE_UNKNOWN_LABEL : PROVIDER_MODE_LABELS[mode]}</strong>.
         </p>
       ) : (
         <NotApplicableState

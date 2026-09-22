@@ -75,7 +75,13 @@ export const STATE_LABELS: Readonly<Record<RunState, string>> = {
   cancelled: 'отменён',
 };
 
-const PROVIDER_MODE_LABELS: Readonly<Record<'live' | 'recorded', string>> = {
+/*
+ * Exported, and it is the FOURTH label map in this tree to need exporting after a second
+ * consumer rendered around it. `run-progress` printed `live` twice as a bare contract value
+ * beside a badge that already said `живой вызов` — found by photographing the run screen in
+ * a browser, not by any test.
+ */
+export const PROVIDER_MODE_LABELS: Readonly<Record<'live' | 'recorded', string>> = {
   live: 'живой вызов',
   recorded: 'из записи',
 };
@@ -92,3 +98,16 @@ export function RunStateBadge({ state, providerMode }: RunStateBadgeProps) {
     </span>
   );
 }
+
+/**
+ * The third provider-mode value a screen can show. `providerModeLabel()` narrows anything
+ * unrecognised to `unknown`, which is itself a Latin word that reached the reviewer -- so it
+ * needs a label exactly as the two contract values do.
+ */
+export const PROVIDER_MODE_UNKNOWN_LABEL = 'не сообщён';
+
+/** The Russian label for a cost basis, for the same reason and found the same way. */
+export const COST_BASIS_LABELS: Readonly<Record<'measured' | 'estimated', string>> = {
+  measured: 'измерено',
+  estimated: 'оценено',
+};
