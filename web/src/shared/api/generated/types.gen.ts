@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 37425dffc050db7819710cfd778ec41483a870f2f936461d7fabd5855f6041a9
+ *   sha256 70c9180f409b6256967a42ce39507cfcacb0a9f25cf391945c2aef994852b003
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '37425dffc050db7819710cfd778ec41483a870f2f936461d7fabd5855f6041a9';
+export const CONTRACT_DIGEST = '70c9180f409b6256967a42ce39507cfcacb0a9f25cf391945c2aef994852b003';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -32,6 +32,8 @@ export const SCHEMA_NAMES = [
   'DecisionEventPage',
   'DecisionEventType',
   'DecisionId',
+  'DecisionRecord',
+  'DecisionRecordPage',
   'DocumentUid',
   'DocumentVersion',
   'DocumentVersionPage',
@@ -146,6 +148,33 @@ export type DecisionId = string;
 
 /** The contract pattern for `DecisionId`. Anchored; use with `new RegExp()`. */
 export const DECISION_ID_PATTERN = "^dec_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. */
+export type DecisionRecord = {
+  /** OD-12: one configured local reviewer label, persisted server-side. It is a label, not a subject identity, and it authorizes nothing. */
+  author_label: string;
+  category: FindingCategory;
+  comment?: string | null;
+  current_verdict: Verdict;
+  /** How many events the ledger holds for this finding, including this one. A count greater than one means the expert returned to the finding. */
+  decision_event_count: number;
+  decision_id: DecisionId;
+  event_type: DecisionEventType;
+  finding_observation_id: FindingObservationId;
+  /** The observation's own words, as `FindingObservation.finding_text` carries them. It is the analysis's text and not this API's prose, so it is in whatever language the analysis produced. */
+  finding_text: string;
+  finding_uid: FindingUid;
+  project_uid: ProjectUid;
+  recorded_at: string;
+  run_id: RunId;
+  /** The verdict this event carries, or null for a comment. */
+  verdict?: Verdict | null;
+};
+
+export type DecisionRecordPage = {
+  items: Array<DecisionRecord>;
+  page: PageInfo;
+};
 
 export type DocumentUid = string;
 

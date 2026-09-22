@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 37425dffc050db7819710cfd778ec41483a870f2f936461d7fabd5855f6041a9
+ *   sha256 70c9180f409b6256967a42ce39507cfcacb0a9f25cf391945c2aef994852b003
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -21,6 +21,7 @@ import type {
   CreateProjectRequest,
   Cursor,
   DecisionEventPage,
+  DecisionRecordPage,
   DocumentUid,
   DocumentVersion,
   DocumentVersionPage,
@@ -53,6 +54,7 @@ export const OPERATION_IDS = [
   'getRunStatus',
   'issueToken',
   'listDecisionHistory',
+  'listDecisions',
   'listDocuments',
   'listProjects',
   'listRunFindings',
@@ -262,6 +264,42 @@ export type ListDecisionHistoryInput = {
 
 /** Success body of `listDecisionHistory` (`application/json`, HTTP 200). */
 export type ListDecisionHistoryResult = DecisionEventPage;
+
+// ------------------------------------------------------------------------------------
+// listDecisions - GET /decisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the decision journal across findings, newest first.
+ *
+ * Every expert decision this deployment has recorded, in one listing, with the finding context each event was recorded against. `listDecisionHistory` answers *what was decided about this finding*; this answers *what has been decided*, which no operation could answer before and which a client could otherwise reach only by walking every run and every finding.
+ *
+ * **It is a projection and creates nothing.** `ADR-0012` holds: the current verdict, the reason aggregates and the knowledge-base views are rebuildable projections over the append-only ledger. Every property of `DecisionRecord` is rebuildable from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and this operation is the only place they are read together.
+ *
+ * Ordered by `(recorded_at, decision_id)` **descending** - the newest decision first, as `listProjects` orders projects - and that is a total order, stable across pages. The server's row sequence is never exposed, in a field or inside a cursor.
+ *
+ * `category` and `verdict` filter on the **finding**, exactly as they do on `listRunFindings`: the category of the finding the event was recorded against, and the verdict that now stands for it. Neither filters on the event. There is no parent identity in the path, so an empty journal is an empty page and never `not_found`.
+ */
+export type ListDecisionsInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Restrict the page to one finding category. */
+    category?: FindingCategory;
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+    /** Restrict the page to findings whose current projected verdict is this value. */
+    verdict?: Verdict;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listDecisions` (`application/json`, HTTP 200). */
+export type ListDecisionsResult = DecisionRecordPage;
 
 // ------------------------------------------------------------------------------------
 // listDocuments - GET /projects/{project_uid}/documents
@@ -624,6 +662,20 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['decisions'],
+  },
+  listDecisions: {
+    operationId: 'listDecisions',
+    method: 'GET',
+    path: '/decisions',
+    pathParams: [],
+    queryParams: ['category', 'cursor', 'limit', 'verdict'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
     tags: ['decisions'],
   },
   listDocuments: {
