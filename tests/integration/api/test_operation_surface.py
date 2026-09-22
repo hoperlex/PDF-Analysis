@@ -123,28 +123,48 @@ def test_the_document_declares_no_operation_outside_the_declared_capabilities(
     Until the wave-13 reseal this also asserted that `components.securitySchemes` was
     absent, with the reason "PC-01 has no authentication and no role model". Owner
     ruling `R-3` of 2026-09-17 reversed the premise, so the assertion is inverted rather
-    than deleted: the scheme must now be there, and `/auth`, `/login` and `/token` must
-    still not be, because the seam is a header the deployment satisfies and never a
-    thirteenth operation. `tests/contract/domain_p02/test_openapi_document.py` owns the
-    shape of the scheme itself.
+    than deleted: the scheme must now be there.
+
+    **Wave 34 moved the line again, and by exactly one path.** `R-3`'s seam was a header
+    the deployment satisfied, so `/auth` was forbidden outright. `W34-CONTRACT` declared
+    the operation that hands that header's value out, which is the one endpoint the seam
+    cannot be satisfied without -- so the rule is widened by a *register of exact paths*
+    and not by dropping the fragment: `/auth/token` is admitted, `/auth/anything-else` is
+    still a widening and still fails here, and `/login`, `/token` and the rest are
+    untouched. `tests/contract/domain_p02/test_openapi_document.py` owns the shape of the
+    scheme itself.
     """
     paths = set(openapi_document["paths"])
+    #: The exact paths admitted under an otherwise forbidden fragment. Exact, because
+    #: "anything under /auth" would readmit the user management this surface does not have.
+    ADMITTED = {"/auth/token"}
     forbidden = ("/auth", "/login", "/token", "/tenants", "/exports", "/jobs", "/imports")
     for fragment in forbidden:
-        assert not any(path.startswith(fragment) for path in paths), (
-            f"the document declares a path under {fragment}, which PC-01 excludes"
+        trespassers = sorted(
+            path
+            for path in paths
+            if path.startswith(fragment) and path not in ADMITTED
         )
+        assert not trespassers, (
+            f"the document declares {trespassers} under {fragment}, which PC-01 excludes"
+        )
+    assert ADMITTED <= paths, (
+        f"{sorted(ADMITTED - paths)} is registered as an admitted exception and is not in "
+        "the document; a register that names a path nobody declares excuses nothing and "
+        "hides the next one"
+    )
     assert "components" in openapi_document
     assert list(openapi_document["components"]["securitySchemes"]) == ["bearerAuth"], (
         "the authorization seam is one bearer scheme declared once, per R-3"
     )
-    assert len(paths) == 12 and sum(
+    assert len(paths) == 13 and sum(
         1
         for item in openapi_document["paths"].values()
         for method in item
         if method in {"get", "put", "post", "delete", "options", "head", "patch"}
-    ) == 15, (
-        "10 paths / 12 operations before the `R-5` reseal, 12 / 15 after it. The seam "
-        "`R-3` added is still a header and not an endpoint; the three operations `R-5` "
-        "added are endpoints and are named in `REQUIRED_OPERATIONS`."
+    ) == 16, (
+        "10 paths / 12 operations before the `R-5` reseal, 12 / 15 after it, 13 / 16 "
+        "after `W34-CONTRACT` added the credential exchange. The three operations `R-5` "
+        "added are named in `REQUIRED_OPERATIONS`; the one wave 34 added is `issueToken`, "
+        "and it is the only one this surface answers without a credential."
     )
