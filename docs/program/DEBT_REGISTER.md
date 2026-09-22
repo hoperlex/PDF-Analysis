@@ -13,6 +13,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 |---|---|---|
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
 | D-63 | a dashboard | **deferred by the owner**; a reseal when it comes |
+| **D-65** | the account exists and nothing around it does — no rate limit, lockout, password change or **revocation** | **owner**: which belong in the alpha |
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
 | D-61 | the journey guard still matches by substring against concatenated source | compare against **rendered** output |
@@ -1603,6 +1604,34 @@ PC-01 has no equivalent of, and the dashboard is the largest of them.
 carries `document_count`; runs, findings and verdicts have no aggregate operation at all, so a
 dashboard showing counts across projects is **a contract reseal plus new read paths**, in the
 same class as `D-56`'s second half and priced the same way.
+
+### D-65 — the account exists, and nothing around it does
+
+**Opened 2026-09-22 with wave 34, deliberately and by the session that built it.** The owner
+ruled the default `admin`/`password` pair explicitly and said user management is the first work
+after the alpha, **so the stream built what was asked and did not add guards the owner had
+removed.** That was the right call. What it did not decide is whether the *set* of absences is
+the same question as the pair.
+
+**Reachable from a browser now**, where before there was no sign-in at all:
+
+| absent | what it means today |
+|---|---|
+| rate limit | a password is guessable at machine speed |
+| lockout | and forever |
+| password change | the default pair is the only pair |
+| revocation | **a minted credential outlives the account it names** — there is no way to stop one |
+| durable session register | it lives in the Node process's memory, so **a web-container restart signs everyone out** |
+
+**Mitigated, not solved, by `D-49`:** the stand binds `127.0.0.1` and is reached over a tunnel,
+so the attack surface is whoever can already open a tunnel to the host. **That mitigation is a
+deployment setting, not a property of the software**, and `R-1`'s VPS will run the same code.
+
+**Revocation is the one that is not a normal backlog item.** The others make the account weak;
+this one makes a *past* credential permanent, and `R-4` puts real client documents on the pilot
+server. A pilot that ends cannot be made to end for a token already issued.
+
+Needs the owner: which of these belong in the alpha and which wait for user management.
 
 ### D-57 — one query key holds two incompatible shapes, and a finished run is polled forever
 
