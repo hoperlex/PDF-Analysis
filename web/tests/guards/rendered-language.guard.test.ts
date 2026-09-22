@@ -75,6 +75,7 @@ import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-ver
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { DocumentDetailPage } from '@/_pages/document-detail';
 import { ProjectDetailPage } from '@/_pages/project-detail';
+import { AppFrame } from '@/_app';
 import { ProjectsPage } from '@/_pages/projects';
 import { ReviewPage } from '@/_pages/review';
 import { RunPage } from '@/_pages/run';
@@ -180,6 +181,16 @@ export function contractVocabulary(): ReadonlySet<string> {
  * on a screen" is an offence being laundered, and the next reader should delete it.
  */
 const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] = [
+  {
+    word: 'AuditManager',
+    why:
+      'The product name, rendered in the application bar by `_app/app-frame.tsx`. No contract ' +
+      'declares it -- a product name is not a vocabulary a schema can publish -- and it is not ' +
+      'translated for the same reason a trademark is not: it identifies the thing rather than ' +
+      'describing it. It became visible to this guard only when `AppFrame` was added to the ' +
+      'screen list; before that the entire chrome was outside the ratchet, which is how a ' +
+      'judge could mutate a theme label to English and see green.',
+  },
   {
     word: 'proxy',
     why:
@@ -634,6 +645,20 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
     name: 'review',
     make: () => createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
   },
+  /*
+   * `AppFrame` is a SCREEN here, not a wrapper, and that is the repair.
+   *
+   * This guard rendered the six pages and never the chrome around them, so the product name,
+   * the instance label, the theme control and the footer were outside the ratchet
+   * STRUCTURALLY rather than by oversight. A wave-33 judge mutated a theme label to English
+   * and this guard stayed green — and `W33-THEME` had cited that green as coverage for its
+   * own output. Silence from a guard is read as coverage; it was.
+   *
+   * Wrapping the six pages in it would work too, and is worse: a string would then have to
+   * be found somewhere in a whole page's markup, and a chrome regression would look like a
+   * page regression. As its own entry it names itself in the failure.
+   */
+  { name: 'app-frame', make: () => createElement(AppFrame, { children: null }) },
 ];
 
 /**
