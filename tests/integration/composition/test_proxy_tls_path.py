@@ -185,8 +185,36 @@ def test_the_overlay_introduces_no_name_that_could_hold_a_secret() -> None:
     substitution. The only variable this overlay adds is a port number.
     """
     used = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", OVERLAY.read_text()))
-    assert used == {"ALPHA_HTTPS_PORT"}, used
+    # `ALPHA_BIND_ADDRESS` joined `ALPHA_HTTPS_PORT` on 2026-09-22, closing `D-49`: both
+    # published ports bind `127.0.0.1` unless a host deliberately says otherwise, and the
+    # overlay must carry the same rule as the base or a host would be published on one port
+    # and not the other.
+    #
+    # THIS GUARD DID ITS JOB AND IS NOT BEING WEAKENED. It is here because `docker compose
+    # config` prints substituted values in clear -- `D-42` measured that the provider
+    # credential appears there -- so every name this overlay substitutes has to be one that
+    # is safe to print. An interface address is: it is where the port listens, it is visible
+    # in `docker port` and in `ss -ltn` to anyone on the host already, and it names no
+    # endpoint, host, bucket or key. The set stays exhaustive and each member is reasoned.
+    assert used == {"ALPHA_HTTPS_PORT", "ALPHA_BIND_ADDRESS"}, (
+        f"the TLS overlay substitutes {sorted(used)}. Every name here is printed in clear by "
+        "`docker compose config`, so a new one is only admissible if it cannot carry a "
+        "secret -- and admitting it means saying so here, in this list."
+    )
     assert "${ALPHA_HTTPS_PORT:-443}" in OVERLAY.read_text(), "it must default, or the base deploy breaks"
+
+
+def _without_comments(text: str) -> str:
+    """The configuration a compose file states, with the prose it carries stripped out.
+
+    A `#` inside a quoted value is not a comment, so lines are kept whole and only a `#`
+    that starts a line (after indentation) removes it. That is conservative in the safe
+    direction: a trailing-comment mention would still fail the assertion, which is a false
+    red rather than a missed one.
+    """
+    return "\n".join(
+        line for line in text.splitlines() if not line.lstrip().startswith("#")
+    )
 
 
 def test_the_base_deployment_is_unchanged_by_any_of_this() -> None:
@@ -196,5 +224,39 @@ def test_the_base_deployment_is_unchanged_by_any_of_this() -> None:
     what they lose is the TLS listener and nothing else.
     """
     base = BASE_COMPOSE.read_text()
-    assert "tls" not in base.lower()
-    assert "443" not in base
+
+    # The claim is about CONFIGURATION, not about the word. This assertion read the whole
+    # file, so it forbade `tls` in a comment too -- and on 2026-09-22 a comment explaining
+    # `ALPHA_BIND_ADDRESS` mentioned serving TLS under `R-1` and turned the gate red on a
+    # base that had gained no TLS whatsoever. Three live lanes were standing on that commit.
+    #
+    # Comments are stripped and the assertion is otherwise unchanged and no weaker: a real
+    # `tls`-bearing key, value or filename in the base still fails it, and
+    # `test_the_stripped_assertion_still_catches_real_tls_in_the_base` below proves exactly
+    # that by feeding it one.
+    directives = _without_comments(base)
+    assert "tls" not in directives.lower(), (
+        "the base compose gained TLS configuration; it is meant to be the certified stack "
+        "until a second -f is passed"
+    )
+    assert "443" not in directives
+
+
+def test_the_stripped_assertion_still_catches_real_tls_in_the_base() -> None:
+    """The control for the comment-stripping above: it must not have made the guard vacuous.
+
+    `_without_comments` exists so prose cannot redden a configuration claim. This case feeds
+    the same assertion a base that really has gained TLS -- as a key, as a value and as a
+    filename -- and requires each to be caught. Without it, stripping comments would be
+    indistinguishable from deleting the check.
+    """
+    for injected in (
+        '      - "./proxy/tls-server.conf:/etc/nginx/tls.conf:ro"',
+        "        ALPHA_TLS_ENABLED: 1",
+        '      - "${ALPHA_HTTPS_PORT:-443}:8443"',
+    ):
+        polluted = _without_comments(BASE_COMPOSE.read_text() + "\n" + injected)
+        assert "tls" in polluted.lower() or "443" in polluted, (
+            f"a base compose carrying {injected!r} was not caught after comment stripping; "
+            "the strip has made the assertion vacuous"
+        )
