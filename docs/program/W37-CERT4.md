@@ -275,6 +275,176 @@ latest_decision_id, decision_recorded_at`. `/root/w37-logs/cert4-csv.log`.
 
 **Verdict: `holds`.** Stack: the owner's stand.
 
+### This session's own stack, and what it was for
+
+`auditmanager-w37cert4` at `http://127.0.0.1:31570`, built by `deploy.sh` from this
+worktree, `ALPHA_INSTANCE=auditmanager-w37cert4`, `ALPHA_HTTP_PORT=31570`,
+`POSTGRES_DB=auditmanager_w37cert4`, `S3_BUCKET=auditmanager-w37cert4`. The env file lives
+**outside the tree** at `/root/w37-logs/cert4-drive/alpha.env`.
+
+**`verify-deployed.sh` exits 0 on BOTH stacks against this worktree** — 156 `src/`, 10 `db/`,
+34 `contracts/`, 7 `fixtures/recorded/`, `docs/program/P02_LOCK.json`,
+`infra/deploy/serve.py` and 262 `web/` files **identical**, twice.
+`/root/w37-logs/cert4-verify-own.log`, `/root/w37-logs/cert4-verify-stand.log`.
+
+**That is the licence for certifying `b0e5c07` from the owner's stand.** `git diff --name-only
+31a8a53..b0e5c07` is **one file**, `docs/program/dispatch/PORT_REGISTRY.md`, and nothing
+outside `docs/`. The stand was deployed from `31a8a53`; its images are byte-identical to the
+code at `b0e5c07`; `verify-deployed.sh` says so by comparing the bytes inside the running
+containers. Measured, not assumed.
+
+**One file was written into the worktree and it is git-ignored.** `infra/deploy/env/provider.env`
+is matched by `.gitignore:34` (`infra/deploy/env/*.env`) and is the file `compose.server.yml`
+names as `env_file`, which is the only way to point an api container at a different provider.
+`git status --short` was empty after every write, and no tracked file under `infra/` was
+touched. Proof: `git diff --stat b0e5c07..HEAD` at the foot of this report.
+
+#### Criterion 4's remaining clause — the four states distinguished in the UI
+
+Driven on **this session's own stack**, because `partial` and `failed` cannot be produced on
+the owner's stand without changing its provider configuration.
+
+The provider was pointed at a local stub of the proxy's own documented OpenAI-compatible
+contract, run as a **container on the compose network** (`w37cert4-stub`) so the real
+`ProxyAdapter` really opens a socket to it. Nothing in the application is stubbed.
+
+Five runs, and the badge read from `.am-badge[data-run-state]` on **the run's own screen**:
+
+| run | state | how it was produced |
+|---|---|---|
+| `run_01M34SPD64EM0YY0JPZQBYX8C2` | `published` | `recorded` mode, no provider call |
+| `run_01M34T6DET614KYYZ90NTXYNZA` | `partial` | the stub answers `finish_reason: "length"`; `degradation_set: ["text_analysis"]`, `text_analysis` stage `partial`, 1 finding published |
+| `run_01M34T7HJ5AWGSM6K3BFMAYCXK` | `failed` | the provider's port unreachable; `terminal_reason: dependency_unavailable`, 0 findings |
+| `run_01M34T1JMDNJRATRHAJDBGFMD3` | `failed` | its api process was replaced mid-flight; `interrupted_reason: executor_process_ended_before_terminal` |
+| `run_01M34T980709YBN41J4J9KYJ2C` | `partial` | **the control** — same stack, same version, same stub, the base URL reachable again |
+
+**And `running` was caught live, on the run's own screen, not inferred.** Following
+`run_01M34TD3NGG30J1HSNKCNDSJR1` from the moment its control was clicked, the badge read, in
+order:
+
+```
+queued    «в очереди»     -> running  «выполняется»   -> failed  «отказ»
+```
+
+**Five distinct contract values rendered by the badge component: `queued`, `running`,
+`published`, `partial`, `failed`.** The Russian label is the visible text; the contract value
+stays intact in `data-run-state`.
+
+**The selector matters, and getting it wrong nearly produced a wrong reading.** A first pass
+read every `[data-run-state]` on the page and got three states on one run's screen:
+`run-progress.tsx` and `export-panel.tsx` render bare `<span data-run-state="published">`
+inside *explanatory prose* («опубликован или частично»), and the version screen lists every
+prior run's badge. Only `span.am-badge[data-run-state]`, which is what `RunStateBadge` emits,
+is the run's own state. Recorded here because the previous certification's sentence —
+*"read from the `[data-run-state]` badge, never from page prose"* — describes the right
+intention and the wrong selector.
+
+**Verdict on criterion 4: `holds`.** Stacks: the owner's stand for the live run, its provider
+mode and its cost; this session's own stack for `running`, `partial` and `failed`.
+
+#### Criterion 8 — a restart, and every canonical row, object and decision survives
+
+> *"the server is rebooted and every canonical row, object and decision survives"*
+
+**What was driven, on this session's own stack, entirely.** The owner's stand was never
+stopped, restarted, recreated or reset.
+
+1. A **43-line census taken below the application** — straight from PostgreSQL and from
+   MinIO, never through the tier under test: every base table's row count, the migration
+   head, every project, version, run, model call, finding and decision by identifier, and
+   every object by exact key and size. `/root/w37-logs/cert4-drive/census.sh`.
+2. `docker compose down` **without `-v`**: all seven containers **removed**, both named
+   volumes kept. The published port answered `000` — the stack was genuinely gone.
+3. `deploy.sh` again. **Every one of the seven container ids differs** from before:
+   `5400e88a144f → 8ad34b705309` for the api, and six more.
+   `/root/w37-logs/cert4-containers-before.txt`, `…-after.txt`.
+4. The same census again. **`diff` is empty.**
+
+```
+$ diff /root/w37-logs/cert4-census-before.txt /root/w37-logs/cert4-census-after.txt
+THE CENSUS DIFFS TO NOTHING
+```
+
+17 base tables, migration head `0006_app_user`, 1 project, 1 version
+(`6d53674f…`, 58978 bytes, 8 pages), 1 run, 1 model call, 3 findings, 5 evidence rows,
+3 decision events (`accept`, `reject`, `comment`) and 7 objects — identical on both sides.
+
+**Reachability afterwards, in a fresh browser process per screen**, each signing in from
+scratch: `projects`, `project`, `version`, `run`, `review`, `document` — **6/6 answer `200`**
+and carry their canonical identifiers. `/root/w37-logs/cert4-browser/cold-after-restart.json`.
+
+**Named exception — `W37CERT4-1`, and its reason was re-measured, not inherited.**
+**This is a container destruction and recreation, not a host reboot.** The reason on record
+(`D-51`, raised as `W30CERT3-3`) is *"a certifying session runs on the host it would have to
+reboot, and cannot witness its own reboot."* **That still holds at `b0e5c07`**, and it is now
+narrower and stronger than when it was written:
+
+- it is structural, not a property of a tidy host: this session is a process on the host, and
+  a reboot ends it before it can read anything back;
+- and there is a **second** reason that did not exist in wave 30: a peer stream, `W37-D57`,
+  was live on this host throughout, together with the owner's stand and two other lanes'
+  foundation services. A reboot is a host-wide action on a shared resource, which
+  `OPERATING_CONSTRAINTS.md` §4.5 is entirely about. `W30-CERT3`'s replacement reason
+  (*"the host carries three alpha stacks"* was false; it carried one) is not the reason
+  being used here.
+
+**Verdict: `holds with a named exception` (`W37CERT4-1`).** Unchanged from `ac7c348`, and the
+exception's reason re-measured and found still true.
+
+#### Criterion 9 — five typed refusals through HTTP, and a provider outage that fails the run
+
+> *"each of the five refusals answers with its own typed code **through HTTP**, and a provider
+> outage fails the run rather than publishing it"*
+
+**Which five.** Read from the roadmap, not inherited: §"Stage 1 — `W13-BASE`" names *"the five
+refusals with their distinct `details.constraint` values"*. They are the five upload
+constraints, and they are five because the constraints are five.
+
+**Driven with curl through the OWNER'S STAND's nginx origin**, each with a valid credential —
+so what refuses is the validation and not the seam:
+
+| fixture | status | `error_code` | `details.field` | `details.constraint` |
+|---|---|---|---|---|
+| `not_a_pdf.txt` | 422 | `validation_failed` | `content` | `pdf_magic_bytes` |
+| `encrypted.pdf` | 422 | `validation_failed` | `content` | `not_encrypted` |
+| `image_only.pdf` | 422 | `validation_failed` | `page_text` | `every_page_has_extractable_text` |
+| `too_many_pages.pdf` | 422 | `validation_failed` | `page_count` | `1 <= page_count <= 30` |
+| `oversize.pdf` | 422 | `validation_failed` | `file` | `max_bytes` |
+
+Five distinct constraints out of five, five distinct `correlation_id`s, every one
+`retryable: false`. Afterwards the project they were uploaded to lists **zero** documents:
+nothing half-created survived a refusal. `/root/w37-logs/cert4-refusals.log`.
+
+**A provider outage fails the run rather than publishing it — driven on this session's own
+stack**, because it needs the provider taken away.
+
+`PROXY_LLM_BASE_URL` was pointed at `http://w37cert4-stub:59991`, a port nothing listens on
+inside the compose network. `run_01M34T7HJ5AWGSM6K3BFMAYCXK`:
+
+```
+state            failed
+terminal_reason  dependency_unavailable
+published_finding_count 0
+model_call rows  none -- no answer ever came
+elapsed          13 s  (ATTEMPT_BUDGET 3, BACKOFF_SECONDS 2.0 + 8.0)
+```
+
+**The control that proves the boundary.** Driven minutes later on the **same stack**, same
+version, same stub container, differing **only** in whether the port was the one the stub
+listens on: `run_01M34T980709YBN41J4J9KYJ2C` → `partial`, 1 finding published. So the
+`failed` above is the outage and not the stack.
+
+**What an outage *is* at this commit, established by reading the tree** — `W29-RETRY` moved
+this boundary and the previous record re-established it from scratch, so this one did too.
+`src/auditmanager/runs/retry.py`: `RETRYABLE_STAGE_ERRORS` is exactly
+`{DEPENDENCY_UNAVAILABLE}`, narrower than the frozen catalog's retryable set, and
+`RetryPolicy.__post_init__` refuses to construct over any code the catalog does not mark
+retryable — so a policy that retries `analysis_failed` is **not expressible** without editing
+a frozen contract.
+
+**Verdict: `holds`.** Stacks: the owner's stand for the five refusals; this session's own
+stack for the outage and its control.
+
 ## 4. Findings
 
 *pending*
