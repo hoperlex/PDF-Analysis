@@ -65,19 +65,35 @@ def _ids(page: Mapping[str, Any]) -> list[str]:
     return [item["decision_id"] for item in page["items"]]
 
 
-def _walk(router: Surface, target: str, limit: int = 2) -> list[dict[str, Any]]:
-    """Every record of a listing, one page at a time, following the cursor."""
+def _walk(
+    router: Surface, target: str, limit: int = 2, *, pages: int = 200
+) -> list[dict[str, Any]]:
+    """Records of a listing, page by page, following the cursor.
+
+    ``pages`` bounds the walk so a cursor that never advances fails instead of hanging.
+    Reaching the bound is **not** an assertion failure and this is the correction that
+    matters: the journal spans **every finding in the database**, and
+    ``OPERATING_CONSTRAINTS.md`` §6 says the integration suites share one. This walk
+    terminated in the stream's own clean lane and did not in the integrator's, where the
+    same database carries every wave's fixtures — several hundred events.
+
+    So the bound is a *stopping condition*, not a claim. The cursor's real properties —
+    that it loses nothing and repeats nothing — hold on any prefix, and the caller asserts
+    them there. A walk that demanded the end of an unbounded population was asserting
+    something about the size of a shared database, which is §9's rule: §6 is about
+    residue, not about population.
+    """
     collected: list[dict[str, Any]] = []
     cursor: str | None = None
-    for _ in range(200):  # a bound, so a cursor that never advances fails rather than hangs
+    for _ in range(pages):
         joiner = "&" if "?" in target else "?"
         suffix = "" if cursor is None else f"&cursor={cursor}"
         page = ok(get(router, f"{target}{joiner}limit={limit}{suffix}"))
         collected.extend(page["items"])
         cursor = page["page"]["next_cursor"]
         if cursor is None:
-            return collected
-    raise AssertionError("the cursor did not terminate")
+            break
+    return collected
 
 
 class Decided:
@@ -271,7 +287,11 @@ def test_the_cursor_walks_the_journal_without_losing_or_repeating_an_event(
     shipped_router: Surface, decided: Decided
 ) -> None:
     whole = ok(get(shipped_router, f"{JOURNAL}?limit=200"))
-    walked = _walk(shipped_router, JOURNAL, limit=1)
+    # A PREFIX, deliberately. One page of 200 and a single-record walk long enough to cover
+    # it: the cursor's properties are properties of stepping, so they show on any prefix,
+    # and demanding the end of a journal that spans every finding in a shared database
+    # would assert the database's size instead.
+    walked = _walk(shipped_router, JOURNAL, limit=1, pages=len(_ids(whole)) + 5)
     assert _ids(whole) == [r["decision_id"] for r in walked][: len(_ids(whole))]
     identities = [r["decision_id"] for r in walked]
     assert len(identities) == len(set(identities)), "an event was returned twice"
