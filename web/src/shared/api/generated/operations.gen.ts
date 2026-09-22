@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 68762ec87931ed03ee8b68d16717533c4f7f68816bc1b490b53ba8a5f50f1513
+ *   sha256 37425dffc050db7819710cfd778ec41483a870f2f936461d7fabd5855f6041a9
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -29,6 +29,8 @@ import type {
   FindingPage,
   FindingUid,
   IdempotencyKey,
+  IssueTokenRequest,
+  IssueTokenResponse,
   Project,
   ProjectPage,
   ProjectUid,
@@ -49,6 +51,7 @@ export const OPERATION_IDS = [
   'getDocumentVersion',
   'getFinding',
   'getRunStatus',
+  'issueToken',
   'listDecisionHistory',
   'listDocuments',
   'listProjects',
@@ -204,6 +207,31 @@ export type GetRunStatusInput = {
 
 /** Success body of `getRunStatus` (`application/json`, HTTP 200). */
 export type GetRunStatusResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// issueToken - POST /auth/token
+// ------------------------------------------------------------------------------------
+
+/**
+ * Exchange a login and a password for a bearer credential.
+ *
+ * The only operation on this surface that is reachable without a credential, because it is the one that hands one out: its `security` is the empty requirement, which overrides the document root for this operation and for no other.
+ *
+ * **What this operation says about the credential it returns: nothing.** The response carries an opaque string and how long it stays valid. Its structure, what it encodes, and where the deployment got it are the deployment's own, are not described anywhere in this document, and are never parsed by a caller -- the same rule that keeps `bearerFormat` off `components.securitySchemes.bearerAuth`. A deployment that replaces a static string with something else changes no operation here.
+ *
+ * Nothing is created and nothing is changed, so there is no idempotency key: a repeat of the same exchange is a second exchange, not a replay of the first.
+ */
+export type IssueTokenInput = {
+  /** Request body, sent as `application/json`. */
+  body: IssueTokenRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `issueToken` (`application/json`, HTTP 200). */
+export type IssueTokenResult = IssueTokenResponse;
 
 // ------------------------------------------------------------------------------------
 // listDecisionHistory - GET /findings/{finding_uid}/decisions
@@ -569,6 +597,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['runs'],
+  },
+  issueToken: {
+    operationId: 'issueToken',
+    method: 'POST',
+    path: '/auth/token',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 422, 500, 503],
+    tags: ['auth'],
   },
   listDecisionHistory: {
     operationId: 'listDecisionHistory',

@@ -48,7 +48,14 @@ interface Catalog {
 interface Contract {
   readonly paths: Record<
     string,
-    Record<string, { operationId?: string; responses?: Record<string, { $ref?: string }> }>
+    Record<
+      string,
+      {
+        operationId?: string;
+        responses?: Record<string, { $ref?: string }>;
+        security?: ReadonlyArray<Record<string, unknown>>;
+      }
+    >
   >;
   readonly components: { readonly responses: Record<string, { readonly description: string }> };
 }
@@ -79,6 +86,33 @@ function pascal(code: string): string {
 const CODE_BY_COMPONENT_NAME = new Map(
   Object.keys(catalog.codes).map((code) => [pascal(code), code] as const),
 );
+
+/**
+ * Every operation in the document, and whether the root credential requirement reaches it.
+ *
+ * `W34-CONTRACT`: `issueToken` overrides the root `security` with the empty requirement,
+ * because it is the operation a caller with no credential uses to obtain one. Read off the
+ * document rather than named here, so a second operation that opened itself the same way
+ * would be reported by the assertion below rather than waved through by a name check.
+ */
+function operationsWithSecurity(): Array<{ operationId: string; requiresCredential: boolean }> {
+  const found: Array<{ operationId: string; requiresCredential: boolean }> = [];
+  for (const item of Object.values(contract.paths)) {
+    for (const operation of Object.values(item)) {
+      if (!operation.operationId) continue;
+      found.push({
+        operationId: operation.operationId,
+        // Absent -> the document root applies. Present and empty -> no credential.
+        requiresCredential: (operation.security ?? [{}]).length > 0,
+      });
+    }
+  }
+  return found;
+}
+
+const requiresCredential = (operationId: string): boolean =>
+  operationsWithSecurity().find((entry) => entry.operationId === operationId)
+    ?.requiresCredential ?? true;
 
 /** Every `(operationId, status, responseComponent)` the document declares for a failure. */
 function declaredFailureResponses(): Array<{
@@ -124,7 +158,7 @@ function codesCarriedAt(component: string, status: string): Set<string> {
   );
 }
 
-/** Every catalog code the fifteen PC-01 operations can put in front of a screen. */
+/** Every catalog code the PC-01 operations can put in front of a screen. */
 function reachableCodes(): Set<string> {
   const reachable = new Set<string>();
   for (const { status, component } of declaredFailureResponses()) {
@@ -139,15 +173,40 @@ describe('the derivation reads the document and is not vacuous', () => {
   it('finds a component-backed failure response on every operation', () => {
     const declared = declaredFailureResponses();
     const operations = new Set(declared.map(({ operationId }) => operationId));
-    expect(operations.size).toBe(15);
-    // Every operation declares at least the authorization pair, so the floor is real.
+    // No literal, for the reason this whole file exists: the floor is the document's own
+    // operation count, so a reseal moves both sides together and a truncated document
+    // still cannot pass. The lower bound is what stops the two shrinking to nothing.
+    expect(operations.size).toBe(operationsWithSecurity().length);
+    expect(operations.size).toBeGreaterThan(10);
+    // Every operation declares at least a 401, so the floor is real. The 403 is
+    // `permission_denied` -- an authenticated subject refused a resource -- so it belongs
+    // to the operations the credential requirement reaches, and not to the exchange that
+    // produces the credential.
     for (const operationId of operations) {
       const statuses = declared
         .filter((entry) => entry.operationId === operationId)
         .map(({ status }) => status);
       expect(statuses, `${operationId} declares no 401`).toContain('401');
-      expect(statuses, `${operationId} declares no 403`).toContain('403');
+      if (requiresCredential(operationId)) {
+        expect(statuses, `${operationId} declares no 403`).toContain('403');
+      } else {
+        expect(
+          statuses,
+          `${operationId} carries no credential, so it has no authenticated subject to deny`,
+        ).not.toContain('403');
+      }
     }
+  });
+
+  it('opens exactly one operation to a caller holding no credential', () => {
+    // `W34-CONTRACT`. The branch above is only worth something if the set it branches on
+    // is pinned: an operation that quietly dropped its `security` would otherwise be
+    // excused from the 403 rule by the same code that is meant to catch it.
+    const open = operationsWithSecurity()
+      .filter((entry) => !entry.requiresCredential)
+      .map((entry) => entry.operationId)
+      .sort();
+    expect(open).toEqual(['issueToken']);
   });
 
   it('reads at least one catalog code out of every failure response the document declares', () => {

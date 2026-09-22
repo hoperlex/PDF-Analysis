@@ -2,7 +2,7 @@
  * Contract guard: the client still carries the PC-01 seam `B6`, `B7` and `B8` agreed on.
  *
  * The drift guard next door proves the client matches the document. This one proves the
- * document still says what `docs/program/P02_SEAMS.md` section 7 says it says — the fifteen
+ * document still says what `docs/program/P02_SEAMS.md` section 7 says it says — the sixteen
  * operations at their frozen methods and paths, the field sets a review screen depends on,
  * and the safety rules that must survive any future edit to the contract.
  *
@@ -50,11 +50,18 @@ const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> = [
   ['listDocuments', 'GET', '/projects/{project_uid}/documents'],
   ['listVersions', 'GET', '/documents/{document_uid}/versions'],
   ['listRuns', 'GET', '/versions/{version_uid}/runs'],
+  // W34-CONTRACT, 2026-09-22: the credential exchange. R-3 required a bearer credential on
+  // every operation and described no way to obtain one, so this is the one operation whose
+  // own `security` is the empty requirement. It says nothing about what the credential is.
+  ['issueToken', 'POST', '/auth/token'],
 ];
 
 const document = JSON.parse(readText(CONTRACT_PATH)) as {
   components: { schemas: Record<string, { required?: string[]; properties?: Record<string, unknown> }> };
 };
+
+/** How many `components.schemas` keys the frozen document declares, read and not written. */
+const SCHEMA_COUNT = Object.keys(document.components.schemas).length;
 
 const schema = (name: string) => {
   const found = document.components.schemas[name];
@@ -62,7 +69,7 @@ const schema = (name: string) => {
   return found as { required?: string[]; properties?: Record<string, unknown> };
 };
 
-describe('the fifteen seam operations', () => {
+describe('the sixteen seam operations', () => {
   it('are exactly the operations the client exposes', () => {
     expect([...OPERATION_IDS].sort()).toEqual(SEAM_OPERATIONS.map(([id]) => id).sort());
   });
@@ -75,6 +82,12 @@ describe('the fifteen seam operations', () => {
       expect(descriptor.path).toBe(path);
     });
   }
+
+  it('mints no idempotency key for the credential exchange, which creates nothing', () => {
+    // A repeat of the same exchange is a second exchange, not a replay of the first, so
+    // the key would be a promise this operation cannot keep.
+    expect(OPERATIONS.issueToken.requiresIdempotencyKey).toBe(false);
+  });
 
   it('requires an idempotency key on exactly the four writes', () => {
     const writes = Object.values(OPERATIONS)
@@ -220,10 +233,18 @@ describe('the error catalog', () => {
         withResponses.push([typed.operationId, Object.keys(typed.responses ?? {})]);
       }
     }
-    expect(withResponses).toHaveLength(15);
+    expect(withResponses).toHaveLength(SEAM_OPERATIONS.length);
     for (const [operationId, statuses] of withResponses) {
       expect(statuses, `${operationId} declares no 401`).toContain('401');
-      expect(statuses, `${operationId} declares no 403`).toContain('403');
+      // `W34-CONTRACT`: 403 is `permission_denied`, which needs an authenticated subject.
+      // `issueToken` is the operation that produces one and presents none itself, so it
+      // declares the 401 and not the 403. That exception is pinned by name here and
+      // derived from the document's `security` in `pc01-error-codes.contract.test.ts`.
+      if (operationId === 'issueToken') {
+        expect(statuses, 'issueToken has no authenticated subject to deny').not.toContain('403');
+      } else {
+        expect(statuses, `${operationId} declares no 403`).toContain('403');
+      }
     }
   });
 
@@ -306,7 +327,11 @@ describe('the surface leaks no internal address', () => {
     expect(FORBIDDEN.test('finding_uid')).toBe(false);
   });
 
-  it('names 46 component schemas, so a truncated document cannot pass', () => {
-    expect(SCHEMA_NAMES).toHaveLength(46);
+  it('names every component schema the document declares, so a truncated one cannot pass', () => {
+    // Read off the frozen document rather than written down: a client generated from a
+    // truncated contract carries fewer names than the contract has, which is the defect
+    // this asserts, and a literal here would only ever be the last reseal's figure.
+    expect(SCHEMA_NAMES).toHaveLength(SCHEMA_COUNT);
+    expect(SCHEMA_COUNT).toBeGreaterThan(40);
   });
 });

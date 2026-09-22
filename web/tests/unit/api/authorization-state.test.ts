@@ -225,13 +225,29 @@ describe('a 401 from the wire reaches the screen as a 401', () => {
     expect(classifyCreateProjectFailure(write).kind).toBe('not_authenticated');
   });
 
-  it('is a state on every one of the fifteen operations, because the seam is on all fifteen', () => {
+  it('is a state on every operation the seam is in front of', () => {
+    // `W34-CONTRACT` added `issueToken`, the credential exchange, which is the one
+    // operation a caller reaches while holding nothing: its `security` is the empty
+    // requirement, so it answers 401 when the login and password are not accepted and
+    // has no authenticated subject a 403 could deny. Every other operation carries both.
     const ids = Object.keys(OPERATIONS);
-    expect(ids).toHaveLength(15);
+    expect(ids.length).toBeGreaterThan(10);
     for (const id of ids) {
       const descriptor = OPERATIONS[id as keyof typeof OPERATIONS];
       expect([...descriptor.errorStatuses], `${id} cannot return 401`).toContain(401);
-      expect([...descriptor.errorStatuses], `${id} cannot return 403`).toContain(403);
+      if (id === 'issueToken') {
+        expect([...descriptor.errorStatuses], 'issueToken denies no subject').not.toContain(403);
+      } else {
+        expect([...descriptor.errorStatuses], `${id} cannot return 403`).toContain(403);
+      }
     }
+    // Anti-vacuity: the exception is one named operation and not "whatever lacks a 403".
+    // The spread widens each descriptor's literal tuple to `number[]`; without it `403` is
+    // not assignable to the element type the generated table narrows to, which is itself
+    // the compiler saying the same thing this assertion says at runtime.
+    const without403 = ids.filter(
+      (id) => ![...OPERATIONS[id as keyof typeof OPERATIONS].errorStatuses].some((s) => s === 403),
+    );
+    expect(without403).toEqual(['issueToken']);
   });
 });
