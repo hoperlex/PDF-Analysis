@@ -62,12 +62,17 @@ export function AppFrame({ children }: AppFrameProps) {
          * "Local prototype. One reviewer, no authentication, no tenancy." It was English, it
          * was on every page, and it addressed a developer rather than the reviewer reading it.
          *
-         * The SUBSTANCE is kept rather than deleted. It is true, and a reviewer who assumes
-         * their verdicts are attributed to a named account, or that someone else's work is
-         * walled off from theirs, would be wrong in a way that matters to what they are being
-         * asked to judge. What changed is who it is written for.
+         * The SUBSTANCE is kept rather than deleted. A reviewer who assumes another
+         * reviewer's work is walled off from theirs would be wrong in a way that matters to
+         * what they are being asked to judge.
+         *
+         * AMENDED 2026-09-22 after wave 34: it said "без учётных записей" — WITHOUT ACCOUNTS
+         * — and accounts now exist. `W37-CERT4` found it as `W37CERT4-2`: a claim about the
+         * system's security posture, rendered to a reviewer on every screen INCLUDING the
+         * sign-in screen they had just used, and by then the opposite of true. The half that
+         * is still true is the one kept: there is no separation of access BETWEEN accounts.
          */}
-        Альфа-версия. Один проверяющий, без учётных записей и разделения доступа.
+        Альфа-версия. Один проверяющий, без разделения доступа между учётными записями.
       </footer>
     </div>
   );

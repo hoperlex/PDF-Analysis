@@ -201,7 +201,11 @@ describe('the application frame', () => {
     // must not be left assuming their verdicts are attributed to a named account, or that
     // another reviewer's work is walled off from theirs. `R-18` moved the language, not the
     // claim -- the English sentence it replaced was a developer's note shown to a reviewer.
-    expect(markup).toContain('без учётных записей');
-    expect(markup).toContain('разделения доступа');
+    // Was `без учётных записей` — WITHOUT ACCOUNTS — which this case pinned in place while
+    // wave 34 gave the application accounts. The assertion held and the claim became false,
+    // which is the shape `W37CERT4-2` reports: a test can keep a sentence true to itself and
+    // false about the world. The half that survives is the one that is still measured.
+    expect(markup).toContain('разделения доступа между учётными записями');
+    expect(markup).not.toContain('без учётных записей,');
   });
 });

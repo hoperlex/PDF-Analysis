@@ -14,6 +14,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
 | D-63 | a dashboard | **deferred by the owner**; a reseal when it comes |
 | **D-65** | the account exists and nothing around it does — no rate limit, lockout, password change or **revocation** | **owner**: which belong in the alpha |
+| D-66 | two seam guards absent: fail-closed default, and `compare_digest` | one test each |
+| D-67 | 200-with-empty vs 404 on two of nine collections | a decision, then seven or two change |
+| D-68 | the certification's criterion-4 selector is too wide | use `span.am-badge[data-run-state]` |
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
 | D-61 | the journey guard still matches by substring against concatenated source | compare against **rendered** output |
@@ -1438,6 +1441,50 @@ Needs the owner: whether the second half is wanted at all for the alpha, and whe
 sections is the right set or legacy's set is simply what legacy had.
 
 Check: `python3 -c "import json; d=json.load(open('contracts/api/v1/openapi.json')); print(list(d['components']['schemas']['Project']['properties']))"`
+
+### D-66 — two seam guards are absent, found by mutation and not exploitable today
+
+**Found by `W37-CERT4` 2026-09-22 sweeping the authorization seam: four of six mutations
+reddened, two did not, and the two are the finding.**
+
+- **`W37CERT4-5`.** The route's docstring claims a **fail-closed default** for a route
+  carrying no `operation_id`. Inverting it leaves three suites at 77 green. Today all sixteen
+  routes carry one, **so nothing will redden on the day that stops being true** — which is the
+  only day the default matters.
+- **`W37CERT4-6`.** Replacing `hmac.compare_digest` with `!=` does not redden. A timing
+  comparison on a credential is the textbook case, and nothing holds it.
+
+**Neither is exploitable at `b0e5c07`** and both are one test each. They are together because
+they share a shape this programme keeps meeting: **a property stated in a docstring and held by
+nothing.** `D-23` is the prose version; this is the version where the prose is about a
+security property.
+
+Check: `make mutation-copy MUT=/root/seam-mut FULL=1`, invert each, run the three suites.
+
+### D-67 — two collection operations answer 200 with an empty page where seven answer 404
+
+**Found by `W37-CERT4` as `W37CERT4-4`.** Given a well-formed ULID that names nothing,
+`listRunFindings` and `listDecisions` return **`200` with an empty page**; the other seven
+collection operations and the parents' own `GET`s return **`404`**.
+
+**Not a defect in either behaviour — a defect in having both.** A client cannot tell "this run
+has no findings" from "there is no such run" on two of nine operations and can on the other
+seven, and `D-16`'s whole lesson was a screen that rendered *"nothing here yet"* over a
+question the server had answered differently.
+
+Needs a decision: which of the two is the rule, and the other seven or the other two change.
+
+### D-68 — the previous certification's criterion-4 selector is too wide, and the record says so
+
+**Found by `W37-CERT4`.** `certification-ac7c348.json` says to read criterion 4's states from
+`[data-run-state]`, *"never from the screen's prose"*. **The intent is right and the selector
+is wrong:** `run-progress.tsx` and `export-panel.tsx` render bare
+`<span data-run-state="published">` **inside explanatory prose** — the integrator put them
+there translating contract vocabulary — and the version screen lists badges for every previous
+run. Applied literally on a single run's screen, three states are visible.
+
+The correct selector is **`span.am-badge[data-run-state]`**. Recorded rather than silently
+used, because a certification's stated method is part of its evidence.
 
 ### D-59 — the normative corpus carries leaked English LLM reasoning as document body — **RULED, open for work**
 

@@ -18,13 +18,23 @@ prerequisites, and nothing below is dispatchable until they exist.
 > `ADR-0002` and lost.
 >
 > Two questions the owner answered with it: the frozen document stays the contract authority
-> and FastAPI conforms to it (**contract-first**), and the twelve operations are converted
+> and FastAPI conforms to it (**contract-first**), and the sixteen operations are converted
 > **natively before the deploy**, not behind a shell that would have to be certified twice.
 > Wave 13 is rewritten accordingly and is now the largest wave in this road; §8 says so.
 
 The programme has certified the same prototype four times through an in-process router. It
 has never served one HTTP request. This plan ends that in three waves, and it is deliberately
 the shortest route that still leaves a commit somebody can certify.
+
+> **Surface corrected 2026-09-22 by `W37CERT4-8`.** This roadmap said *"twelve
+> operations"* in **nine** places — **one of them inside criterion 2 itself**, the criterion
+> about a credential standing in front of every operation. The surface is **13 paths / 16
+> operations / 48 schemas** after wave 34's reseal, and was 12/15/46 before it.
+>
+> A certification reading criterion 2 from this file would have measured a credential against
+> a count four operations short. `W37-CERT4` caught it only because its brief carried the
+> right numbers, and it says so: **until this was fixed, every future certification of
+> criterion 2 had to notice the discrepancy for itself.**
 
 ## 1. What "alpha" means here, and what it does not
 
@@ -83,7 +93,7 @@ about widening what the application does.
 | a wipe, a dump or a restore | no script under `infra/`; `make down` keeps the volumes |
 | UI rendering under test | `DEBT_REGISTER.md` D-1.5: 34 of 110 `web/src` modules reached by no test; criterion 4's UI clause is the certification's one named exception |
 
-What is **not** missing, and is why this road is still short: the twelve operations, the
+What is **not** missing, and is why this road is still short: the sixteen operations, the
 typed error envelope over a 20-code catalog (frozen by practice and the P02 lock, not by the
 file — `D-8`), the append-only ledger, migrations, the
 checksum-verified blob store, the six `Port` protocols the handlers talk to, the frozen
@@ -122,7 +132,7 @@ piece a disposition and an argument, not a preference.
 ## 3. Six decisions this plan makes, with the argument for each
 
 **T-1 — FastAPI, natively, with the frozen contract built under it.** Owner decision,
-2026-09-17. The twelve operations become typed FastAPI path operations; the 43 schemas of
+2026-09-17. The sixteen operations become typed FastAPI path operations; the 43 schemas of
 `contracts/api/v1/openapi.json` become Pydantic models; the hand-rolled
 `Router`/`dispatch`/`http.py`/`multipart.py` layer is retired. The `Port` protocols in
 `routers/ports.py` are the seam that makes this a transport change rather than a rewrite of
@@ -150,7 +160,7 @@ not baked to one origin, and there is no cross-origin surface to configure, mis-
 test. Adding CORS headers would also mean touching a frozen contract. **This shape is already known to work here:** the out-of-repo bridge of §2 served `/api/v1` itself, proxied the rest to Next and set `NEXT_PUBLIC_API_BASE_URL=/api/v1`, one origin and one forwarded port — `run.sh` records why, in the same words.
 
 **T-3 — the operational plane is off-contract.** Liveness and readiness answer on a **second
-port**, never under `/api/v1`. The contract has twelve operations and `openapi-drift.contract.test.ts`
+port**, never under `/api/v1`. The contract has sixteen operations and `openapi-drift.contract.test.ts`
 will say so. An alpha still needs a health check the proxy and the deploy script can poll;
 this is where it goes, and it is documented as an operational surface with no product meaning.
 
@@ -186,10 +196,10 @@ about seams decides the rest.
   design, not extending one.
 
 Therefore: **one reseal, while the API layer is already open.** Wave 13 adds `securitySchemes`
-to the contract, puts a single authorization dependency in front of all twelve operations, and
+to the contract, puts a single authorization dependency in front of all sixteen operations, and
 wires the two codes that have been waiting. The alpha satisfies that dependency with one static
 token; the public version replaces the dependency's implementation with OIDC and touches
-neither the twelve operations nor the contract again. Doing it after wave 13 means reopening
+neither the sixteen operations nor the contract again. Doing it after wave 13 means reopening
 the API layer, reopening the contract, and regenerating the frontend client a second time.
 
 **One snag the reseal must settle, found in the tree rather than in a document — and now
@@ -239,7 +249,7 @@ generated client with it. §9 R-3 is the ruling it needs.
 
 **Stage 1 — `W13-BASE`, tests only, starts now, needs no pin.** *Renamed 2026-09-17: this was the "golden corpus", which collided with the owner's normative corpus — see `ROADMAP.md`, "Normative corpus". Two things under one name is `D-1.6` and `D-8`; the older claim on the word wins.* Capture a **response baseline**
 of request/response pairs through the *current, certified* implementation at `e6eae1e`: all
-twelve operations, the five refusals with their distinct `details.constraint` values, the
+sixteen operations, the five refusals with their distinct `details.constraint` values, the
 `additionalProperties` refusal, the idempotency replay and conflict, the 26 MiB boundary on
 both sides, a Range read, the CSV with its BOM and CRLF, and an `X-Correlation-Id` supplied
 and absent. Commit the bytes.
@@ -272,7 +282,7 @@ moved.
   (`max_bytes` at the transport, `byte_size <= 26214400` in the envelope — `P4_CLOSURE.md` §5
   explains why both exist and `tests/integration/ingest/test_size_guard_boundary.py` pins it),
   the Range response and the CSV's exact bytes and headers;
-- **the authorization dependency of `T-6`** in front of all twelve operations, raising
+- **the authorization dependency of `T-6`** in front of all sixteen operations, raising
   `authentication_required`, with the alpha's static-token implementation behind it and
   nothing about roles or subjects beyond that;
 - the health plane of `T-3` on its own port, outside the authorized surface so a health check
@@ -483,7 +493,7 @@ certificate, who has root), who holds the alpha token, and who may upload under 
    second tree changing under one contract change.
 6. **A wipe that runs against the wrong thing.** Addressed by T-5, and the guards get tests
    that fail.
-7. **Scope creep through the seam `T-6` opens.** One token in front of twelve operations is a
+7. **Scope creep through the seam `T-6` opens.** One token in front of sixteen operations is a
    gate. Roles, tenants, user management and a session model are an identity system, and the
    distance between them is one afternoon of good intentions. The rule for wave 13: the
    dependency resolves a subject and refuses, and it decides nothing about *what* a subject may

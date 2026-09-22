@@ -40,8 +40,22 @@
  *
  * Two can reach the API through here, and the choice is explicit rather than layered:
  *
- *   **no session cookie** — the deployment's own credential, exactly as `W15-AUTH` left
- *   it. Nothing about the alpha's behaviour changes for a browser that has not signed in.
+ *   **no session cookie** — NOTHING. This route answers `401` locally and forwards no
+ *   credential at all.
+ *
+ *   This paragraph used to read *"the deployment's own credential, exactly as `W15-AUTH`
+ *   left it. Nothing about the alpha's behaviour changes for a browser that has not signed
+ *   in."* **That was true until wave 34 and became a description of a defect.**
+ *   `AUDITMANAGER_API_TOKEN` stopped being a bearer clients present and became the key the
+ *   API SIGNS credentials with, so forwarding it on an anonymous request put key material
+ *   in an `Authorization` header on every anonymous page view — useless and leaking at
+ *   once. `JUDGE-SEC` caught the forward; the code below was repaired and this paragraph
+ *   was not, and `W37-CERT4` found it as `W37CERT4-3`.
+ *
+ *   **It is `OPERATING_CONSTRAINTS.md` §4.7 one level inward.** That section was written
+ *   because two runbooks told an operator to hand out the signing key; both were repaired,
+ *   and the same sentence went on standing **in the module that holds the key** — where a
+ *   reader is likeliest to trust it and likeliest to be someone about to change this file.
  *
  *   **a live session** — the credential the API minted for that reviewer, held in
  *   `../../session/store.ts` and reachable only through `credentialOf`.
