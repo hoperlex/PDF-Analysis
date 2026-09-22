@@ -12,7 +12,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | | Row | Needs |
 |---|---|---|
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
-| **D-62** | the stage table: no tokens, machine-word stage names, no order | a wave-35 stream |
 | D-63 | a dashboard | **deferred by the owner**; a reseal when it comes |
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
@@ -1507,7 +1506,61 @@ silently truncated.
 
 Check: `docs/program/W33-CORPUS.md` §1.2 carries the reconciliation table and every command.
 
-### D-62 — the stage table is unstyled, names its stages in machine words, and says nothing about order
+### D-62 — the stage table names its stages in machine words and says nothing about order — **CLOSED**
+
+**Closed 2026-09-22 by `W35-STAGE`, in the commit carrying the fix. Two of the three claims
+below were mine and were wrong; both are corrected in place rather than quietly dropped.**
+
+**Correction 1 — it was four rows, not nine.** `PC01_STAGE_IDS` has **four** members; the
+contract's `StageId` enum has nine. **I read the enum and wrote the row about the table.**
+
+**Correction 2 — the table did reach the token layer, and the inline styles were duplicates.**
+`globals.css` styles `table`, `thead th`, `tbody td`, `tbody tr:hover`, `code` and `em` by
+**element selector**, and every one of those reads tokens. Eleven of the twelve inline
+attributes **overrode a tokenised rule with a literal**; only `overflowX` had no counterpart.
+So the repair was deletion, not addition, and the new module carries only the scroller and the
+new cells — a third copy of `thead th` would have been the same defect one level up. My claim
+that it *"renders in the browser's defaults on a dark surface"* was false and it changed the
+shape of the work.
+
+**What was true:** the stage names. Four rows of `source_preparation` and its siblings, and
+`StageId` is now out of the language guard's permitted set, which is what I got wrong when I
+left it in.
+
+**And the order question got a better answer than the row asked for.** Established from
+`contracts/analysis/v1/stage-registry.json` rather than from legacy: `depends_on` carries
+**two branchings, one merge, and four of nine stages marked `skip_allowed`** — so an ordinal
+over nine would be a lie. PC-01's four scheduled stages **are** a strict chain, all mandatory
+and none skippable, so the number is honest over exactly those and a stage outside the
+schedule gets a dash. A guard holds that to the registry: adding `block_analysis` to
+`PC01_STAGE_IDS` goes red.
+
+### D-64 — the contrast census could not see a collocated CSS module, and said nothing
+
+**Found by `W35-STAGE` 2026-09-22 while doing something else. Opened and closed the same day**
+— recorded because the *shape* outlives the fix.
+
+`W32-CONTRAST`'s census renders screens and resolves the cascade to find which colour pairs
+actually meet. It matched rules by their **authored** class names. The markup carries the
+**bundler's** names, with a per-file suffix — so **not one rule in any `*.module.css` ever
+matched**, and a genuine AA failure inside a module **passed**. Proved by mutation: a real
+1.26:1 pair inside a module was green under the old instrument.
+
+**It was sound and blind for two waves.** The evidence was sitting in the tree the whole time:
+`project-sections.module.css` says in its own header that it declined to carry colour, and the
+reason it gives is this one.
+
+**§12 again, and a new shape of it: the query and its subject did not share a vocabulary.** A
+census that reads authored names cannot discover that the thing it is reading has been
+renamed — the miss is invisible *to the miss*. The first collocated module landed in wave 31;
+the census was built in wave 32 against a tree where almost everything was still global.
+
+Fixed: the module list comes from `import.meta.glob` and names are rewritten through each
+module's own export, with an anti-vacuity case. **118 → 123 pairs per palette, no new failure.**
+
+Check: `npx vitest run tests/unit/styles/contrast.test.ts -t 'through the CASCADE'`
+
+
 
 **Opened 2026-09-22, out of the owner's question about why we present stages as a table where
 the legacy application presents a pipeline of buttons.** The table is the right shape for
