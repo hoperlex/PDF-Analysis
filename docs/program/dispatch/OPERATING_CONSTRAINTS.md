@@ -135,6 +135,37 @@ because every one of them is reached by more than one lane. Three consequences w
    33 networks to 9 was that something on the host reclaims them. It does not. A live agent ran
    a command, and the only reason that is known is that it said so.
 
+## 4.6 Two instrument failures that both produce a red you will misread
+
+**Both reported by a peer session on 2026-09-22, and both were found by reading a log rather
+than a status line.**
+
+### A backgrounded gate reports the wrapper's exit code, not the gate's
+
+A `make gate` run in the background reported **exit code 0 while the gate had failed**. The 0
+belonged to the wrapper that launched it. It was caught only because someone read the log.
+
+This programme already has the rule *"read the exit code from `$?` after a redirect, never
+through a pipe"*, and this is the same defect one layer out: **a status line handed to you by a
+harness is not the thing's exit code.** So the rule for briefs is the stronger one — **assert
+on `GATE OK` appearing in the output**, which only the gate itself prints, and never on a
+number some wrapper gives you.
+
+### Contention produces a red that reads exactly like a broken guard
+
+A full gate reported `1 failed` in `test_deploy_image_identity.py` — a test that builds and
+deploys real images. Run alone: **23 passed in 48s**. The failing run took **643s against a
+normal 277s**, with another lane's containers up alongside it for 23 minutes. Second run on the
+same tree, quieter machine: 415s, `GATE OK`.
+
+**Nothing was wrong with the tree or the guard.** The shape belongs beside §10.2's stale-bytecode
+trap for the same reason: both hand you a red whose obvious reading is *"this guard is broken"*,
+and the obvious next step — weakening it — damages a guard that was never at fault.
+
+**Before believing a red from a test that builds, deploys or times anything: re-run it alone,
+and compare the wall clock against a normal run.** A gate that took twice as long as usual is
+evidence about the machine, not about the code.
+
 ## 5. `make bootstrap` needs an explicit base interpreter
 
 When the ambient interpreter is an active virtualenv, run:
