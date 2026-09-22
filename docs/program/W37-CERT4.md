@@ -14,11 +14,53 @@ session that dies leaves its evidence. Sections below are filled as each verdict
 
 ## 1. The answer
 
-*pending*
+**Eight of ten hold, one of those with a named exception. Two cannot be established. None
+failed.** No verdict moved. **One verdict's substance moved a great deal and is the reason this
+re-certification was worth running.**
+
+| | `ac7c348` | `b0e5c07` | |
+|---|---|---|---|
+| 1 `deploy.sh` from a clean clone + the served schema conforms | cannot be established | **cannot be established** | `R-1`; second clause re-taken over a **16-operation** surface |
+| 2 TLS + no token refused **by the application** | cannot be established | **cannot be established** | `R-1` for TLS. **The second clause's named qualification `W30CERT3-1` is gone: measured, repaired** |
+| 3 project, upload, immutable version, private object | holds | **holds** | re-driven through the **sign-in screen** |
+| 4 live run, provider mode + cost visible, four states | holds | **holds** | five badge values re-driven; the previous record's **selector** was too wide |
+| 5 finding opens at its exact quotation beside its page | holds | **holds** | re-confirmed with a second extractor |
+| 6 accept, reject, later comment, history shows all three | holds | **holds** | |
+| 7 CSV through the browser, resolving back | holds | **holds** | 17 columns, BOM, 6 CRLF, 0 bare LF |
+| 8 a restart and everything survives | holds w/ exception | **holds w/ exception** | the exception's reason **re-measured and still true**, with a second reason beside it |
+| 9 five typed refusals + an outage that fails the run | holds | **holds** | re-driven, with a same-stack control |
+| 10 `reset.sh` dumps, wipes, re-initialises; the dump restores | holds | **holds** | seven guards, the cycle, and a restore that diffs to nothing |
+
+Criteria were read from `docs/program/ALPHA_ROADMAP.md` §5, **not** from the dispatch. §5 carries
+**ten**, as the brief says. Criterion 1's second clause is the **API** schema conforming to the
+frozen contract, exactly as the brief warned and exactly as the file says.
+
+**The one thing a reader should take from this record.** At `ac7c348` the published origin
+carried a second, credential-free path to all fifteen operations through `/bff/v1`, recorded as
+`W30CERT3-1` and severity *"low now, high on the day `R-1` lands"*. At `b0e5c07` that path is
+closed: **fifteen guarded operations refuse an absent credential and a wrong one, on both
+surfaces, and a positive control proves the same fifteen requests are not refused when the
+credential is good.** Criterion 2's verdict did not change, because TLS is still absent and
+`R-1` is still the blocker — but the half of it that is about the application is now true for
+the first time in this programme.
 
 ## 2. Stacks driven
 
-*pending*
+There is one alpha stand on this host and it is the owner's. **It was never reset, wiped,
+stopped, restarted or removed.** What it received is additive product data — projects, a
+document, runs, decisions, and five refused uploads — which is what driving it by hand produces
+anyway.
+
+- **`auditmanager-w19a`, `http://127.0.0.1:31500`, `proxy` mode — the owner's stand.**
+  Criterion 1's served-schema conformance, criterion 2's whole sixteen-operation probe and the
+  in-container bypass, the certified live journey behind criteria 3–7, criterion 9's five
+  refusals, and `W37CERT4-4`'s nine requests.
+- **`auditmanager-w37cert4`, `http://127.0.0.1:31570` — this session's own stack**, built by
+  `deploy.sh` from this worktree and **torn down with `down -v` at the end**, its two images
+  removed. Criterion 4's `running`, `partial` and `failed`; criterion 8's destroy-and-recreate;
+  criterion 9's outage and its control; criterion 10's entire cycle.
+
+Every reading below names its stack.
 
 ## 3. The ten verdicts
 
@@ -701,7 +743,51 @@ The brief's figure — *"the last live run cost USD 0.038"* — is confirmed: th
 
 ## 6. False premises in the dispatch brief
 
-*pending*
+Thirteen checkable premises. **Twelve measured true. One is false as written, one could not be
+re-measured, and one of the true ones is true in a narrower way than it reads.**
+
+| # | the brief says | measured |
+|---|---|---|
+| 1 | 12 paths / 15 operations / 46 schemas → 13 / 16 / 48 | **true.** `ac7c348`: 12/15/46. `b0e5c07`: 13/16/48 |
+| 2 | `GET /bff/v1/projects` with no session → `401` | **true**, `authentication_required` |
+| 3 | Authorization headers leaving the BFF → 0 | **FALSE as written.** See below |
+| 4 | the sign-in screen is present | **true**, `/login`, a real `<form method="post">` |
+| 5 | `ALPHA_ROADMAP.md` §5 carries **ten** criteria | **true**, ten |
+| 6 | criterion 1's second clause is the **API** schema, not the DB schema | **true**, quoted from the file |
+| 7 | the previous record's verdicts (1, 2 blocked; 3–7, 9, 10 hold; 8 with an exception) | **true**, read from `certification-ac7c348.json` |
+| 8 | criterion 8's old reason *"the host carries three alpha stacks"* is false — it carries one | **true.** One alpha stack was running when this session arrived, and one is running as it leaves |
+| 9 | criterion 8's replacement reason — a session cannot witness its own reboot | **true, and still true.** `W37CERT4-1` |
+| 10 | the stand was redeployed from `31a8a53` and `verify-deployed.sh` exits 0 | **true**, re-run by this session: **exit 0**, every file identical |
+| 11 | the stand binds loopback only (`D-49`) | **true.** `docker port` → `127.0.0.1:31500` only |
+| 12 | the last live run cost USD 0.038 | **true.** This session's cost `0.038350` |
+| 13 | *"this morning: `GET /bff/v1/projects` with no session → 200, and POST created a project"* | **not re-measurable.** The stand was redeployed since. It is consistent with `W30CERT3-1`, which recorded exactly that path at `ac7c348`, and this session takes it on that evidence rather than its own |
+
+### Premise 3, in full, because it is the one that is false
+
+**Zero Authorization headers leave the *browser*** — measured across every journey in this
+session, and that is almost certainly what the brief means. But *"leaving the BFF"* names the
+other side of the tier, and there the count is **not** zero and must not be:
+
+- `GET /bff/v1/projects` with a live session answers **`200`**;
+- `GET /api/v1/projects` with **no** `Authorization` header answers **`401`**.
+
+Both measured on the owner's stand. The BFF therefore presents a credential to the API on every
+authenticated forward — that is the tier's entire purpose. What *is* zero is the deployment
+credential leaving the BFF **on an anonymous request**: `noSession()` answers `401` and sends
+nothing upstream, which is the `JUDGE-SEC` repair, and that is a different sentence.
+
+The distinction matters because `W37CERT4-3` is a stale paragraph in that very file claiming
+the opposite of the repair. A brief that says *"headers leaving the BFF → 0"* and a file that
+says *"a browser with no session gets the deployment's own credential"* cannot both be checked
+by the same reading, and only one of them is about the browser.
+
+### One premise about this session's own conduct, which turned out to matter
+
+The brief says *"before believing a red from anything that builds, deploys or times, re-run it
+alone and compare the wall clock"* (§4.6). **`gate-w37a` — the peer stream `W37-D57` — had
+services up on this host throughout**, along with `gate-b0` and `gate-w35a`. No red needed
+re-running: nothing in this session's measurements came back red that was not mutated on
+purpose. It is recorded because it is also the second reason behind `W37CERT4-1`.
 
 ## 7. Gate
 
