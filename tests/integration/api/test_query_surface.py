@@ -890,6 +890,9 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listDocuments": f"/projects/{paged.project_uid}/documents",
         "listVersions": f"/documents/{paged.versioned_document_uid}/versions",
         "listRuns": f"/versions/{paged.run_version_uid}/runs",
+        # `R-24`. The only target here with no parent identity in it: the journal is
+        # deployment-wide, which is also why its `verdict` case below is not the shared one.
+        "listDecisions": "/decisions",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -902,6 +905,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listDocuments": {"cursor", "limit"},
         "listVersions": {"cursor", "limit"},
         "listRuns": {"cursor", "limit"},
+        "listDecisions": {"category", "cursor", "limit", "verdict"},
     }, f"the contract's query surface moved: {declared}"
 
     # One supplied value per parameter that the answer must be visibly different for, and
@@ -962,12 +966,28 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
                 if {item["category"] for item in filtered["items"]} != {category}:
                     inert.setdefault(operation_id, []).append(f"category={category}")
 
-        if "verdict" in names:
+        if "verdict" in names and operation_id != "listDecisions":
             # Every finding of a fresh run is `pending`, so the discriminating case is the
             # verdict that must return nothing rather than the one that returns everything.
             everything = ok(get(shipped_router, f"{target}?verdict=pending&limit=200"))
             nothing = ok(get(shipped_router, f"{target}?verdict=rejected&limit=200"))
             if not everything["items"] or nothing["items"]:
+                inert.setdefault(operation_id, []).append("verdict")
+
+        if "verdict" in names and operation_id == "listDecisions":
+            # The journal is deployment-wide and only decided findings are in it, so
+            # neither half of the shared case holds: `pending` is not everything, and
+            # `rejected` is not nothing on an instance a previous run left rows in
+            # (`OPERATING_CONSTRAINTS.md` §9). The discriminating pair here is the value
+            # this run has certainly produced against the one nothing can produce:
+            # `accepted`, from the `accept` appended above, and `needs_manual_review`,
+            # which is in the closed union and has no PC-01 producer at all.
+            accepted = ok(get(shipped_router, f"{target}?verdict=accepted&limit=200"))
+            impossible = ok(
+                get(shipped_router, f"{target}?verdict=needs_manual_review&limit=200")
+            )
+            carried = {item["current_verdict"] for item in accepted["items"]}
+            if not accepted["items"] or carried != {"accepted"} or impossible["items"]:
                 inert.setdefault(operation_id, []).append("verdict")
 
     assert inert == {}, (

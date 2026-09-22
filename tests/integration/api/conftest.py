@@ -70,7 +70,7 @@ Surface = _driver.Surface
 SuiteCredentialAdapter = _driver.SuiteCredentialAdapter
 TEST_TOKEN = _driver.TEST_TOKEN
 dispatch = _driver.dispatch
-from auditmanager.api.schemas.decisions import DecisionEventView
+from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
 from auditmanager.api.schemas.findings import (
     EvidenceView,
@@ -81,7 +81,12 @@ from auditmanager.api.schemas.findings import (
 )
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.runs import RunStatusView, StageStateView
-from auditmanager.decisions import current_verdict, decision_history, record_decision
+from auditmanager.decisions import (
+    current_verdict,
+    decision_history,
+    decision_journal,
+    record_decision,
+)
 from auditmanager.findings import (
     BlockIndex,
     ObservationSet,
@@ -612,6 +617,38 @@ class LedgerDecisionAdapter:
         return _Appended(
             event=self._view(event),
             current_verdict=projection.current_verdict if projection else "pending",
+        )
+
+    def decision_journal(
+        self, *, category: str | None = None, verdict: str | None = None
+    ) -> Sequence[DecisionRecordView]:
+        """The journal, straight off `W38-KB`'s read. No ordering is applied here.
+
+        `decision_history` below sorts, because `B4` returns `ORDER BY sequence_no` and the
+        client-visible order is `(recorded_at, decision_id)`. `decision_journal` already
+        orders by the client-visible key, descending, so a sort here would be a second
+        opinion about the order -- and one that could disagree with the query silently.
+        """
+        return tuple(
+            DecisionRecordView(
+                decision_id=entry.decision_id,
+                finding_uid=entry.finding_uid,
+                finding_observation_id=entry.finding_observation_id,
+                event_type=entry.event_type,
+                author_label=entry.author_label,
+                recorded_at=entry.recorded_at,
+                project_uid=entry.project_uid,
+                run_id=entry.run_id,
+                category=entry.category,
+                finding_text=entry.finding_text,
+                current_verdict=entry.current_verdict,
+                decision_event_count=entry.decision_event_count,
+                verdict=entry.verdict,
+                comment=entry.comment,
+            )
+            for entry in decision_journal(
+                self._session, category=category, verdict=verdict
+            )
         )
 
     def decision_history(self, *, finding_uid: str) -> Sequence[DecisionEventView]:
