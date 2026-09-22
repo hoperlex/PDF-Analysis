@@ -1,0 +1,108 @@
+NOTICE
+======
+
+This file exists because `web/src/shared/ui/icon.tsx` contains work that is not ours.
+
+`DEBT_REGISTER.md` `D-52` established the provenance: the legacy reference interface
+carries 43 inline `<svg>`, of which 28 follow Feather's 24x24 convention, and its
+`dollar-sign` path is byte-identical to Feather's own 45-character path. The legacy tree
+carried no licence file, no notice and no icon package -- the icons arrived by paste. That
+omission is not inherited. Everything below is here so the copy is a lawful one.
+
+The MIT licence requires that "the above copyright notice and this permission notice shall
+be included in all copies or substantial portions of the Software", so the licence text is
+reproduced verbatim rather than linked. Its wording is the licensor's and is not
+translated; the interface it decorates is Russian, this file is not an interface.
+
+
+--------------------------------------------------------------------------------
+Feather
+--------------------------------------------------------------------------------
+
+Homepage:   https://feathericons.com
+Source:     https://github.com/feathericons/feather
+Retrieved:  2026-09-22, from `raw.githubusercontent.com/feathericons/feather/main/icons/`
+Licence:    MIT
+
+The MIT License (MIT)
+
+Copyright (c) 2013-2023 Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+--------------------------------------------------------------------------------
+What was copied
+--------------------------------------------------------------------------------
+
+Sixteen icons. The path, polyline, polygon, line and circle geometry of each was taken
+unchanged from the Feather file named beside it. What we changed is the packaging and
+nothing else: the shared attributes (`viewBox`, `fill`, `stroke`, `stroke-width`, the
+round caps and joins) are set once on the `<svg>` element by the `Icon` component instead
+of being repeated per file, `width` and `height` are a prop rather than a fixed 24, and
+each icon is addressed by the name this application uses for the thing it stands for
+rather than by Feather's name for the shape.
+
+| our name     | Feather file     | origin  |
+|--------------|------------------|---------|
+| `project`    | `folder`         | Feather |
+| `document`   | `file-text`      | Feather |
+| `version`    | `layers`         | Feather |
+| `run`        | `play-circle`    | Feather |
+| `finding`    | `flag`           | Feather |
+| `review`     | `search`         | Feather |
+| `export`     | `download`       | Feather |
+| `upload`     | `upload`         | Feather |
+| `accept`     | `check`          | Feather |
+| `reject`     | `x`              | Feather |
+| `comment`    | `message-square` | Feather |
+| `back`       | `arrow-left`     | Feather |
+| `arrow`      | `arrow-right`    | Feather |
+| `warning`    | `alert-triangle` | Feather |
+| `error`      | `alert-circle`   | Feather |
+| `success`    | `check-circle`   | Feather |
+
+
+--------------------------------------------------------------------------------
+What is ours
+--------------------------------------------------------------------------------
+
+Of the icons in `web/src/shared/ui/icon.tsx`: none. Every one of the sixteen is Feather's,
+and the table above is exhaustive -- `FEATHER_SOURCE` in that file maps every member of
+`IconName` to a Feather file, so an icon with no Feather source does not currently
+typecheck.
+
+Ours is the `Icon` component around them: the attribute convention, the sizing prop, the
+`aria-hidden`-by-default rule and the names. That code is part of this repository and
+carries this repository's licence.
+
+A later session that needs an icon Feather does not have should draw it, widen
+`FEATHER_SOURCE` to admit an icon of our own, and add a row here saying so. It must not
+pass off a drawing as Feather's, and it must not reconstruct a Feather path from memory --
+the sixteen above were fetched from the source and pasted, which is why they can be
+compared against it.
+
+`web/tests/unit/icon-convention.test.ts` reads this file and fails if the table and
+`FEATHER_SOURCE` stop agreeing, so this notice cannot silently fall behind the set.
+
+The copy itself is checked too. `web/tests/unit/icon-feather-source.ts` holds the sixteen
+Feather documents as they were fetched, each with the `sha256` of the fetched bytes, and
+`web/tests/unit/icon-provenance.test.ts` compares what the component renders against them.
+A path edited after the fact would make this notice wrong about what was copied, which is
+the failure `D-52` was opened over, so it fails the suite instead.
