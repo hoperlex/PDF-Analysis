@@ -12,6 +12,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | | Row | Needs |
 |---|---|---|
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
+| **D-62** | the stage table: no tokens, machine-word stage names, no order | a wave-35 stream |
+| D-63 | a dashboard | **deferred by the owner**; a reseal when it comes |
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
 | D-61 | the journey guard still matches by substring against concatenated source | compare against **rendered** output |
@@ -1504,6 +1506,50 @@ summary, accept truncation) belongs to the embedding stream and is left explicit
 silently truncated.
 
 Check: `docs/program/W33-CORPUS.md` §1.2 carries the reconciliation table and every command.
+
+### D-62 — the stage table is unstyled, names its stages in machine words, and says nothing about order
+
+**Opened 2026-09-22, out of the owner's question about why we present stages as a table where
+the legacy application presents a pipeline of buttons.** The table is the right shape for
+PC-01's question (§ below), and it has three defects that are not intrinsic to being a table.
+
+**1. It is entirely inline styles — twelve `style={{…}}` attributes and not one token.**
+`W31-STYLE` built a token layer and `W33-THEME` a second palette; **this table reaches
+neither.** On the dark theme it renders in the browser's defaults on a dark surface, which is
+the single most visible thing an expert will meet on the run screen. It was invisible to every
+guard because a stylesheet is exactly what the suite cannot see.
+
+**2. It renders `<code>{row.stageId}</code>` — nine rows of `source_preparation`,
+`page_geometry_extraction`, `text_analysis`** to a Russian auditor.
+
+**This one is mine.** When I taught the language guard that contract vocabulary is translated,
+I removed `RunState`, `StageStatus`, `Verdict` and `FindingCategory` from the permitted set and
+**deliberately left `StageId` in it**, on the argument that a stage id is an identifier a
+reviewer is shown on purpose beside a sentence. That argument is true of `terminal_reason`,
+where the code sits next to its meaning. **It is false here**, where nine identifiers are the
+entire first column and no sentence accompanies any of them. The allowlist excused the
+largest block of untranslated text on the screen.
+
+**3. It carries no sequence or dependency.** Row order implies an order and asserts nothing.
+Legacy's pipeline draws arrows, and its class vocabulary has `stage-algorithm-branch` and
+`stage-algorithm-split` — **its pipeline forks, and it says so.** Ours cannot.
+
+Check: `grep -c "style={{" web/src/entities/audit-run/ui/stage-table.tsx` → 12;
+`grep -n "row.stageId" web/src/entities/audit-run/ui/stage-table.tsx`.
+
+### D-63 — a dashboard, deferred by the owner
+
+**Raised and deferred the same day, 2026-09-22: "важно, но не в этой волне".** Recorded so it
+is not rediscovered as a gap.
+
+Legacy opens on a dashboard; PC-01 opens on a project list. `pdf-analysis-84` measured 166
+legacy classes across `stage*`, `queue*`, `modal*`, `batch*` and `compar*` that cover screens
+PC-01 has no equivalent of, and the dashboard is the largest of them.
+
+**What it would need, so the estimate is not re-derived from scratch:** `listProjects` already
+carries `document_count`; runs, findings and verdicts have no aggregate operation at all, so a
+dashboard showing counts across projects is **a contract reseal plus new read paths**, in the
+same class as `D-56`'s second half and priced the same way.
 
 ### D-57 — one query key holds two incompatible shapes, and a finished run is polled forever
 
