@@ -52,6 +52,14 @@ export const QUERY_NAMESPACES = ['projects', 'versions', 'runs', 'findings'] as 
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
 
+/** Filters that make a decision journal page a distinct cache entry. */
+export interface DecisionJournalFilters {
+  readonly category?: FindingCategory;
+  readonly verdict?: Verdict;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
 /** Filters that make a finding list a distinct cache entry. */
 export interface FindingListFilters {
   readonly category?: FindingCategory;
@@ -117,5 +125,21 @@ export const queryKeys = {
     all: () => ['findings'] as const,
     detail: (findingUid: FindingUid) => ['findings', 'detail', findingUid] as const,
     decisions: (findingUid: FindingUid) => ['findings', 'decisions', findingUid] as const,
+    /**
+     * One page of `listDecisions` — the decision journal across every finding.
+     *
+     * Under `findings` and not under a fifth root namespace, because the question it asks
+     * is *what has been decided about findings* and the answer changes exactly when a
+     * finding's verdict does. `decisionCacheKeys` already invalidates
+     * `findings.decisions` and `findings.detail` after an append; a key outside this
+     * namespace would need a fourth entry there, and the entry somebody forgets is how a
+     * screen shows `accepted` in one panel and `pending` in the one beside it.
+     *
+     * The filters are one object, so a partial key matches every filtered journal of the
+     * deployment: React Query compares query keys by deep partial equality, and
+     * `['findings','journal',{}]` therefore reaches the filtered pages too.
+     */
+    journal: (filters: DecisionJournalFilters = {}) =>
+      ['findings', 'journal', filters] as const,
   },
 } as const;

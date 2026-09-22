@@ -2,8 +2,8 @@
  * Contract guard: the client still carries the PC-01 seam `B6`, `B7` and `B8` agreed on.
  *
  * The drift guard next door proves the client matches the document. This one proves the
- * document still says what `docs/program/P02_SEAMS.md` section 7 says it says — the sixteen
- * operations at their frozen methods and paths, the field sets a review screen depends on,
+ * document still says what `docs/program/P02_SEAMS.md` section 7 says it says — the
+ * seventeen operations at their frozen methods and paths, the field sets a review screen depends on,
  * and the safety rules that must survive any future edit to the contract.
  *
  * A P02 change that breaks the seam fails here, before any UI task is blamed for it.
@@ -54,6 +54,10 @@ const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> = [
   // every operation and described no way to obtain one, so this is the one operation whose
   // own `security` is the empty requirement. It says nothing about what the credential is.
   ['issueToken', 'POST', '/auth/token'],
+  // W38-KB, 2026-09-22: `R-24`. The decision journal across findings, which the
+  // knowledge base reads. `listDecisionHistory` answers for one finding and this
+  // answers for all of them; it creates nothing and `ADR-0012` calls it a projection.
+  ['listDecisions', 'GET', '/decisions'],
 ];
 
 const document = JSON.parse(readText(CONTRACT_PATH)) as {

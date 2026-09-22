@@ -1,4 +1,4 @@
-"""The sixteen operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The seventeen operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the seven router modules. It takes its
 dependencies as arguments and constructs none of them: choosing what sits behind each port
@@ -125,7 +125,7 @@ def build_router(
     exports: CsvExportPort,
     credentials: CredentialPort | None = None,
 ) -> Router:
-    """Assemble the sixteen operations.
+    """Assemble the seventeen operations.
 
     Keyword-only, because seven same-shaped dependencies passed positionally is a wiring
     defect waiting to happen and the type checker cannot see it.

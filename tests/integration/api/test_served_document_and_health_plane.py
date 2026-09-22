@@ -1,7 +1,7 @@
 """Two things `T-1` and `T-3` leave that no other suite is the home of.
 
 * **the served document is the one the gate compares.** ``W13-CONF``'s conformance gate
-  reads ``create_documentation_app().openapi()``, which builds the sixteen operations with
+  reads ``create_documentation_app().openapi()``, which builds the seventeen operations with
   nothing behind the ports so that a document can be read on any checkout, without a
   database, an object store or a credential. That is only worth anything if it is the
   *same* document the wired application serves. Asserted here, because the gate cannot
@@ -30,9 +30,9 @@ OPENAPI = Path(__file__).resolve().parents[3] / "contracts/api/v1/openapi.json"
 #: from the document it is counting cannot tell you the document shrank.
 OPENAPI_VERSION = "3.1.0"
 BASE_PATH = "/api/v1"
-PATH_COUNT = 13
-OPERATION_COUNT = 16
-SCHEMA_COUNT = 48
+PATH_COUNT = 14
+OPERATION_COUNT = 17
+SCHEMA_COUNT = 50
 
 
 class TestTheDocumentedAndTheWiredApplicationAgree:
@@ -66,7 +66,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
         """``HTTPValidationError`` and ``ValidationError``, and the 422 that referenced them.
 
         FastAPI injects a ``422`` for any operation with parameters that declares none of
-        its own. Twelve of the sixteen displace it by declaring the contract's; the other
+        its own. Thirteen of the seventeen displace it by declaring the contract's; the other
         four -- ``getRunStatus``, ``getDocumentVersion``, ``getFinding``, ``exportRunCsv``
         -- declare no 422 at all, because they cannot answer one. A malformed path identity
         is 404 by design and the correlation header is declared but not enforced.
@@ -93,6 +93,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "createProject",
             "issueToken",
             "listDecisionHistory",
+            "listDecisions",
             "listDocuments",
             "listProjects",
             "listRunFindings",
@@ -104,7 +105,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:
-        """The contract declares no ``default`` on any property of any of the 48 schemas.
+        """The contract declares no ``default`` on any property of any of the 50 schemas.
 
         ``default: null`` on an optional property says the server substitutes ``null``,
         which is not what an absent property means here -- and the conformance gate

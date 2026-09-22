@@ -17,7 +17,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.api.schemas.decisions import DecisionEventView
+from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
 from auditmanager.api.schemas.findings import (
     EvidenceView,
@@ -586,6 +586,51 @@ class DecisionAdapter(_SessionHolder):
         from auditmanager.decisions import decision_history as history
 
         return self._read(lambda s: tuple(_event_view(e) for e in history(s, finding_uid)))
+
+    def decision_journal(
+        self, *, category: str | None = None, verdict: str | None = None
+    ) -> Sequence[DecisionRecordView]:
+        """The journal, filtered in the query rather than here.
+
+        Unlike ``list_run_findings``, which filters in Python over one run's handful of
+        findings, this listing is not scoped by a parent and grows with every decision the
+        deployment has ever taken. The predicate goes to PostgreSQL, against the same
+        columns the record reports.
+
+        Both arguments are named in the signature rather than swallowed by ``**_``. The
+        finding adapter's first version took ``**_`` and dropped its two filters, so a
+        filtered request returned everything and looked like it had worked, and
+        ``test_every_adapter_accepts_every_parameter_its_port_declares`` exists because of
+        it.
+        """
+        from auditmanager.decisions import decision_journal
+
+        def work(session: Session) -> Sequence[DecisionRecordView]:
+            return tuple(
+                _record_view(entry)
+                for entry in decision_journal(session, category=category, verdict=verdict)
+            )
+
+        return self._read(work)
+
+
+def _record_view(entry: Any) -> DecisionRecordView:
+    return DecisionRecordView(
+        decision_id=entry.decision_id,
+        finding_uid=entry.finding_uid,
+        finding_observation_id=entry.finding_observation_id,
+        event_type=entry.event_type,
+        author_label=entry.author_label,
+        recorded_at=entry.recorded_at,
+        project_uid=entry.project_uid,
+        run_id=entry.run_id,
+        category=entry.category,
+        finding_text=entry.finding_text,
+        current_verdict=entry.current_verdict,
+        decision_event_count=entry.decision_event_count,
+        verdict=entry.verdict,
+        comment=entry.comment,
+    )
 
 
 def _event_view(event: Any) -> DecisionEventView:

@@ -1,4 +1,4 @@
-"""``appendDecision`` and ``listDecisionHistory``."""
+"""``appendDecision``, ``listDecisionHistory`` and ``listDecisions``."""
 
 from __future__ import annotations
 
@@ -7,8 +7,10 @@ from typing import Annotated
 from fastapi import APIRouter, Path
 
 from auditmanager.api.routers.declarations import (
+    CategoryFilterParam,
     CursorParam,
     LimitParam,
+    VerdictFilterParam,
     envelope_responses,
     success,
 )
@@ -20,6 +22,7 @@ from auditmanager.api.schemas.common import page_body, paginate, timestamp
 from auditmanager.api.schemas.decisions import (
     append_decision_body,
     decision_event_body,
+    decision_record_body,
     check_comment_is_present_for_a_comment_event,
 )
 
@@ -82,6 +85,35 @@ def build_decision_routes(router: APIRouter, decisions: DecisionPort) -> None:
         body = page_body([decision_event_body(view) for view in page.items], page.next_cursor)
         return json_response(200, encode_json(body))
 
+    @router.get(
+        "/decisions",
+        operation_id="listDecisions",
+        tags=["decisions"],
+        status_code=200,
+        response_model=models.DecisionRecordPage,
+        responses={
+            **success(200, "One page of the decision journal, newest first."),
+            # No 404. The path addresses no parent identity, so there is no identity that
+            # could be missing: a deployment that has decided nothing has an empty journal,
+            # and an empty page is the true answer. The listings that DO declare 404 --
+            # `listDocuments`, `listVersions`, `listRuns` -- each hang off a parent whose
+            # absence is a different fact from its emptiness.
+            **envelope_responses(401, 403, 422, 500, 503),
+        },
+    )
+    def list_decisions(
+        cursor: CursorParam = None,  # type: ignore[assignment]
+        limit: LimitParam = 50,
+        category: CategoryFilterParam = None,  # type: ignore[assignment]
+        verdict: VerdictFilterParam = None,  # type: ignore[assignment]
+    ) -> WireResponse:
+        rows = decisions.decision_journal(
+            category=None if category is None else category.value,
+            verdict=None if verdict is None else verdict.value,
+        )
+        page = paginate(rows, limit=limit, cursor=cursor, sort_key=_decision_sort_key)
+        body = page_body([decision_record_body(view) for view in page.items], page.next_cursor)
+        return json_response(200, encode_json(body))
 
 
 def _decision_sort_key(view: object) -> tuple[str, ...]:

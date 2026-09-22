@@ -1879,3 +1879,127 @@ li.am-state .am-state__detail {
   padding-top: var(--am-gap);
   border-top: 1px solid var(--am-line-soft);
 }
+
+/* ---- the knowledge base ----------------------------------------------------------
+ *
+ * `R-23`: required, and working inside the alpha. One block per decision event, in the
+ * same visual language as the decision history it is the cross-finding view of — a left
+ * rule whose colour carries the verdict, so the two screens read as one thing seen from
+ * two distances.
+ */
+
+.am-app__nav {
+  font-size: 13px;
+  color: var(--am-accent);
+  text-decoration: none;
+}
+
+.am-app__nav:hover {
+  text-decoration: underline;
+}
+
+.am-kb {
+  display: block;
+}
+
+.am-kb__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap);
+  margin-bottom: var(--am-gap-lg);
+}
+
+.am-kb__filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--am-text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--am-tracking-caps);
+  color: var(--am-ink-muted);
+}
+
+.am-kb__records {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap);
+}
+
+.am-kb__record {
+  margin: 0;
+  border-left: 2px solid var(--am-line);
+  padding: 0 0 var(--am-gap-sm) var(--am-gap);
+}
+
+.am-kb__record[data-current-verdict='accepted'] {
+  border-left-color: var(--am-ok);
+}
+
+.am-kb__record[data-current-verdict='rejected'] {
+  border-left-color: var(--am-failed);
+}
+
+.am-kb__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-sm);
+  margin: 0;
+}
+
+.am-kb__category {
+  font-weight: 650;
+}
+
+.am-kb__verdict {
+  font-weight: 650;
+}
+
+.am-kb__event {
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--am-tracking-caps);
+  color: var(--am-ink-muted);
+}
+
+.am-kb__text {
+  margin: var(--am-gap-sm) 0 0;
+}
+
+.am-kb__comment {
+  margin: var(--am-gap-sm) 0 0;
+  padding-left: var(--am-gap-sm);
+  border-left: 2px solid var(--am-line-soft);
+  color: var(--am-ink-muted);
+}
+
+.am-kb__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-sm);
+  margin: var(--am-gap-sm) 0 0;
+  font-size: var(--am-text-xs);
+  color: var(--am-ink-muted);
+}
+
+.am-kb__author {
+  font-weight: 600;
+}
+
+.am-kb__events {
+  font-variant-numeric: tabular-nums;
+}
+
+.am-kb__link {
+  color: var(--am-accent);
+  text-decoration: none;
+}
+
+.am-kb__link:hover {
+  text-decoration: underline;
+}

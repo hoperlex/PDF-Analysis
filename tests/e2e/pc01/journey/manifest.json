@@ -189,6 +189,28 @@
       ],
       "expects_api": [],
       "follow": null
+    },
+    {
+      "name": "knowledge-base",
+      "path": "/knowledge-base",
+      "page_module": "web/src/app/knowledge-base/page.tsx",
+      "$comment": [
+        "The knowledge base, added by the integrator because W38-KB could not: this manifest is",
+        "named in that stream's forbidden_hotspots twice, deliberately, and it stopped rather",
+        "than reach past the boundary. Its gate went red on exactly this screen, and the guard",
+        "was right -- R-23 makes the screen required and the journey must walk every screen the",
+        "application offers.",
+        "`follow: null` because this screen captures no identity the next step needs: it is a",
+        "projection over the whole decision journal and hangs off no parent."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/decisions",
+          "operationId": "listDecisions"
+        }
+      ],
+      "follow": null
     }
   ],
   "write": {

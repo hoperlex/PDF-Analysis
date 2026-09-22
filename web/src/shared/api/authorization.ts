@@ -21,7 +21,7 @@
 import type { ErrorCode } from './generated/types.gen';
 import { ApiError } from './errors';
 
-/** The `authorization` category of the catalog, as the sixteen operations can return it. */
+/** The `authorization` category of the catalog, as the seventeen operations can return it. */
 export const AUTHORIZATION_ERROR_CODES = ['authentication_required', 'permission_denied'] as const;
 
 export type AuthorizationErrorCode = (typeof AUTHORIZATION_ERROR_CODES)[number];

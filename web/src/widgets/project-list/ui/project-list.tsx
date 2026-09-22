@@ -60,12 +60,12 @@ export function ProjectList() {
       <div className="am-pager">
         {cursor === undefined ? null : (
           <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(undefined)}>
-            First page
+            В начало
           </button>
         )}
         {nextCursor === null ? null : (
           <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(nextCursor)}>
-            Next page
+            Дальше
           </button>
         )}
       </div>

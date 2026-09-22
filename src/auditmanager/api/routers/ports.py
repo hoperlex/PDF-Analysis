@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from typing import Protocol, Sequence, runtime_checkable
 
-from auditmanager.api.schemas.decisions import DecisionEventView
+from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView
 from auditmanager.api.schemas.findings import FindingDetailView, FindingView
 from auditmanager.api.schemas.projects import ProjectView
@@ -233,7 +233,7 @@ class FindingPort(Protocol):
 
 @runtime_checkable
 class DecisionPort(Protocol):
-    """``appendDecision`` and ``listDecisionHistory``."""
+    """``appendDecision``, ``listDecisionHistory`` and ``listDecisions``."""
 
     def append_decision(
         self,
@@ -255,6 +255,32 @@ class DecisionPort(Protocol):
 
         Ordered by ``(recorded_at, decision_id)`` -- a total order, stable across
         pages. The server's ``sequence_no`` is never exposed, in a field or in a cursor.
+        """
+
+    def decision_journal(
+        self,
+        *,
+        category: str | None,
+        verdict: str | None,
+    ) -> Sequence[DecisionRecordView]:
+        """Every recorded decision, across findings, **newest first**.
+
+        The order is part of this declaration and not a detail of the implementation, for
+        the reason ``list_projects`` states: the router pages what this returns and never
+        re-sorts it, so a port that returned oldest first would page correctly through the
+        wrong listing.
+
+        ``category`` and ``verdict`` are ``None`` when the caller supplied no filter, and
+        otherwise a value the router has already checked against the frozen enum. They
+        narrow the **finding** -- its category, and the verdict that now stands for it --
+        exactly as the identically named parameters do on ``list_run_findings``, and
+        neither narrows the event. **An implementation that accepts these and ignores them
+        is the defect this signature exists to prevent**, and it is not hypothetical: the
+        shipped finding adapter once took ``**_`` and dropped both.
+
+        There is no parent identity, so there is no ``not_found``: a deployment that has
+        decided nothing returns an empty sequence, and that is a true answer rather than a
+        missing one.
         """
 
 

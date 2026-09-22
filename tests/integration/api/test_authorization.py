@@ -88,6 +88,10 @@ GUARDED = (
         "/documents/doc_01M2545JSD15ETSNNV904X991H/versions",
     ),
     ("listRuns", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/runs"),
+    # `R-24`, `W38-KB`. The decision journal is the first listing with no parent in its
+    # path, so it is the first one whose 401 cannot be mistaken for the 404 an unknown
+    # parent would produce. That makes the row below the only thing asserting it.
+    ("listDecisions", "GET", "/decisions"),
 )
 
 #: The catalog's own summary for the code, as a literal. `W13-SEAL` section 8.1 requires
@@ -153,7 +157,7 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Fifteen, not fourteen.
+    """One request per guarded operation, with no credential. Sixteen, not fifteen.
 
     The set comparison is what makes this a sweep rather than a list: a seventeenth
     operation is either written into ``GUARDED`` and swept, or named in
@@ -161,7 +165,7 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 15
+    assert len(GUARDED) == 16
     assert UNAUTHENTICATED_OPERATIONS == {"issueToken"}
     assert {operation for operation, _, _ in GUARDED} | UNAUTHENTICATED_OPERATIONS == (
         router.operation_ids

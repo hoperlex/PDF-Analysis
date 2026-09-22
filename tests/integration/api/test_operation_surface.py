@@ -1,4 +1,4 @@
-"""The surface is exactly the sixteen operations the frozen document declares.
+"""The surface is exactly the seventeen operations the frozen document declares.
 
 Asserted **against the document**, never against a list written out here. A list in a
 test is a second declaration that can drift from the first, and the whole reason
@@ -41,7 +41,7 @@ def test_the_router_declares_exactly_the_frozen_operations(
     )
 
 
-def test_the_document_declares_sixteen_and_the_router_implements_sixteen(
+def test_the_document_declares_seventeen_and_the_router_implements_seventeen(
     router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     """The count is checked separately from the set.
@@ -51,11 +51,12 @@ def test_the_document_declares_sixteen_and_the_router_implements_sixteen(
 
     **Twelve until the `R-5` reseal of 2026-09-18**, which added `listDocuments`,
     `listVersions` and `listRuns`; **fifteen until `W34-CONTRACT`**, which added
-    `issueToken`, the credential exchange. The number moved because an owner ruling moved
-    it; nothing else may move it.
+    `issueToken`, the credential exchange; **sixteen until `W38-KB`**, which added
+    `listDecisions` under `R-24`. The number moved because an owner ruling moved it;
+    nothing else may move it.
     """
-    assert len(declared_operations(openapi_document)) == 16
-    assert len(router.routes) == 16
+    assert len(declared_operations(openapi_document)) == 17
+    assert len(router.routes) == 17
 
 
 def test_every_declared_operation_is_reachable(
@@ -90,7 +91,7 @@ def test_every_declared_operation_is_reachable(
                 assert bound[name] == samples[name]
 
 
-def test_no_sixteenth_operation_answers(router: Surface) -> None:
+def test_no_eighteenth_operation_answers(router: Surface) -> None:
     """A path the document does not declare is not a resource.
 
     Includes a method the document does not declare on a path that *is* declared:
@@ -157,14 +158,16 @@ def test_the_document_declares_no_operation_outside_the_declared_capabilities(
     assert list(openapi_document["components"]["securitySchemes"]) == ["bearerAuth"], (
         "the authorization seam is one bearer scheme declared once, per R-3"
     )
-    assert len(paths) == 13 and sum(
+    assert len(paths) == 14 and sum(
         1
         for item in openapi_document["paths"].values()
         for method in item
         if method in {"get", "put", "post", "delete", "options", "head", "patch"}
-    ) == 16, (
+    ) == 17, (
         "10 paths / 12 operations before the `R-5` reseal, 12 / 15 after it, 13 / 16 "
-        "after `W34-CONTRACT` added the credential exchange. The three operations `R-5` "
-        "added are named in `REQUIRED_OPERATIONS`; the one wave 34 added is `issueToken`, "
-        "and it is the only one this surface answers without a credential."
+        "after `W34-CONTRACT` added the credential exchange, 14 / 17 after `W38-KB` added "
+        "the decision journal under `R-24`. The three operations `R-5` added are named in "
+        "`REQUIRED_OPERATIONS`; the one wave 34 added is `issueToken`, and it is the only "
+        "one this surface answers without a credential; the one wave 38 added is "
+        "`listDecisions`, and it is the only listing with no parent in its path."
     )

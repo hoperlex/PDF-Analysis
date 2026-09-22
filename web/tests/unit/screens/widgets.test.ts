@@ -172,12 +172,12 @@ describe('the project list renders each read outcome as a different state', () =
   it('offers the next page only when the server handed back a cursor', () => {
     const withCursor = list((c) => c.setQueryData(LIST_KEY, page([project()], 'opaque-cursor-xyz')));
     const withoutCursor = list((c) => c.setQueryData(LIST_KEY, page([project()], null)));
-    expect(withCursor).toContain('Next page');
-    expect(withoutCursor).not.toContain('Next page');
+    expect(withCursor).toContain('Дальше');
+    expect(withoutCursor).not.toContain('Дальше');
   });
 
   it('shows no "first page" control while already on the first page', () => {
     const markup = list((c) => c.setQueryData(LIST_KEY, page([project()], 'opaque-cursor-xyz')));
-    expect(markup).not.toContain('First page');
+    expect(markup).not.toContain('В начало');
   });
 });

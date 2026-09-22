@@ -77,7 +77,7 @@ export {
 export type { PollRunOptions } from './polling';
 export { pollRunStatus } from './polling';
 
-export type { FindingListFilters, QueryNamespace } from './query-keys';
+export type { DecisionJournalFilters, FindingListFilters, QueryNamespace } from './query-keys';
 export { QUERY_NAMESPACES, queryKeys } from './query-keys';
 
 export type { CsvColumn } from './csv-columns';

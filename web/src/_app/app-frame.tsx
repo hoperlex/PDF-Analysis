@@ -36,6 +36,15 @@ export function AppFrame({ children }: AppFrameProps) {
          *
          * One link in the frame, so the wall of refusals has a door beside it.
          */}
+        {/*
+         * `R-23` makes the knowledge base required inside the alpha, and it is the first
+         * screen in this application that hangs off no project. The link is in the frame
+         * for the reason the sign-in link is: a screen nothing points at is a screen a
+         * reviewer reaches only by typing the address.
+         */}
+        <Link className="am-app__nav" href="/knowledge-base">
+          База знаний
+        </Link>
         <Link className="am-app__signin" href="/login">
           Вход
         </Link>
