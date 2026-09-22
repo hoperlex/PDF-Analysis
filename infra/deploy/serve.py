@@ -1,7 +1,7 @@
 """The alpha's process entry point: one built application, served on two ports.
 
 `W13-API` built everything this needs and serves none of it. ``api/app.py`` has
-:func:`create_asgi_app` (the sixteen operations) and ``api/health.py`` has
+:func:`create_asgi_app` (the seventeen operations) and ``api/health.py`` has
 :func:`build_health_app` (`T-3`'s liveness and readiness), and ``api/app.py:main`` only
 *constructs* and prints -- deliberately, so an operator can ask "would this process
 start?" for free. Nothing in the repository binds either application to a socket. This
