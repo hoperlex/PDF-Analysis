@@ -12,10 +12,11 @@ the top of every page. There is no phrase to match: the text differs per documen
 identifies it is that it *repeats* — that is what a running head is — so the rule is
 structural: a paragraph ending in an ellipsis that occurs more than once in the same document.
 
-The repetition test is load-bearing and not decoration. Measured over all 674 documents, 110
-ellipsis-terminated paragraphs occur exactly once in their document, and they are body text —
-`"Рисунок Л.6 - Схема расположения колонн, ригелей и балок перекрытия на отм. ..."`. A rule
-that discarded every ellipsis paragraph would delete them.
+The repetition test is load-bearing and not decoration. Measured over all 674 documents with
+the rules in this module, 388 ellipsis-terminated paragraphs in 251 documents occur exactly
+once, and they are body text — `"Рисунок Л.6 - Схема расположения колонн, ригелей и балок
+перекрытия на отм. ..."`. 25 828 occur more than once and are the running head. A rule that
+discarded every ellipsis paragraph would delete the 388 with the 25 828.
 """
 
 from __future__ import annotations

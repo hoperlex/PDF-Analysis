@@ -37,7 +37,7 @@ def test_the_repeated_truncated_title_is_gone_and_a_one_off_ellipsis_survives(
     )
     assert any(text.startswith("Рисунок Л.6") for text in surviving), (
         "an ellipsis-terminated paragraph occurring once is body text, not an offcut; "
-        "110 such paragraphs exist in the real corpus"
+        "388 such paragraphs exist in the real corpus, in 251 documents"
     )
 
 
