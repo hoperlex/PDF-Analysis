@@ -14,6 +14,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
 | D-63 | a dashboard | **deferred by the owner**; a reseal when it comes |
 | **D-65** | the account exists and nothing around it does — no rate limit, lockout, password change or **revocation** | **owner**: which belong in the alpha |
+| D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | D-66 | two seam guards absent: fail-closed default, and `compare_digest` | one test each |
 | D-67 | 200-with-empty vs 404 on two of nine collections | a decision, then seven or two change |
 | D-68 | the certification's criterion-4 selector is too wide | use `span.am-badge[data-run-state]` |
@@ -1441,6 +1442,33 @@ Needs the owner: whether the second half is wanted at all for the alpha, and whe
 sections is the right set or legacy's set is simply what legacy had.
 
 Check: `python3 -c "import json; d=json.load(open('contracts/api/v1/openapi.json')); print(list(d['components']['schemas']['Project']['properties']))"`
+
+### D-69 — the language guard was green over eight English words, because its seed never paged
+
+**Found by `W38-KB` 2026-09-22, and it is the fifth wave running in which a guard was sound
+and blind.** Closed the same day by that stream.
+
+`web/tests/guards/rendered-language.guard.test.ts` renders every screen and fails on one
+English word a contract did not put there. It was **green while `Next page` and `First page`
+rendered in four list widgets**, because **every page its matrix seeded carried
+`next_cursor: null`** — so the pagination branch never rendered at all.
+
+**The tally, because it is now a pattern and not an accident:**
+
+| wave | guard | why it was blind |
+|---|---|---|
+| 35 | contrast census | matched **authored** class names; markup carries the bundler's |
+| 35 | language guard | rendered four of eight run states |
+| 37 | language guard | empty branch is also Russian, so the `D-57` mutation stayed green |
+| 37 | seam sweep | two of six mutations reddened nothing |
+| 38 | language guard | every seeded page had `next_cursor: null` |
+
+**Three of the five are the same guard**, and all five share one shape: **the instrument
+rendered, saw, and permitted — because the state that carries the defect was never reached.**
+A mutation dying quietly is the only thing that has ever found one of these.
+
+The fix is proved loaded rather than assumed: the same mutation against the **old** seed is
+green.
 
 ### D-66 — two seam guards are absent, found by mutation and not exploitable today
 
