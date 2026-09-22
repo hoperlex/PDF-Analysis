@@ -127,9 +127,10 @@ python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
 > runbook did not, which is the shape where a document becomes an attack.
 
 Reviewers obtain a credential by logging in — `POST /auth/token` — and the web tier holds
-what the API mints, in the Node process, never in the browser. The 401 path now has a
-screen behind it rather than nothing (`W13_CLOSURE.md` §7 described the state before
-wave 34).
+what the API mints, in the Node process, never in the browser. A refused request now has a
+sign-in screen behind it rather than nothing (`W13_CLOSURE.md` §7 described the state
+before wave 34).
+
 
 ### Why the token is not in `.env`
 
