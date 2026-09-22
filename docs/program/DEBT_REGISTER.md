@@ -14,7 +14,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
-| D-53 | **11** English strings left, now **guarded** — a ratchet that may only shrink | the eleven; the guard is done |
+| D-61 | the journey guard still matches by substring against concatenated source | compare against **rendered** output |
 | D-57 | one query key, two shapes: a finished run is polled forever | a decision, then a guard |
 | D-58 | a screen names `uploadDocument` and `document_uid` to a reviewer | one sentence |
 | D-52 | the legacy icon set is at least partly Feather, MIT, notice absent | a `NOTICE` file if we copy; **not** `D-11`'s shape |
@@ -1544,7 +1544,15 @@ does not explain its own transport to the person using it.
 
 Check: the `W32-SEE` guard reports it as part of its outstanding list.
 
-### D-53 — twenty user-visible English strings survive two waves that each reported the interface translated
+### D-53 — twenty user-visible English strings survive two waves that each reported the interface translated — **CLOSED**
+
+**Closed 2026-09-22.** Nineteen became eleven, then two, then none. `web/tests/guards/rendered-language.guard.test.ts`'s outstanding list is empty and its final assertion is **unskipped**: from here one English word reaching a reviewer is a red gate.
+
+**Every removal was made because the guard said the string was gone from a RENDERED screen**, never because a diff looked convincing — which is precisely why three earlier sessions each reported the interface translated and each were wrong.
+
+**And the row closed only after the guard was repaired twice, by being made strict.** It derived its permitted vocabulary from every `enum` in `openapi.json`, so under the owner's ruling of 2026-09-22 it **explicitly permitted `published`, `pending`, `partial` and `accepted` on screen** — an entire integration pass translated them and the guard stayed green, then a judge put one back in English and it stayed green again. **A guard that legitimises the class it was built to catch is worse than none, because its silence is read as coverage — and it was cited as coverage.** Four schemas are now removed from the permitted set.
+
+Making it strict then exposed a defect in its own matcher and a hole in its own coverage, both recorded in `D-61`.
 
 **Measured by `W31-STYLE` 2026-09-21, in the course of restyling screens it was told not to
 re-translate. Opened the same day.** `R-18`'s **first** named defect is mixed language, and
@@ -1570,6 +1578,49 @@ have caught all three rounds, and is the repair — not a fourth translation pas
 
 Check: a sweep for Latin-script user-facing literals across `web/src/**`, with an explicit
 allowlist for contract vocabulary, identifiers and code spans.
+
+### D-61 — substring containment has now deceived three guards, and a green mutation is a coverage report
+
+**Two findings from repairing `D-53`'s guard, kept as one row because they are the same
+lesson at two levels: a guard that answers is not a guard that is right.**
+
+**1. Substring containment, third instance.** The language guard consumed its permitted
+vocabulary with `split`/`join`, so `accept` — a legitimate `DecisionEventType` — was eaten out
+of the middle of `accepted`, and the guard reported the residue **`ed`**. The offence was
+found and **its name was wrong**, which is worse than a miss: it sends a reader hunting a
+string that is not on the screen.
+
+The same week, the wave-33 judges found `tests/e2e/test_pc01_journey_conformance.py` asserting
+a manifest sentence `"Run"` that **no screen renders** — it matched inside `RunPage`, because
+that guard tests containment against a **concatenation of `web/src`**. And `D-40` before both.
+
+| | guard | what containment let through |
+|---|---|---|
+| `D-40` | `PC01_ERROR_CODES` | a code the screen rendered and the list denied |
+| this row | `rendered-language.guard.test.ts` | `accepted` reported as `ed` |
+| open | `test_pc01_journey_conformance.py` | a manifest asserting a title no screen renders |
+
+**The first two are fixed by matching on a word boundary. The third is not**, and it is the
+dangerous one: it is the same text search that missed `D-53` three times, now **deceiving the
+browser journey instead of the interface**. Its repair is to compare `expects_rendered`
+against **rendered output** rather than a source concatenation — which is what `W32-SEE` built
+the machinery for.
+
+**2. A mutation that dies quietly is a coverage report.** Putting `cancelled` back as a raw
+contract value left the repaired guard **green**. Establishing which — weak guard or
+insufficient mutation — found the third thing: the render matrix carried **four of the eight
+run states**, so four arms of `run-progress` had never been rendered by it and an English
+string in any of them would have passed. The guard was sound and **blind**.
+
+`W32-SEE`'s own first mutation had died the same way, for the same reason, one wave earlier.
+**Twice is a pattern**: when a mutation reddens nothing, the first hypothesis should be
+missing coverage, not a weak assertion.
+
+And the vacuity check counting those renders was itself `W30-LISTS`'s defect — `SCREENS.length
+* 7 + 1`, a hard-coded count that goes red when the matrix grows and teaches the next reader
+to update the literal. It is a relationship now, with both factors asserted non-trivial.
+
+Check: `grep -n "expects_rendered" tests/e2e/test_pc01_journey_conformance.py` — the open half.
 
 ### D-54 — `web/src/_app/**` and `web/src/shared/lib/**` had no owner, and both held reviewer-facing defects
 
