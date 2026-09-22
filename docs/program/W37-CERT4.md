@@ -445,6 +445,110 @@ a frozen contract.
 **Verdict: `holds`.** Stacks: the owner's stand for the five refusals; this session's own
 stack for the outage and its control.
 
+#### Criterion 10 — `reset.sh` dumps, wipes and re-initialises; the dump restores
+
+> *"`reset.sh` dumps, wipes and re-initialises; the app comes back empty and working; the dump
+> restores the wiped state."*
+
+**This session's own stack, entirely.** The owner's stand was never a candidate for this
+criterion and was not touched by it.
+
+**The guards first — seven refusals, each `exit 3`, each read from `$?` after a redirect to a
+file and never through a pipe** (`/root/w37-logs/cert4-reset-guards.log`):
+
+| what was typed | exit |
+|---|---|
+| no mode flag at all | 3 |
+| `--dry-run` and `--yes-destroy-everything` together | 3 |
+| no `--database` / `--bucket` | 3 |
+| a database that is not the configured one (`auditmanager_alpha` — **the owner's**) | 3 |
+| a bucket that is not the configured one (`auditmanager-alpha` — **the owner's**) | 3 |
+| an env file that is not there | 3 |
+| an unrecognised option | 3 |
+
+Two of those seven are the guard that would have stopped this session wiping the owner's
+stand by typing its names, and they were driven with the owner's actual names.
+
+**The rehearsal.** `--dry-run`, **exit 0**. 17 base tables listed by name with their counts,
+**`total: 111 rows in 17 base tables (and 1 view listed above, projecting rows already in that
+number)`** — `W26-OPS`'s `D-39` repair, which moved this criterion from an exception to `holds`
+at `ac7c348`, is still in place and was re-read rather than assumed. 11 objects listed exactly
+by key, size and time. Nothing was touched.
+
+**The cycle.** `--yes-destroy-everything`, **exit 0**.
+
+```
+dumping into infra/deploy/dumps/auditmanager-w37cert4-20260922T150754Z
+object_attrs: recorded 11 objects
+dump verified -- database.dump readable, 11/11 objects mirrored
+   ... drop, recreate, migrate to 0006_app_user, purge, re-initialise private ...
+bucket-init: Access permission for `local/auditmanager-w37cert4` is `private`
+```
+
+The dump directory holds `database.dump` (103434 bytes), `objects/`, `objects.attrs` and
+`objects.stat.json`. It is git-ignored (`.gitignore:35`) and was removed afterwards.
+
+**Empty and working — in the SAME api process, proved and not asserted.** The api container's
+id was `e8b617bad7fe` before the wipe and `e8b617bad7fe` after it: no restart.
+
+- `POST /auth/token` with `admin`/`password` mints a credential — the seeded account came back
+  with the migrations, and the migration logged its own warning about the default password;
+- `GET /projects` → **0 projects**;
+- a project was created, and `ar_baseline.pdf` uploaded → `201`, a new version,
+  58978 bytes, `6d53674f…`. **Empty *and* working.**
+
+**The restore.** `--restore` with the **relative** path — the shape `D-31` broke on — **exit 0**,
+`restored 11 objects`.
+
+The census taken after the restore **diffs to nothing** against the census taken before the
+wipe:
+
+```
+$ diff /root/w37-logs/cert4-census-prewipe.txt /root/w37-logs/cert4-census-restored.txt
+THE RESTORED STATE DIFFS TO NOTHING AGAINST THE PRE-WIPE CENSUS
+```
+
+and the post-wipe project that existed between the two is gone, which is the other half of
+"the dump restores the wiped state".
+
+**The bytes, and the write-back proof.** `GET /versions/{uid}/content` after the restore
+returns 58978 bytes whose sha256 is `6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f` —
+the version's declared digest. Re-uploading exactly those bytes **after** the restore answers
+`201` and not `409`, with a new `version_uid`: the restored instance is writable, not a
+read-only replay.
+
+**Verdict: `holds`.** Unchanged from `ac7c348`, re-taken end to end at this tree.
+
+## 3a. Anti-vacuity: can the thing that certifies criterion 2 fail?
+
+Two sweeps, because criterion 2 has two instruments.
+
+**The conformance engine** — three plants into the *served* document, three reds, one green
+control. Table in criterion 1 above.
+
+**The authorization seam.** Criterion 2's second clause is the verdict that moved, and it rests
+on `src/auditmanager/api/security.py`. `make mutation-copy MUT=/root/w37cert4-mut`, the copy
+proved to be the imported tree (`auditmanager.api.security.__file__` resolves under the copy),
+`PYTHONDONTWRITEBYTECODE=1` and `__pycache__` cleared between cases (§10.2), baseline green
+first. Suites: `tests/integration/api/test_authorization.py`, `tests/integration/auth`,
+`tests/integration/composition/test_api_token_channel.py`.
+
+| | mutation | result |
+|---|---|---|
+| **CTRL** | *unmutated copy* | **77 passed** |
+| **M1** | `verify()` accepts every credential | **RED** — the suite refuses to collect: *"this case is only a case if the credential really has expired"* |
+| **M2** | `UNAUTHENTICATED_OPERATIONS` also holds `listProjects` | **RED** — 15 failed |
+| **M3** | the expiry check removed | **RED** — same collection-time precondition |
+| **M4** | `hmac.compare_digest` → `!=` | **GREEN — BLIND** |
+| **M5** | an unreadable route is **exempted** instead of guarded | **GREEN — BLIND** |
+| **M6** | an empty deployment secret derives a key anyway | **RED** — 3 failed |
+| **REV** | reverted | **77 passed** |
+
+**Four of six redden, two are blind, and the answer the brief asks for is: sound on the
+substance, blind on two stated properties.** Both blind spots are written up as findings
+below. The sweep did not manufacture a red — the baseline and the revert are both 77 green on
+the same copy.
+
 ## 4. Findings
 
 *pending*
