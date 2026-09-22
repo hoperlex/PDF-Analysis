@@ -29,7 +29,15 @@ MODEL_ID_ENV: Final[str] = "AUDITMANAGER_MODEL_ID"
 COST_CEILING_ENV: Final[str] = "AUDITMANAGER_RUN_COST_CEILING_USD"
 API_KEY_ENV: Final[str] = "ANTHROPIC_API_KEY"
 
-#: `T-6`'s static alpha credential, given a configuration channel by `W14-PKG`.
+#: The deployment secret of `T-6`'s seam, given a configuration channel by `W14-PKG`.
+#:
+#: **What it means changed in wave 34 and its name did not.** Until `W34-API` this value
+#: *was* the credential: a caller presented it and the seam compared. It is now the secret
+#: the seam derives its signing key from (``api/security.py``,
+#: :func:`~auditmanager.api.security.derive_signing_key`), and its literal value is no
+#: longer accepted as a bearer credential by anything. A deployment therefore keeps one
+#: configured name and gains no second secret -- and stops honouring the string its
+#: runbook published, which is the point rather than a side effect.
 #:
 #: ``api/security.py`` reads this same name out of the mapping ``create_app(environ=...)``
 #: carries, and spells it there as ``API_TOKEN_VARIABLE``. It is spelled again here rather
@@ -80,6 +88,9 @@ class AppSettings:
     proxy_model: str
     run_cost_ceiling_usd: float
     api_key: str | None
+    #: The deployment secret the credential signer is derived from; see
+    #: :data:`API_TOKEN_ENV`. Still required, still refused when empty, and no longer a
+    #: credential anybody presents.
     api_token: str
 
     @property

@@ -36,9 +36,11 @@ from auditmanager.api.schemas.documents import DocumentVersionView
 from auditmanager.api.schemas.findings import FindingDetailView, FindingView
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.runs import RunStatusView
+from auditmanager.api.security import IssuedCredential
 
 __all__ = [
     "AppendedDecision",
+    "CredentialPort",
     "CsvExportPort",
     "DecisionPort",
     "DocumentPort",
@@ -274,4 +276,35 @@ class CsvExportPort(Protocol):
         ``partial`` run **is** exported, with the degraded state carried explicitly in
         the ``run_state`` column. ``partial_result_not_publishable`` is never emitted.
         Nothing is created, so a repeat returns byte-identical bytes.
+        """
+
+
+@runtime_checkable
+class CredentialPort(Protocol):
+    """``issueToken``. Produced by `W34-API`'s adapter over `W34-DOM`'s user repository.
+
+    One method, and deliberately not three. The port cannot read a password digest, cannot
+    write one, cannot list users and cannot revoke a credential: everything it offers is
+    "here is a login and a password, mint a credential or do not". Registration, password
+    change and revocation are the next piece of work, and a port that guessed at their
+    shape now would be a contract nobody agreed to.
+
+    The token is minted **behind** this port rather than in the router, because minting
+    needs the deployment's signing key and a router that held one would be a router that
+    reads configuration -- which is the composition root's job and nobody else's.
+    """
+
+    def issue(self, *, login: str, password: str) -> IssuedCredential | None:
+        """A credential for the subject these credentials name, or ``None``.
+
+        ``None`` covers an unknown login, a wrong password, and a login this deployment
+        would never have stored. The three are one answer on purpose: two answers would let
+        anyone with the exchange form enumerate which accounts exist. The implementation is
+        expected to spend comparable work on all three, because a timing difference is the
+        same oracle with extra steps.
+
+        A ``DomainError`` is for the cases that are *not* a refused credential -- a database
+        that cannot be reached, a stored credential this deployment cannot parse. Reporting
+        one of those as "wrong password" would hide a defect behind the most plausible
+        explanation available, which is the silent fallback `AGENTS.md` section 4 forbids.
         """

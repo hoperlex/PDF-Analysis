@@ -1,4 +1,4 @@
-"""The surface is exactly the twelve operations the frozen document declares.
+"""The surface is exactly the sixteen operations the frozen document declares.
 
 Asserted **against the document**, never against a list written out here. A list in a
 test is a second declaration that can drift from the first, and the whole reason
@@ -41,7 +41,7 @@ def test_the_router_declares_exactly_the_frozen_operations(
     )
 
 
-def test_the_document_declares_fifteen_and_the_router_implements_fifteen(
+def test_the_document_declares_sixteen_and_the_router_implements_sixteen(
     router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     """The count is checked separately from the set.
@@ -50,11 +50,12 @@ def test_the_document_declares_fifteen_and_the_router_implements_fifteen(
     the document is sealed. This is the assertion that notices that.
 
     **Twelve until the `R-5` reseal of 2026-09-18**, which added `listDocuments`,
-    `listVersions` and `listRuns`. The number moved because an owner ruling moved it;
-    nothing else may move it.
+    `listVersions` and `listRuns`; **fifteen until `W34-CONTRACT`**, which added
+    `issueToken`, the credential exchange. The number moved because an owner ruling moved
+    it; nothing else may move it.
     """
-    assert len(declared_operations(openapi_document)) == 15
-    assert len(router.routes) == 15
+    assert len(declared_operations(openapi_document)) == 16
+    assert len(router.routes) == 16
 
 
 def test_every_declared_operation_is_reachable(
