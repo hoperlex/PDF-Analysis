@@ -744,16 +744,25 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
  * label back to English and it stayed green again. **A guard that legitimises the class it
  * was built to catch is worse than no guard, because its silence is read as coverage.**
  *
- * These four schemas are the ones the ruling reaches. The others stay permitted and each for
- * a stated reason: `ErrorCode` and `StageId` are identifiers a reviewer is deliberately shown
- * beside a sentence -- `terminal-reason.ts` renders the code AND its meaning; `CostBasis` and
+ * **`StageId` joined them in wave 35, and the argument that kept it out was mine and was
+ * wrong.** When the four above were removed I left `StageId` permitted, on the reasoning that
+ * a stage id is an identifier a reviewer is deliberately shown beside a sentence. That is true
+ * of `terminal_reason`, where `terminal-reason.ts` renders the code AND its meaning. It was
+ * false of the stage table, where `<code>{row.stageId}</code>` was the ENTIRE first column and
+ * no sentence accompanied any row -- so this allowlist excused the largest block of
+ * untranslated text on the run screen, and `D-62` had to be opened by a person reading the
+ * screen because the guard could not see it. `STAGE_LABELS` now names the nine stages and the
+ * contract value keeps its home in `data-stage-id`.
+ *
+ * The others stay permitted and each for a stated reason: `ErrorCode` is the identifier case
+ * that really does hold -- the code is rendered next to its meaning -- and `CostBasis` and
  * `DecisionEventType` are not rendered as bare words today, and forbidding a value nothing
  * renders would be a claim this guard cannot support.
  *
  * `visibleText()` reads text nodes and four attributes and **never `data-*`**, so the machine
  * value keeps its home and only the rendered word is judged.
  */
-const TRANSLATED_SCHEMAS = ['RunState', 'StageStatus', 'Verdict', 'FindingCategory'] as const;
+const TRANSLATED_SCHEMAS = ['RunState', 'StageStatus', 'Verdict', 'FindingCategory', 'StageId'] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
   const openapi = readJson<OpenApi>(CONTRACT_PATH);
@@ -782,7 +791,7 @@ describe('the guard reads a contract rather than a list of words', () => {
     // narrowing the allowlist in silence.
     // Still permitted as visible text, and each for a stated reason: identifiers a reviewer
     // is deliberately shown, and modes nothing renders as a bare word.
-    for (const value of ['recorded', 'live', 'text_analysis', 'analysis_failed', 'accept']) {
+    for (const value of ['recorded', 'live', 'analysis_failed', 'accept']) {
       expect(VOCABULARY.has(value), `${value} is not in the contract's enums`).toBe(true);
     }
     // NO LONGER permitted as visible text, because the owner ruled them translated. The
@@ -791,7 +800,12 @@ describe('the guard reads a contract rather than a list of words', () => {
     // would make the first half red rather than silently re-permitting the word.
     for (const value of ['published', 'partial', 'failed', 'cancelled', 'queued', 'running',
       'validating', 'accepted', 'rejected', 'pending', 'needs_manual_review',
-      'internal_contradiction', 'explicit_placeholder', 'succeeded', 'skipped']) {
+      'internal_contradiction', 'explicit_placeholder', 'succeeded', 'skipped',
+      // `StageId`, wave 35. All nine, so a schema that lost a member is red here rather
+      // than quietly re-permitting the word on a screen.
+      'source_preparation', 'page_geometry_extraction', 'document_context_build',
+      'text_analysis', 'block_analysis', 'finding_merge', 'finding_review',
+      'finding_correction', 'norm_verification']) {
       expect(TRANSLATED.has(value), `${value} left the translated schemas`).toBe(true);
       expect(VOCABULARY.has(value), `${value} is permitted as visible text again`).toBe(false);
     }
@@ -832,8 +846,11 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     // a verdict never redden. Under the 2026-09-22 ruling they must, so they moved to the
     // case below rather than being deleted -- a control that quietly loses a case is how a
     // guard stops proving what its name says.
+    // `analysis_failed` is an `ErrorCode` and stays permitted; `text_analysis` was here
+    // beside it until wave 35 and has moved to the case below, because a stage id is now
+    // translated. A control that quietly loses a case is how a guard stops proving what its
+    // name says, so it moved rather than being deleted.
     expect(unexplainedLatin('analysis_failed', VOCABULARY)).toEqual([]);
-    expect(unexplainedLatin('text_analysis', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin(`prj_${ULID}`, VOCABULARY)).toEqual([]);
     expect(unexplainedLatin(SHA, VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('application/pdf', VOCABULARY)).toEqual([]);
@@ -853,6 +870,10 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('needs_manual_review', VOCABULARY)).toEqual(['needs', 'manual', 'review']);
     expect(unexplainedLatin('→ accepted', VOCABULARY)).toEqual(['accepted']);
     expect(unexplainedLatin('internal_contradiction', VOCABULARY)).toEqual(['internal', 'contradiction']);
+    // `D-62`: the stage table's whole first column. `analysis` alone is already an offence
+    // below, so this also shows the compound is not teaching the guard a bare word.
+    expect(unexplainedLatin('text_analysis', VOCABULARY)).toEqual(['text', 'analysis']);
+    expect(unexplainedLatin('source_preparation', VOCABULARY)).toEqual(['source', 'preparation']);
     // And the machine value keeps its home: `visibleText` reads text nodes and four
     // attributes and never `data-*`, so a badge carrying its contract value is untouched.
     expect(visibleText('<span data-run-state="published">Опубликован</span>')).toEqual([

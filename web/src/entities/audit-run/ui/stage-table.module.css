@@ -1,0 +1,98 @@
+/*
+ * The stage table's styling layer.
+ *
+ * `D-62`: this table was twelve `style={{…}}` attributes and not one token, so it reached
+ * neither `W31-STYLE`'s token set nor `W33-THEME`'s second palette — on the dark theme it
+ * rendered in the browser's defaults on a dark surface, which is the most visible thing an
+ * expert meets on the run screen. No guard saw it, because a stylesheet is what a suite of
+ * rendering tests structurally cannot see.
+ *
+ * Every colour below is a token read. Nothing here declares a token: `globals.css` holds
+ * both palettes and a module that redefined one would be the defect that architecture
+ * exists to prevent (`styling-layer.test.ts` asserts both).
+ *
+ * The quiet ink is `--am-ink-muted` and never `--am-ink-soft`. `W32-CONTRAST` §3 measured
+ * the third ink level as spent: AA on the darkest surface it carries text over caps it at
+ * 1.10:1 from muted, so reaching for it to make a column quieter buys no visible step and
+ * spends a token whose separation the contrast guard asserts stays where it is.
+ */
+
+.scroller {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--am-text-md);
+  line-height: var(--am-leading-base);
+  color: var(--am-ink);
+}
+
+.table th {
+  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap-sm) 0;
+  border-bottom: 1px solid var(--am-line);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+  letter-spacing: var(--am-tracking-caps);
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap-sm) 0;
+  border-bottom: 1px solid var(--am-grid-line);
+  vertical-align: top;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+/*
+ * The ordinal. It numbers the sequence PC-01 schedules and nothing else — a stage the run
+ * reported outside that schedule carries `—` in this column, because the contract's nine
+ * stages fork and a position for one of them would be an invention. Tabular figures so the
+ * column reads as a column.
+ */
+.ordinal {
+  width: 1%;
+  color: var(--am-ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.name {
+  font-weight: 500;
+}
+
+/*
+ * What the stage waits for, under its name. This is the one thing legacy's pipeline of
+ * connected buttons has that a table does not, and it is the half that survives a fork:
+ * `finding_merge` waits for two stages and says so, where an arrow would have to be drawn.
+ */
+.dependency {
+  display: block;
+  margin-top: 2px;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  line-height: var(--am-leading-tight);
+}
+
+/* A stage the run reported that PC-01 does not schedule, and the not-yet-reported status. */
+.aside {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.elapsed {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.instant {
+  color: var(--am-ink-muted);
+  white-space: nowrap;
+}

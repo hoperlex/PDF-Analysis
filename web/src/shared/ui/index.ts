@@ -27,6 +27,8 @@ export { STATE_LABELS, RunStateBadge } from './run-state-badge';
 export type { StageStatusBadgeProps } from './stage-status-badge';
 export { StageStatusBadge } from './stage-status-badge';
 
+export { STAGE_LABELS } from './stage-label';
+
 export type { PageShellProps } from './page-shell';
 export { PageShell } from './page-shell';
 

@@ -35,6 +35,8 @@
  * cannot sit here unnoticed, and a new failure cannot hide behind one.
  */
 
+/// <reference types="vite/client" />
+
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,12 +58,61 @@ import {
   thresholdFor,
   unsupported,
 } from './contrast';
-import type { Occurrence, Theme, TokenName } from './contrast';
+import type { Occurrence, Rule, Theme, TokenName } from './contrast';
 import { screens } from './screens';
 
 const WEB = fileURLToPath(new URL('../../..', import.meta.url));
 const GLOBALS = join(WEB, 'src', 'app', 'globals.css');
-const MODULES = [join(WEB, 'src', 'widgets', 'run-progress', 'ui', 'run-progress.module.css')];
+
+/**
+ * Every collocated CSS module in the tree, FOUND rather than listed — and rewritten into
+ * the class names the markup actually carries.
+ *
+ * TWO defects are closed here and the second is the one that mattered.
+ *
+ * **The list.** `MODULES` was a literal array of one: `run-progress.module.css`, the only
+ * module that existed when this file was written. A second landed one wave later
+ * (`project-sections.module.css`, `W33-SECT`) and the census did not read it — the
+ * hand-maintained-subset shape `W30-LISTS` closed eighteen instances of, standing in for a
+ * set the filesystem decides. `import.meta.glob` is the derivation; `styling-layer.test.ts`
+ * has always walked for the same files.
+ *
+ * **The names.** A CSS module's class names are SCOPED at build time: the module declares
+ * `.ordinal` and the markup carries `class="_ordinal_b1553c"`, with a different suffix per
+ * file. `parseRules` reads the authored file, so every module selector this census parsed
+ * matched **no element ever** — the cascade half of the measurement was empty for modules,
+ * and the only module pair that ever reached the register did so through `declaredPairs`,
+ * which needs `color` and `background` in one rule. So the sentence "the census crosses
+ * MODULES with the rendered markup" was false for the whole of `W32-CONTRAST` and
+ * `W33-THEME`, and `project-sections.module.css`'s own header — *"a colour declared in a
+ * collocated module is a colour that census cannot see"* — was **right**, for a deeper
+ * reason than the array. A session declined the architecture `globals.css` promises because
+ * of it.
+ *
+ * The scoped name is read from the module's own export rather than reconstructed: the
+ * mapping is the bundler's, and a guard that guessed its format would be measuring its own
+ * guess. Scoping four module rules into the cascade takes the census from 118 pairs to 122
+ * and introduces no failure in either palette.
+ */
+const MODULE_EXPORTS = import.meta.glob('../../../src/**/*.module.css', { eager: true }) as Record<
+  string,
+  { readonly default: Record<string, string> }
+>;
+
+/** One module's text, with every class selector rewritten to the name the markup carries. */
+function scopedCss(relative: string): string {
+  const scope = (MODULE_EXPORTS[relative] as { readonly default: Record<string, string> }).default;
+  const css = readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8');
+  // A class selector only: the character after the dot must begin an identifier, so
+  // `0.35rem` and `82ch` are untouched.
+  return css.replace(/\.([a-zA-Z_][A-Za-z0-9_-]*)/g, (_match, name: string) => `.${scope[name]}`);
+}
+
+const MODULES = Object.keys(MODULE_EXPORTS).sort();
+
+function moduleRules(): Rule[] {
+  return MODULES.map((relative) => parseRules(scopedCss(relative), relative)).flat();
+}
 
 // --------------------------------------------------------------------------- the register
 
@@ -161,10 +212,7 @@ function isRegistered(key: string, theme: Theme): boolean {
 function everyPair(theme: Theme): Map<string, Occurrence & { sites: string[] }> {
   const globals = readFileSync(GLOBALS, 'utf8');
   const tokens = palette(globals, theme);
-  const rules = [
-    ...parseRules(globals, 'globals.css'),
-    ...MODULES.map((path) => parseRules(readFileSync(path, 'utf8'), path)).flat(),
-  ];
+  const rules = [...parseRules(globals, 'globals.css'), ...moduleRules()];
   const all = census(screens(), rules, tokens);
   for (const [key, occurrence] of declaredPairs(rules)) {
     if (!all.has(key)) all.set(key, occurrence);
@@ -279,6 +327,46 @@ describe('the census is taken over rendered screens, not over a list', () => {
     const properties = [...(declined[0] as (typeof declined)[number]).declarations.keys()];
     expect(properties.length).toBeGreaterThan(0);
     expect(properties.filter((name) => !name.startsWith('--am-'))).toEqual([]);
+  });
+
+  it('reads a collocated module through the CASCADE, not only through `declaredPairs`', () => {
+    /*
+     * Anti-vacuity for the scoping above, and the proof that it was not cosmetic.
+     *
+     * A module declares `.ordinal` and the markup carries `_ordinal_<hash>`. Parsing the
+     * authored file — which is what this census did for two waves — produces selectors that
+     * match no element, so a module contributed a pair only when one rule declared both
+     * `color` and `background` and `declaredPairs` could read it without a screen. This
+     * measures both ways and asserts the difference, so a change that silently went back to
+     * the authored names is red rather than merely quieter.
+     */
+    const globals = readFileSync(GLOBALS, 'utf8');
+    const tokens = palette(globals, 'light');
+    const authored = MODULES.map((relative) =>
+      parseRules(readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8'), relative),
+    ).flat();
+    const base = parseRules(globals, 'globals.css');
+    const unscoped = census(screens(), [...base, ...authored], tokens);
+    const scoped = census(screens(), [...base, ...moduleRules()], tokens);
+    const gained = [...scoped.keys()].filter((key) => !unscoped.has(key));
+    expect(
+      gained.length > 0,
+      'Scoping the module class names gains no pair. Either no module declares a colour ' +
+        'any more, or the rewrite has stopped matching the markup.',
+    ).toBe(true);
+    // And the module rules really are class rules: every module names at least one class,
+    // so a module file that parsed to nothing is red rather than trivially agreeing.
+    expect(MODULES.length).toBeGreaterThan(0);
+    for (const relative of MODULES) {
+      expect({ relative, rules: parseRules(scopedCss(relative), relative).length > 0 }).toEqual({
+        relative,
+        rules: true,
+      });
+      expect({ relative, scoped: /\._[A-Za-z]/.test(scopedCss(relative)) }).toEqual({
+        relative,
+        scoped: true,
+      });
+    }
   });
 
   it('finds the pairs a reading of the token block alone cannot', () => {

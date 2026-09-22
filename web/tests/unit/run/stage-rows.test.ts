@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { RunState, RunStatus, StageState } from '@/shared/api';
 import { STAGE_ID_VALUES } from '@/shared/api';
-import { PC01_STAGE_IDS, stageRows } from '@/entities/audit-run';
+import { PC01_STAGE_IDS, STAGE_DEPENDS_ON, stageRows } from '@/entities/audit-run';
 
 function reading(state: RunState, stages: StageState[]): RunStatus {
   return {
@@ -43,6 +43,26 @@ describe('the four stages PC-01 schedules', () => {
       expect(row.status).toBeNull();
       expect(row.expected).toBe(true);
     }
+  });
+
+  it('numbers the scheduled stages from one, in the order they run', () => {
+    // `D-62`: the order was in the data and not in the markup. Row order IMPLIED a
+    // sequence and asserted nothing, so the table now carries the position as a value.
+    const rows = stageRows(reading('queued', []));
+    expect(rows.map((r) => r.ordinal)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('carries each stage\u2019s declared dependency, which is what survives a fork', () => {
+    const rows = stageRows(reading('queued', []));
+    expect(rows.map((r) => [...r.dependsOn])).toEqual([
+      [],
+      ['source_preparation'],
+      ['page_geometry_extraction'],
+      ['document_context_build'],
+    ]);
+    // From the one map, so a dependency cannot be right in the table and wrong in the
+    // model. `stage-vocabulary.guard.test.ts` holds that map to the analysis contract.
+    for (const row of rows) expect(row.dependsOn).toBe(STAGE_DEPENDS_ON[row.stageId]);
   });
 });
 
@@ -91,6 +111,12 @@ describe('a stage PC-01 does not schedule is shown, and marked as such', () => {
     expect(extra?.expected).toBe(false);
     expect(extra?.status).toBe('partial');
     expect(extra?.errorCode).toBe('required_norm_unavailable');
+    // NOT numbered. The contract's nine stages fork -- `norm_verification` waits on
+    // `finding_merge`, as does `finding_review` -- so a position for a stage outside the
+    // schedule would assert an order the registry does not declare. It states its
+    // dependency instead, which stays true whatever else the run scheduled.
+    expect(extra?.ordinal).toBeNull();
+    expect(extra?.dependsOn).toEqual(['finding_merge']);
   });
 
   it('does not duplicate a stage that is both expected and reported', () => {

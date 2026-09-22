@@ -13,13 +13,50 @@
  * finish in tens of milliseconds, so Started and Finished are the same string on a real
  * run and the pair carries no information at all. The elapsed column is what makes the
  * two columns a measurement rather than a decoration.
+ *
+ * **Why it is a table and not a pipeline of connected buttons.** The owner asked; the
+ * answer stands and `D-62` records it. A PC-01 run is over in 0.4–9.1 seconds, so nobody
+ * watches a progress pipeline — the table is what is read afterwards, and it is the shape
+ * that supports "which stage took longest" and "which stage never ran". What `D-62`
+ * conceded is everything below.
+ *
+ * **What this file gained in wave 35, and why each is not cosmetic:**
+ *
+ *   1. **A styling layer.** Twelve `style={{…}}` attributes and not one token meant the
+ *      table reached neither `W31-STYLE`'s tokens nor `W33-THEME`'s second palette, so on
+ *      the dark theme it rendered in the browser's defaults on a dark surface. It is now a
+ *      collocated module, which is the architecture `globals.css` has promised since the
+ *      bootstrap.
+ *
+ *   2. **Russian stage names.** It rendered `<code>{row.stageId}</code>` — the first column
+ *      of the one table on the run screen was `source_preparation`,
+ *      `page_geometry_extraction`, `document_context_build`, `text_analysis`, shown to a
+ *      Russian auditor with no sentence beside any of them. `STAGE_LABELS` names them; the
+ *      contract value keeps its home in `data-stage-id`, which is what the browser journey
+ *      and `PA-01` criterion 4 read.
+ *
+ *   3. **The order, which the data held and the markup threw away.** `PC01_STAGE_IDS` is
+ *      an ordered tuple and `stageRows` walks it, so row order *implied* a sequence and
+ *      asserted nothing. Two columns now state it: an ordinal over the stages PC-01
+ *      schedules, and each stage's declared dependency under its name.
+ *
+ *      **The ordinal is deliberately not over the nine.** `stage-registry.json` forks:
+ *      `text_analysis` and `block_analysis` both wait on `document_context_build` and have
+ *      no order between them, `finding_merge` joins them, and `finding_review` and
+ *      `norm_verification` fork again. Numbering a graph is a lie, so a stage PC-01 does
+ *      not schedule shows `—` here and states its dependency instead. That the four
+ *      scheduled stages ARE a chain is proven against the registry by
+ *      `web/tests/guards/stage-vocabulary.guard.test.ts`, not assumed — if a later wave
+ *      schedules a forked stage, that guard reddens before this column can mislead anyone.
  */
 
-import type { StageStatus } from '@/shared/api';
+import type { StageId, StageStatus } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
 
 import { elapsedMs, formatElapsed } from '../model/run-presentation';
-import { StageStatusBadge } from '@/shared/ui';
+import { STAGE_LABELS, StageStatusBadge } from '@/shared/ui';
+
+import styles from './stage-table.module.css';
 
 import type { StageRow } from '../model/run-presentation';
 
@@ -35,42 +72,66 @@ function StatusCell({
   readonly errorCode: string | null;
 }) {
   if (status === null) {
-    return <em data-stage-status="not-reported">не начинался</em>;
+    return (
+      <em className={styles.aside} data-stage-status="not-reported">
+        не начинался
+      </em>
+    );
   }
   return <StageStatusBadge status={status} errorCode={errorCode} />;
 }
 
+/**
+ * What the stage waits for, in the reader's language.
+ *
+ * The machine values stay in `data-depends-on`; the sentence carries their labels. A stage
+ * with no dependency is the entry point and says so rather than rendering an empty cell,
+ * which would read as "not stated".
+ */
+function DependencyNote({ dependsOn }: { readonly dependsOn: readonly StageId[] }) {
+  return (
+    <span className={styles.dependency} data-depends-on={dependsOn.join(' ') || 'none'}>
+      {dependsOn.length === 0
+        ? 'первый этап'
+        : `после: ${dependsOn.map((stageId) => STAGE_LABELS[stageId]).join(', ')}`}
+    </span>
+  );
+}
+
 export function StageTable({ rows }: StageTableProps) {
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+    <div className={styles.scroller}>
+      <table className={styles.table}>
         <thead>
           <tr>
-            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Этап</th>
-            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Статус</th>
-            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Начало</th>
-            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Окончание</th>
-            <th style={{ textAlign: 'left', padding: '0.35rem 0.75rem 0.35rem 0' }}>Длительность</th>
+            <th scope="col">№</th>
+            <th scope="col">Этап</th>
+            <th scope="col">Статус</th>
+            <th scope="col">Начало</th>
+            <th scope="col">Окончание</th>
+            <th scope="col">Длительность</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.stageId} data-stage-id={row.stageId}>
-              <td style={{ padding: '0.35rem 0.75rem 0.35rem 0' }}>
-                <code>{row.stageId}</code>
-                {row.expected ? null : <em> (на этом этапе не планируется)</em>}
+              <td className={styles.ordinal} data-stage-ordinal={row.ordinal ?? 'unscheduled'}>
+                {row.ordinal ?? '—'}
               </td>
-              <td style={{ padding: '0.35rem 0.75rem 0.35rem 0' }}>
+              <td>
+                <span className={styles.name}>{STAGE_LABELS[row.stageId]}</span>
+                {row.expected ? null : (
+                  <span className={styles.aside}> (на этом этапе не планируется)</span>
+                )}
+                <DependencyNote dependsOn={row.dependsOn} />
+              </td>
+              <td>
                 <StatusCell status={row.status} errorCode={row.errorCode} />
               </td>
-              <td style={{ padding: '0.35rem 0.75rem 0.35rem 0' }}>
-                {formatInstant(row.startedAt)}
-              </td>
-              <td style={{ padding: '0.35rem 0.75rem 0.35rem 0' }}>
-                {formatInstant(row.finishedAt)}
-              </td>
+              <td className={styles.instant}>{formatInstant(row.startedAt)}</td>
+              <td className={styles.instant}>{formatInstant(row.finishedAt)}</td>
               <td
-                style={{ padding: '0.35rem 0.75rem 0.35rem 0' }}
+                className={styles.elapsed}
                 data-stage-elapsed={elapsedMs(row.startedAt, row.finishedAt) ?? 'unknown'}
               >
                 {formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}
