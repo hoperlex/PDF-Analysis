@@ -19,7 +19,7 @@
  * one. The question has not been asked yet, which is different from the answer being none.
  */
 
-import type { DecisionEvent } from '@/shared/api';
+import type { DecisionEvent, DecisionEventType } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, LoadingState, NotApplicableState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
@@ -30,6 +30,25 @@ export interface DecisionHistoryProps {
   readonly isLoading?: boolean | undefined;
   readonly error?: ErrorStateProps | null | undefined;
 }
+
+/**
+ * Russian labels. Contract values stay in `data-event-type` and on the decision itself;
+ * see `RunStateBadge` for why the owner's ruling does not touch the machine value.
+ */
+const EVENT_TYPE_LABELS: Readonly<Record<DecisionEventType, string>> = {
+  accept: 'приём',
+  reject: 'отклонение',
+  comment: 'комментарий',
+  revoke: 'отзыв',
+};
+
+/*
+ * The local copy of `VERDICT_LABELS` that stood here is deleted, not merged. Two sessions
+ * repaired this widget within the hour; one exported the entity's table and imported it, the
+ * other wrote a second table with the same four values. Both render correctly TODAY, and that
+ * is exactly the failure this programme keeps finding: a second description maintained by
+ * hand with nothing tying it to the first. The entity owns the verdict vocabulary.
+ */
 
 export function DecisionHistory({ events, isLoading, error }: DecisionHistoryProps) {
   if (isLoading === true) return <LoadingState what="the decision history" />;
@@ -59,7 +78,14 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
             data-verdict={event.verdict ?? 'none'}
           >
             <p className="am-history__line">
-              <span className="am-history__type">{event.event_type}</span>
+              <span className="am-history__type">{EVENT_TYPE_LABELS[event.event_type]}</span>
+              {/*
+                * Two sessions reached this repair independently within the hour, from
+                * different directions: one rendering the screens for a UI overview, one
+                * teaching the language guard that contract vocabulary is translated. Both
+                * replaced the raw `event.verdict`; this keeps `data-verdict` as well, so the
+                * machine value has a home at THIS node and not only on the badge beside it.
+                */}
               {event.verdict !== null && event.verdict !== undefined ? (
                 <span className="am-history__verdict" data-verdict={event.verdict}>
                   {' → '}

@@ -121,7 +121,7 @@ export function EvidenceViewer({
           </button>
         ))}
         <span className="am-evidence__provider" data-provider-mode={observationProviderMode(observation)}>
-          {observationProviderMode(observation)}
+          {observationProviderMode(observation) === 'live' ? 'живой вызов' : 'из записи'}
         </span>
       </nav>
 
