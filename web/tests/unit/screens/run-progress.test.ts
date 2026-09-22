@@ -264,7 +264,9 @@ describe('the three terminals are three different claims', () => {
   it('cancelled published nothing and says so', () => {
     const markup = screen({ state: 'cancelled', published_finding_count: 0 });
     expect(markup).toContain('data-run-outcome="cancelled"');
-    expect(markup).toContain('Nothing was published.');
+    // Translated by `W33-SECT`; the claim is the same one and the machine value is
+    // still `data-run-outcome`, which is what an instrument reads.
+    expect(markup).toContain('Ничего не опубликовано.');
     expect(markup).not.toContain('Опубликованных находок');
   });
 

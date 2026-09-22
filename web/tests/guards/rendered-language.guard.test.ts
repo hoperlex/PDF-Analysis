@@ -793,24 +793,26 @@ describe('the guard renders the screens it claims to render', () => {
  * The list may only shrink. Nothing was added here and the assertion was not relaxed; the
  * both-directions check is what forced this edit, by refusing to stay green over a register
  * describing defects that no longer exist.
+ *
+ * RATCHET MOVED AGAIN, 2026-09-22, by `W33-SECT`. Nine entries deleted, each because the
+ * guard named it and demanded the deletion — not because a translation looked done:
+ *
+ *   Recorded: · Terminal reason: · The run terminated · . Nothing was published. ·
+ *   provider mode: · Загрузка: findings… · Загрузка: projects… · Загрузка: the finding… ·
+ *   the version-list sentence addressed to a developer
+ *
+ * All nine were in that session's own territory — `web/src/widgets`, `web/src/_pages` —
+ * and were repaired there in the same commit that deleted these lines. The two that
+ * remain are not: `Correlation id` is `shared/ui` and `features`, `Upload` is
+ * `features/upload-document`, and the second is additionally named as a control's text by
+ * `tests/e2e/pc01/journey/manifest.json`, so translating it moves a browser-journey handle
+ * and has to move both files at once.
+ *
+ * Nothing was added, no assertion was relaxed and no permission was widened.
  */
 const OUTSTANDING: readonly { readonly text: string; readonly module: string }[] = [
   { text: 'Correlation id', module: 'web/src/shared/ui/states.tsx:42, features/start-run/ui/start-run-control.tsx:63, features/upload-document/ui/upload-document-form.tsx:145' },
-  { text: 'Recorded:', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:178' },
-  { text: 'Terminal reason:', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:140' },
-  { text: 'The run terminated', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:137,159' },
-  { text: '. Nothing was published.', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:137,159' },
   { text: 'Upload', module: 'web/src/features/upload-document/ui/upload-document-form.tsx:117' },
-  { text: 'provider mode:', module: 'web/src/widgets/run-progress/ui/run-progress.tsx:264' },
-  { text: 'Загрузка: findings…', module: 'web/src/widgets/finding-list/ui/finding-list.tsx:63 (LoadingState what=)' },
-  { text: 'Загрузка: projects…', module: 'web/src/widgets/project-list/ui/project-list.tsx:24 (LoadingState what=)' },
-  { text: 'Загрузка: the finding…', module: 'web/src/_pages/review/ui/review-page.tsx:198 (LoadingState what=)' },
-  {
-    text:
-      'Одна версия на загрузку: этот экран не передаёт `uploadDocument` параметр ' +
-      '`document_uid`, поэтому каждая загрузка начина',
-    module: 'web/src/widgets/version-list/ui/version-list.tsx:7 — a sentence addressed to a developer, on a reviewer\u2019s screen',
-  },
 ];
 
 /**

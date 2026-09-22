@@ -195,7 +195,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
 
         <div className="am-review__detail">
           {selectedUid === null ? null : detailQuery.isPending ? (
-            <LoadingState what="the finding" />
+            <LoadingState what="выбранная находка" />
           ) : detailQuery.error !== null ? (
             <ErrorState
               {...(presentFailureOrNull(detailQuery.error, {

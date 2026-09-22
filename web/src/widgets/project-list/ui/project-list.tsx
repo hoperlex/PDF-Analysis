@@ -21,7 +21,7 @@ export function ProjectList() {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useProjectList(cursor);
 
-  if (query.isPending) return <LoadingState what="projects" />;
+  if (query.isPending) return <LoadingState what="проекты" />;
 
   if (query.isError) {
     const failure = classifyProjectListFailure(query.error);

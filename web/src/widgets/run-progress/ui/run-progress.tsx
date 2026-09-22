@@ -134,10 +134,10 @@ function Outcome({ status }: { readonly status: RunStatus }) {
       return (
         <div className={styles.outcome} data-run-outcome="failed">
           <p>
-            The run terminated <code>failed</code>. Nothing was published.
+            Прогон завершился как <code>failed</code>. Ничего не опубликовано.
           </p>
           <p>
-            Terminal reason:{' '}
+            Терминальная причина:{' '}
             {outcome.terminalReason === null ? (
               <em>не сообщено</em>
             ) : (
@@ -156,7 +156,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
     case 'cancelled':
       return (
         <p className={styles.outcome} data-run-outcome="cancelled">
-          The run terminated <code>cancelled</code>. Nothing was published.
+          Прогон завершился как <code>cancelled</code>. Ничего не опубликовано.
         </p>
       );
   }
@@ -175,7 +175,7 @@ function Recorded({ status }: { readonly status: RunStatus }) {
     <>
       <h2>Диагностические наблюдения</h2>
       <p>
-        Recorded:{' '}
+        Зарегистрировано:{' '}
         {diagnostics === null ? (
           <em data-diagnostic-observation-count="not-reported">не сообщено</em>
         ) : (
@@ -261,7 +261,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       <p className={styles.mode}>
         <RunStateBadge state={status.state} providerMode={badgeProviderMode(mode)} />
         <span data-provider-mode={mode}>
-          provider mode: <strong>{mode}</strong>
+          режим провайдера: <strong>{mode}</strong>
         </span>
       </p>
       <p>{providerModeCaption(mode)}</p>

@@ -60,7 +60,7 @@ export function FindingList({
   error,
   integrityFaults,
 }: FindingListProps) {
-  if (isLoading === true) return <LoadingState what="findings" />;
+  if (isLoading === true) return <LoadingState what="находки" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
 
   const total = countGrouped(groups);

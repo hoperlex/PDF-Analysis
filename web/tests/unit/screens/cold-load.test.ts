@@ -308,7 +308,14 @@ describe('the document screen asks the server on a cold load (D-16)', () => {
     // W18-SEAL section 2: uploadDocument declares no document_uid, so every upload starts
     // a new document. The screen states that rather than leaving a reviewer to wonder
     // whether a version went missing.
-    expect(markup).toContain('document_uid');
+    //
+    // W33-SECT restated the sentence for a reviewer: it used to name `uploadDocument` and
+    // `document_uid` on screen -- a developer's note on a reviewer's screen, which is the
+    // shape `R-18` forbids and the rendered-language ratchet had recorded. The CLAIM is
+    // what this case is about and the claim is unchanged, so it is asserted here rather
+    // than the transport's spelling of it.
+    expect(markup).toContain('каждая загрузка заводит новый документ');
+    expect(markup).toContain('ничего из загруженного не потеряно');
   });
 
   it('distinguishes an unknown document from a document with no version', () => {
