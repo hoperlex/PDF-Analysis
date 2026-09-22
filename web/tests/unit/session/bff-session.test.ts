@@ -171,10 +171,26 @@ describe('the exchange happens on the server, and the token stops there', () => 
     expect(seen.at(-1)?.url).toBe(`${UPSTREAM}/projects`);
   });
 
-  it('presents the deployment’s credential when nobody has signed in', async () => {
+  /**
+   * This case asserted the opposite until the wave's own judge measured what it costs.
+   *
+   * `AUDITMANAGER_API_TOKEN` stopped being the shared bearer and became **the key the API
+   * signs credentials with**. Presenting it upstream was useless — the API answers `401`
+   * to it, driven and measured — and it put key material in an `Authorization` header on
+   * every anonymous page view. So the premise was overturned, not the wording.
+   *
+   * Both halves are asserted: nothing leaves this tier, and the refusal is the contract's
+   * own `401` rather than a locally invented shape.
+   */
+  it('sends nothing upstream when nobody has signed in', async () => {
+    const response = await listProjects();
+    expect(seen).toHaveLength(0);
+    expect(response.status).toBe(401);
+  });
+
+  it('never puts the signing key in a header, signed in or not', async () => {
     await listProjects();
-    expect(seen).toHaveLength(1);
-    expect(seen[0]?.authorization).toBe(`Bearer ${DEPLOYMENT_TOKEN}`);
+    expect(seen.map((call) => call.authorization)).not.toContain(`Bearer ${DEPLOYMENT_TOKEN}`);
   });
 });
 

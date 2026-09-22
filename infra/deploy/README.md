@@ -23,7 +23,7 @@ down`. This is the deployed stack.
 
 | Path | What it is |
 |---|---|
-| `Dockerfile.api` | the fifteen operations under uvicorn, plus `T-3`'s health plane |
+| `Dockerfile.api` | the sixteen operations under uvicorn, plus `T-3`'s health plane |
 | `Dockerfile.web` | `npm run build`, then `next start` |
 | `serve.py` | the entry point: **one built application, two ports** |
 | `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, api, web, one proxy |
@@ -100,7 +100,7 @@ are reachable only on the compose network.
 ## `AUDITMANAGER_API_TOKEN` — read this before the first deployment
 
 The authorization seam of `T-6` is **fail-closed**. An application with no token
-configured answers `authentication_required` to every one of the fifteen operations, while
+configured answers `authentication_required` to every one of the sixteen operations, while
 `/healthz` and `/readyz` stay green because `T-3` puts them outside the authorized
 surface. From a browser that looks like a broken product rather than an unconfigured one.
 
@@ -118,8 +118,18 @@ Generate one per deployment and never reuse the example:
 python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
 ```
 
-Clients present it as `Authorization: Bearer <token>`. **The frontend has no branch for
-401** (`W13_CLOSURE.md` §7) — see `docs/program/reviews/W14-PKG.md` §7.
+> **Its meaning changed in wave 34, and the old sentence was dangerous.** This used to be
+> the shared bearer every client presented, and this paragraph used to say so. It is now
+> **the key the API signs reviewer credentials with**. An operator following the old
+> instruction would hand the signing key to every reviewer, and anyone holding it can mint
+> a credential for any subject. Nobody presents it. Nothing outside the API process needs
+> it. `JUDGE-SEC` raised this as blocking on wave 34's merge: the code changed and the
+> runbook did not, which is the shape where a document becomes an attack.
+
+Reviewers obtain a credential by logging in — `POST /auth/token` — and the web tier holds
+what the API mints, in the Node process, never in the browser. The 401 path now has a
+screen behind it rather than nothing (`W13_CLOSURE.md` §7 described the state before
+wave 34).
 
 ### Why the token is not in `.env`
 
@@ -136,7 +146,7 @@ rather than configure anything. `bootstrap/settings.py` records the same reasoni
 Two ports on the API container, from **one built application**:
 
 ```
-:8000   the fifteen operations, mounted by the proxy at /api/v1
+:8000   the sixteen operations, mounted by the proxy at /api/v1
 :8001   /healthz and /readyz — no credential, no product meaning, no contract
 ```
 

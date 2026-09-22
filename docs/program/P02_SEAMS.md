@@ -610,6 +610,7 @@ D-16).
 | `appendDecision` | `POST /findings/{finding_uid}/decisions` |
 | `listDecisionHistory` | `GET /findings/{finding_uid}/decisions` |
 | `exportRunCsv` | `GET /runs/{run_id}/export.csv` |
+| `issueToken` | `POST /auth/token` |
 | `listDocuments` | `GET /projects/{project_uid}/documents` |
 | `listVersions` | `GET /documents/{document_uid}/versions` |
 | `listRuns` | `GET /versions/{version_uid}/runs` |

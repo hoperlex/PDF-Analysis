@@ -307,7 +307,12 @@ class TokenSigner:
         return Subject(user_uid=subject_uid, login=login)
 
     def _tag(self, signed: str) -> bytes:
-        return hmac.new(self._key, signed.encode("ascii"), hashlib.sha256).digest()
+        # ``utf-8`` and not ``ascii``: a non-printable byte in the credential raised
+        # ``UnicodeEncodeError`` out of here, and the seam answered ``500 internal_error``
+        # instead of ``401``. That made the 500 an oracle -- it appeared only behind the
+        # ``am1`` prefix, so a caller could learn the credential format from the status
+        # code alone. Found by ``JUDGE-SEC`` driving raw bytes at the built application.
+        return hmac.new(self._key, signed.encode("utf-8"), hashlib.sha256).digest()
 
 
 def build_signer(environ: Mapping[str, str]) -> TokenSigner | None:

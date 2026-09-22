@@ -98,6 +98,8 @@ export const dynamic = 'force-dynamic';
 
 /** The first segment this tier answers itself. No contract path begins with it. */
 const SESSION_SEGMENT = 'session';
+/** The contract's token exchange. Reachable from this tier, never from a browser. */
+const EXCHANGE_SEGMENT = 'auth';
 
 /** The second segment that ends a session, so the two intents are two addresses. */
 const SESSION_END_SEGMENT = 'end';
@@ -190,6 +192,53 @@ function staleSession(request: Request): Response {
  * `D-18`'s rule is that a code is added to the contract by the contract's owner, never
  * invented at a seam.
  */
+/**
+ * The answer to a browser that asks for anything without a live session.
+ *
+ * **This replaces forwarding the deployment credential**, and the reason is that the
+ * credential changed meaning under this wave. `AUDITMANAGER_API_TOKEN` used to be the
+ * shared bearer every caller presented; it is now the **key the API signs credentials
+ * with**. Forwarding it was already useless — the API answers `401` to it, measured — and
+ * it put key material in an `Authorization` header on every anonymous page view, where a
+ * request dump, a debugging proxy or a future access log would keep it.
+ *
+ * `JUDGE-SEC` found both halves: the header goes out, and the answer is `401` anyway.
+ */
+function noSession(request: Request): Response {
+  return envelopeResponse(
+    401,
+    synthesizedEnvelope(
+      'authentication_required',
+      'Этот запрос требует входа. Откройте экран входа и войдите под своей учётной записью.',
+      false,
+      request.headers.get('x-correlation-id') ?? mintForwardCorrelationId(),
+    ),
+  );
+}
+
+/**
+ * The answer to a browser asking for the token exchange directly.
+ *
+ * The exchange is a contract path, so the catch-all forwarded it like any other and
+ * **returned the minted token to the page** — `JUDGE-SEC` drove it and got
+ * `200 {"token": …}` in a browser, which is the one thing this tier exists to prevent.
+ * The exchange still happens, through `/bff/v1/session`, where the token is held in the
+ * Node process and never serialised into an answer.
+ *
+ * `not_found` rather than a new code, for `D-18`'s reason: a seam does not invent codes.
+ */
+function noDirectExchange(request: Request): Response {
+  return envelopeResponse(
+    404,
+    synthesizedEnvelope(
+      'not_found',
+      'Этот путь недоступен из браузера. Вход выполняется через /bff/v1/session.',
+      false,
+      request.headers.get('x-correlation-id') ?? mintForwardCorrelationId(),
+    ),
+  );
+}
+
 function noSuchDoor(request: Request): Response {
   return envelopeResponse(
     404,
@@ -329,6 +378,7 @@ async function handle(request: Request, context: RouteContext): Promise<Response
   const segments = path ?? [];
 
   if (segments[0] === SESSION_SEGMENT) return ownDoor(request, segments);
+  if (segments[0] === EXCHANGE_SEGMENT) return noDirectExchange(request);
 
   let upstream: string;
   try {
@@ -344,14 +394,7 @@ async function handle(request: Request, context: RouteContext): Promise<Response
     return forwardWithCredential(request, segments, { upstream, token: held });
   }
 
-  let token: string;
-  try {
-    token = getApiToken();
-  } catch {
-    return unconfigured(request);
-  }
-
-  return forwardWithCredential(request, segments, { upstream, token });
+  return noSession(request);
 }
 
 export const GET = handle;
