@@ -163,8 +163,27 @@ def _get(router: Any, target: str) -> dict[str, Any]:
     assert response.status_code == 200, (target, response.status_code, response.content)
     return json.loads(response.content)
 
-#: `T-6`. The credential this module configures and presents, as a literal.
-_STATIC_TOKEN = "p02-journey-static-token"
+#: `T-6`. The deployment secret this module configures, as a literal; the credential it
+#: presents is minted from it below.
+_DEPLOYMENT_SECRET = "p02-journey-static-token"
+
+def _minted_credential(secret: str, login: str) -> str:
+    """A credential minted with this suite's deployment secret.
+
+    `W34-API` replaced the seam's body: the configured string is the signing material and
+    is no longer a credential. The subject is this suite's own -- what these cases are
+    about is behind the seam, not who the caller is.
+    """
+    from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
+
+    signer = build_signer({API_TOKEN_VARIABLE: secret})
+    assert signer is not None, "this suite's own secret derives a signing key"
+    return signer.issue(
+        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991T", login=login)
+    ).token
+
+
+_STATIC_TOKEN = _minted_credential(_DEPLOYMENT_SECRET, "p02-query-suite")
 
 
 class _Built:
@@ -200,7 +219,7 @@ def _client(router: Any) -> Any:
     from auditmanager.api.security import API_TOKEN_VARIABLE
 
     app = create_asgi_app(
-        environ={API_TOKEN_VARIABLE: _STATIC_TOKEN}, application=_Built(router)
+        environ={API_TOKEN_VARIABLE: _DEPLOYMENT_SECRET}, application=_Built(router)
     )
     return TestClient(app, raise_server_exceptions=False)
 
