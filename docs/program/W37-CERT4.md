@@ -115,6 +115,166 @@ below bypass nginx entirely, from inside the containers:
 There is no TLS, no host and no certificate on this host. The second clause is stronger than it
 has ever been recorded and is stated above in full.
 
+### Criteria 3–7 — driven in a real Chromium process through the published origin
+
+One journey on the **owner's stand**, `http://127.0.0.1:31500`, in a headless Chromium
+(playwright-core 1.56.0, `chromium-1234`). Journals:
+`/root/w37-logs/cert4-browser/review-main.json`, `/root/w37-logs/cert4-browser/recon.json`.
+
+The journey now **begins at the sign-in screen**, which is new since `ac7c348`: `/login`,
+`#sign-in-login` = `admin`, `#sign-in-password` = `password`, a real `<form method="post">`.
+After it the browser holds one cookie:
+
+```
+am_session   HttpOnly=true   SameSite=Strict   Secure=false   Path=/   64 chars
+             carries the minted am1. token: NO
+```
+
+`Secure=false` is a consequence of criterion 2's first clause, not a separate defect: there
+is no TLS to set it over.
+
+**Zero `Authorization` headers left the browser** across the whole journey, and the only
+origin contacted was `http://127.0.0.1:31500` (plus the `blob:` the PDF viewer makes). The
+credential is held in the Node tier.
+
+#### Criterion 3 — a project, a real AR PDF, an immutable version, a verified private object
+
+> *"a project is created and a real AR PDF is uploaded through the browser, producing an
+> immutable version and a verified private object"*
+
+Created through the real controls: project `prj_01M34RWTX9GXAG69X21VZQ8TY4`, document
+`doc_01M34RWZ28C484W579CMVS2V4G`, version `ver_01M34RWZ29KMC4F60RSS5YH0N3`,
+`byte_size` 58978, `sha256`
+`6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f`, 8 pages.
+
+**Immutable — three independent readings, none inherited:**
+
+1. The frozen contract declares **only `get`** on every path that addresses a version:
+   `/versions/{version_uid}`, `/versions/{version_uid}/content`, `/versions/{version_uid}/runs`,
+   `/documents/{document_uid}/versions`. There is no write method to call.
+2. Re-uploading the **same bytes** through `POST /projects/{uid}/documents` answered `201`
+   with a **new** `document_uid` and a **new** `version_uid` — it created an aggregate, it did
+   not replace one.
+3. The original version re-read afterwards is unchanged, field for field, including
+   `published_at`.
+
+**Verified private object — checked against the bucket itself.** `docker port
+auditmanager-w19a-s3-1` publishes **nothing**. Inside the compose network, with the
+application's own credentials, the bucket `auditmanager-alpha` holds 49 objects under
+content-addressed keys; exactly one is 58978 bytes,
+`blobs/7K/DZ/7KDZE8SQTZ9K23JYB742HG7K8J`, and its sha256 is the version's sha256. An
+**anonymous** `GET` of that exact key answers `403 Forbidden`; an anonymous bucket listing
+answers `403 AccessDenied`. `/root/w37-logs/cert4-object.log`.
+
+**Verdict: `holds`.** Stack: the owner's stand.
+
+#### Criterion 4 — a live run, provider mode and cost visible, four states distinguished
+
+> *"a live `text_analysis` run completes, with its provider mode and cost visible, and the UI
+> distinguishes running, published, partial and failed"*
+
+**The live run: `run_01M34RX7PH00Y6J6Y6E8RDJRJZ` on the owner's stand**, started from the
+real control (`Запустить прогон`) on the version screen. `state: published`,
+`provider_mode: live`, four stages all `succeeded`, `published_finding_count: 3`,
+`model_call_count: 1`, `cost_micros: 38350`, `cost_basis: measured`. 12.4 s of
+`text_analysis`. `/root/w37-logs/cert4-run.json`.
+
+**Provider mode visible in the UI, read from the attribute and not from prose:** four
+`[data-provider-mode="live"]` nodes on the run and review screens, rendering *«живой вызов»*
+and *«режим провайдера: живой вызов»*.
+
+**Cost visible:** the run screen prints the spend; the API's `cost_micros` 38350 with
+`cost_basis: measured` is the integer behind it.
+
+**Verdict: `holds` for the live-run, provider-mode and cost clauses on the owner's stand.**
+The four-state clause is driven on this session's own stack — see below — because `partial`
+and `failed` cannot be produced on the owner's stand without changing its provider
+configuration, which this session may not do.
+
+#### Criterion 5 — a finding opens at its exact quotation beside the page it came from
+
+> *"a finding opens at its exact quotation beside the page it came from"*
+
+Clicking a finding row on the review screen of the owner's stand:
+
+- selected `fnd_01M34RXKTCW6WNY74RMJTKKT8C`, `data-selected="true"`;
+- `.am-evidence` carries `data-active-page="3"`;
+- the page navigation offers pages 3 and 7 with `data-active="true"` on **3**;
+- the PDF pane's `data-viewer-src` is `blob:http://127.0.0.1:31500/…#page=3` — the viewer is
+  pointed at page 3, beside the quotation;
+- the quotation's `data-evidence-quote` attribute and its **visible text are byte-identical**:
+  `«2.4. Из надземной части здания предусмотрено два эвакуационных выхода.»`
+
+**Checked with an extractor the application does not use.** `pdfminer.high_level.extract_text`,
+page by page, over the bytes the API served back (`GET /versions/{uid}/content`, 58978 bytes,
+sha256 matching). The quotation occurs on **page 3 and on no other page of the eight**. The
+CSV's own `evidence_page` for the same finding is also `3`, and its `evidence_quote` is
+byte-identical to the screen's.
+
+**Verdict: `holds`.** Stack: the owner's stand.
+
+**What the second extractor still cannot confirm, restated rather than inherited.** The
+anchor line also says *«символы 1282–1352 по всему документу»*. `pdfminer`'s whole-document
+text puts the same quotation at offset 1320. A character offset is defined relative to an
+extractor's own text stream, and this is not the extractor the application uses, so the
+difference is **not evidence of a defect** and is **not evidence the number is right**
+either. It is unverifiable from outside, and it is recorded as `W37CERT4-3` below rather
+than as a qualification on the verdict, because the criterion asks for the page and the
+quotation and both are confirmed.
+
+#### Criterion 6 — an accept, a reject and a later comment; the history shows all three
+
+> *"an accept, a reject and a later comment are recorded, and the history shows all three"*
+
+Three clicks on the real controls of the owner's stand, on finding
+`fnd_01M34RXKTCW6WNY74RMJTKKT8C`, each a separate `POST /bff/v1/findings/{uid}/decisions`
+answering `201` (seen in the browser's own response log):
+
+| control | verdict badge after |
+|---|---|
+| *(before)* | `не решено` |
+| `button[data-intent="accept"]` → *Принять* | `принято` |
+| `button[data-intent="reject"]` → *Отклонить* | `отклонено` |
+| `button[data-intent="comment"]` → *Добавить* | `отклонено` *(unchanged — a comment is not a verdict)* |
+
+The history renders **three** `[data-decision-id]` events, in order, none replacing another:
+
+```
+dec_01M34S62R2E4KGNYW68V3SPBWH  ПРИЁМ       → принято    14:44:12 UTC  local-reviewer
+dec_01M34S65RCM0XV0WFTA2KBSJKA  ОТКЛОНЕНИЕ  → отклонено  14:44:15 UTC  local-reviewer
+dec_01M34S6944WVAV73TSF0TYXWCE  КОММЕНТАРИЙ              14:44:18 UTC  local-reviewer
+                                "W37-CERT4: a later comment, recorded after the accept and the reject."
+```
+
+The comment is the **later** event and the verdict badge did not move for it, which is the
+half of the criterion that a history of three rows alone would not prove.
+
+**Verdict: `holds`.** Stack: the owner's stand.
+
+#### Criterion 7 — the CSV through the browser, seventeen columns, BOM, CRLF, resolving back
+
+> *"the CSV downloads through the browser with its seventeen columns, its BOM and its CRLF
+> intact, and resolves back to the same version and run"*
+
+A real browser download from the real `button[data-intent="export"]` (*«Скачать
+run_…-findings.csv»*) on the review screen, saved by the browser's own download handler to
+`/root/w37-logs/cert4-browser/export-main.csv`. 4628 bytes.
+
+| clause | measured |
+|---|---|
+| seventeen columns | **17** header fields |
+| BOM | first three bytes `EF BB BF` |
+| CRLF intact | **6** `CRLF`, **0** bare `LF` |
+| resolves back to the same run | all **5** data rows carry `run_01M34RX7PH00Y6J6Y6E8RDJRJZ` |
+| resolves back to the same version | all **5** data rows carry `ver_01M34RWZ29KMC4F60RSS5YH0N3` |
+
+Column names, in order: `project_uid, document_uid, version_uid, run_id, run_state,
+provider_mode, finding_uid, finding_observation_id, category, finding_text,
+recommendation_text, evidence_page, evidence_quote, current_verdict, latest_comment,
+latest_decision_id, decision_recorded_at`. `/root/w37-logs/cert4-csv.log`.
+
+**Verdict: `holds`.** Stack: the owner's stand.
+
 ## 4. Findings
 
 *pending*
