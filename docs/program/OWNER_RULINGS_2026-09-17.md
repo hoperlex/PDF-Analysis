@@ -483,6 +483,50 @@ reading: no tokeniser is installed in this tree and no API credential is availab
 session, and `tiktoken` is explicitly wrong for both Claude and Voyage. **The first act of the
 embedding stream is to count with the real tokeniser before spending** — `D-60`.)*
 
+## 3.11 — `R-23` … `R-25`, ruled 2026-09-22 on the six legacy screens
+
+**Given to `pdf-analysis-79` and drafted at `.local/handoff/R-23-DRAFT.md`; landed here by the
+integrator.** The mechanism that carried them is the one `owner-rulings-arrive-via-peer-sessions`
+describes: a ruling reaches whichever session the owner is talking to, and `.local/` is invisible
+to git.
+
+### `R-23` — the six screens, sorted
+
+| screen | ruled |
+|---|---|
+| **knowledge base** | **required, and must work inside the alpha** |
+| **stage comparison** | very important; a stub skeleton now, the real thing during the alpha |
+| **dashboard** | wanted on the front end even partly working — an important visual instrument |
+| **dispatcher** | wanted, with the work on rights, users, actions and a personal account |
+| **queue** | waits for a full vertical |
+| **work schedule** | important, deferrable to later alpha releases |
+
+### `R-24` — the knowledge base gets a listing operation in the contract
+
+**Ruled against the drafting session's recommendation, and the owner took the expensive option
+deliberately.** A client-side walk over the decision journal is cheaper and lives only as long as
+the alpha; a listing operation costs a reseal and outlives it.
+
+**So a second contract reseal is due after wave 34's**, and the integrator's note is that it
+should be **batched**: `D-56`'s per-section verdict aggregation and `D-63`'s dashboard counts are
+both reseals nobody has taken, and `R-11` reverted an entire wave once over a reseal discovered
+at the end rather than planned at the start.
+
+### `R-25` — the dashboard counts what exists, and shows the rest without numbers
+
+Real numbers for projects, runs and verdicts; **the section structure rendered without counts**,
+because the data has no section field — `Project` is `{project_uid, name, created_at,
+document_count}` and `D-56` measured that there is none anywhere.
+
+**And the thirteen sections are ordered by how textual they are — ПОС, ТХ, ПБ first.** The
+reason is measured rather than aesthetic: the AR vertical is **5 148 lines plus a
+content-hashed prompt bundle plus 16 fixtures**, and the sections whose answers live in
+*drawings* cannot reuse any of it. Ordering by textuality puts the sections that can reuse the
+existing vertical first.
+
+**The dashboard itself stays deferred by the owner's separate instruction the same day** —
+*"важно, но не в этой волне"* — and is `D-63`.
+
 ## 4. Still open, and still the owner's
 
 - **`OD-18`** — three to five named experts with committed slots; `P4-BHV-01` waits on it alone.
