@@ -372,12 +372,32 @@ EXCEPTION_W20EXEC = {
 
 MULTIPART_BOUNDARY = "w13baselineboundary"
 
-#: `T-6`. The credential every request in this journey presents, and the environment
-#: variable the application reads it from -- both written out here rather than imported,
-#: like every other literal in this file.
+#: `T-6`. The deployment secret this journey configures, and the environment variable the
+#: application reads it from -- both written out here rather than imported, like every
+#: other literal in this file.
+#:
+#: `W34-API` replaced the seam's body: this string is no longer a credential, it is what
+#: the signing key is derived from, and the credential below is minted from it. The 33
+#: recorded responses are unaffected -- ``Authorization`` is a request header and appears
+#: in no record -- which is the point: replacing the seam's body changed no response byte
+#: on the authorized surface.
 AUTHORIZATION_HEADER = "Authorization"
-STATIC_TOKEN = "w13-baseline-static-token"
+DEPLOYMENT_SECRET = "w13-baseline-static-token"
 API_TOKEN_VARIABLE = "AUDITMANAGER_API_TOKEN"
+
+
+def _minted_credential() -> str:
+    """The credential every request in this journey presents, minted with that secret."""
+    from auditmanager.api.security import Subject, build_signer
+
+    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
+    assert signer is not None, "this journey's own secret derives a signing key"
+    return signer.issue(
+        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991R", login="w13-baseline")
+    ).token
+
+
+STATIC_TOKEN = _minted_credential()
 
 
 # --- O1: the one ordering this baseline does not pin -------------------------------
@@ -716,10 +736,10 @@ def build_apps() -> tuple[Any, Any]:
 
     environ = dict(os.environ) | {
         "AUDITMANAGER_PROVIDER_MODE": "recorded",
-        # `T-6`: the seam is fail-closed, so a journey that configured no token would
-        # record 33 copies of `authentication_required`. The token is supplied here rather
-        # than read from `.env`, so this capture does not depend on a lane's configuration.
-        API_TOKEN_VARIABLE: STATIC_TOKEN,
+        # `T-6`: the seam is fail-closed, so a journey that configured no secret would
+        # record 33 copies of `authentication_required`. It is supplied here rather than
+        # read from `.env`, so this capture does not depend on a lane's configuration.
+        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET,
     }
     good = create_asgi_app(environ=environ)
     refused = create_asgi_app(

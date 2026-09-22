@@ -67,6 +67,7 @@ _driver_spec.loader.exec_module(_driver)
 Answer = _driver.Answer
 Request = _driver.Request
 Surface = _driver.Surface
+SuiteCredentialAdapter = _driver.SuiteCredentialAdapter
 TEST_TOKEN = _driver.TEST_TOKEN
 dispatch = _driver.dispatch
 from auditmanager.api.schemas.decisions import DecisionEventView
@@ -742,6 +743,7 @@ def router(ingest: IngestService, session: Session) -> Surface:
         findings=DatabaseFindingAdapter(session),
         decisions=LedgerDecisionAdapter(session),
         exports=SeamExportAdapter(session),
+        credentials=SuiteCredentialAdapter(),
     ))
 
 
@@ -781,6 +783,7 @@ def shipped_router(
         findings=FindingAdapter(session_factory),
         decisions=DecisionAdapter(session_factory),
         exports=SeamExportAdapter(session),
+        credentials=SuiteCredentialAdapter(),
     ))
 
 

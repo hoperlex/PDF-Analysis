@@ -20,7 +20,9 @@ from typing import Any
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.routers import Router, build_router
+from auditmanager.api.security import TokenSigner, derive_signing_key
 from auditmanager.bootstrap.adapters import (
+    CredentialAdapter,
     CsvExportAdapter,
     DecisionAdapter,
     DocumentAdapter,
@@ -93,6 +95,27 @@ def build_application(
 
     ingest = IngestService(store, session_factory=sessions)
 
+    # `W34-API`. The credential exchange, wired from the two halves that exist for it:
+    # `W34-DOM`'s user repository, and a signer derived from the deployment secret
+    # `load_settings` has already refused to start without. The derivation reads
+    # ``resolved.api_token`` rather than ``env`` directly, so an injected settings object
+    # governs the whole wiring -- ``W5CERT-DEF-2`` is what happens when one component takes
+    # the injected value and another reaches past it for the same name.
+    #
+    # The import is here rather than at module scope for the reason the four imports above
+    # are: the composition root is the only thing that knows which boundaries this
+    # application is made of, and ``access`` is a boundary the routers must not import.
+    from auditmanager.access.repository import UserRepository as UserAccessRepository
+
+    try:
+        signer = TokenSigner(derive_signing_key(resolved.api_token))
+    except ValueError as exc:  # pragma: no cover - settings.load refuses an empty one first
+        raise ConfigurationError(
+            "the deployment secret derives no signing key, so this application could "
+            "neither issue a credential nor verify one; it refuses to start rather than "
+            "answer authentication_required to every request"
+        ) from exc
+
     # `D-20`. One carrier per built application, constructed here like everything else:
     # a process that starts has its executor, and `RunAdapter` takes it as a required
     # argument so no application can be assembled that quietly executes on the request
@@ -123,6 +146,9 @@ def build_application(
         findings=FindingAdapter(sessions),
         decisions=DecisionAdapter(sessions),
         exports=CsvExportAdapter(sessions),
+        credentials=CredentialAdapter(
+            sessions, users=UserAccessRepository(), signer=signer
+        ),
     )
     return Application(
         router=router,

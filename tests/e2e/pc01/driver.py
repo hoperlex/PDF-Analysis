@@ -298,7 +298,7 @@ def build_client(**overrides: str) -> Client:
     adapter and a new router. That is what makes the criterion-8 test a restart rather
     than a second look at the same objects.
     """
-    environ = dict(os.environ) | {API_TOKEN_VARIABLE: STATIC_TOKEN} | overrides
+    environ = dict(os.environ) | {API_TOKEN_VARIABLE: DEPLOYMENT_SECRET} | overrides
     from auditmanager.api.app import create_app, create_asgi_app
 
     application = create_app(environ=environ)
@@ -307,11 +307,36 @@ def build_client(**overrides: str) -> Client:
     )
 
 
-#: `T-6`. The credential this suite configures and presents, and the variable the
-#: application reads it from. Literals: a driver that read the token out of the
-#: application would drive an application that had stopped checking it.
-STATIC_TOKEN = "c2-pc01-static-token"
+#: `T-6`. The deployment secret this suite configures, and the variable the application
+#: reads it from. Literals: a driver that read them out of the application would drive an
+#: application that had stopped checking anything.
+#:
+#: `W34-API` replaced the seam's body, so this string is no longer a credential -- it is
+#: what the signing key is derived from. Presenting it as a bearer is now a refusal, which
+#: ``tests/integration/api/test_authorization.py`` asserts case by case.
+DEPLOYMENT_SECRET = "c2-pc01-static-token"
 API_TOKEN_VARIABLE = "AUDITMANAGER_API_TOKEN"
+
+#: The credential this suite presents. **Minted with the deployment's own key**, for a
+#: subject of this driver's choosing, rather than exchanged through ``issueToken``: this
+#: suite has no user table of its own, and a criterion about the PC-01 journey should not
+#: fail because an account was renamed. The exchange itself is driven against real rows in
+#: ``tests/integration/auth``.
+#:
+#: Note what this shows about the credential: it is a signed statement and not a row, so
+#: it names a subject the deployment need not still have. Revocation before expiry does
+#: not exist yet -- see the wave report.
+def _minted_credential() -> str:
+    from auditmanager.api.security import Subject, build_signer
+
+    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
+    assert signer is not None, "the suite's own secret derives a signing key"
+    return signer.issue(
+        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991P", login="pc01-acceptance")
+    ).token
+
+
+STATIC_TOKEN = _minted_credential()
 
 
 def key(label: str, *, unique: bool = False) -> str:

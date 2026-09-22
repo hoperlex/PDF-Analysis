@@ -36,14 +36,63 @@ from fastapi import APIRouter, FastAPI
 from starlette.testclient import TestClient
 
 from auditmanager.api.app import create_asgi_app
-from auditmanager.api.security import API_TOKEN_VARIABLE
+from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
 
-__all__ = ["Answer", "Request", "Surface", "TEST_TOKEN", "dispatch", "probe_surface"]
+__all__ = [
+    "Answer",
+    "DEPLOYMENT_SECRET",
+    "Request",
+    "SUITE_LOGIN",
+    "SUITE_PASSWORD",
+    "Surface",
+    "SuiteCredentialAdapter",
+    "TEST_SUBJECT",
+    "TEST_TOKEN",
+    "dispatch",
+    "probe_surface",
+]
 
-#: The credential this suite configures and presents. A literal, and the only one: a test
-#: that read the token out of the application would pass against an application that had
-#: stopped checking it.
-TEST_TOKEN = "w13-api-suite-token"
+#: The deployment secret this suite configures. A literal, and the only one.
+#:
+#: `W34-API` replaced the seam's body: this value is no longer a credential anybody can
+#: present -- it is what the signing key is derived from. Presenting *it* is one of the
+#: refusals ``test_authorization.py`` asserts, which is how this suite states that the
+#: alpha's static token really is gone rather than still quietly accepted.
+DEPLOYMENT_SECRET = "w13-api-suite-token"
+
+#: The subject the minted credential names. This suite has no user table -- it wires the
+#: six ports itself -- so the credential is minted directly from the seam's signer, the way
+#: the credential exchange mints one for a user the repository proved. What is under test
+#: here is every operation *behind* the seam; the exchange itself is tested where it can be
+#: driven against real rows, in ``tests/integration/auth``.
+TEST_SUBJECT = Subject(user_uid="usr_01M2545JSD15ETSNNV904X991Q", login="api-suite")
+
+#: The credential this suite presents on every request. Minted, not written down: a literal
+#: would have to be re-minted by hand at every change to the format and could not carry an
+#: expiry at all.
+_SIGNER = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
+assert _SIGNER is not None, "the suite's own secret derives a signing key"
+TEST_TOKEN = _SIGNER.issue(TEST_SUBJECT).token
+
+#: The one pair the suite's credential port accepts. There is no user table behind this
+#: suite -- it wires the six ports itself -- so the exchange is answered by the adapter
+#: below rather than by `W34-DOM`'s repository, which is exercised where rows exist.
+SUITE_LOGIN = "api-suite"
+SUITE_PASSWORD = "w13-api-suite-password"
+
+
+class SuiteCredentialAdapter:
+    """``CredentialPort`` for this suite: one pair in, one minted credential out.
+
+    Deliberately not a stub that says yes to everything. The refusal is the half of this
+    operation the seam's own tests are about, and an adapter that could not refuse would
+    make ``test_a_refused_pair_is_the_same_refusal_a_missing_credential_gets`` vacuous.
+    """
+
+    def issue(self, *, login: str, password: str) -> Any:
+        if (login, password) != (SUITE_LOGIN, SUITE_PASSWORD):
+            return None
+        return _SIGNER.issue(TEST_SUBJECT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +176,7 @@ class Surface:
     def app(self) -> FastAPI:
         if self._app is None:
             self._app = create_asgi_app(
-                environ={API_TOKEN_VARIABLE: TEST_TOKEN},
+                environ={API_TOKEN_VARIABLE: DEPLOYMENT_SECRET},
                 application=_PreBuilt(self.router),  # type: ignore[arg-type]
             )
         return self._app

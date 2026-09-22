@@ -53,7 +53,7 @@ __all__ = [
     "to_domain_error",
 ]
 
-#: 405 has no catalog code of its own. The surface declares fifteen operations and no
+#: 405 has no catalog code of its own. The surface declares sixteen operations and no
 #: other method on any of their paths, so a method the document does not declare is
 #: simply not a resource here -- and answering 405 would make the API an oracle for which
 #: paths exist. ``records/29-dispatch.method_not_allowed.json`` pins the 404.

@@ -48,8 +48,27 @@ from starlette.testclient import TestClient
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
 
-#: `T-6`. Written out, not imported from the seam it authenticates against.
-STATIC_TOKEN = "published-run-reports-itself-token"
+#: `T-6`. Written out, not imported from the seam it authenticates against. The secret
+#: the signing key is derived from; the credential is minted from it below.
+DEPLOYMENT_SECRET = "published-run-reports-itself-token"
+
+def _minted_credential(secret: str) -> str:
+    """A credential minted with this suite's deployment secret.
+
+    `W34-API`: the configured string is the signing material and no longer a credential,
+    so a suite that presents it is refused. The subject is this suite's own; what is under
+    test here is the wiring behind the seam, not who the caller is.
+    """
+    from auditmanager.api.security import Subject, build_signer
+
+    signer = build_signer({API_TOKEN_VARIABLE: secret})
+    assert signer is not None, "this suite's own secret derives a signing key"
+    return signer.issue(
+        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991S", login="composition-suite")
+    ).token
+
+
+STATIC_TOKEN = _minted_credential(DEPLOYMENT_SECRET)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_PDF = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar" / "ar_baseline.pdf"
@@ -90,7 +109,7 @@ def published_run() -> dict[str, Any]:
 
     environ = dict(os.environ) | {
         "AUDITMANAGER_PROVIDER_MODE": "recorded",
-        API_TOKEN_VARIABLE: STATIC_TOKEN,
+        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET,
     }
     asgi_app = create_asgi_app(environ=environ)
     client = TestClient(asgi_app, raise_server_exceptions=False)

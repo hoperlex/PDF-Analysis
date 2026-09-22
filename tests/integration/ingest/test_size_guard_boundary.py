@@ -41,8 +41,27 @@ from auditmanager.api.routers.multipart import MAX_BODY
 from auditmanager.api.security import API_TOKEN_VARIABLE
 from auditmanager.ingest import MAX_BYTES
 
-#: `T-6`. The credential this suite configures and presents, as a literal.
-STATIC_TOKEN = "size-guard-static-token"
+#: `T-6`. The deployment secret this suite configures, as a literal; the credential it
+#: presents is minted from it below.
+DEPLOYMENT_SECRET = "size-guard-static-token"
+
+def _minted_credential(secret: str, login: str) -> str:
+    """A credential minted with this suite's deployment secret.
+
+    `W34-API` replaced the seam's body: the configured string is the signing material and
+    is no longer a credential. The subject is this suite's own -- what these cases are
+    about is behind the seam, not who the caller is.
+    """
+    from auditmanager.api.security import Subject, build_signer
+
+    signer = build_signer({API_TOKEN_VARIABLE: secret})
+    assert signer is not None, "this suite's own secret derives a signing key"
+    return signer.issue(
+        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991T", login=login)
+    ).token
+
+
+STATIC_TOKEN = _minted_credential(DEPLOYMENT_SECRET, "size-guard-suite")
 
 #: Between the two limits, with room for the multipart framing on either side. Asserted
 #: below rather than trusted: if either limit moves, the window may close or this value
@@ -94,7 +113,7 @@ class _Composed:
 @pytest.fixture(scope="module")
 def app():
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
-    environ = dict(os.environ) | {API_TOKEN_VARIABLE: STATIC_TOKEN}
+    environ = dict(os.environ) | {API_TOKEN_VARIABLE: DEPLOYMENT_SECRET}
     application = create_app(environ=environ)
     asgi = create_asgi_app(environ=environ, application=application)
     return _Composed(application, TestClient(asgi, raise_server_exceptions=False))

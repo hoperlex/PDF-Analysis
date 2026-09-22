@@ -27,17 +27,36 @@ and useless:
 
 from __future__ import annotations
 
+import base64
 import json
+import time
 
 import pytest
 
 from auditmanager.api.app import create_asgi_app
-from auditmanager.api.security import API_TOKEN_VARIABLE, SCHEME_NAME
-from w13_api_driver import TEST_TOKEN, Request, Surface, dispatch
+from auditmanager.api.security import (
+    API_TOKEN_VARIABLE,
+    SCHEME_NAME,
+    UNAUTHENTICATED_OPERATIONS,
+    Subject,
+    build_signer,
+)
+from w13_api_driver import (
+    DEPLOYMENT_SECRET,
+    SUITE_LOGIN,
+    SUITE_PASSWORD,
+    TEST_SUBJECT,
+    TEST_TOKEN,
+    Request,
+    Surface,
+    dispatch,
+)
 
-#: The twelve, written out: one request each, shaped so that *authorization* is the only
-#: thing that can refuse it before anything else does.
-FIFTEEN = (
+#: The guarded operations, written out: one request each, shaped so that *authorization*
+#: is the only thing that can refuse it before anything else does. Every operation of the
+#: surface except the credential exchange, which is the register's one entry and is swept
+#: separately below.
+GUARDED = (
     ("createProject", "POST", "/projects"),
     ("listProjects", "GET", "/projects"),
     ("uploadDocument", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents"),
@@ -75,6 +94,53 @@ FIFTEEN = (
 #: this exact answer and not merely a 401.
 AUTHENTICATION_REQUIRED = "authentication_required"
 
+#: The exchange, which the register opens. Written out here as its own row rather than
+#: added to :data:`GUARDED`, because what is asserted about it is the opposite thing.
+EXCHANGE = ("issueToken", "POST", "/auth/token")
+
+
+def _another_deployments_credential() -> str:
+    """A well-formed credential, minted with a key this deployment does not hold."""
+    signer = build_signer({API_TOKEN_VARIABLE: "some-other-deployments-secret"})
+    assert signer is not None
+    return signer.issue(TEST_SUBJECT).token
+
+
+def _an_expired_credential() -> str:
+    """One this deployment really minted, an hour and a second ago."""
+    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
+    assert signer is not None
+    issued = signer.issue(TEST_SUBJECT, now=time.time() - 3601)
+    assert signer.verify(issued.token) is None, (
+        "this case is only a case if the credential really has expired"
+    )
+    return issued.token
+
+
+def _a_tampered_credential() -> str:
+    """This deployment's own credential, with another subject written into the payload.
+
+    The tag is left exactly as it was, which is what a caller who can read their own
+    credential and wants to be somebody else would produce. Built by re-encoding the
+    payload rather than by flipping bytes, so the result is a *valid-looking* credential
+    and the only thing wrong with it is that this deployment did not sign it.
+    """
+    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
+    assert signer is not None
+    version, body, tag = signer.issue(TEST_SUBJECT).token.split(".")
+    payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+    assert payload["sub"] == TEST_SUBJECT.user_uid, payload
+    payload["sub"] = "usr_01M2545JSD15ETSNNV904X991Z"
+    edited = (
+        base64.urlsafe_b64encode(
+            json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        )
+        .decode("ascii")
+        .rstrip("=")
+    )
+    assert edited != body
+    return f"{version}.{edited}.{tag}"
+
 
 def _envelope(answer) -> dict:
     assert answer.header("Content-Type") == "application/json", answer.headers
@@ -86,12 +152,22 @@ def _envelope(answer) -> dict:
     return body
 
 
-def test_the_fifteen_are_all_behind_the_seam(router: Surface) -> None:
-    """One request per operation, with no credential. Fifteen, not fourteen."""
-    assert len(FIFTEEN) == 15
-    assert {operation for operation, _, _ in FIFTEEN} == router.operation_ids
+def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
+    """One request per guarded operation, with no credential. Fifteen, not fourteen.
+
+    The set comparison is what makes this a sweep rather than a list: a seventeenth
+    operation is either written into ``GUARDED`` and swept, or named in
+    :data:`~auditmanager.api.security.UNAUTHENTICATED_OPERATIONS` and reported by
+    ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
+    be, and an operation that is in neither fails here.
+    """
+    assert len(GUARDED) == 15
+    assert UNAUTHENTICATED_OPERATIONS == {"issueToken"}
+    assert {operation for operation, _, _ in GUARDED} | UNAUTHENTICATED_OPERATIONS == (
+        router.operation_ids
+    )
     open_surface = []
-    for operation, method, path in FIFTEEN:
+    for operation, method, path in GUARDED:
         answer = dispatch(router, Request.build(method, path), credential=None)
         if answer.status != 401:
             open_surface.append((operation, answer.status))
@@ -109,22 +185,52 @@ def test_the_fifteen_are_all_behind_the_seam(router: Surface) -> None:
     ("label", "credential"),
     [
         ("no credential at all", None),
-        ("a credential the deployment does not accept", "not-the-configured-token"),
+        ("a credential the deployment does not accept", "not-a-credential-at-all"),
         ("an empty bearer", ""),
-        ("the configured token with one character removed", TEST_TOKEN[:-1]),
-        ("the configured token with one character added", TEST_TOKEN + "x"),
+        ("this deployment's credential with one character removed", TEST_TOKEN[:-1]),
+        ("this deployment's credential with one character added", TEST_TOKEN + "x"),
+        # `W34-API`. The alpha accepted the configured string itself. It is now the secret
+        # the signing key is derived from and **not** a credential, and an upgraded
+        # deployment that kept its value has therefore stopped honouring the token every
+        # operator and every runbook already knows.
+        ("the deployment secret itself", DEPLOYMENT_SECRET),
+        # A credential this deployment did not sign. Same format, same shape, another key:
+        # what a second deployment's token, or a forgery, looks like from here.
+        (
+            "a credential minted with another deployment's key",
+            _another_deployments_credential(),
+        ),
+        # A credential this deployment signed, and would sign again, an hour and a second
+        # ago. The tag verifies; the expiry does not.
+        ("an expired credential this deployment minted", _an_expired_credential()),
+        # The payload rewritten to name another subject, with the tag left as it was.
+        ("a credential whose payload was edited", _a_tampered_credential()),
     ],
-    ids=["absent", "wrong", "empty", "one-short", "one-long"],
+    ids=[
+        "absent",
+        "wrong",
+        "empty",
+        "one-short",
+        "one-long",
+        "the-deployment-secret",
+        "another-key",
+        "expired",
+        "tampered",
+    ],
 )
 def test_a_credential_the_deployment_does_not_accept_is_refused(
     router: Surface, label: str, credential: str | None
 ) -> None:
-    """Including the two neighbours of the real token.
+    """Including the two neighbours of the real credential, and the four `W34-API` added.
 
     A comparison that passed for a prefix or for a longer string would be a comparison
     that is not a comparison. ``hmac.compare_digest`` is what makes the timing of these
-    five indistinguishable as well, which no test can assert and which is why the
+    indistinguishable as well, which no test can assert and which is why the
     implementation says so out loud.
+
+    Every one of the nine answers the *same* refusal: one status, one code, one envelope.
+    A caller cannot tell "expired" from "forged" from "never issued", which is the point --
+    each of those is a different sentence about the deployment's internals.
     """
     answer = dispatch(router, Request.build("GET", "/projects"), credential=credential)
     assert answer.status == 401, (label, answer.status, answer.body)
@@ -217,16 +323,261 @@ def test_the_served_document_declares_the_scheme_the_contract_declares(
     assert scheme["type"] == "http"
     assert scheme["scheme"] == "bearer"
     assert "bearerFormat" not in scheme, scheme
+    opened = []
     for path_item in document["paths"].values():
         for method, operation in path_item.items():
-            if method in ("get", "post"):
-                assert operation["security"] == [{SCHEME_NAME: []}], (
-                    method,
-                    operation["operationId"],
-                    operation.get("security"),
-                )
+            if method not in ("get", "post"):
+                continue
+            if operation["security"] == [{SCHEME_NAME: []}]:
+                continue
+            opened.append(operation["operationId"])
+            # The empty requirement, and only that. An operation that merely *omitted*
+            # `security` would inherit the document root -- which this document does not
+            # declare -- and would be a third state neither the contract nor the seam has
+            # a meaning for.
+            assert operation["security"] == [], (
+                method,
+                operation["operationId"],
+                operation.get("security"),
+            )
+    assert set(opened) == UNAUTHENTICATED_OPERATIONS, (
+        "the document opens a different set of operations from the one the seam opens: "
+        f"document {sorted(opened)}, seam {sorted(UNAUTHENTICATED_OPERATIONS)}"
+    )
 
 
 def test_the_environment_variable_is_the_one_the_deployment_will_set() -> None:
     """A literal, because a deployment sets a string and not a symbol."""
     assert API_TOKEN_VARIABLE == "AUDITMANAGER_API_TOKEN"
+
+
+# =======================================================================================
+# `W34-API` -- the body behind the seam: a credential is issued, and only that is accepted
+# =======================================================================================
+
+
+def test_the_open_surface_is_exactly_the_register(router: Surface) -> None:
+    """Sweep every operation with no credential; the ones that answer are the register.
+
+    The sweep is the assertion, not the list: this is what reports a second operation
+    that opened itself, whoever opened it and whichever module it lives in. It is the
+    runtime twin of the document sweep above, and the two are deliberately written
+    against different sources -- one reads the served document, one sends requests.
+    """
+    samples = {
+        operation: (method, path) for operation, method, path in (*GUARDED, EXCHANGE)
+    }
+    assert set(samples) == router.operation_ids
+
+    answered = set()
+    for operation, (method, path) in samples.items():
+        body = b'{"login":"nobody","password":"nothing"}' if operation == "issueToken" else b""
+        headers = {"Content-Type": "application/json"} if body else {}
+        answer = dispatch(
+            router,
+            Request.build(method, path, headers=headers, body=body),
+            credential=None,
+        )
+        if answer.status != 401 or _envelope(answer)["error_code"] != AUTHENTICATION_REQUIRED:
+            answered.add(operation)
+    # ``issueToken`` above is deliberately sent a pair the suite's port refuses, so that a
+    # 401 from *the exchange's own rule* would put it in this set and be reported. It is
+    # not here because the exchange refused it with the same code -- see the next test,
+    # which is where "the exchange answers at all" is asserted.
+    assert answered == set(), (
+        f"these operations did not answer authentication_required without a credential: "
+        f"{sorted(answered)}"
+    )
+
+
+def test_the_exchange_answers_without_a_credential(router: Surface) -> None:
+    """The register's one entry, doing the thing the register exists for.
+
+    The anti-vacuity of the sweep above: if the exchange were behind the seam too, this
+    would be a 401 and there would be no way to obtain a credential at all.
+    """
+    answer = dispatch(
+        router,
+        Request.build(
+            "POST",
+            "/auth/token",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"login": SUITE_LOGIN, "password": SUITE_PASSWORD}).encode(),
+        ),
+        credential=None,
+    )
+    assert answer.status == 200, answer.body
+    body = json.loads(answer.body)
+    assert sorted(body) == ["expires_in", "token"], body
+    assert isinstance(body["token"], str) and body["token"]
+    assert body["expires_in"] == 3600, body
+    assert answer.header("X-Correlation-Id"), answer.headers
+
+
+def test_a_credential_from_the_exchange_opens_the_guarded_surface(router: Surface) -> None:
+    """End to end through the seam: exchange a pair, present what comes back.
+
+    This is the whole point of the wave in four lines. The credential is not written down
+    anywhere in this test: it is the one the application just minted, and the operation it
+    opens is one the same application guards.
+    """
+    exchanged = dispatch(
+        router,
+        Request.build(
+            "POST",
+            "/auth/token",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"login": SUITE_LOGIN, "password": SUITE_PASSWORD}).encode(),
+        ),
+        credential=None,
+    )
+    assert exchanged.status == 200, exchanged.body
+    minted = json.loads(exchanged.body)["token"]
+
+    answer = dispatch(router, Request.build("GET", "/projects"), credential=minted)
+    assert answer.status == 200, answer.body
+
+
+@pytest.mark.parametrize(
+    ("label", "payload"),
+    [
+        ("a login this deployment has never heard of", {"login": "nobody", "password": "x"}),
+        ("the right login and the wrong password", {"login": SUITE_LOGIN, "password": "x"}),
+    ],
+    ids=["unknown-login", "wrong-password"],
+)
+def test_a_refused_pair_is_the_same_refusal_a_missing_credential_gets(
+    router: Surface, label: str, payload: dict
+) -> None:
+    """401 ``authentication_required``, in an ``ErrorEnvelope``, for both.
+
+    Two facts in one assertion. **It is a 401 and not a 403**: ``permission_denied`` is an
+    authenticated subject being refused, and this is the operation that produces one.
+    **The two cases are indistinguishable**: an answer that told them apart would let
+    anyone with this form enumerate which accounts exist.
+    """
+    answer = dispatch(
+        router,
+        Request.build(
+            "POST",
+            "/auth/token",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps(payload).encode(),
+        ),
+        credential=None,
+    )
+    assert answer.status == 401, (label, answer.status, answer.body)
+    envelope = _envelope(answer)
+    assert envelope["error_code"] == AUTHENTICATION_REQUIRED, envelope
+    assert envelope["retryable"] is False, envelope
+    assert "login" not in json.dumps(envelope.get("details")), envelope
+
+
+def test_the_exchange_never_answers_with_what_it_was_given(router: Surface) -> None:
+    """No password reaches a response body, on either outcome.
+
+    The refusal carries the catalog summary and nothing of the request; the success
+    carries a credential the deployment minted. Asserted on a password distinctive enough
+    that a substring search means something.
+    """
+    secret = "correct-horse-battery-staple-9182"
+    for payload in (
+        {"login": SUITE_LOGIN, "password": secret},
+        {"login": SUITE_LOGIN, "password": SUITE_PASSWORD},
+    ):
+        answer = dispatch(
+            router,
+            Request.build(
+                "POST",
+                "/auth/token",
+                headers={"Content-Type": "application/json"},
+                body=json.dumps(payload).encode(),
+            ),
+            credential=None,
+        )
+        assert secret.encode() not in answer.body, answer.body
+        assert SUITE_PASSWORD.encode() not in answer.body, answer.body
+
+
+def test_a_malformed_exchange_body_is_refused_as_a_rule_and_not_as_a_credential(
+    router: Surface,
+) -> None:
+    """422 ``validation_failed``, because the request never reached a credential check.
+
+    The distinction matters: 401 here would say "the deployment does not accept this
+    pair" about a request that carried no pair at all.
+    """
+    answer = dispatch(
+        router,
+        Request.build(
+            "POST",
+            "/auth/token",
+            headers={"Content-Type": "application/json"},
+            body=b'{"login":"api-suite"}',
+        ),
+        credential=None,
+    )
+    assert answer.status == 422, answer.body
+    assert _envelope(answer)["error_code"] == "validation_failed", answer.body
+
+
+def test_the_exchange_declares_the_empty_requirement(router: Surface) -> None:
+    """``security: []`` in the served document, in memory and in the bytes.
+
+    Both halves, because they are produced by different machinery: ``app.openapi()``
+    builds the object, and the ``/openapi.json`` route serialises it. The frozen contract
+    declares ``[]``, an *absent* key would mean "inherit the root", and this surface's
+    document declares no root requirement -- so absent and empty are not the same answer
+    and only one of them is the contract's.
+    """
+    from starlette.testclient import TestClient
+
+    document = router.app.openapi()
+    assert document["paths"]["/auth/token"]["post"]["security"] == []
+
+    served = TestClient(router.app, raise_server_exceptions=False).get("/openapi.json")
+    assert served.status_code == 200
+    assert b'"security":[]' in served.content.replace(b", ", b",").replace(b": ", b":")
+
+
+def test_a_subject_is_published_for_the_next_session_and_read_by_nobody_now(
+    router: Surface,
+) -> None:
+    """The seam decides *who*; it does not decide *what they may do*.
+
+    ``request.state.subject`` carries the verified subject, so the day roles exist there
+    is something to attach them to. That it is currently read by nothing is the `T-6`
+    boundary this session was told not to cross, and this asserts the boundary from both
+    sides: the value is there, and no router module reads it.
+    """
+    import pathlib
+
+    routers = pathlib.Path("src/auditmanager/api/routers")
+    readers = [
+        path.name
+        for path in routers.rglob("*.py")
+        if "state.subject" in path.read_text(encoding="utf-8")
+    ]
+    assert readers == [], (
+        f"{readers} read the subject off the request. Deciding what a subject may do is "
+        "the next session's work (roles), and doing it here would make this seam an "
+        "authorization model nobody specified."
+    )
+
+    seen: list = []
+    from starlette.testclient import TestClient
+
+    app = router.app
+
+    @app.middleware("http")
+    async def _capture(request, call_next):  # pragma: no cover - exercised below
+        response = await call_next(request)
+        seen.append(getattr(request.state, "subject", None))
+        return response
+
+    client = TestClient(app, raise_server_exceptions=False)
+    assert client.get("/projects", headers={"Authorization": f"Bearer {TEST_TOKEN}"}).status_code == 200
+    assert seen and seen[0] is not None, seen
+    assert seen[0] == Subject(
+        user_uid=TEST_SUBJECT.user_uid, login=TEST_SUBJECT.login
+    ), seen

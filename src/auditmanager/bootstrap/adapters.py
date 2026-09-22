@@ -28,6 +28,7 @@ from auditmanager.api.schemas.findings import (
 )
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.runs import RunStatusView, StageStateView
+from auditmanager.api.security import IssuedCredential, Subject, TokenSigner
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 
@@ -620,3 +621,53 @@ class CsvExportAdapter(_SessionHolder):
         from auditmanager.exports import export_run_csv
 
         return self._read(lambda s: export_run_csv(s, run_id).content)
+
+
+class CredentialAdapter(_SessionHolder):
+    """``issueToken``: `W34-DOM`'s user repository on one side, the seam's signer on the other.
+
+    The two halves of the exchange meet here and nowhere else. The repository proves a
+    password and never returns credential material; the signer mints a credential for the
+    subject it proved and never sees a password. Neither imports the other, and this adapter
+    is the only object in the tree that holds both -- which is what keeps "a digest never
+    leaves the repository" and "the signing key never leaves the seam" two separate
+    sentences that are each true.
+
+    **Why the adapter and not the router mints.** Minting needs the deployment's signing
+    key. A router that held one would be a router that reads configuration, and the
+    composition root exists so that nothing else does.
+
+    **The session is opened for a read.** Authentication writes nothing: no session row, no
+    last-login column, no attempt counter. A credential is a signed statement about a
+    subject, not a row -- which is also why nothing here has to be cleaned up when it
+    expires, and why this surface has no logout. Both of those are the next session's
+    question; see the report.
+    """
+
+    __slots__ = ("_users", "_signer")
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        *,
+        users: Any,
+        signer: TokenSigner,
+    ) -> None:
+        super().__init__(session_factory)
+        #: ``auditmanager.access.ports.UserRepository``. Annotated ``Any`` and imported by
+        #: the composition root rather than here, so this module -- which every adapter in
+        #: the application is in -- does not import the ``access`` boundary's internals to
+        #: name a type it only passes through.
+        self._users = users
+        self._signer = signer
+
+    def issue(self, *, login: str, password: str) -> IssuedCredential | None:
+        record = self._read(lambda session: self._users.authenticate(session, login, password))
+        if record is None:
+            # One answer for an unknown login, a wrong password and a login that could not
+            # have been stored. The repository already spends a key derivation on all
+            # three, so this returns in comparable time as well as with one answer.
+            return None
+        return self._signer.issue(
+            Subject(user_uid=str(record.user_uid), login=record.login)
+        )
