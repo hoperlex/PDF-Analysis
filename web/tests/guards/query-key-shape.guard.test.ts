@@ -100,6 +100,42 @@ describe('the compiler refuses the two shapes D-57 put under one key', () => {
 });
 
 // ======================================================================================
+// 1b. The compiler's verdict has to reach the gate, and `make gate` runs vitest.
+// ======================================================================================
+
+/**
+ * `make gate`'s frontend half is `npm --prefix web test`, which is `vitest run`. Vitest
+ * transforms TypeScript with esbuild and esbuild does not typecheck. So every rule the
+ * tag enforces -- including the four `setQueryData` sites `D-57` was written across --
+ * is enforced by a command the gate never runs, and a regression at any of them would
+ * reach `main` with a green gate and fail at `npm run typecheck` or at `next build`.
+ *
+ * This case is the bridge. It is deliberately broader than `D-57`: it fails on any type
+ * error in `web/`, not only on this key. That is the point -- a phantom type is worth
+ * exactly as much as the frequency of the compiler running, and four seconds buys it.
+ *
+ * `--incremental false` so the run leaves no `tsconfig.tsbuildinfo` behind; `*.tsbuildinfo`
+ * is git-ignored, but the battery's checkout guard is about files, not about tracking.
+ */
+describe('the compiler runs inside the gate, not only in a command nobody runs there', () => {
+  it('typechecks web/ clean', () => {
+    let output = '';
+    let exitCode = 0;
+    try {
+      output = execFileSync(TSC_BIN, ['--noEmit', '--incremental', 'false'], {
+        cwd: WEB_ROOT,
+        encoding: 'utf8',
+      });
+    } catch (error) {
+      const failure = error as { status?: number; stdout?: string; stderr?: string };
+      exitCode = failure.status ?? 1;
+      output = `${failure.stdout ?? ''}${failure.stderr ?? ''}`;
+    }
+    expect(exitCode, `tsc --noEmit reported:\n${output}`).toBe(0);
+  });
+});
+
+// ======================================================================================
 // 2. The hole the tag does not close: `useQuery` ignores it in this version.
 // ======================================================================================
 
