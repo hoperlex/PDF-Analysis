@@ -21,6 +21,7 @@ import subprocess
 import sys
 import textwrap
 
+import auditmanager.norms
 from auditmanager.norms import derive, fingerprint, join_into_chunks, segment
 from auditmanager.norms.snapshot import DocumentFingerprint
 
@@ -73,7 +74,11 @@ def test_the_run_does_not_depend_on_the_process_it_runs_in(consultant_plus_markd
     Without it, `frozenset` membership in the offcut rule and any future `dict` iteration
     would be unguarded, and the resulting non-determinism would appear only across machines.
     """
-    source = pathlib.Path(__file__).resolve().parents[3] / "src"
+    # Derived from the module this test actually imported, never from this file's own path.
+    # `OPERATING_CONSTRAINTS.md` §2: a mutation applied to a scratch copy of `src/` is invisible
+    # to a subprocess told to import the worktree, and that invisibility looks exactly like a
+    # guard that cannot fire.
+    source = pathlib.Path(auditmanager.norms.__file__).resolve().parents[2]
     program = textwrap.dedent(
         """
         import json, sys

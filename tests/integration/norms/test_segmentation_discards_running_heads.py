@@ -119,3 +119,31 @@ def test_an_offset_points_at_the_paragraph_in_the_recognised_text(
     for paragraph in paragraphs:
         window = text[paragraph.char_offset : paragraph.char_offset + paragraph.char_length]
         assert window == paragraph.text, f"offset {paragraph.char_offset} does not resolve"
+
+
+def test_two_identical_paragraphs_in_one_block_get_two_different_offsets() -> None:
+    """An anchor shared by two chunks is an anchor that cannot be checked.
+
+    Added because the mutation sweep found this guard weak: rewriting the offset search to
+    start from zero every time reddened nothing, since no fixture repeated a line inside one
+    block. The corpus does — a table's units row, a repeated `Примечание` — and the effect
+    would have been two chunks claiming one position, with nothing downstream able to notice.
+    """
+    markdown = (
+        "# Document: X.pdf\n\n## Page 1\n\n### BLOCK #1 [TEXT]: blk_1\n\n"
+        "> **Created:** 2026-08-25 09:22:54 UTC\n"
+        "> **Crop:** [Crop](https://example.invalid/a)\n\n"
+        "Примечание - Значение уточняют по таблице.\n\n"
+        "3.1. Между двумя одинаковыми абзацами стоит текст пункта.\n\n"
+        "Примечание - Значение уточняют по таблице.\n"
+    )
+    paragraphs, _report = segment("example", markdown)
+    repeated = [p for p in paragraphs if p.text.startswith("Примечание")]
+    assert len(repeated) == 2
+    assert repeated[0].char_offset != repeated[1].char_offset
+
+    from auditmanager.norms import recognised_text
+
+    text = recognised_text(markdown)
+    for paragraph in paragraphs:
+        assert text[paragraph.char_offset : paragraph.char_offset + paragraph.char_length] == paragraph.text
