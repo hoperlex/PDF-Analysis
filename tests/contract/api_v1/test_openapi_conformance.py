@@ -29,8 +29,8 @@ survive normalization rather than merely to differ from the pristine document.
 
 `OPERATING_CONSTRAINTS.md` §12: *"never build an expectation, or an input, out of the thing
 under test."* What is under test here is the comparison, not the contract. Its expectations
-are literals in this file: the seven normalization identifiers, the fifteen
-`(method, path, operationId)` triples, the forty-six schema names, the version string,
+are literals in this file: the seven normalization identifiers, the sixteen
+`(method, path, operationId)` triples, the forty-eight schema names, the version string,
 and the exact dotted location each plant must be reported at. The contract is read from
 disk as an **authority**, from a path anchored on this file, which §12 names as the
 opposite case and which the `tests/integration/exports/test_frozen_column_list.py` guard
@@ -86,15 +86,16 @@ surface = conformance.surface
 
 #: `ALPHA_ROADMAP.md` §3 `T-1` and the measurement in the `W13-CONF` brief.
 FROZEN_OPENAPI_VERSION = "3.1.0"
-FROZEN_OPERATION_COUNT = 15
-FROZEN_SCHEMA_COUNT = 46
+FROZEN_OPERATION_COUNT = 16
+FROZEN_SCHEMA_COUNT = 48
 FROZEN_SERVER_URL = "/api/v1"
 
-#: The fifteen operations, written out. Deliberately not derived from the document: an
+#: The sixteen operations, written out. Deliberately not derived from the document: an
 #: operation that disappears from the contract has to fail *here*, not silently reduce the
 #: size of the thing both sides are compared through.
 #:
-#: Twelve until the `R-5` reseal of 2026-09-18 added the three listings.
+#: Twelve until the `R-5` reseal of 2026-09-18 added the three listings, and fifteen until
+#: `W34-CONTRACT` added the credential exchange on 2026-09-22.
 FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("POST", "/projects", "createProject"),
     ("GET", "/projects", "listProjects"),
@@ -111,10 +112,13 @@ FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("GET", "/projects/{project_uid}/documents", "listDocuments"),
     ("GET", "/documents/{document_uid}/versions", "listVersions"),
     ("GET", "/versions/{version_uid}/runs", "listRuns"),
+    ("POST", "/auth/token", "issueToken"),
 )
 
-#: The forty-six `components.schemas` keys, written out. Forty-three until the `R-5`
-#: reseal, which added `DocumentVersionPage`, `RunStatusPage` and `CostBasis`. These are the names the
+#: The forty-eight `components.schemas` keys, written out. Forty-three until the `R-5`
+#: reseal, which added `DocumentVersionPage`, `RunStatusPage` and `CostBasis`, and
+#: forty-six until `W34-CONTRACT` added `IssueTokenRequest` and `IssueTokenResponse`.
+#: These are the names the
 #: Pydantic models must carry (`ALPHA_ROADMAP.md` §4, stage 2: *"named exactly as the
 #: contract's `components.schemas` keys"*). If FastAPI splits a model into `X-Input` and
 #: `X-Output`, this set changes and the gate fails - which is the correct outcome. The fix
@@ -147,6 +151,8 @@ FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
         "FindingUid",
         "IdempotencyKey",
         "InputManifestEntry",
+        "IssueTokenRequest",
+        "IssueTokenResponse",
         "ModelCallId",
         "ObservationProvenance",
         "PageInfo",
@@ -452,8 +458,14 @@ def resealed(document: dict[str, Any]) -> dict[str, Any]:
     """The contract as `W13-SEAL` will leave it: a scheme, and `security` per operation.
 
     `T-6` and stage 0b. Built here so the comparison is shown to handle a contract that
-    carries security on all twelve operations **before** the reseal lands, rather than
+    carries security on every operation **before** the reseal lands, rather than
     discovering at merge time that it does not.
+
+    An operation that already declares its own requirement keeps it. `W34-CONTRACT` added
+    one whose requirement is the empty list -- the credential exchange -- and overwriting
+    it here would have made the synthetic document disagree with the real one about the
+    only operation whose security is interesting, while every test built on this fixture
+    stayed green.
     """
     document = copy.deepcopy(document)
     document.setdefault("components", {})["securitySchemes"] = {
@@ -462,7 +474,7 @@ def resealed(document: dict[str, Any]) -> dict[str, Any]:
     for path_item in document["paths"].values():
         for method in conformance.HTTP_METHODS:
             operation = path_item.get(method)
-            if operation is not None:
+            if operation is not None and "security" not in operation:
                 operation["security"] = [{"bearerAuth": []}]
     return document
 
@@ -867,17 +879,36 @@ class TestN7EffectiveSecurity:
     def test_security_moved_from_root_to_operation_is_invisible(
         self, contract: dict[str, Any]
     ) -> None:
+        """Declaring the *shared* requirement once at the root re-spells the same document.
+
+        `W34-CONTRACT`: only the operations whose requirement is the root's are hoisted. An
+        operation that declares its own keeps it -- the credential exchange declares the
+        empty requirement, and popping that one would not re-spell this document but write
+        a different one, in which a caller needs a credential to obtain a credential. The
+        two counters make that split an assertion rather than a comment: a reseal that
+        quietly opened a second operation, or closed this one, fails here.
+        """
         sealed = resealed(contract)
+        root_requirement = [{"bearerAuth": []}]
         rooted = copy.deepcopy(sealed)
-        rooted["security"] = [{"bearerAuth": []}]
+        rooted["security"] = root_requirement
+        hoisted = 0
+        overriding = 0
         for path_item in rooted["paths"].values():
             for method in conformance.HTTP_METHODS:
-                if method in path_item:
+                if method not in path_item:
+                    continue
+                if path_item[method].get("security") == root_requirement:
                     path_item[method].pop("security")
+                    hoisted += 1
+                else:
+                    overriding += 1
+        assert hoisted == FROZEN_OPERATION_COUNT - 1, hoisted
+        assert overriding == 1, overriding
         assert_silent(differences(surface(rooted), surface(fastapi_flavoured(sealed))))
 
     def test_dropped_operation_security_is_caught(self, contract: dict[str, Any]) -> None:
-        """One unauthenticated operation among twelve authenticated ones."""
+        """One operation stripped of its requirement, among all the others that keep one."""
         sealed = resealed(contract)
         mutated = plant(
             fastapi_flavoured(sealed),

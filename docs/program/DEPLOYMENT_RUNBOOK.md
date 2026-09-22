@@ -63,7 +63,7 @@ ssh -L 31500:127.0.0.1:31500 <host>        # then open http://127.0.0.1:31500 lo
 
 **Why the default is loopback, measured rather than assumed.** The compose file used to
 publish with no interface at all, which binds `0.0.0.0`. On this host the stand answered
-**`200`** on its **public** address, at `/bff/v1` — which serves all fifteen operations,
+**`200`** on its **public** address, at `/bff/v1` — which serves all sixteen operations,
 **writes included**, with no credential, because the browser deliberately holds no secret and
 the BFF route adds it server-side. The origin is unauthenticated *by design*; nothing but the
 network was keeping anyone out.
@@ -163,8 +163,14 @@ Two of its values are not free choices:
   python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
   ```
 
+  **Since wave 34 this is the key the API signs reviewer credentials with, not a token
+  anyone presents.** Whoever holds it can mint a credential for any subject, so it goes to
+  the API process and nowhere else — not to a reviewer, not into a browser, not into a
+  request header. The paragraph that used to tell operators to present it as a bearer
+  token is corrected in `infra/deploy/README.md`.
+
   The seam is **fail-closed**: a container started without it exits non-zero rather than
-  serving `authentication_required` to all fifteen operations, which from a browser looks
+  serving `authentication_required` to all sixteen operations, which from a browser looks
   like a broken product rather than an unconfigured one;
 
 * **the passwords.** `deploy.sh` compares what you wrote against the example file's own

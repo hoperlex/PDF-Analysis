@@ -28,6 +28,12 @@ HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "tra
 #: plus the three `R-5` added: P2-API-01's eleven capabilities are what a *client journey*
 #: needs, and `W15-RUN` measured in a browser that the journey cannot be resumed without
 #: a way to list what it produced. `DEBT_REGISTER.md` D-16.
+#:
+#: And `issueToken`, added by `W34-CONTRACT`. It implements no product capability: `R-3`
+#: required a bearer credential on every operation and the document described no way to
+#: obtain one, so the surface admitted only a caller already holding a credential from
+#: somewhere this document does not name. It is the seam's own door and is listed here
+#: because this set is the whole surface, not the product part of it.
 REQUIRED_OPERATIONS = {
     "createProject",
     "listProjects",
@@ -44,7 +50,14 @@ REQUIRED_OPERATIONS = {
     "listDocuments",
     "listVersions",
     "listRuns",
+    "issueToken",
 }
+
+#: The operations a caller reaches while holding no credential. Exactly one, and it is
+#: the one that hands a credential out. `UNAUTHENTICATED_OPERATIONS` is a register of
+#: *deliberate* exceptions, not a tolerance: anything else that opts itself out of the
+#: root requirement is reported by `test_every_operation_requires_the_bearer_scheme`.
+UNAUTHENTICATED_OPERATIONS = {"issueToken"}
 
 WRITE_OPERATIONS = {"createProject", "uploadDocument", "startRun", "appendDecision"}
 
@@ -342,28 +355,87 @@ def test_every_declared_scheme_is_required_somewhere(openapi_document: dict) -> 
 
 
 def test_every_operation_requires_the_bearer_scheme(openapi_document: dict) -> None:
-    """All twelve, and not by counting the ones that happen to be listed.
+    """All of them but the registered exception, and not by counting the listed ones.
 
     `security: []` on an operation, or a root requirement containing an empty
     alternative, makes that operation unauthenticated. Both are checked, because both
     are how an operation quietly leaves the authorized surface.
+
+    `W34-CONTRACT` added the one operation that is *supposed* to be reachable without a
+    credential, since it is what a caller with none uses to obtain one. The exception is
+    a register of names, so the guard reports any **other** operation that opts itself
+    out instead of widening to "whatever is unauthenticated today".
     """
     operations = _operations(openapi_document)
     assert set(operations) == REQUIRED_OPERATIONS
+    opened: set[str] = set()
     for name, operation in operations.items():
         effective = _effective_security(openapi_document, operation)
-        assert effective, f"{name} requires no credential"
+        if not effective:
+            opened.add(name)
+            continue
         for alternative in effective:
-            assert alternative, f"{name} accepts an unauthenticated alternative"
+            if not alternative:
+                opened.add(name)
+                continue
             assert BEARER_SCHEME in alternative, f"{name} does not require {BEARER_SCHEME}"
+    assert opened == UNAUTHENTICATED_OPERATIONS, (
+        "the set of operations reachable with no credential is not the registered one: "
+        f"opened={sorted(opened)} registered={sorted(UNAUTHENTICATED_OPERATIONS)}"
+    )
+
+
+def test_the_unauthenticated_operation_is_the_one_that_hands_out_a_credential(
+    openapi_document: dict,
+) -> None:
+    """The register is only worth something if what it admits is what it says it admits.
+
+    A name in `UNAUTHENTICATED_OPERATIONS` excuses an operation from the requirement the
+    whole surface is built on, so this pins what that one operation actually is: it takes
+    a credential and returns one, and it is the only path in the document that does.
+    """
+    operations = _operations(openapi_document)
+    for name in UNAUTHENTICATED_OPERATIONS:
+        operation = operations[name]
+        assert operation["_method"] == "post", name
+        body = _resolve(
+            openapi_document,
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+        )
+        assert set(body["required"]) == {"login", "password"}, name
+        success = _resolve(
+            openapi_document,
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        )
+        assert set(success["required"]) == {"token", "expires_in"}, name
+        # `T-6`: the document describes the exchange and never the credential. A format,
+        # an issuer or a flow would be a promise the deployment has to keep for ever.
+        assert "bearerFormat" not in openapi_document["components"]["securitySchemes"][
+            BEARER_SCHEME
+        ], "the token format is back in the document"
+        assert set(success["properties"]["token"]) <= {"type", "description", "minLength"}, (
+            "the token schema constrains its own structure, which pins the credential "
+            "format the scheme deliberately leaves open"
+        )
 
 
 def test_every_operation_can_report_401_and_403(openapi_document: dict) -> None:
-    """A scheme with no declared refusal leaves a generated client no typed shape."""
+    """A scheme with no declared refusal leaves a generated client no typed shape.
+
+    `W34-CONTRACT`: the 403 is `permission_denied`, which the response component defines
+    as *"the authenticated subject is not permitted"*. The credential exchange has no
+    authenticated subject -- it is the operation that produces one -- so it declares the
+    401 and must **not** declare a 403, and that is asserted rather than skipped.
+    """
     for name, operation in _operations(openapi_document).items():
         responses = operation["responses"]
         assert responses["401"]["$ref"] == "#/components/responses/AuthenticationRequired", name
-        assert responses["403"]["$ref"] == "#/components/responses/PermissionDenied", name
+        if name in UNAUTHENTICATED_OPERATIONS:
+            assert "403" not in responses, (
+                f"{name} presents no credential, so it has no subject a 403 could deny"
+            )
+        else:
+            assert responses["403"]["$ref"] == "#/components/responses/PermissionDenied", name
 
 
 def test_the_document_no_longer_says_it_has_no_authentication(
@@ -491,7 +563,22 @@ def test_correlation_and_idempotency_carry_their_contract_pattern(
 # ---------------------------------------------------------------------------
 
 
-def test_no_schema_property_names_an_address_or_a_secret(openapi_document: dict) -> None:
+#: The only two places a banned property name is the correct name, each as an exact
+#: `Schema.properties.key` location and never as a bare name. `W34-CONTRACT`: the
+#: credential exchange takes a password and returns a token, and a schema that could not
+#: spell either could not describe the operation at all. Registered this way, `password`
+#: on any other schema is still a leak -- which is the whole point of the ban -- and
+#: `test_the_admitted_secret_properties_are_real_and_exhaustive` proves each entry still
+#: names something, so a rename cannot leave a dead exemption behind.
+ADMITTED_SECRET_PROPERTIES = frozenset(
+    {
+        "IssueTokenRequest.properties.password",
+        "IssueTokenResponse.properties.token",
+    }
+)
+
+
+def _secret_property_offenders(document: dict) -> list[str]:
     banned = {
         "bucket",
         "bucket_name",
@@ -519,12 +606,56 @@ def test_no_schema_property_names_an_address_or_a_secret(openapi_document: dict)
         "idempotency_key",
     }
     offenders = []
-    for name, schema in openapi_document["components"]["schemas"].items():
+    for name, schema in document["components"]["schemas"].items():
         for path, node in _walk(schema, name):
             if not path.endswith(".properties"):
                 continue
             offenders.extend(f"{path}.{key}" for key in node if key in banned)
+    return offenders
+
+
+def test_no_schema_property_names_an_address_or_a_secret(openapi_document: dict) -> None:
+    offenders = [
+        found
+        for found in _secret_property_offenders(openapi_document)
+        if found not in ADMITTED_SECRET_PROPERTIES
+    ]
     assert offenders == [], f"response shapes leak {offenders}"
+
+
+def test_the_admitted_secret_properties_are_real_and_exhaustive(
+    openapi_document: dict,
+) -> None:
+    """Every registered exception still names a property, and nothing more is excused.
+
+    An exemption for a property that no longer exists is an exemption nobody is reading,
+    and the next schema to carry that name inherits it silently.
+    """
+    found = set(_secret_property_offenders(openapi_document))
+    assert ADMITTED_SECRET_PROPERTIES <= found, sorted(ADMITTED_SECRET_PROPERTIES - found)
+    assert found == ADMITTED_SECRET_PROPERTIES, sorted(found - ADMITTED_SECRET_PROPERTIES)
+
+
+def test_the_secret_property_detector_would_report_a_real_leak(
+    openapi_document: dict,
+) -> None:
+    """The exemption is a filter over a detector that still works. Shown, not assumed."""
+    import copy
+
+    planted = copy.deepcopy(openapi_document)
+    planted["components"]["schemas"]["Project"]["properties"]["password"] = {"type": "string"}
+    planted["components"]["schemas"]["IssueTokenResponse"]["properties"]["object_key"] = {
+        "type": "string"
+    }
+    offenders = [
+        found
+        for found in _secret_property_offenders(planted)
+        if found not in ADMITTED_SECRET_PROPERTIES
+    ]
+    assert sorted(offenders) == [
+        "IssueTokenResponse.properties.object_key",
+        "Project.properties.password",
+    ], offenders
 
 
 def test_the_envelope_forbids_the_catalog_forbidden_detail_keys(

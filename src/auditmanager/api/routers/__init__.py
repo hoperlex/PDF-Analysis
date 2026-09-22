@@ -1,6 +1,6 @@
-"""The fifteen operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The sixteen operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the six router modules. It takes its
+:func:`build_router` assembles one ``APIRouter`` from the seven router modules. It takes its
 dependencies as arguments and constructs none of them: choosing what sits behind each port
 is the composition root's job (``api/composition.py``), and a factory that reached for a
 concrete implementation would have taken that decision away from it.
@@ -8,12 +8,13 @@ concrete implementation would have taken that decision away from it.
 ``tests/contract/api_v1/test_openapi_conformance.py`` asserts the generated document's
 ``(operationId, method, path)`` set against the frozen document itself, so a thirteenth
 operation fails the suite and a missing one cannot be overlooked. ``web/tests/contract/
-openapi-drift.contract.test.ts`` counts fifteen from the other side.
+openapi-drift.contract.test.ts`` counts them from the other side.
 
-**The signature is the one the composition root already calls.** ``build_router`` took six
-keyword-only ports before `T-1` and takes the same six now; ``Router`` is still the name of
-what it returns. That is what let the transport change without ``bootstrap/composition.py``
--- another session's file -- moving a line.
+**The signature is still the one ``api/app.py`` already calls.** ``build_router`` took six
+keyword-only ports before `T-1` and takes the same six now; `W34-API` added a seventh with a
+default rather than a seventh argument, so the two call sites in that file -- which this
+session does not own -- did not have to move. ``Router`` is still the name of what it
+returns.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from typing import Final
 
 from fastapi import APIRouter
 
+from auditmanager.api.routers.auth import build_auth_routes
 from auditmanager.api.routers.correlation import (
     CORRELATION_HEADER,
     CorrelationMiddleware,
@@ -51,6 +53,7 @@ from auditmanager.api.routers.idempotency import (
 )
 from auditmanager.api.routers.multipart import MAX_BODY, BodyCapMiddleware
 from auditmanager.api.routers.ports import (
+    CredentialPort,
     CsvExportPort,
     DecisionPort,
     DocumentPort,
@@ -74,6 +77,7 @@ __all__ = [
     "METHOD_NOT_ALLOWED_CODE",
     "BodyCapMiddleware",
     "CorrelationMiddleware",
+    "CredentialPort",
     "CsvExportPort",
     "DecisionPort",
     "DocumentPort",
@@ -83,6 +87,7 @@ __all__ = [
     "Router",
     "RunPort",
     "WireResponse",
+    "build_auth_routes",
     "build_router",
     "current_correlation_id",
     "declare_correlation_id",
@@ -118,17 +123,29 @@ def build_router(
     findings: FindingPort,
     decisions: DecisionPort,
     exports: CsvExportPort,
+    credentials: CredentialPort | None = None,
 ) -> Router:
-    """Assemble the fifteen operations.
+    """Assemble the sixteen operations.
 
-    Keyword-only, because six same-shaped dependencies passed positionally is a wiring
+    Keyword-only, because seven same-shaped dependencies passed positionally is a wiring
     defect waiting to happen and the type checker cannot see it.
+
+    ``credentials`` has a default and the other six do not, for one reason that is not
+    taste: ``api/app.py`` -- another session's file -- calls this with exactly the six it
+    has called it with since `B6`, and ``create_documentation_app`` builds the served
+    document with nothing behind any port at all. A seventh *required* argument would have
+    made the credential exchange a change to that file. The exchange is therefore
+    **declared** in every router and **answerable** only in one that was handed a port,
+    which is the same bargain ``create_documentation_app`` already makes with the other six:
+    the document is a function of the declarations, and serving a request is not.
+    ``test_the_wired_application_can_answer_the_exchange`` is what says the composition root
+    really hands one over.
     """
     router = APIRouter()
     # One router, registered onto directly, rather than six included into a seventh.
     # ``include_router`` wraps each sub-router instead of copying its routes, so
-    # ``router.routes`` would carry six opaque wrappers and the fifteen-operation
-    # assertions -- ``len(routes) == 15``, the ``(operationId, method, path)`` set,
+    # ``router.routes`` would carry seven opaque wrappers and the whole-surface
+    # assertions -- the route count, the ``(operationId, method, path)`` set,
     # ``tests/integration/api/test_operation_surface.py`` -- could not see an operation at
     # all. A table nobody can enumerate is a table nobody can check.
     build_project_routes(router, projects)
@@ -137,6 +154,7 @@ def build_router(
     build_finding_routes(router, findings)
     build_decision_routes(router, decisions)
     build_export_routes(router, exports)
+    build_auth_routes(router, credentials)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

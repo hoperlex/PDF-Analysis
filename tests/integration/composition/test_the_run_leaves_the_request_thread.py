@@ -85,8 +85,27 @@ else:
     sys.modules[_HARNESS_NAME] = harness
     _spec.loader.exec_module(harness)
 
-#: `T-6`. Written out, not imported from the seam it authenticates against.
-STATIC_TOKEN = "w20-exec-carrier-token"
+#: `T-6`. Written out, not imported from the seam it authenticates against. The secret
+#: the signing key is derived from; the credential is minted from it below.
+DEPLOYMENT_SECRET = "w20-exec-carrier-token"
+
+def _minted_credential(secret: str) -> str:
+    """A credential minted with this suite's deployment secret.
+
+    `W34-API`: the configured string is the signing material and no longer a credential,
+    so a suite that presents it is refused. The subject is this suite's own; what is under
+    test here is the wiring behind the seam, not who the caller is.
+    """
+    from auditmanager.api.security import Subject, build_signer
+
+    signer = build_signer({API_TOKEN_VARIABLE: secret})
+    assert signer is not None, "this suite's own secret derives a signing key"
+    return signer.issue(
+        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991S", login="composition-suite")
+    ).token
+
+
+STATIC_TOKEN = _minted_credential(DEPLOYMENT_SECRET)
 
 #: The four `audit_run` terminals, written out rather than read from the topology this
 #: suite drives: an expectation taken from the thing under test cannot report that it
@@ -237,7 +256,7 @@ def _client(
         exports=None,  # type: ignore[arg-type]
     )
     app = create_asgi_app(
-        environ={API_TOKEN_VARIABLE: STATIC_TOKEN},
+        environ={API_TOKEN_VARIABLE: DEPLOYMENT_SECRET},
         application=_Built(router, carrier, sessions),  # type: ignore[arg-type]
     )
     yield TestClient(app, raise_server_exceptions=False)

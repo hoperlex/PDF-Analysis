@@ -27,6 +27,19 @@ export function AppFrame({ children }: AppFrameProps) {
           AuditManager
         </Link>
         {/*
+         * The way back in, and it is not decoration.
+         *
+         * `JUDGE-CLAIM` measured the state without it: a reviewer whose session expired —
+         * or whose web container restarted, since the session register lives in the Node
+         * process's memory — met `401` on every call and had no route to the sign-in
+         * screen except typing the address. The screen existed and nothing pointed at it.
+         *
+         * One link in the frame, so the wall of refusals has a door beside it.
+         */}
+        <Link className="am-app__signin" href="/login">
+          Вход
+        </Link>
+        {/*
          * `PC-01` stood here and is gone. It is the programme's own checkpoint code — it
          * told a reviewer nothing and it named the thing `R-18` says the alpha must stop
          * looking like. The integrator translated the footer for the same reason

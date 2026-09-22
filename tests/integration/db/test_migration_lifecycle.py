@@ -17,6 +17,9 @@ from auditmanager.shared.db.config import DatabaseSettings
 #: database, so a table silently disappearing from the migration fails here.
 EXPECTED_TABLES = {
     "alembic_version",
+    # `0006_app_user`: the one table outside the PC-01 analysis schema. It is listed
+    # here rather than exempted, because "exactly the declared relations" is the claim.
+    "app_user",
     "audit_event",
     "audit_run",
     "blob",

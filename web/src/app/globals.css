@@ -661,6 +661,17 @@ input[type='file']::file-selector-button:hover {
 }
 
 .am-app__context,
+.am-app__signin {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--am-accent);
+  text-decoration: none;
+}
+
+.am-app__signin:hover {
+  text-decoration: underline;
+}
+
 .am-app__instance {
   font-size: var(--am-text-xs);
   color: var(--am-ink-muted);

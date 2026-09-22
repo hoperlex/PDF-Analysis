@@ -30,8 +30,27 @@ from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
 
-#: `T-6`. This suite configures the seam and presents its credential, as a literal.
-STATIC_TOKEN = "composition-static-token"
+#: `T-6`. This suite configures the seam's deployment secret, as a literal, and presents
+#: a credential minted from it -- which is what the deployment itself does.
+DEPLOYMENT_SECRET = "composition-static-token"
+
+def _minted_credential(secret: str) -> str:
+    """A credential minted with this suite's deployment secret.
+
+    `W34-API`: the configured string is the signing material and no longer a credential,
+    so a suite that presents it is refused. The subject is this suite's own; what is under
+    test here is the wiring behind the seam, not who the caller is.
+    """
+    from auditmanager.api.security import Subject, build_signer
+
+    signer = build_signer({API_TOKEN_VARIABLE: secret})
+    assert signer is not None, "this suite's own secret derives a signing key"
+    return signer.issue(
+        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991S", login="composition-suite")
+    ).token
+
+
+STATIC_TOKEN = _minted_credential(DEPLOYMENT_SECRET)
 
 
 class Composed:
@@ -51,7 +70,7 @@ class Composed:
 @pytest.fixture(scope="module")
 def app() -> Composed:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
-    environ = dict(os.environ) | {API_TOKEN_VARIABLE: STATIC_TOKEN}
+    environ = dict(os.environ) | {API_TOKEN_VARIABLE: DEPLOYMENT_SECRET}
     application = create_app(environ=environ)
     asgi = create_asgi_app(environ=environ, application=application)
     return Composed(application, TestClient(asgi, raise_server_exceptions=False))

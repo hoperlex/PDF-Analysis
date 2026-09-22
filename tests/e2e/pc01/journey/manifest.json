@@ -158,6 +158,37 @@
         }
       ],
       "follow": null
+    },
+    {
+      "name": "sign-in",
+      "path": "/login",
+      "page_module": "web/src/app/login/page.tsx",
+      "$comment": [
+        "The sign-in screen, added by W34-WEB because this manifest is where a new screen",
+        "is declared: `test_the_journey_walks_every_screen_the_application_offers` reddens",
+        "the moment `web/src/app` offers one the journey does not walk, which is the point",
+        "of that check and not a side effect of it.",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission. The screen renders a",
+        "`<form>` and asks the API nothing until it is submitted: the exchange is a POST the",
+        "browser makes on navigation, to `/bff/v1/session`, which is this tier's own address",
+        "and not an operation of `contracts/api/v1/openapi.json`. Declaring a contract",
+        "operation here would name a call the browser does not make on load, and the walk",
+        "asserts in both directions -- every declared call observed, and no undeclared one.",
+        "",
+        "It is LAST so the read walk's follow-chain is untouched: `root` hands `/projects`",
+        "the first project uid and each route after it captures the next identifier. A route",
+        "inserted before them walks a screen with nothing captured yet.",
+        "",
+        "What this route does NOT cover is the submitted exchange -- the password typed, the",
+        "303, the cookie, the credential the forwarder then presents. That is a write step",
+        "against a live API that can mint a token, and the API half of the exchange does not",
+        "exist yet (W34-CONTRACT published the operation; no router implements it). The",
+        "session report of W34-WEB names it as the open half rather than declaring a step",
+        "here that no stack can satisfy."
+      ],
+      "expects_api": [],
+      "follow": null
     }
   ],
   "write": {

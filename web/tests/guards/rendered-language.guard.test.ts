@@ -78,6 +78,7 @@ import { ProjectDetailPage } from '@/_pages/project-detail';
 import { AppFrame } from '@/_app';
 import { ProjectsPage } from '@/_pages/projects';
 import { ReviewPage } from '@/_pages/review';
+import { SignInPage } from '@/_pages/sign-in';
 import { RunPage } from '@/_pages/run';
 import { VersionDetailPage } from '@/_pages/version-detail';
 
@@ -659,6 +660,28 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
    * page regression. As its own entry it names itself in the failure.
    */
   { name: 'app-frame', make: () => createElement(AppFrame, { children: null }) },
+  /*
+   * The sign-in screen, and its two other shapes, APPENDED.
+   *
+   * Appended and not inserted: `renderedScreens()` reaches the review screen by index --
+   * `SCREENS[5]!.make()` for the detail-pending pass -- so a screen put anywhere but the end
+   * silently renders a different page under the review screen's name. That is a footgun of
+   * this file's own making and it is cheaper to write the rule down than to remove the index.
+   *
+   * Three entries rather than one because the screen has three shapes and a static pass
+   * renders exactly what its props select: the credentials form, the form carrying a
+   * refusal, and the panel a signed-in reviewer sees. `W32-SEE` measured the cost of the
+   * opposite choice -- an English sentence in a branch nothing rendered reddened nothing --
+   * and the branch here is the whole refusal wording, which is the one string on this
+   * screen a reviewer reads only when something has gone wrong.
+   *
+   * The login is Cyrillic for the reason every fixture in this file is: it is the server's
+   * data, not this programme's prose. The other three refusal sentences are judged by
+   * `web/tests/unit/session/sign-in-screen.test.ts`, which renders all four.
+   */
+  { name: 'sign-in', make: () => createElement(SignInPage, {}) },
+  { name: 'sign-in-refused', make: () => createElement(SignInPage, { refusal: 'credentials' }) },
+  { name: 'sign-in-open', make: () => createElement(SignInPage, { login: 'проверяющий' }) },
 ];
 
 /**
