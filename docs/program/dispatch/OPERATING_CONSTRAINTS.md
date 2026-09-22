@@ -166,6 +166,52 @@ and the obvious next step — weakening it — damages a guard that was never at
 and compare the wall clock against a normal run.** A gate that took twice as long as usual is
 evidence about the machine, not about the code.
 
+## 4.65 A type-keyed map is only a guard where a typechecker runs
+
+**Recorded 2026-09-22. `make gate` ran no typechecker at all, and had not since the frontend
+existed.**
+
+`run_frontend` was `npm --prefix web test`. That is vitest, vitest transforms TypeScript with
+**esbuild**, and **esbuild does not typecheck**. So every rule this repository expresses in the
+type system — the FSD import boundaries, the contract-derived unions, `run-state.ts`'s
+compile-time partition proof, `W37-D57`'s tagged query keys — **was guarded by a command the
+gate never ran.** A type error could reach `main` on a green gate and fail at `next build`.
+
+**What it cost, measured rather than imagined.** Wave 34 keyed its label maps
+`Record<ContractType, string>` so a value added to the contract fails to compile until it is
+given a label. That caught **`Verdict.needs_manual_review`** and **`DecisionEventType.revoke`**
+— two real contract members the session's own grep had missed, both of which would have
+rendered as raw identifiers on a reviewer's screen. **The frontend battery was green with both
+missing.**
+
+**They were caught by habit, not by a guard.** That session's briefs listed `npx tsc --noEmit`
+beside `npm test`, and it ran it by hand. Nothing enforced it, no stream would have reddened
+for skipping it, **and a session running only what `make gate` runs would have shipped both.**
+
+So the rule, and it is uncomfortable because the pattern's whole appeal is that it looks
+self-enforcing:
+
+> **A type-keyed map is only a guard where a typechecker runs. Everywhere else it is
+> documentation that happens to be well-formatted.**
+
+`run_frontend` now runs `npm --prefix web run typecheck` **before** the suite, and
+`web/tests/guards/query-key-shape.guard.test.ts` asserts that Makefile line exists — because
+without that, the obligation leaves the gate the first time someone tidies a Makefile and the
+suite stays green running its own `tsc`.
+
+### And a selector widened by unrelated work stops measuring what its instruction named
+
+`certification-ac7c348.json` told the next certification to read criterion 4's states from
+`[data-run-state]`, *"never from the screen's prose"*. Right intent. Then translating contract
+vocabulary put **bare `data-run-state` spans into explanatory prose**, and the version screen
+listed badges for previous runs — so on one run's screen that selector now matches **three**
+states.
+
+**It does not fail. It passes for the wrong reason, and keeps passing.** `D-68`; the correct
+selector is `span.am-badge[data-run-state]`. It belongs beside the residue-count rule because
+both are an instrument that **silently changed subject** while its instruction stayed the
+same.
+
 ## 4.7 A document that outlives the code it describes becomes an attack
 
 **Recorded 2026-09-22 from wave 34's judges, and it is the first finding in this programme
