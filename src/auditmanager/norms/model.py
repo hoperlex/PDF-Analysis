@@ -108,7 +108,7 @@ class SegmentationReport:
     """
 
     document_slug: str
-    pages: int
+    page_headings: int
     blocks: int
     recognised_characters: int
     candidates: int
@@ -132,7 +132,7 @@ class CorpusTotals:
     """The same counts summed over a corpus. Addition only, so it cannot disagree with the parts."""
 
     documents: int = 0
-    pages: int = 0
+    page_headings: int = 0
     blocks: int = 0
     recognised_characters: int = 0
     candidates: int = 0

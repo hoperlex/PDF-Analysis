@@ -43,6 +43,13 @@ _PAGE_OF_PAGES = re.compile(r"^Страница\s+\d+\s+из\s+\d+$")
 #: the corpus contains both and a rule that knows one spelling is a §12 shape.
 _ELLIPSIS_ENDINGS: tuple[str, ...] = ("...", "…")
 
+#: Closing punctuation the truncation may sit inside. The export quotes the document title,
+#: and it truncates the title *within* the quotes as often as after them: measured over the
+#: corpus, 838 lines in 102 documents end `..."` rather than `...`. A rule that tested the
+#: last character alone would have left those 838 running heads in the embedded text, and
+#: nothing downstream would ever have said so.
+_TRAILING_CLOSERS = "\"»”’')"
+
 _EMPHASIS = "*_ \t"
 
 
@@ -70,7 +77,7 @@ def is_publisher_noise(paragraph: str) -> bool:
 
 
 def ends_with_ellipsis(paragraph: str) -> bool:
-    return paragraph.rstrip().endswith(_ELLIPSIS_ENDINGS)
+    return paragraph.rstrip().rstrip(_TRAILING_CLOSERS).endswith(_ELLIPSIS_ENDINGS)
 
 
 def repeated_offcuts(paragraphs: Iterable[str]) -> frozenset[str]:

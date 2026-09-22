@@ -49,12 +49,16 @@ class _Block:
 
 
 def _parse_blocks(markdown: str) -> tuple[list[_Block], int]:
-    """Split a `results.md` into blocks, and report how many `## Page` headings it carried.
+    """Split a `results.md` into blocks, and count the `## Page` headings it carried.
 
-    Pages and blocks are counted separately on purpose. `R-16` says *one block per page*
-    beside 28 249 blocks over 28 251 pages; the manifest records why the two disagree
-    (`ГОСТ_Р_50030_2-2010` has two pages with no block), and a parse that assumed the identity
-    would either lose a page or invent a block.
+    The count is of headings, not of PDF pages, and the two are different numbers. `results.md`
+    prints a `## Page N` heading only where the page carries a block: across the corpus there
+    are 28 249 headings and 28 249 blocks over 28 251 PDF pages, because `ГОСТ_Р_50030_2-2010`
+    has two pages with no block and `results.md` does not mention them at all.
+
+    The label is the true PDF page number and does not renumber over the gap — that document's
+    headings run 1..225 with 22 and 210 absent — so `page_label` can be used to fetch the page
+    crop. A field named `pages` here would have been a count of something the file cannot see.
     """
     blocks: list[_Block] = []
     pages = 0
@@ -85,7 +89,7 @@ def recognised_text(markdown: str) -> str:
     an offset is worthless unless the text it indexes is reconstructible from the source by
     anyone who reads this function.
     """
-    blocks, _pages = _parse_blocks(markdown)
+    blocks, _page_headings = _parse_blocks(markdown)
     return "\n\n".join("\n".join(block.body).strip("\n") for block in blocks)
 
 
@@ -127,7 +131,7 @@ def attribution(markdown: str) -> SourceAttribution:
 
 def segment(document_slug: str, markdown: str) -> tuple[tuple[Paragraph, ...], SegmentationReport]:
     """Parse one `results.md` into substantive paragraphs plus the counts behind them."""
-    blocks, pages = _parse_blocks(markdown)
+    blocks, page_headings = _parse_blocks(markdown)
 
     candidates: list[tuple[int, str, str]] = []  # (page_label, block_id, text)
     offset_by_index: list[int] = []
@@ -191,7 +195,7 @@ def segment(document_slug: str, markdown: str) -> tuple[tuple[Paragraph, ...], S
 
     report = SegmentationReport(
         document_slug=document_slug,
-        pages=pages,
+        page_headings=page_headings,
         blocks=len(blocks),
         recognised_characters=sum(len("\n".join(b.body).strip("\n")) for b in blocks)
         + max(len(blocks) - 1, 0) * 2,

@@ -105,7 +105,7 @@ def segment_corpus(
 def totals(reports_and_chunks: Iterator[tuple[SegmentationReport, tuple[Paragraph, ...], tuple[Chunk, ...]]]) -> CorpusTotals:
     """Sum a corpus run. Addition only: a total here cannot disagree with its parts."""
     accumulated = {
-        "documents": 0, "pages": 0, "blocks": 0, "recognised_characters": 0, "candidates": 0,
+        "documents": 0, "page_headings": 0, "blocks": 0, "recognised_characters": 0, "candidates": 0,
         "discarded_publisher_noise": 0, "discarded_repeated_offcut": 0, "substantive": 0,
         "numbered_clauses": 0, "headings": 0, "table_rows": 0, "substantive_characters": 0,
         "chunks": 0, "chunk_characters": 0,
@@ -114,7 +114,7 @@ def totals(reports_and_chunks: Iterator[tuple[SegmentationReport, tuple[Paragrap
     for report, _paragraphs, chunks in reports_and_chunks:
         accumulated["documents"] += 1
         for name in (
-            "pages", "blocks", "recognised_characters", "candidates",
+            "page_headings", "blocks", "recognised_characters", "candidates",
             "discarded_publisher_noise", "discarded_repeated_offcut", "substantive",
             "numbered_clauses", "headings", "table_rows", "substantive_characters",
         ):
