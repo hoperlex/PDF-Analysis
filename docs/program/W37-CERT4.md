@@ -551,11 +551,153 @@ the same copy.
 
 ## 4. Findings
 
-*pending*
+Eight, none repaired. `DEBT_REGISTER.md` is the integrator's file and a forbidden hotspot for
+this task, so each row is written here with the command a later session re-runs.
+
+### `W37CERT4-1` — criterion 8 is a container destruction and recreation, not a host reboot
+
+- **Tree:** none. This is a property of the certifying arrangement.
+- **Severity:** the named exception on criterion 8. Nothing to repair.
+- **Already registered as `D-51`.** Its reason was **re-measured at `b0e5c07` and still holds**:
+  a certifying session is a process on the host it would have to reboot and cannot witness its
+  own reboot. A **second** reason now stands beside it that did not exist in wave 30: the peer
+  stream `W37-D57` was live on this host throughout, as were the owner's stand and two other
+  lanes' services. `OPERATING_CONSTRAINTS.md` §4.5 is exactly about host-wide actions on shared
+  resources.
+- **Check:** `diff` of the census either side of a `docker compose down` (no `-v`) plus
+  `deploy.sh`, as in criterion 8 above.
+
+### `W37CERT4-2` — every screen of the alpha tells the reviewer there are no accounts
+
+- **Tree:** `web/src/_app/app-frame.tsx:70`.
+- **Measured:** the footer of **every screen, including `/login`**, reads
+  *«Альфа-версия. Один проверяющий, без учётных записей и разделения доступа.»* — "one reviewer,
+  no accounts and no access separation". At `b0e5c07` there is a sign-in screen, an `app_user`
+  table, a seeded account and a surface that refuses all fifteen guarded operations without a
+  credential.
+- **Severity:** medium. It is not a stale count: it is a **statement about the security posture**
+  rendered to whoever uses the alpha, and it is now the opposite of the truth. It reads as
+  reassurance that nothing is protected, next to a sign-in form.
+- **Check:** `grep -n "без учётных записей" web/src/_app/app-frame.tsx` — one hit at `b0e5c07`.
+
+### `W37CERT4-3` — the file that holds the credential still documents the behaviour it replaced
+
+- **Tree:** `web/src/app/bff/v1/[...path]/route.ts`, the `## Which credential is presented`
+  block, lines 39–45.
+- **Measured:** it says *"**no session cookie** — the deployment's own credential, exactly as
+  `W15-AUTH` left it. **Nothing about the alpha's behaviour changes for a browser that has not
+  signed in.**"* One hundred and sixty lines further down, the same file documents and
+  implements the opposite: `noSession()` answers `401` and forwards nothing, and its own comment
+  says *"**This replaces forwarding the deployment credential**"*.
+- **Severity:** medium, and it is `OPERATING_CONSTRAINTS.md` §4.7's exact shape one level in.
+  §4.7 caught the stale instruction in `infra/deploy/README.md` and `DEPLOYMENT_RUNBOOK.md` —
+  **both of those are correct at `b0e5c07`, verified** — and left the same claim standing inside
+  the module that holds the key. A reviewer reading this file to answer *"can a browser reach the
+  API without signing in?"* is told **yes** by its own header.
+- **Check:** `sed -n '39,46p' 'web/src/app/bff/v1/[...path]/route.ts'` against
+  `sed -n '195,218p'` of the same file.
+
+### `W37CERT4-4` — two collection endpoints answer `200` for a parent that does not exist
+
+- **Tree:** the `listRunFindings` and `listDecisions` operations.
+- **Measured** on the owner's stand, with a valid credential and a **well-formed 26-character
+  ULID that names nothing** (`/root/w37-logs/cert4-nonexistent-parent.log`):
+
+  | request | answer |
+  |---|---|
+  | `GET /runs/run_01M34N4H18E6570C3HTMXA0000` | `404 not_found` |
+  | `GET /runs/run_01M34N4H18E6570C3HTMXA0000/findings` | **`200`, `items: []`** |
+  | `GET /runs/run_01M34N4H18E6570C3HTMXA0000/export.csv` | `404 not_found` |
+  | `GET /findings/fnd_01M34N4H18E6570C3HTMXA0000` | `404 not_found` |
+  | `GET /findings/fnd_01M34N4H18E6570C3HTMXA0000/decisions` | **`200`, `items: []`** |
+  | `GET /versions/ver_…0000/runs` | `404 not_found` |
+  | `GET /documents/doc_…0000/versions` | `404 not_found` |
+  | `GET /projects/prj_…0000/documents` | `404 not_found` |
+
+- **Severity:** low-to-medium. Seven of the nine agree; two do not. A client cannot tell
+  *"this run published no findings"* from *"this run does not exist"*, and the CSV endpoint on
+  the same parent disagrees with the findings endpoint about whether that parent is there.
+- **Check:** the nine requests above, verbatim.
+
+### `W37CERT4-5` — the seam's fail-closed default for an unreadable route has no guard
+
+- **Tree:** `src/auditmanager/api/security.py`, `_operation_of` and `require_authorization`.
+- **Measured:** mutation **M5** — rewriting the guard so that a route the seam cannot identify
+  is **exempted** instead of guarded — leaves `tests/integration/api/test_authorization.py`,
+  `tests/integration/auth` and `tests/integration/composition/test_api_token_channel.py` at
+  **77 passed**. The module's own docstring states the opposite as a property:
+  *"A route whose `operationId` the seam cannot read is guarded, not exempted, so a new
+  operation is closed by default."*
+- **Not currently exploitable, and that is the point.** All **16** routes on the built
+  application carry an `operation_id` (measured: `routes total: 16, routes with NO
+  operation_id: 0`). So the claim is true today and **nothing would redden on the day it stops
+  being true** — which is precisely the day a route is added without one.
+- **Severity:** low now, high the first time a route is added carelessly.
+- **Check:** `make mutation-copy MUT=<dir>`, then in the copy replace
+  `if _operation_of(request) in UNAUTHENTICATED_OPERATIONS:` with
+  `if _operation_of(request) is None or _operation_of(request) in UNAUTHENTICATED_OPERATIONS:`
+  and run the three suites: still green.
+
+### `W37CERT4-6` — the credential tag's timing-safe comparison is unguarded
+
+- **Tree:** `src/auditmanager/api/security.py`, `TokenSigner._tag` / `verify`.
+- **Measured:** mutation **M4** — `hmac.compare_digest(presented_tag, self._tag(signed))` →
+  `presented_tag != self._tag(signed)` — leaves the three suites at **77 passed**.
+- **Severity:** low. The behaviour is identical; what is lost is the constant-time property the
+  module deliberately chose and explains in a comment (*"a short-circuiting one leaks its
+  length and its prefix to a caller who can time it"*). It is a property with a stated reason
+  and no test.
+- **Check:** as `W37CERT4-5`, with that substitution.
+
+### `W37CERT4-7` — the interface's only console error, on every screen of both stacks
+
+- **Tree:** `web/` — there is no favicon asset and no `icon` export.
+- **Measured:** every screen load in every browser journey of this session produced exactly one
+  console error: `Failed to load resource: the server responded with a status of 404`.
+  `curl -o /dev/null -w '%{http_code}' http://127.0.0.1:31500/favicon.ico` → **404**, and
+  the same on this session's own stack.
+- **Severity:** cosmetic, and recorded only because `R-18` asks for a finished interface and this
+  is the single error a reviewer's console shows. It is **not** a `/bff/v1` failure: every one of
+  the 11 BFF responses in the certified journey was `200`, `201` or `303`.
+- **Check:** the `curl` above.
+
+### `W37CERT4-8` — `ALPHA_ROADMAP.md` still says *twelve operations*, in nine places
+
+- **Tree:** `docs/program/ALPHA_ROADMAP.md`. **A forbidden hotspot for this task**, so it is
+  recorded and not repaired.
+- **Measured:** `grep -c "twelve operations" docs/program/ALPHA_ROADMAP.md` → **9**. The surface
+  is **13 paths / 16 operations / 48 schemas** since the wave-34 reseal added `POST /auth/token`.
+- **Why it matters here rather than in a documentation pass:** one of the nine is **inside
+  criterion 2 itself** — *"the dependency is proved to be in front of all twelve"*. A criterion
+  that names a count the contract no longer declares is a criterion that can be satisfied by
+  probing the wrong surface. This session drove all sixteen and said so; a later one reading the
+  criterion literally would drive twelve.
+- **Check:** `grep -c "twelve operations" docs/program/ALPHA_ROADMAP.md` against
+  `python3 -c "import json;d=json.load(open('contracts/api/v1/openapi.json'));print(len(d['paths']), sum(1 for p,v in d['paths'].items() for m in v if m in ('get','post','put','patch','delete')))"`.
+
+### Not a new finding: the character offset
+
+The anchor's *«символы 1282–1352 по всему документу»* is unverifiable from outside, and it is
+**already registered as `D-50`** (*"a character offset no second extractor can resolve"*). This
+session reproduced the condition — `pdfminer` puts the same quotation at offset 1320 — and
+confirms the row rather than opening a second one.
 
 ## 5. Spend
 
-*pending*
+**USD 0.038350, one paid provider call**, against a ceiling of 1.00.
+
+| run | stack | provider | cost |
+|---|---|---|---|
+| `run_01M34RX7PH00Y6J6Y6E8RDJRJZ` | the owner's stand, `proxy` mode | the operated `proxyllm.fvds.ru` | `cost_micros 38350`, `cost_basis measured`, 1 model call |
+| everything else | this session's own stack | `recorded` mode, then a **local stub container** on the compose network | **0** |
+
+The certified journey behind criteria 3, 5, 6 and 7, and criterion 4's live half, hang off that
+one run. Criterion 4's `partial` and `failed`, criterion 9's outage and its control, criterion
+8's restart and criterion 10's whole cycle cost nothing, because the provider was a stub this
+session ran, or was absent on purpose.
+
+The brief's figure — *"the last live run cost USD 0.038"* — is confirmed: this one cost
+0.038350.
 
 ## 6. False premises in the dispatch brief
 
@@ -563,4 +705,4 @@ the same copy.
 
 ## 7. Gate
 
-*pending*
+*pending — run once, at the end, from a committed-clean tree.*
