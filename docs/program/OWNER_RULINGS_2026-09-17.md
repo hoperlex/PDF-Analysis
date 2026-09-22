@@ -417,6 +417,72 @@ user management, retention, legal hold, HA, DR, backup rotation, the job/attempt
 workers and OCR remain out of scope. The requirement is about **the finish and the language of
 what is shown**, not about widening function.
 
+## 3.10 — `R-19` … `R-22`, ruled 2026-09-22 by direct poll, on `D-59`
+
+### `R-19` — the leaked model reasoning is repaired at the source: re-recognise
+
+**Ruled.** Not classified, not filtered — **re-recognised.**
+
+**Scope reconciled from two answers that differ.** Asked where the marker should live, the owner
+chose *"re-recognise the 34 documents"*; asked what an expert should see for the 55 pages with no
+norm text, they chose *"re-recognise only these 79 pages"*. **The narrower answer is the one
+carried out**, because it is a strict subset and it is the later, more specific of the two: the
+unit of failure is the page, and 28 170 of the 28 249 pages in those documents are fine. If the
+owner meant every page of all 34 documents, that is a superset and they can say so.
+
+**What made classification the wrong answer, and it is measured:** the pipeline marked **every
+one of the 79 blocks `recognized`**. The corpus's own vocabulary has no state for *"the model
+looped and emitted its plan"*, so there is nothing to filter on but the text itself — and the
+text is what is wrong. Repairing the source removes the question instead of encoding it.
+
+### `R-20` — the 24 mixed blocks stay, marked
+
+**Ruled.** Where Russian normative text and English reasoning share one block, **nothing is cut**
+and the chunk carries a mark. The owner accepted the stated cost: the reasoning enters the
+vector and influences retrieval even where no screen shows it. `R-19` reduces this to whatever
+re-recognition does not fix.
+
+### `R-21` — the corpus is embedded first, the 79 pages repaired after
+
+**Ruled**, with an instruction attached: **price the token volume against the limits before
+committing**, and move the work to an external tool if it is too expensive. §1 below is that
+pricing.
+
+The contaminated text is **2.1% of the corpus by characters** — 1.55M of 74.6M — so a single
+pass embeds about **0.5M tokens of model output as though it were a norm**. The owner judged
+that acceptable against the delay of blocking the whole corpus on 79 pages.
+
+### `R-22` — measured before spending: the volume, the limits, and who charges for it
+
+**The single most consequential fact, verified rather than assumed: Anthropic does not offer an
+embedding model.** Its own documentation says so and points at Voyage AI. **So the embedding job
+was never an Anthropic-API cost** — it is an external provider either way, which settles the
+owner's question about moving it to an external tool: it is already there.
+
+| | |
+|---|---|
+| corpus | **74 642 798 characters**, 63.1% Cyrillic, 6.4% Latin |
+| tokens, one pass | **18.7M–29.9M** at 3.99–2.5 chars/token; **~25M** at the likely Cyrillic rate |
+| `R-16`'s estimate | ~15.6M — **too low**, because 3.99 chars/token is a *Latin* ratio (`D-60`) |
+| contamination | 1.55M characters ≈ **0.5M tokens, 2.1%** |
+| dimensions | `voyage-4` defaults to **1024** — exactly what `R-16` assumed, so its 0.11 GB vector figure stands |
+
+**The limit that actually bites is context, not cost.** `voyage-4`'s input context is **32 000
+tokens**, and the longest chunk in the corpus is the 62 359-character paragraph of `D-59` —
+**21–25 thousand tokens. It fits, and barely.** `D-60`'s long-tail question (3 666 chunks over
+1200 characters) is therefore not academic: a chunker that merged two such paragraphs would
+exceed the limit and the request would be refused, not truncated.
+
+**Re-recognising the 79 pages is cheap and the estimate is robust to its own uncertainty.**
+At 1 500–3 000 input tokens per page image and ~2 516 characters of output per page, it is
+**$2.58–$3.17 on Claude Opus 5** ($5/$25 per MTok). Wrong by 3× it is still under $10. **Cost is
+not a reason to defer `R-19`.**
+
+*(The token figures above are arithmetic over measured character counts, not a tokeniser
+reading: no tokeniser is installed in this tree and no API credential is available to this
+session, and `tiktoken` is explicitly wrong for both Claude and Voyage. **The first act of the
+embedding stream is to count with the real tokeniser before spending** — `D-60`.)*
+
 ## 4. Still open, and still the owner's
 
 - **`OD-18`** — three to five named experts with committed slots; `P4-BHV-01` waits on it alone.

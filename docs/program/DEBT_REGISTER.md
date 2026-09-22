@@ -1438,7 +1438,15 @@ sections is the right set or legacy's set is simply what legacy had.
 
 Check: `python3 -c "import json; d=json.load(open('contracts/api/v1/openapi.json')); print(list(d['components']['schemas']['Project']['properties']))"`
 
-### D-59 — the normative corpus carries leaked English LLM reasoning as document body
+### D-59 — the normative corpus carries leaked English LLM reasoning as document body — **RULED, open for work**
+
+**Ruled 2026-09-22 (`R-19`–`R-22`): re-recognise the 79 affected pages; the 24 mixed blocks stay
+and are marked; the corpus is embedded first and repaired after.** Measured since the row was
+written: **79 pages of 28 249 — 0.28%** — but **1.55M characters of 74.6M — 2.1%**, because the
+degenerate paragraphs are enormous (median 12 660, max 62 359). **55 of the 79 carry no Russian
+at all**; 24 mix it with real normative text. **Every one of the 79 blocks is marked
+`recognized`**, which is why no structural filter exists and why the ruling repairs the source
+instead. Re-recognition is priced at **$2.58–$3.17**.
 
 **Found by `W33-CORPUS` 2026-09-22 while segmenting for `R-16`. Nothing in `R-16`, `R-17` or
 the brief mentions it. Opened the same day, and it is the largest open quality question in the
