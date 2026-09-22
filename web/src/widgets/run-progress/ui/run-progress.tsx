@@ -49,7 +49,14 @@ import Link from 'next/link';
 
 import type { RunStatus } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
-import { ErrorState, LoadingState, NotApplicableState, RunStateBadge, STATE_LABELS } from '@/shared/ui';
+import {
+  ErrorState,
+  LoadingState,
+  NotApplicableState,
+  RunStateBadge,
+  STAGE_LABELS,
+  STATE_LABELS,
+} from '@/shared/ui';
 import styles from './run-progress.module.css';
 
 import {
@@ -118,9 +125,18 @@ function Outcome({ status }: { readonly status: RunStatus }) {
             <>
               <p>Отсутствующие или деградировавшие этапы:</p>
               <ul>
+                {/*
+                 * The stage's name, not its id. `D-62`: the machine value stays in
+                 * `data-degraded-stage`, where the journey and `PA-01` criterion 4 read
+                 * it, and the reviewer reads a word. This list is the second consumer
+                 * `STAGE_LABELS` had on the day it was written, which is why that map was
+                 * exported from `shared/ui` rather than kept private — `VERDICT_LABELS`
+                 * and `STATE_LABELS` each had to be exported after a second consumer had
+                 * already rendered the raw value.
+                 */}
                 {outcome.degradation.map((stageId) => (
                   <li key={stageId} data-degraded-stage={stageId}>
-                    <code>{stageId}</code>
+                    {STAGE_LABELS[stageId]}
                   </li>
                 ))}
               </ul>

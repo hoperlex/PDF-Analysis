@@ -10,6 +10,7 @@ export type { ProviderModeLabel, RunCostReading, RunOutcome, StageRow } from './
 export {
   PC01_STAGE_IDS,
   PROVIDER_MODE_UNKNOWN,
+  STAGE_DEPENDS_ON,
   badgeProviderMode,
   costBasisCaption,
   diagnosticObservationCount,

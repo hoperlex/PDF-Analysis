@@ -166,6 +166,44 @@ export const PC01_STAGE_IDS = [
   'text_analysis',
 ] as const satisfies readonly StageId[];
 
+/**
+ * What each stage waits for, as `contracts/analysis/v1/stage-registry.json` declares it.
+ *
+ * **The nine stages are a graph, not a line, and this is the fact `D-62` asked for.** The
+ * registry's `depends_on` forks twice and joins once:
+ *
+ * ```
+ * source_preparation → page_geometry_extraction → document_context_build
+ *                                                      ├→ text_analysis  ─┐
+ *                                                      └→ block_analysis ─┴→ finding_merge
+ *                                                                              ├→ finding_review → finding_correction
+ *                                                                              └→ norm_verification
+ * ```
+ *
+ * So a single ordinal over the nine would be an invention: `text_analysis` and
+ * `block_analysis` have no order between them, and four of the nine are `skip_allowed`
+ * besides. The table renders an ordinal only over the stages PC-01 actually schedules —
+ * which ARE a chain, proven against this registry by
+ * `web/tests/guards/stage-vocabulary.guard.test.ts` rather than assumed — and renders this
+ * dependency beside every row, because a dependency stays true when the pipeline forks and
+ * a position does not.
+ *
+ * Mirrored here rather than fetched: the registry is a build-time contract with no wire
+ * representation, and the guard holds this map to it in both directions, so a stage whose
+ * dependencies move in the contract reddens the gate instead of drifting.
+ */
+export const STAGE_DEPENDS_ON: Readonly<Record<StageId, readonly StageId[]>> = {
+  source_preparation: [],
+  page_geometry_extraction: ['source_preparation'],
+  document_context_build: ['page_geometry_extraction'],
+  text_analysis: ['document_context_build'],
+  block_analysis: ['document_context_build'],
+  finding_merge: ['text_analysis', 'block_analysis'],
+  finding_review: ['finding_merge'],
+  finding_correction: ['finding_review'],
+  norm_verification: ['finding_merge'],
+};
+
 export interface StageRow {
   readonly stageId: StageId;
   /** `null` when the run has not reported this stage yet, or never scheduled it. */
@@ -175,6 +213,18 @@ export interface StageRow {
   readonly finishedAt: string | null;
   /** True when the stage is one PC-01 schedules; false for a stage the run added. */
   readonly expected: boolean;
+  /**
+   * Position in the sequence PC-01 schedules, from 1 — and `null` for a stage it does not
+   * schedule.
+   *
+   * `null` rather than a number appended to the end, because the four scheduled stages are
+   * a chain and the nine are not: a stage the run reported outside the schedule has a
+   * dependency, not a position, and numbering it would assert an order the contract does
+   * not declare.
+   */
+  readonly ordinal: number | null;
+  /** What this stage waits for, from `STAGE_DEPENDS_ON`. Empty for the first stage. */
+  readonly dependsOn: readonly StageId[];
 }
 
 /**
@@ -189,7 +239,7 @@ export function stageRows(status: Pick<RunStatus, 'stages'>): readonly StageRow[
   const reported = new Map(status.stages.map((stage) => [stage.stage_id, stage]));
   const rows: StageRow[] = [];
 
-  for (const stageId of PC01_STAGE_IDS) {
+  PC01_STAGE_IDS.forEach((stageId, index) => {
     const stage = reported.get(stageId);
     rows.push({
       stageId,
@@ -198,8 +248,10 @@ export function stageRows(status: Pick<RunStatus, 'stages'>): readonly StageRow[
       startedAt: stage?.started_at ?? null,
       finishedAt: stage?.finished_at ?? null,
       expected: true,
+      ordinal: index + 1,
+      dependsOn: STAGE_DEPENDS_ON[stageId],
     });
-  }
+  });
 
   const expected: ReadonlySet<string> = new Set<string>(PC01_STAGE_IDS);
   for (const stage of status.stages) {
@@ -211,6 +263,8 @@ export function stageRows(status: Pick<RunStatus, 'stages'>): readonly StageRow[
       startedAt: stage.started_at ?? null,
       finishedAt: stage.finished_at ?? null,
       expected: false,
+      ordinal: null,
+      dependsOn: STAGE_DEPENDS_ON[stage.stage_id],
     });
   }
 

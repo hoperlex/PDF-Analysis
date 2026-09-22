@@ -1,0 +1,93 @@
+/*
+ * The stage table's styling layer.
+ *
+ * ## What `D-62` said, and what the tree says
+ *
+ * `D-62` records this table as "entirely inline styles — twelve `style={{…}}` attributes
+ * and not one token", reaching "neither `W31-STYLE`'s token layer nor `W33-THEME`'s second
+ * palette", so that "on the dark theme it renders in the browser's defaults on a dark
+ * surface". **The count is right and the consequence is not, and the difference decides
+ * what belongs in this file.**
+ *
+ * `globals.css` styles `table`, `thead th`, `tbody td`, `tbody tr:hover`, `code` and `em`
+ * by ELEMENT selector, so every one of those rules already applied to this table and every
+ * one of them is a token read. It reached both palettes. What the twelve inline attributes
+ * actually were is a **token-free duplicate of rules the stylesheet already had**, winning
+ * on inline specificity: `padding: '0.35rem 0.75rem 0.35rem 0'` standing where
+ * `var(--am-gap-sm) var(--am-gap) var(--am-gap-sm) 0` was, `borderCollapse`/`width`
+ * restating `table`, `textAlign: left` restating `thead th`. Eleven of the twelve
+ * overrode a tokenised rule with a literal; the twelfth, `overflowX: auto`, was the only
+ * one with nothing behind it.
+ *
+ * So the repair is to DELETE, not to re-declare. Nothing below restates a rule
+ * `globals.css` already makes about a `table`, a `th` or a `td` — a third copy of
+ * `thead th`'s padding would be the same defect one layer further out, and the copy that
+ * won would again be the one a theme change cannot reach. This file carries only what the
+ * element selectors cannot know about: the scroller, and the cells this wave added.
+ *
+ * Every colour is a token read, and nothing here declares a token: `globals.css` holds both
+ * palettes and a module that redefined one would be the defect that architecture exists to
+ * prevent (`styling-layer.test.ts` asserts both).
+ *
+ * The quiet ink is `--am-ink-muted` and never `--am-ink-soft`. `W32-CONTRAST` §3 measured
+ * the third ink level as spent: AA on the darkest surface it carries text over caps it at
+ * 1.10:1 from muted, so reaching for it to make a column quieter buys no visible step and
+ * spends a token whose separation the contrast guard asserts stays where it is.
+ */
+
+/* The one inline style with nothing behind it in `globals.css`. */
+.scroller {
+  overflow-x: auto;
+}
+
+/*
+ * The ordinal. It numbers the sequence PC-01 schedules and nothing else — a stage the run
+ * reported outside that schedule carries `—` here, because the contract's nine stages fork
+ * and a position for one of them would be an invention. Tabular figures, so a column of
+ * numbers reads as a column.
+ */
+.ordinal {
+  width: 1%;
+  color: var(--am-ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.name {
+  font-weight: 500;
+}
+
+/*
+ * What the stage waits for, under its name. This is the one thing legacy's pipeline of
+ * connected buttons has that a table does not, and it is the half that survives a fork:
+ * `finding_merge` waits for two stages and says so, where an arrow would have to be drawn.
+ */
+.dependency {
+  display: block;
+  margin-top: 2px;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  line-height: var(--am-leading-tight);
+}
+
+/* A stage the run reported that PC-01 does not schedule, and the not-yet-reported status. */
+.aside {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+/*
+ * The two instants and the elapsed span. The stamps are quieted and the elapsed figure is
+ * not, because on a real run they say different amounts: `formatInstant` prints to the
+ * second and PC-01's stages finish in tens of milliseconds, so Started and Finished are
+ * the same string and the elapsed column is the one carrying the measurement.
+ */
+.instant {
+  color: var(--am-ink-muted);
+  white-space: nowrap;
+}
+
+.elapsed {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
