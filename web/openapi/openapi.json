@@ -4,7 +4,7 @@
     "title": "AuditManager PC-01 API",
     "version": "1.0.0-draft.1",
     "summary": "The exact PC-01 journey: one project, one AR PDF, one text-consistency run, one CSV.",
-    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, roles, rate limiting, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-two-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.\n\nResealed 2026-09-18 under owner ruling `R-5`, which closes `DEBT_REGISTER.md` `D-16` and `D-21` together. Three list operations -- `listDocuments`, `listVersions` and `listRuns` -- make published work reachable after a page reload: before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. And `RunStatus` gained `cost_micros`, `cost_basis` and `model_call_count`, so what a run spent is readable by a user for the first time. Each listing is a `GET` of the collection its parent creates into, pages with the same `cursor` and `limit` and returns the same `{items, page}` envelope as `listProjects`. No error code was added: an unknown parent is the catalog's `not_found` and a malformed cursor is `validation_failed`.\n\nAmended 2026-09-18 under owner ruling `R-8`, which closes `DEBT_REGISTER.md` `D-18`. The domain catalog gains one code, `staged_upload_lost`, and the `ErrorCode` enum below carries it: twenty-one becomes twenty-two. Two blob-store failures demanding opposite operator responses -- *stop, the instance was restored wrong* against *retry the upload* -- both answered `conflict` with `aggregate_type` `Blob`, so their envelopes were byte-identical apart from `correlation_id`. A widened `safe_detail_keys` was offered and rejected, because a detail key cannot fix `retryable`: the envelope reads that flag from the catalog for the reported code, so only a separate code carries a separate value. **No path, operation or schema changed** -- the surface is still twelve paths, fifteen operations and forty-six schemas -- and the new code travels on the `503` every staging write already declares.",
+    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, roles, rate limiting, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates, other than the credential exchange the authorization seam needs and `W34-CONTRACT` adds below.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-two-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.\n\nResealed 2026-09-18 under owner ruling `R-5`, which closes `DEBT_REGISTER.md` `D-16` and `D-21` together. Three list operations -- `listDocuments`, `listVersions` and `listRuns` -- make published work reachable after a page reload: before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. And `RunStatus` gained `cost_micros`, `cost_basis` and `model_call_count`, so what a run spent is readable by a user for the first time. Each listing is a `GET` of the collection its parent creates into, pages with the same `cursor` and `limit` and returns the same `{items, page}` envelope as `listProjects`. No error code was added: an unknown parent is the catalog's `not_found` and a malformed cursor is `validation_failed`.\n\nAmended 2026-09-18 under owner ruling `R-8`, which closes `DEBT_REGISTER.md` `D-18`. The domain catalog gains one code, `staged_upload_lost`, and the `ErrorCode` enum below carries it: twenty-one becomes twenty-two. Two blob-store failures demanding opposite operator responses -- *stop, the instance was restored wrong* against *retry the upload* -- both answered `conflict` with `aggregate_type` `Blob`, so their envelopes were byte-identical apart from `correlation_id`. A widened `safe_detail_keys` was offered and rejected, because a detail key cannot fix `retryable`: the envelope reads that flag from the catalog for the reported code, so only a separate code carries a separate value. **No path, operation or schema changed** -- that amendment moved none of the three counts -- and the new code travels on the `503` every staging write already declares.\n\nResealed 2026-09-22 by `W34-CONTRACT`. `R-3` declared the seam and left no way to get through it: the document required a bearer credential on every operation and described no operation that hands one out, so the only caller this surface admitted was one already holding a credential from somewhere the document does not name. One operation closes that -- `issueToken`, `POST /auth/token` -- and it is a credential *exchange* and nothing more: a login and a password in, an opaque credential and its lifetime out. It is the single operation whose `security` is the empty requirement, because requiring a credential to obtain one is a closed door with a handle on the inside.\n\n**What this reseal deliberately does not add, because `T-6` forbids it.** No issuer, no discovery URL, no flow, no `bearerFormat`, and no role, subject or capability vocabulary. The returned `token` is a string this document states no structure for; the deployment decides what it is, and the operations keep working when that decision changes. No error code was added either: an unaccepted login and password pair is the catalog's `authentication_required`, a malformed body is `validation_failed`. `permission_denied` is **not** declared here, because it means an authenticated subject refused a resource and this operation has no authenticated subject in it -- it is the operation that produces one. The surface moves to thirteen paths, sixteen operations and forty-eight schemas.",
     "contact": {
       "name": "docs/program/P02_SEAMS.md - seam S8"
     },
@@ -25,6 +25,10 @@
     }
   ],
   "tags": [
+    {
+      "name": "auth",
+      "description": "Exchange a login and a password for a bearer credential."
+    },
     {
       "name": "projects",
       "description": "Create and list projects."
@@ -51,6 +55,61 @@
     }
   ],
   "paths": {
+    "/auth/token": {
+      "post": {
+        "operationId": "issueToken",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Exchange a login and a password for a bearer credential.",
+        "description": "The only operation on this surface that is reachable without a credential, because it is the one that hands one out: its `security` is the empty requirement, which overrides the document root for this operation and for no other.\n\n**What this operation says about the credential it returns: nothing.** The response carries an opaque string and how long it stays valid. Its structure, what it encodes, and where the deployment got it are the deployment's own, are not described anywhere in this document, and are never parsed by a caller -- the same rule that keeps `bearerFormat` off `components.securitySchemes.bearerAuth`. A deployment that replaces a static string with something else changes no operation here.\n\nNothing is created and nothing is changed, so there is no idempotency key: a repeat of the same exchange is a second exchange, not a replay of the first.",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The credentials were accepted. The body carries the credential to present on every other operation and how long it stays valid.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
     "/projects": {
       "post": {
         "operationId": "createProject",
@@ -983,7 +1042,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "The authorization seam. Every operation in this document requires a bearer credential presented as `Authorization: Bearer <token>`.\n\n**This declares the seam, not its implementation.** No issuer, no discovery URL, no flow, no token format, no role, subject or capability vocabulary appears here, and none may be added: the deployment decides all of them and the same operations must keep working when it does. `bearerFormat` is deliberately absent for that reason -- an opaque deployment token and an OIDC-issued JWT are both bearer credentials, and naming the format would pin the document to whichever one is current.\n\nA request with no credential, or one the deployment does not accept, is `401 authentication_required`. A credential the deployment accepts, for a subject not permitted this operation on this resource, is `403 permission_denied`; authorization is decided server-side and the response never reveals the existence of a resource the caller may not see, so absence and refusal are reported as this surface's `404 not_found` where revealing them would leak.\n\nNothing outside `/api/v1` is covered. The operational liveness and readiness plane answers on its own port, carries no product meaning and needs no credential."
+        "description": "The authorization seam. Every operation in this document requires a bearer credential presented as `Authorization: Bearer <token>`, except `issueToken`, the credential exchange, whose own `security` is the empty requirement because it is what a caller with no credential uses to obtain one.\n\n**This declares the seam, not its implementation.** No issuer, no discovery URL, no flow, no token format, no role, subject or capability vocabulary appears here, and none may be added: the deployment decides all of them and the same operations must keep working when it does. `bearerFormat` is deliberately absent for that reason -- an opaque deployment token and an OIDC-issued JWT are both bearer credentials, and naming the format would pin the document to whichever one is current.\n\nA request with no credential, or one the deployment does not accept, is `401 authentication_required`; so is an exchange whose login and password the deployment does not accept, which is the same refusal and not a second one. A credential the deployment accepts, for a subject not permitted this operation on this resource, is `403 permission_denied`; authorization is decided server-side and the response never reveals the existence of a resource the caller may not see, so absence and refusal are reported as this surface's `404 not_found` where revealing them would leak.\n\nNothing outside `/api/v1` is covered. The operational liveness and readiness plane answers on its own port, carries no product meaning and needs no credential."
       }
     },
     "parameters": {
@@ -1096,7 +1155,7 @@
     },
     "responses": {
       "AuthenticationRequired": {
-        "description": "`authentication_required`. No valid authenticated subject was presented: the request carried no bearer credential, or one this deployment does not accept. The response carries no hint about the addressed resource, so it is the same answer whether or not the resource exists.",
+        "description": "`authentication_required`. No valid authenticated subject was presented: the request carried no bearer credential, or one this deployment does not accept, or -- on the credential exchange, which presents no credential by design -- a login and password pair this deployment does not accept. The response carries no hint about the addressed resource, so it is the same answer whether or not the resource exists.",
         "headers": {
           "X-Correlation-Id": {
             "$ref": "#/components/headers/CorrelationId"
@@ -2335,6 +2394,48 @@
           },
           "page": {
             "$ref": "#/components/schemas/PageInfo"
+          }
+        }
+      },
+      "IssueTokenRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "login",
+          "password"
+        ],
+        "properties": {
+          "login": {
+            "type": "string",
+            "description": "The caller's login, spelled the way the deployment spells it. Not an identity of this surface: it addresses nothing, appears in no path and is never a foreign key.",
+            "minLength": 1,
+            "maxLength": 320
+          },
+          "password": {
+            "type": "string",
+            "description": "The secret presented with the login. It appears in no response body, no error detail and no diagnostic record.",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        }
+      },
+      "IssueTokenResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "token",
+          "expires_in"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The credential, presented on the authorized operations as `Authorization: Bearer <token>`. Opaque: this document states no format for it, and a caller that reads anything out of it has taken a dependency this contract does not offer.",
+            "minLength": 1
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "How long the credential stays valid, in seconds counted from this response. A lifetime and never a clock reading, so no clock has to agree between the two sides. A caller exchanges again before it elapses; an elapsed credential is `authentication_required` like any other the deployment does not accept.",
+            "minimum": 1
           }
         }
       }

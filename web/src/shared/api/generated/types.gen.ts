@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 68762ec87931ed03ee8b68d16717533c4f7f68816bc1b490b53ba8a5f50f1513
+ *   sha256 37425dffc050db7819710cfd778ec41483a870f2f936461d7fabd5855f6041a9
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '68762ec87931ed03ee8b68d16717533c4f7f68816bc1b490b53ba8a5f50f1513';
+export const CONTRACT_DIGEST = '37425dffc050db7819710cfd778ec41483a870f2f936461d7fabd5855f6041a9';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -47,6 +47,8 @@ export const SCHEMA_NAMES = [
   'FindingUid',
   'IdempotencyKey',
   'InputManifestEntry',
+  'IssueTokenRequest',
+  'IssueTokenResponse',
   'ModelCallId',
   'ObservationProvenance',
   'PageInfo',
@@ -304,6 +306,20 @@ export type InputManifestEntry = {
   role: string;
   sha256: Sha256;
   size_bytes: number;
+};
+
+export type IssueTokenRequest = {
+  /** The caller's login, spelled the way the deployment spells it. Not an identity of this surface: it addresses nothing, appears in no path and is never a foreign key. */
+  login: string;
+  /** The secret presented with the login. It appears in no response body, no error detail and no diagnostic record. */
+  password: string;
+};
+
+export type IssueTokenResponse = {
+  /** How long the credential stays valid, in seconds counted from this response. A lifetime and never a clock reading, so no clock has to agree between the two sides. A caller exchanges again before it elapses; an elapsed credential is `authentication_required` like any other the deployment does not accept. */
+  expires_in: number;
+  /** The credential, presented on the authorized operations as `Authorization: Bearer <token>`. Opaque: this document states no format for it, and a caller that reads anything out of it has taken a dependency this contract does not offer. */
+  token: string;
 };
 
 export type ModelCallId = string;
