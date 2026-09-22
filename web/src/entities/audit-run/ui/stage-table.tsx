@@ -22,11 +22,15 @@
  *
  * **What this file gained in wave 35, and why each is not cosmetic:**
  *
- *   1. **A styling layer.** Twelve `style={{…}}` attributes and not one token meant the
- *      table reached neither `W31-STYLE`'s tokens nor `W33-THEME`'s second palette, so on
- *      the dark theme it rendered in the browser's defaults on a dark surface. It is now a
- *      collocated module, which is the architecture `globals.css` has promised since the
- *      bootstrap.
+ *   1. **The twelve inline styles are gone, and they were not what `D-62` thought.**
+ *      `globals.css` styles `table`, `thead th`, `tbody td`, `tbody tr:hover`, `code` and
+ *      `em` by ELEMENT selector, so this table always reached the token layer and always
+ *      reached `W33-THEME`'s second palette. What the twelve attributes were is a
+ *      token-free DUPLICATE of those rules, winning on inline specificity — a literal
+ *      `padding: '0.35rem 0.75rem 0.35rem 0'` standing where the stylesheet's own spacing
+ *      tokens were. Eleven overrode a tokenised rule with a literal; only `overflowX:
+ *      auto` had nothing behind it. Deleting them is the repair, and the collocated module
+ *      carries only the cells this wave added rather than a third copy of `thead th`.
  *
  *   2. **Russian stage names.** It rendered `<code>{row.stageId}</code>` — the first column
  *      of the one table on the run screen was `source_preparation`,
@@ -101,7 +105,7 @@ function DependencyNote({ dependsOn }: { readonly dependsOn: readonly StageId[] 
 export function StageTable({ rows }: StageTableProps) {
   return (
     <div className={styles.scroller}>
-      <table className={styles.table}>
+      <table>
         <thead>
           <tr>
             <th scope="col">№</th>
