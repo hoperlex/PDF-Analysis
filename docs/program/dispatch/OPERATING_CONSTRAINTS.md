@@ -166,6 +166,40 @@ and the obvious next step — weakening it — damages a guard that was never at
 and compare the wall clock against a normal run.** A gate that took twice as long as usual is
 evidence about the machine, not about the code.
 
+## 4.7 A document that outlives the code it describes becomes an attack
+
+**Recorded 2026-09-22 from wave 34's judges, and it is the first finding in this programme
+where stale prose was a security defect rather than a confusion.**
+
+`AUDITMANAGER_API_TOKEN` changed meaning. It had been the **shared bearer** every client
+presents; it became the **key the API signs credentials with**. The code changed correctly.
+`infra/deploy/README.md` went on saying *"Clients present it as `Authorization: Bearer
+<token>`"*, and `DEPLOYMENT_RUNBOOK.md` said the same in its own words.
+
+**An operator following that runbook hands the signing key to every reviewer.** The document
+does not merely mislead; it instructs, and the instruction is now the worst possible one.
+
+This programme already knows that prose goes stale — `D-23`, `D-1.6`, thirty-five statements
+about a surface that had moved. **What is new is the direction of the damage.** A stale count
+is read and discarded. A stale *instruction about a credential* is read and **followed**, and
+the person following it is doing their job.
+
+**So the rule is narrower than "keep documents current", which nobody can enforce:** when a
+value changes what it *is* — a bearer becomes a signing key, a path becomes public, a default
+becomes reachable — **every document that tells someone what to DO with it is part of that
+change**, and lands in the same commit. Not the next wave's documentation pass.
+
+**And it took a merge to see.** Each stream was correct inside its own branch; the token's old
+meaning and its new one lived in different branches until they met.
+
+### The same shape, without the security edge: a residue count is a property of the merge
+
+Three streams each counted the stale *"fifteen operations"* phrases the reseal left behind.
+**Three different numbers, all three wrong**, because each measured inside its own branch
+before the merge. Only the judge measuring the **merged** tree got the list that matched.
+
+**Never accept a count of what a change left behind from the branch that made the change.**
+
 ## 5. `make bootstrap` needs an explicit base interpreter
 
 When the ambient interpreter is an active virtualenv, run:
