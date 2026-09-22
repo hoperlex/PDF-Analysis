@@ -30,7 +30,7 @@ survive normalization rather than merely to differ from the pristine document.
 `OPERATING_CONSTRAINTS.md` §12: *"never build an expectation, or an input, out of the thing
 under test."* What is under test here is the comparison, not the contract. Its expectations
 are literals in this file: the seven normalization identifiers, the sixteen
-`(method, path, operationId)` triples, the forty-eight schema names, the version string,
+`(method, path, operationId)` triples, the fifty schema names, the version string,
 and the exact dotted location each plant must be reported at. The contract is read from
 disk as an **authority**, from a path anchored on this file, which §12 names as the
 opposite case and which the `tests/integration/exports/test_frozen_column_list.py` guard
