@@ -14,6 +14,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
 | D-63 | a dashboard | **deferred by the owner**; a reseal when it comes |
 | **D-65** | the account exists and nothing around it does — no rate limit, lockout, password change or **revocation** | **owner**: which belong in the alpha |
+| **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
+| D-76 | a manual-test document names a head three versions stale | reported once already, still stale |
 | **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -1547,6 +1549,38 @@ in the single field a client automates against. `D-70` is what it looks like in 
 
 Check: construct `ProxySettings` with `http://:59990` and read the error code it eventually
 raises.
+
+### D-75 — the account an unauthenticated caller can hold shut is the published one
+
+**Reported by `W40-LIMIT` and deliberately not acted on. `R-29` clause 2 reserves both repairs
+by name.**
+
+A lockout cannot be made harmless — *a lockout a correct password defeats does not stop
+guessing, because a lucky guess is the correct password.* So it is bounded instead: it expires,
+a password change clears it, and an operator can clear it in a command.
+
+**What the bounding does not solve is that there is one account and its login is published** —
+in migration `0006_app_user`, in `access/__init__.py`, and in the runbook. With a single
+account, *"hold the owner's account shut"* and *"hold the installation shut"* are the same
+sentence, and a continuous attacker keeps it there.
+
+**Two things would change it and both are the owner's:** renaming or replacing the seeded
+account (*a default changed*), or restricting `/api/v1/auth/token` at the proxy (*a published
+surface narrowed*). **The stream did neither and said why**, which is the behaviour `R-29` is
+for. The alpha ships without it.
+
+### D-76 — a manual-test document names a migration head three versions stale
+
+**Found by `W40-LIMIT`, outside its grant.** `docs/manual-tests/PC-01_prototype.md:39` names
+`0005_truncated_call_status`. The head is `0008_sign_in_throttle`.
+
+**A certification already recorded this once** —
+`artifacts/checkpoints/PC-01/recertification-beaa7f7.json:97` — and the document was not
+corrected, so it has gone stale **twice more since being reported**. That is the whole of the
+row: a finding recorded in an artifact nobody edits does not repair anything, and this is the
+second time this programme has watched prose rot after being measured (`D-23`).
+
+Check: `grep -n 000 docs/manual-tests/PC-01_prototype.md` against `ls db/migrations/versions/`.
 
 ### D-73 — four routes answer 200 with no credential, because the seam is on the router
 

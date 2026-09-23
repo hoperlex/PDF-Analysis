@@ -36,7 +36,12 @@ the expected one.
 A sentinel is the evidence, not the exit code: a checker that exits 0 without printing one is
 refused by the command surface on purpose.
 
-**Observe the migration head is `0005_truncated_call_status`**, not merely "a head".
+**Observe the migration head is `0008_sign_in_throttle`**, not merely "a head".
+
+> *Corrected 2026-09-23.* This line said `0005_truncated_call_status`, and a PC-01
+> recertification recorded that it was stale — after which the document went stale **twice
+> more**, through `0006_app_user`, `0007_credential_epoch` and `0008_sign_in_throttle`. A
+> finding recorded in an artifact nobody edits repairs nothing; `D-76`.
 Measured at `e6eae1e` from `information_schema`: **16 `BASE TABLE`s** — fifteen domain tables plus
 `alembic_version` — and **one `VIEW`**, `finding_current_verdict`. An earlier record said "17
 tables" and §8 below said "sixteen"; both were counting, neither said what. Count the two kinds
