@@ -11,10 +11,12 @@ One migration head owner per wave. Use forward migrations and expand→backfill�
 | `0003_open_items` | `0002_pc01_schema` | three owner-ruled corrections: the blob index comment, `model_call.status` widened to admit `truncated`, a CHECK on `ungrounded_reason` |
 | `0004_cost_basis` | `0003_open_items` | `model_call.cost_basis` — whether `cost_micros` was measured or derived |
 | `0005_truncated_call_status` | `0004_cost_basis` | the two invariants that give `truncated` content: it carries a response checksum and no error code |
-| `0006_app_user` | `0005_truncated_call_status` | **head** — `app_user`: a login, a salted PBKDF2-SHA256 digest with its parameters, and one seeded account (`admin`) flagged `is_default_credential` |
+| `0006_app_user` | `0005_truncated_call_status` | `app_user`: a login, a salted PBKDF2-SHA256 digest with its parameters, and one seeded account (`admin`) flagged `is_default_credential` |
+| `0007_credential_epoch` | `0006_app_user` | **head** — `app_user.token_epoch` and `token_epoch_updated_at`: the generation of credentials an account accepts, so raising it by one revokes every credential that account holds |
 
 **One head, one owner.** `A1` owns it until Gate A closes, then the integrator; `W34-DOM`
-holds it for wave 34 and wrote `0006_app_user`. No Gate B session writes DDL. A schema
+holds it for wave 34 and wrote `0006_app_user`; `W39-REVOKE` holds it for wave 39 and wrote
+`0007_credential_epoch`. No Gate B session writes DDL. A schema
 need is submitted as a test plus the constraint it asks for; see `docs/program/P02_SEAMS.md` §10.
 
 The table list, the SQLSTATE codes and the declared state topology are documented in

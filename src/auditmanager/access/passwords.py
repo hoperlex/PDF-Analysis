@@ -56,6 +56,7 @@ __all__ = [
     "SALT_BYTES",
     "StoredPassword",
     "hash_password",
+    "is_the_same_password",
     "spend_a_verification",
     "verify_password",
 ]
@@ -191,6 +192,33 @@ def verify_password(stored: StoredPassword, password: str) -> bool:
             message="stored password digest is not hexadecimal",
         ) from exc
     return hmac.compare_digest(computed, expected)
+
+
+def is_the_same_password(one: str, other: str) -> bool:
+    """True when two typed passwords are the same string.
+
+    Used by password change to refuse a "new" password that is the old one. That refusal
+    is **mechanical, not a policy**: this module still has no minimum length, no complexity
+    rule, no history and no expiry, and inventing one here would have to be renegotiated
+    when a policy is really specified. What it enforces is that a password change changes
+    the password -- otherwise the operation is a credential revocation wearing a password
+    change's name, and a reviewer who typed the same string twice would be told their
+    password had changed when it had not.
+
+    Compared with :func:`hmac.compare_digest` over UTF-8 bytes, for the same reason
+    everything else in this module is: one of the two operands is a live password. ``==``
+    on ``str`` returns at the first differing character, so an attacker who can present one
+    side and time the call learns a prefix of the other. ``compare_digest`` refuses a
+    non-ASCII ``str`` outright, which is why both sides are encoded first rather than
+    handed over as text -- a password with a Cyrillic character in it is an ordinary
+    password here and must not raise.
+
+    Neither side is hashed. Both are already in this process, in the clear, because the
+    caller has just been handed both by the request that wants to change one into the
+    other; deriving a key from each to compare them would cost a quarter of a second and
+    protect nothing that is not already in memory.
+    """
+    return hmac.compare_digest(one.encode("utf-8"), other.encode("utf-8"))
 
 
 def spend_a_verification(password: str, *, iterations: int = ITERATIONS) -> None:
