@@ -1540,3 +1540,131 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
     expect([...offencesOnScreens().keys()]).toEqual([]);
   });
 });
+
+// ============================== D-61's third instance: the journey's own sentences
+
+/**
+ * `tests/e2e/pc01/journey/manifest.json` declares, per step, the sentences a screen must
+ * render once that step has run. **This is the check that they are evidence of anything.**
+ *
+ * ## What was there, and why a word boundary could not fix it
+ *
+ * `tests/e2e/test_pc01_journey_conformance.py` asserted them by substring containment
+ * against a **concatenation of every `.ts`/`.tsx` byte under `web/src`**. That is `D-61`:
+ * the manifest asserted `"Run"` and passed, because `Run` occurs inside `RunPage`, and no
+ * screen renders it. Containment had already deceived two guards before it and both were
+ * repaired by matching on a word boundary. **This one is not**, because the subject is
+ * wrong rather than the matcher: it read source where the claim is about a screen.
+ *
+ * ## What a renderer can decide here, and what it cannot — measured, because the brief
+ * assumed it could decide more
+ *
+ * Measured at `abe1c15` over `renderedScreens()`: of the manifest's **15** declared
+ * sentences, **11 are rendered by no screen this harness can reach**, and it is not
+ * because the manifest is wrong. They live in the upload form's pre-check panel, the
+ * created-project panel and the version panel — branches driven by `useState` and by a
+ * settled `useMutation`, which one static pass cannot select. `contrast.ts` says the same
+ * thing in its own words about `.am-form__created`, `.am-form__problem` and
+ * `.am-form__chosen`. **A renderer cannot confirm those sentences positively**, and a
+ * check that claimed to would be the same false affordance one layer along.
+ *
+ * ## What it CAN decide, and it is the half that was actually wrong
+ *
+ * The other **4 of 15 passed by matching text the screen renders whatever happened**:
+ *
+ * | declared | matched | what it really is |
+ * |---|---|---|
+ * | `Создан` | `Создан 2026-09-10 08:00:00 UTC · документов 2` | every project row's created date |
+ * | `Эта версия` | `Эта версия и её манифест неизменяемы.` | the version panel's standing prose |
+ * | `Прогон` | `Прогон использует тот режим провайдера…` | the start-run control's own note |
+ * | `25 MiB` | `Не более 25 MiB.` | the upload envelope, printed before any file is chosen |
+ *
+ * **Every one of those passes in the live browser too**, because `write.mjs` and
+ * `refusals.mjs` test `bodyText.includes(needle)` against the page the journey is already
+ * on. So the deception was not only in the gate: four of the journey's own assertions
+ * could not fail.
+ *
+ * The corpus this guard renders performs **no write at all** — it is the application
+ * before any of these steps has run. So:
+ *
+ * > **a sentence offered as evidence that a step happened must not be on the screen
+ * > before it happens.**
+ *
+ * That is decidable from rendered output, it is derived from the manifest rather than
+ * listed here, and it is what this case asserts.
+ */
+const STILL_EVIDENCE_THOUGH_RENDERED: readonly { readonly text: string; readonly why: string }[] = [
+  /*
+   * EMPTY, and the empty is the assertion.
+   *
+   * An entry would be legitimate in exactly one shape: a sentence this corpus renders only
+   * because its FIXTURE seeds a state the journey's own fresh project cannot be in. `Прогон
+   * завершился как` is the candidate — this matrix seeds a published run, and the journey's
+   * project has no run until it starts one. Nothing needs the exemption today, and a reader
+   * adding one must make that argument in writing rather than silencing a red.
+   */
+];
+
+interface JourneyManifest {
+  readonly write?: { readonly steps?: readonly { readonly name?: string; readonly expects_rendered?: readonly string[] }[] };
+  readonly refusals?: { readonly cases?: readonly { readonly fixture?: string; readonly expects_rendered?: readonly string[] }[] };
+}
+
+/** Every `expects_rendered` sentence the manifest declares, with the step that declares it. */
+export function journeySentences(): readonly { readonly where: string; readonly text: string }[] {
+  const manifest = readJson<JourneyManifest>(
+    join(REPO_ROOT, 'tests/e2e/pc01/journey/manifest.json'),
+  );
+  const out: { where: string; text: string }[] = [];
+  for (const step of manifest.write?.steps ?? []) {
+    for (const text of step.expects_rendered ?? []) out.push({ where: step.name ?? 'write', text });
+  }
+  for (const item of manifest.refusals?.cases ?? []) {
+    for (const text of item.expects_rendered ?? []) out.push({ where: item.fixture ?? 'refusal', text });
+  }
+  return out;
+}
+
+describe('D-61: every sentence the journey calls evidence is evidence', () => {
+  const sentences = journeySentences();
+
+  it('reads sentences out of the manifest at all', () => {
+    // Non-vacuous: a manifest that stopped declaring them would otherwise satisfy the case
+    // below by having nothing to check, which is the failure mode it exists to prevent.
+    expect(sentences.length, 'the manifest declares no expects_rendered sentence').toBeGreaterThan(5);
+  });
+
+  it('finds none of them already on a screen before the step that is supposed to produce it', () => {
+    const excused = new Set(STILL_EVIDENCE_THOUGH_RENDERED.map((entry) => entry.text));
+    const screens = renderedScreens().map((screen) => ({
+      where: screen.where.replace(/ \(.*$/, ''),
+      text: visibleText(screen.markup).join(' '),
+    }));
+
+    const vacuous = sentences
+      .filter(({ text }) => !excused.has(text))
+      .map(({ where, text }) => {
+        const on = [...new Set(screens.filter((s) => s.text.includes(text)).map((s) => s.where))];
+        return on.length === 0 ? null : `${where}: ${JSON.stringify(text)} is already on [${on.sort().join(', ')}]`;
+      })
+      .filter((entry): entry is string => entry !== null)
+      .sort();
+
+    expect(
+      vacuous,
+      'the journey declares these as proof that a step succeeded, and the application ' +
+        'renders them with no step having run. The assertion cannot fail, in the gate or ' +
+        'in the browser. Declare a sentence only that outcome renders, or drop the ' +
+        'sentence and say in the step why its marker is the evidence -- do not reach for ' +
+        'a longer substring of the same standing prose.',
+    ).toEqual([]);
+
+    // The other direction, so the exemption list is a ratchet and may only shrink.
+    expect(
+      [...excused].filter((text) => !screens.some((s) => s.text.includes(text))).sort(),
+      'these are excused from the rule and no screen renders them any more. Delete their ' +
+        'entries.',
+    ).toEqual([]);
+  });
+});
+

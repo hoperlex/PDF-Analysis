@@ -315,9 +315,7 @@
           "matches": "^(prj_%ID%)$",
           "bound_ms": 30000
         },
-        "expects_rendered": [
-          "Создан"
-        ],
+        "$why_no_expects_rendered": "D-61, W41-BLIND 2026-09-23. `expects_rendered` here declared \"Создан\", which this application renders on every project row as that project's created date -- with no step having run. It passed in the gate AND in the browser, because both test containment against text that is on the screen either way, so it was an assertion that could not fail. The evidence this step really has is `capture`: the `[data-created-project]` marker, matched against `^(prj_%ID%)$` under a 30s bound. A sentence is declared here again only when the outcome is the only thing that renders it.",
         "forbids_rendered": [
           "[role=\"alert\"]",
           "[data-create-problem]"
@@ -386,9 +384,7 @@
           ],
           "bound_ms": 30000
         },
-        "expects_rendered": [
-          "Эта версия"
-        ],
+        "$why_no_expects_rendered": "D-61, W41-BLIND 2026-09-23. `expects_rendered` here declared \"Эта версия\", which this application renders in the version panel's standing prose, on every version screen -- with no step having run. It passed in the gate AND in the browser, because both test containment against text that is on the screen either way, so it was an assertion that could not fail. The evidence this step really has is `capture`: the location match on the published version's own address. A sentence is declared here again only when the outcome is the only thing that renders it.",
         "forbids_rendered": [
           "[data-upload-failure]",
           "[data-precheck-problem]"
@@ -437,6 +433,7 @@
           ],
           "bound_ms": 30000
         },
+        "$why_no_expects_rendered": "D-61, W41-BLIND 2026-09-23. `expects_rendered` here declared \"Прогон\", which this application renders in the start-run control's own note, before the button is pressed -- with no step having run. It passed in the gate AND in the browser, because both test containment against text that is on the screen either way, so it was an assertion that could not fail. The evidence this step really has is `capture`: the captured run id, `await_terminal`, and `expects_api_after_terminal`. A sentence is declared here again only when the outcome is the only thing that renders it.",
         "await_terminal": {
           "$comment": [
             "The run reaches its terminal asynchronously. This does NOT sleep: it reads",
@@ -465,9 +462,6 @@
             "path": "/runs/{run_id}",
             "operationId": "getRunStatus"
           }
-        ],
-        "expects_rendered": [
-          "Прогон"
         ],
         "forbids_rendered": [
           "[data-run-failure]"
@@ -551,10 +545,10 @@
         "refused_by": "client",
         "precheck_problem": "too_large",
         "expects_rendered": [
-          "25 MiB",
           "Ничего не отправлено"
         ],
-        "$why_the_size_case_is_client_side": "`D-44`. It is client-side only while the pre-check limit stays strictly below nginx's `client_max_body_size`; tests/e2e/test_upload_limit_headroom.py is what keeps that true."
+        "$why_the_size_case_is_client_side": "`D-44`. It is client-side only while the pre-check limit stays strictly below nginx's `client_max_body_size`; tests/e2e/test_upload_limit_headroom.py is what keeps that true.",
+        "$why_not_the_limit": "D-61, W41-BLIND 2026-09-23. This case declared \"25 MiB\" as well, and the upload panel prints `Не более 25 MiB.` before any file is chosen -- so that half of the assertion was satisfied by the envelope notice on an untouched screen. `Ничего не отправлено` is rendered only by the pre-check refusal panel and is the half that is evidence."
       },
       {
         "fixture": "encrypted.pdf",
