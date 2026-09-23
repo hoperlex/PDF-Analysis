@@ -98,6 +98,16 @@ class TestFindingAUser:
             # the way it says so is by being a closed set that reports anything new. It did.
             "token_epoch",
             "token_epoch_updated_at",
+            # `W40-LIMIT`. Three more, and none of them is credential material either:
+            # they say how often somebody has been wrong and until when the door is shut,
+            # never what the password is. They are on the record because the operator's two
+            # views of a lockout read them -- `access.check` and `access.unlock` -- and a
+            # refusal state nobody can see is one nobody can answer for. The assertion is
+            # still about the four columns that must never appear, and the way it says so
+            # is still by being a closed set that reports anything new. It did, twice.
+            "failed_sign_ins",
+            "last_failed_sign_in_at",
+            "sign_in_blocked_until",
         }, "a credential column reached the record the boundary hands out"
         for forbidden in (
             "password_algorithm",
