@@ -30,9 +30,10 @@ import { describe, expect, it } from 'vitest';
 import type { DecisionEvent, Evidence } from '@/shared/api';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { DecisionPanel } from '@/widgets/decision-panel';
+import { COMMENT_REFUSALS, commentRefusalMessage } from '@/features/append-comment';
 import { DecisionHistory } from '@/widgets/decision-history';
 
-import { OBSERVATION_ID, decisionEvent, decisionId, observation, render } from './fixtures';
+import { OBSERVATION_ID, decisionEvent, decisionId, evidence, observation, render } from './fixtures';
 
 const OBJECT_URL = 'blob:https://app.test/0f0e9d8c-7b6a-5948-3726-150413021100';
 
@@ -113,6 +114,55 @@ describe('each quotation is shown with the anchor it was verified at', () => {
   });
 });
 
+describe('the page the viewer opens is always a page with a quotation on it', () => {
+  /**
+   * `D-85`: the invariant that made `.am-evidence__none` dead code.
+   *
+   * `pages` is the distinct set of `page_number` over the observation's OWN evidence and
+   * `page` is either an `activePage` inside that set or `pages[0]`, so a page with nothing
+   * on it cannot be the active page. The branch that said *"this observation cites no
+   * quotation on page N"* was therefore unreachable on every input, and the census saw it
+   * as a colour rule no screen reaches. It is deleted; this is what holds the invariant it
+   * relied on, because deleting a branch on the strength of an argument leaves the argument
+   * unchecked.
+   *
+   * Driven with the hostile inputs rather than the convenient one: a page the observation
+   * does not cite, page zero, a negative page, and evidence declared out of page order.
+   */
+  const spread = observation({
+    evidence: [
+      evidence({ evidence_ordinal: 3, page_number: 9 }),
+      evidence({ evidence_ordinal: 1, page_number: 2 }),
+      evidence({ evidence_ordinal: 2, page_number: 9 }),
+    ],
+  });
+
+  for (const activePage of [7, 0, -1, 2, 9, 1000]) {
+    it(`renders a quotation when the viewer is opened at page ${activePage}`, () => {
+      const markup = render(
+        createElement(EvidenceViewer, {
+          observation: spread,
+          activePage,
+          onPageChange: () => {},
+          documentUrl: OBJECT_URL,
+        }),
+      );
+      // The page it settled on is one the observation cites...
+      const settled = /data-active-page="(\d+)"/.exec(markup)?.[1];
+      expect({ activePage, settled }).toEqual({ activePage, settled: expect.stringMatching(/^(2|9)$/) });
+      // ...and there is a quotation on it. `am-quotation-list` renders only from
+      // `evidenceOnPage`, so its presence IS the non-empty claim.
+      expect({ activePage, list: markup.includes('am-quotation-list') })
+        .toEqual({ activePage, list: true });
+      expect({ activePage, anchor: markup.includes('am-quotation__anchor') })
+        .toEqual({ activePage, anchor: true });
+      // And the deleted branch is gone rather than merely unused.
+      expect({ activePage, dead: markup.includes('am-evidence__none') })
+        .toEqual({ activePage, dead: false });
+    });
+  }
+});
+
 describe('an anchor that disagrees with its quotation is said so, in the open', () => {
   it('renders the alert when the declared span is not the quotation length', () => {
     const markup = viewer(
@@ -174,6 +224,32 @@ describe('a comment the browser refused to send says so', () => {
   it('renders nothing of the kind when there was no refusal', () => {
     expect(panel()).not.toContain('am-decision__refusal');
     expect(panel({ refusal: null })).not.toContain('am-decision__refusal');
+  });
+
+  /**
+   * EVERY member of the union, derived from the union rather than listed here.
+   *
+   * `D-84`: the panel declared `refusal?: string` and rendered on `refusal === 'empty'`.
+   * With one member that screen was correct, which is exactly why nothing caught it — and
+   * a test naming `'empty'` is a second copy of the same assumption, so it could not catch
+   * it either. This one iterates `COMMENT_REFUSALS`, so a member added to the feature
+   * fails HERE at run time as well as in `tsc`, and the two failures say different things:
+   * the compiler says the sentence is missing, this says the screen is silent.
+   */
+  it('renders a sentence and the machine value for every refusal the feature can produce', () => {
+    expect(COMMENT_REFUSALS.length).toBeGreaterThan(0);
+    for (const refusal of COMMENT_REFUSALS) {
+      const markup = panel({ refusal });
+      expect({ refusal, block: markup.includes('am-decision__refusal') })
+        .toEqual({ refusal, block: true });
+      expect({ refusal, machine: markup.includes(`data-comment-refusal="${refusal}"`) })
+        .toEqual({ refusal, machine: true });
+      expect({ refusal, sentence: markup.includes(commentRefusalMessage(refusal)) })
+        .toEqual({ refusal, sentence: true });
+      // And the sentence is a sentence, not the machine value leaking onto the screen.
+      expect({ refusal, russian: /[а-яё]/i.test(commentRefusalMessage(refusal)) })
+        .toEqual({ refusal, russian: true });
+    }
   });
 });
 

@@ -18,21 +18,29 @@
  * instances of: a hand-maintained subset standing in for a set something else decides,
  * with nothing that fails when the authority grows.
  *
- *   the PAIRS       are computed by `census()` from thirty rendered screens crossed with
- *                   the stylesheet, plus `declaredPairs()` for the rules one server
+ *   the PAIRS       are computed by `census()` from forty-nine rendered screens crossed
+ *                   with the stylesheet, plus `declaredPairs()` for the rules one server
  *                   render pass structurally cannot reach;
  *   the THRESHOLD   is a function of what the pair IS — 4.5 for text (WCAG 1.4.3 AA),
- *                   3.0 for a boundary or a graphic that carries meaning (1.4.11) —
- *                   and whether a boundary carries meaning is itself derived: the
- *                   element is interactive per the MARKUP (an interactive tag, a `role`,
- *                   a `tabindex`), and its own fill does not already distinguish it from
- *                   what is behind it.
+ *                   3.0 for a graphic that carries meaning (1.4.11), and, since `R-33`,
+ *                   3.0 for EVERY border in the product.
+ *
+ * WHAT `R-33` CHANGED, 2026-09-23. Until wave 42 a border answered to 1.4.11 only where it
+ * was the sole thing identifying a control — interactive per the markup, with a fill that
+ * did not already distinguish it. That is what the standard asks for, and the owner ruled
+ * for more than the standard asks: every border, every state, both palettes. So the
+ * threshold no longer asks anything about the element a border surrounds, and
+ * `R-33: every border that meets on a screen clears 3:1` asserts the floor a second time
+ * WITHOUT consulting the register, because a product-wide floor that a paragraph can
+ * excuse is the targeted rule again under another name.
  *
  * So the only hand-maintained set in this file is `REGISTERED`: pairs that are measured,
  * below threshold, and knowingly not repaired this wave, each with its reason. It is
  * held to the census in BOTH directions — a registered pair the screens no longer produce
  * is a failure, exactly as an unregistered pair below threshold is. A stale exemption
- * cannot sit here unnoticed, and a new failure cannot hide behind one.
+ * cannot sit here unnoticed, and a new failure cannot hide behind one. **It is empty as of
+ * wave 42**, and the eight rows it carried were deleted by that both-directions check going
+ * red after the tokens moved, not by anyone remembering to look.
  */
 
 /// <reference types="vite/client" />
@@ -162,122 +170,33 @@ interface Registered {
  */
 const REGISTERED: readonly Registered[] = [
   /*
-   * REMOVED, repaired rather than accepted. `W32-CONTRAST` registered
-   * `text|--am-ink-inverse|--am-accent-light|-|selection` because `::selection` set no
-   * `color` of its own, so selecting a primary button label put white on a pale tint at
-   * 1.17:1 and the words vanished under the pointer. It could not fix it: the repair is a
-   * rule, and that session's grant was token values.
+   * EMPTY, and the eight rows that stood here were deleted by a red test rather than by
+   * a tidy-up. Wave 42, `R-33` / `D-81`.
    *
-   * The integrator added `color: var(--am-ink)` to the `::selection` rule — 15.13:1 against
-   * that tint, and the one foreground safe on every surface selection can land on.
+   * What they said, in one sentence repeated eight times: `--am-line` is below 1.4.11 on
+   * `--am-surface` and on `--am-paper`, resting and hovered and focused and active, in
+   * both palettes; raising it is `--am-line-strong`'s own territory; a three-level border
+   * scale cannot carry two levels at the 1.4.11 ceiling; that is a scale decision with an
+   * owner and neither `W32-CONTRAST` §3 nor `W33-THEME` nor `W41-BLIND` had the grant to
+   * take it. Every one of those clauses was true when it was written.
    *
-   * **This row's removal was forced by the guard, not noticed by a person.** The repair made
-   * `every registered pair is still produced and still below its threshold` go red, which is
-   * the both-directions check doing exactly what §4.2's M4 mutation predicted. A one-way
-   * register would have kept a row describing a defect that no longer exists, and the next
-   * reader would have believed it.
+   * The owner took the decision on 2026-09-23 and took it the wide way: `R-33` raises
+   * EVERY border to 3:1 rather than the load-bearing ones, so there is no longer a ceiling
+   * for two levels to compete for — the whole scale sits above the floor and the levels are
+   * spread across what is left. `docs/program/W42-LOOK.md` §1 carries the arithmetic.
+   *
+   * THE ROWS WERE NOT DELETED BY THE HAND THAT MOVED THE TOKENS. The values changed first,
+   * and `every registered row is still produced and still below its threshold` went red
+   * naming all sixteen rows (eight pairs × two palettes) as excuses for pairs that now
+   * pass. That is the both-directions check doing exactly what it was built for in wave 32,
+   * and it is the second time it has forced a stale exemption out of this file — the first
+   * was `::selection`, recorded in the comment `W32-CONTRAST` left above.
+   *
+   * An empty register is not a weaker guard: every assertion below still runs, and
+   * `isRegistered` now excuses nothing at all. The next pair that drops below its threshold
+   * fails loudly with nowhere to hide, which is the state this file has been working
+   * towards since it was written.
    */
-  {
-    key: 'edge|--am-line|--am-surface|-|border',
-    themes: ['light', 'dark'],
-    why:
-      '`--am-line` at 1.26:1 on `--am-surface` in the light palette and 1.44:1 in the ' +
-      'dark one. It is a separator at forty sites and the ONLY boundary at three ' +
-      'interactive ones whose fill does not distinguish them from the page: the finding ' +
-      'row, the evidence page tabs and the page-action links. 1.4.11 reaches those three. ' +
-      'Raising it needs `--am-line-strong`\u2019s own territory in EITHER palette — a ' +
-      'three-level border scale cannot carry two levels at the 1.4.11 ceiling — and it ' +
-      'would darken (or lighten) every card, table rule and divider in the tree. That is ' +
-      'one scale decision, it has the same answer in both themes, and `W33-THEME` did not ' +
-      'take it either. W32-CONTRAST §3.',
-  },
-  {
-    key: 'edge|--am-line|--am-surface|hover|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token on the same three controls, hovered, in both palettes. 1.4.11 covers ' +
-      'states as well as components, so the hovered boundary is in scope for the same ' +
-      'reason and is left for the same reason. The hover CHANGE is carried by ' +
-      '`--am-line-strong` and by `--am-accent`, both of which clear 3:1 in both themes; ' +
-      'only this resting edge does not.',
-  },
-  {
-    key: 'edge|--am-line|--am-surface|focus-visible|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token, focused, in both palettes. What indicates focus is the ' +
-      '`--am-accent` outline — 7.62:1 light, 7.67:1 dark — which passes and is the thing ' +
-      '2.4.7 and 1.4.11 actually ask for here; this row is the resting border still ' +
-      'showing underneath it, and repairing it would change nothing a keyboard user can see.',
-  },
-  /*
-   * FOUR ROWS ADDED BY `W41-BLIND`, 2026-09-23, and every one of them is a pair this
-   * census had never measured rather than a pair it had excused.
-   *
-   * Widening the screen list -- populated lists, a seeded review screen, the knowledge
-   * base, the two session screens -- took the census from 31 unreached colour rules to
-   * 11, and the newly reached elements carry `--am-line` on `--am-paper`: **1.30:1 in the
-   * dark palette and 1.36:1 in the light one, against the 3:1 that 1.4.11 asks of the
-   * only boundary an interactive control has.**
-   *
-   * The sites are `button.am-finding-row.am-button` inside the review list, `li.am-state`
-   * -- every project row and every run row -- while hovered, and the theme control in the
-   * application bar. **No census had ever rendered a populated list or a review screen
-   * with data in it**, which is why a pair on the row a reviewer clicks first has been
-   * unmeasured since wave 32.
-   *
-   * Registered and NOT repaired, and the reason is the one four rows above already give:
-   * this is `--am-line` at the 1.4.11 ceiling, the repair is `--am-line-strong`'s own
-   * territory in both palettes, and a three-level border scale cannot carry two levels at
-   * that ceiling. `W32-CONTRAST` §3 did not take that decision and `W33-THEME` did not
-   * take it either; it is a scale decision with an owner, and `W41-BLIND`'s grant is the
-   * instruments. What this wave changes is that the pair is now MEASURED, named, and held
-   * in both directions, instead of being invisible.
-   */
-  {
-    key: 'edge|--am-line|--am-paper|-|border',
-    themes: ['light', 'dark'],
-    why:
-      '`--am-line` at 1.36:1 on `--am-paper` in the light palette and 1.30:1 in the dark ' +
-      'one, at the theme control in the application bar. Exactly the scale decision the ' +
-      '`--am-surface` rows above describe, on the other fill; the two cannot be taken ' +
-      'apart, because one token draws both. W32-CONTRAST §3.',
-  },
-  {
-    key: 'edge|--am-line|--am-paper|hover|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token on `li.am-state` -- every project row and every run row -- while ' +
-      'hovered, in both palettes. Reached for the first time in wave 41, because every ' +
-      'list in this census had been rendered COLD since wave 32 and a cold list has no ' +
-      'rows. The hover change itself is carried by `--am-line-strong`, which clears 3:1.',
-  },
-  {
-    key: 'edge|--am-line|--am-paper|focus-visible|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token on the review screen\'s finding row, focused, in both palettes. ' +
-      'What indicates focus is the `--am-accent` outline at 7.6:1, which passes and is ' +
-      'what 2.4.7 asks for; this row is the resting border underneath it. Reached for the ' +
-      'first time in wave 41: the review screen had only ever been censused COLD.',
-  },
-  {
-    key: 'edge|--am-line|--am-paper|active|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token on the finding row while the pointer is down, in both palettes. The ' +
-      'active state is indicated by the shadow dropping to `--am-shadow-0`, not by this ' +
-      'border. Same token, same scale decision, same owner as the `--am-surface` rows.',
-  },
-  {
-    key: 'edge|--am-line|--am-surface|active|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token, on the finding row while the pointer is down, in both palettes. The ' +
-      'active state is indicated by the shadow dropping to `--am-shadow-0`, not by this ' +
-      'border, and the row is `--am-accent-light` with an inset `--am-accent` rail once ' +
-      'selected. Same token, same scale decision, same owner. W32-CONTRAST §3.',
-  },
 ];
 
 /** Is this pair excused in this palette? A pair excused in one is not excused in the other. */
@@ -408,11 +327,45 @@ describe('the census is taken over rendered screens, not over a list', () => {
    *
    * A rule this reaches is a rule the census EVALUATES. It is not a claim that the pair
    * passes — `every pair that meets on a screen clears the threshold its role asks of it`
-   * is that claim, and it is only as wide as this. Nor is an unreached rule a defect in
-   * the application: three of the entries below are branches one static pass cannot
-   * select, and two are dead CSS.
+   * is that claim, and it is only as wide as this.
+   *
+   * Nor is an unreached rule, on its own, a defect in the application. What it IS, always,
+   * is a question with two answers the census cannot tell apart — a missing seed or a rule
+   * nobody needs — so the list below answers it per entry, in the tree, rather than
+   * carrying a count down. Wave 42 read all eleven: three were dead and are deleted, one
+   * was a seed this harness could have taken all along, and seven are states a server
+   * render pass cannot produce, each naming how its colours are measured instead.
    */
   const UNREACHED_BY_ANY_SCREEN: readonly { readonly selector: string; readonly why: string }[] = [
+    /*
+     * ELEVEN ENTRIES BECAME SEVEN IN WAVE 42, AND THE COUNT IS THE LEAST INTERESTING PART.
+     *
+     * `W41-BLIND` took this list from 31 to 11 by rendering screens nobody had rendered,
+     * and closed with the sentence that made this wave's work: a rule no screen reaches is
+     * either A MISSING SEED or A RULE NOBODY NEEDS, and **from the census's side the two
+     * are indistinguishable**. So the eleven were not counted down again. Each was read in
+     * `web/src` and given a verdict, which is the only place the distinction exists:
+     *
+     *   DEAD, deleted this wave (3):
+     *     `hr`                  no module renders one -- `grep -rn "<hr" web/src` is empty
+     *     `.am-app__context`    declared, rendered by nothing -- measured the same way
+     *     `.am-evidence__none`  unreachable on EVERY input, `D-85`; the branch that carried
+     *                           it is deleted too, and the invariant that made it dead is
+     *                           now asserted in `tests/unit/review/viewer-and-panels.test.ts`
+     *
+     *   A MISSING SEED, seeded this wave (1):
+     *     `.am-app__instance`   `W41-BLIND` reasoned that "a static render pass has no
+     *                           environment to read one from". `getInstanceLabel()` reads
+     *                           `process.env` in the component body and this harness is a
+     *                           node process; `screens.ts` now sets one. The rule was never
+     *                           unreachable -- the seed was missing, which is `D-69`'s own
+     *                           shape and the reason this list is read rather than counted.
+     *
+     *   OUT OF REACH OF A SERVER RENDER PASS, and each one says how its colours ARE
+     *   measured instead (7, below). None of them is excused for being unrendered: an
+     *   entry whose reason is only "it is not rendered" is the defect being laundered,
+     *   which is what the assertion below says in as many words.
+     */
     {
       selector: '::selection',
       why:
@@ -422,40 +375,15 @@ describe('the census is taken over rendered screens, not over a list', () => {
         'markup at all.',
     },
     {
-      selector: 'hr',
-      why:
-        'No module in `web/src` renders an `<hr>`. Measured, not assumed: `grep -rn "<hr" ' +
-        'web/src` is empty. The rule is dead CSS and is reported as such rather than deleted, ' +
-        'because `globals.css` is not this task\'s to edit.',
-    },
-    {
-      selector: '.am-app__instance',
-      why:
-        '`_app/app-frame.tsx` renders it only when a deployment instance label is configured, ' +
-        'and a static render pass has no environment to read one from. The label is the ' +
-        'operator\'s, never the application\'s prose.',
-    },
-    {
-      selector: '.am-app__context',
-      why:
-        'Declared in `globals.css` and rendered by no module in `web/src`. Measured the same ' +
-        'way as `hr` and dead for the same reason; reported rather than deleted.',
-    },
-    {
       selector: ".am-theme__option[aria-pressed='true']",
       why:
-        'Which theme option is pressed is decided in the browser, by the script that reads ' +
-        'the stored preference. A server pass presses none, so the selected state of the ' +
-        'theme control is outside every instrument this suite has.',
-    },
-    {
-      selector: '.am-evidence__none',
-      why:
-        'UNREACHABLE BY ANY INPUT, and that is a finding rather than a limit. ' +
-        '`evidence-viewer.tsx` chooses `page` out of `pages`, which it derives from the ' +
-        'observation\'s own evidence — so a page carrying no quotation cannot be the active ' +
-        'page, and this branch cannot render. It is dead code in `web/src` and is reported, ' +
-        'not repaired: nothing this task changed exposed a defect that requires it.',
+        'Which theme option is pressed is decided in the browser. `theme-toggle.tsx` starts at ' +
+        '`useState<ThemeChoice>(\'system\')` and the stored preference arrives in an EFFECT, ' +
+        'which a server render pass does not run, so both options render `aria-pressed="false"` ' +
+        'whatever the harness does. Checked rather than assumed this wave. The rule declares ' +
+        '`background: var(--am-paper)` and `color: var(--am-ink)` in one block, so the pair it ' +
+        'carries is measured by `declaredPairs`; what is unmeasured is only the CASCADE around ' +
+        'it, and the pressed option sits on the same surfaces the unpressed one does.',
     },
     {
       selector: '.am-quotation:has(.am-quotation__inconsistent)',
@@ -468,8 +396,12 @@ describe('the census is taken over rendered screens, not over a list', () => {
       selector: '.am-export__disclosure[open] > summary',
       why:
         'A `<details>` is closed until a reader opens it, and the harness cannot fire the ' +
-        'event that opens one. The summary in its CLOSED state is censused; only the open ' +
-        'state is out of reach.',
+        'event that opens one; `export-panel.tsx` renders it with no `open` attribute and ' +
+        'takes no prop that would add one, so this is a browser state rather than a missing ' +
+        'seed. The summary in its CLOSED state is censused. The rule declares one colour -- ' +
+        '`border-bottom: 1px solid var(--am-line-soft)` -- and that exact pair, ' +
+        '`--am-line-soft` on `--am-surface`, is measured at other sites in both palettes, so ' +
+        'no pair is missing from the census; the RULE is what is unevaluated.',
     },
     {
       selector: '.am-form__chosen',
@@ -685,6 +617,82 @@ describe('every pair that meets on a screen clears the threshold its role asks o
     const light = new Map(measured('light').map((m) => [m.key, m.ratio]));
     const differing = measured('dark').filter((m) => Math.abs((light.get(m.key) as number) - m.ratio) > 0.01);
     expect(differing.length).toBeGreaterThan(20);
+  });
+});
+
+// ================================================================== R-33: the border floor
+
+describe('R-33: every border that meets on a screen clears 3:1, in both palettes', () => {
+  /**
+   * The product-wide floor, asserted WITHOUT consulting the register.
+   *
+   * This is deliberately not a row in `REGISTERED`'s question. The register answers *"is
+   * this particular failing pair knowingly excused"*, and for six waves the answer for
+   * `--am-line` was yes — eight rows of it, across two fills and four states, every one of
+   * them ending in the same sentence: this is a scale decision with an owner. The owner
+   * took it on 2026-09-23 (`R-33`, `D-81`) and chose the product-wide change over the
+   * targeted one, so the floor is no longer a pair-by-pair negotiation and this assertion
+   * is no longer excusable by writing a paragraph.
+   *
+   * It overlaps `every pair that meets on a screen clears the threshold its role asks of
+   * it` by design, and the overlap is not redundancy: that assertion routes through
+   * `thresholdFor` and through `isRegistered`, so a future row could excuse a border there.
+   * Nothing excuses one here. If a border below 3:1 is ever deliberate again, it takes a
+   * ruling that edits this test, not a register entry that slips past it.
+   *
+   * WHAT COUNTS AS A BORDER: every `edge` occurrence the census produces — the four
+   * `border-*` properties and `outline`, on any element, in any state, in either palette.
+   * Not graphics, which answer to 1.4.11 for a different reason and already did.
+   */
+  it('names the theme, the ratio and the site of every border under the floor', () => {
+    const under = THEMES.flatMap((theme) =>
+      measured(theme)
+        .filter((m) => m.occurrence.kind === 'edge')
+        .filter((m) => !(m.ratio >= AA_NON_TEXT))
+        .map((m) => ({
+          theme,
+          pair: m.key,
+          ratio: Number(m.ratio.toFixed(2)),
+          needs: AA_NON_TEXT,
+          where: m.occurrence.sites[0],
+        })),
+    ).sort((a, b) => a.ratio - b.ratio || a.pair.localeCompare(b.pair));
+    expect(
+      under,
+      'R-33: every border in this product clears 3:1 against the surface it is drawn on, ' +
+        'in BOTH palettes. These do not. The repair is the token, not an exemption: this ' +
+        'assertion reads no register.',
+    ).toEqual([]);
+  });
+
+  it('measures borders at all, so an empty census cannot satisfy the floor', () => {
+    // Anti-vacuity, and it is the one this assertion needs most: `.filter(kind === 'edge')`
+    // over a census that produced no edges is an empty list agreeing with an empty list.
+    for (const theme of THEMES) {
+      const edges = measured(theme).filter((m) => m.occurrence.kind === 'edge');
+      expect({ theme, edges: edges.length >= 20 }).toEqual({ theme, edges: true });
+      // And every one of them is a real measurement rather than a NaN that `>=` swallows.
+      expect({ theme, measurable: edges.every((m) => Number.isFinite(m.ratio)) })
+        .toEqual({ theme, measurable: true });
+    }
+  });
+
+  it('asks 3:1 of a border whatever the markup around it says', () => {
+    // The ruling's own words -- "not only the load-bearing ones" -- as a property of
+    // `thresholdFor` rather than of today's census: a decorative separator, a disabled
+    // control's edge and an interactive control's sole boundary all answer to the same
+    // number now. Built from a literal occurrence so it stays true when the screens change.
+    const edge = (over: Partial<Occurrence>): Occurrence => ({
+      kind: 'edge', foreground: '--am-line', background: '--am-paper',
+      state: null, pseudo: 'border', site: 'synthetic', interactive: false,
+      fillDistinguishes: false, ...over,
+    });
+    expect(thresholdFor(edge({}))).toBe(AA_NON_TEXT);
+    expect(thresholdFor(edge({ interactive: true, fillDistinguishes: true }))).toBe(AA_NON_TEXT);
+    expect(thresholdFor(edge({ state: 'disabled' }))).toBe(AA_NON_TEXT);
+    expect(thresholdFor(edge({ state: 'hover' }))).toBe(AA_NON_TEXT);
+    // Text is untouched by the ruling and still answers to 1.4.3.
+    expect(thresholdFor(edge({ kind: 'text' }))).toBe(AA_TEXT);
   });
 });
 

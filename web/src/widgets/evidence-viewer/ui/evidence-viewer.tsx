@@ -159,17 +159,33 @@ export function EvidenceViewer({
 
         <div className="am-evidence__quotations">
           <h3>Цитаты на странице {page}</h3>
-          {quotations.length === 0 ? (
-            <p className="am-evidence__none">
-              Это наблюдение не ссылается ни на одну цитату на странице {page}.
-            </p>
-          ) : (
-            <ul className="am-quotation-list">
-              {quotations.map((item) => (
-                <QuotationCard key={`${item.evidence_ordinal}`} item={item} />
-              ))}
-            </ul>
-          )}
+          {/*
+            * NO EMPTY BRANCH HERE, and its absence is the repair `D-85` asked for.
+            *
+            * A `quotations.length === 0` case stood here and could not run on any input:
+            * `pages` is the DISTINCT set of `page_number` over this observation's own
+            * evidence, and `page` is either an `activePage` that is in that set or
+            * `pages[0]`. So `page` always cites at least one quotation, and the branch was
+            * dead code carrying a dead CSS rule -- the empty-case paragraph, now deleted
+            * from `globals.css` -- which is how the census came to report it as a colour
+            * rule no screen reaches. Its class name is deliberately not repeated here:
+            * `styling-layer.test.ts` reads every product class token out of this file,
+            * comments included, and requires the stylesheet to declare each one. It caught
+            * this very sentence twice -- first for naming the deleted class, then for the
+            * bare prefix in the explanation -- which is the guard being right both times.
+            *
+            * The invariant is asserted rather than trusted:
+            * `tests/unit/review/viewer-and-panels.test.ts` renders this viewer with an
+            * `activePage` the observation does not cite and with pages in a scrambled
+            * order, and requires a quotation on the page that comes back. An observation
+            * with no evidence at all never reaches here -- `pages.length === 0` is refused
+            * above, as a reported integrity violation rather than an empty panel.
+            */}
+          <ul className="am-quotation-list">
+            {quotations.map((item) => (
+              <QuotationCard key={`${item.evidence_ordinal}`} item={item} />
+            ))}
+          </ul>
           <p className="am-evidence__limits">
             Навигация только по страницам: без подсветки фрагмента и рамки. Цитата выше —
             точная строка, которую шлюз привязки проверил по её якорю.
