@@ -6,7 +6,9 @@ and both of them are properties the module writes down as properties:
 * ``_operation_of``: *"An unreadable route is a closed route."* Inverting the default -- so
   that a route the seam cannot identify is exempted rather than guarded -- left
   ``test_authorization.py``, ``tests/integration/auth`` and
-  ``test_api_token_channel.py`` at **77 passed**. Every route on the built application
+  ``test_api_token_channel.py`` green -- **77 passed** when `W37-CERT4` measured it, and
+  **103 passed** re-measured at ``ccaeed8``, because waves 38 and 39 added cases to those
+  suites and not one of them can see this. Every route on the built application
   carries an ``operationId`` today, so the claim is true and untested, and the day it stops
   being true is the only day the default decides anything.
 * ``TokenSigner.verify``: *"a short-circuiting one leaks its length and its prefix to a
@@ -110,7 +112,7 @@ def test_the_fixtures_route_really_carries_no_operation_id() -> None:
 
 
 def test_a_route_the_seam_cannot_identify_is_refused_without_a_credential() -> None:
-    """`W37CERT4-5`. The mutation that used to leave three suites at 77 green.
+    """`W37CERT4-5`. The mutation that used to leave three suites entirely green.
 
     The seam's own words: *"Everything else -- including a request whose route the seam
     could not identify -- must present a credential this deployment's key produced."*
