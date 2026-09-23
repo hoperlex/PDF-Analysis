@@ -18,6 +18,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |
 | D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
 | **D-79** | `CURRENT_STATE.md` — the file `AGENTS.md` makes every agent read first — went stale twice, and said the system was open when it is closed | the gate does not read `docs/` |
+| **D-80** | no `.dockerignore`: the web image's `node_modules` is the build host's, not the lockfile's — and criterion 1 is blind to it by construction | one file, verified by a build |
 | **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -1696,6 +1697,63 @@ argument for the structural repair in one line.
 Check: `ls tests/contract/api_v1/test_surface_counts_in_prose.py`, then
 `grep -n 'REPO_ROOT /' tests/contract/api_v1/test_surface_counts_in_prose.py` — three trees, no
 `docs`.
+
+### D-80 — the web image's dependencies are the build host's, and the criterion that would catch it cannot
+
+**Measured by the integrator 2026-09-23 from a line in `pdf-analysis-04`'s pre-flight review
+that called this a build-context size problem. It is not only that.**
+
+**There is no `.dockerignore` anywhere in the repository**, and both services build with
+`context: ../..` — the repository root (`infra/deploy/compose.server.yml:112,127,174`). So every
+build ships the whole working tree to the daemon: **6.1 GB here, of which 5.3 GB is `.local/`**,
+the norms corpus that no `git status` shows.
+
+**Size is the visible half. This is the other one** — `infra/deploy/Dockerfile.web:23–26`:
+
+```dockerfile
+COPY web/package.json web/package-lock.json ./
+RUN npm ci                 # a clean, locked install
+COPY web/ ./               # overlays the BUILD HOST'S web/node_modules on top of it
+```
+
+`web/node_modules` is **576 MB** on this machine and `web/.next` is **51 MB** of stale host
+build output, and both go in. `COPY` merges rather than replaces, so the image's dependency tree
+ends up the clean install **overlaid by whatever the host happened to have** — a different
+resolution, a different platform's binaries, or an abandoned experiment. `package-lock.json`,
+`pinned-versions.guard.test.ts` and `web/FRONTEND_LOCK.json` all describe a tree the image does
+not necessarily contain.
+
+**The sharp part, and the reason this is a row and not a chore:** `PA-01` criterion 1 is *deploy
+from a **clean clone***. A clean clone has no `node_modules`, no `.next` and no `.local`.
+**The certification passes in exactly the one condition where this defect cannot appear**, and
+every deploy from a working checkout — which is every deploy this programme has ever done — is
+the condition it does appear in. That is `OPERATING_CONSTRAINTS.md` §12's shape at the level of a
+certification criterion: *the measurement shares an assumption with its subject.*
+
+**Two things this is NOT, checked rather than assumed, because the scary reading is the wrong
+one here:**
+
+- **No credential reaches an image.** `Dockerfile.api` copies **named paths only** — `Makefile`,
+  `pyproject.toml`, `uv.lock`, `.python-version`, `src/`, `db/`, `contracts/`,
+  `fixtures/recorded/`, `P02_LOCK.json`, `serve.py` — and there is **no `COPY . .` in either
+  file**. `.env` and `infra/deploy/env/provider.env` are in the *context* but are never copied.
+- **`web/.env.local` cannot override the build.** It is copied in by `COPY web/ ./`, and it
+  holds two `NEXT_PUBLIC_*` values which are public by construction. It still cannot change the
+  image, because `@next/env`'s `processEnv` assigns a parsed key **only when it is absent from
+  the `process.env` snapshot taken before loading** — and the Dockerfile sets both with `ENV`
+  before `npm run build`. *Recorded with the mechanism so the next reader does not have to
+  re-derive it, and because the plausible-sounding opposite is what a reviewer would assume.*
+
+**Repair: one `.dockerignore` at the context root**, excluding `.git`, `.local`, `.venv`,
+`**/node_modules`, `web/.next`, `**/__pycache__`, `*.log` and every `.env*`. **It must be
+verified by an actual build, not by inspection** — a `.dockerignore` that excludes something a
+`COPY` names fails at build time, and this file's whole purpose is to change what `COPY` sees.
+Deferred out of wave 41 for that reason: a build needs ~3.7 GB of cache and this host is at 92%
+with two lanes live, and `one-measurement-per-lane` says not to build a third thing while two
+gates are running.
+
+Check: `ls .dockerignore` (absent), `grep -n 'COPY web/' infra/deploy/Dockerfile.web`, and
+`du -sh --exclude=.git .` against `du -sh .local web/node_modules`.
 
 ### D-73 — four routes answer 200 with no credential, because the seam is on the router
 
