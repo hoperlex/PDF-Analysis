@@ -3,7 +3,7 @@
  *
  * The drift guard next door proves the client matches the document. This one proves the
  * document still says what `docs/program/P02_SEAMS.md` section 7 says it says — the
- * seventeen operations at their frozen methods and paths, the field sets a review screen depends on,
+ * eighteen operations at their frozen methods and paths, the field sets a review screen depends on,
  * and the safety rules that must survive any future edit to the contract.
  *
  * A P02 change that breaks the seam fails here, before any UI task is blamed for it.

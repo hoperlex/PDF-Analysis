@@ -1,7 +1,7 @@
 """Two things `T-1` and `T-3` leave that no other suite is the home of.
 
 * **the served document is the one the gate compares.** ``W13-CONF``'s conformance gate
-  reads ``create_documentation_app().openapi()``, which builds the seventeen operations with
+  reads ``create_documentation_app().openapi()``, which builds the eighteen operations with
   nothing behind the ports so that a document can be read on any checkout, without a
   database, an object store or a credential. That is only worth anything if it is the
   *same* document the wired application serves. Asserted here, because the gate cannot
@@ -112,7 +112,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:
-        """The contract declares no ``default`` on any property of any of the 50 schemas.
+        """The contract declares no ``default`` on any property of any of the 51 schemas.
 
         ``default: null`` on an optional property says the server substitutes ``null``,
         which is not what an absent property means here -- and the conformance gate

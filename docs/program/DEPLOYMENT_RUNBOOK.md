@@ -63,7 +63,7 @@ ssh -L 31500:127.0.0.1:31500 <host>        # then open http://127.0.0.1:31500 lo
 
 **Why the default is loopback, measured rather than assumed.** The compose file used to
 publish with no interface at all, which binds `0.0.0.0`. On this host the stand answered
-**`200`** on its **public** address, at `/bff/v1` — which serves all seventeen operations,
+**`200`** on its **public** address, at `/bff/v1` — which serves all eighteen operations,
 **writes included**, with no credential, because the browser deliberately holds no secret and
 the BFF route adds it server-side. The origin is unauthenticated *by design*; nothing but the
 network was keeping anyone out.
@@ -170,7 +170,7 @@ Two of its values are not free choices:
   token is corrected in `infra/deploy/README.md`.
 
   The seam is **fail-closed**: a container started without it exits non-zero rather than
-  serving `authentication_required` to all seventeen operations, which from a browser looks
+  serving `authentication_required` to all eighteen operations, which from a browser looks
   like a broken product rather than an unconfigured one;
 
 * **the passwords.** `deploy.sh` compares what you wrote against the example file's own
@@ -380,6 +380,47 @@ rather than from anyone's preference:
 * it is not the same event as `PA-01`. The roadmap's §6 already runs `reset.sh` once
   **after** `PA-01` and **before** real documents arrive, to clear the pilot corpus. The
   `R-4` wipe is the later one, at the end.
+
+### The credentials, which the wipe does **not** touch — `R-26`
+
+`reset.sh` destroys documents and rows. It does **not** invalidate credentials anybody was
+given during the pilot, and until `W39-REVOKE` nothing could: a credential is a signed
+statement with an expiry, so the only lever was rotating `AUDITMANAGER_API_TOKEN` — which
+signs out the operator too and needs a redeploy.
+
+There is now a command, and it publishes no HTTP operation:
+
+```
+# end the pilot for everybody -- everyone signs in again, including you
+PYTHONPATH=src python -m auditmanager.access.revoke --everyone
+
+# or one account
+PYTHONPATH=src python -m auditmanager.access.revoke --login <login>
+```
+
+It raises `app_user.token_epoch`, which every credential carries a copy of, so **every
+credential ever minted for those accounts stops being accepted at once** — in every
+process, across a restart, without a redeploy. Exit `0` revoked something, **`1` was
+well-formed and matched nothing** (a mistyped `--login` looks like this and not like
+success), `2` could not reach the database. Run it with no argument and it does nothing and
+exits `2`: neither "revoke everybody" nor "revoke nobody" is a defensible default.
+
+Run it **after** `reset.sh`, in the same sitting. The two answer different halves of
+*"the pilot has ended"*: one takes the documents away, the other takes the access away, and
+a wipe that leaves live credentials behind has ended the pilot only for the data.
+
+Two more things an operator should know about it:
+
+* **a password change revokes too.** Whoever changes their password through the application
+  invalidates every credential that account held, by the same mechanism and in the same
+  write. That is not a side effect to work around; it is what a password change means here;
+* **deploying migration `0007_credential_epoch` is itself a global revocation.** Credentials
+  minted before it carry no epoch and are refused. Everyone signs in again, once, at the
+  upgrade. The migration says so in its own log line.
+
+`python -m auditmanager.access.check` is the other half of the same operator view: it names
+the accounts still holding the password this system seeded them with, without anybody
+signing in.
 
 ### What an operator checks afterwards — by **writing**, never by reading
 
