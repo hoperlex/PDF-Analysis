@@ -39,7 +39,9 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56190`, `59790/59791` | `gate-w39b` | 2026-09-23 | wave 39 merges |
 | `56180–56210`, `59780–59811` | waves 39 and 40 | 2026-09-23 | **released** — both merged at `6aeda82`; containers, volumes and networks removed by the integrator |
 | `56220`, `59820/59821` | `gate-w41a` — `W41-AUTHOR` | 2026-09-23 | wave 41 merges |
-| `56230`, `59830/59831` | `gate-w41b` — `W41-BLIND` | 2026-09-23 | wave 41 merges |
+| `56220–56230`, `59820–59831` | wave 41 | 2026-09-23 | **released** — merged at `6b5b500`, tagged `alpha-w41`; containers and volumes removed |
+| `56240`, `59840/59841` | `gate-w42a` — `W42-SEAL` | 2026-09-23 | wave 42 merges |
+| `56250`, `59850/59851` | `gate-w42b` — `W42-LOOK` | 2026-09-23 | wave 42 merges |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
