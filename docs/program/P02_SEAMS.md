@@ -505,7 +505,7 @@ Append-only. Every event is a new `decision_id`. Nothing is ever updated.
 | `event_type` | `accept`, `reject`, `comment`; `revoke` declared, no PC-01 producer |
 | `verdict` | `accepted` for accept, `rejected` for reject, `pending` for revoke, `null` for comment |
 | `comment` | required for `comment`, optional on any other type |
-| `author_label` | `OD-12`: one configured local reviewer label, persisted server-side. A label, not a subject identity; it authorizes nothing |
+| `author_label` | **Since wave 41: the login of the reviewer who recorded the event**, derived server-side from the authenticated credential and never from a request body. Authorizes nothing. `OD-12`'s single configured label is gone — `P04` cannot measure whose judgement was whose when every judgement carries one name. The sealed contract's description still says the old thing; that is `D-86`, a reseal |
 | `command_id` | at most one event per command record, enforced by a unique index |
 | `recorded_at` | `clock_timestamp()`, so events inside one transaction are distinguishable |
 

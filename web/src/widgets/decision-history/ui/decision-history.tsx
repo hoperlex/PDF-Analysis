@@ -10,9 +10,16 @@
  * behind "show older": the whole point of an append-only ledger is that the reviewer can
  * see that the accept from ten minutes ago is still there under the comment from just now.
  *
- * `author_label` is `OD-12`'s configured local reviewer label. It is a label, not a subject
- * identity, and it authorizes nothing — the UI never sends one, it only displays what the
- * server recorded.
+ * `author_label` is **the login of the reviewer who recorded the event**, derived by the
+ * server from the authenticated credential. Wave 41 replaced `OD-12`'s single configured
+ * label with it, because three experts producing one indistinguishable voice is precisely
+ * what `P04` cannot measure. It still authorizes nothing, and **the UI never sends one** —
+ * it only displays what the server recorded, which is the half of `OD-12` that was always
+ * the point.
+ *
+ * The sealed contract's own description of this field still carries the old sentence.
+ * Correcting it is a reseal and is registered as `D-86`; this comment is ahead of it
+ * deliberately, rather than repeating something that stopped being true.
  *
  * An empty history renders `NotApplicableState`, not `EmptyState`: `shared/ui` names this
  * exact case — a decision history on a finding nobody has judged — as the not-applicable

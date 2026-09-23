@@ -24,6 +24,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-83 | eleven journey sentences are verified by nothing inside the gate | only `refusals.mjs` against a live stand |
 | D-84 | a widget widens a one-member union to `string` and matches a magic literal — a second refusal renders **silence** | one word, and `tsc` starts catching it |
 | D-85 | dead code that the widened contrast census can now see | three items, named |
+| **D-86** | the **sealed** contract describes `author_label` as *"not a subject identity"* — it now is one | a reseal; batch it with `D-46` |
 | **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -1674,10 +1675,26 @@ was whose. With this constant in place it cannot: three experts produce one indi
 **Two rules meet at that constant, and wave 34 made one of them false without moving it.** The
 docstring says the label *"is never taken from a request body — PC-01 has no authentication, and a
 client-supplied 'who did this' would be a subject identity in all but name."* The first half is
-still exactly right and must survive any repair. The second half stopped being true in wave 34:
-`api/security.py:403` builds `Subject(user_uid, login, token_epoch)` on every authenticated
-request, and `require_authorization` **returns `None`** — the identity is established and then
-discarded. **A justification that outlived its premise, which is `OPERATING_CONSTRAINTS.md` §4.7.**
+still exactly right and survived the repair untouched. The second half stopped being true in
+wave 34. **A justification that outlived its premise, which is `OPERATING_CONSTRAINTS.md` §4.7.**
+
+> **Correction, 2026-09-23, and it is the integrator's.** This row and the brief built on it both
+> said *"`require_authorization` **returns `None`** — the identity is established and then
+> discarded."* **That is false, and the file says so in its own docstring.**
+> `api/security.py:497` ends `require_authorization` with `request.state.subject = subject`, and
+> the module has published `current_subject` and `CurrentSubject` since wave 39 — `changePassword`
+> has read the authenticated subject through them since `W39-REVOKE`, and lines 43–45 of that file
+> state it in plain prose.
+>
+> **I read the signature's return annotation and stopped.** `-> None` is a true fact about the
+> function and not the whole of its subject — `OPERATING_CONSTRAINTS.md` §12's sixth shape, the
+> third instance in three days and the second of those to reach a dispatched brief.
+>
+> **It changed the shape of the work rather than its size.** There was no seam to build; there was
+> a second operation to make reach for one that existed — which walked straight into a guard
+> asserting that **exactly one** router module does. Tightening that guard from a string grep to
+> an AST import check, and proving it still bites, was a real slice of `W41-AUTHOR` that the brief
+> did not ask for and could not have.
 
 `W12-DEC` recorded mutation `M21` — `"local-reviewer"` → `"someone-else"` — as **deliberately
 green**. That is the measurement of this row, and after `W41-AUTHOR` it must be red.
@@ -1927,6 +1944,39 @@ down, and this row starts that list at three.
 
 Check: the census's own failure list, and `grep -rn 'am-evidence__none\|am-app__context' web/src`.
 
+### D-86 — the frozen contract's description of `author_label` is now false
+
+**Reported by `W41-AUTHOR` as the one item in its work needing a decision rather than a merge,
+and it was right to stop.**
+
+`contracts/api/v1/openapi.json`, `DecisionEvent.author_label`:
+
+> *"OD-12: one configured local reviewer label, persisted server-side. It is a **label, not a
+> subject identity**, and it authorizes nothing."*
+
+After `D-78` it **is** a subject identity: the login of the authenticated reviewer, derived
+server-side. **The schema did not move** — same type, same `1..128` — so no frozen artefact
+changed in the sense the freeze means, and the wave is legitimately contract-free. **The
+sentence is still wrong**, and a generated client carries it to whoever reads the API.
+
+**Correcting a description is a full reseal**, because it is the same four documents in one
+change that `D-18` named: `openapi.json`, the regenerated client, the mirror, and the sha in
+`web/FRONTEND_LOCK.json`. That is the whole reason this is a row and not an edit.
+
+**Deferred deliberately to `W44`'s reseal, not dropped.** `R-24`'s own note says to batch —
+`R-11` reverted an entire wave over a reseal found at the end rather than planned at the start,
+and finding one at the end and *scheduling* it is the response that lesson asks for.
+`WAVE_PLAN_42_45.md` nominates `D-46` as the reseal to batch around; this joins it.
+
+**Two copies of the sentence live outside the seal and were corrected immediately**, because
+neither costs a reseal and leaving them would have made three documents disagree instead of one:
+`docs/program/P02_SEAMS.md:508` and
+`web/src/widgets/decision-history/ui/decision-history.tsx:13`. **Both now say what is true and
+both name this row**, so the disagreement with the sealed copy is recorded where a reader meets
+it rather than discovered later.
+
+Check: `python3 -c "import json;print(json.load(open('contracts/api/v1/openapi.json'))['components']['schemas']['DecisionEvent']['properties']['author_label']['description'])"`
+
 ### D-73 — four routes answer 200 with no credential, because the seam is on the router
 
 **Found by `W40-GUARDS` 2026-09-23 and verified by the integrator on the live stand.**
@@ -1969,8 +2019,10 @@ The two routers now check that a parent exists, and each check builds far more t
 `listDecisionHistory` then reads a second time.
 
 An existence method on the ports is the right shape. It is also a change to four
-implementations — one in `bootstrap/` (a hotspot) and three in `tests/` — and a router calling
-a method an implementation lacks is an `AttributeError` and a `500`.
+implementations — **two in `bootstrap/adapters.py` and two in `tests/integration/api/conftest.py`**
+(this row said "one and three"; `W41-AUTHOR` counted them by parsing all 13 `build_router` call
+sites and 89 port arguments, and the total of four was the only part that was right) — and a
+router calling a method an implementation lacks is an `AttributeError` and a `500`.
 
 Check: read `RunAdapter.get_run_status` and `FindingAdapter.get_finding` and count what each
 loads to answer "does this exist".
