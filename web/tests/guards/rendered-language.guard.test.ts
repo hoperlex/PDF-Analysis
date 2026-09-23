@@ -70,6 +70,7 @@ import type {
   Project,
   RunStatus,
   StageId,
+  StageStatus,
 } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
@@ -425,8 +426,30 @@ const version = (over: Partial<DocumentVersion> = {}): DocumentVersion => ({
   ...over,
 });
 
-const STAGES: readonly StageId[] = [
-  'source_preparation', 'page_geometry_extraction', 'document_context_build', 'text_analysis',
+/*
+ * ALL NINE stage ids, and each with a DIFFERENT stage status.
+ *
+ * It was four, all `succeeded`, and that was five `StageId` members and three
+ * `StageStatus` members this guard never rendered. `W41-BLIND` did not find that by
+ * reading the list -- a list is exactly what nobody re-reads. The coverage assertion at
+ * the foot of this file names every contract member no screen puts on a badge, and it is
+ * what this seed answers to.
+ *
+ * Hand-written on purpose. Deriving the seeds from the contract would make a tenth stage
+ * cover itself, silently, with whatever default a builder chose -- which is the shape
+ * this task exists to stop. A new member must redden, so that somebody decides what the
+ * screen does with it.
+ */
+const STAGES: readonly { readonly id: StageId; readonly status: StageStatus }[] = [
+  { id: 'source_preparation', status: 'succeeded' },
+  { id: 'page_geometry_extraction', status: 'succeeded' },
+  { id: 'document_context_build', status: 'partial' },
+  { id: 'text_analysis', status: 'succeeded' },
+  { id: 'block_analysis', status: 'failed' },
+  { id: 'finding_merge', status: 'skipped' },
+  { id: 'finding_review', status: 'succeeded' },
+  { id: 'finding_correction', status: 'skipped' },
+  { id: 'norm_verification', status: 'partial' },
 ];
 
 const run = (over: Partial<RunStatus> = {}): RunStatus => ({
@@ -439,12 +462,12 @@ const run = (over: Partial<RunStatus> = {}): RunStatus => ({
   terminal_at: '2026-09-10T08:04:00.000Z',
   terminal_reason: null,
   interrupted_reason: null,
-  stages: STAGES.map((stage_id) => ({
-    stage_id,
-    status: 'succeeded' as const,
+  stages: STAGES.map(({ id, status }) => ({
+    stage_id: id,
+    status,
     started_at: '2026-09-10T08:00:00.000Z',
     finished_at: '2026-09-10T08:01:00.000Z',
-    error_code: null,
+    error_code: status === 'failed' ? ('analysis_failed' as ErrorCode) : null,
     stage_version: '1.0.0',
   })),
   degradation_set: [],
@@ -502,7 +525,7 @@ const detail = (): FindingDetail => ({
   latest_comment: 'Замечание проверяющего.',
 });
 
-const decision = (): DecisionEvent => ({
+const decision = (over: Partial<DecisionEvent> = {}): DecisionEvent => ({
   decision_id: `dec_${ULID}`,
   finding_uid: FINDING_UID,
   finding_observation_id: OBSERVATION_ID,
@@ -511,7 +534,58 @@ const decision = (): DecisionEvent => ({
   comment: 'Подтверждено.',
   author_label: 'проверяющий',
   recorded_at: '2026-09-10T09:00:00.000Z',
+  ...over,
 });
+
+/*
+ * ONE FINDING PER `FindingCategory`, AND ONE PER `Verdict`.
+ *
+ * The list used to hold a single `internal_contradiction` finding whose verdict was
+ * `pending`, so `explicit_placeholder`, `rejected` and `needs_manual_review` never
+ * reached a badge -- three contract members with a Russian label each, rendered by no
+ * state in this matrix. The coverage assertion at the foot of this file is what now says
+ * so out loud, and this is its answer.
+ *
+ * Hand-written for the reason `STAGES` is: a fifth verdict must redden rather than seed
+ * itself.
+ */
+const FINDINGS: readonly Finding[] = [
+  finding({ current_verdict: 'pending' }),
+  finding({
+    finding_uid: `${FINDING_UID.slice(0, -1)}C`,
+    category: 'internal_contradiction',
+    current_verdict: 'accepted',
+    latest_decision_id: `dec_${ULID}`,
+    decision_recorded_at: '2026-09-10T09:00:00.000Z',
+  }),
+  finding({
+    finding_uid: `${FINDING_UID.slice(0, -1)}D`,
+    category: 'explicit_placeholder',
+    current_verdict: 'rejected',
+    latest_decision_id: `dec_${ULID}`,
+    decision_recorded_at: '2026-09-10T09:00:00.000Z',
+  }),
+  finding({
+    finding_uid: `${FINDING_UID.slice(0, -1)}E`,
+    category: 'explicit_placeholder',
+    current_verdict: 'needs_manual_review',
+    latest_decision_id: `dec_${ULID}`,
+    decision_recorded_at: '2026-09-10T09:00:00.000Z',
+  }),
+];
+
+/** One decision event per `Verdict`, for the same reason the findings are four. */
+const DECISIONS: readonly DecisionEvent[] = [
+  decision(),
+  decision({ decision_id: `dec_${ULID}B`, event_type: 'reject', verdict: 'rejected', comment: 'Отклонено.' }),
+  decision({
+    decision_id: `dec_${ULID}C`,
+    event_type: 'comment',
+    verdict: 'needs_manual_review',
+    comment: 'Требует ручной проверки.',
+  }),
+  decision({ decision_id: `dec_${ULID}D`, event_type: 'revoke', verdict: 'pending', comment: 'Решение отозвано.' }),
+];
 
 /**
  * One journal record. Cyrillic everywhere the application did not author the string, and
@@ -582,9 +656,9 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.version, version());
   client.setQueryData(KEYS.runs, { items: [run(runOverrides)], page });
   client.setQueryData(KEYS.run, run(runOverrides));
-  client.setQueryData(KEYS.findings, { items: [finding()], page });
+  client.setQueryData(KEYS.findings, { items: FINDINGS, page });
   client.setQueryData(KEYS.finding, detail());
-  client.setQueryData(KEYS.decisions, { items: [decision()], page });
+  client.setQueryData(KEYS.decisions, { items: DECISIONS, page });
   /*
    * TWO records, and the second one is not decoration.
    *
@@ -599,7 +673,22 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
    * English word in either is now an offence.
    */
   client.setQueryData(KEYS.journal, {
-    items: [record(), record({ decision_id: `dec_${ULID}A`, decision_event_count: 1 })],
+    items: [
+      record(),
+      record({ decision_id: `dec_${ULID}A`, decision_event_count: 1 }),
+      // One row per remaining `Verdict` and per remaining `FindingCategory`, so the
+      // knowledge base puts every badge this contract publishes on a screen. Before this
+      // the journal held `accepted`/`internal_contradiction` twice and nothing else.
+      ...DECISIONS.slice(1).map((event, index) =>
+        record({
+          ...event,
+          decision_id: `${event.decision_id}J`,
+          current_verdict: event.verdict ?? 'pending',
+          category: index === 0 ? 'explicit_placeholder' : 'internal_contradiction',
+          decision_event_count: index + 1,
+        }),
+      ),
+    ],
     page,
   });
   return client;
@@ -614,9 +703,9 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
 function loadedReviewClient(runOverrides: Partial<RunStatus> = {}): Client {
   const client = loadedClient(runOverrides);
   const page = { next_cursor: null } as { next_cursor: null };
-  client.setQueryData(KEYS.findings, { data: { items: [finding()], page } });
+  client.setQueryData(KEYS.findings, { data: { items: FINDINGS, page } });
   client.setQueryData(KEYS.finding, { data: detail() });
-  client.setQueryData(KEYS.decisions, { data: { items: [decision()], page } });
+  client.setQueryData(KEYS.decisions, { data: { items: DECISIONS, page } });
   return client;
 }
 
@@ -850,6 +939,22 @@ export const CACHE_STATES: readonly {
   { state: 'created-run', run: { state: 'created', terminal_at: null, published_finding_count: 0 } },
   { state: 'queued-run', run: { state: 'queued', terminal_at: null, published_finding_count: 0 } },
   { state: 'validating-run', run: { state: 'validating', terminal_at: null, published_finding_count: 0 } },
+  /*
+   * The OTHER provider mode and the OTHER cost basis, added by `W41-BLIND`.
+   *
+   * Every other state in this matrix seeds `provider_mode: 'recorded'` and
+   * `cost_basis: 'measured'`, so `live` and `estimated` -- two contract members that the
+   * owner's ruling puts on screen in Russian, and that a PHOTOGRAPH of the run screen
+   * caught in English once already -- were rendered by no state here. The guard was sound
+   * and blind, for the seventh and eighth time, and in the same file.
+   *
+   * One state rather than two: they are independent fields of the same reading, and
+   * nothing on the screen couples them.
+   */
+  {
+    state: 'live-estimated-run',
+    run: { provider_mode: 'live', cost_basis: 'estimated' },
+  },
 ];
 
 export function renderedScreens(): readonly { readonly where: string; readonly markup: string }[] {
@@ -1096,6 +1201,167 @@ describe('the guard renders the screens it claims to render', () => {
     expect(loaded.some((s) => s.markup.includes(`data-run-id="${RUN_ID}"`))).toBe(true);
     expect(loaded.some((s) => s.markup.includes('Договор поставки'))).toBe(true);
     expect(loaded.some((s) => s.markup.includes('Срок поставки'))).toBe(true);
+  });
+});
+
+// ================================================== the matrix's COVERAGE is an assertion
+
+/**
+ * `D-69`, and the reason this section exists rather than one more seeded state.
+ *
+ * Seven waves running, a guard on this programme has been **sound and blind**: it
+ * rendered, saw, and permitted, because the state that carries the defect was never
+ * reached. Three of the seven are this file. Each repair was *"seed one more state"*, and
+ * each fixed the instance and left the cause:
+ *
+ * > **a guard's seed matrix is a hand-written literal, and nothing anywhere checks that
+ * > the literal covers the space.**
+ *
+ * A guard answers, and an answer is read as coverage. So the coverage is asserted here,
+ * against the contract rather than against a list: every member of every schema the
+ * owner's ruling put on screen in Russian must be **rendered by some state in this
+ * matrix**, and a member that is not makes this file red **naming the member**.
+ *
+ * ## Why a `data-` attribute is the evidence, and not the label
+ *
+ * A translated screen renders `Опубликован`, not `published`, so the rendered *word*
+ * cannot say which contract member reached the screen. The machine value keeps its home
+ * in a `data-` attribute — that is the whole of `D-62`'s repair and `PA-01` criterion 4
+ * is re-driven from those attributes — so the attribute is where a member's arrival is
+ * observable, and it is read from the raw markup rather than through `visibleText`,
+ * which never reads `data-*` by design.
+ *
+ * Reading the LABEL instead would break `OPERATING_CONSTRAINTS.md` §12: the label is
+ * produced by the same map the language half of this file judges, so the query would
+ * share an assumption with its subject and could not see the subject being wrong.
+ *
+ * ## Why the seeds are still hand-written
+ *
+ * Deriving the fixtures from the contract would make a new member seed itself, and this
+ * assertion would go green over a state nobody had looked at — the same silence, one
+ * level up. A new member must redden, so that somebody decides what the screen does with
+ * it. The derivation is on the **question**, never on the answer.
+ */
+const SCHEMA_MARKERS: readonly {
+  readonly schema: (typeof TRANSLATED_SCHEMAS)[number];
+  readonly attribute: string;
+  readonly why: string;
+}[] = [
+  {
+    schema: 'RunState',
+    attribute: 'data-run-state',
+    why: '`shared/ui/run-state-badge.tsx` and every sentence in `run-progress` that names an outcome.',
+  },
+  {
+    schema: 'StageStatus',
+    attribute: 'data-stage-status',
+    why: '`shared/ui/stage-status-badge.tsx`, one per row of the stage table.',
+  },
+  {
+    schema: 'Verdict',
+    attribute: 'data-verdict',
+    why: '`entities/expert-decision/ui/verdict-badge.tsx`, the decision history and the knowledge base.',
+  },
+  {
+    schema: 'FindingCategory',
+    attribute: 'data-category',
+    why: "`widgets/finding-list`'s group heading and the knowledge base's row.",
+  },
+  {
+    schema: 'StageId',
+    attribute: 'data-stage-id',
+    why: '`entities/audit-run/ui/stage-table.tsx`, one row per stage. `D-62` put the id here.',
+  },
+  {
+    schema: 'ProviderMode',
+    attribute: 'data-provider-mode',
+    why: 'the run screen twice, the run-state badge qualifier and the evidence viewer.',
+  },
+  {
+    schema: 'CostBasis',
+    attribute: 'data-cost-basis',
+    why: "the run screen's cost block, which prints the basis beside the amount.",
+  },
+];
+
+/** `data-x="y"` pairs, read out of the raw markup of every screen in every state. */
+function markerValuesOnScreens(): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const { attribute } of SCHEMA_MARKERS) out.set(attribute, new Set<string>());
+  for (const { markup } of renderedScreens()) {
+    for (const [attribute, values] of out) {
+      for (const match of markup.matchAll(new RegExp(`\\s${attribute}="([^"]*)"`, 'g'))) {
+        values.add(match[1] ?? '');
+      }
+    }
+  }
+  return out;
+}
+
+describe('the matrix covers the contract, and says which member it does not', () => {
+  const observed = markerValuesOnScreens();
+  const openapi = readJson<OpenApi>(CONTRACT_PATH);
+
+  it('decides for every translated schema HOW a member becomes observable', () => {
+    // A schema added to `TRANSLATED_SCHEMAS` with no marker would be excused by silence,
+    // which is the class of defect this section exists to close. Both directions.
+    const marked = SCHEMA_MARKERS.map((entry) => entry.schema);
+    expect([...TRANSLATED_SCHEMAS].filter((name) => !marked.includes(name))).toEqual([]);
+    expect(marked.filter((name) => !([...TRANSLATED_SCHEMAS] as string[]).includes(name))).toEqual([]);
+    for (const { schema, why } of SCHEMA_MARKERS) {
+      expect(why.length, `${schema} names no module that renders it`).toBeGreaterThan(40);
+    }
+  });
+
+  it('renders every attribute it claims to read, so a renamed one is red and not merely empty', () => {
+    // Anti-vacuity, and it is not the same case as the one below. An attribute that was
+    // renamed in `web/src` makes EVERY member of its schema look unseeded; this case says
+    // which of the two happened, instead of leaving a reader to seed nine states that were
+    // already seeded.
+    const silent = SCHEMA_MARKERS.filter(({ attribute }) => (observed.get(attribute)?.size ?? 0) === 0);
+    expect(
+      silent.map(({ schema, attribute }) => `${schema} -> ${attribute}`),
+      'no rendered screen carries this attribute at all. Either the application renamed ' +
+        'it -- in which case fix the name here and the coverage below is unaffected -- or ' +
+        'the component that carried it stopped being rendered by this matrix.',
+    ).toEqual([]);
+  });
+
+  it('renders every member of every translated schema, and NAMES the one it does not', () => {
+    /*
+     * THE ASSERTION THIS SECTION EXISTS FOR.
+     *
+     * Measured at `295ff04`, before this was written: 18 of 31 members reached a screen.
+     * `StageId` 4/9, `StageStatus` 1/4, `Verdict` 2/4, `FindingCategory` 1/2,
+     * `ProviderMode` 1/2, `CostBasis` 1/2 -- thirteen contract members, every one of them
+     * carrying a Russian label a mutation could have put back into English with this file
+     * staying green. `RunState` was the only schema at 8/8, and only because a wave-33
+     * judge's mutation died quietly and somebody chased it.
+     */
+    const unseeded: string[] = [];
+    for (const { schema, attribute } of SCHEMA_MARKERS) {
+      const declared = openapi.components.schemas[schema]?.enum ?? [];
+      const seen = observed.get(attribute) ?? new Set<string>();
+      for (const member of declared) {
+        if (!seen.has(member)) unseeded.push(`${schema}.${member} (no ${attribute}="${member}")`);
+      }
+    }
+    expect(
+      unseeded.sort(),
+      'the contract publishes these members and NO state in CACHE_STATES renders one. ' +
+        'They are not "allowed" and they are not "absent" -- they are UNSEEDED, and every ' +
+        'assertion in this file about them is vacuous. Seed a state that puts each on a ' +
+        'screen; do not delete it from TRANSLATED_SCHEMAS, and do not derive the fixtures ' +
+        'from the contract, which would make the next member cover itself in silence.',
+    ).toEqual([]);
+
+    // And the question itself is non-trivial: a contract that parsed to nothing would
+    // otherwise satisfy the line above by asking nothing.
+    const total = SCHEMA_MARKERS.reduce(
+      (sum, { schema }) => sum + (openapi.components.schemas[schema]?.enum ?? []).length,
+      0,
+    );
+    expect(total, 'the translated schemas declare no members at all').toBeGreaterThan(20);
   });
 });
 
