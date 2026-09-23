@@ -1,22 +1,51 @@
 # Current state
 
-> **Updated 2026-09-20 by the integrator, at `e2dc68f`.** `AGENTS.md` §1.1 makes this file
-> the first thing every agent reads. It had not been touched since 2026-09-14 and still
-> opened with the `P0-PLN-01` planning candidate — **nine waves out of date**. Every session
-> dispatched in that window was oriented by its brief instead, which worked and is not the
-> arrangement this file describes. The history below is kept; this block is what is true now.
+> **Updated 2026-09-23 by the integrator, at `6aeda82`.** `AGENTS.md` §1.1 makes this file the
+> first thing every agent reads.
+>
+> **It has now gone stale twice, and the second time was inside the note written to record the
+> first.** That note — kept below — says the file sat nine waves out of date and that every
+> session dispatched in that window was oriented by its brief instead. It was written on
+> 2026-09-20 and the file then went **six waves** out of date again: it named `origin/main` as
+> `f96c23a` tagged `alpha-w30` when the tip was `6aeda82` tagged `alpha-w40`, a contract surface
+> three reseals behind, and a migration head two versions behind. **A document that outlives what
+> it describes becomes an attack** (`OPERATING_CONSTRAINTS.md` §4.7), and this is the document
+> with the widest blast radius in the programme, because it is the one every dispatched session
+> reads before it reads anything else. Registered as `D-79`, where the structural repair is
+> named: **the gate measures prose against the tree and does not read `docs/`.**
+>
+> *The 2026-09-20 note, kept:* "It had not been touched since 2026-09-14 and still opened with
+> the `P0-PLN-01` planning candidate — nine waves out of date. Every session dispatched in that
+> window was oriented by its brief instead, which worked and is not the arrangement this file
+> describes. The history below is kept; this block is what is true now."
 
-## Where the programme is, 2026-09-22
+## Where the programme is, 2026-09-23
 
-**`origin/dev` = `b0e5c07`. `origin/main` = `f96c23a`, tagged `alpha-w30` — a gated tip, not
-a certification.** `make gate` → `GATE OK`: battery **2193 passed / 5 skipped / 169
-subtests**, foundation **35**, frontend **959 in 68 files**.
+**`origin/main` = `origin/dev` = `origin/planning/prototype-roadmap` = `6aeda82`, tagged
+`alpha-w40` — a gated tip, not a certification.** All three refs are equal, and that sentence is
+part of the state: for waves 39 and 40 they were not, `dev` sat **41 commits** behind `main`, and
+a peer session wrote a pre-flight review for the owner measured on the stale one (`D-77`).
 
-**The application has authorization.** Wave 34 added `POST /auth/token`, a sign-in screen and
-migration `0006_app_user`, and resealed the contract: **12 paths / 15 operations / 46 schemas
-→ 13 / 16 / 48**, with the contract, the generated client, the mirror, the migration and
-`web/FRONTEND_LOCK.json` moving in one change — the three-document coupling `D-18` named and
-the first wave to plan for it rather than discover it.
+`make gate` → **`GATE OK`**: battery **2315 passed / 5 skipped / 1 warning / 169 subtests**,
+foundation **35**, frontend **1014 in 72 files**. Read from the `GATE OK` line of
+`/root/w40-logs/integrator-gate2.log`, taken 2026-09-23 14:29 at this tip — not from a status a
+harness returned (`OPERATING_CONSTRAINTS.md` §4.62).
+
+**The application has authorization, and as of wave 40 it has all four guards around it.**
+Wave 34 added `POST /auth/token`, a sign-in screen and migration `0006_app_user`. Wave 39 added
+revocation — a `token_epoch` column, migration `0007_credential_epoch`, which annuls every
+credential ever issued to an account at once with no list and no restart — and password change,
+because changing a password revokes the credential that made the request. Wave 40 added the rate
+limit and the lockout, migration `0008_sign_in_throttle`. That is `R-26` complete.
+
+**The contract surface is 15 paths / 18 operations / 51 schemas.** Progression: 12/15/46 →
+13/16/48 (wave 34) → 14/17/50 (wave 38, the knowledge base's `listDecisions`) → 15/18/51
+(wave 39, `changePassword`). **A reseal is four documents in one change** — `contracts/api/v1/openapi.json`,
+the generated client, the mirror, and `web/FRONTEND_LOCK.json` — the coupling `D-18` named.
+**The error catalog is 22 codes and frozen**; adding one is a second reseal.
+
+**Migration head: `0008_sign_in_throttle`.** Upgrading past `0007` signs everyone out once, by
+design. `0008` locks nobody out.
 
 **Driven on the stand, not inferred:** `GET /bff/v1/projects` without a session answered `200`
 **with write access** that morning and answers **`401`** now; zero `Authorization` headers
@@ -29,7 +58,7 @@ that renders the screens and fails on one English word a contract did not put th
 
 **The application is deployed, drivable by hand, and provably the tree.** One alpha stack
 answers on `127.0.0.1:31500` — `auditmanager-w19a`, `AUDITMANAGER_PROVIDER_MODE=proxy`,
-brought up by `infra/deploy/deploy.sh`. Redeployed from `ac7c348` on 2026-09-21;
+brought up by `infra/deploy/deploy.sh`. Redeployed from `6aeda82` on 2026-09-23;
 `infra/deploy/verify-deployed.sh` exits 0 and prints *"the deployed stack IS this tree"*, file
 by file: 141 in `src/`, 9 in `db/`, 34 in `contracts/`, 223 in `web/`, all identical. **The sha
 that sentence prints is the repository's working tree at the moment you run it, not a property
@@ -66,8 +95,9 @@ certification covers**, and the sixteen per-table counts now sum to exactly the 
 Criterion 8's exception survives, but its **reason was false and is replaced**: it said the
 host carries three alpha stacks, and it carries one. The standing reason is structural —
 **a certifying session runs on the host it would have to reboot** (`D-51`). Three findings
-were recorded rather than repaired: **`D-49`** (the published origin, and the highest-severity
-row in the register), `D-50`, `D-51`.
+were recorded rather than repaired: **`D-49`** (the published origin — **its operative half has
+since closed**: `/bff/v1` without a session went from `200` with write access to `401`, and the
+binding is `127.0.0.1` by default), `D-50`, `D-51`.
 
 **Previously re-certified 2026-09-20 at `16d3503`** —
 `artifacts/checkpoints/PA-01/certification-16d3503.json`. Criterion 4's exception is **gone**: `partial` was driven **in a browser on the deployed
@@ -79,13 +109,30 @@ is not a host reboot.
 
 ### What is open
 
-`DEBT_REGISTER.md` carries the live list with a check command per row. **`D-15`, `D-18` and
-`D-35` closed on 2026-09-21** under rulings `R-12`, `R-13` and `R-14`. **One still needs the
-owner: `D-9`**, the norms corpus, which `R-9` placed after manual testing. The rest are
-`infra/` and `web/src` repairs with no ruling attached.
-**`D-49` is open and is the register's highest-severity row**: the stand is published to every
-interface and `/bff/v1` serves all fifteen operations, writes included, with no credential.
-It needs a decision from the owner about how the stand is reached.
+`DEBT_REGISTER.md` carries the live list with a check command per row, and **that file is the
+authority — this section orients, it does not enumerate.**
+
+**`D-49` is closed operatively and this document said otherwise for three waves.** It read *"the
+register's highest-severity row: the stand is published to every interface and `/bff/v1` serves
+all fifteen operations, writes included, with no credential."* That has not been true since
+wave 34: `/bff/v1` without a session answers **`401`**, the compose binding defaults to
+`127.0.0.1`, and a sign-in screen exists. **A stale sentence saying a system is open is worse
+than one saying it is closed**, and it sat in the file every dispatched session reads first.
+
+**What genuinely waits on the owner, 2026-09-23** — five of these are `R-29` clause 2, which
+reserves anything changing who can reach the system:
+
+| | |
+|---|---|
+| **`R-1`** | no host, no domain, no certificate. `PA-01` criteria 1 and 2 have read *cannot be established* through **four** certifications and close on nothing else |
+| **`D-70`** | the stand's provider is a certification stub (`stub/w37cert4`, a base URL with no hostname). **Every run fails `dependency_unavailable`**, which blocks the owner's manual pass, which `R-9` makes the gate on the corpus work |
+| **`D-73`** | four routes answer `200` with no credential — `/openapi.json`, `/docs`, `/docs/oauth2-redirect`, `/redoc`. The authorization dependency is on the router and these are on the application |
+| **`D-75`** | one account, its login published, and a lockout an unauthenticated caller can aim at it |
+| **`D-71`** | the corpus defect is 121 blocks in 54 documents, not the 79 `R-19` ruled on, and 25 of them are a different defect |
+| `D-56`, `D-63` | the per-section verdict field, and the dashboard the owner deferred |
+| `R-4` | the pilot wipe, both halves |
+
+Everything else is `src/`, `infra/` and `web/src` work with no ruling attached.
 
 **`D-42`, `D-47` and `D-48` closed 2026-09-21.** `D-42`'s measurement always stood; its open half was
 one review document still carrying the false sentence unqualified, and that document now

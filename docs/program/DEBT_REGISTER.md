@@ -17,6 +17,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-76 | a manual-test document names a head three versions stale | **closed 2026-09-23**, corrected in place |
 | **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |
 | D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
+| **D-79** | `CURRENT_STATE.md` — the file `AGENTS.md` makes every agent read first — went stale twice, and said the system was open when it is closed | the gate does not read `docs/` |
 | **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -1639,6 +1640,62 @@ green**. That is the measurement of this row, and after `W41-AUTHOR` it must be 
 
 Check: `grep -n CONFIGURED_AUTHOR_LABEL src/auditmanager/decisions/ledger.py` and read what
 `require_authorization` returns.
+
+### D-79 — the orientation document went stale twice, and the second time was inside the note recording the first
+
+**Found by the integrator 2026-09-23 sweeping `docs/` for prose that had outlived its subject.
+Corrected in place the same hour. The row is about the third fact, not the first two.**
+
+`AGENTS.md` §1.1 makes `docs/program/CURRENT_STATE.md` **the first file every agent on this
+programme reads.** At `6aeda82` it named `origin/main` as `f96c23a` tagged `alpha-w30` (the tip
+was `alpha-w40`), a contract surface of 13/16/48 (it is 15/18/51), a migration head of
+`0006_app_user` (it is `0008_sign_in_throttle`), gate figures from wave 29, and a redeploy from
+`ac7c348` on 2026-09-21. **Six waves.**
+
+**And one of its stale sentences was not merely old, it inverted a security property:**
+
+> *"`D-49` is open and is the register's highest-severity row: the stand is published to every
+> interface and `/bff/v1` serves all fifteen operations, writes included, with no credential."*
+
+Untrue since wave 34. **A stale sentence saying a system is open is a different kind of defect
+from one saying a count is 43**, and it sat where every dispatched session reads it first.
+
+**The part that makes this a row rather than an edit:** the document's own opening block is a
+note recording that this had already happened once — *"nine waves out of date… every session
+dispatched in that window was oriented by its brief instead."* It was written 2026-09-20. **The
+file then went six waves stale again underneath it.** That is the third time this programme has
+watched prose rot after being measured: `D-23`, then `D-76` (a certification recorded a stale
+migration head and the document went stale twice more afterwards), now this.
+
+**So the repair is not an edit, and three editions of this row would prove it.** The structural
+fact is measurable and is the finding:
+
+> **`tests/contract/api_v1/test_surface_counts_in_prose.py` reads exactly three trees —
+> `src/auditmanager/api`, `infra/deploy` and `web/src` (lines 47–58). `docs/` is not among
+> them, and nothing else reads it either.**
+
+Every count the gate checks is a count in code. Every count in prose — the surface, the head, the
+tip, the tag, the gate figures — is unchecked, and the integrator's own `ALPHA_ROADMAP.md` block
+was wrong twice in two days for exactly this reason, the second time inside the note written to
+record that it had been wrong.
+
+**Candidate repair, for the debt wave:** extend that guard to the small set of documents that
+make load-bearing factual claims — `CURRENT_STATE.md`, `ALPHA_ROADMAP.md`,
+`docs/manual-tests/**` — asserting the migration head, the surface triple and the tagged tip
+against the tree. **Wave reports are explicitly out of scope**: `W30-CERT3.md` naming head
+`0005` is correct, because it records what was true at its wave. A guard that cannot tell a
+record from a claim would force the programme to falsify its own history, which is `D-23`'s
+lesson pointing the other way.
+
+**And this row named that guard at a path that does not exist on its first writing** —
+`tests/contract/` rather than `tests/contract/api_v1/` — which is the fifth time on this register
+and happened *inside the row about it*. The check command is what caught it, within the minute,
+because a check command that is run is the difference between a register and a story. That is the
+argument for the structural repair in one line.
+
+Check: `ls tests/contract/api_v1/test_surface_counts_in_prose.py`, then
+`grep -n 'REPO_ROOT /' tests/contract/api_v1/test_surface_counts_in_prose.py` — three trees, no
+`docs`.
 
 ### D-73 — four routes answer 200 with no credential, because the seam is on the router
 
