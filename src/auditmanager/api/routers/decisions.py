@@ -65,23 +65,33 @@ def build_decision_routes(
         check_comment_is_present_for_a_comment_event(
             event_type=body.event_type.value, comment=body.comment
         )
-        # `D-78`. `subject.login` and never `body`: this is the second operation on the
-        # surface to read who the caller is, and it reads it for the same reason
-        # `changePassword` does -- the answer is about *identity*, not about permission,
-        # which is the roles work `T-6` says must not be invented here. The ledger recorded
-        # one configured constant for every reviewer until this line existed.
+        # `D-78`, as `R-37` amends it. The label comes off the verified subject and never
+        # off `body`: this is the second operation on the surface to read who the caller
+        # is, and it reads it for the same reason `changePassword` does -- the answer is
+        # about *identity*, not about permission, which is the roles work `T-6` says must
+        # not be invented here. The ledger recorded one configured constant for every
+        # reviewer until this line existed.
         #
-        # The login rather than `user_uid`: `author_label` is what a reviewer reads on a
-        # decision somebody else took, and an opaque identity would make the field
-        # unreadable to the only audience it has. It is a signed claim, so no client can
-        # choose it, and `AppendDecisionRequest` is closed, so no body can carry one.
+        # `subject.display_label` and not `subject.user_uid`: `author_label` is what a
+        # reviewer reads on a decision somebody else took, and an opaque identity would
+        # make the field unreadable to the only audience it has.
+        #
+        # And not `subject.login`, which is what `D-78` wrote and what `R-37` overruled. A
+        # login is an address -- folded, ASCII, unique, sayable down a telephone -- and a
+        # decision is read by people. `display_label` is the account's chosen name when it
+        # has one and its login when it has not, resolved once on the record and never
+        # here; the fallback is stated at `UserRecord.display_label` and is visible through
+        # `python -m auditmanager.access.check`.
+        #
+        # It is a signed claim, so no client can choose it, and `AppendDecisionRequest` is
+        # closed, so no body can carry one.
         appended = decisions.append_decision(
             finding_uid=finding_uid,
             finding_observation_id=body.finding_observation_id,
             event_type=body.event_type.value,
             comment=body.comment,
             idempotency_key=idempotency_key,
-            author_label=subject.login,
+            author_label=subject.display_label,
         )
         payload = append_decision_body(appended.event, appended.current_verdict)
         return json_response(201, encode_json(payload))

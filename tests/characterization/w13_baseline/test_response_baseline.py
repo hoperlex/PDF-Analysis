@@ -159,8 +159,13 @@ NON_TERMINAL_RUN_STATES = ("created", "queued", "running", "validating")
 #: reason this map is written out case by case.
 #: **`W41-AUTHOR` added the eighth and ninth entries**, records 10 and 11, under `D-78`.
 #: They are one change seen twice: ``author_label`` was the constant ``"local-reviewer"``
-#: -- one string for every verdict by every reviewer -- and is now the login of the
-#: reviewer the authorization seam verified. Record 10 is the ``appendDecision`` response
+#: -- one string for every verdict by every reviewer -- and is now the verified reviewer's
+#: **display label** (`R-37`, which replaced `D-78`'s login with the name other reviewers
+#: read). **Neither record's bytes moved for `R-37`**, because ``w13-baseline`` has chosen
+#: no display name and the label therefore falls back to its login -- which is what these
+#: records already pinned. Their exception blocks say so; the distinction a record that did
+#: not move cannot make is asserted in
+#: ``tests/integration/api/test_decision_authorship.py`` instead. Record 10 is the ``appendDecision`` response
 #: that writes the event; record 11 renders the same event back through
 #: ``listDecisionHistory``. Two entries and not one, because a record moved is a record
 #: named, and "the decision records" is not a countable thing.
@@ -213,9 +218,14 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
 
     `D-78` is records 10 and 11, and needs no ruling for `D-20`'s reason: `author_label`
     is declared by the seal and has always been written, and what changed is the value the
-    server puts in it -- the login of the reviewer the seam verified, instead of one
-    constant for every reviewer. The two records are the same event written and then read
-    back.
+    server puts in it -- the reviewer the seam verified, instead of one constant for every
+    reviewer. The two records are the same event written and then read back.
+
+    `R-37` then changed that value again, from the reviewer's login to their display label,
+    and **moved neither record**: this journey's account has chosen no display name, so the
+    label falls back to the login these records already pin. The exception blocks were
+    amended rather than the records re-captured, because nothing about the bytes is
+    different and a re-capture would have recorded that fact as a change.
     """
     marked = {
         path.stem: json.loads(path.read_text(encoding="utf-8"))["exception"]

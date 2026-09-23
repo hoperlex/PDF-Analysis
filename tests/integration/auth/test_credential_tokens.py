@@ -49,7 +49,15 @@ OTHER_SECRET = "another-deployments-secret"
 #: ``token_epoch`` is 4 and deliberately not 1: `W39-REVOKE` made the epoch part of the
 #: payload, and a suite that always minted at the initial value would pass equally against
 #: an implementation that dropped the field and defaulted to it.
-SUBJECT = Subject(user_uid="usr_01M2545JSD15ETSNNV904X991Q", login="ada", token_epoch=4)
+#: ``display_label`` is `R-37` and is deliberately **not** the login: a suite whose label
+#: equalled its login could not tell a seam that carries the name from one that carries the
+#: login, which is the same vacuity ``token_epoch=4`` avoids.
+SUBJECT = Subject(
+    user_uid="usr_01M2545JSD15ETSNNV904X991Q",
+    login="ada",
+    token_epoch=4,
+    display_label="Ada Lovelace",
+)
 
 
 @pytest.fixture
@@ -108,15 +116,29 @@ def test_the_payload_carries_the_subject_and_nothing_else(signer: TokenSigner) -
     reported here, which is the only kind of assertion that can catch the credential
     growing a claim nobody agreed to.
 
-    **It worked.** `W39-REVOKE` added ``ver`` and this assertion is what reported it, which
-    is the whole reason the list is written out rather than sampled. ``ver`` is the account's
-    credential generation at the moment of minting -- the one field on this payload the seam
-    checks against the *database* rather than against the key, and therefore the one that
-    makes a credential retractable. It is not a claim about the subject and grants nothing:
-    a caller who reads it learns how many times that account has been revoked.
+    **It worked, twice.** `W39-REVOKE` added ``ver`` and this assertion is what reported it,
+    which is the whole reason the list is written out rather than sampled. ``ver`` is the
+    account's credential generation at the moment of minting -- the one field on this
+    payload the seam checks against the *database* rather than against the key, and
+    therefore the one that makes a credential retractable. It is not a claim about the
+    subject and grants nothing: a caller who reads it learns how many times that account has
+    been revoked.
+
+    **`R-37` added ``name`` and this assertion reported that too.** It is the label other
+    reviewers read on a decision this subject records -- the account's chosen display name,
+    or its login when it has chosen none, resolved once on the account's own record before
+    the credential was minted. It is the same *kind* of claim as ``login``, which has
+    travelled here since wave 34: a statement about who the subject is, never about what
+    they may do. `T-6`'s ban is on a role, group, permission or capability vocabulary, and
+    a name is none of those.
     """
     payload = _payload(signer.issue(SUBJECT).token)
-    assert sorted(payload) == ["exp", "iat", "login", "sub", "ver"], payload
+    assert sorted(payload) == ["exp", "iat", "login", "name", "sub", "ver"], payload
+    assert payload["name"] == SUBJECT.display_label
+    assert payload["name"] != SUBJECT.login, (
+        "this suite's subject is deliberately named something other than its login, so "
+        "that a seam which carried the login under the key `name` could not pass here"
+    )
     assert payload["ver"] == SUBJECT.token_epoch, (
         "the credential must carry the epoch it was minted under, not a constant: a "
         "hard-coded 1 here would verify against every account that had never been revoked "
@@ -228,7 +250,10 @@ def test_an_edited_payload_is_refused(
         ("the tag replaced by another credential's", lambda token: token),  # filled below
         ("no tag at all", lambda token: ".".join(token.split(".")[:2])),
         ("an extra field", lambda token: token + ".extra"),
-        ("an unknown format version", lambda token: "am2" + token[3:]),
+        # Three characters that are not, and will not become, a format this module mints.
+        # It used to be "am2", which stopped being unknown the moment `R-37` bumped the
+        # format -- so the case went green for the wrong reason and had to be re-chosen.
+        ("an unknown format version", lambda token: "zzz" + token[3:]),
         ("an empty string", lambda token: ""),
         ("a tag that is not base64", lambda token: ".".join(token.split(".")[:2]) + ".!!!!"),
     ],
@@ -240,7 +265,12 @@ def test_a_credential_that_is_not_one_is_refused(
     token = signer.issue(SUBJECT).token
     if label == "the tag replaced by another credential's":
         other_tag = signer.issue(
-            Subject(user_uid="usr_01M2545JSD15ETSNNV904X991Z", login="bob", token_epoch=4)
+            Subject(
+                user_uid="usr_01M2545JSD15ETSNNV904X991Z",
+                login="bob",
+                token_epoch=4,
+                display_label="Bob Barker",
+            )
         ).token.split(".")[2]
         version, body, _ = _parts(token)
         presented = f"{version}.{body}.{other_tag}"

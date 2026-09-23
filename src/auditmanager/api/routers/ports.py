@@ -283,9 +283,10 @@ class DecisionPort(Protocol):
         The database enforces the "exactly one" rather than the handler promising it:
         ``expert_decision_event`` carries at most one event per ``command_id``.
 
-        ``author_label`` is `D-78`, and it is the one parameter here that does **not** come
-        from the request. It is the login of the reviewer the authorization seam verified,
-        read by the router through
+        ``author_label`` is `D-78` as `R-37` amends it, and it is the one parameter here
+        that does **not** come from the request. It is the **display label** of the
+        reviewer the authorization seam verified -- their chosen name, or their login when
+        they have chosen none -- read by the router through
         :data:`~auditmanager.api.security.CurrentSubject`. It is declared on the port
         rather than resolved behind it because the identity is a property of the *request*,
         which only the surface can see -- an adapter reaching for it would be a module

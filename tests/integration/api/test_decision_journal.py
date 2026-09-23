@@ -192,11 +192,21 @@ def test_a_record_carries_the_finding_context_it_was_recorded_against(
         assert record["finding_text"] == detail["observation"]["finding_text"]
         assert record["current_verdict"] == detail["current_verdict"] == "accepted"
         assert record["decision_event_count"] == detail["decision_event_count"] == 2
-        # `D-78`. The login of the account whose credential this suite presents, not a
-        # configured constant: until the command surface could see the verified subject,
-        # every verdict by every reviewer went into this column as "local-reviewer" and the
-        # journal could not say whose judgement it was reporting.
-        assert record["author_label"] == "api-suite"
+        # `D-78`, as `R-37` amends it. The **display label** of the account whose
+        # credential this suite presents, not a configured constant: until the command
+        # surface could see the verified subject, every verdict by every reviewer went into
+        # this column as "local-reviewer" and the journal could not say whose judgement it
+        # was reporting. `R-37` then ruled that what it should say is a name rather than a
+        # login, because this column is read by people.
+        #
+        # Asserted against the literal and not against `TEST_SUBJECT.display_label`:
+        # `OPERATING_CONSTRAINTS.md` §12 -- a test that built its expectation out of the
+        # thing under test would move both sides of the comparison together. The driver's
+        # label is deliberately not equal to its login, so this line distinguishes the two.
+        assert record["author_label"] == "Испытательный стенд"
+        assert record["author_label"] != "api-suite", (
+            "the journal is reporting the login again; `R-37` ruled for the display name"
+        )
 
     by_type = {r["event_type"]: r for r in records}
     assert by_type["comment"]["verdict"] is None, (

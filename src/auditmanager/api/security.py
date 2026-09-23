@@ -20,7 +20,7 @@ deployment-held key -- at the price of a root dependency pin, which is a protect
 and a wave-level ratification; the seam needs "did this deployment sign this, and has it
 expired", and that is forty lines of stdlib rather than an amendment to the lock.
 
-**The format is this module's business and nobody else's.** ``am1.<payload>.<tag>`` appears
+**The format is this module's business and nobody else's.** ``am2.<payload>.<tag>`` appears
 in no contract, no test outside this session's own, and no client. A caller that reads
 anything out of a credential has taken a dependency this surface does not offer, and the
 document says so in ``IssueTokenResponse.token``. A deployment that later replaces this
@@ -187,7 +187,21 @@ TOKEN_LIFETIME_SECONDS: Final[int] = 3600
 #: mints. Present so that a future body -- a different payload, a different algorithm, OIDC
 #: -- is *distinguishable* rather than merely different: a credential of an unknown version
 #: is refused by the same path that refuses a forged one.
-_FORMAT: Final[str] = "am1"
+#:
+#: **`R-37` is the first time that promise was called in.** The payload gained a required
+#: ``name``, so an ``am1`` credential -- everything minted before this wave -- carries a
+#: payload this seam no longer accepts. There were two things that could be done with one
+#: and only one of them was allowed: refuse it, or fall back to ``login`` for the label
+#: *inside the seam*, which is a silent fallback (``AGENTS.md`` section 4) on the
+#: authorization path, in the module that may least have one. So it is refused -- and
+#: refused **at the version check**, because a required field added to an ``am1`` body
+#: would have made that body *different* without making it *distinguishable*, which is the
+#: one thing this constant exists to prevent.
+#:
+#: **So deploying this signs everybody out once**, exactly as ``0007_credential_epoch``
+#: does and for a comparable reason. Written down here rather than discovered in an
+#: incident.
+_FORMAT: Final[str] = "am2"
 
 #: Domain separation. The signing key is ``HMAC-SHA256(deployment secret, this string)``, so
 #: the bytes that sign credentials are not the bytes the deployment configured, and a second
@@ -213,10 +227,12 @@ AuthorizationDependency = Annotated[
 class Subject:
     """Who the deployment decided the caller is. Not what they may do.
 
-    Three fields, all already known to the caller: their own identity, their own login, and
-    the generation of credentials their account accepts. Nothing else is carried, because
-    everything else -- a role, a group, a permission, an expiry the client could act on --
-    would be this module inventing the identity model `T-6` says it must not have.
+    Four fields, all already known to the caller: their own identity, their own login, the
+    generation of credentials their account accepts, and the name other reviewers read on
+    their decisions. Nothing else is carried, because everything else -- a role, a group, a
+    permission, an expiry the client could act on -- would be this module inventing the
+    identity model `T-6` says it must not have. The fourth arrived with `R-37` and the
+    paragraph on it says why it is not one of those.
 
     ``token_epoch`` has **no default**, and that is the point of it being a field rather than
     an argument with one. A caller that could omit it would mint a credential under an epoch
@@ -228,6 +244,26 @@ class Subject:
     user_uid: str
     login: str
     token_epoch: int
+    #: `R-37`. **The name other reviewers read**, already resolved, never empty.
+    #:
+    #: It is :attr:`~auditmanager.access.models.UserRecord.display_label` -- the account's
+    #: chosen display name when it has one and its **login** when it has not -- and the
+    #: fallback happens *there*, at the moment the row is read, not here. This field is a
+    #: fact that has already been decided; nothing on the request path may decide it again.
+    #:
+    #: **It has no default, for `token_epoch`'s reason.** A caller that could omit it would
+    #: attribute a decision to whatever the default said, and a ledger row attributed to a
+    #: constant is exactly `D-66`'s shape and exactly what `D-78` was raised to remove.
+    #: Every construction of this class has therefore had to get the name from somewhere,
+    #: and the only place it comes from is the account's row.
+    #:
+    #: **Is this `T-6`'s forbidden identity model?** No, and the line is worth drawing.
+    #: `T-6` forbids this module inventing a *role, group, permission or capability*
+    #: vocabulary -- statements about what a subject may **do**. A display name says
+    #: nothing about that; it is the same kind of fact as ``login``, which has travelled
+    #: here since wave 34, and the seam still decides *who* the caller is and never *what
+    #: they may do*.
+    display_label: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,6 +361,21 @@ class TokenSigner:
             "ver": subject.token_epoch,
             "sub": subject.user_uid,
             "login": subject.login,
+            # `R-37`. The name other reviewers read, already resolved by the account's own
+            # record before this method was reached. It travels here rather than being
+            # looked up per request for three reasons, in order: it is the mechanism
+            # `D-78` already established for `login`, and `R-37` changes only the *source*
+            # of the label; reading it per request would mean widening `CredentialEpochs`,
+            # which the module note argues at length must stay one integer on the path of
+            # every request; and a decisions router reaching the `access` boundary for a
+            # name would be the deep import `AGENTS.md` section 4 forbids.
+            #
+            # The price, stated rather than left to be found: a rename is visible on the
+            # next credential, so a reviewer holding one goes on recording decisions under
+            # the old name for at most `TOKEN_LIFETIME_SECONDS`. For an append-only ledger
+            # that is arguably the better reading -- the row records who decided, under the
+            # name they had then -- but it is a consequence and not the goal.
+            "name": subject.display_label,
             "iat": issued_at,
             "exp": expires_at,
         }
@@ -374,11 +425,19 @@ class TokenSigner:
             return None
         subject_uid = payload.get("sub")
         login = payload.get("login")
+        display_label = payload.get("name")
         expires_at = payload.get("exp")
         token_epoch = payload.get("ver")
         if not isinstance(subject_uid, str) or not subject_uid:
             return None
         if not isinstance(login, str) or not login:
+            return None
+        # `R-37`. Required, and required to be non-empty: a credential naming no author is
+        # not one this seam will admit, because the one operation that reads the name
+        # writes it into an append-only ledger whose contract bounds it at 1..128. There is
+        # no fallback here on purpose -- the fallback is the account's, decided once at
+        # `UserRecord.display_label`, and a second one in the seam would be a silent one.
+        if not isinstance(display_label, str) or not display_label:
             return None
         # A credential with no epoch, or with one that is not a positive integer, is not a
         # credential. `bool` is excluded for the same reason it is below -- `True` would
@@ -401,13 +460,18 @@ class TokenSigner:
         # under. It is not yet known to be current: this method holds the key and no
         # database, so it can prove the deployment signed this and cannot prove the account
         # still accepts it. `require_authorization` is where the claim meets the row.
-        return Subject(user_uid=subject_uid, login=login, token_epoch=token_epoch)
+        return Subject(
+            user_uid=subject_uid,
+            login=login,
+            token_epoch=token_epoch,
+            display_label=display_label,
+        )
 
     def _tag(self, signed: str) -> bytes:
         # ``utf-8`` and not ``ascii``: a non-printable byte in the credential raised
         # ``UnicodeEncodeError`` out of here, and the seam answered ``500 internal_error``
         # instead of ``401``. That made the 500 an oracle -- it appeared only behind the
-        # ``am1`` prefix, so a caller could learn the credential format from the status
+        # ``am2`` prefix, so a caller could learn the credential format from the status
         # code alone. Found by ``JUDGE-SEC`` driving raw bytes at the built application.
         return hmac.new(self._key, signed.encode("utf-8"), hashlib.sha256).digest()
 

@@ -1,4 +1,4 @@
-"""`D-78`. A decision is attributed to the reviewer who made it.
+"""`D-78`, and `R-37`: a decision is attributed to the reviewer who made it, **by name**.
 
 Until this wave ``auditmanager.decisions.ledger`` carried::
 
@@ -19,15 +19,25 @@ the verified ``Subject`` the authorization seam publishes, which
 had since wave 34: ``security.py`` builds a ``Subject`` on every authenticated request.
 What was missing was not the identity but a route that could see it.
 
-**Two credentials, two logins, two rows.** The suite in ``conftest.py`` has exactly one
-account, which cannot distinguish "the label follows the caller" from "the label is a
-constant that happens to equal this caller's login". So this module wires its own
-credential port over two accounts and drives the **shipped** ``DecisionAdapter``: a
-fixture adapter that wrote the label would prove that the fixture writes it.
+**What `R-37` changed, and why `D-78` was not enough.** Wave 41 wrote the reviewer's
+**login**. A login is an address: folded, ASCII, unique, chosen to be typed at a keyboard
+and said down a telephone. ``author_label`` is read by *people* -- it is what another
+reviewer sees on a decision somebody else took -- so the owner ruled for a display name.
+The rule that did not change is the one that matters most and is asserted again below: the
+label is **never taken from a request body**. It is server-derived or nothing.
+
+**Three credentials, three labels, and one of them has no name at all.** The suite in
+``conftest.py`` has exactly one account, which cannot distinguish "the label follows the
+caller" from "the label is a constant that happens to equal this caller's login". So this
+module wires its own credential port over three accounts -- two named, one not -- and
+drives the **shipped** ``DecisionAdapter``: a fixture adapter that wrote the label would
+prove that the fixture writes it. The third account is `R-37`'s empty case, which the
+ruling left to be decided and which :class:`TestTheAccountWithNoDisplayName` states.
 """
 
 from __future__ import annotations
 
+import base64
 import inspect
 import uuid
 from dataclasses import dataclass
@@ -55,20 +65,64 @@ assert _SIGNER is not None, "this module's secret derives a signing key"
 
 @dataclass(frozen=True, slots=True)
 class _Account:
-    """One reviewer this module's credential port knows about."""
+    """One reviewer this module's credential port knows about.
+
+    ``display_name`` is what the reviewer chose; ``None`` means they chose nothing, and the
+    label then falls back to the login -- the case `R-37` made this module decide, and the
+    one :class:`TestTheAccountWithNoDisplayName` is about.
+    """
 
     user_uid: str
     login: str
     epoch: int
     password: str
+    display_name: str | None
+
+    @property
+    def display_label(self) -> str:
+        """The same resolution :attr:`UserRecord.display_label` performs, restated here.
+
+        Restated and **not imported**, on purpose. ``OPERATING_CONSTRAINTS.md`` section 12:
+        a test that built its expectation out of the thing under test could not see the
+        thing under test being wrong. The assertions below go further and compare against
+        the literals this module declares rather than against this property.
+        """
+        return self.display_name or self.login
 
 
 #: Two accounts with **different logins and different epochs**. Different epochs so that a
 #: seam which ignored the credential's epoch could not pass by defaulting to a shared one,
 #: which is the reason ``driver.py`` pins its own epoch away from 1.
-ANNA = _Account("usr_01M2545JSD15ETSNNV904X991Q", "anna.petrova", 7, "anna-password")
-BORIS = _Account("usr_01M2545JSD15ETSNNV904X992R", "boris.smirnov", 3, "boris-password")
-ACCOUNTS = (ANNA, BORIS)
+#:
+#: **Since `R-37` they also have different display names, and `CLARA` has none** -- so this
+#: module can state all three of the things that ruling decided: two named reviewers are
+#: two distinguishable authors, the label is the *name* and not the login, and an account
+#: that chose no name writes its login rather than a blank or something invented.
+ANNA = _Account(
+    "usr_01M2545JSD15ETSNNV904X991Q",
+    "anna.petrova",
+    7,
+    "anna-password",
+    "Анна Петрова",
+)
+BORIS = _Account(
+    "usr_01M2545JSD15ETSNNV904X992R",
+    "boris.smirnov",
+    3,
+    "boris-password",
+    "Борис Смирнов",
+)
+#: The empty case. No display name, so the ledger must record ``clara.jones`` -- which is a
+#: real string this reviewer typed, is unique, and is 1..100 characters by
+#: ``ck_app_user_login_format``, i.e. inside ``author_label``'s 1..128 by construction.
+CLARA = _Account(
+    "usr_01M2545JSD15ETSNNV904X993T",
+    "clara.jones",
+    5,
+    "clara-password",
+    None,
+)
+ACCOUNTS = (ANNA, BORIS, CLARA)
 
 
 def credential_for(account: _Account) -> str:
@@ -79,7 +133,10 @@ def credential_for(account: _Account) -> str:
     """
     return _SIGNER.issue(
         Subject(
-            user_uid=account.user_uid, login=account.login, token_epoch=account.epoch
+            user_uid=account.user_uid,
+            login=account.login,
+            token_epoch=account.epoch,
+            display_label=account.display_label,
         )
     ).token
 
@@ -101,6 +158,7 @@ class TwoAccountCredentialAdapter:
                         user_uid=account.user_uid,
                         login=account.login,
                         token_epoch=account.epoch,
+                        display_label=account.display_label,
                     )
                 )
         return None
@@ -203,9 +261,16 @@ class TestTwoReviewersAreTwoAuthors:
         )
         assert second.status == 201, second.body
 
-        assert first.json()["event"]["author_label"] == "anna.petrova"
-        assert second.json()["event"]["author_label"] == "boris.smirnov"
+        assert first.json()["event"]["author_label"] == "Анна Петрова"
+        assert second.json()["event"]["author_label"] == "Борис Смирнов"
         assert _stored_labels(session, published_run.finding_uid) == [
+            "Анна Петрова",
+            "Борис Смирнов",
+        ]
+        # `R-37`: the *name* and not the login. Stated as its own assertion rather than
+        # left implicit in the two above, because "two labels differ" was already true
+        # under `D-78` and is not what this ruling changed.
+        assert _stored_labels(session, published_run.finding_uid) != [
             "anna.petrova",
             "boris.smirnov",
         ]
@@ -228,7 +293,133 @@ class TestTwoReviewersAreTwoAuthors:
         )
         assert answer.status == 200, answer.body
         labels = [item["author_label"] for item in answer.json()["items"]]
-        assert labels == ["boris.smirnov", "anna.petrova"]
+        assert labels == ["Борис Смирнов", "Анна Петрова"]
+
+
+class TestTheAccountWithNoDisplayName:
+    """`R-37`'s empty case, decided and then asserted.
+
+    An account that has chosen no display name records **its login**. The two alternatives
+    were refused and the refusals are what this class holds in place:
+
+    * **a blank** -- ``author_label`` is ``minLength: 1`` in the frozen contract and the
+      ledger refuses an empty label outright, so a blank stored upstream is a refused write
+      at the exact moment an expert records a verdict;
+    * **an invented name** -- "Reviewer 3", a prefix of the opaque identity, a mail-address
+      local part. In an append-only ledger a fabricated name is, a year later,
+      indistinguishable from one a person chose, and `P04` exists to learn whose judgement
+      was whose.
+
+    The login is not a compromise between those two. It is a real string the reviewer
+    typed, it is unique, and ``ck_app_user_login_format`` bounds it at 1..100 characters --
+    inside ``author_label``'s 1..128 **by construction**, which is what makes "this label
+    can never be empty and can never be too long" a proof rather than a hope.
+    """
+
+    def test_it_records_the_login_and_not_a_blank(
+        self, two_reviewer_router: Surface, published_run: PublishedRun, session: Session
+    ) -> None:
+        answer = _append(
+            two_reviewer_router, published_run, credential=credential_for(CLARA)
+        )
+        assert answer.status == 201, answer.body
+        assert answer.json()["event"]["author_label"] == "clara.jones"
+        assert _stored_labels(session, published_run.finding_uid) == ["clara.jones"]
+
+    def test_it_records_nothing_that_looks_invented(
+        self, two_reviewer_router: Surface, published_run: PublishedRun, session: Session
+    ) -> None:
+        """The label is one of the account's own two strings and nothing else.
+
+        Stated as an exclusion because the defect this guards against is not "the wrong
+        name" but "a name from nowhere", and a positive assertion against one literal would
+        not notice a second fallback being introduced beside the first.
+        """
+        _append(two_reviewer_router, published_run, credential=credential_for(CLARA))
+        (label,) = _stored_labels(session, published_run.finding_uid)
+        assert label == CLARA.login
+        assert label not in {"", " ", "local-reviewer", CLARA.user_uid}
+        assert CLARA.user_uid not in label, (
+            "the opaque identity has leaked into a field every reviewer reads"
+        )
+
+    def test_the_named_and_the_unnamed_are_still_two_authors(
+        self, two_reviewer_router: Surface, published_run: PublishedRun, session: Session
+    ) -> None:
+        """The fallback does not collapse anybody together, which is `D-78`'s whole point."""
+        _append(two_reviewer_router, published_run, credential=credential_for(ANNA))
+        _append(
+            two_reviewer_router,
+            published_run,
+            credential=credential_for(CLARA),
+            event="reject",
+        )
+        assert _stored_labels(session, published_run.finding_uid) == [
+            "Анна Петрова",
+            "clara.jones",
+        ]
+
+    def test_a_credential_carrying_an_empty_label_is_refused_and_writes_nothing(
+        self, two_reviewer_router: Surface, published_run: PublishedRun, session: Session
+    ) -> None:
+        """The seam refuses rather than falling back, which is where a second fallback would go.
+
+        A credential minted with an empty ``name`` is the shape a caller would produce if
+        the resolution above were ever skipped. The seam answers ``401`` -- the same refusal
+        a forged credential gets -- rather than quietly substituting the login, because a
+        fallback inside the seam is a fallback nobody can see. The *account's* fallback is
+        visible: it is a NULL column and a line in ``access-check``.
+        """
+        import json as _json
+
+        genuine = credential_for(ANNA)
+        version, body, _tag = genuine.split(".")
+        payload = _json.loads(
+            base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)).decode("utf-8")
+        )
+        assert payload["name"] == "Анна Петрова", payload
+        payload["name"] = ""
+        forged = _resign(version, payload)
+        assert forged != genuine
+        assert _SIGNER.verify(forged) is None, (
+            "this case is only a case if the seam really refuses the credential -- a "
+            "credential it accepted would be testing the router instead"
+        )
+
+        answer = _append(two_reviewer_router, published_run, credential=forged)
+        assert answer.status == 401, (answer.status, answer.body)
+        assert _stored_labels(session, published_run.finding_uid) == []
+
+
+def _resign(version: str, payload: dict[str, Any]) -> str:
+    """Re-sign ``payload`` with this suite's own key, so only the payload is under test.
+
+    ``version`` is taken from a credential the signer just minted rather than written down,
+    so this helper does not pin the format tag and does not have to be edited when it moves.
+
+    The tag is recomputed with the deployment's key on purpose: the case above is about a
+    credential this deployment **really signed** whose payload the seam must still refuse.
+    A credential with a broken tag would be refused one check earlier and would prove
+    nothing about the payload rule.
+    """
+    import hashlib
+    import hmac
+    import json as _json
+
+    from auditmanager.api.security import derive_signing_key
+
+    body = (
+        base64.urlsafe_b64encode(
+            _json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        )
+        .decode("ascii")
+        .rstrip("=")
+    )
+    signed = f"{version}.{body}"
+    tag = hmac.new(
+        derive_signing_key(DEPLOYMENT_SECRET), signed.encode("utf-8"), hashlib.sha256
+    ).digest()
+    return f"{signed}.{base64.urlsafe_b64encode(tag).decode('ascii').rstrip('=')}"
 
 
 class TestTheBodyCannotNameAnAuthor:
@@ -284,8 +475,14 @@ class TestTheBodyCannotNameAnAuthor:
             "the handler reads an author off the request body; the label is server-derived "
             "and a client-supplied one is a subject identity in all but name"
         )
-        assert "author_label=subject.login" in source, (
-            "the handler no longer derives the label from the verified subject"
+        assert "author_label=subject.display_label" in source, (
+            "the handler no longer derives the label from the verified subject. `R-37`: it "
+            "is `subject.display_label` -- the reviewer's chosen name, or their login when "
+            "they have chosen none, resolved once on the account's own record."
+        )
+        assert "author_label=subject.login" not in source, (
+            "the handler is back on `D-78`'s login. `R-37` ruled for the display name, "
+            "which is what another reviewer reads on a decision somebody else took."
         )
 
 
@@ -319,6 +516,7 @@ class TestFailClosed:
                 user_uid="usr_01M2545JSD15ETSNNV904X993S",
                 login="ghost.reviewer",
                 token_epoch=1,
+                display_label="Ghost Reviewer",
             )
         ).token
         answer = _append(two_reviewer_router, published_run, credential=ghost)

@@ -641,8 +641,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # The epoch is part of what the seam publishes, because it is part of what the seam
         # verified: the credential named this generation and the account confirmed it.
         # Comparing the whole `Subject` rather than two of its fields is what makes a fourth
-        # field somebody adds later visible here rather than silent.
+        # field somebody adds later visible here rather than silent -- and it did: `R-37`
+        # added `display_label`, and this comparison is where the suite was told about it.
         token_epoch=TEST_SUBJECT.token_epoch,
+        display_label=TEST_SUBJECT.display_label,
     ), seen
 
 
@@ -722,6 +724,7 @@ def test_a_credential_minted_under_a_stale_epoch_is_refused(router: Surface) -> 
             user_uid=TEST_SUBJECT.user_uid,
             login=TEST_SUBJECT.login,
             token_epoch=TEST_EPOCH - 1,
+            display_label=TEST_SUBJECT.display_label,
         )
     ).token
     # Verified by the signer: so the refusal below cannot be a malformed credential.
@@ -744,7 +747,12 @@ def test_a_credential_naming_an_account_this_deployment_has_not_got_is_refused(
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None
     orphan = signer.issue(
-        Subject(user_uid="usr_01M2545JSD15ETSNNV904X9912", login="nobody", token_epoch=1)
+        Subject(
+            user_uid="usr_01M2545JSD15ETSNNV904X9912",
+            login="nobody",
+            token_epoch=1,
+            display_label="Nobody At All",
+        )
     ).token
     assert signer.verify(orphan) is not None
 

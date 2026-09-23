@@ -133,5 +133,10 @@ def provisioned_credential(deployment_secret: str, login: str) -> str:
             # Read from the row, never assumed. A constant here would be a credential that
             # works until the first time anything in this lane revokes anything.
             token_epoch=record.token_epoch,
+            # `R-37`, and the same rule one field along: the label is the record's own
+            # answer -- the chosen display name, or the login when there is none. A literal
+            # here would make this helper mint credentials that disagree with the rows it
+            # just read, which is the whole defect this module exists to have stopped.
+            display_label=record.display_label,
         )
     ).token

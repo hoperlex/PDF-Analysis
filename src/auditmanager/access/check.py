@@ -17,6 +17,12 @@ Exit status: ``0`` when no account is on a default credential, ``1`` when at lea
 is, and ``2`` when the database could not be read. The first two are both *successful
 readings*; the distinction is there so a checklist can assert on it.
 
+**Since `R-37` it also reports which accounts have chosen no display name**, so their
+decisions are attributed to their login. That is the declared fallback and not a defect --
+see ``UNNAMED_PREFIX`` for why the exit status deliberately does not move for it -- but a
+fallback nobody can see is the silent fallback ``AGENTS.md`` section 4 forbids, and this
+line plus ``app_user.display_name IS NULL`` is what makes it visible.
+
 **Since `W40-LIMIT` it also reports which accounts are shut out of signing in**, and the
 status deliberately does **not** move for it. The reasons are the same sentence read twice:
 a default credential is a state that is supposed to be temporary and becomes permanent when
@@ -43,7 +49,14 @@ from auditmanager.access.repository import UserRepository
 from auditmanager.shared.db.config import DatabaseSettings, load_settings
 from auditmanager.shared.db.engine import create_database_engine
 
-__all__ = ["BLOCKED_PREFIX", "CLEAN_SENTINEL", "FINDING_PREFIX", "main", "run_check"]
+__all__ = [
+    "BLOCKED_PREFIX",
+    "CLEAN_SENTINEL",
+    "FINDING_PREFIX",
+    "UNNAMED_PREFIX",
+    "main",
+    "run_check",
+]
 
 #: Printed when nothing is on a default credential. Stable text, so a checklist can grep.
 CLEAN_SENTINEL = "access-check OK no default credentials"
@@ -55,6 +68,21 @@ FINDING_PREFIX = "access-check DEFAULT CREDENTIAL"
 #: of the reading. Stable, and deliberately a different prefix from the one above so a
 #: scraper cannot conflate two states with different remedies.
 BLOCKED_PREFIX = "access-check SIGN-IN BLOCKED"
+
+#: `R-37`. Printed, once per account, for every account that has chosen no display name,
+#: so its decisions are attributed to its login. Stable, and a third prefix rather than a
+#: variant of either above, for the reason ``BLOCKED_PREFIX`` is its own: three states with
+#: three different remedies must not be conflatable by a scraper.
+#:
+#: **The status does not move for these either, and here the reason is stronger.** A
+#: default credential is a temporary state that becomes permanent unseen, so it is worth a
+#: number a checklist fails on. A lockout is temporary by construction. An unset display
+#: name is neither -- it is the **declared fallback working as designed**, and an
+#: installation may legitimately never set one. Failing a checklist over it would be this
+#: command asserting that every reviewer must be named, which is a policy nobody has ruled.
+#: What it is worth is being *visible*: the fallback is the one thing about `R-37` that a
+#: reader could otherwise mistake for a reviewer having chosen their login as their name.
+UNNAMED_PREFIX = "access-check NO DISPLAY NAME"
 
 
 def run_check(settings: DatabaseSettings | None = None) -> int:
@@ -69,6 +97,10 @@ def run_check(settings: DatabaseSettings | None = None) -> int:
             # had to reconcile two readings would be doing the work this command exists to
             # save.
             blocked = repository.accounts_blocked_from_signing_in(session)
+            # Third question about the same table, in the same session, for the reason the
+            # second one is here: a reader who had to reconcile three readings would be
+            # doing the work this command exists to save.
+            unnamed = repository.accounts_without_a_display_name(session)
     finally:
         engine.dispose()
 
@@ -92,6 +124,17 @@ def run_check(settings: DatabaseSettings | None = None) -> int:
             f"failed_sign_ins={user.failed_sign_ins} "
             f"blocked_until={until.isoformat()} "
             f"release_now='python -m auditmanager.access.unlock --login {user.login}'",
+            flush=True,
+        )
+
+    for user in unnamed:
+        # `R-37`. Information, never a finding: the status below does not move for it. See
+        # `UNNAMED_PREFIX`.
+        print(
+            f"{UNNAMED_PREFIX}: login={user.login} user_uid={user.user_uid} "
+            f"label={user.display_label!r} (the login, by fallback) "
+            f"set_name='python -m auditmanager.access.name --login {user.login} "
+            "--display-name <name>'",
             flush=True,
         )
 

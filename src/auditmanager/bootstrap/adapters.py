@@ -787,6 +787,11 @@ class CredentialAdapter(_SessionHolder):
                 # an assumption. A credential minted under a stale epoch is refused by the
                 # very next request, which looks exactly like a broken sign-in.
                 token_epoch=record.token_epoch,
+                # `R-37`. The name other reviewers read, taken from the record and never
+                # resolved here: `display_label` is the account's own answer -- the chosen
+                # display name, or the login when there is none -- and one fallback in one
+                # place is the whole of why it is not a silent one.
+                display_label=record.display_label,
             )
         )
 
@@ -817,6 +822,7 @@ class CredentialAdapter(_SessionHolder):
                 user_uid=str(record.user_uid),
                 login=record.login,
                 token_epoch=record.token_epoch,
+                display_label=record.display_label,
             )
         )
 
