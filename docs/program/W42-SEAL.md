@@ -305,24 +305,184 @@ Provisioning, before any measurement:
 make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12   # exit 0, "bootstrap OK"
 .venv/bin/python -c "import boto3"                     # boto3 1.43.90
 npm --prefix web ci                                    # added 184 packages
+make migrate                                           # 0008 -> 0009 -> 0010
 ```
 
-Figures, the commit each was taken at, and the mutation ledger are in §6 and §8.
+Every command was run in `/root/w42seal` against lane `gate-w42a` — PostgreSQL
+`127.0.0.1:56240`, S3 `59840`/`59841`. `docker ps` during the wave lists
+`gate-w42a-postgres-1`, `gate-w42a-s3-1` and `gate-w42a-s3-init-1` and no other container
+this stream touched.
 
 ---
 
 ## 6. Measurements
 
-*(filled as they are taken; every figure carries the commit it was measured at)*
+**Every figure below carries the commit it was taken at and the log it was read from.** The
+verdict is read from the `GATE OK` line inside the log and never from a status a harness
+returned (`OPERATING_CONSTRAINTS.md` §4.6, §4.62).
+
+| What | Figure | Commit | Read from |
+|---|---|---|---|
+| foundation | **35 passed** | `fe8734f` | `/root/w42a-gate.log` |
+| battery | **2441 passed / 5 skipped / 4 warnings / 169 subtests** in 587.63 s | `fe8734f` | `/root/w42a-gate.log` |
+| frontend | **1022 passed in 72 files** | `fe8734f` | `/root/w42a-gate.log` |
+| contract surface | **15 paths / 18 operations / 51 schemas** | `fe8734f` | `json.load(contracts/api/v1/openapi.json)` |
+| migration head | **`0010_run_terminal_detail`** | `fe8734f` | `make migrate` |
+
+Wave 41 closed at 2361 / 35 / 1022 in 72 files.
+
+**The battery grew by 80 cases and the frontend did not move**, which is the shape this
+wave should have: `2361 → 2441` is the four new suites this stream wrote, and `1022 in 72
+files` is unchanged because `web/tests/**` is `W42-LOOK`'s and this stream did not touch it.
+The one frontend file this stream owns — the regenerated client — is compiled by the
+`typecheck` step the gate runs before the suite, and it passed.
+
+**The wall clock is worth recording beside the figures.** The battery took **587.63 s**
+against a normal ~280 s, with `W42-LOOK` live in `/root/w42look` throughout and the lane's
+own containers restarted mid-run by the battery's deploy tests.
+`OPERATING_CONSTRAINTS.md` §4.6: *"a gate that took twice as long as usual is evidence about
+the machine, not about the code"* — and it is evidence worth writing down rather than
+noticing again next wave.
 
 ---
 
 ## 7. For the integrator
 
-*(filled at the end)*
+**Branch `agent/w42-seal`, four commits on `b0a329b`. Not tagged, not pushed, not merged.**
+
+```
+188abd9  docs(W42-SEAL): the wave record, opened before the first measurement
+4b4ab1c  fix(D-73): the seam covers the served application, not only the router
+667a49c  feat(R-37): a decision shows a display name, not a login
+fe8734f  seal(W42): D-86's false description and D-46's terminal_detail, in one change
+```
+
+**Merge them in order.** `fe8734f` is the reseal and carries all four of `D-18`'s documents;
+splitting it re-opens the window where the frontend reads a digest the backend does not
+serve.
+
+### Rows this closes
+
+| Row | Ruling | Where |
+|---|---|---|
+| `D-73` | `R-31` | `4b4ab1c` |
+| `D-86` | `R-37` | `fe8734f` |
+| `D-46` | `R-29` | `fe8734f` |
+
+`DEBT_REGISTER.md` is the integrator's file and is untouched by this stream. The register's
+own first rule — *"a row is closed in the same commit as its fix, or this register lies"* —
+is the one thing this stream could not honour, because the file is not in its grant.
+
+### Deploying this
+
+1. **Migration head moves `0008` → `0010`**, two revisions. Both roll back, independently
+   and in either order relative to each other's subject: `0009` drops a label (loud, names
+   the accounts), `0010` drops a classifier the `stage_result` rows still carry in full.
+2. **Everybody signs in again, once.** The credential format is `am2`; every `am1`
+   credential is refused at the version check. This is `0007`'s direction and is stated in
+   `api/security.py` rather than discovered.
+3. **`/api/v1/openapi.json` now answers `401` without a credential**, and two deploy
+   scripts fetch it expecting `200`. See §7.1 — **this will break a deploy if it is not
+   handled first.**
+4. Optionally name the reviewers: `python -m auditmanager.access.name --login <login>
+   --display-name '<name>'`. Nothing requires it; an account with no name records its login.
+
+### 7.1 Outside the grant: reported, not repaired
+
+**`R-31` breaks the deploy script's own liveness probe, and this stream may not fix it.**
+`infra/**` is not in `allowed_paths`. Three places fetch `/api/v1/openapi.json` and require
+`200` from a caller holding no credential:
+
+* `infra/deploy/verify-deployed.sh:125-137` — *"the proxy answered $PROXY_CODE on
+  /api/v1/openapi.json, not 200. Nothing was compared."* After this wave that is `401`, and
+  `verify-deployed.sh` refuses before it compares a single file;
+* `infra/deploy/deploy.sh`'s `proxy-answers` guard — named in
+  `infra/deploy/proxy/tls-server.conf:36-38`, which says *"a `return 301` would turn every
+  successful deploy into a refusal"*. A `401` does the same thing for the same reason;
+* `infra/deploy/proxy/tls-server.conf` repeats the expectation in prose.
+
+**The repair is small and is somebody else's to make.** The health plane already exists on
+its own port, carries no product meaning and needs no credential (`api/health.py`,
+`/healthz` and `/readyz`, pinned by
+`tests/integration/api/test_served_document_and_health_plane.py`). A probe that wants to
+know whether the proxy reaches the API should ask it. The alternative — teaching the script
+to mint a credential — puts a sign-in on the deploy path for a liveness check.
+
+**Two more documents now describe a value that has changed**, which is
+`OPERATING_CONSTRAINTS.md` §4.7's rule and `D-86`'s own shape one level out. Both say
+`author_label` is *"the login of the reviewer"*, which `R-37` has just made false:
+
+* `docs/program/P02_SEAMS.md:508` — outside `allowed_paths`;
+* `web/src/widgets/decision-history/ui/decision-history.tsx:13` — `W42-LOOK`'s file, live in
+  another worktree while this ran.
+
+Both were corrected in wave 41 *because* they were stale, and both are stale again. The
+sentence they need is the one now in the sealed contract.
 
 ---
 
 ## 8. Mutation ledger
 
-*(filled as each guard is shown to fail)*
+Every guard in this wave was shown to fail: mutate → red → revert → green. Baselines were
+run against the **unmutated** copy first, because *"a red from a copy you never baselined is
+not evidence"*. `PYTHONDONTWRITEBYTECODE=1` on every run and `__pycache__` cleared between
+cases (§10.2).
+
+**S4 — `/root/w42a-mut`, baseline 22 passed**
+
+| # | Mutation | Result | The assertion that fired |
+|---|---|---|---|
+| `M-S4-1` | the green no-op: dependencies on `FastAPI(...)`, FastAPI's own four routes restored | **12 failed** | `Route at '/openapi.json' is a route this guard cannot read` |
+| `M-S4-2` | dependencies back on `include_router` | **11 failed** | `these routes are served by the application and carry no authorization seam: /openapi.json /docs /docs/oauth2-redirect /redoc` |
+| `M-S4-3` | a fifth route added with `app.add_route`, the four left correct | **3 failed, 19 passed** | `Route at '/surface' …` |
+
+`M-S4-3` is the anti-vacuity claim measured rather than asserted: **every path-driven case
+stayed green** and only the structural guard caught the fifth route.
+
+**S1 — `/root/w42a-mut`, baseline 26 passed; `M-S1-f` on a whole-worktree copy, baseline 33**
+
+| # | Mutation | Result | The assertion that fired |
+|---|---|---|---|
+| `M-S1-a` | `author_label` pinned to `"local-reviewer"` (`W12-DEC`'s `M21`, modern form) | **6 failed** | `assert 'local-reviewer' == 'Анна Петрова'` |
+| `M-S1-b` | `author_label=subject.login`, i.e. `D-78` restored | **4 failed** | `assert 'anna.petrova' == 'Анна Петрова'` |
+| `M-S1-c` | `display_label` falls back to `""` | **4 failed** | `assert '' == 'w42seal-effd108753b2'` |
+| `M-S1-d` | `display_label` falls back to `f"Reviewer {user_uid}"` | **4 failed** | `assert 'Reviewer usr_01M37BM…' == 'w42seal-4675dca04e8a'` |
+| `M-S1-e` | the seam drops `name` and rebuilds it from the login | **11 failed** | the closed-payload assertion that reported the field's arrival |
+| `M-S1-f` | `display_name` `NOT NULL`, backfilled from `login` | **6 failed** | `app_user.display_name is NOT NULL. A backfilled column cannot tell an account that chose no name from one that chose its login` |
+
+`M-S1-f` is the evidence for §1.1's judgement call. It needed a **whole-worktree** copy:
+`OPERATING_CONSTRAINTS.md` §10.1 — no ordinary copy makes a migration mutable.
+
+**S3 — `/root/w42a-mut`, baseline 14 passed; `M-S3-6` on a whole-worktree copy, baseline 8**
+
+| # | Mutation | Result | The assertion that fired |
+|---|---|---|---|
+| `M-S3-1` | the decision-point screen removed | **1 failed** | `DID NOT RAISE UnsafeDetailKey` |
+| `M-S3-2` | the edge screen removed | **1 failed** | the case covering a row this code did not write |
+| `M-S3-3` | the detail leads the reason | **1 failed** | `analysis_failed declares safe_detail_keys ['run_id', 'stage_id']; 'dependency' is not one of them` |
+| `M-S3-4` | the write screen removed | **1 failed** | `DID NOT RAISE UnsafeDetailKey` |
+| `M-S3-5` | the executor stops passing the detail, i.e. `D-46` restored | **2 failed** | `the run reports a code and no detail, which is exactly D-46` |
+| `M-S3-6` | `ck_audit_run_terminal_detail_needs_a_reason` → `CHECK (true)` | **green, then 3 failed** | see below |
+
+### 8.1 The mutation that came back green, which is the finding
+
+`M-S3-6` weakened the database's own coupling in a **whole-worktree** copy and
+`tests/integration/runs/test_terminal_detail_says_which_dependency.py` stayed at **14
+passed**.
+
+**Why.** That suite connects to the lane's **already-migrated** database. Changing a
+migration's source cannot reach it, however the tree is copied.
+`OPERATING_CONSTRAINTS.md` §10.1 names the first half of this — *"it does not make a
+migration mutable, and neither does any other copy"* — and names a whole-worktree copy as
+the escape. **The half it does not say is that a whole-worktree copy is still not enough
+unless the suite re-migrates.** The escape is the `migrated_engine` fixture, which creates a
+throwaway database and applies the head through the literal command.
+
+**The repair, in the same wave.** `tests/integration/db/test_run_terminal_detail_schema.py`
+asserts both CHECKs over `migrated_engine`. The same mutation against it: **3 failed**,
+`assert 'terminal_reason IS NOT NULL' in 'CHECK (true)'`. One of its cases asserts the
+constraint **is not a tautology**, because `CHECK (true)` reads in `pg_constraint` exactly
+like a constraint does.
+
+The two behavioural cases in the runs suite were kept and now say in their own docstring
+that they cannot redden for a migration change, and where the version that can lives.
