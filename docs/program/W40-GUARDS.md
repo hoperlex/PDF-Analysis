@@ -311,21 +311,37 @@ FAILED ...::test_every_get_that_names_a_parent_refuses_an_identity_that_names_no
 
 ## 4. The gate, case by case
 
-Two full runs, both in lane `gate-w40b`, both read for `GATE OK` in the log rather than
-believed from a status a harness handed back — `OPERATING_CONSTRAINTS.md` §4.62, and the
-notification for **both** of these runs carried exit code 0, which on the baseline run was
-true and is not evidence either way.
+**Three** full runs, all in lane `gate-w40b`, all read for `GATE OK` **in the log** rather
+than believed from a status a harness handed back -- `OPERATING_CONSTRAINTS.md` section 4.62.
+The completion notification for every one of them carried exit code 0, which happens to have
+been true three times and is not evidence in any of them.
 
-| case | tree | battery | foundation | frontend | whitespace |
+| run | tree | battery | foundation | frontend | whitespace |
 |---|---|---|---|---|---|
 | baseline | `ccaeed8`, clean | `2265 passed, 5 skipped, 169 subtests` in 326.84s | `35 passed` in 29.30s | `1013` in `72` files | pass |
-| final | `HEAD`, clean | `2282 passed, 5 skipped, 169 subtests` in 335.02s | `35 passed` in 29.91s | `1013` in `72` files | pass |
+| code complete | `4484091`, clean | `2282 passed, 5 skipped, 169 subtests` in 335.02s | `35 passed` in 29.91s | `1013` in `72` files | pass |
+| HEAD | `a4d5a55`, clean | `2282 passed, 5 skipped, 169 subtests` in 335.75s | `35 passed` in 28.93s | `1013` in `72` files | pass |
+
+Logs: `/root/w40-logs/guards-gate-baseline.log`, `guards-gate-final.log`,
+`guards-gate-head.log`.
 
 **The brief's baseline figures are correct**, to the case: `2265 / 5 / 169`, `35`,
-`1013 in 72`. Both logs are kept: `/root/w40-logs/guards-gate-baseline.log`,
-`/root/w40-logs/guards-gate-final.log`.
+`1013 in 72`.
 
-**The delta is exactly the seventeen cases added here**: `2265 -> 2282` passed, `5 -> 5` skipped, `169 -> 169` subtests, foundation `35 -> 35`, frontend `1013 in 72 -> 1013 in 72`. No existing case changed status and no frontend case was added, which is right: nothing in `web/` moved.
+**The delta is exactly the seventeen cases added here**: `2265 -> 2282` passed, `5 -> 5`
+skipped, `169 -> 169` subtests, foundation `35 -> 35`, frontend `1013 in 72 -> 1013 in 72`.
+No existing case changed status and no frontend case was added, which is right: nothing in
+`web/` moved.
+
+**The residue, stated rather than glossed.** The third run gated `a4d5a55`, and the only later
+change in this branch is the text of *this document*. Measured rather than assumed:
+`grep -rhon 'docs/program/[A-Za-z0-9_./-]*' --include=*.py tests/ src/` lists every path under
+`docs/program/` that any module names, and it contains **no glob over that directory and no
+reference to this file** -- the ones the battery reads are `P02_LOCK.json`, `P02_SEAMS.md`,
+`FOUNDATION_LOCK.json`, `PROTOTYPE_PROFILE.md`, `CHECKPOINT_REGISTRY.md`, `CURRENT_STATE.md`
+and the `tasks/` and `reviews/` files named one by one. A fourth run at the literal final
+commit is reported in the session hand-back, where a document can be measured without
+containing its own measurement.
 
 Case by case, the seventeen are:
 
@@ -335,10 +351,10 @@ Case by case, the seventeen are:
 | `tests/integration/composition/test_an_absent_parent_is_not_an_empty_page.py` | 3 | `D-67`: the partition and its two literal counts, the sweep over every parented `GET`, and the two parentless collections |
 | `tests/integration/api/test_absent_and_empty_are_not_the_same_answer.py` | 7 | `D-67`'s second half: three present-but-childless parents answering `200`, beside the three absent ones refusing, and the control that a populated run still answers its findings |
 
-Nothing existing changed status. The final run was taken with the peer lane `gate-w40a`
-running its own gate alongside — `OPERATING_CONSTRAINTS.md` §4.6 — which is recorded because
-the wall clock is evidence about the machine and this figure should not be compared with the
-baseline's as if it were a measurement of the code.
+Nothing existing changed status. The second and third runs were taken with the peer lane
+`gate-w40a` running its own gate alongside -- `OPERATING_CONSTRAINTS.md` section 4.6 -- which
+is recorded because the wall clock is evidence about the machine, not about the code: a
+battery 9s slower than the baseline's is a statement about a shared host.
 
 ---
 
@@ -349,28 +365,37 @@ baseline's as if it were a measurement of the code.
    rows, cost — and `FindingAdapter.get_finding` reads the finding's evidence, its current
    verdict **and its decision history**, which `listDecisionHistory` then reads again. A
    narrow existence method on `RunPort` and `FindingPort` is the right shape and is **not**
-   this stream's to add: the port implementations live in `src/auditmanager/bootstrap/`, a
-   forbidden hotspot here, and `test_every_adapter_accepts_every_parameter_its_port_declares`
-   turns a port method nobody implements into a red gate. Worth a row.
+   this stream's to add: a port method is only useful once the router calls it, and the
+   moment it does, every implementation that lacks it raises `AttributeError` and answers
+   `500`. There are four -- the shipped adapters in `src/auditmanager/bootstrap/`, a
+   forbidden hotspot here, and three separate wirings in `tests/`.
+   `test_every_adapter_accepts_every_parameter_its_port_declares` would **not** catch it: it
+   `continue`s on an adapter method that is absent and reports only one that drops a declared
+   parameter. Read to the end rather than assumed -- the first draft of this paragraph
+   claimed the opposite. Worth a row.
 2. **The repair is in the router and `listRuns`/`exportRunCsv` prove their parents in the
    adapter.** Two places now hold the same kind of rule. The argument for the router is in §3
    and in both source comments; the inconsistency is real and is recorded rather than hidden.
 3. **`appendDecision` was not measured.** `D-67` is about collections and the sweep is over
    `GET`s. What `POST /findings/{finding_uid}/decisions` answers for an absent finding is
    unmeasured here.
-4. **`W40-LIMIT` is live in `src/auditmanager/api/**`.** Three router files moved in this
-   branch: `findings.py`, `decisions.py` and `__init__.py`. `__init__.py` is the likeliest
-   collision if that stream added middleware or a dependency there; the change here is six
-   lines inside `build_router`.
+4. **`W40-LIMIT` is live in `src/auditmanager/api/**` and could still reach a router.**
+   Three router files moved in this branch: `findings.py`, `decisions.py` and `__init__.py`.
+   Measured against `/root/w40limit` while writing this: that stream has touched no file
+   under `src/auditmanager/api/routers/**` -- see section 8 -- so there is no collision
+   **today**. The risk is that it lands one before this branch merges, and `__init__.py` is
+   where it would be; the change here is six lines inside `build_router`.
 5. **The sweep's identities come from the catalog, and a wrong prefix would not show up in
    it.** Measured: `GET /documents/prj_01ARZ3NDEKTSV4RRFFQ69G5FAV/versions` — a project
    identity where a document identity belongs — answers **`404 not_found`**, the same answer
    a correct-prefix absent identity gets, so the sweep cannot tell a bad
    parameter-to-prefix mapping from a working guard. What defends it is that the mapping is
    read from `contracts/domain/v1/identifiers.json` at run time and an unresolvable path
-   parameter raises rather than defaulting — the existing sweep in `test_router_answers.py`
-   does default, to `prj`, which is why it probes `listVersions` with a malformed identity
-   and has never noticed. And the second file closes the gap from the other side for
+   parameter raises rather than defaulting. The existing sweep in `test_router_answers.py`
+   does default, to `prj`, and its `_absent_identity` has no entry for `document_uid` -- so
+   it has been probing `listVersions` with a project identity. That costs it nothing,
+   because it asks only whether the answer is below `500`; it is written down because the
+   same shortcut in a sweep that asks about `404` would be silent and wrong. And the second file closes the gap from the other side for
    `run_id`, `finding_uid` and `project_uid`: those three identities are proved to resolve,
    because a real one of each answers `200` on the same operation.
 6. **The second file's run existence is measured through a stand-in.** `shipped_router`
@@ -495,7 +520,12 @@ not a check: the baseline gate figures (`2265 / 5 / 169`, `35`, `1013 in 72`); t
 in `PORT_REGISTRY.md`; `tests/**` being uncontested — `W40-LIMIT` has touched
 `src/auditmanager/access/**`, `bootstrap/adapters.py`, `db/migrations/**`, `web/src/**` and
 two new test files, and **no file in `src/auditmanager/api/routers/**`**; and the brief's
-*"all eighteen routes carry one"* — measured, `application.router.routes` = **18**, all eighteen carrying one, none without (`/root/w40-logs/guards-routes-and-prefix.log`). The `DEBT_REGISTER.md` row's *sixteen* is the stale figure; the brief's eighteen is right. **With one correction, in §6**: eighteen is the count of routes **on the router**, and the served application carries four more that the seam never sees.
+*"all eighteen routes carry one"* — measured, `application.router.routes` = **18**, all
+eighteen carrying one and none without
+(`/root/w40-logs/guards-routes-and-prefix.log`); the `DEBT_REGISTER.md` row's *sixteen* is
+the stale figure and the brief's eighteen is right. **With one correction, in section 6**:
+eighteen is the count of routes **on the router**, and the served application carries four
+more that the seam never sees.
 
 **Not re-measured, and so not claimed either way:** `W37-CERT4`'s statement that four of its
 six mutations reddened. Only M4 and M5 were re-run here.
@@ -504,12 +534,15 @@ six mutations reddened. Only M4 and M5 were re-run here.
 
 ## 8. For the integrator
 
-- Merge order does not matter for `contracts/**`, `db/**`, `web/**`, `infra/**` — none moved,
-  and `git diff --stat ccaeed8..HEAD` is six files: three routers and three new test files.
+- Merge order does not matter for `contracts/**`, `db/**`, `web/**`, `infra/**` — none moved.
+  `git diff --stat ccaeed8..HEAD` is **seven** files: three routers, three new test files and
+  this document. No lockfile, no `Makefile`, no migration, no composition root, no register,
+  no `PORT_REGISTRY.md`, no `artifacts/**`, and neither `tests/e2e/pc01/journey/manifest.json`
+  nor `tests/integration/norms/**`.
 - **`W40-LIMIT` and this stream do not overlap.** Measured against its worktree at the time
-  of writing: it has touched `src/auditmanager/access/**`, `src/auditmanager/bootstrap/
-  adapters.py`, `db/migrations/**`, `web/src/**`, two docs and two new test files, and **no
-  file under `src/auditmanager/api/routers/**`**. Note that `adapters.py` is where `D-67`'s
+  of writing: it has touched `src/auditmanager/access/**`, `bootstrap/adapters.py`,
+  `db/migrations/**`, `web/src/**`, two documents and two new test files, and **no file under
+  `src/auditmanager/api/routers/**`**. Note that `adapters.py` is where `D-67`'s
   repair would have gone had the allowed paths permitted it, so the router choice avoided a
   collision as well as being argued for on its own terms.
 - `D-66` and `D-67` can both be closed. **`D-67`'s row names the wrong operation** and should
