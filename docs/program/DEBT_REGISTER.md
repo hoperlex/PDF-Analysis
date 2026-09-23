@@ -22,6 +22,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-81** | four real WCAG 1.4.11 failures: `--am-line` on `--am-paper` is **1.36:1** light, **1.30:1** dark, against 3:1 | **owner** — a border-scale decision twice declined |
 | D-82 | three English `LoadingState` strings no instrument in the tree can render | a repair nothing can verify is not a repair |
 | D-83 | eleven journey sentences are verified by nothing inside the gate | only `refusals.mjs` against a live stand |
+| D-84 | a widget widens a one-member union to `string` and matches a magic literal — a second refusal renders **silence** | one word, and `tsc` starts catching it |
+| D-85 | dead code that the widened contrast census can now see | three items, named |
 | **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -1871,6 +1873,60 @@ same fact from the other side.
 
 Check: `docs/program/W41-BLIND.md` §B2 carries the fifteen sentences and which of the four
 matched what.
+
+### D-84 — a widget widens a typed refusal to `string`, so the second one will render silence
+
+**Reported by `W41-BLIND` in its risks and verified by the integrator, 2026-09-23. Latent today,
+and the row exists because of what makes it stop being latent.**
+
+`web/src/widgets/decision-panel/ui/decision-panel.tsx:41` declares
+
+```ts
+readonly refusal?: string | null | undefined;
+```
+
+and line 118 renders on `refusal === 'empty'`. **The feature it is fed from is properly typed** —
+`CommentRefusal` is exported from `features/append-comment`'s public index and
+`useAppendComment` returns `CommentRefusal | null`. The widget throws that away at its own
+boundary and matches a magic literal instead.
+
+**Today `CommentRefusal = 'empty'`, one member, so the screen is correct.** The day a second
+refusal exists — an over-long comment, whitespace only — the reviewer's comment is refused and
+**the screen says nothing at all**: no alert, no sentence, no trace. That is the **silent
+fallback** `AGENTS.md` §4 forbids by name, and `tsc` cannot catch it, because `string` accepts
+every new member. `OPERATING_CONSTRAINTS.md` §4.65: *a type-keyed map is only a guard where a
+typechecker runs* — and a type widened to `string` is where it stops running.
+
+**The correct pattern is eight files away and already written.**
+`features/sign-in/ui/sign-in-form.tsx:23` declares `readonly refusal?: SignInRefusal | null |
+undefined` and renders on presence rather than on a literal. **The codebase carries both
+patterns**, which is why this is worth a row rather than a quiet edit: whoever adds the second
+refusal will read the wrong one first, because it is the one on the screen they are changing.
+
+**Repair is one word** — `CommentRefusal` in place of `string` — plus rendering the refusal
+rather than testing it for a value. Then adding a member **stops compiling**, which is the
+property `W37-D57` established for query keys and the reason `npm run typecheck` is in the gate
+at all.
+
+Check: `grep -n 'refusal' web/src/widgets/decision-panel/ui/decision-panel.tsx` against
+`grep -n 'CommentRefusal' web/src/features/append-comment/model/comment-text.ts`.
+
+### D-85 — three dead things the widened census can now see
+
+**Reported by `W41-BLIND` while taking the contrast census from 25 screens to 49.**
+
+- **`.am-evidence__none` is unreachable on every input**, because the active page is chosen from
+  the pages derived from the evidence itself — so "no evidence on this page" cannot occur.
+- **`hr` and `.am-app__context`** are dead CSS: no component renders either.
+
+Minor on their own. Registered because of what they are *evidence of*: after `D-69`'s repair the
+census still reports **11 colour-bearing rules reaching no screen**, down from 31, and **these
+are part of that residue**. A rule that no screen reaches is either a screen nobody wrote a seed
+for — the `D-69` defect — or a rule nobody needs. **The two are indistinguishable from the
+census's side**, which is why the remaining 11 have to be named individually rather than counted
+down, and this row starts that list at three.
+
+Check: the census's own failure list, and `grep -rn 'am-evidence__none\|am-app__context' web/src`.
 
 ### D-73 — four routes answer 200 with no credential, because the seam is on the router
 
