@@ -24,6 +24,8 @@ import { useState } from 'react';
 import type { FindingObservationId, Verdict } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState } from '@/shared/ui';
+import type { CommentRefusal } from '@/features/append-comment';
+import { commentRefusalMessage } from '@/features/append-comment';
 import { VerdictBadge } from '@/entities/expert-decision';
 
 /** Which intent is in flight, so only that control shows as busy. */
@@ -37,8 +39,18 @@ export interface DecisionPanelProps {
   readonly onComment: (text: string, observationId: FindingObservationId) => void;
   readonly pendingIntent?: DecisionIntent | null | undefined;
   readonly error?: ErrorStateProps | null | undefined;
-  /** Set when the browser refused to send, e.g. an empty comment. */
-  readonly refusal?: string | null | undefined;
+  /**
+   * Set when the browser refused to send, rather than when the server refused.
+   *
+   * TYPED, and `D-84` is why it says so here. This read `string` and the panel rendered on
+   * `refusal === 'empty'`, so the day `CommentRefusal` gained a second member the comment
+   * would have been refused while the screen said nothing at all — the silent fallback
+   * `AGENTS.md` §4 forbids by name, and one `tsc` could not see, because `string` accepts
+   * every member anyone will ever add. The type is the feature's own union now, and the
+   * panel renders on PRESENCE, so a new refusal reaches the reviewer by construction
+   * instead of by somebody remembering this line.
+   */
+  readonly refusal?: CommentRefusal | null | undefined;
 }
 
 export function DecisionPanel({
@@ -115,9 +127,9 @@ export function DecisionPanel({
           Комментарий — это новое событие. Он никогда не заменяет вердикт выше и не
           редактирует более раннее событие.
         </p>
-        {refusal === 'empty' ? (
-          <p className="am-decision__refusal" role="alert">
-            Событию комментария нужен текст. Ничего не отправлено.
+        {refusal !== null && refusal !== undefined ? (
+          <p className="am-decision__refusal" role="alert" data-comment-refusal={refusal}>
+            {commentRefusalMessage(refusal)}
           </p>
         ) : null}
       </div>

@@ -30,6 +30,7 @@ import { describe, expect, it } from 'vitest';
 import type { DecisionEvent, Evidence } from '@/shared/api';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { DecisionPanel } from '@/widgets/decision-panel';
+import { COMMENT_REFUSALS, commentRefusalMessage } from '@/features/append-comment';
 import { DecisionHistory } from '@/widgets/decision-history';
 
 import { OBSERVATION_ID, decisionEvent, decisionId, observation, render } from './fixtures';
@@ -174,6 +175,32 @@ describe('a comment the browser refused to send says so', () => {
   it('renders nothing of the kind when there was no refusal', () => {
     expect(panel()).not.toContain('am-decision__refusal');
     expect(panel({ refusal: null })).not.toContain('am-decision__refusal');
+  });
+
+  /**
+   * EVERY member of the union, derived from the union rather than listed here.
+   *
+   * `D-84`: the panel declared `refusal?: string` and rendered on `refusal === 'empty'`.
+   * With one member that screen was correct, which is exactly why nothing caught it — and
+   * a test naming `'empty'` is a second copy of the same assumption, so it could not catch
+   * it either. This one iterates `COMMENT_REFUSALS`, so a member added to the feature
+   * fails HERE at run time as well as in `tsc`, and the two failures say different things:
+   * the compiler says the sentence is missing, this says the screen is silent.
+   */
+  it('renders a sentence and the machine value for every refusal the feature can produce', () => {
+    expect(COMMENT_REFUSALS.length).toBeGreaterThan(0);
+    for (const refusal of COMMENT_REFUSALS) {
+      const markup = panel({ refusal });
+      expect({ refusal, block: markup.includes('am-decision__refusal') })
+        .toEqual({ refusal, block: true });
+      expect({ refusal, machine: markup.includes(`data-comment-refusal="${refusal}"`) })
+        .toEqual({ refusal, machine: true });
+      expect({ refusal, sentence: markup.includes(commentRefusalMessage(refusal)) })
+        .toEqual({ refusal, sentence: true });
+      // And the sentence is a sentence, not the machine value leaking onto the screen.
+      expect({ refusal, russian: /[а-яё]/i.test(commentRefusalMessage(refusal)) })
+        .toEqual({ refusal, russian: true });
+    }
   });
 });
 

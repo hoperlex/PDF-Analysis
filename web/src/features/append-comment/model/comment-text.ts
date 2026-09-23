@@ -12,7 +12,35 @@
  * immutable row.
  */
 
-export type CommentRefusal = 'empty';
+/**
+ * Every reason this tier refuses to send, as a value.
+ *
+ * DECLARED AS AN ARRAY so the set is enumerable at run time as well as at compile time,
+ * which is `SIGN_IN_REFUSALS`'s shape eight files away and is what lets a test render the
+ * screen for EVERY member rather than for the one whoever wrote the test remembered.
+ * `D-84` is the row that asks for this: the decision panel matched the literal `'empty'`
+ * and a second member would have been refused in silence.
+ */
+export const COMMENT_REFUSALS = ['empty'] as const;
+
+export type CommentRefusal = (typeof COMMENT_REFUSALS)[number];
+
+/**
+ * The sentence a reviewer reads. The machine value stays on the `data-` attribute.
+ *
+ * THE SWITCH HAS NO `default` ON PURPOSE. A `default` would make this function total over
+ * a union it has not been told about, which is the same silence one layer down: adding a
+ * member would compile and the new refusal would read as the old sentence. Without one,
+ * `tsc` refuses the file — *"Function lacks ending return statement and return type does
+ * not include 'undefined'"* — until the member has words. That refusal is `D-84`'s repair;
+ * the widget rendering on PRESENCE is what makes it reach the screen.
+ */
+export function commentRefusalMessage(refusal: CommentRefusal): string {
+  switch (refusal) {
+    case 'empty':
+      return 'Событию комментария нужен текст. Ничего не отправлено.';
+  }
+}
 
 export type CommentCheck =
   | { readonly kind: 'ok'; readonly comment: string }
