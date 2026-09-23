@@ -15,7 +15,7 @@ from auditmanager.api.routers.declarations import (
     success,
 )
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
-from auditmanager.api.routers.ports import DecisionPort
+from auditmanager.api.routers.ports import DecisionPort, FindingPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import page_body, paginate, timestamp
@@ -29,7 +29,15 @@ from auditmanager.api.schemas.decisions import (
 __all__ = ["build_decision_routes"]
 
 
-def build_decision_routes(router: APIRouter, decisions: DecisionPort) -> None:
+def build_decision_routes(
+    router: APIRouter, decisions: DecisionPort, findings: FindingPort
+) -> None:
+    """`D-67`. ``findings`` is here so that ``listDecisionHistory`` can answer its path.
+
+    Not to read a finding for its own sake -- to establish that the finding the path names
+    exists, before its ledger is rendered as an empty page. ``listDecisions``, two routes
+    below, takes no such argument and must not: its path names no parent.
+    """
 
     @router.post(
         "/findings/{finding_uid}/decisions",
@@ -80,6 +88,21 @@ def build_decision_routes(router: APIRouter, decisions: DecisionPort) -> None:
         cursor: CursorParam = None,  # type: ignore[assignment]
         limit: LimitParam = 50,
     ) -> WireResponse:
+        # `D-67`. The finding is proved to exist before its ledger is read. A finding
+        # that has never been decided on has an empty history and that is a true answer;
+        # a finding that does not exist has no history to be empty, and until this line
+        # the two were the same 200.
+        #
+        # The reason this sits in the router rather than in the adapter is written out at
+        # the same line in `findings.py`, and applies word for word: the `404` is the
+        # frozen contract's statement about this operation, and the operation is here.
+        #
+        # It costs a read of the finding, and the shipped `FindingAdapter.get_finding`
+        # reads its evidence, its current verdict and -- this listing's own rows -- its
+        # history, to answer a yes/no. `D-67`'s repair is deliberately not widened into a
+        # narrower port method: `ports.py`'s implementations live outside this stream's
+        # allowed paths.
+        findings.get_finding(finding_uid=finding_uid)
         rows = decisions.decision_history(finding_uid=finding_uid)
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_decision_sort_key)
         body = page_body([decision_event_body(view) for view in page.items], page.next_cursor)
