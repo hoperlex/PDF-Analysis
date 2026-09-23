@@ -310,6 +310,77 @@ class TestItRefusesToBeBuiltWrong:
             ProxySettings(base_url="proxy.example", token="t")
 
 
+class TestAHostlessUrlIsAConfigurationErrorNotAnOutage:
+    """`D-72`. ``http://:59990`` is a lane pointed at nothing, and it used to look like rain.
+
+    The prefix check above accepted it -- ``"http://:59990".startswith("http://")`` is true --
+    so ``ProxySettings`` constructed, the adapter was built, and the failure arrived at call
+    time out of ``urllib``: ``dependency_unavailable``, which the frozen catalog marks
+    ``retryable: true``. A run against a misconfigured lane therefore retried a ladder, paid
+    for the waiting, and reported a transient provider outage about a value that was never
+    going to work.
+
+    **It is not hypothetical.** ``infra/deploy/env/provider.env`` on the owner's stand carries
+    exactly that URL today (`D-70`), so this is what `D-70` looks like from inside the
+    product. `W39-CORPUS` diagnosed it from the outside and put the check in the one caller
+    it owned, ``auditmanager.norms.__main__.resolve_transport``, whose refusal message still
+    names this class: *"accepted by ProxySettings, which checks only the scheme"*. This is
+    that sentence stopping being true.
+
+    No error code is added. The refusal is ``INTERNAL_ERROR`` from ``__post_init__``, the same
+    shape the two checks beside it already use, because a deployment assembled from a broken
+    configuration is not a caller's fault to be told about in a new vocabulary.
+    """
+
+    @pytest.mark.parametrize(
+        "base_url",
+        [
+            "http://:59990",  # `D-70`'s own value, port and all
+            "https://:8443",
+            "http:///v1",  # no authority at all
+            "http://",
+            "https://",
+        ],
+    )
+    def test_a_url_with_no_host_is_refused_at_construction(self, base_url: str) -> None:
+        with pytest.raises(DomainError) as caught:
+            ProxySettings(base_url=base_url, token="t")
+        assert caught.value.code is ErrorCode.INTERNAL_ERROR
+
+    @pytest.mark.parametrize(
+        "base_url",
+        [
+            "http://127.0.0.1:59990",
+            "https://proxy.example.invalid",
+            "https://p",
+            "http://[::1]:8080",
+            "https://proxy.example.invalid/openai/v1",
+        ],
+    )
+    def test_a_url_that_names_a_host_still_constructs(self, base_url: str) -> None:
+        """The control. A check that refused everything would satisfy the case above."""
+        assert ProxySettings(base_url=base_url, token="t").base_url == base_url
+
+    def test_the_failure_it_replaces_was_one_the_catalog_calls_retryable(self) -> None:
+        """Why the refusal has to happen at construction rather than at the call.
+
+        Read off the frozen catalog rather than restated here, because the whole defect is
+        that two different facts -- "the provider is down" and "this lane names no provider"
+        -- arrived as one code, and a test that wrote ``True`` next to
+        ``dependency_unavailable`` by hand would not notice if the catalog stopped saying so.
+        """
+        from auditmanager.shared.errors.catalog import CODES
+
+        assert CODES[ErrorCode.DEPENDENCY_UNAVAILABLE.value]["retryable"] is True
+
+    def test_the_adapter_is_never_built_around_one(self) -> None:
+        """The reachability statement: there is no way to hold an adapter over a hostless
+        URL, because the only thing that can be handed to :class:`ProxyAdapter` is a
+        :class:`ProxySettings`, and one cannot exist."""
+        with pytest.raises(DomainError):
+            ProxyAdapter(ProxySettings(base_url="http://:59990", token="t"))
+
+
 class TestTheMeasuredCostBeatsTheEstimate:
     """`OD-02`'s revision makes the model selectable, so no rate table can cover it.
 
