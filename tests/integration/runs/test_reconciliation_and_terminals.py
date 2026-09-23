@@ -83,7 +83,17 @@ def test_terminal_selection_is_delegated(
     calls: list[dict] = []
 
     def fake_select_terminal(
-        stage_statuses, *, required_stages, gate_ran=True, stage_errors=None
+        stage_statuses,
+        *,
+        required_stages,
+        gate_ran=True,
+        stage_errors=None,
+        # `D-46`. The fourth argument arrived with `terminal_detail`, and this substitute
+        # is recorded here rather than given a `**kwargs` catch-all deliberately: the point
+        # of this test is that the executor *delegates*, so what it passes is part of the
+        # claim. A signature that swallowed a new argument would go on passing while the
+        # executor started deciding something on its own.
+        stage_details=None,
     ):
         calls.append(
             {
@@ -91,6 +101,7 @@ def test_terminal_selection_is_delegated(
                 "required_stages": tuple(required_stages),
                 "gate_ran": gate_ran,
                 "stage_errors": dict(stage_errors or {}),
+                "stage_details": dict(stage_details or {}),
             }
         )
         # A terminal the run would never have reached on its own: every stage succeeded.

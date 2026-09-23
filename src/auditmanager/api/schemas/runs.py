@@ -16,9 +16,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Mapping
 
 from auditmanager.api.schemas.common import timestamp
+from auditmanager.shared.errors import ErrorCode, screen_details
 
 __all__ = ["RunStatusView", "StageStateView", "run_status_body", "stage_state_body"]
 
@@ -49,6 +50,10 @@ class RunStatusView:
     prompt_bundle_id: str | None = None
     degradation_set: tuple[str, ...] | None = None
     terminal_reason: str | None = None
+    #: `D-46`. Safe scalar classifiers saying **which** dependency a failed run terminated
+    #: on, restricted to the ``safe_detail_keys`` the frozen catalog declares for
+    #: :attr:`terminal_reason`. ``None`` when there is none; never an empty object.
+    terminal_detail: Mapping[str, Any] | None = None
     interrupted_reason: str | None = None
     published_finding_count: int | None = None
     diagnostic_observation_count: int | None = None
@@ -103,6 +108,24 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         body["degradation_set"] = list(view.degradation_set)
     if view.terminal_reason is not None:
         body["terminal_reason"] = view.terminal_reason
+        # `D-46`, and the third of the three screens. The first is
+        # `TerminalSelection.__post_init__`, when the run terminates; the second is the
+        # UPDATE that writes the row. **This one is the only one that covers a row this
+        # code did not write** -- one written by an older process, restored from a backup,
+        # or edited by hand -- and an unrestricted detail object is exactly how internals
+        # reach a client.
+        #
+        # It is inside the `terminal_reason` branch because the allowlist is a property of
+        # the reported code: a detail with no reason has nothing to be screened against,
+        # and the correct thing to do with one is not to publish it. The database refuses
+        # that combination too (`ck_audit_run_terminal_detail_needs_a_reason`), so this
+        # branch is the second line of one rule rather than the only one.
+        if view.terminal_detail:
+            screened = screen_details(
+                ErrorCode(view.terminal_reason), view.terminal_detail
+            )
+            if screened:
+                body["terminal_detail"] = dict(screened)
     if view.interrupted_reason is not None:
         body["interrupted_reason"] = view.interrupted_reason
     if view.published_finding_count is not None:

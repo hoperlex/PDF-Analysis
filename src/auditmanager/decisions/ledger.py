@@ -18,9 +18,16 @@ Two things this module refuses, and why:
   create a producer the programme has not decided to have. The refusal names that,
   rather than failing on a constraint the caller cannot read.
 
-``author_label`` is ``OD-12``, and since `D-78` it is **the login of the reviewer who made
-the decision**, persisted server-side with each event. It still authorizes nothing: it is
-what the ledger records about who judged, not a permission anybody holds.
+``author_label`` is ``OD-12``, and since `R-37` it is **the display name of the reviewer
+who made the decision** -- the name they chose, or their login when they have chosen none
+(:attr:`auditmanager.access.models.UserRecord.display_label`) -- persisted server-side with
+each event. `D-78` made it the login; `R-37` made it the name, because a login is an
+address and a decision is read by people. It still authorizes nothing: it is what the
+ledger records about who judged, not a permission anybody holds.
+
+**A row keeps the label it was written with.** The table is append-only, so renaming a
+reviewer later changes nothing already recorded -- which is the correct behaviour for a
+ledger and worth saying, because it is the first question a rename raises.
 
 Two rules stood beside it, and only one of them was still true.
 
@@ -37,8 +44,8 @@ Two rules stood beside it, and only one of them was still true.
 ``author_label`` has **no default**, and that is the point of it being a required argument.
 A default is what a caller with no authenticated subject would fall into, and a row
 attributed to a configuration constant is worse than a refusal, because it looks like a
-decision somebody took. The composition root passes the login the seam verified; there is
-nothing else to pass.
+decision somebody took. The composition root passes the display label the seam verified;
+there is nothing else to pass.
 """
 
 from __future__ import annotations
@@ -177,7 +184,7 @@ def record_decision(
 ) -> DecisionEvent:
     """Append one expert decision event. Never updates and never deletes.
 
-    ``author_label`` is **required and has no default**. `D-78`: it is the login of the
+    ``author_label`` is **required and has no default**. `R-37`: it is the display label of the
     reviewer the authorization seam verified, handed down from the command surface, and it
     is not a field a client fills in. A default here would be a decision recorded with no
     named author -- which must be a refusal, not a row attributed to a constant.

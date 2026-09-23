@@ -427,6 +427,11 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         prompt_bundle_id=run.prompt_bundle_id,
         degradation_set=tuple(run.degradation_set or ()),
         terminal_reason=run.terminal_reason,
+        # `D-46`. Carried straight through: it was screened when the terminal was chosen
+        # and again when the row was written, and `run_status_body` screens it once more
+        # before it reaches a client. An adapter that filtered it here would be a fourth
+        # place the catalog's rule lives.
+        terminal_detail=run.terminal_detail,
         interrupted_reason=run.interrupted_reason,
         # W17VIEW-1: both counts are declared by the frozen `RunStatus`, carried by
         # `RunStatusView` and emitted by `run_status_body` whenever they are not None -
@@ -787,6 +792,11 @@ class CredentialAdapter(_SessionHolder):
                 # an assumption. A credential minted under a stale epoch is refused by the
                 # very next request, which looks exactly like a broken sign-in.
                 token_epoch=record.token_epoch,
+                # `R-37`. The name other reviewers read, taken from the record and never
+                # resolved here: `display_label` is the account's own answer -- the chosen
+                # display name, or the login when there is none -- and one fallback in one
+                # place is the whole of why it is not a silent one.
+                display_label=record.display_label,
             )
         )
 
@@ -817,6 +827,7 @@ class CredentialAdapter(_SessionHolder):
                 user_uid=str(record.user_uid),
                 login=record.login,
                 token_epoch=record.token_epoch,
+                display_label=record.display_label,
             )
         )
 

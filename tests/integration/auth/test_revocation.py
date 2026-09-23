@@ -428,6 +428,7 @@ def test_a_credential_minted_under_a_stale_epoch_is_refused(
             user_uid=str(user.user_uid),
             login=user.login,
             token_epoch=user.token_epoch + 5,
+            display_label=user.display_label,
         )
     ).token
     # Verified by the signer itself -- so the refusal below cannot be a malformed credential.
@@ -444,6 +445,7 @@ def test_a_credential_naming_no_account_is_refused(client: TestClient) -> None:
             user_uid="usr_01M2545JSD15ETSNNV904X9911",
             login="w39rev-never-existed",
             token_epoch=1,
+            display_label="Never Existed",
         )
     ).token
     assert signer.verify(orphan) is not None

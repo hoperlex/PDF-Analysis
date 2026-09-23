@@ -443,6 +443,15 @@ class RunStatus(_Object):
     stages: list[StageState]
     degradation_set: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     terminal_reason: ErrorCode | None = Field(default=None, json_schema_extra=optional_property)
+    #: `D-46`. **The same shape as ``ErrorEnvelope.details``, and the same constant**: it
+    #: is the same rule -- safe scalar classifiers, restricted to the ``safe_detail_keys``
+    #: the catalog declares for the reported code -- applied to the code in
+    #: ``terminal_reason`` instead of to the code in ``error_code``. A second spelling of
+    #: one constraint is a second thing to get wrong, so there is one.
+    terminal_detail: Annotated[
+        dict[str, str | float | int | bool | None] | None,
+        WithJsonSchema(_DETAILS_SCHEMA),
+    ] = Field(default=None, json_schema_extra=optional_property)
     interrupted_reason: str | None = Field(default=None, json_schema_extra=optional_property)
     published_finding_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property

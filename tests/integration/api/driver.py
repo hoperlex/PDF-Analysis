@@ -48,6 +48,7 @@ __all__ = [
     "SUITE_PASSWORD",
     "Surface",
     "SuiteCredentialAdapter",
+    "TEST_DISPLAY_LABEL",
     "TEST_EPOCH",
     "TEST_SUBJECT",
     "TEST_TOKEN",
@@ -78,8 +79,17 @@ TEST_EPOCH = 7
 #: from :data:`TEST_EPOCH` rather than from a row. What is under test here is every
 #: operation *behind* the seam; the exchange itself is tested where it can be driven against
 #: real rows, in ``tests/integration/auth``.
+#: ``display_label`` is `R-37`, and it is deliberately **not** equal to the login. A suite
+#: whose label happened to be its login could not tell "the ledger writes the display name"
+#: from "the ledger writes the login", which is the same vacuity ``TEST_EPOCH`` avoids by
+#: not being 1.
+TEST_DISPLAY_LABEL = "Испытательный стенд"
+
 TEST_SUBJECT = Subject(
-    user_uid="usr_01M2545JSD15ETSNNV904X991Q", login="api-suite", token_epoch=TEST_EPOCH
+    user_uid="usr_01M2545JSD15ETSNNV904X991Q",
+    login="api-suite",
+    token_epoch=TEST_EPOCH,
+    display_label=TEST_DISPLAY_LABEL,
 )
 
 #: The credential this suite presents on every request. Minted, not written down: a literal
@@ -121,7 +131,10 @@ class SuiteCredentialAdapter:
 
     def _subject(self) -> Subject:
         return Subject(
-            user_uid=TEST_SUBJECT.user_uid, login=TEST_SUBJECT.login, token_epoch=self.epoch
+            user_uid=TEST_SUBJECT.user_uid,
+            login=TEST_SUBJECT.login,
+            token_epoch=self.epoch,
+            display_label=TEST_SUBJECT.display_label,
         )
 
     def issue(self, *, login: str, password: str) -> Any:

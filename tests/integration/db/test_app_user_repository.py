@@ -108,6 +108,15 @@ class TestFindingAUser:
             "failed_sign_ins",
             "last_failed_sign_in_at",
             "sign_in_blocked_until",
+            # `R-37`. The fourth arrival, and this assertion reported it too -- three
+            # waves, three reports, which is what a closed set is for. A display name is
+            # not credential material by an even wider margin than the six above: it is a
+            # string chosen to be *shown to other people*, and it travels on purpose, in
+            # the signed credential, so that a decision can be attributed to a name rather
+            # than to a login. It is nullable, and the NULL is the state itself -- "this
+            # reviewer has chosen no name" -- which is why `display_label` and not this
+            # field is what anything reads.
+            "display_name",
         }, "a credential column reached the record the boundary hands out"
         for forbidden in (
             "password_algorithm",

@@ -89,7 +89,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
-from auditmanager.access.models import UserRecord, UserUid, normalize_login
+from auditmanager.access.models import (
+    UserRecord,
+    UserUid,
+    normalize_display_name,
+    normalize_login,
+)
 from auditmanager.access.passwords import (
     StoredPassword,
     hash_password,
@@ -104,6 +109,7 @@ __all__ = [
     "COOLING_OFF_SECONDS",
     "CREDENTIALS_REVOKED",
     "DEFAULT_CREDENTIAL_WARNING",
+    "DISPLAY_NAME_CHANGED",
     "FAILED_SIGN_IN_ALLOWANCE",
     "SIGN_IN_BLOCKED",
     "UserRepository",
@@ -118,6 +124,13 @@ _UNIQUE_VIOLATION: Final[str] = "23505"
 #: The prefix of the warning emitted when a default credential is used. Named here so a
 #: test and a log-scraping operator can both match on something stable.
 DEFAULT_CREDENTIAL_WARNING: Final[str] = "default credential in use"
+
+#: `R-37`. The prefix of the line written when an operator names a reviewer. Stable, and
+#: its own prefix rather than a shared one, for the reason ``check.py`` gives about
+#: ``BLOCKED_PREFIX``: a scraper must not be able to conflate two states with different
+#: remedies, and this one has no remedy at all -- it is a record that somebody was renamed
+#: on a ledger other people read.
+DISPLAY_NAME_CHANGED: Final[str] = "display name changed"
 
 #: The prefix of the warning emitted whenever an account's credentials are revoked, by a
 #: password change or by an operator. Stable text, for the same two readers.
@@ -179,7 +192,7 @@ COOLING_OFF_SECONDS: Final[int] = 300
 _PUBLIC_COLUMNS: Final[str] = (
     "user_uid, login, is_default_credential, created_at, password_updated_at, "
     "token_epoch, token_epoch_updated_at, "
-    "failed_sign_ins, last_failed_sign_in_at, sign_in_blocked_until"
+    "failed_sign_ins, last_failed_sign_in_at, sign_in_blocked_until, display_name"
 )
 
 _INSERT_USER = text(
@@ -387,6 +400,24 @@ _SELECT_DEFAULT_CREDENTIALS = text(
     "WHERE is_default_credential IS TRUE ORDER BY login"
 )
 
+#: `R-37`. The operator's write. ``login`` addresses it because an operator types a name
+#: and holds no identity, which is the same reason ``authenticate`` is addressed by login
+#: and ``change_password`` is not.
+_SET_DISPLAY_NAME = text(
+    f"""
+    UPDATE app_user SET display_name = :display_name
+    WHERE login = :login
+    RETURNING {_PUBLIC_COLUMNS}
+    """
+)
+
+#: The query the nullable ``display_name`` exists to make possible. See
+#: ``0009_reviewer_display_name``: the alternative was a ``NOT NULL`` backfill that would
+#: have made the fallback permanently invisible.
+_SELECT_WITHOUT_DISPLAY_NAME = text(
+    f"SELECT {_PUBLIC_COLUMNS} FROM app_user WHERE display_name IS NULL ORDER BY login"
+)
+
 
 def _record(row: object) -> UserRecord:
     (
@@ -400,6 +431,7 @@ def _record(row: object) -> UserRecord:
         failed_sign_ins,
         last_failed_sign_in_at,
         sign_in_blocked_until,
+        display_name,
     ) = row  # type: ignore[misc]
     return UserRecord(
         user_uid=UserUid.parse(user_uid),
@@ -412,6 +444,7 @@ def _record(row: object) -> UserRecord:
         failed_sign_ins=int(failed_sign_ins),
         last_failed_sign_in_at=last_failed_sign_in_at,
         sign_in_blocked_until=sign_in_blocked_until,
+        display_name=display_name,
     )
 
 
@@ -816,4 +849,69 @@ class UserRepository:
         boolean so the answer names the accounts, and reading it costs no login.
         """
         rows = session.execute(_SELECT_DEFAULT_CREDENTIALS).all()
+        return tuple(_record(row) for row in rows)
+
+    # -- `R-37`: the display name. Two methods, neither on the port -------------------
+    #
+    # `UserRepository` in `ports.py` is what a caller *outside* this boundary may depend
+    # on, and the only such caller is the API's credential adapter, which needs to read a
+    # record and nothing else. Naming a reviewer is an operator's action in an operator's
+    # shell, exactly where `revoke_credentials` and `clear_failed_sign_ins` put theirs, and
+    # for the same reason: publishing it would require deciding **who may rename whom**,
+    # which is the role vocabulary `T-6` forbids inventing at that seam. A reviewer
+    # renaming another reviewer on a ledger everyone reads is the sharpest form of that
+    # question, so the port stays where it is until somebody answers it.
+
+    def set_display_name(
+        self, session: Session, *, login: str, display_name: str | None
+    ) -> UserRecord | None:
+        """Give this account the name other reviewers read, or take it away.
+
+        ``display_name=None`` clears it, which returns the account to the fallback rather
+        than breaking it: :attr:`~auditmanager.access.models.UserRecord.display_label`
+        answers with the login. Clearing is a real operation and not an oversight -- a
+        reviewer who leaves should be able to stop having their name shown without the row
+        being deleted, because the ledger rows they wrote are append-only and keep the name
+        they were written with.
+
+        ``None`` for "no such account". One answer, as everywhere else on this module.
+
+        **It does not touch ``token_epoch``.** A display name is not credential material
+        and a rename is not a revocation: signing every reviewer's browser out because
+        somebody corrected a spelling would be a punishment for tidiness. The consequence
+        is stated rather than hidden -- a credential already minted carries the *old* name
+        until it expires (one hour), because the name travels in the signed credential; see
+        :mod:`auditmanager.api.security`.
+        """
+        normalized = (
+            None if display_name is None else normalize_display_name(display_name)
+        )
+        row = session.execute(
+            _SET_DISPLAY_NAME,
+            {"login": normalize_login(login), "display_name": normalized},
+        ).one_or_none()
+        if row is None:
+            return None
+        record = _record(row)
+        _log.warning(
+            "%s: %r is now shown to other reviewers as %r. Decisions already recorded "
+            "keep the label they were written with -- the ledger is append-only -- and a "
+            "credential minted before this carries the old name until it expires.",
+            DISPLAY_NAME_CHANGED,
+            record.login,
+            record.display_label,
+        )
+        return record
+
+    def accounts_without_a_display_name(self, session: Session) -> tuple[UserRecord, ...]:
+        """Every account whose decisions are attributed to its login.
+
+        The query the nullable column exists for. It is what makes the fallback something
+        an operator can **see** rather than something they have to know about, which is the
+        whole difference between this and the ``NOT NULL`` backfill that was refused --
+        see ``0009_reviewer_display_name``. Same shape and same reason as
+        :meth:`users_on_default_credentials`, with one deliberate difference: what it
+        reports is not a defect and nothing here treats it as one.
+        """
+        rows = session.execute(_SELECT_WITHOUT_DISPLAY_NAME).all()
         return tuple(_record(row) for row in rows)

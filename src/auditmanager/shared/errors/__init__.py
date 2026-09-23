@@ -13,6 +13,7 @@ from auditmanager.shared.errors.envelope import (
     UnsafeDetailValue,
     UnsafeMessage,
     build,
+    screen_details,
     screen_message,
 )
 from auditmanager.shared.errors.exceptions import DomainError, InternalError
@@ -29,5 +30,6 @@ __all__ = [
     "UnsafeMessage",
     "build",
     "from_internal",
+    "screen_details",
     "screen_message",
 ]
