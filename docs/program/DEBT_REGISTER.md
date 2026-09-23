@@ -14,12 +14,12 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
 | D-63 | a dashboard | **deferred by the owner**; a reseal when it comes |
 | **D-65** | the account exists and nothing around it does — no rate limit, lockout, password change or **revocation** | **owner**: which belong in the alpha |
+| **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
+| D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | **D-70** | the stand runs a certification stub — **blocks the owner's manual pass** | **owner: a real credential** |
 | D-71 | `D-59` is 121 blocks not 79, and 25 of them are a different defect | **owner: widen `R-19`?** |
 | D-72 | a URL with no host becomes a retryable outage | argue it from the catalog, as `D-13` was |
-| D-66 | two seam guards absent: fail-closed default, and `compare_digest` | one test each |
-| D-67 | 200-with-empty vs 404 on two of nine collections | a decision, then seven or two change |
 | D-68 | the certification's criterion-4 selector is too wide | use `span.am-badge[data-run-state]` |
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
@@ -1548,6 +1548,54 @@ in the single field a client automates against. `D-70` is what it looks like in 
 Check: construct `ProxySettings` with `http://:59990` and read the error code it eventually
 raises.
 
+### D-73 — four routes answer 200 with no credential, because the seam is on the router
+
+**Found by `W40-GUARDS` 2026-09-23 and verified by the integrator on the live stand.**
+
+The authorization dependency is attached with `app.include_router(router,
+dependencies=[...])`, so it covers the router's **eighteen** routes and nothing else. The
+served application carries **four more** — `/openapi.json`, `/docs`, `/docs/oauth2-redirect`,
+`/redoc` — which **never reach `require_authorization`.** Driven against `127.0.0.1:31500`:
+
+```
+GET /api/v1/openapi.json   no credential  ->  200
+GET /api/v1/docs           no credential  ->  200
+```
+
+**Two consequences, and the first is the general one.**
+
+`test_every_operation_but_the_register_is_behind_the_seam` is a true statement **about the
+router** and reads as a statement about the application. **A route registered on the app past
+`build_router` is open regardless of its `operationId`** — the same gap `D-66` names, one level
+up: a property held by where a thing is attached rather than by what it is.
+
+And the deployment serves its own OpenAPI document and Swagger UI unauthenticated. **That may
+well be intended** — it describes a surface, not data — but it is **written down nowhere and
+checked by nothing**; the one test that asserts it asserts it of the *health* application.
+
+**Not repaired, and deliberately.** `R-29` reserves anything that changes who can reach the
+system, and closing these changes it. **The owner decides:** leave them open and say so in a
+test, or bring them behind the seam.
+
+Check: `curl -so /dev/null -w '%{http_code}' http://127.0.0.1:31500/api/v1/docs`
+
+### D-74 — a parent-existence check costs a full parent read
+
+**Reported by `W40-GUARDS` while repairing `D-67`, not repaired — the narrow port it needs is
+outside that stream's grant.**
+
+The two routers now check that a parent exists, and each check builds far more than an answer.
+`RunAdapter.get_run_status` assembles an entire `RunStatus` — run, stages, cost.
+`FindingAdapter.get_finding` reads evidence, verdict **and the decision history**, which
+`listDecisionHistory` then reads a second time.
+
+An existence method on the ports is the right shape. It is also a change to four
+implementations — one in `bootstrap/` (a hotspot) and three in `tests/` — and a router calling
+a method an implementation lacks is an `AttributeError` and a `500`.
+
+Check: read `RunAdapter.get_run_status` and `FindingAdapter.get_finding` and count what each
+loads to answer "does this exist".
+
 ### D-66 — two seam guards are absent, found by mutation and not exploitable today
 
 **Found by `W37-CERT4` 2026-09-22 sweeping the authorization seam: four of six mutations
@@ -1567,7 +1615,31 @@ security property.
 
 Check: `make mutation-copy MUT=/root/seam-mut FULL=1`, invert each, run the three suites.
 
-### D-67 — two collection operations answer 200 with an empty page where seven answer 404
+### D-67 — two collection operations answered 200 where the contract declared 404 — **CLOSED**
+
+**Closed 2026-09-23 by `W40-GUARDS`. This row named the wrong operation and the error spread
+to four documents before anyone measured it.**
+
+**The minority is `listRunFindings` and `listDecisionHistory`, not `listDecisions`.**
+`listDecisions` is `GET /decisions`: no parent in the path, no `404` declared, and it correctly
+answers `200` with its page. `W37-CERT4`'s table carried the right path —
+`/findings/{finding_uid}/decisions` — and the row written from that table named the wrong
+operation, which then reached the row's summary, `WAVE_PLAN_39_42.md` and the wave-40 brief.
+
+**And the rule was already in the contract, so there was nothing to decide.** Measured over
+all twelve `GET` operations — not the nine this row claimed, and **no partition of this surface
+gives nine**: every one of the **ten** with a parent placeholder declares `404`; the two
+without declare none. **So those two operations were declaring a `404` they never returned**,
+and the repair is conformance with a document frozen at `a5f4001`. No reseal. The opposite
+direction would have contradicted six declarations at once.
+
+Ten address a parent, eight already agreed, two changed, two were never in the question. **The
+rule has no exceptions** — `listDecisions` is it applied to a path with no parent, exactly like
+`listProjects`.
+
+**Both halves are guarded.** A sweep asserting only `404` is satisfied by an implementation
+that refuses *every* empty collection and destroys the distinction from the other side; the
+mutation that does exactly that leaves the sweep green and reddens only the empty-page cases.
 
 **Found by `W37-CERT4` as `W37CERT4-4`.** Given a well-formed ULID that names nothing,
 `listRunFindings` and `listDecisions` return **`200` with an empty page**; the other seven

@@ -27,8 +27,8 @@ a default account changed, `R-29`'s second clause applies. Building what `R-26` 
 `R-26`'s second half: state around the token endpoint, no contract change expected.
 
 Beside it, the rows that are decisions rather than work and that `R-29` now lets the integrator
-take: **`D-67`** — two of nine collection operations answer `200` with an empty page where
-seven answer `404`; pick the rule and change the minority. **`D-66`** — the fail-closed default
+take: **`D-67`** — *(closed; and this line named the wrong operation. The minority was
+`listRunFindings` and `listDecisionHistory`, and the rule was already in the contract.)* **`D-66`** — the fail-closed default
 nothing holds, and `hmac.compare_digest` replaceable with `!=` without a red; one test each.
 
 ## W41 — the host, if it is there
