@@ -400,7 +400,23 @@ cannot reach an issued token; **this** work cannot reach one either. `0007_crede
 does not revoke old credentials by finding them — it refuses them because they carry no epoch
 at all. There was never a way to reach them; there is now a way to make them unusable.
 
-**11. A premise about my own lane, which I found false while acting on it.** The brief says
+**11. The brief's `allowed_paths` is narrower than the brief's own instructions, in two
+places.** The glob list names `web/src/**`, and does not name:
+
+* **`web/openapi/openapi.json`** — the *mirror*, which the brief commissions by name two
+  sections earlier (*"the regenerated client and mirror"*) and which
+  `npm --prefix web run api:generate` writes whether or not anybody wanted it to. A session
+  that took the glob literally could not have resealed at all;
+* **`web/tests/**`** — where the brief explicitly sends the session (*"A new screen is added
+  to that guard's `SCREENS` list at the end"*, `web/tests/guards/rendered-language.guard.test.ts`),
+  and where `SEAM_OPERATIONS` lives, and where a test proving the new screen belongs.
+
+I did the work the brief's body commissions and touched both, and I say so here rather than
+leave it to be noticed. `MEMORY.md` already carries *"ownership globs must come from the
+tree — three briefs named paths matching nothing"*; this is the same defect with the sign
+reversed, a glob that omits paths the brief's own prose requires.
+
+**12. A premise about my own lane, which I found false while acting on it.** The brief says
 *"§4.6 … assert on `GATE OK`"*. I did — and the trap fired anyway, one layer further out: a
 `nohup make gate &` launched in the background produced a **completion notification with exit
 code 0 while the gate was still running its first suite**. The 0 belonged to the shell that
@@ -411,20 +427,29 @@ narrow enough: *any* status a harness hands you is about the harness.
 
 ## 9. The gate
 
+**Twice, both green, and the second is the one that counts.**
+
 ```
-$ make gate > /root/w39-logs/revoke-gate.log 2>&1
-$ grep -E "GATE OK" /root/w39-logs/revoke-gate.log
+$ make gate > /root/w39-logs/revoke-gate-final.log 2>&1
+$ grep -E "GATE OK" /root/w39-logs/revoke-gate-final.log
 GATE OK: battery, foundation, frontend and whitespace all pass
 ```
 
-Run at `a093a15`'s parent state (`bca08e7`), on a tree `git status --porcelain` reported
-clean, in lane `gate-w39a`.
+Asserted on `GATE OK` in the log and never on an exit code, per §4.6 — and see §8 item 11
+for how that rule fired anyway, one layer further out. Both runs were on a tree
+`git status --porcelain` reported clean, in lane `gate-w39a`.
 
-| | baseline at `3fd5c17` | at this tree | delta |
-|---|---|---|---|
-| battery | 2207 passed / 5 skipped / 169 subtests | **2232 / 5 / 169** | **+25** |
-| foundation | 35 | **35** | — |
-| frontend | 988 in 71 files | **1013 in 72 files** | **+25, +1 file** |
+| | baseline at `3fd5c17` | at `bca08e7` | at `755c2e4` | delta |
+|---|---|---|---|---|
+| battery | 2207 / 5 skipped / 169 subtests | 2232 / 5 / 169 | **2233 / 5 / 169** | **+26** |
+| foundation | 35 | 35 | **35** | — |
+| frontend | 988 in 71 files | 1013 in 72 | **1013 in 72** | **+25, +1 file** |
+
+The battery's own wall clock is worth quoting with the figure: **306 s** on the changed
+tree with the host quiet, **330 s** for the first gate, **496 s** for the second — with
+`W39-CORPUS`'s `gate-w39b` stack up alongside it and a load average of 15 for the whole run.
+§4.6: *a gate that took twice as long as usual is evidence about the machine, not about the
+code.* Nothing was re-run on that account because nothing was red.
 
 **Case by case, and nothing was lost.** The first full battery on the changed tree reported
 `23 failed, 2184 passed` — and 2184 + 23 is exactly 2207, so no test disappeared; twenty-three
@@ -451,7 +476,8 @@ alongside it for the whole run — §4.6's contention shape, and not enough of o
 
 The frontend's +25 is one new file, `web/tests/unit/session/change-password.test.ts` (24 cases),
 plus one case added to `rendered-language.guard`'s parameterised set by the four new screen
-shapes.
+shapes. The battery's +26 is `tests/integration/auth/test_revocation.py` (21) and five cases
+added to `tests/integration/api/test_authorization.py`.
 
 ---
 
@@ -557,8 +583,12 @@ defend a command that never consults it**.
    subprocess root from the test file exactly as `test_revocation.py` did before `86f493c` —
    §10.1 already records that a migration cannot be mutated by the standard copy, so it is a
    known limitation rather than a new defect, but the two are the same shape.
-5. **Nothing was tagged, pushed, merged, or written to `main`/`dev`.** No rebase: `W39-CORPUS`
+5. **Two paths I touched are outside the brief's `allowed_paths` glob and inside its
+   prose** — `web/openapi/openapi.json` (the reseal mirror) and `web/tests/**` (the language
+   guard's `SCREENS`, `SEAM_OPERATIONS`, and the new screen's own suite). See §8 item 11.
+   Nothing else in `web/` outside `web/src/**` was touched.
+6. **Nothing was tagged, pushed, merged, or written to `main`/`dev`.** No rebase: `W39-CORPUS`
    is writing `src/auditmanager/norms/`, which this branch does not touch.
-6. **`R-29`'s reserved list is untouched.** No port binding changed, no default account changed,
+7. **`R-29`'s reserved list is untouched.** No port binding changed, no default account changed,
    no surface was exposed beyond the one operation this brief commissions. `127.0.0.1:31500`
    was not touched and no image was built (disk 88%).
