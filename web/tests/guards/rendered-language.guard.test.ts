@@ -86,8 +86,11 @@ import { SignInPage } from '@/_pages/sign-in';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { RunPage } from '@/_pages/run';
 import { VersionDetailPage } from '@/_pages/version-detail';
+import NotFound from '@/app/not-found';
+import { DecisionHistory } from '@/widgets/decision-history';
+import { EvidenceViewer } from '@/widgets/evidence-viewer';
 
-import { CONTRACT_PATH, SEAMS_PATH, readJson, readText } from './lib/repo';
+import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderWith, seedError } from '../unit/screens/harness';
@@ -268,7 +271,15 @@ const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp
   // The designator is matched only where a timestamp precedes it, so a bare `UTC` in a
   // sentence is still an offence.
   { name: 'ISO 8601 timestamps', pattern: /\b\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|\s*UTC)?\b/g },
-  { name: 'the product designation', pattern: /\bPC-\d{2}\b/g },
+  {
+    // `PC-01` is the product; `P02` is the PROGRAMME PHASE, and the evidence viewer names
+    // it to the reviewer -- "Шлюз свидетельств P02 делает такое невозможным". Both are
+    // designations this programme fixes in `docs/program/`, neither is English, and the
+    // shape is the authority rather than a list of them. Narrow on purpose: a bare `P`
+    // and a bare `PC` are still offences.
+    name: 'the product and phase designations',
+    pattern: /\b(?:PC-\d{2}|P\d{2})\b/g,
+  },
   {
     name: 'units attached to a number',
     // A unit is Latin because the unit is Latin. Bound to a preceding number so that a
@@ -886,6 +897,68 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
     make: () =>
       createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'changed' }),
   },
+  /*
+   * SEVEN MORE, APPENDED, and not one of them was thought of: the branch scan below
+   * named each by the literal its widget passes to a mandatory state, and this matrix
+   * reached none of them.
+   *
+   * Four are `UnsupportedState` — the tone that says no retry will help — which was
+   * rendered by no screen at all. One of them, `app/not-found.tsx`, carried a WHOLE
+   * ENGLISH SENTENCE to a reviewer who had mistyped an address, and it is repaired in
+   * the same commit that made it visible. That is `D-53` again on a screen nobody had
+   * rendered, three waves after `D-53` was closed.
+   *
+   * The evidence viewer and the decision history are rendered here as widgets rather
+   * than through the review page, because their failure branches are chosen by props
+   * the page only produces from a query state a static pass cannot put it in.
+   * `tests/unit/styles/screens.ts` has rendered widgets directly since wave 32 for the
+   * same reason.
+   */
+  { name: 'not-found', make: () => createElement(NotFound, {}) },
+  {
+    name: 'project-detail-bad-address',
+    make: () => createElement(ProjectDetailPage, { projectUid: 'not-an-identifier' }),
+  },
+  {
+    name: 'document-detail-bad-address',
+    make: () =>
+      createElement(DocumentDetailPage, {
+        projectUid: PROJECT_UID,
+        documentUid: 'not-an-identifier',
+      }),
+  },
+  {
+    name: 'version-detail-bad-address',
+    make: () =>
+      createElement(VersionDetailPage, {
+        projectUid: PROJECT_UID,
+        versionUid: 'not-an-identifier',
+      }),
+  },
+  {
+    name: 'evidence-viewer-no-evidence',
+    make: () =>
+      createElement(EvidenceViewer, {
+        observation: { ...finding().observation, evidence: [] },
+        activePage: 1,
+        onPageChange: () => {},
+        documentUrl: null,
+      }),
+  },
+  {
+    name: 'evidence-viewer-no-document',
+    make: () =>
+      createElement(EvidenceViewer, {
+        observation: finding().observation,
+        activePage: 7,
+        onPageChange: () => {},
+        documentUrl: null,
+      }),
+  },
+  {
+    name: 'decision-history-pending',
+    make: () => createElement(DecisionHistory, { events: [], isLoading: true }),
+  },
 ];
 
 /**
@@ -1189,9 +1262,20 @@ describe('the guard renders the screens it claims to render', () => {
     // trivially satisfied.
     expect(SCREENS.length).toBeGreaterThan(1);
     expect(CACHE_STATES.length).toBeGreaterThan(1);
+    /*
+     * The floor is 100 and it used to be 200. It is here to catch a screen that rendered
+     * NOTHING, and three entries in `SCREENS` are now widgets rendered directly -- a
+     * pending decision history is one `am-state` block, 122 characters, and legitimately
+     * so. A floor tuned to the largest page would have refused the branches this matrix
+     * was extended to reach, which is the wrong direction for a coverage guard.
+     */
     for (const { where, markup } of screens) {
-      expect(markup.length, `${where} rendered nothing`).toBeGreaterThan(200);
+      expect(markup.length, `${where} rendered nothing`).toBeGreaterThan(100);
     }
+    // And the pages are still pages: the floor above cannot be met by a matrix that
+    // quietly became a list of state blocks.
+    const substantial = screens.filter((screen) => screen.markup.length > 2000);
+    expect(substantial.length, 'no screen rendered a whole page').toBeGreaterThan(20);
   });
 
   it('reaches past the loading state into a real reading', () => {
@@ -1538,6 +1622,169 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
 
   it('finds none at all', () => {
     expect([...offencesOnScreens().keys()]).toEqual([]);
+  });
+});
+
+// ======================================= the WIDGETS' branches, derived from the tree
+
+/**
+ * Every branch a widget actually has is rendered by some state in this matrix.
+ *
+ * ## The other half of `D-69`, and the contract cannot express it
+ *
+ * The coverage assertion above answers *"is every contract member seeded"*. It says
+ * nothing about the branches a widget has that no schema declares: **pending, error,
+ * empty, non-empty, and a listing with a next page.** Four of the seven blindnesses in
+ * the register are exactly those — `W32-SEE`'s empty branch, `W37`'s empty branch again,
+ * `W38-KB`'s `next_cursor: null`, and `W38-KB`'s singular arm.
+ *
+ * ## What identifies a branch, derived rather than listed
+ *
+ * `shared/ui/states.tsx` declares the five mandatory states, and every list, panel and
+ * viewer in PC-01 renders one of them when it has no content to show. Each is given a
+ * `title` (or, for `LoadingState`, a `what`), and **where that argument is a literal it
+ * names the branch uniquely**. So the required set is read out of `web/src` by scanning
+ * for those five component names and taking the literal argument beside each — the
+ * filesystem decides it, and a widget added next wave brings its own branches with it.
+ *
+ * The same scan takes the **pager's** two controls, which are the `next_cursor` branch
+ * and the first-page branch that `D-69`'s wave-38 row is about.
+ *
+ * A literal that no rendered screen carries is a branch this guard does not reach, and
+ * **every assertion it makes about that branch is vacuous** — which is how an English
+ * sentence in `ProjectList`'s `EmptyState` survived until a mutation died quietly.
+ */
+const STATE_COMPONENTS = ['LoadingState', 'EmptyState', 'ErrorState', 'UnsupportedState', 'NotApplicableState'] as const;
+
+/** `title="…"`/`what="…"` on a mandatory state, plus the two pager controls, from `web/src`. */
+export function branchLabelsInSource(): readonly { readonly label: string; readonly module: string }[] {
+  const out: { label: string; module: string }[] = [];
+  const seen = new Set<string>();
+  const add = (label: string, module: string): void => {
+    const trimmed = label.trim();
+    if (trimmed.length === 0 || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    out.push({ label: trimmed, module });
+  };
+  const files = walkFiles(join(REPO_ROOT, 'web', 'src'), (path) => path.endsWith('.tsx'));
+  const opening = new RegExp(`<(${STATE_COMPONENTS.join('|')})\\b([\\s\\S]*?)(?:/>|>)`, 'g');
+  for (const file of files) {
+    const source = readText(file);
+    const module = repoRelative(file);
+    for (const match of source.matchAll(opening)) {
+      const body = match[2] ?? '';
+      const title = /\stitle="([^"]+)"/.exec(body);
+      const what = /\swhat="([^"]+)"/.exec(body);
+      if (title !== null) add(title[1] as string, module);
+      else if (what !== null) add(`Загрузка: ${what[1] as string}…`, module);
+    }
+    // The pager. `className="am-pager"` wraps two buttons whose text is a literal, and a
+    // listing renders each only in one of the two `next_cursor` / cursor states.
+    for (const pager of source.matchAll(/className="am-pager"[\s\S]*?<\/div>/g)) {
+      for (const button of (pager[0] ?? '').matchAll(/>\s*([^<>{}\n]+?)\s*<\/button>/g)) {
+        add(button[1] as string, module);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Branches one static render pass cannot select. Each says why, and the list may only shrink.
+ *
+ * `W32-SEE` measured this boundary and `contrast.ts` restates it: the harness renders one
+ * pass and cannot fire an event, run an effect, or render an instance twice. So a branch
+ * chosen by `useState` after a click, or by a `useMutation` that has settled, is out of
+ * reach — and **saying so by name is the whole point**, because the alternative is a
+ * matrix that looks complete.
+ *
+ * **Three of these are English strings on a screen a reviewer can reach**, and they are
+ * reported rather than repaired: `rendered-language`'s own ratchet cannot see them for
+ * the same reason this list exists, and translating them is a `web/src` change that no
+ * defect this task newly catches requires.
+ */
+const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
+  {
+    label: 'Загрузка: the new project…',
+    why:
+      "`create-project-form.tsx`, while its `useMutation` is in flight. One server pass " +
+      'never has a settled mutation, and the harness cannot fire the submit that starts ' +
+      'one. ENGLISH ON A SCREEN, reported: `W32-SEE` §4 listed it and it is still there.',
+  },
+  {
+    label: 'Загрузка: the upload…',
+    why:
+      '`upload-document-form.tsx`, while the upload is in flight; same mechanism as the ' +
+      'new project. ENGLISH ON A SCREEN, reported and not repaired here.',
+  },
+  {
+    label: 'Загрузка: the run request…',
+    why:
+      '`start-run-control.tsx`, between the press and the run id. Same mechanism. ' +
+      'ENGLISH ON A SCREEN, reported and not repaired here.',
+  },
+  {
+    label: 'Файл выходит за допустимые ограничения.',
+    why:
+      'The upload pre-check panel, selected by a `useState` the harness cannot set: it is ' +
+      'written by the file input\'s change handler. This is the branch the journey\'s six ' +
+      'refusal cases drive in a real browser, and `tests/e2e/pc01/journey/refusals.mjs` is ' +
+      'the only instrument that reaches it.',
+  },
+  {
+    label: 'В начало',
+    why:
+      "The pager's first-page control, rendered only when a list widget's own `cursor` " +
+      'state is set — which one render cannot do. `W38-KB` stated this limit when it added ' +
+      'the `paged` cache state and it is unchanged: the NEXT-page control is reached, the ' +
+      'return to the first page is not.',
+  },
+];
+
+describe('every branch the widgets have is rendered by some state in this matrix', () => {
+  const labels = branchLabelsInSource();
+
+  it('finds the branches by scanning web/src, not by listing them', () => {
+    // Non-vacuous in both factors: a scan that stopped matching would otherwise make the
+    // case below pass by having nothing to require.
+    expect(labels.length, 'no mandatory-state branch was found in web/src at all').toBeGreaterThan(15);
+    expect(
+      labels.filter((entry) => entry.label.includes('Загрузка: ')).length,
+      'no LoadingState `what=` was found; the scan has stopped matching',
+    ).toBeGreaterThan(3);
+    expect(
+      labels.some((entry) => entry.label === 'Дальше'),
+      'the pager scan found no next-page control',
+    ).toBe(true);
+  });
+
+  it('renders every one of them, and NAMES the branch it does not reach', () => {
+    const rendered = renderedScreens()
+      .flatMap((screen) => visibleText(screen.markup))
+      .join('\n');
+    const excused = new Set(UNREACHABLE_IN_ONE_PASS.map((entry) => entry.label));
+    const unreached = labels
+      .filter(({ label }) => !excused.has(label) && !rendered.includes(label))
+      .map(({ label, module }) => `${JSON.stringify(label)}  (${module})`)
+      .sort();
+    expect(
+      unreached,
+      'a widget has this branch and NO state in CACHE_STATES renders it, so every ' +
+        'assertion this guard makes about it is vacuous — which is how an English sentence ' +
+        "in ProjectList's EmptyState survived until a mutation died quietly. Seed a state " +
+        'that reaches it, or add it to UNREACHABLE_IN_ONE_PASS with the reason one pass ' +
+        'cannot select it.',
+    ).toEqual([]);
+
+    // The other direction: the ratchet may only shrink.
+    expect(
+      [...excused].filter((label) => rendered.includes(label)).sort(),
+      'these are excused as unreachable and a state now renders them. Delete their entries.',
+    ).toEqual([]);
+
+    for (const { label, why } of UNREACHABLE_IN_ONE_PASS) {
+      expect(why.length, `${label} carries no reason`).toBeGreaterThan(80);
+    }
   });
 });
 

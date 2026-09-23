@@ -51,7 +51,7 @@ const EVENT_TYPE_LABELS: Readonly<Record<DecisionEventType, string>> = {
  */
 
 export function DecisionHistory({ events, isLoading, error }: DecisionHistoryProps) {
-  if (isLoading === true) return <LoadingState what="the decision history" />;
+  if (isLoading === true) return <LoadingState what="историю решений" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
 
   const ordered = orderEvents(events);
