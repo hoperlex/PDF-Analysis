@@ -282,3 +282,169 @@ matcher declines and already names; `[open] > summary` needs a click; and the th
 `.am-form__*` rules render only after a mutation settles — all three declare ink and tint in
 one block, so `declaredPairs` measures them with no markup at all.
 
+## 4. B1, third part — the widgets' branches
+
+The coverage assertion in §2 answers *"is every contract member seeded"*. It says nothing
+about the branches no schema declares — **pending, error, empty, non-empty, and a listing
+with a next page** — and four of `D-69`'s seven instances are exactly those.
+
+**The required set is read out of `web/src`**: every literal `title=` or `what=` passed to
+one of the five mandatory state components `shared/ui/states.tsx` declares, plus the two
+pager controls. The filesystem decides it, so a widget added next wave brings its own
+branches with it, and a literal no rendered screen carries makes the guard red naming the
+branch **and the module that has it**.
+
+### 4.1 It reddened for seven branches, and every one of them was reachable
+
+Nobody had reached them:
+
+| branch | module | what it is |
+|---|---|---|
+| `Такого адреса в приложении нет.` | `app/not-found.tsx` | the 404 screen — **in `SCREENS` at all for the first time** |
+| `Это не адрес проекта. / документа. / версии.` | the three detail pages | a pasted address that is not an identifier |
+| `Нарушение целостности данных` | `evidence-viewer.tsx` | a finding with no evidence |
+| `Страницу не удалось показать` | `evidence-viewer.tsx` | the document bytes unavailable |
+| `Загрузка: the decision history…` | `decision-history.tsx` | the history still in flight |
+
+Four of those seven are `UnsupportedState` — **the tone that says no retry will help, which
+was rendered by no screen in this guard and by none in the contrast census either.**
+
+### 4.2 Two real `R-18` defects fell out of rendering them, and both are repaired
+
+Both are repaired here because the **repaired guard is what caught them**, which is the one
+condition the grant puts on touching `web/src`:
+
+- **`web/src/app/not-found.tsx` carried a whole English sentence** to a reviewer who had
+  mistyped an address: *"A project, a document, a version and a run are each addressed by an
+  opaque identifier…"* — 33 words, on a screen no instrument had ever rendered, **three
+  waves after `D-53` was closed**;
+- **`decision-history.tsx` rendered `Загрузка: the decision history…`** — a fourth English
+  `LoadingState` argument.
+
+### 4.3 One masking repair, and it narrows rather than widens
+
+The evidence viewer names the programme phase to the reviewer — *"Шлюз свидетельств **P02**
+делает такое невозможным"* — and `MACHINE_SHAPES` knew only `PC-\d{2}`. So the guard
+reported the residue **`P`**: a letter no reviewer can see, in a report meant to name what
+they can, which is `D-61`'s own complaint about `accepted` → `ed`. The pattern now covers
+`PC-01` and `P02` and nothing else; a bare `P` and a bare `PC` are still offences.
+
+### 4.4 Five branches one static pass cannot select, and three of them are English
+
+Each carries its reason in `UNREACHABLE_IN_ONE_PASS`, and the list is held in both
+directions. **Three are English on a screen a reviewer reaches in a browser:**
+
+| string | module |
+|---|---|
+| `Загрузка: the new project…` | `create-project-form.tsx`, while the mutation is in flight |
+| `Загрузка: the upload…` | `upload-document-form.tsx` |
+| `Загрузка: the run request…` | `start-run-control.tsx` |
+
+**Reported, not repaired, and the reason is a rule rather than a shortage of time.** No
+instrument in this tree can render those branches — they are selected by a `useMutation`
+that has settled, and `contrast.ts` records the same boundary for `.am-form__created` — so
+**no instrument could verify the repair**. A three-word change that no guard can check is
+precisely what this programme keeps paying for. They are named here for the wave that owns
+`web/src` and can add a test that reaches them.
+
+The other two are `Файл выходит за допустимые ограничения.` (the upload pre-check panel,
+selected by a `useState` the harness cannot write) and `В начало` (the pager's first-page
+control, which needs a widget's own cursor state — `W38-KB` stated this limit and it is
+unchanged: the **next**-page control is reached, the return to the first page is not).
+
+## 5. B2 — `D-61`'s third instance
+
+### 5.1 What was there
+
+`tests/e2e/test_pc01_journey_conformance.py` asserted every `expects_rendered` sentence by
+**substring containment against a concatenation of every `.ts`/`.tsx` byte under
+`web/src`**. The manifest declared the sentence `"Run"` and passed, because `Run` occurs
+inside `RunPage`, and no screen renders it.
+
+### 5.2 A premise in the brief that is false, and it changed the repair
+
+> *"`W32-SEE` already built a renderer for exactly this. Reuse it… When the repaired
+> assertion reddens, the manifest is what is wrong, not the screen."*
+
+**The renderer cannot decide these sentences positively, for 11 of the 15.** Measured at
+`abe1c15` over `renderedScreens()`: eleven live in the upload pre-check panel, the
+created-project panel and the version panel — branches driven by `useState` and by a
+settled `useMutation`, which one static pass cannot select. `contrast.ts` says the same
+thing in its own words about `.am-form__created`, `.am-form__problem` and `.am-form__chosen`,
+and §4.4 above measures the same boundary from the other side. A check that claimed to
+confirm them would be the same false affordance one layer along.
+
+### 5.3 What the renderer CAN decide, and it is the half that was actually wrong
+
+**The other 4 of 15 passed by matching text the screen renders whatever happened:**
+
+| step | declared | what it actually matched |
+|---|---|---|
+| `create-project` | `Создан` | `Создан 2026-09-10 08:00:00 UTC · документов 2` — every project row's created date |
+| `upload-document` | `Эта версия` | `Эта версия и её манифест неизменяемы.` — the version panel's standing prose |
+| `start-run` | `Прогон` | `Прогон использует тот режим провайдера…` — the start-run control's own note |
+| `oversize.pdf` | `25 MiB` | `Не более 25 MiB.` — the upload envelope, printed before any file is chosen |
+
+**Every one of those passes in the live browser too.** `write.mjs` and `refusals.mjs` test
+`bodyText.includes(needle)` against the page the journey is already on, and all four strings
+are on that page regardless. So the deception was never confined to the gate: **four of the
+journey's own assertions could not fail.**
+
+**So: none of the manifest's fifteen sentences was verified by anything.** Eleven asserted
+something no instrument in the gate could see, and four asserted something that was true
+before the step ran.
+
+### 5.4 The repair — two checks, and neither is the old one
+
+**Rendered**, in `web/tests/guards/rendered-language.guard.test.ts`, over `W32-SEE`'s
+renderer — reused, not rebuilt, because two renderers is two truths:
+
+> a sentence offered as evidence that a step happened **must not be on the screen before it
+> happens.**
+
+The corpus performs no write at all, so it *is* the application before any of these steps
+has run. The rule is derived from the manifest, and `STILL_EVIDENCE_THOUGH_RENDERED` is
+empty with the one shape that would justify an entry written down.
+
+**Source**, in the Python file, with its subject corrected rather than its matcher: the
+sentence must be authored by the **import closure of the `control_module` the manifest
+itself names**, in a **quoted literal or JSX text**, **comments stripped**, on a **word
+boundary**. Each of those four is load-bearing and the negative controls say so — with
+comments left in, declaring `"Run"` on the create-project step *still passed*, because this
+repository writes markdown in doc comments and a backtick run reads as a template literal.
+Scoping and literal-filtering remove `Run` inside the identifier `RunPage`; they do not
+remove `Run` inside the string literal `'RunStateBadge'`, which `run-state-badge.tsx` really
+carries, and that is what the boundary is for.
+
+`test_the_rendered_half_of_d61_has_not_left_the_frontend_guard` keeps the rendered half from
+leaving the gate in silence — `OPERATING_CONSTRAINTS.md` §4.65's precedent, and sharper here,
+because deleting it would leave the Python file green and looking complete.
+
+### 5.5 The manifest, repaired
+
+The four vacuous sentences are removed, each with the reason in its own step and **the
+evidence that step really has** named: `create-project` has `[data-created-project]` matched
+against `^(prj_%ID%)$` under a 30-second bound; `upload-document` has the location match on
+the published version's own address; `start-run` has the captured run id, `await_terminal`
+and `expects_api_after_terminal`; `oversize.pdf` keeps `Ничего не отправлено`, which only
+the pre-check refusal panel renders.
+
+### 5.6 Falsification
+
+```
+manifest.json: write.steps[2].expects_rendered = ["Прогон завершился как"]
+× D-61: every sentence the journey calls evidence is evidence > finds none of them already
+  on a screen before the step that is supposed to produce it
++   "start-run: \"Прогон завершился как\" is already on [run]"
+Tests  1 failed | 16 passed (17)
+```
+
+reverted → `Tests 17 passed (17)`.
+
+And the source half, through `prove_the_guard_can_fail.py` against the **real** manifest:
+**21 → 24 mutations, every one RED, none vacuous.** The three that drive this check are
+*require a sentence no screen renders*, *reword the write half's own panel*, and the new
+*declare a sentence that is only an identifier in the source* — which is `D-61` itself, and
+which **came back GREEN** against the first version of the repair. That green is the reason
+comments are stripped and the boundary is there.
+
