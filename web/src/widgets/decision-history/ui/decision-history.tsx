@@ -10,16 +10,22 @@
  * behind "show older": the whole point of an append-only ledger is that the reviewer can
  * see that the accept from ten minutes ago is still there under the comment from just now.
  *
- * `author_label` is **the login of the reviewer who recorded the event**, derived by the
- * server from the authenticated credential. Wave 41 replaced `OD-12`'s single configured
- * label with it, because three experts producing one indistinguishable voice is precisely
- * what `P04` cannot measure. It still authorizes nothing, and **the UI never sends one** —
- * it only displays what the server recorded, which is the half of `OD-12` that was always
- * the point.
+ * `author_label` is **the display name of the reviewer who recorded the event**, derived
+ * by the server from the authenticated credential; an account that has chosen no name
+ * falls back to its login, and that fallback is queryable rather than silent. Wave 41
+ * replaced `OD-12`'s single configured label with the login and wave 42 (`R-37`) made it
+ * the display name, because three experts producing one indistinguishable voice is
+ * precisely what `P04` cannot measure. It still authorizes nothing, and **the UI never
+ * sends one** — it only displays what the server recorded, which is the half of `OD-12`
+ * that was always the point.
  *
- * The sealed contract's own description of this field still carries the old sentence.
- * Correcting it is a reseal and is registered as `D-86`; this comment is ahead of it
- * deliberately, rather than repeating something that stopped being true.
+ * **The sealed contract now says this too** — `D-86`, closed in wave 42 — so this comment
+ * restates the contract rather than running ahead of it.
+ *
+ * *This paragraph has now been corrected twice in two waves, each time because it had
+ * gone stale.* It describes a field whose meaning two rulings moved, which is
+ * `OPERATING_CONSTRAINTS.md` §4.7 in miniature: prose next to code outlives what it
+ * describes unless something checks it, and nothing checks this.
  *
  * An empty history renders `NotApplicableState`, not `EmptyState`: `shared/ui` names this
  * exact case — a decision history on a finding nobody has judged — as the not-applicable

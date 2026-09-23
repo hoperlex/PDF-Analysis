@@ -131,10 +131,19 @@ if [ "$PROXY_CODE" = 502 ] || [ "$PROXY_CODE" = 503 ] || [ "$PROXY_CODE" = 504 ]
         "this stack still serves nothing. Repair it with:" \
         "    infra/deploy/reload-proxy.sh"
 fi
-[ "$PROXY_CODE" = 200 ] || fail "$UNANSWERABLE" \
-    "the proxy answered $PROXY_CODE on /api/v1/openapi.json, not 200." \
+# `R-31` closed this path behind a credential, so the answer that proves life is 401.
+# A 401 can only come from the application authorization seam; nginx holding a dead
+# upstream answers 502, 503 or 504, which the branch above already names. A 200 means the
+# four documentation routes are open again and is refused on its own terms.
+if [ "$PROXY_CODE" = 200 ]; then
+    fail "$DRIFT" "/api/v1/openapi.json answered 200 with no credential." \
+        "R-31 closed the four documentation routes and this stack serves the full API" \
+        "description to any caller that reaches the port. Nothing was compared."
+fi
+[ "$PROXY_CODE" = 401 ] || fail "$UNANSWERABLE" \
+    "the proxy answered $PROXY_CODE on /api/v1/openapi.json, not 401." \
     "Nothing was compared. Is the stack up, and is ALPHA_HTTP_PORT right?"
-echo "  200 on /api/v1/openapi.json"
+echo "  401 on /api/v1/openapi.json -- the API answered and D-73 is closed here"
 echo
 
 # --- 2. what the Dockerfiles say goes into each image -------------------------------

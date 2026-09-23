@@ -21,8 +21,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-80** | no `.dockerignore`: the web image's `node_modules` is the build host's, not the lockfile's — and criterion 1 is blind to it by construction | one file, verified by a build |
 | D-82 | three English `LoadingState` strings no instrument in the tree can render | a repair nothing can verify is not a repair |
 | D-83 | eleven journey sentences are verified by nothing inside the gate | only `refusals.mjs` against a live stand |
-| **D-86** | the **sealed** contract describes `author_label` as *"not a subject identity"* — it now is one | a reseal; batch it with `D-46` |
-| **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
+| D-87 | a full-tree mutation copy still cannot redden a migration — §10.1 names only half the trap | one fixture exists; the class is wider |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | **D-70** | the stand's API **will not start** since wave 41: the stub URL has no host and `D-72` now refuses it | **owner: a real credential, or a hostname** |
@@ -33,12 +32,15 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
 | D-61 | the journey guard still matches by substring against concatenated source | compare against **rendered** output |
 | D-52 | the legacy icon set is at least partly Feather, MIT, notice absent | a `NOTICE` file if we copy; **not** `D-11`'s shape |
-| **D-46** | a failed run cannot say *which* dependency | owner — a reseal either way |
 | D-50 | a character offset no second extractor can resolve | registered |
 | D-51 | criterion 8 is a container restart, for a structural reason | registered; nothing to fix |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
+
+**Closed 2026-09-23 in wave 42** — `D-73` (`R-31`), `D-86` and `D-46` by one reseal, `D-81`
+(`R-33`), `D-84`, `D-85`, and `D-58`. **Three of them closed differently than this register said
+they would**, and the differences are in the rows.
 
 **Closed 2026-09-21** — D-42 (the prose half; the measurement always stood) and D-47.
 
@@ -1362,7 +1364,7 @@ and the runbook now gives it with that reason.
 **Also recorded because it cost a session its confidence in a number:** `df` *during* a build
 on this host is worthless — another lane moved free space by gigabytes in both directions.
 
-### D-46 — a failed run cannot say *which* dependency, and the envelope is why
+### D-46 — a failed run cannot say *which* dependency, and the envelope is why — **CLOSED**
 
 **Registered by `W29-SAY` with its price, rather than worked around.** The screen now
 explains what `dependency_unavailable` **means** — and it still cannot say **which**
@@ -2023,7 +2025,7 @@ leaves the argument unchecked.* The same pass renamed `EvidenceViewer no quotati
 which renders a quotation: the **third** fixture in that one file whose name claimed a state it
 never reached.
 
-### D-86 — the frozen contract's description of `author_label` is now false
+### D-86 — the frozen contract's description of `author_label` is now false — **CLOSED**, and there were two copies
 
 **Reported by `W41-AUTHOR` as the one item in its work needing a decision rather than a merge,
 and it was right to stop.**
@@ -2056,7 +2058,7 @@ it rather than discovered later.
 
 Check: `python3 -c "import json;print(json.load(open('contracts/api/v1/openapi.json'))['components']['schemas']['DecisionEvent']['properties']['author_label']['description'])"`
 
-### D-73 — four routes answer 200 with no credential, because the seam is on the router
+### D-73 — four routes answer 200 with no credential — **CLOSED**, and the obvious repair was a no-op
 
 **Found by `W40-GUARDS` 2026-09-23 and verified by the integrator on the live stand.**
 
@@ -2086,6 +2088,35 @@ system, and closing these changes it. **The owner decides:** leave them open and
 test, or bring them behind the seam.
 
 Check: `curl -so /dev/null -w '%{http_code}' http://127.0.0.1:31500/api/v1/docs`
+
+### D-87 — a full-tree mutation copy still cannot redden a migration, and §10.1 names only half of it
+
+**Found by `W42-SEAL` when a mutation came back green, which is the only way any of these
+has ever been found.**
+
+`M-S3-6` weakened `ck_audit_run_terminal_detail_needs_a_reason` to `CHECK (true)` **in a copy of
+the whole tree**, and `tests/integration/runs/` stayed at **14 passed**. The suite connects to
+the lane database, which is **already migrated**; editing a migration's source reaches nothing,
+and no amount of copying changes that.
+
+**`OPERATING_CONSTRAINTS.md` §10.1 records the first half of this trap** — *no copy makes a
+migration mutable* — and stops there. **The second half is the dangerous one: a full-tree copy is
+still not enough if the suite does not re-migrate**, and a full-tree copy is exactly what a
+careful session reaches for when a narrow copy proves insufficient. It feels like the stronger
+instrument and is not.
+
+Repaired in the same wave with a `migrated_engine` fixture —
+`tests/integration/db/test_run_terminal_detail_schema.py` — against which the same mutation gives
+**3 failed**, `assert 'terminal_reason IS NOT NULL' in 'CHECK (true)'`. One of its cases asserts
+the constraint **is not a tautology**, because `CHECK (true)` reads in `pg_constraint` exactly
+like a constraint.
+
+**Registered rather than closed by its own fix**, because the class is wider than the one file:
+every schema-level invariant this programme has is audited by suites that connect to an
+already-migrated database, and only this one now has an instrument that can see it. The two
+cases that cannot redden say so in their own docstrings and name the file that can.
+
+Check: `grep -rn migrated_engine tests/integration/db/` and read why the fixture exists.
 
 ### D-74 — a parent-existence check costs a full parent read
 

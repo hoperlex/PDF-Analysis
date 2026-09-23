@@ -691,20 +691,36 @@ PROXY_CODE="$(curl -s -m 30 -o "$SERVED" -w '%{http_code}' \
     "http://127.0.0.1:$HTTP_PORT/api/v1/openapi.json" || true)"
 [ -n "$PROXY_CODE" ] || PROXY_CODE=000
 # >>> guard: proxy-answers
-if [ "$PROXY_CODE" != 200 ]; then
+# `R-31` CLOSED THIS PATH BEHIND A CREDENTIAL, SO THE ANSWER THAT PROVES LIFE IS NOW 401.
+# That is not a weaker probe than 200 was, and in one respect it is a stronger one: a 401
+# on this path can only be produced by the application's own authorization seam, while
+# nginx alone -- holding a dead upstream -- answers 502, 503 or 504. So this guard now
+# establishes two things at once: the proxy reaches the API, and `D-73` is actually closed
+# on the deployed stack rather than only in the tree.
+#
+# A 200 here is therefore a REFUSAL, and deliberately so: it means the four documentation
+# routes are open again on a running deployment, which is the defect `R-31` was ruled to
+# close. A guard that accepted both answers would be a guard that cannot tell them apart.
+if [ "$PROXY_CODE" != 401 ]; then
     case "$PROXY_CODE" in
         502|503|504)
             refuse "the proxy answered $PROXY_CODE on /api/v1/openapi.json." \
                    "That is nginx holding an upstream that is no longer there. The images" \
                    "may be perfect and this stack still serves nothing. The reload above" \
                    "did not fix it; look at:  docker compose logs proxy api" ;;
+        200)
+            refuse "/api/v1/openapi.json answered 200 with no credential." \
+                   "R-31 closed the four documentation routes; this deployment serves the" \
+                   "full API description to any caller that reaches the port. That is D-73" \
+                   "open again on a running stack, and no claim about this deployment's" \
+                   "exposure is made." ;;
         *)
-            refuse "http://127.0.0.1:$HTTP_PORT/api/v1/openapi.json answered $PROXY_CODE, not 200." \
+            refuse "http://127.0.0.1:$HTTP_PORT/api/v1/openapi.json answered $PROXY_CODE, not 401." \
                    "Every service reported healthy and the one published port does not" \
-                   "serve. Nothing about this deployment is claimed." ;;
+                   "answer the way an authenticated API answers. Nothing is claimed." ;;
     esac
 fi
-echo "  200 on http://127.0.0.1:$HTTP_PORT/api/v1/openapi.json"
+echo "  $PROXY_CODE on http://127.0.0.1:$HTTP_PORT/api/v1/openapi.json -- the API answered"
 echo
 # <<< guard: proxy-answers
 
@@ -774,10 +790,26 @@ import json, sys
 sys.path.insert(0, "/engine")
 from openapi_conformance import differences, operation_index, surface
 
+# R-31 CLOSED /openapi.json BEHIND A CREDENTIAL, SO THE DOCUMENT NO LONGER ARRIVES ON
+# STDIN. This asks the deployed process for its own document instead of asking it through
+# nginx. The criterion says "the schema the running app SERVES" and "against the deployed
+# process rather than against a build artifact" -- both still hold, and this is the more
+# direct of the two readings: it is this image application object, built from this
+# container environment, not a file that was copied in.
+#
+# WHAT WAS LOST, SAID PLAINLY: the document no longer travels the proxy inside THIS check.
+# Two other guards cover that and neither is new. The proxy-answers guard above proves
+# nginx reaches the API, because it now expects 401 and only the application can produce
+# one, while nginx alone answers 502, 503 or 504. And verify-deployed.sh proves the image
+# bytes are this tree bytes. The alternative was to teach a deploy script to mint a
+# reviewer credential, which puts signing in on the deployment path to ask a liveness
+# question.
 try:
-    served = json.load(sys.stdin)
-except ValueError as exc:
-    print("the document served at /api/v1/openapi.json is not JSON: %s" % exc)
+    from auditmanager.api.app import create_asgi_app
+
+    served = create_asgi_app().openapi()
+except Exception as exc:  # noqa: BLE001 - any failure here is "could not read", exit 2
+    print("the deployed process could not produce its own schema: %r" % exc)
     sys.exit(2)
 frozen = json.load(open("/app/contracts/api/v1/openapi.json", encoding="utf-8"))
 report = differences(surface(frozen), surface(served))
@@ -791,10 +823,10 @@ sys.exit(0 if not report else 1)
 CONFORMANCE_STATUS=0
 compose run --rm --no-deps -T \
     -v "$CONFORMANCE_ENGINE:/engine/openapi_conformance.py:ro" \
-    --entrypoint python api -c "$CONFORMANCE_DRIVER" < "$SERVED" 2>&1 | sed 's/^/  /' \
+    --entrypoint python api -c "$CONFORMANCE_DRIVER" 2>&1 | sed 's/^/  /' \
     || CONFORMANCE_STATUS=$?
 if [ "$CONFORMANCE_STATUS" -eq 2 ]; then
-    refuse "the published port answered 200 and did not serve a document." \
+    refuse "the stack is up and could not produce its own schema." \
            "What came back is above. The stack is up and the conformance check was NOT" \
            "made, which is a different thing from a check that was made and failed."
 fi
