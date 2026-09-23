@@ -54,7 +54,7 @@ minutes hold it closed at essentially no cost to the attacker, and ways 1 and 2 
 against an attacker who stops. §7 is where that goes to the owner.
 
 What is load-bearing instead — and it is the design's real answer for a pilot — is that
-**a lockout does not touch a credential anybody already holds.** See §4.
+**a lockout does not touch a credential anybody already holds.** See §5.
 
 ---
 
@@ -439,8 +439,41 @@ evidence about the machine. Nothing was red, so nothing was re-run on that accou
 The typecheck ran inside the gate and passed — `✓ the compiler runs inside the gate, not only
 in a command nobody runs there > typechecks web/ clean 3501ms`, §4.65.
 
-**A second gate was run after §10's repair**, and it is the one that describes the tree being
-handed over. Both figures appear in §12.
+### The second gate, and it is the one that counts
+
+§10's repair added a thirty-third case, so the figures above describe `dc9b09b` and not the
+tree being handed over. The gate was run again on `687bfa2`, from a `git status --porcelain`
+that was empty:
+
+```
+$ make gate > /root/w40-logs/limit-gate-final.log 2>&1
+$ grep -a "GATE OK" /root/w40-logs/limit-gate-final.log
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+| | baseline at `ccaeed8` | **at `687bfa2`** | delta |
+|---|---|---|---|
+| battery | 2265 / 5 skipped / 169 subtests | **2298 / 5 / 169** | **+33** |
+| foundation | 35 | **35** | — |
+| frontend | 1013 in 72 files | **1014 in 72** | **+1** |
+
+`365.38 s` for the battery against `364.74 s` for the first run — the same machine, and the
+difference is the thirty-third case.
+
+### A third instrument trap, in something built to watch the instrument
+
+§8 item 8 records one. There were two more of the same family, both mine, both costing only
+time — and the third is the one worth copying out:
+
+**`while pgrep -f "make gate"; do sleep; done` never terminates, because `pgrep -f` matches
+the watcher's own command line.** The watcher waits for itself. Four of them ran to their
+timeouts reporting *"still running"* over a gate that had printed `GATE OK` minutes earlier —
+a status which, taken at face value, is §4.62 exactly: **a harness reporting about the
+harness.** It was caught by reading the log, which is the same instruction that catches the
+other two. (And `pkill -f` on that pattern kills the shell issuing it, for the same reason.)
+
+All three are one sentence: **an instrument built to watch an instrument is an instrument,
+and none of them is evidence. The log file is.**
 
 ---
 
@@ -658,7 +691,9 @@ docs/manual-tests/PC-01_prototype.md:39:**Observe the migration head is `0005_tr
      blind, found only because a mutation was expected to kill something and did not. Its
      check command is the `L5` row in §10.
 9. **Nothing was tagged, pushed, merged, or written to `main`/`dev`.** No rebase. Branch
-   `agent/w40-limit`, four commits on `ccaeed8`.
+   `agent/w40-limit`, five commits on `ccaeed8`. **`GATE OK` twice**, and the second —
+   `/root/w40-logs/limit-gate-final.log`, battery **2298 / 5 / 169**, foundation **35**,
+   frontend **1014 in 72 files** — is the one that describes the tree being handed over.
 10. **`R-29`: §7 is the part that needs your eye.** Building the lockout is execution under
     `R-26`. The residual — that the account an unauthenticated caller can hold shut is the
     seeded `admin`, whose login is published — is **not** something I acted on, because both
