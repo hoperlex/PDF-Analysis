@@ -713,6 +713,7 @@ $ git diff --stat ccaeed8..HEAD
  db/migrations/README.md                            |   6 +-
  .../versions/20260923_0008_sign_in_throttle.py     | 192 +++++
  docs/program/DEPLOYMENT_RUNBOOK.md                 |  55 +-
+ docs/program/W40-LIMIT.md                          | 737 +++++++++++++++++++
  src/auditmanager/access/__init__.py                |  21 +
  src/auditmanager/access/check.py                   |  53 +-
  src/auditmanager/access/models.py                  |  20 +
@@ -724,8 +725,11 @@ $ git diff --stat ccaeed8..HEAD
  tests/integration/db/test_app_user_repository.py   |  10 +
  web/src/features/sign-in/model/exchange.ts         |  20 +-
  web/tests/unit/session/sign-in-screen.test.ts      |  22 +
- 14 files changed, 1793 insertions(+), 25 deletions(-)
+ 15 files changed, 2530 insertions(+), 25 deletions(-)
 ```
+
+Taken at `bf4bfc0`. It includes this document, which is the brief's own
+`allowed_paths` entry; the fifteenth row is therefore the report and not the work.
 
 **Every `forbidden_hotspot` is absent from that list**, and the list is the proof:
 `contracts/domain/v1/error-codes.json`, `contracts/analysis/**`, `src/auditmanager/norms/**`,
