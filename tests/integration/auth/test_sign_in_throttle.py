@@ -402,6 +402,40 @@ def test_a_served_block_is_spent_and_the_next_failure_starts_a_fresh_allowance(
     assert after.sign_in_blocked_until is None
 
 
+def test_a_block_that_has_passed_is_spent_while_the_last_failure_is_still_recent(
+    user: UserRecord, session_factory: sessionmaker[Session]
+) -> None:
+    """The case the test above **cannot** see, and finding that out cost a dead mutation.
+
+    ``test_a_served_block_is_spent...`` ages the row by an hour, which puts the last
+    failure outside the attempt window as well -- so the *window* branch of
+    ``_NEXT_FAILED_SIGN_INS`` restarts the count and the *served-block* branch is never
+    needed. Deleting the served-block branch left that test green (mutation ``L5``,
+    ``58 passed``), and the guard was **sound and blind**: it asserted the right outcome
+    for the wrong reason.
+
+    The interval that discriminates is one **longer than the cooling-off period and
+    shorter than the attempt window**, because only there is the block spent while the
+    last failure is still recent -- and that is the interval a real reviewer meets, five
+    minutes after being shut.
+
+    ``6 minutes`` is a literal chosen to sit in that gap and is deliberately not computed
+    from either constant (§12: never build an input out of the thing under test). It is
+    therefore a *statement about the gap*: if the cooling-off period is ever raised past
+    six minutes, or the window lowered below it, this test fails and the person moving the
+    number is told to come here -- which is the right outcome and the reason the literal is
+    not a defect.
+    """
+    _shut_it(session_factory, user.login)
+    _age_the_row(session_factory, user.login, sql_interval="6 minutes")
+    reopened = _refuse_once(session_factory, user.login)
+    assert reopened.failed_sign_ins == 1, (
+        "a block that has been served must be spent: a single attempt per cooling-off "
+        "period would otherwise hold the account shut for ever"
+    )
+    assert reopened.sign_in_blocked_until is None
+
+
 def test_a_successful_sign_in_clears_what_earlier_refusals_recorded(
     user: UserRecord, session_factory: sessionmaker[Session]
 ) -> None:
