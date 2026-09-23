@@ -182,6 +182,26 @@ class RunPort(Protocol):
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         """Current run state and per-stage state."""
 
+    def run_exists(self, *, run_id: str) -> bool:
+        """Is there such a run? `D-74`.
+
+        ``listRunFindings`` has to prove its parent exists before it renders an empty page
+        -- `D-67` -- and until this method existed it proved it by calling
+        :meth:`get_run_status`, which assembles the run row, **every stage result** and the
+        run's **cost** to answer a yes/no.
+
+        **A bool, not a refusal.** Whether an absent parent is a ``404`` is the frozen
+        contract's statement about a particular operation, so it belongs in the router that
+        declares it -- which is where `D-67` put it and where it stays. A port method that
+        raised would take that decision away from the operation and make the two answers
+        indistinguishable from an implementation that happened to fail.
+
+        **Every implementation must have it.** A router calling a method an implementation
+        lacks is an ``AttributeError`` and a ``500``, visible only on the wiring that is
+        missing it; ``tests/integration/composition/test_every_port_implementation_is_whole.py``
+        is the guard, and it derives the set of implementations from the tree.
+        """
+
     def list_runs(self, *, version_uid: str) -> Sequence[RunStatusView]:
         """Every run of one published version, **newest first**.
 
@@ -229,6 +249,19 @@ class FindingPort(Protocol):
 
     def get_finding(self, *, finding_uid: str) -> FindingDetailView:
         """One finding with its observation, evidence, provenance and projection."""
+
+    def finding_exists(self, *, finding_uid: str) -> bool:
+        """Is this a published finding? `D-74`.
+
+        ``listDecisionHistory`` proves the finding in its path exists before rendering its
+        ledger, and proved it by calling :meth:`get_finding` -- which reads the finding's
+        evidence, its current verdict and **its whole decision history**, the very rows the
+        handler's next line then reads a second time.
+
+        A bool for the reason :meth:`RunPort.run_exists` gives, and an ungrounded
+        observation is ``False``: it carries no ``finding_uid``, so there is nothing to
+        decide on and nothing to render a history for.
+        """
 
 
 @runtime_checkable

@@ -25,6 +25,7 @@ from auditmanager.api.schemas.decisions import (
     decision_record_body,
     check_comment_is_present_for_a_comment_event,
 )
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = ["build_decision_routes"]
 
@@ -97,12 +98,12 @@ def build_decision_routes(
         # the same line in `findings.py`, and applies word for word: the `404` is the
         # frozen contract's statement about this operation, and the operation is here.
         #
-        # It costs a read of the finding, and the shipped `FindingAdapter.get_finding`
-        # reads its evidence, its current verdict and -- this listing's own rows -- its
-        # history, to answer a yes/no. `D-67`'s repair is deliberately not widened into a
-        # narrower port method: `ports.py`'s implementations live outside this stream's
-        # allowed paths.
-        findings.get_finding(finding_uid=finding_uid)
+        # `D-74`. It used to call `get_finding`, which reads the finding's evidence, its
+        # current verdict and -- this listing's own rows -- its whole history, to answer a
+        # yes/no, and the line below then read that history a second time. `finding_exists`
+        # is the narrow question; the refusal stays here, where the operation is.
+        if not findings.finding_exists(finding_uid=finding_uid):
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Finding")
         rows = decisions.decision_history(finding_uid=finding_uid)
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_decision_sort_key)
         body = page_body([decision_event_body(view) for view in page.items], page.next_cursor)

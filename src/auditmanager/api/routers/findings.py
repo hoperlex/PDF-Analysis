@@ -19,6 +19,7 @@ from auditmanager.api.routers.wire import WireResponse, encode_json, json_respon
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import page_body, paginate
 from auditmanager.api.schemas.findings import finding_body, finding_detail_body
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = ["build_finding_routes"]
 
@@ -69,12 +70,14 @@ def build_finding_routes(
         # three test wirings of this router are three implementations, and `W37-CERT4`
         # found this defect through none of them.
         #
-        # The cost is one extra read of the run on every listing, and it is real: the
-        # shipped `RunAdapter.get_run_status` builds the whole `RunStatus`, stages and cost
-        # included, to answer a yes/no. A narrower `RunPort` method would be the cheaper
-        # shape and it is not this task's to add -- the port's implementations are outside
-        # this stream's paths, and a port method nobody implements is a red gate.
-        runs.get_run_status(run_id=run_id)
+        # `D-74`. It used to cost a whole `RunStatus` -- the run row, every stage result
+        # and the run's cost -- to answer a yes/no, because `get_run_status` was the only
+        # thing `RunPort` offered. `run_exists` is the narrow question, and the `404` stays
+        # here: the refusal is this operation's statement about itself, and a port method
+        # that raised would have taken that decision away from the operation that declares
+        # it. `test_existence_is_not_a_full_read.py` asserts the narrowing is real.
+        if not runs.run_exists(run_id=run_id):
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
         rows = findings.list_run_findings(
             run_id=run_id,
             category=category.value if category else None,

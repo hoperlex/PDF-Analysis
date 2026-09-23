@@ -534,6 +534,26 @@ class DatabaseFindingAdapter:
             views = [view for view in views if view.current_verdict == verdict]
         return tuple(views)
 
+    def finding_exists(self, *, finding_uid: str) -> bool:
+        """`D-74`. The published-finding question, without the projection or the evidence.
+
+        The shipped adapter answers it through ``auditmanager.findings``' own
+        ``finding_exists``; this one asks its own join, for the reason this whole class
+        exists -- ``B4`` publishes no by-``finding_uid`` detail query and this suite reads
+        the columns the frozen document requires directly.
+        """
+        return (
+            self._session.execute(
+                text(
+                    "SELECT 1 FROM finding_observation o "
+                    "JOIN finding f ON f.finding_uid = o.finding_uid "
+                    "WHERE o.finding_uid = :f"
+                ),
+                {"f": finding_uid},
+            ).first()
+            is not None
+        )
+
     def get_finding(self, *, finding_uid: str) -> FindingDetailView:
         views = self._rows(run_id=None, finding_uid=finding_uid)
         if not views:
@@ -715,6 +735,21 @@ class SeamRunAdapter:
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._view(run_id)
+
+    def run_exists(self, *, run_id: str) -> bool:
+        """`D-74`. One row, no stages, no cost -- the stand-in's own narrow read.
+
+        Written against ``audit_run`` directly rather than delegating to ``_view``, because
+        a stand-in that answered this by building a whole ``RunStatus`` would satisfy the
+        port and keep exactly the cost the method exists to remove -- and would do it in
+        the fixture that most of this suite's ``404`` assertions travel through.
+        """
+        return (
+            self._session.execute(
+                text("SELECT 1 FROM audit_run WHERE run_id = :r"), {"r": run_id}
+            ).first()
+            is not None
+        )
 
     def list_runs(self, *, version_uid: str) -> tuple[RunStatusView, ...]:
         """`R-5`. The **shipped** query, rendered through this stand-in's own view.
