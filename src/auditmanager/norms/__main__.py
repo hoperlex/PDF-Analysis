@@ -62,7 +62,6 @@ from auditmanager.norms.repair import (
     LEDGER_VERSION,
     PageRepair,
     RepairLedger,
-    RepairOutcome,
     ledger_of,
 )
 from auditmanager.norms.rerecognition import (

@@ -251,11 +251,20 @@ def test_a_ledger_that_applied_nothing_returns_the_base_unchanged(base_snapshot)
 
 
 def test_the_identifier_does_not_depend_on_the_order_repairs_were_taken_in(base_snapshot) -> None:
-    """A partially completed run has no guaranteed order and the corpus has no commit name."""
+    """A partially completed run has no guaranteed order and the corpus has no commit name.
+
+    The ledgers are built through ``RepairLedger`` directly and **not** through ``ledger_of``,
+    which sorts. Built the convenient way this test passes against a digest taken in ledger
+    order, because both of its inputs arrive sorted — the guard would have shared an
+    assumption with the thing it measures (`OPERATING_CONSTRAINTS.md` §12). ``from_document``
+    does not sort either, so an unsorted ledger is what a partially written file really is.
+    """
     repairs = [_repair("b", "blk_2"), _repair("a", "blk_1"), _repair("a", "blk_9")]
-    first = repaired_snapshot(base_snapshot, ledger_of(base_snapshot.snapshot_id, NOW, repairs))
+    first = repaired_snapshot(
+        base_snapshot, RepairLedger(base_snapshot.snapshot_id, NOW, tuple(repairs))
+    )
     second = repaired_snapshot(
-        base_snapshot, ledger_of(base_snapshot.snapshot_id, NOW, list(reversed(repairs)))
+        base_snapshot, RepairLedger(base_snapshot.snapshot_id, NOW, tuple(reversed(repairs)))
     )
     assert first.snapshot_id == second.snapshot_id
 
