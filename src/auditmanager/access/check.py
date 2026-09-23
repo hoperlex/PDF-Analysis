@@ -76,11 +76,21 @@ def run_check(settings: DatabaseSettings | None = None) -> int:
         # The status does not move for these; see the module docstring. A lockout expires
         # on its own, and a checklist that failed over one would fail over a reviewer
         # mistyping a password five minutes ago.
-        assert user.sign_in_blocked_until is not None  # noqa: S101 - the query's predicate
+        until = user.sign_in_blocked_until
+        if until is None:  # pragma: no cover - the query's own predicate excludes it
+            # Not an `assert`, for the reason `api/security.py` gives about its own
+            # unreachable refusal: an assertion disappears under `-O`, and this branch
+            # means the statement's WHERE clause and this reader disagree about what
+            # "blocked" is. Printing a placeholder would be the silent fallback
+            # `AGENTS.md` section 4 forbids, in the one line an operator acts on.
+            raise RuntimeError(
+                f"accounts_blocked_from_signing_in returned {user.login!r} with no "
+                "block instant; _SELECT_BLOCKED and this reader disagree"
+            )
         print(
             f"{BLOCKED_PREFIX}: login={user.login} user_uid={user.user_uid} "
             f"failed_sign_ins={user.failed_sign_ins} "
-            f"blocked_until={user.sign_in_blocked_until.isoformat()} "
+            f"blocked_until={until.isoformat()} "
             f"release_now='python -m auditmanager.access.unlock --login {user.login}'",
             flush=True,
         )
