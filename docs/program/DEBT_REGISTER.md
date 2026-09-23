@@ -19,11 +19,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
 | **D-79** | `CURRENT_STATE.md` — the file `AGENTS.md` makes every agent read first — went stale twice, and said the system was open when it is closed | the gate does not read `docs/` |
 | **D-80** | no `.dockerignore`: the web image's `node_modules` is the build host's, not the lockfile's — and criterion 1 is blind to it by construction | one file, verified by a build |
-| **D-81** | four real WCAG 1.4.11 failures: `--am-line` on `--am-paper` is **1.36:1** light, **1.30:1** dark, against 3:1 | **owner** — a border-scale decision twice declined |
 | D-82 | three English `LoadingState` strings no instrument in the tree can render | a repair nothing can verify is not a repair |
 | D-83 | eleven journey sentences are verified by nothing inside the gate | only `refusals.mjs` against a live stand |
-| D-84 | a widget widens a one-member union to `string` and matches a magic literal — a second refusal renders **silence** | one word, and `tsc` starts catching it |
-| D-85 | dead code that the widened contrast census can now see | three items, named |
 | **D-86** | the **sealed** contract describes `author_label` as *"not a subject identity"* — it now is one | a reseal; batch it with `D-46` |
 | **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
@@ -1845,7 +1842,7 @@ gates are running.
 Check: `ls .dockerignore` (absent), `grep -n 'COPY web/' infra/deploy/Dockerfile.web`, and
 `du -sh --exclude=.git .` against `du -sh .local web/node_modules`.
 
-### D-81 — the only border under every finding row fails WCAG 1.4.11 in both palettes
+### D-81 — the only border under every finding row fails WCAG 1.4.11 in both palettes — **CLOSED**
 
 **Found by `W41-BLIND` as a side effect of widening the contrast census from 25 screens to 49.
 Reported, not repaired, and the integrator reproduced both figures before registering them.**
@@ -1869,8 +1866,30 @@ a token tweak. **A third session taking it unilaterally would be the third answe
 nobody has asked the owner.** It is `R-29`-adjacent rather than `R-29` clause 2 — it changes
 nothing about reach — so it is registered for the owner as *design*, not held as a blocker.
 
-Check: compute the two ratios from `web/src/app/globals.css:104,128` (light) and `254,260`
-(dark). Both reproduce exactly.
+**Closed 2026-09-23 under `R-33`, which ruled the product-wide change over the targeted one.**
+`W42-LOOK` wrote the floor **first and committed it red** against untouched tokens — 80 border
+pairs under 3:1, 64 of them unexcused — then moved the scale. Recomputed independently by the
+integrator from the merged tokens:
+
+| pair | before | after |
+|---|---|---|
+| `--am-line` on `--am-paper`, light | **1.36:1** | **4.77:1** |
+| `--am-line` on `--am-paper`, dark | **1.30:1** | **4.34:1** |
+| worst border pair, either palette | — | **3.17:1** |
+
+Ladder order preserved: soft < grid < line < strong. **Two things the row did not know**, both
+found by the guard rather than by reading: `--am-line-soft` (1.08) and `--am-grid-line` (1.13)
+were **worse than the pair this row names**, and the ruling reaches **five tinted rings** — two
+state blocks and four badges drawing `color-mix()` at 1.32–2.00:1 — which are borders and so in
+scope. Those now carry the hue itself rather than a mix percentage tuned to a threshold.
+
+**Out of scope as implemented, and named so it is a decision rather than an oversight:** the
+census measures `border-*` and `outline` only. A link's `text-decoration-color`, `--am-ring`
+(a box-shadow) and the elevation shadows are untouched. If `R-33` is meant to reach a link
+underline, that is a further token move and a further ruling.
+
+Check: recompute from `web/src/app/globals.css` — light `--am-line` `#6e737b`, dark `#748295`,
+against every `--am-paper` / `--am-surface*` in the same palette.
 
 ### D-82 — three English strings on screens, and no instrument in the tree can render them
 
@@ -1920,7 +1939,7 @@ same fact from the other side.
 Check: `docs/program/W41-BLIND.md` §B2 carries the fifteen sentences and which of the four
 matched what.
 
-### D-84 — a widget widens a typed refusal to `string`, so the second one will render silence
+### D-84 — a widget widens a typed refusal to `string`, so the second one will render silence — **CLOSED**
 
 **Reported by `W41-BLIND` in its risks and verified by the integrator, 2026-09-23. Latent today,
 and the row exists because of what makes it stop being latent.**
@@ -1954,10 +1973,22 @@ rather than testing it for a value. Then adding a member **stops compiling**, wh
 property `W37-D57` established for query keys and the reason `npm run typecheck` is in the gate
 at all.
 
-Check: `grep -n 'refusal' web/src/widgets/decision-panel/ui/decision-panel.tsx` against
-`grep -n 'CommentRefusal' web/src/features/append-comment/model/comment-text.ts`.
+**Closed 2026-09-23 by `W42-LOOK`, and the proof is a compile failure taken in both
+directions** — which is the only kind of evidence this row could have accepted:
 
-### D-85 — three dead things the widened census can now see
+- **before the repair**, a second member added to `CommentRefusal` → `tsc` **exit 0**. Green,
+  because `string` accepts every member. The comment would be refused and the screen silent.
+- **after it** → `tsc` **exit 2**, `TS2366: Function lacks ending return statement`. Give the
+  new member a sentence and both go green and the panel renders it.
+
+The repair is the pattern the codebase already carried eight files away: a `COMMENT_REFUSALS`
+array, a `switch` with **no `default`**, the prop typed as the union, rendered on **presence**,
+and the machine value on `data-comment-refusal`. The new test iterates the array rather than the
+literal, so it cannot go stale the way the widget did.
+
+Check: add a member to `CommentRefusal` and run `npm --prefix web run typecheck` — it must fail.
+
+### D-85 — three dead things the widened census can now see — **CLOSED, and all eleven named**
 
 **Reported by `W41-BLIND` while taking the contrast census from 25 screens to 49.**
 
@@ -1972,7 +2003,25 @@ for — the `D-69` defect — or a rule nobody needs. **The two are indistinguis
 census's side**, which is why the remaining 11 have to be named individually rather than counted
 down, and this row starts that list at three.
 
-Check: the census's own failure list, and `grep -rn 'am-evidence__none\|am-app__context' web/src`.
+**Closed 2026-09-23. The row asked for the eleven to be named individually rather than counted
+down, and they were:**
+
+- **Dead, deleted — 3.** `hr` (no `<hr>` in `web/src`), `.am-app__context` (rendered by nothing),
+  and `.am-evidence__none`, whose unreachability was **re-verified rather than inherited**: the
+  active page is always in the page list, which is derived from the observation's own evidence.
+- **A missing seed — 1.** `.am-app__instance`. **`W41-BLIND`'s stated reason for it was false**
+  — `getInstanceLabel()` reads `process.env` at render time and the harness is a node process,
+  so it was reachable all along. `OPERATING_CONSTRAINTS.md` §12 one more time, inside the repair
+  of a §12 row.
+- **Out of reach of a server render — 7.** `::selection`, the pressed theme option (the choice
+  arrives in an **effect** — checked, not assumed), `:has()`, `[open] > summary`, and three
+  `.am-form__*`. Each now records how its colours **are** measured instead of sitting in a count.
+
+**And the unreachable branch was deleted with a test rather than an argument** — six hostile
+cases, and reverting the invariant reddens four of them. *Deleting a branch on an argument
+leaves the argument unchecked.* The same pass renamed `EvidenceViewer no quotation on this page`,
+which renders a quotation: the **third** fixture in that one file whose name claimed a state it
+never reached.
 
 ### D-86 — the frozen contract's description of `author_label` is now false
 
