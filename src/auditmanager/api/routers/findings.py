@@ -14,7 +14,7 @@ from auditmanager.api.routers.declarations import (
     envelope_responses,
     success,
 )
-from auditmanager.api.routers.ports import FindingPort
+from auditmanager.api.routers.ports import FindingPort, RunPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import page_body, paginate
@@ -23,7 +23,16 @@ from auditmanager.api.schemas.findings import finding_body, finding_detail_body
 __all__ = ["build_finding_routes"]
 
 
-def build_finding_routes(router: APIRouter, findings: FindingPort) -> None:
+def build_finding_routes(
+    router: APIRouter, findings: FindingPort, runs: RunPort
+) -> None:
+    """`D-67`. ``runs`` is here for one reason: ``listRunFindings`` addresses a run.
+
+    The port is not used to list anything. It is used to answer the question the path
+    asks before the collection is read -- *is there such a run* -- because an empty page
+    and a missing parent are different facts and this operation answered both with the
+    same bytes. See the note on ``list_run_findings``.
+    """
 
     @router.get(
         "/runs/{run_id}/findings",
@@ -48,6 +57,24 @@ def build_finding_routes(router: APIRouter, findings: FindingPort) -> None:
         # so FastAPI refuses it and `on_request_validation_error` renders `constraint:
         # enum`. An empty page would read as "this run has no findings of that kind",
         # which is a different and wrong answer to "that kind does not exist".
+        # `D-67`. The parent is proved to exist before its collection is read, so an
+        # unknown run is `not_found` rather than an empty page.
+        #
+        # **Why here and not in the adapter**, which is where `listRuns` proves its own
+        # parent. What is being honoured is a statement the *frozen contract* makes about
+        # this operation -- `listRunFindings` declares `404` and has never produced one --
+        # and the operation is this function. Put in the adapter, the rule holds for
+        # whichever implementation happens to be wired; put here, it holds for the surface,
+        # which is the thing the contract describes and the thing a client talks to. The
+        # three test wirings of this router are three implementations, and `W37-CERT4`
+        # found this defect through none of them.
+        #
+        # The cost is one extra read of the run on every listing, and it is real: the
+        # shipped `RunAdapter.get_run_status` builds the whole `RunStatus`, stages and cost
+        # included, to answer a yes/no. A narrower `RunPort` method would be the cheaper
+        # shape and it is not this task's to add -- the port's implementations are outside
+        # this stream's paths, and a port method nobody implements is a red gate.
+        runs.get_run_status(run_id=run_id)
         rows = findings.list_run_findings(
             run_id=run_id,
             category=category.value if category else None,

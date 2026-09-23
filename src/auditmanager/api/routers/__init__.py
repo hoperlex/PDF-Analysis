@@ -180,8 +180,14 @@ def build_router(
     build_project_routes(router, projects)
     build_document_routes(router, documents)
     build_run_routes(router, runs)
-    build_finding_routes(router, findings)
-    build_decision_routes(router, decisions)
+    # `D-67`. Two collections address a parent that another port owns: `listRunFindings`
+    # hangs off a run and `listDecisionHistory` off a finding. Each builder is handed the
+    # port that can answer whether that parent exists, so the operation can refuse an
+    # identity that names nothing instead of rendering an empty page over it. Positional
+    # and required, not a keyword with a `None` default: a default would be a silent
+    # fallback to the behaviour this closes.
+    build_finding_routes(router, findings, runs)
+    build_decision_routes(router, decisions, findings)
     build_export_routes(router, exports)
     build_auth_routes(router, credentials)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
