@@ -40,6 +40,20 @@ class SourceAttribution(enum.Enum):
 
 
 @dataclass(frozen=True, slots=True)
+class BlockBody:
+    """One recognition block's body, as `results.md` carries it.
+
+    The unit `D-59` is measured in and the unit `R-19` repairs. It is a block and not a page
+    because a page label is not an identity here: `results.md` prints no heading for a page
+    with no block, and the crop the pipeline fetched is named after the block.
+    """
+
+    page_label: int
+    block_id: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
 class Paragraph:
     """One substantive paragraph of a normative document.
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 
-from .model import Paragraph, ParagraphKind, SegmentationReport, SourceAttribution
+from .model import BlockBody, Paragraph, ParagraphKind, SegmentationReport, SourceAttribution
 from .running_heads import is_publisher_noise, repeated_offcuts
 
 _PAGE = re.compile(r"^## Page (\d+)\s*$")
@@ -80,6 +80,25 @@ def _parse_blocks(markdown: str) -> tuple[list[_Block], int]:
             continue
         current.body.append(line)
     return blocks, pages
+
+
+def blocks(markdown: str) -> tuple[BlockBody, ...]:
+    """Every recognition block, in block order, with its page label and its body.
+
+    The public form of the parse that `recognised_text` and `segment` already run. It exists
+    because `D-59` is a property of a **block** — 79 of 28 249 of them carry the recognition
+    model's own reasoning — and asking that question through `segment` would ask it of
+    paragraphs after the noise filter had already run, which is a different population.
+    """
+    parsed, _page_headings = _parse_blocks(markdown)
+    return tuple(
+        BlockBody(
+            page_label=block.page_label,
+            block_id=block.block_id,
+            text="\n".join(block.body).strip("\n"),
+        )
+        for block in parsed
+    )
 
 
 def recognised_text(markdown: str) -> str:
