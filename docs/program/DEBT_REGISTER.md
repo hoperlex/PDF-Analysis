@@ -2291,7 +2291,14 @@ does not explain its own transport to the person using it.
 
 Check: the `W32-SEE` guard reports it as part of its outstanding list.
 
-### D-53 — twenty user-visible English strings survive two waves that each reported the interface translated — **CLOSED**
+### D-53 — twenty user-visible English strings survive two waves that each reported the interface translated — **CLOSED, and its closing claim was overstated**
+
+> **Amended 2026-09-23.** The strings this row measured really were gone. The *property* it
+> claimed — *"from here one English word reaching a reviewer is a red gate"* — was not true,
+> because the guard could not reach every screen. `W41-BLIND` found **an English paragraph on
+> the 404 screen** and **`"the decision history"`** in a loading state, both green under the
+> guard this row closed on, and `D-82` records three more it still cannot reach. **A closure
+> is entitled to claim what it measured, not what its instrument was assumed to cover.**
 
 **Closed 2026-09-22.** Nineteen became eleven, then two, then none. `web/tests/guards/rendered-language.guard.test.ts`'s outstanding list is empty and its final assertion is **unskipped**: from here one English word reaching a reviewer is a red gate.
 
