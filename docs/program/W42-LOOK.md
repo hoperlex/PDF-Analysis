@@ -240,3 +240,75 @@ the census under that name since wave 41. Renamed to what it exercises — the f
 first two instances were `DecisionPanel refused`, which rendered no refusal, and the finding
 list, censused cold while named as though populated. **A fixture's name is not evidence that
 a state was reached.**
+
+---
+
+## 4. Checks, each with the commit it was taken at
+
+| check | commit | result |
+|---|---|---|
+| `npm --prefix web run test -- --run tests/unit/styles/contrast.test.ts` | `c7cd08f` | **2 failed / 17 passed** — the R-33 floor red against untouched tokens, 80 border pairs |
+| same | `e1abddd` | 19 passed; the register emptied because the both-directions check demanded it |
+| `npm --prefix web run typecheck` (with a second `CommentRefusal` member) | `e1abddd` (pre-repair) | **exit 0** — the defect: `string` hid it |
+| `npm --prefix web run typecheck` (same mutation) | `f09c087` | **exit 2, TS2366** — the repair |
+| `npm --prefix web run test -- --run tests/unit/review/viewer-and-panels.test.ts` (with `const page = activePage`) | `2a59edb` | **4 of 6 red** — the invariant guard seen to fail |
+| `npm --prefix web run typecheck` | `b174a69` | exit 0 |
+| `npm --prefix web run lint` | `b174a69` | exit 0 |
+| `make gate` (lane `gate-w42b`) | `b174a69`, clean tree | **`GATE OK`** |
+
+Read from the `GATE OK` line of `/root/w42b-gate.log`, not from a status a harness returned
+(`OPERATING_CONSTRAINTS.md` §4.62):
+
+```
+2361 passed, 5 skipped, 1 warning, 169 subtests passed in 488.11s   (battery)
+35 passed in 29.54s                                                 (foundation)
+Test Files  72 passed (72)   Tests  1032 passed (1032)              (frontend)
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+Wave 41 closed at **2361 / 35 / 1022 in 72 files**. The battery and foundation are unchanged
+— this wave touches no Python — and the frontend is **1032 in 72 files**, ten tests more: three
+for the R-33 floor, one for the refusal union, six for the viewer invariant.
+
+**The run took 488s against a normal ~280s battery, on a host at load average 15 with another
+lane and an unrelated node workload live.** Recorded per `OPERATING_CONSTRAINTS.md` §4.6: a
+gate that took twice as long as usual is evidence about the machine. It was green, so nothing
+turns on it; it is written down because the next session to see 488s should not read it as a
+symptom of this change.
+
+## 5. Risks and known limitations
+
+1. **The interface looks different on every screen, and that is the ruling, not a defect.**
+   `R-33` was chosen over the targeted option with the arithmetic in front of the owner.
+   Anyone meeting the change without the ruling will read it as heavy-handed. The renders are
+   in `/root/w42look-evidence/` so the first look does not have to be at a running stand.
+2. **The four border levels are closer together than they were.** The compliant band is
+   narrow and four levels share it. They are all *visible* levels now, which the light
+   palette's soft/line/grid were not, but the step between soft and grid is small.
+3. **Scope boundary, named rather than left implicit: the census measures `border-*` and
+   `outline` colour properties.** Three colours a reader can see are therefore outside
+   `R-33` as implemented — `text-decoration-color: color-mix(… var(--am-accent) 35% …)` on a
+   link underline, `--am-ring` (a `box-shadow`, not an outline), and the elevation shadows.
+   None is a border; none was raised. If the owner reads `R-33` as reaching a link's
+   underline, that is a fourth token move and it is not this wave's.
+4. **The census still cannot run a browser.** Seven rules are evaluated only through
+   `declaredPairs` or not at all (§3). The pressed theme option, an open disclosure and the
+   three form states are reached by the browser journey and by nothing in `make gate`.
+5. **`--am-line-strong` in the dark palette (`#8491a1`) now sits close to `--am-ink-soft`
+   (`#838d9c`).** A control's boundary is about as light as the quietest text. Both clear
+   their own thresholds and no assertion couples them; it is a taste risk, and a palette
+   question rather than a compliance one.
+6. **The screenshots are a chromium headless shell over `screens.ts`'s static markup**, not
+   the deployed stand. Hover, focus and the pressed theme option are not in them; their
+   ratios are in the census, which measures states the renders cannot show.
+
+## 6. Reported, not repaired
+
+- **`R-33` reaches five tinted rings the ruling's text does not mention** (§1.2). Repaired
+  here, because they are borders and the ruling says every border — but the owner should
+  know the change is wider than `D-81`'s row reads.
+- **`W41-BLIND`'s reason for excusing `.am-app__instance` was false** (§3). No harm done: it
+  excused a rule rather than permitting a defect, and it is closed.
+- **A third fixture whose name claimed a state it never reached** (§3.2).
+- **Nothing outside the grant was touched.** `web/FRONTEND_LOCK.json`, `web/openapi/**` and
+  `web/src/shared/api/generated/**` are `W42-SEAL`'s and do not appear in this branch's diff.
