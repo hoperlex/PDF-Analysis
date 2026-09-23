@@ -298,28 +298,38 @@ purged between cases, per §10.2 — the trap `W33-CORPUS` found in this same la
 
 | | mutation | red, verbatim |
 |---|---|---|
-| M1 | `degeneracy`: drop `"the user wants"` from the first-person family | `E AssertionError: assert <DegeneracySignal.FIRST_PERSON_PLAN: 'first_person_plan'> in (<DegeneracySignal.INSTRUCTION_ECHO: 'instruction_echo'>,)` |
-| M2 | the narration family leaves the check | `E AssertionError: assert False` on `verdict.is_degenerate` for `СП_28.13330.2017` p73 |
-| M3 | the envelope regex can never match | `E AssertionError: clean` |
-| M4 | the check stops case-folding | `E assert False` on the upper-case spelling |
-| M5 | the echo family leaves the check | `E AssertionError: assert <DegeneracySignal.INSTRUCTION_ECHO…> in (…FIRST_PERSON_PLAN…)` |
-| M6 | **a narration phrase widened onto legitimate ISO citations** | `E AssertionError: page_narration: 'iso '` |
-| M7 | `rerecognise`: a degenerate replacement is applied anyway | `E AssertionError: assert <RepairOutcome.REPAIRED…> is <RepairOutcome.STILL_DEGENERATE…>` |
-| M8 | `MAX_ATTEMPTS` 2 → 1: a degenerate page is never re-read | `E assert 1 == 2` |
-| M9 | the truncation and empty checks are removed | `E AssertionError: assert <RepairOutcome.REPAIRED…> is <RepairOutcome.UNUSABLE…>` |
-| M10 | `MINIMUM_REPLACEMENT_CHARACTERS` 16 → 0 | `E AssertionError: assert <RepairOutcome.REPAIRED…> is <RepairOutcome.UNUSABLE…>` |
-| M11 | **an unpriced call is recorded as a free one** (`cost_usd or 0.0`) | `E assert 0 == 1` on `unpriced_attempts` |
-| M12 | the repair digest is taken in ledger order | `E AssertionError: assert '…+1d+3r.a1…' == '…+1d+3r.7f…'` |
-| M13 | the identifier drops the repair count | `E AssertionError: assert '+1r.' in '2026-07-23..2026-08-20+1d.…'` |
-| M14 | an empty repair pass is given a new identifier | `E AssertionError: assert CorpusSnapshot(snapshot_id='…+1d+0r.…') == CorpusSnapshot(snapshot_id='…+1d.…')` |
-| M15 | the digest ignores what the replacement says | `E AssertionError: assert '…' != '…'` on one changed character |
-| M16 | a ledger from another corpus is accepted | `E Failed: DID NOT RAISE ValueError` |
-| M17 | an unapplied replacement stays reachable | `E Failed: DID NOT RAISE ValueError` |
-| M18 | two repairs for one block are accepted | `E Failed: DID NOT RAISE ValueError` |
-| M19 | a ledger of an unknown version is read anyway | `E Failed: DID NOT RAISE ValueError` |
-| M20 | a repair moves the draw window | `E AssertionError: assert None == '2026-08-20'` |
-| M21 | **the hostless proxy URL is accepted** | `E Failed: DID NOT RAISE RunRefused` |
-| M22 | **the refusal prints the configured value** | `E AssertionError: assert 'example.invalid' not in 'the provide…a file here.'` |
+| M1 | `degeneracy`: first-person phrase dropped | `AssertionError: assert False` |
+| M2 | `degeneracy`: the narration family leaves the check | `AssertionError: clean` |
+| M3 | `degeneracy`: the envelope regex can never match | `AssertionError: clean` |
+| M4 | `degeneracy`: the check stops case-folding | `AssertionError: clean` |
+| M5 | `degeneracy`: the echo family leaves the check | `AssertionError: assert <DegeneracySignal.INSTRUCTION_ECHO: 'instruction_echo'> in (<DegeneracySignal.FIRST_PERSON_PLAN: 'first_person_plan'>,)` |
+| M6 | `degeneracy`: a narration phrase widened onto legitimate ISO citations | `AssertionError: page_narration: 'iso '` |
+| M7 | `rerecognition`: a degenerate replacement is applied anyway | `assert 1 == 2` |
+| M8 | `rerecognition`: a degenerate page is never re-read | `assert 1 == 2` |
+| M9 | `rerecognition`: the truncation and empty checks are removed | `AssertionError: assert <RepairOutcome.REPAIRED: 'repaired'> is <RepairOutcome.UNUSABLE: 'unusable'>` |
+| M10 | `rerecognition`: an empty answer counts as a transcription | `AssertionError: assert <RepairOutcome.REPAIRED: 'repaired'> is <RepairOutcome.UNUSABLE: 'unusable'>` |
+| M11 | `rerecognition`: an unpriced call is recorded as a free one | `AssertionError: assert 0 == 1` |
+| M12 | `repair`: the repair digest is taken in ledger order | `AssertionError: assert '2026-07-23......01a22540a08c' == '2026-07-23......fdf52f5598a8'` |
+| M13 | `repair`: the identifier drops the repair count | `AssertionError: assert '+1r.' in '2026-07-23..2026-08-20+1d.eabbeeb89130'` |
+| M14 | `repair`: an empty repair pass is given a new identifier | `AssertionError: assert CorpusSnapsho...d61ecbf116d2') == CorpusSnapsho...53e5dbf6b17a')` |
+| M15 | `repair`: the digest ignores what the replacement says | `AssertionError: assert '2026-07-23..2026-08-20+1d+1r.6e70c1e61906' != '2026-07-23..2026-08-20+1d+1r.6e70c1e61906'` |
+| M16 | `repair`: a ledger from another corpus is accepted | `Failed: DID NOT RAISE ValueError` |
+| M17 | `repair`: an unapplied replacement stays reachable | `Failed: DID NOT RAISE ValueError` |
+| M18 | `repair`: two repairs for one block are accepted | `Failed: DID NOT RAISE ValueError` |
+| M19 | `repair`: a ledger of an unknown version is read anyway | `Failed: DID NOT RAISE ValueError` |
+| M20 | `repair`: a repair moves the draw window | `AssertionError: assert None == '2026-08-20'` |
+| M21 | `__main__`: the hostless proxy URL is accepted | `Failed: DID NOT RAISE RunRefused` |
+| M22 | `__main__`: the refusal prints the configured value | `AssertionError: assert 'example.invalid' not in 'the provide...a file here.'` |
+
+**Read the reds with `-x` in mind.** The sweep runs `pytest -x`, so each case reports the
+**first** test that fell, which is not always the one the mutation was aimed at — M1 drops a
+phrase from the first-person family and the first case to fall is the case-folding one,
+`is_degenerate('THE USER WANTS ME TO TRANSCRIBE A TABLE')`; M7 applies a degenerate
+replacement and the first case to fall counts calls, `assert 1 == 2`. Every red above is
+verbatim from `/root/w39-logs/corpus-mutations.log` and every one belongs to a test that
+covers the mutated rule. `AssertionError: clean` is `DegeneracyVerdict.describe()` — the
+check's own word for *"I found nothing"* — arriving as the failure message on a block the
+corpus really carries.
 
 **M6 is the one that matters most and it is the easiest to leave out.** Every other case proves
 the check can *stop* firing. M6 proves it can *start* firing on text that is fine: it adds
