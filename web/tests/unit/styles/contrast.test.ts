@@ -327,11 +327,45 @@ describe('the census is taken over rendered screens, not over a list', () => {
    *
    * A rule this reaches is a rule the census EVALUATES. It is not a claim that the pair
    * passes — `every pair that meets on a screen clears the threshold its role asks of it`
-   * is that claim, and it is only as wide as this. Nor is an unreached rule a defect in
-   * the application: three of the entries below are branches one static pass cannot
-   * select, and two are dead CSS.
+   * is that claim, and it is only as wide as this.
+   *
+   * Nor is an unreached rule, on its own, a defect in the application. What it IS, always,
+   * is a question with two answers the census cannot tell apart — a missing seed or a rule
+   * nobody needs — so the list below answers it per entry, in the tree, rather than
+   * carrying a count down. Wave 42 read all eleven: three were dead and are deleted, one
+   * was a seed this harness could have taken all along, and seven are states a server
+   * render pass cannot produce, each naming how its colours are measured instead.
    */
   const UNREACHED_BY_ANY_SCREEN: readonly { readonly selector: string; readonly why: string }[] = [
+    /*
+     * ELEVEN ENTRIES BECAME SEVEN IN WAVE 42, AND THE COUNT IS THE LEAST INTERESTING PART.
+     *
+     * `W41-BLIND` took this list from 31 to 11 by rendering screens nobody had rendered,
+     * and closed with the sentence that made this wave's work: a rule no screen reaches is
+     * either A MISSING SEED or A RULE NOBODY NEEDS, and **from the census's side the two
+     * are indistinguishable**. So the eleven were not counted down again. Each was read in
+     * `web/src` and given a verdict, which is the only place the distinction exists:
+     *
+     *   DEAD, deleted this wave (3):
+     *     `hr`                  no module renders one -- `grep -rn "<hr" web/src` is empty
+     *     `.am-app__context`    declared, rendered by nothing -- measured the same way
+     *     `.am-evidence__none`  unreachable on EVERY input, `D-85`; the branch that carried
+     *                           it is deleted too, and the invariant that made it dead is
+     *                           now asserted in `tests/unit/review/viewer-and-panels.test.ts`
+     *
+     *   A MISSING SEED, seeded this wave (1):
+     *     `.am-app__instance`   `W41-BLIND` reasoned that "a static render pass has no
+     *                           environment to read one from". `getInstanceLabel()` reads
+     *                           `process.env` in the component body and this harness is a
+     *                           node process; `screens.ts` now sets one. The rule was never
+     *                           unreachable -- the seed was missing, which is `D-69`'s own
+     *                           shape and the reason this list is read rather than counted.
+     *
+     *   OUT OF REACH OF A SERVER RENDER PASS, and each one says how its colours ARE
+     *   measured instead (7, below). None of them is excused for being unrendered: an
+     *   entry whose reason is only "it is not rendered" is the defect being laundered,
+     *   which is what the assertion below says in as many words.
+     */
     {
       selector: '::selection',
       why:
@@ -341,40 +375,15 @@ describe('the census is taken over rendered screens, not over a list', () => {
         'markup at all.',
     },
     {
-      selector: 'hr',
-      why:
-        'No module in `web/src` renders an `<hr>`. Measured, not assumed: `grep -rn "<hr" ' +
-        'web/src` is empty. The rule is dead CSS and is reported as such rather than deleted, ' +
-        'because `globals.css` is not this task\'s to edit.',
-    },
-    {
-      selector: '.am-app__instance',
-      why:
-        '`_app/app-frame.tsx` renders it only when a deployment instance label is configured, ' +
-        'and a static render pass has no environment to read one from. The label is the ' +
-        'operator\'s, never the application\'s prose.',
-    },
-    {
-      selector: '.am-app__context',
-      why:
-        'Declared in `globals.css` and rendered by no module in `web/src`. Measured the same ' +
-        'way as `hr` and dead for the same reason; reported rather than deleted.',
-    },
-    {
       selector: ".am-theme__option[aria-pressed='true']",
       why:
-        'Which theme option is pressed is decided in the browser, by the script that reads ' +
-        'the stored preference. A server pass presses none, so the selected state of the ' +
-        'theme control is outside every instrument this suite has.',
-    },
-    {
-      selector: '.am-evidence__none',
-      why:
-        'UNREACHABLE BY ANY INPUT, and that is a finding rather than a limit. ' +
-        '`evidence-viewer.tsx` chooses `page` out of `pages`, which it derives from the ' +
-        'observation\'s own evidence — so a page carrying no quotation cannot be the active ' +
-        'page, and this branch cannot render. It is dead code in `web/src` and is reported, ' +
-        'not repaired: nothing this task changed exposed a defect that requires it.',
+        'Which theme option is pressed is decided in the browser. `theme-toggle.tsx` starts at ' +
+        '`useState<ThemeChoice>(\'system\')` and the stored preference arrives in an EFFECT, ' +
+        'which a server render pass does not run, so both options render `aria-pressed="false"` ' +
+        'whatever the harness does. Checked rather than assumed this wave. The rule declares ' +
+        '`background: var(--am-paper)` and `color: var(--am-ink)` in one block, so the pair it ' +
+        'carries is measured by `declaredPairs`; what is unmeasured is only the CASCADE around ' +
+        'it, and the pressed option sits on the same surfaces the unpressed one does.',
     },
     {
       selector: '.am-quotation:has(.am-quotation__inconsistent)',
@@ -387,8 +396,12 @@ describe('the census is taken over rendered screens, not over a list', () => {
       selector: '.am-export__disclosure[open] > summary',
       why:
         'A `<details>` is closed until a reader opens it, and the harness cannot fire the ' +
-        'event that opens one. The summary in its CLOSED state is censused; only the open ' +
-        'state is out of reach.',
+        'event that opens one; `export-panel.tsx` renders it with no `open` attribute and ' +
+        'takes no prop that would add one, so this is a browser state rather than a missing ' +
+        'seed. The summary in its CLOSED state is censused. The rule declares one colour -- ' +
+        '`border-bottom: 1px solid var(--am-line-soft)` -- and that exact pair, ' +
+        '`--am-line-soft` on `--am-surface`, is measured at other sites in both palettes, so ' +
+        'no pair is missing from the census; the RULE is what is unevaluated.',
     },
     {
       selector: '.am-form__chosen',

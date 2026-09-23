@@ -33,7 +33,7 @@ import { DecisionPanel } from '@/widgets/decision-panel';
 import { COMMENT_REFUSALS, commentRefusalMessage } from '@/features/append-comment';
 import { DecisionHistory } from '@/widgets/decision-history';
 
-import { OBSERVATION_ID, decisionEvent, decisionId, observation, render } from './fixtures';
+import { OBSERVATION_ID, decisionEvent, decisionId, evidence, observation, render } from './fixtures';
 
 const OBJECT_URL = 'blob:https://app.test/0f0e9d8c-7b6a-5948-3726-150413021100';
 
@@ -112,6 +112,55 @@ describe('each quotation is shown with the anchor it was verified at', () => {
     expect(markup).not.toContain('chars 712');
     expect(markup).toContain('по всему документу');
   });
+});
+
+describe('the page the viewer opens is always a page with a quotation on it', () => {
+  /**
+   * `D-85`: the invariant that made `.am-evidence__none` dead code.
+   *
+   * `pages` is the distinct set of `page_number` over the observation's OWN evidence and
+   * `page` is either an `activePage` inside that set or `pages[0]`, so a page with nothing
+   * on it cannot be the active page. The branch that said *"this observation cites no
+   * quotation on page N"* was therefore unreachable on every input, and the census saw it
+   * as a colour rule no screen reaches. It is deleted; this is what holds the invariant it
+   * relied on, because deleting a branch on the strength of an argument leaves the argument
+   * unchecked.
+   *
+   * Driven with the hostile inputs rather than the convenient one: a page the observation
+   * does not cite, page zero, a negative page, and evidence declared out of page order.
+   */
+  const spread = observation({
+    evidence: [
+      evidence({ evidence_ordinal: 3, page_number: 9 }),
+      evidence({ evidence_ordinal: 1, page_number: 2 }),
+      evidence({ evidence_ordinal: 2, page_number: 9 }),
+    ],
+  });
+
+  for (const activePage of [7, 0, -1, 2, 9, 1000]) {
+    it(`renders a quotation when the viewer is opened at page ${activePage}`, () => {
+      const markup = render(
+        createElement(EvidenceViewer, {
+          observation: spread,
+          activePage,
+          onPageChange: () => {},
+          documentUrl: OBJECT_URL,
+        }),
+      );
+      // The page it settled on is one the observation cites...
+      const settled = /data-active-page="(\d+)"/.exec(markup)?.[1];
+      expect({ activePage, settled }).toEqual({ activePage, settled: expect.stringMatching(/^(2|9)$/) });
+      // ...and there is a quotation on it. `am-quotation-list` renders only from
+      // `evidenceOnPage`, so its presence IS the non-empty claim.
+      expect({ activePage, list: markup.includes('am-quotation-list') })
+        .toEqual({ activePage, list: true });
+      expect({ activePage, anchor: markup.includes('am-quotation__anchor') })
+        .toEqual({ activePage, anchor: true });
+      // And the deleted branch is gone rather than merely unused.
+      expect({ activePage, dead: markup.includes('am-evidence__none') })
+        .toEqual({ activePage, dead: false });
+    });
+  }
 });
 
 describe('an anchor that disagrees with its quotation is said so, in the open', () => {

@@ -197,6 +197,31 @@ export function screens(): Screen[] {
   // ------------------------------------------------------------------- the shell
   add('AppFrame', render(createElement(AppFrame, { children: 'экран' })));
 
+  /*
+   * The same shell WITH an instance label, which is the whole of `.am-app__instance`.
+   *
+   * `W41-BLIND` listed that rule as one the census cannot reach, reasoning that "a static
+   * render pass has no environment to read one from". The premise was wrong in the way
+   * `OPERATING_CONSTRAINTS.md` §12 describes: `getInstanceLabel()` reads
+   * `process.env.NEXT_PUBLIC_INSTANCE_LABEL` in the component's own body, at render time,
+   * and this harness is a node process that can set one. It was a MISSING SEED rather than
+   * an unreachable branch, and a census cannot tell those apart from its own side -- which
+   * is why each of the eleven had to be read in the tree rather than counted.
+   *
+   * The variable is restored rather than left set: this module is imported once per suite
+   * and another screen reading configuration would otherwise inherit it.
+   */
+  {
+    const before = process.env.NEXT_PUBLIC_INSTANCE_LABEL;
+    process.env.NEXT_PUBLIC_INSTANCE_LABEL = 'стенд-w42b';
+    try {
+      add('AppFrame with an instance label', render(createElement(AppFrame, { children: 'экран' })));
+    } finally {
+      if (before === undefined) delete process.env.NEXT_PUBLIC_INSTANCE_LABEL;
+      else process.env.NEXT_PUBLIC_INSTANCE_LABEL = before;
+    }
+  }
+
   // ------------------------------------------------------------------- the pages
   add('ProjectsPage cold', withRouter(createElement(ProjectsPage, {})));
   add('ProjectDetailPage cold', withRouter(createElement(ProjectDetailPage, { projectUid: PROJECT_UID })));
@@ -417,7 +442,19 @@ export function screens(): Screen[] {
 
   // The evidence viewer with no quotation on the page a reader is looking at.
   add(
-    'EvidenceViewer no quotation on this page',
+    /*
+     * RENAMED, and the old name is the finding. It was `EvidenceViewer no quotation on
+     * this page` and it renders a viewer WITH a quotation: `activePage: 7` is not a page
+     * this observation cites, so the viewer falls back to page 2 and shows page 2's
+     * quotation. The state the name claimed is unreachable on every input (`D-85`), the
+     * branch that would have rendered it is deleted this wave, and what this screen
+     * actually exercises -- the fallback -- is worth a screen under its own name.
+     *
+     * Third instance of the shape in this file: `DecisionPanel refused` rendered no
+     * refusal until wave 41, and the finding list was censused cold while named as
+     * though populated. A fixture NAME is not evidence that a state was reached.
+     */
+    'EvidenceViewer opened at a page the observation does not cite',
     render(
       createElement(EvidenceViewer, {
         observation: observation({ evidence: [evidence({ evidence_ordinal: 1, page_number: 2 })] }),

@@ -562,13 +562,6 @@ em {
   color: var(--am-ink-muted);
 }
 
-hr {
-  height: 1px;
-  margin: var(--am-gap-lg) 0;
-  border: 0;
-  background: var(--am-line-soft);
-}
-
 /* ---- form controls --------------------------------------------------------------
  * Three inline `style={{ padding: '0.4rem 0.5rem' }}` attributes were the whole of the
  * form styling in this application. The controls are styled here, by element, so a form
@@ -683,7 +676,6 @@ input[type='file']::file-selector-button:hover {
   text-decoration: none;
 }
 
-.am-app__context,
 .am-app__signin {
   margin-left: auto;
   font-size: 13px;
@@ -700,12 +692,6 @@ input[type='file']::file-selector-button:hover {
   color: var(--am-ink-muted);
   text-transform: uppercase;
   letter-spacing: var(--am-tracking-caps);
-}
-
-.am-app__context {
-  padding: 2px 8px;
-  border-radius: var(--am-radius-pill);
-  background: var(--am-surface-sunken);
 }
 
 .am-app__instance {
@@ -1402,11 +1388,6 @@ li.am-state .am-state__detail {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: var(--am-tracking-caps);
-}
-
-.am-evidence__none {
-  margin: 0;
-  color: var(--am-ink-muted);
 }
 
 .am-evidence__limits {
