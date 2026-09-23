@@ -92,6 +92,12 @@ GUARDED = (
     # path, so it is the first one whose 401 cannot be mistaken for the 404 an unknown
     # parent would produce. That makes the row below the only thing asserting it.
     ("listDecisions", "GET", "/decisions"),
+    # `R-26`, `W39-REVOKE`. The password change is behind the seam like everything else, and
+    # its row here matters more than most: it is the operation that takes credentials away,
+    # so an unauthenticated caller reaching it would be able to revoke an account's
+    # credentials without holding one. The request below carries no body on purpose --
+    # authorization must refuse it before the body model is ever parsed.
+    ("changePassword", "POST", "/auth/password"),
 )
 
 #: The catalog's own summary for the code, as a literal. `W13-SEAL` section 8.1 requires
@@ -157,15 +163,15 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Sixteen, not fifteen.
+    """One request per guarded operation, with no credential. Seventeen, not sixteen.
 
-    The set comparison is what makes this a sweep rather than a list: a seventeenth
+    The set comparison is what makes this a sweep rather than a list: an eighteenth
     operation is either written into ``GUARDED`` and swept, or named in
     :data:`~auditmanager.api.security.UNAUTHENTICATED_OPERATIONS` and reported by
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 16
+    assert len(GUARDED) == 17
     assert UNAUTHENTICATED_OPERATIONS == {"issueToken"}
     assert {operation for operation, _, _ in GUARDED} | UNAUTHENTICATED_OPERATIONS == (
         router.operation_ids
@@ -583,5 +589,11 @@ def test_a_subject_is_published_for_the_next_session_and_read_by_nobody_now(
     assert client.get("/projects", headers={"Authorization": f"Bearer {TEST_TOKEN}"}).status_code == 200
     assert seen and seen[0] is not None, seen
     assert seen[0] == Subject(
-        user_uid=TEST_SUBJECT.user_uid, login=TEST_SUBJECT.login
+        user_uid=TEST_SUBJECT.user_uid,
+        login=TEST_SUBJECT.login,
+        # The epoch is part of what the seam publishes, because it is part of what the seam
+        # verified: the credential named this generation and the account confirmed it.
+        # Comparing the whole `Subject` rather than two of its fields is what makes a fourth
+        # field somebody adds later visible here rather than silent.
+        token_epoch=TEST_SUBJECT.token_epoch,
     ), seen

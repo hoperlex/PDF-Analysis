@@ -1,4 +1,4 @@
-"""The surface is exactly the seventeen operations the frozen document declares.
+"""The surface is exactly the eighteen operations the frozen document declares.
 
 Asserted **against the document**, never against a list written out here. A list in a
 test is a second declaration that can drift from the first, and the whole reason
@@ -41,7 +41,7 @@ def test_the_router_declares_exactly_the_frozen_operations(
     )
 
 
-def test_the_document_declares_seventeen_and_the_router_implements_seventeen(
+def test_the_document_declares_eighteen_and_the_router_implements_eighteen(
     router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     """The count is checked separately from the set.
@@ -52,11 +52,12 @@ def test_the_document_declares_seventeen_and_the_router_implements_seventeen(
     **Twelve until the `R-5` reseal of 2026-09-18**, which added `listDocuments`,
     `listVersions` and `listRuns`; **fifteen until `W34-CONTRACT`**, which added
     `issueToken`, the credential exchange; **sixteen until `W38-KB`**, which added
-    `listDecisions` under `R-24`. The number moved because an owner ruling moved it;
+    `listDecisions` under `R-24`; **seventeen until `W39-REVOKE`**, which added
+    `changePassword` under `R-26`. The number moved because an owner ruling moved it;
     nothing else may move it.
     """
-    assert len(declared_operations(openapi_document)) == 17
-    assert len(router.routes) == 17
+    assert len(declared_operations(openapi_document)) == 18
+    assert len(router.routes) == 18
 
 
 def test_every_declared_operation_is_reachable(
@@ -91,7 +92,7 @@ def test_every_declared_operation_is_reachable(
                 assert bound[name] == samples[name]
 
 
-def test_no_eighteenth_operation_answers(router: Surface) -> None:
+def test_no_nineteenth_operation_answers(router: Surface) -> None:
     """A path the document does not declare is not a resource.
 
     Includes a method the document does not declare on a path that *is* declared:

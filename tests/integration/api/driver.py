@@ -36,6 +36,7 @@ from fastapi import APIRouter, FastAPI
 from starlette.testclient import TestClient
 
 from auditmanager.api.app import create_asgi_app
+from auditmanager.api.routers import Router
 from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -382,8 +383,17 @@ def probe_surface(handler: Any) -> Surface:
     That is strictly more evidence than the old probe gave: the old one exercised
     ``dispatch``'s own try/except, which is gone, and this one exercises the path a real
     failure now takes.
+
+    **The probe router is a `Router` and carries the credential port**, which it did not
+    need to before `W39-REVOKE`. ``probe`` is not in
+    :data:`~auditmanager.api.security.UNAUTHENTICATED_OPERATIONS`, so the seam guards it like
+    any other operation, and the seam now reads an account's credential generation through
+    the port the router carries. A bare ``APIRouter`` carries none, so every probe answered
+    ``401`` before its handler ran -- and the tests that read it saw *authentication_required*
+    where they expected the failure they had staged. That is the seam working; the probe was
+    the thing that had stopped being a caller.
     """
-    router = APIRouter()
+    router = Router(credentials=SuiteCredentialAdapter())
 
     @router.get("/probe", operation_id="probe", tags=["probe"])
     def probe() -> Any:
