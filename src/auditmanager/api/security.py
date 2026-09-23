@@ -40,8 +40,9 @@ Four things this module does **not** do, each because the contract or `T-6` says
 * **it does not decide what a subject may do.** It decides *who* the subject is and refuses
   everyone else. ``permission_denied`` stays in the catalog, reachable and unraised by this
   application, because the day there are roles it is already the right code. A verified
-  subject is published on ``request.state.subject`` and read by nothing in this tree: it is
-  what the next session needs and this one must not invent a use for;
+  subject is published on ``request.state.subject``, and since wave 39 exactly one operation
+  reads it -- ``changePassword``, which needs to know whose password it is changing and must
+  not be told by the body;
 * **it does not choose which operations it guards, except by a written register.**
   :data:`UNAUTHENTICATED_OPERATIONS` is the exception list, by ``operationId``, and it holds
   exactly the operation that hands a credential out. A route whose ``operationId`` the seam
@@ -61,6 +62,51 @@ the signature check like any other string -- so an upgraded deployment does not 
 keep a shared password that everyone who read the runbook already has.
 ``test_the_deployment_secret_is_not_itself_a_credential`` is that sentence as an assertion.
 
+**What wave 39 added: a credential can now be taken back.** Until `W39-REVOKE` a credential
+was a signed statement and nothing else, which made it *irrevocable*: between issuing one
+and its ``exp``, the only lever was rotating the deployment secret -- which signs everybody
+out, including the operator, and needs a redeploy. `R-26` rules revocation into the alpha,
+and it is the one guard of the four that cannot be added later, because no later work
+reaches a credential already sitting in somebody's browser.
+
+**What is revoked is an account's credentials, all of them, and never one token.** The
+payload carries ``ver``: the value of ``app_user.token_epoch`` at the moment of minting. On
+every guarded request the seam reads that account's *current* epoch and refuses a credential
+that disagrees. Raising the column by one therefore invalidates every credential ever minted
+for that account, immediately, everywhere, with no list of tokens kept anywhere.
+
+**Three properties of that choice, stated because each was the reason an alternative lost.**
+
+* *Nothing is stored per credential.* A denylist keyed by a token identity needs a table
+  that grows with traffic, needs sweeping, and -- the part that decides it -- cannot revoke
+  a credential minted before the denylist existed, because such a credential carries no
+  identity to list. The counter revokes credentials it has never seen.
+* *It survives a restart, and it must.* ``web/src/app/bff/session/store.ts`` is process
+  memory, so restarting the web container already signs everyone out; **that is not
+  revocation** and nothing here may lean on it. The API is a second process, the deployment
+  runs more than one thing, and an operator who ends the pilot must not have to guess which
+  processes have been restarted since. The epoch is a column: it is the same answer after a
+  restart, after a redeploy, and to every replica at once.
+* *A credential with no epoch is refused.* Everything minted before this landed carries no
+  ``ver`` at all, and an unreadable epoch is treated exactly as an unknown format version
+  is. So deploying this change is itself a global revocation -- everyone signs in again
+  once -- which is the correct direction for a change whose point is that credentials can be
+  taken away, and is written down here rather than discovered in an incident.
+
+**What it costs, and why that is the right trade.** One primary-key ``SELECT`` of one
+integer, on every request the seam guards. The seam was previously free -- one HMAC and no
+I/O -- and it is not free any more. That is the *whole* price of revocation and it is not
+avoidable by cleverness: a statement that can be taken back cannot be verified by reading
+only the statement. What was refused instead is a cached epoch with a short TTL, which would
+buy back the read and reintroduce exactly the property being removed: a revocation that
+takes effect in a little while. The request that follows a revocation is refused, not the
+one after that.
+
+**The port is narrow on purpose.** :class:`CredentialEpochs` has one method, takes a
+``user_uid`` and returns an integer or ``None``. It cannot read a password, cannot list
+accounts and cannot write. ``None`` -- no such account -- is a refusal and never a
+permissive default, which is how deleting a row revokes that account's credentials for free.
+
 **Unconfigured means refused, not open.** An application built with no deployment secret
 answers ``authentication_required`` to every request on the authorized surface and refuses
 to issue a credential at all. The alternative -- "no secret configured, so let everyone
@@ -79,7 +125,7 @@ import hmac
 import json
 import time
 from dataclasses import dataclass
-from typing import Annotated, Any, Final, Mapping
+from typing import Annotated, Any, Final, Mapping, Protocol, runtime_checkable
 
 from fastapi import Depends, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -92,12 +138,15 @@ __all__ = [
     "TOKEN_LIFETIME_SECONDS",
     "UNAUTHENTICATED_OPERATIONS",
     "AuthorizationDependency",
+    "CredentialEpochs",
+    "CurrentSubject",
     "IssuedCredential",
     "Subject",
     "TokenSigner",
     "bearer_scheme",
     "build_authorization_dependency",
     "build_signer",
+    "current_subject",
     "derive_signing_key",
 ]
 
@@ -163,14 +212,21 @@ AuthorizationDependency = Annotated[
 class Subject:
     """Who the deployment decided the caller is. Not what they may do.
 
-    Two fields, both already known to the caller: their own identity and their own login.
-    Nothing else is carried, because everything else -- a role, a group, a permission, an
-    expiry the client could act on -- would be this module inventing the identity model
-    `T-6` says it must not have.
+    Three fields, all already known to the caller: their own identity, their own login, and
+    the generation of credentials their account accepts. Nothing else is carried, because
+    everything else -- a role, a group, a permission, an expiry the client could act on --
+    would be this module inventing the identity model `T-6` says it must not have.
+
+    ``token_epoch`` has **no default**, and that is the point of it being a field rather than
+    an argument with one. A caller that could omit it would mint a credential under an epoch
+    it assumed instead of one it read, and the two differ exactly when it matters: in the
+    moment just after a revocation. Every construction of this class therefore has to have
+    got the number from somewhere, and the only place it comes from is the account's row.
     """
 
     user_uid: str
     login: str
+    token_epoch: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +235,25 @@ class IssuedCredential:
 
     token: str
     expires_in: int
+
+
+@runtime_checkable
+class CredentialEpochs(Protocol):
+    """The one thing the seam needs from a database, and nothing more.
+
+    One method. It cannot read a password, cannot list accounts, cannot write and cannot be
+    handed a login -- only the opaque identity the credential itself carries. A wider port
+    here would be a wider thing for the seam to be tempted by: this module is on the path of
+    every request, and the narrower its reach the fewer decisions it can make by accident.
+    """
+
+    def epoch_of(self, user_uid: str) -> int | None:
+        """This account's current credential generation, or ``None`` when there is none.
+
+        ``None`` is a **refusal**, never a permissive default. An account that no longer
+        exists must not keep authorising requests until its last credential expires, and a
+        deployment whose epoch lookup cannot answer must fail closed.
+        """
 
 
 def derive_signing_key(secret: str) -> bytes:
@@ -240,6 +315,13 @@ class TokenSigner:
         issued_at = int(time.time() if now is None else now)
         expires_at = issued_at + self._lifetime
         payload = {
+            # The account's credential generation at the moment of minting. A whole
+            # integer and not a clock reading: an instant would have to be compared against
+            # another instant, and two clocks that must agree are two ways to be wrong --
+            # the same reason the response carries a lifetime and never an expiry. A counter
+            # has no granularity to get wrong, so a credential minted in the same second as
+            # a revocation is unambiguously on one side of it.
+            "ver": subject.token_epoch,
             "sub": subject.user_uid,
             "login": subject.login,
             "iat": issued_at,
@@ -292,9 +374,19 @@ class TokenSigner:
         subject_uid = payload.get("sub")
         login = payload.get("login")
         expires_at = payload.get("exp")
+        token_epoch = payload.get("ver")
         if not isinstance(subject_uid, str) or not subject_uid:
             return None
         if not isinstance(login, str) or not login:
+            return None
+        # A credential with no epoch, or with one that is not a positive integer, is not a
+        # credential. `bool` is excluded for the same reason it is below -- `True` would
+        # otherwise compare equal to epoch 1 and authorise against an account that had never
+        # been revoked. Every credential minted before wave 39 lands here, which is why
+        # deploying that change signs everybody out once; see the module note.
+        if not isinstance(token_epoch, int) or isinstance(token_epoch, bool):
+            return None
+        if token_epoch < 1:
             return None
         # ``isinstance(True, int)`` is true, so booleans are excluded explicitly: a
         # credential whose expiry is ``true`` would otherwise compare as 1 and be expired,
@@ -304,7 +396,11 @@ class TokenSigner:
             return None
         if expires_at <= (time.time() if now is None else now):
             return None
-        return Subject(user_uid=subject_uid, login=login)
+        # What this returns is what the CREDENTIAL claims, including the epoch it was minted
+        # under. It is not yet known to be current: this method holds the key and no
+        # database, so it can prove the deployment signed this and cannot prove the account
+        # still accepts it. `require_authorization` is where the claim meets the row.
+        return Subject(user_uid=subject_uid, login=login, token_epoch=token_epoch)
 
     def _tag(self, signed: str) -> bytes:
         # ``utf-8`` and not ``ascii``: a non-printable byte in the credential raised
@@ -344,7 +440,9 @@ def _operation_of(request: Request) -> str | None:
     return operation_id if isinstance(operation_id, str) else None
 
 
-def build_authorization_dependency(environ: Mapping[str, str]) -> object:
+def build_authorization_dependency(
+    environ: Mapping[str, str], *, epochs: CredentialEpochs | None = None
+) -> object:
     """The dependency that guards the surface, closed over this environment's signer.
 
     A factory rather than a module-level dependency reading ``os.environ``, because
@@ -352,29 +450,71 @@ def build_authorization_dependency(environ: Mapping[str, str]) -> object:
     with a different configuration in the same process -- `W13-BASE` builds one that way for
     the `D-7` case, and `W5CERT-DEF-2` is the defect that happened the last time a component
     reached for the process environment instead of the injected mapping.
+
+    ``epochs`` is how revocation reaches this seam, and it is a **keyword argument with a
+    ``None`` default that refuses**, not an optional feature. ``None`` means this
+    application was assembled without a way to read credential generations, and a deployment
+    that cannot tell a live credential from a revoked one must answer
+    ``authentication_required`` rather than guess -- the same bargain the module note already
+    strikes for a missing deployment secret. ``create_documentation_app`` is the caller that
+    passes none, and it can serve no request anyway.
     """
     signer = build_signer(environ)
 
     def require_authorization(
         request: Request, credentials: AuthorizationDependency
     ) -> None:
-        """Refuse anything this deployment did not mint, or minted too long ago.
+        """Refuse anything this deployment did not mint, minted too long ago, or has revoked.
 
         The exchange is let through by name, because requiring a credential to obtain one
         is a door with a handle on the inside. Everything else -- including a request whose
         route the seam could not identify -- must present a credential this deployment's key
-        produced and whose expiry has not passed.
+        produced, whose expiry has not passed, **and whose epoch is the one its account
+        accepts right now**.
+
+        One refusal for all of them, as before. A caller learning that their credential was
+        *revoked* rather than *forged* learns that the account exists, which is the
+        enumeration oracle the exchange already refuses to be.
         """
         if _operation_of(request) in UNAUTHENTICATED_OPERATIONS:
             return
-        if signer is None or credentials is None:
+        if signer is None or credentials is None or epochs is None:
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
         subject = signer.verify(credentials.credentials)
         if subject is None:
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
-        # Published, and read by nothing in this tree. `T-6`: the seam says who the caller
-        # is; what they may do is the next session's question and this one must not answer
-        # it by accident.
+        # The credential is genuine and unexpired. Only now is the row read, and only now
+        # can this request be refused for having been revoked. The order is deliberate: a
+        # forged credential must not cost a database round trip, or an unauthenticated
+        # caller can make this deployment query on demand.
+        current = epochs.epoch_of(subject.user_uid)
+        if current is None or current != subject.token_epoch:
+            raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+        # Published. `T-6`: the seam says who the caller is; what they may do is still not
+        # its question. `changePassword` is the one operation that reads this, and it reads
+        # the identity rather than being handed one in a body -- a body could name somebody
+        # else.
         request.state.subject = subject
 
     return Depends(require_authorization)
+
+
+def current_subject(request: Request) -> Subject:
+    """The subject the seam verified for this request.
+
+    Only an operation the seam guards may depend on this, and every such operation is
+    guaranteed one: ``require_authorization`` either published a subject or refused the
+    request before any handler ran. The refusal below is therefore unreachable through the
+    assembled application and is still not an ``assert``: an operation added to
+    :data:`UNAUTHENTICATED_OPERATIONS` that also asked for a subject would reach it, and
+    answering ``authentication_required`` is the correct thing to do about that, where an
+    ``AttributeError`` would be a 500 telling the caller about this module's internals.
+    """
+    subject = getattr(request.state, "subject", None)
+    if not isinstance(subject, Subject):
+        raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+    return subject
+
+
+#: What an operation writes to receive the verified caller. The seam is the only producer.
+CurrentSubject = Annotated[Subject, Depends(current_subject)]

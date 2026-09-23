@@ -19,7 +19,7 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **seventeen operations across fourteen paths**, which is what the
+ * Those figures are **eighteen operations across fifteen paths**, which is what the
  * frozen document declares after the wave-38 reseal that added `listDecisions`. This file
  * said fifteen and twelve once and sixteen and thirteen after that, each true until the
  * next reseal, and it is the fifth stale count in this programme, so it is no longer

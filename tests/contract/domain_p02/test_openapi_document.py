@@ -55,6 +55,12 @@ REQUIRED_OPERATIONS = {
     # `R-23` requires reads it, and before it `listDecisionHistory` answered for one
     # finding only, so the only source was a client-side walk over every run.
     "listDecisions",
+    # `W39-REVOKE`, under `R-26`. The password change, and with it the only way this
+    # surface can take a credential back: the account's credential generation is raised by
+    # the same write that stores the new digest. Like `issueToken` it implements no product
+    # capability, and it is listed for the same reason -- this set is the whole surface, not
+    # the product part of it.
+    "changePassword",
 }
 
 #: The operations a caller reaches while holding no credential. Exactly one, and it is

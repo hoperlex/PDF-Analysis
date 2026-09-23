@@ -588,13 +588,23 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Fifteen operations, sealed. `A5` generates the typed client from this document; `B6`
+Eighteen operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
 Twelve until the reseal of 2026-09-18 under owner ruling `R-5`, which added the three
 listings below and made published work reachable after a page reload (`DEBT_REGISTER.md`
-D-16).
+D-16). Sixteen after `W34-CONTRACT` added `issueToken` on 2026-09-22, seventeen after
+`W38-KB` added `listDecisions` under `R-24` the same day, eighteen after `W39-REVOKE`
+added `changePassword` under `R-26` on 2026-09-23.
+
+*This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
+`tests/contract/api_v1/test_surface_counts_in_prose.py` reads `src/auditmanager/api`,
+`infra/deploy` and `web/src` and does **not** read `docs/`, so the sentence outlived two
+reseals with nothing able to see it. The count here is checked instead by
+`tests/contract/domain_p02/test_seam_register.py`, which compares the **table** against the
+frozen document -- so the table cannot rot, and until 2026-09-23 the sentence above it
+could.
 
 | Operation | Method and path |
 |---|---|
@@ -615,6 +625,7 @@ D-16).
 | `listVersions` | `GET /documents/{document_uid}/versions` |
 | `listRuns` | `GET /versions/{version_uid}/runs` |
 | `listDecisions` | `GET /decisions` |
+| `changePassword` | `POST /auth/password` |
 
 Rules that hold across the whole surface:
 
@@ -626,7 +637,14 @@ Rules that hold across the whole surface:
 * the viewer streams bytes from the server. There is no redirect and no presigned
   link: a URL into object storage is the internal address the contract forbids in a
   response, and it would outlive the request that authorized it;
-* growing lists — projects, findings, decision history — are cursor-paginated.
+* growing lists — projects, findings, decision history — are cursor-paginated;
+* every operation but `issueToken` requires a bearer credential **and** a credential
+  generation the account still accepts. `changePassword` raises that generation, which is
+  how a credential already issued is taken back: see `src/auditmanager/api/security.py`.
+  There is no revocation operation and there deliberately is not one — revoking an account
+  whose password nobody is changing is an operator's action
+  (`python -m auditmanager.access.revoke`), and publishing it would require deciding who
+  may revoke whom, which is the role vocabulary `T-6` forbids inventing at this seam.
 
 ## 8. Owner decisions this seam register encodes
 

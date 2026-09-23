@@ -1,4 +1,4 @@
-"""``issueToken`` -- the credential exchange, and the only open operation on this surface.
+"""``issueToken`` and ``changePassword`` -- the credential exchange, and taking one back.
 
 Three things here are not the shape the other six router modules have, and each is the
 contract's doing rather than a liberty:
@@ -22,12 +22,42 @@ contract's doing rather than a liberty:
   refusal a request with no credential gets, because "the deployment does not accept this"
   is one fact. Anything more specific is an account-enumeration oracle with extra steps.
 
-**Where the two models should live.** ``IssueTokenRequest`` and ``IssueTokenResponse`` are
-``components.schemas`` entries and belong beside the other forty-six in
-``api/schemas/models.py``. `W34-API` does not own that file, so they are declared here
-instead of edited into another session's module. Moving them there later changes no byte of
-the served document: FastAPI names a schema after the class, not after its module. The
-declarations themselves are the contract's, spelling for spelling.
+**Where the models should live.** ``IssueTokenRequest``, ``IssueTokenResponse`` and
+``ChangePasswordRequest`` are ``components.schemas`` entries and belong beside the others in
+``api/schemas/models.py``. `W34-API` did not own that file, so the first two were declared
+here instead of edited into another session's module, and the third is declared beside them
+for the same reason plus one more: the three are one subject. Moving them changes no byte of
+the served document -- FastAPI names a schema after the class, not after its module. The
+declarations are the contract's, spelling for spelling.
+
+``changePassword``, and why it looks the way it does
+----------------------------------------------------
+**It is not an open operation.** It requires a credential like every operation but the
+exchange, and the account whose password changes is the one that credential names -- read
+from :data:`~auditmanager.api.security.CurrentSubject`, never from the body. A login in the
+body would be an operation one reviewer could aim at another, which is an authorization
+model this system has not got and `T-6` forbids inventing here.
+
+**It answers with a credential, and that is the revocation being visible rather than a
+convenience.** Changing a password raises the account's credential epoch in the same
+statement that writes the new digest, so every credential minted under the old password
+stops being accepted -- *including the one this very request presented*. Answering `204`
+would leave the caller holding something already dead and unable to tell that from a
+failure. So the answer is the replacement: minted after the change, under the new epoch, and
+the only credential in the world this account now accepts.
+
+**The response reuses ``IssueTokenResponse`` and adds no schema.** A credential and its
+lifetime is one shape; the contract already has a name for it. A second name for the same
+two properties would be two spellings of one thing in a document whose size is itself a
+guarded number, and `D-18`'s lesson is that the surface grows by as little as it can.
+
+**One refusal for the credential, as everywhere on this path.** A wrong current password is
+``authentication_required`` -- the same answer a missing credential gets -- because "this
+deployment does not accept this" is one fact. A *new* password that is the current one, or
+that fails the mechanical bounds, is ``validation_failed``: that is a statement about the
+request and not about whether the caller is who they say, and it is only ever reported to a
+caller who has already proved the current password. No error code is added to the catalog:
+`D-18`, and neither refusal needs one that is not already there.
 """
 
 from __future__ import annotations
@@ -40,9 +70,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from auditmanager.api.routers.declarations import envelope_responses, success
 from auditmanager.api.routers.ports import CredentialPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
+from auditmanager.api.security import CurrentSubject
 from auditmanager.shared.errors import DomainError, ErrorCode
 
-__all__ = ["IssueTokenRequest", "IssueTokenResponse", "build_auth_routes"]
+__all__ = [
+    "ChangePasswordRequest",
+    "IssueTokenRequest",
+    "IssueTokenResponse",
+    "build_auth_routes",
+]
 
 #: The operation's own ``security``: **the empty requirement**, which overrides the
 #: document root for this operation and for no other.
@@ -84,10 +120,36 @@ class IssueTokenRequest(_Object):
 
 
 class IssueTokenResponse(_Object):
-    """The credential, and how long it stays valid counted from this response."""
+    """The credential, and how long it stays valid counted from this response.
+
+    Answered by ``issueToken`` and by ``changePassword``. One shape, one name: both
+    operations hand back a credential this deployment has just minted and the number of
+    seconds it stays good for, and a second schema saying the same two things would grow the
+    document without telling a caller anything new.
+    """
 
     token: Annotated[str, Field(min_length=1)]
     expires_in: Annotated[int, Field(ge=1)]
+
+
+class ChangePasswordRequest(_Object):
+    """The current password and its replacement. Both required, neither may be empty.
+
+    **There is no login here and there will not be one.** Whose password this changes is
+    decided by the credential the request carries, which the seam has already verified. A
+    login in this body would let a caller name an account other than their own, and the only
+    thing standing between that and a working impersonation would be a check nobody has
+    specified yet.
+
+    The bounds are :mod:`auditmanager.access.passwords`' mechanical ones, restated here
+    because a transport schema is where a body is bounded. They are not a password policy:
+    there is still no minimum length, no complexity rule, no history and no expiry, and
+    inventing one at this seam would have to be renegotiated when a policy is really
+    specified.
+    """
+
+    current_password: Annotated[str, Field(min_length=1, max_length=1024)]
+    new_password: Annotated[str, Field(min_length=1, max_length=1024)]
 
 
 def build_auth_routes(router: APIRouter, credentials: CredentialPort) -> None:
@@ -114,6 +176,54 @@ def build_auth_routes(router: APIRouter, credentials: CredentialPort) -> None:
     )
     def issue_token(body: IssueTokenRequest) -> WireResponse:
         issued = credentials.issue(login=body.login, password=body.password)
+        if issued is None:
+            raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+        return json_response(
+            200,
+            encode_json({"token": issued.token, "expires_in": issued.expires_in}),
+        )
+
+    @router.post(
+        "/auth/password",
+        operation_id="changePassword",
+        tags=["auth"],
+        status_code=200,
+        response_model=IssueTokenResponse,
+        responses={
+            **success(
+                200,
+                "The password was changed. Every credential minted for this account "
+                "before this response -- including the one this request presented -- is "
+                "refused from now on. The body carries the replacement.",
+            ),
+            # 401 covers both "no credential" and "that is not the current password": one
+            # refusal, as on the exchange.
+            #
+            # 403 is declared, and this is the difference from ``issueToken``. That
+            # operation omits it because it has no authenticated subject -- it is the one
+            # that produces one -- and every *other* operation on this surface declares it,
+            # which `tests/contract/domain_p02/test_openapi_document.py`'s
+            # ``test_every_operation_can_report_401_and_403`` enforces for exactly the
+            # reason that makes it right here: a generated client needs a typed shape for
+            # `permission_denied` on every authorized operation, and an operation that
+            # omitted it would be asserting something about a role model this surface does
+            # not have. Nothing raises it, here or anywhere else.
+            #
+            # 409 is absent because nothing here is idempotent: a second identical change
+            # is refused by its own current password, not replayed. 404 is absent because
+            # this path addresses no aggregate; an account that has gone is a refused
+            # credential.
+            **envelope_responses(401, 403, 422, 500, 503),
+        },
+        summary="Change the signed-in account's password and revoke its old credentials.",
+    )
+    def change_password(subject: CurrentSubject, body: ChangePasswordRequest) -> WireResponse:
+        # `subject.user_uid` and never `body`: the account is the one the seam verified.
+        issued = credentials.change_password(
+            user_uid=subject.user_uid,
+            current_password=body.current_password,
+            new_password=body.new_password,
+        )
         if issued is None:
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
         return json_response(
