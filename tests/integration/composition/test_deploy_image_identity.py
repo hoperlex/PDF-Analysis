@@ -246,7 +246,11 @@ class _Served(http.server.BaseHTTPRequestHandler):
     body = b'{"openapi": "3.1.0"}'
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's spelling
-        self.send_response(200)
+        # `R-31` closed the documentation routes, so a real deployment answers **401**
+        # here and `deploy.sh` requires exactly that. This stands in for the API, so it
+        # answers the way the API does -- a stub that kept answering 200 would be
+        # asserting the behaviour the ruling removed.
+        self.send_response(401)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(self.body)))
         self.end_headers()

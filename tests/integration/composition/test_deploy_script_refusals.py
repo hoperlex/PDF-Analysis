@@ -180,7 +180,11 @@ sys.exit(0)
 
 
 class _Served(http.server.BaseHTTPRequestHandler):
-    status = 200
+    # `R-31` closed the documentation routes, so a real deployment answers **401** here
+    # and `deploy.sh` requires exactly that. This stands in for the API, so it answers the
+    # way the API does; a stub still answering 200 would assert the behaviour the ruling
+    # removed. Cases that want a different code override `status` through the fixture.
+    status = 401
     body = b'{"openapi": "3.1.0"}'
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's spelling
@@ -197,7 +201,7 @@ class _Served(http.server.BaseHTTPRequestHandler):
 @pytest.fixture()
 def serving() -> Iterator[tuple[int, type[_Served]]]:
     """An HTTP server on an ephemeral port, standing in for the published proxy port."""
-    handler = type("_Handler", (_Served,), {"status": 200, "body": _Served.body})
+    handler = type("_Handler", (_Served,), {"status": 401, "body": _Served.body})
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -688,7 +692,7 @@ class TestTheRunningStackIsAskedAndMayFail:
         script, env_file = _ready(tmp_path, port)
         completed, _ = _run(script, tmp_path=tmp_path, env_file=env_file)
         assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
-        assert "answered 404, not 200" in completed.stderr, completed.stderr
+        assert "answered 404, not 401" in completed.stderr, completed.stderr
 
     def test_proxy_answers_is_shown_able_to_fail(
         self, tmp_path: Path, serving: tuple[int, type]
@@ -859,19 +863,48 @@ class TestTheControl:
         assert subcommands.index("build") < subcommands.index("up"), subcommands
         assert "run" in subcommands[subcommands.index("up"):], subcommands
 
-    def test_the_served_document_reaches_the_conformance_check(
+    def test_the_conformance_check_asks_the_deployed_process_for_its_own_document(
         self, tmp_path: Path, serving: tuple[int, type]
     ) -> None:
-        """The bytes the proxy served are what the engine is given -- not a build artefact
-        and not a second fetch. The criterion's words are "against the deployed process"."""
+        """WHAT THIS CASE USED TO ASSERT, AND WHY IT NO LONGER CAN -- said here rather
+        than deleted, because the property really did change and a reader deserves to
+        know which way.
+
+        It asserted that **the bytes the proxy served** were what the engine was given:
+        not a build artefact, not a second fetch. `R-31` closed `/openapi.json` behind a
+        credential, so the proxy now answers `401` with no document at all, and the only
+        ways to keep that exact property were to teach a deploy script to mint a reviewer
+        credential -- putting sign-in on the deployment path -- or to reopen the route.
+
+        What is asserted instead is the half of the criterion that survives intact and is
+        the half it names: *"against the deployed process rather than against a build
+        artefact"*. The engine now receives the document from `create_asgi_app().openapi()`
+        **inside the image**, which is this deployment's own application object built from
+        this container's environment.
+
+        WHAT IS NO LONGER COVERED HERE, AND BY WHAT: the document does not travel the
+        proxy inside this check. `proxy-answers` above covers that -- it requires `401`,
+        which only the application's seam can produce, where nginx holding a dead upstream
+        answers 502/503/504 -- and `verify-deployed.sh` covers image bytes against tree
+        bytes. Two guards where there was one, each answering a smaller question.
+        """
         port, handler = serving
         handler.body = b'{"openapi": "3.1.0", "x-served-by": "the-proxy"}'
         script, env_file = _ready(tmp_path, port)
         completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
-        captured = Path(str(log) + ".served")
-        assert captured.exists(), "the served document never reached the conformance check"
-        assert json.loads(captured.read_text(encoding="utf-8"))["x-served-by"] == "the-proxy"
+        calls = Path(log).read_text(encoding="utf-8") if Path(log).exists() else ""
+        assert "create_asgi_app" in calls, (
+            "the conformance driver does not build the deployed application: " + calls[:400]
+        )
+        # And it is NOT fed the proxy's bytes. The docker stub captures stdin whatever
+        # arrives, so the file exists and being EMPTY is the assertion: nothing is piped
+        # in any more. Both mechanisms present would mean only one of them is the check.
+        piped = Path(str(log) + ".served")
+        assert piped.read_text(encoding="utf-8").strip() == "", (
+            "a served document was still piped into the engine: "
+            + piped.read_text(encoding="utf-8")[:200]
+        )
 
     def test_the_served_document_is_not_bind_mounted(
         self, tmp_path: Path, serving: tuple[int, type]
@@ -927,11 +960,11 @@ class TestTheControl:
             stub={
                 "STUB_CONFORMANCE_STATUS": "2",
                 "STUB_CONFORMANCE_OUTPUT":
-                    "the document served at /api/v1/openapi.json is not JSON: line 1",
+                    "the deployed process could not produce its own schema: ValueError()",
             },
         )
         assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
-        assert "answered 200 and did not serve a document" in completed.stderr, completed.stderr
+        assert "could not produce its own schema" in completed.stderr, completed.stderr
         assert "does not conform to the frozen contract" not in completed.stderr
 
 

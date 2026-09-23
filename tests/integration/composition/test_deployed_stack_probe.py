@@ -207,7 +207,11 @@ def _run(
     tmp_path: Path,
     repo: Path | None = None,
     env_file: Path | None = None,
-    code: str = "200",
+    # `R-31` closed `/openapi.json` behind a credential, so the answer that proves the
+    # API is alive is **401**, not 200. The default moved with it; the cases that
+    # drive 502 and 000 still name their own codes, and a new case drives 200 --
+    # which is now a refusal, because it means the four documentation routes are open.
+    code: str = "401",
     **stub_environment: str,
 ) -> tuple[subprocess.CompletedProcess[str], str]:
     binary = tmp_path / "bin"
@@ -331,6 +335,29 @@ class TestEveryWayItCannotTellIsAFailure:
         assert completed.returncode == DRIFT, (completed.stdout, completed.stderr)
         assert "answered 502" in completed.stderr, completed.stderr
         assert "reload-proxy.sh" in completed.stderr, completed.stderr
+
+    def test_a_200_with_no_credential_is_refused_because_that_is_d73_reopened(
+        self, world, tmp_path: Path
+    ) -> None:
+        """`R-31` closed `/openapi.json` behind a credential, so **200 is now a refusal.**
+
+        Without this case the repair is only a moved default: every other case in this
+        file would pass if the script simply stopped checking the code at all, because
+        they all drive codes it rejects either way. This is the one that fails when the
+        four documentation routes are open on a running deployment, which is the whole
+        of what `D-73` was.
+        """
+        repo, deploy, image = world
+        completed, _ = _run(
+            deploy / "verify-deployed.sh",
+            tmp_path=tmp_path,
+            repo=repo,
+            code="200",
+            STUB_IMAGE=str(image),
+        )
+        assert completed.returncode == DRIFT, (completed.stdout, completed.stderr)
+        assert "200 with no credential" in completed.stderr, completed.stderr
+        assert "R-31" in completed.stderr, completed.stderr
 
     def test_a_proxy_that_does_not_answer_at_all_is_not_a_pass(
         self, world, tmp_path: Path
