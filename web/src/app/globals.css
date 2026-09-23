@@ -108,27 +108,47 @@
   /*
    * ---- lines -------------------------------------------------------------------
    *
-   * `--am-line-strong` is NOT decoration and that is why it moved. It is the resting
-   * border of every `input`, `textarea` and `select`, of `.am-button--quiet`, and of
-   * `input[type='file']::file-selector-button` — controls whose fill is `--am-paper`
-   * on a `--am-paper` or `--am-surface` page, so the border is the only thing that
-   * says a control is there. WCAG 1.4.11 asks 3:1 of exactly that. It was **1.92 on
-   * paper and 1.77 on surface**; it is now ≥ 3.06 on every surface it borders.
+   * EVERY LEVEL OF THIS SCALE IS ABOVE 3:1, AND THAT IS A RULING RATHER THAN A REPAIR.
+   * `R-33`, taken by the owner on 2026-09-23 over the targeted alternative that
+   * `W32-CONTRAST` §3 and `W33-THEME` had each declined: every border in the product
+   * clears WCAG 1.4.11's 3:1 against the surface it is drawn on, whether or not it is
+   * the only thing identifying a control. `D-81` is the row it closes.
    *
-   * The other three levels did not move and are separators, not component boundaries:
-   * a card, a table rule, a divider. `--am-line` is the one to argue about — it bounds
-   * three things that ARE interactive (the finding row, the evidence page tabs, the
-   * page-action links), each with a fill that does not distinguish it from the page,
-   * so 1.4.11 reaches it too, at 1.20–1.36. Raising it means L ≤ 0.2568, which is
-   * `--am-line-strong`'s own territory, and a three-level border scale cannot have two
-   * levels at the 1.4.11 ceiling. That is a scale decision, not a value repair, and it
-   * is registered in `docs/program/W32-CONTRAST.md` §3 rather than taken here.
+   * WHAT THAT COSTS, SAID PLAINLY: every rule in this product is now a line a reader
+   * can see. A hairline inside a card, a table rule, the divider under a section
+   * heading — none of them can be a suggestion any more. The interface reads harder
+   * than it did, and the owner chose that with the arithmetic in front of them.
+   *
+   * WHAT THE FOUR LEVELS ARE NOW. The ceiling the old comment described — *"a
+   * three-level border scale cannot have two levels at the 1.4.11 ceiling"* — was true
+   * and is gone with the thing that made it a ceiling. There is no longer one level
+   * sitting on the floor and three below it: the floor is where the scale STARTS, and
+   * the four levels are spread across the band above it. Measured against the worst
+   * surface each meets, over both palettes:
+   *
+   *   `--am-line-soft`     3.08 light / 3.13 dark   the quiet separator inside a card
+   *   `--am-grid-line`     3.39 / 3.41              a table rule
+   *   `--am-line`          4.07 / 4.10              a card edge, a row boundary
+   *   `--am-line-strong`   5.00 / 5.00              a control's own boundary
+   *
+   * They are closer together than they were, and that is arithmetic rather than taste:
+   * the compliant band in a light palette runs from L ≈ 0.248 down, so four levels
+   * share it. What they gained is that all four are now VISIBLE levels — the light
+   * palette's previous soft/line/grid sat at 1.08–1.36 against their surfaces, which is
+   * to say they were three names for "almost not there".
+   *
+   * Every figure above is reproduced by `tests/unit/styles/contrast.test.ts`, which
+   * asserts the floor twice: once through `thresholdFor` and once in
+   * `R-33: every border that meets on a screen clears 3:1`, which reads no register.
    */
-  --am-line-soft: #ebedf1;
-  --am-line: #d9dde3;
-  /* was #b4bcc7 — 1.92 on paper, 1.77 on surface. Now 3.56 / 3.29, 3.12 on sunken. */
-  --am-line-strong: #838891;
-  --am-grid-line: #e6e9ed;
+  /* was #ebedf1 — 1.17 on paper, 1.08 on surface. Now ≥ 3.08 on every surface. */
+  --am-line-soft: #818790;
+  /* was #d9dde3 — 1.36 on paper, 1.26 on surface, 1.20 on sunken. Now ≥ 4.07. */
+  --am-line: #6e737b;
+  /* was #838891 (and #b4bcc7 before W32) — 3.04 at worst. Now ≥ 5.00. */
+  --am-line-strong: #60656d;
+  /* was #e6e9ed — 1.13 on surface. Now ≥ 3.39. */
+  --am-grid-line: #7a8089;
 
   /* ---- semantic hues, each with a tint that can carry text --------------------- */
   --am-accent: #1f4f8b;
@@ -216,11 +236,14 @@
  * **1.64:1**. The light theme's collapsed third level is therefore not a property of the
  * token set; it is a property of one value nobody has been allowed to move.
  *
- * `--am-line` fails 1.4.11 in this theme for the same reason and by the same arithmetic it
- * fails in the light one — 1.44:1 on `--am-surface` here, 1.26:1 there. It is registered
- * per theme in `tests/unit/styles/contrast.test.ts`, not repaired, because raising it is a
- * change to the three-level border SCALE and that is the same owner decision in both
- * palettes.
+ * `--am-line` failed 1.4.11 in this theme for the same reason and by the same arithmetic it
+ * failed in the light one — 1.44:1 on `--am-surface` here, 1.26:1 there — and for six waves
+ * it was registered per theme in `tests/unit/styles/contrast.test.ts` rather than repaired,
+ * because raising it is a change to the border SCALE and that was the same owner decision in
+ * both palettes. **The owner took it on 2026-09-23 (`R-33`), the wide way**, so this palette's
+ * four border levels moved with the light one's and by the same rule: every border clears 3:1
+ * against the surface it is drawn on. A dark palette reaches that floor by getting LIGHTER,
+ * which is why these four values went up the scale where the light ones went down it.
  *
  * WHY THE BORDER TOKENS ARE OPAQUE HEX AND NOT WHITE AT LOW ALPHA, which is what the
  * reference system uses: `tests/unit/styles/contrast.ts` resolves a token to a measurable
@@ -256,10 +279,10 @@
     --am-surface-sunken: #0a0f16;
 
     /* ---- lines -------------------------------------------------------------------- */
-    --am-line-soft: #1b2431;
-    --am-line: #27323f;
-    --am-line-strong: #6b7a8d;
-    --am-grid-line: #212b38;
+    --am-line-soft: #616f80;
+    --am-line: #748295;
+    --am-line-strong: #8491a1;
+    --am-grid-line: #667587;
 
     /* ---- semantic hues, each with a tint that can carry text ---------------------- */
     --am-accent: #7aa9e0;
@@ -297,10 +320,10 @@
   --am-surface-sunken: #0a0f16;
 
   /* ---- lines -------------------------------------------------------------------- */
-  --am-line-soft: #1b2431;
-  --am-line: #27323f;
-  --am-line-strong: #6b7a8d;
-  --am-grid-line: #212b38;
+  --am-line-soft: #616f80;
+  --am-line: #748295;
+  --am-line-strong: #8491a1;
+  --am-grid-line: #667587;
 
   /* ---- semantic hues, each with a tint that can carry text ---------------------- */
   --am-accent: #7aa9e0;
@@ -805,9 +828,18 @@ input[type='file']::file-selector-button:hover {
  * A state block announces an outcome, so it is tinted rather than outlined: an outline in
  * a hue on white is a ring around small text, and it is what made every one of these read
  * as the same grey panel.
+ *
+ * THE RING IS THE HUE ITSELF SINCE `R-33`, not a fraction of it. These borders were
+ * `color-mix(in srgb, var(--am-failed) 30%, transparent)` and its four siblings, which
+ * composite to 1.4–2.0:1 against the page — below the floor the owner set for every border
+ * in the product. Reaching 3:1 through the mix takes 59–78% of the hue depending on the
+ * palette, and a percentage tuned to land just over a threshold is a number the next reader
+ * cannot check against anything. The hue at full strength clears 4.48:1 at worst across both
+ * palettes and every surface, and it says what it is: the ring around a failed state is the
+ * failed colour.
  */
 .am-state--error {
-  border-color: color-mix(in srgb, var(--am-failed) 30%, transparent);
+  border-color: var(--am-failed);
   background: var(--am-failed-light);
 }
 
@@ -816,7 +848,7 @@ input[type='file']::file-selector-button:hover {
 }
 
 .am-state--warning {
-  border-color: color-mix(in srgb, var(--am-degraded) 32%, transparent);
+  border-color: var(--am-degraded);
   background: var(--am-degraded-light);
 }
 
@@ -918,31 +950,31 @@ li.am-state .am-state__detail {
 .am-badge--inert {
   color: var(--am-inert);
   background: var(--am-inert-light);
-  border-color: color-mix(in srgb, var(--am-inert) 22%, transparent);
+  border-color: var(--am-inert);
 }
 
 .am-badge--active {
   color: var(--am-accent);
   background: var(--am-accent-light);
-  border-color: color-mix(in srgb, var(--am-accent) 22%, transparent);
+  border-color: var(--am-accent);
 }
 
 .am-badge--ok {
   color: var(--am-ok);
   background: var(--am-ok-light);
-  border-color: color-mix(in srgb, var(--am-ok) 22%, transparent);
+  border-color: var(--am-ok);
 }
 
 .am-badge--degraded {
   color: var(--am-degraded);
   background: var(--am-degraded-light);
-  border-color: color-mix(in srgb, var(--am-degraded) 26%, transparent);
+  border-color: var(--am-degraded);
 }
 
 .am-badge--failed {
   color: var(--am-failed);
   background: var(--am-failed-light);
-  border-color: color-mix(in srgb, var(--am-failed) 24%, transparent);
+  border-color: var(--am-failed);
 }
 
 .am-badge__qualifier {

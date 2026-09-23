@@ -18,21 +18,29 @@
  * instances of: a hand-maintained subset standing in for a set something else decides,
  * with nothing that fails when the authority grows.
  *
- *   the PAIRS       are computed by `census()` from thirty rendered screens crossed with
- *                   the stylesheet, plus `declaredPairs()` for the rules one server
+ *   the PAIRS       are computed by `census()` from forty-nine rendered screens crossed
+ *                   with the stylesheet, plus `declaredPairs()` for the rules one server
  *                   render pass structurally cannot reach;
  *   the THRESHOLD   is a function of what the pair IS — 4.5 for text (WCAG 1.4.3 AA),
- *                   3.0 for a boundary or a graphic that carries meaning (1.4.11) —
- *                   and whether a boundary carries meaning is itself derived: the
- *                   element is interactive per the MARKUP (an interactive tag, a `role`,
- *                   a `tabindex`), and its own fill does not already distinguish it from
- *                   what is behind it.
+ *                   3.0 for a graphic that carries meaning (1.4.11), and, since `R-33`,
+ *                   3.0 for EVERY border in the product.
+ *
+ * WHAT `R-33` CHANGED, 2026-09-23. Until wave 42 a border answered to 1.4.11 only where it
+ * was the sole thing identifying a control — interactive per the markup, with a fill that
+ * did not already distinguish it. That is what the standard asks for, and the owner ruled
+ * for more than the standard asks: every border, every state, both palettes. So the
+ * threshold no longer asks anything about the element a border surrounds, and
+ * `R-33: every border that meets on a screen clears 3:1` asserts the floor a second time
+ * WITHOUT consulting the register, because a product-wide floor that a paragraph can
+ * excuse is the targeted rule again under another name.
  *
  * So the only hand-maintained set in this file is `REGISTERED`: pairs that are measured,
  * below threshold, and knowingly not repaired this wave, each with its reason. It is
  * held to the census in BOTH directions — a registered pair the screens no longer produce
  * is a failure, exactly as an unregistered pair below threshold is. A stale exemption
- * cannot sit here unnoticed, and a new failure cannot hide behind one.
+ * cannot sit here unnoticed, and a new failure cannot hide behind one. **It is empty as of
+ * wave 42**, and the eight rows it carried were deleted by that both-directions check going
+ * red after the tokens moved, not by anyone remembering to look.
  */
 
 /// <reference types="vite/client" />
@@ -162,122 +170,33 @@ interface Registered {
  */
 const REGISTERED: readonly Registered[] = [
   /*
-   * REMOVED, repaired rather than accepted. `W32-CONTRAST` registered
-   * `text|--am-ink-inverse|--am-accent-light|-|selection` because `::selection` set no
-   * `color` of its own, so selecting a primary button label put white on a pale tint at
-   * 1.17:1 and the words vanished under the pointer. It could not fix it: the repair is a
-   * rule, and that session's grant was token values.
+   * EMPTY, and the eight rows that stood here were deleted by a red test rather than by
+   * a tidy-up. Wave 42, `R-33` / `D-81`.
    *
-   * The integrator added `color: var(--am-ink)` to the `::selection` rule — 15.13:1 against
-   * that tint, and the one foreground safe on every surface selection can land on.
+   * What they said, in one sentence repeated eight times: `--am-line` is below 1.4.11 on
+   * `--am-surface` and on `--am-paper`, resting and hovered and focused and active, in
+   * both palettes; raising it is `--am-line-strong`'s own territory; a three-level border
+   * scale cannot carry two levels at the 1.4.11 ceiling; that is a scale decision with an
+   * owner and neither `W32-CONTRAST` §3 nor `W33-THEME` nor `W41-BLIND` had the grant to
+   * take it. Every one of those clauses was true when it was written.
    *
-   * **This row's removal was forced by the guard, not noticed by a person.** The repair made
-   * `every registered pair is still produced and still below its threshold` go red, which is
-   * the both-directions check doing exactly what §4.2's M4 mutation predicted. A one-way
-   * register would have kept a row describing a defect that no longer exists, and the next
-   * reader would have believed it.
+   * The owner took the decision on 2026-09-23 and took it the wide way: `R-33` raises
+   * EVERY border to 3:1 rather than the load-bearing ones, so there is no longer a ceiling
+   * for two levels to compete for — the whole scale sits above the floor and the levels are
+   * spread across what is left. `docs/program/W42-LOOK.md` §1 carries the arithmetic.
+   *
+   * THE ROWS WERE NOT DELETED BY THE HAND THAT MOVED THE TOKENS. The values changed first,
+   * and `every registered row is still produced and still below its threshold` went red
+   * naming all sixteen rows (eight pairs × two palettes) as excuses for pairs that now
+   * pass. That is the both-directions check doing exactly what it was built for in wave 32,
+   * and it is the second time it has forced a stale exemption out of this file — the first
+   * was `::selection`, recorded in the comment `W32-CONTRAST` left above.
+   *
+   * An empty register is not a weaker guard: every assertion below still runs, and
+   * `isRegistered` now excuses nothing at all. The next pair that drops below its threshold
+   * fails loudly with nowhere to hide, which is the state this file has been working
+   * towards since it was written.
    */
-  {
-    key: 'edge|--am-line|--am-surface|-|border',
-    themes: ['light', 'dark'],
-    why:
-      '`--am-line` at 1.26:1 on `--am-surface` in the light palette and 1.44:1 in the ' +
-      'dark one. It is a separator at forty sites and the ONLY boundary at three ' +
-      'interactive ones whose fill does not distinguish them from the page: the finding ' +
-      'row, the evidence page tabs and the page-action links. 1.4.11 reaches those three. ' +
-      'Raising it needs `--am-line-strong`\u2019s own territory in EITHER palette — a ' +
-      'three-level border scale cannot carry two levels at the 1.4.11 ceiling — and it ' +
-      'would darken (or lighten) every card, table rule and divider in the tree. That is ' +
-      'one scale decision, it has the same answer in both themes, and `W33-THEME` did not ' +
-      'take it either. W32-CONTRAST §3.',
-  },
-  {
-    key: 'edge|--am-line|--am-surface|hover|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token on the same three controls, hovered, in both palettes. 1.4.11 covers ' +
-      'states as well as components, so the hovered boundary is in scope for the same ' +
-      'reason and is left for the same reason. The hover CHANGE is carried by ' +
-      '`--am-line-strong` and by `--am-accent`, both of which clear 3:1 in both themes; ' +
-      'only this resting edge does not.',
-  },
-  {
-    key: 'edge|--am-line|--am-surface|focus-visible|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token, focused, in both palettes. What indicates focus is the ' +
-      '`--am-accent` outline — 7.62:1 light, 7.67:1 dark — which passes and is the thing ' +
-      '2.4.7 and 1.4.11 actually ask for here; this row is the resting border still ' +
-      'showing underneath it, and repairing it would change nothing a keyboard user can see.',
-  },
-  /*
-   * FOUR ROWS ADDED BY `W41-BLIND`, 2026-09-23, and every one of them is a pair this
-   * census had never measured rather than a pair it had excused.
-   *
-   * Widening the screen list -- populated lists, a seeded review screen, the knowledge
-   * base, the two session screens -- took the census from 31 unreached colour rules to
-   * 11, and the newly reached elements carry `--am-line` on `--am-paper`: **1.30:1 in the
-   * dark palette and 1.36:1 in the light one, against the 3:1 that 1.4.11 asks of the
-   * only boundary an interactive control has.**
-   *
-   * The sites are `button.am-finding-row.am-button` inside the review list, `li.am-state`
-   * -- every project row and every run row -- while hovered, and the theme control in the
-   * application bar. **No census had ever rendered a populated list or a review screen
-   * with data in it**, which is why a pair on the row a reviewer clicks first has been
-   * unmeasured since wave 32.
-   *
-   * Registered and NOT repaired, and the reason is the one four rows above already give:
-   * this is `--am-line` at the 1.4.11 ceiling, the repair is `--am-line-strong`'s own
-   * territory in both palettes, and a three-level border scale cannot carry two levels at
-   * that ceiling. `W32-CONTRAST` §3 did not take that decision and `W33-THEME` did not
-   * take it either; it is a scale decision with an owner, and `W41-BLIND`'s grant is the
-   * instruments. What this wave changes is that the pair is now MEASURED, named, and held
-   * in both directions, instead of being invisible.
-   */
-  {
-    key: 'edge|--am-line|--am-paper|-|border',
-    themes: ['light', 'dark'],
-    why:
-      '`--am-line` at 1.36:1 on `--am-paper` in the light palette and 1.30:1 in the dark ' +
-      'one, at the theme control in the application bar. Exactly the scale decision the ' +
-      '`--am-surface` rows above describe, on the other fill; the two cannot be taken ' +
-      'apart, because one token draws both. W32-CONTRAST §3.',
-  },
-  {
-    key: 'edge|--am-line|--am-paper|hover|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token on `li.am-state` -- every project row and every run row -- while ' +
-      'hovered, in both palettes. Reached for the first time in wave 41, because every ' +
-      'list in this census had been rendered COLD since wave 32 and a cold list has no ' +
-      'rows. The hover change itself is carried by `--am-line-strong`, which clears 3:1.',
-  },
-  {
-    key: 'edge|--am-line|--am-paper|focus-visible|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token on the review screen\'s finding row, focused, in both palettes. ' +
-      'What indicates focus is the `--am-accent` outline at 7.6:1, which passes and is ' +
-      'what 2.4.7 asks for; this row is the resting border underneath it. Reached for the ' +
-      'first time in wave 41: the review screen had only ever been censused COLD.',
-  },
-  {
-    key: 'edge|--am-line|--am-paper|active|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token on the finding row while the pointer is down, in both palettes. The ' +
-      'active state is indicated by the shadow dropping to `--am-shadow-0`, not by this ' +
-      'border. Same token, same scale decision, same owner as the `--am-surface` rows.',
-  },
-  {
-    key: 'edge|--am-line|--am-surface|active|border',
-    themes: ['light', 'dark'],
-    why:
-      'The same token, on the finding row while the pointer is down, in both palettes. The ' +
-      'active state is indicated by the shadow dropping to `--am-shadow-0`, not by this ' +
-      'border, and the row is `--am-accent-light` with an inset `--am-accent` rail once ' +
-      'selected. Same token, same scale decision, same owner. W32-CONTRAST §3.',
-  },
 ];
 
 /** Is this pair excused in this palette? A pair excused in one is not excused in the other. */
