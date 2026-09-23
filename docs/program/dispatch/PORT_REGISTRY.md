@@ -35,6 +35,8 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56150`, `59750/59751` | `gate-w37a` | 2026-09-22 | wave 37 merges |
 | `56160`, `59760/59761` | `gate-w37b` | 2026-09-22 | wave 37 merges |
 | `56170`, `59770/59771` | `gate-w38a` | 2026-09-22 | wave 38 merges |
+| `56180`, `59780/59781` | `gate-w39a` | 2026-09-23 | wave 39 merges |
+| `56190`, `59790/59791` | `gate-w39b` | 2026-09-23 | wave 39 merges |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
