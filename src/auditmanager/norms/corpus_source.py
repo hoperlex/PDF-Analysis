@@ -18,7 +18,9 @@ from pathlib import Path
 
 from .model import Chunk, CorpusTotals, Paragraph, SegmentationReport
 from .chunking import DEFAULT_TARGET_CHARACTERS, join_into_chunks
-from .segmentation import drawn_on, segment
+from .degeneracy import is_degenerate
+from .rerecognition import PageToRecognise
+from .segmentation import blocks, drawn_on, segment
 from .snapshot import CorpusSnapshot, DocumentFingerprint, derive, fingerprint
 
 RESULTS_FILENAME = "results.md"
@@ -124,3 +126,51 @@ def totals(reports_and_chunks: Iterator[tuple[SegmentationReport, tuple[Paragrap
         key = report.attribution.value
         attribution[key] = attribution.get(key, 0) + 1
     return CorpusTotals(attribution=tuple(sorted(attribution.items())), **accumulated)
+
+
+CROPS_DIRNAME = "crops"
+
+
+def crop_path(root: Path, document_slug: str, block_id: str) -> Path:
+    """Where the pipeline put the single-page PDF for one block.
+
+    `corpus/<slug>/crops/<block_id>.pdf`, the layout the drop's own `MANIFEST.json` states
+    and which it reports complete: `expected 28246, fetched 28246, missing 0`.
+    """
+    return root / document_slug / CROPS_DIRNAME / f"{block_id}.pdf"
+
+
+def read_crop(root: Path, document_slug: str, block_id: str) -> bytes:
+    """The crop's bytes, or an explicit refusal.
+
+    A missing crop is loud. `AGENTS.md` §4 forbids a silent fallback, and re-recognising a
+    page from *nothing* would produce an answer with no source — which is the shape of the
+    defect being repaired rather than a repair of it.
+    """
+    path = crop_path(root, document_slug, block_id)
+    if not path.is_file():
+        raise CorpusUnavailable(
+            f"{document_slug}/{block_id}: no crop at {CROPS_DIRNAME}/{block_id}.pdf"
+        )
+    return path.read_bytes()
+
+
+def degenerate_pages(root: Path) -> Iterator[PageToRecognise]:
+    """Every block in the corpus whose text is not the document's, with its crop.
+
+    In document-directory order and then block order, so a partially completed run resumes at
+    a determinate place. The check is `degeneracy.inspect`; what it finds and why is that
+    module's subject, not this one's.
+    """
+    for directory in document_directories(root):
+        document = read_document(directory)
+        for block in blocks(document.markdown):
+            if not is_degenerate(block.text):
+                continue
+            yield PageToRecognise(
+                document_slug=document.slug,
+                block_id=block.block_id,
+                page_label=block.page_label,
+                original_text=block.text,
+                crop=read_crop(root, document.slug, block.block_id),
+            )
