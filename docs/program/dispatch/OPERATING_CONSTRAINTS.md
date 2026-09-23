@@ -212,6 +212,36 @@ selector is `span.am-badge[data-run-state]`. It belongs beside the residue-count
 both are an instrument that **silently changed subject** while its instruction stayed the
 same.
 
+## 4.62 Any status a harness hands you is the harness's status — and a pin protects only the command that reads it
+
+**Two more instrument failures, 2026-09-23, from a session that was already following §4.6.**
+
+### §4.6 was right and not wide enough
+
+§4.6 says to assert on `GATE OK` in the output rather than on an exit code a wrapper hands
+you. `W39-REVOKE` did exactly that — and the trap fired one layer further out: **`nohup make
+gate &` produced a completion notification carrying exit code 0 while the gate was still
+running its first suite.** The zero belonged to the launching shell.
+
+So the rule generalises past gates: **any status a harness hands you is a statement about the
+harness.** The gate's own `GATE OK` line is evidence because the gate prints it; a
+notification, a task summary, a wrapper's exit code and a scheduler's "completed" are not.
+
+### A pin protects only the command that consults it
+
+The same session ran `npx vitest` **without `--prefix web`**. `npx` fetched **vitest 5.0.1**
+from the registry instead of the tree's pinned **3.2.7**, four files it had never touched
+failed to parse on ordinary JSX, and the summary read like a real breakage. The tell was that
+the failing filenames had nothing to do with the mutation under test.
+
+**`web/FRONTEND_LOCK.json` pins the toolchain and cannot defend a command that never reads
+it.** This programme has a `pinned-versions.guard.test.ts` and it guards the manifest, not the
+invocation.
+
+**Both belong beside §10.2's stale bytecode and §4.6's contention red**, because all four hand
+you a result whose obvious reading is wrong, and in three of the four the obvious next step —
+believing a red, or believing a green — costs more than the check would have.
+
 ## 4.7 A document that outlives the code it describes becomes an attack
 
 **Recorded 2026-09-22 from wave 34's judges, and it is the first finding in this programme
