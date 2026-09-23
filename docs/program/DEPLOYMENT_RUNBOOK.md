@@ -420,7 +420,60 @@ Two more things an operator should know about it:
 
 `python -m auditmanager.access.check` is the other half of the same operator view: it names
 the accounts still holding the password this system seeded them with, without anybody
-signing in.
+signing in — and, since `W40-LIMIT`, every account that is shut out of signing in right
+now.
+
+### When somebody cannot sign in and the password is right — `R-26`
+
+`W40-LIMIT` added the other two halves of `R-26`, and **they are two different things**:
+
+* a **rate limit** — consecutive recent failed sign-ins are counted per account. It slows a
+  guesser and recovers on its own. Nothing to operate;
+* a **lockout** — when five consecutive recent attempts have been refused, that account is
+  shut for **five minutes**, during which its password is not consulted at all, **including
+  the right one**. The screen says so in general terms and never says it about the account
+  in front of it, because that would tell anybody who can type a login which accounts exist
+  and which are under attack.
+
+**A lockout can be aimed.** Anybody who can reach `POST /api/v1/auth/token` can shut a named
+account by typing five wrong passwords at it, and the seeded account's login — `admin` — is
+published in a migration and in this runbook. What bounds it:
+
+* it expires by itself, and the first attempt after it expires starts a fresh allowance
+  rather than re-tripping;
+* **credentials already minted are not touched.** Somebody who is signed in stays signed in
+  and keeps working; only *getting a new credential* is refused. An unauthenticated caller
+  cannot sign anybody out;
+* a **password change clears it**, so a reviewer who is still holding a live credential can
+  open their own door through the application;
+* and there is a command, with no HTTP operation behind it:
+
+```
+# let one account sign in again, immediately
+PYTHONPATH=src python -m auditmanager.access.unlock --login <login>
+
+# or everybody, when you do not yet know what is shut
+PYTHONPATH=src python -m auditmanager.access.unlock --everyone
+```
+
+Exit `0` released something, **`1` released nothing** — and the printed line says whether
+that was because no such account exists or because nothing was shut, which is the
+difference between a typo and a no-op. `2` could not reach the database. Run it bare and it
+does nothing and exits `2`.
+
+It releases a brake and **nothing else**: no password changes, no credential is issued, and
+**a revocation is not undone**. `unlock` and `revoke` are opposite-looking commands over
+different columns, and an account that was deliberately revoked stays revoked.
+
+If the same account is shut again within minutes of an unlock, that is not a defect: it is
+somebody still guessing, and the deployment log carries one `sign-in blocked` warning per
+cooling-off period naming the account and the instant. At that point the lever is the proxy,
+not this command.
+
+**Deploying migration `0008_sign_in_throttle` locks nobody out** — every existing account
+starts with a clean count and no block. That is the opposite of what deploying
+`0007_credential_epoch` does, and the two land close enough together to be worth saying
+separately.
 
 ### What an operator checks afterwards — by **writing**, never by reading
 

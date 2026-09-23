@@ -16,6 +16,21 @@ extending it. Whoever owns the deployment checklist can add the invocation above
 Exit status: ``0`` when no account is on a default credential, ``1`` when at least one
 is, and ``2`` when the database could not be read. The first two are both *successful
 readings*; the distinction is there so a checklist can assert on it.
+
+**Since `W40-LIMIT` it also reports which accounts are shut out of signing in**, and the
+status deliberately does **not** move for it. The reasons are the same sentence read twice:
+a default credential is a state that is supposed to be temporary and becomes permanent when
+nobody can see it, so it is worth a status a checklist fails on; a lockout is temporary *by
+construction* -- it expires on its own -- so failing a checklist over one would fail it for
+somebody mistyping a password five minutes ago. Folding both into the same number would
+make ``1`` mean two things and an operator would have to read the output anyway to find out
+which.
+
+So the lockout lines are **information beside a status about something else**, stated here
+rather than left to be inferred from the code. The question they answer is the only one a
+lockout ever produces -- *"why can the owner not sign in?"* -- and it is asked by somebody
+who cannot sign in to find out. The answer, when there is one, is
+``python -m auditmanager.access.unlock --login <login>``.
 """
 
 from __future__ import annotations
@@ -28,7 +43,7 @@ from auditmanager.access.repository import UserRepository
 from auditmanager.shared.db.config import DatabaseSettings, load_settings
 from auditmanager.shared.db.engine import create_database_engine
 
-__all__ = ["main", "run_check"]
+__all__ = ["BLOCKED_PREFIX", "CLEAN_SENTINEL", "FINDING_PREFIX", "main", "run_check"]
 
 #: Printed when nothing is on a default credential. Stable text, so a checklist can grep.
 CLEAN_SENTINEL = "access-check OK no default credentials"
@@ -36,15 +51,39 @@ CLEAN_SENTINEL = "access-check OK no default credentials"
 #: Printed, once per account, when something is. Also stable.
 FINDING_PREFIX = "access-check DEFAULT CREDENTIAL"
 
+#: Printed, once per account, for every account inside a cooling-off period at the moment
+#: of the reading. Stable, and deliberately a different prefix from the one above so a
+#: scraper cannot conflate two states with different remedies.
+BLOCKED_PREFIX = "access-check SIGN-IN BLOCKED"
+
 
 def run_check(settings: DatabaseSettings | None = None) -> int:
     resolved = settings if settings is not None else load_settings()
     engine = create_database_engine(resolved)
     try:
         with Session(engine) as session:
-            users = UserRepository().users_on_default_credentials(session)
+            repository = UserRepository()
+            users = repository.users_on_default_credentials(session)
+            # Read in the same session as the line above, so the two halves of the report
+            # describe one moment. They are two questions about one table and a reader who
+            # had to reconcile two readings would be doing the work this command exists to
+            # save.
+            blocked = repository.accounts_blocked_from_signing_in(session)
     finally:
         engine.dispose()
+
+    for user in blocked:
+        # The status does not move for these; see the module docstring. A lockout expires
+        # on its own, and a checklist that failed over one would fail over a reviewer
+        # mistyping a password five minutes ago.
+        assert user.sign_in_blocked_until is not None  # noqa: S101 - the query's predicate
+        print(
+            f"{BLOCKED_PREFIX}: login={user.login} user_uid={user.user_uid} "
+            f"failed_sign_ins={user.failed_sign_ins} "
+            f"blocked_until={user.sign_in_blocked_until.isoformat()} "
+            f"release_now='python -m auditmanager.access.unlock --login {user.login}'",
+            flush=True,
+        )
 
     if not users:
         print(CLEAN_SENTINEL, flush=True)

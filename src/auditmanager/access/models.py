@@ -131,6 +131,23 @@ class UserRecord:
     Reading it tells an attacker how many times this account has been revoked and nothing
     else, and hiding it would mean the one value the seam must check on every request could
     only be reached through the one statement that also reads the digest.
+
+    **The last three are `W40-LIMIT`'s and they are two things, not one.**
+    ``failed_sign_ins`` with ``last_failed_sign_in_at`` is the **rate limit** -- how many
+    consecutive recent attempts have been refused, and when the last one was. On its own it
+    refuses nothing. ``sign_in_blocked_until`` is the **lockout** -- the instant before
+    which this account's password is not consulted at all, so that even the right one mints
+    nothing. ``None`` means this account may be tried now, and a ``None`` here is **never**
+    read as a refusal: a nullable field whose absence closed the door would be one restart
+    away from shutting an installation out of itself.
+
+    None of the three is credential material either -- they say how often somebody has been
+    wrong, never what the password is -- and none of them travels: no operation returns a
+    record, and the one thing this boundary hands the API is a credential. They are on the
+    record because the operator's two views of the state
+    (:mod:`auditmanager.access.check` and :mod:`auditmanager.access.unlock`) read them, and
+    an operator who cannot see a lockout cannot answer the only question a lockout ever
+    produces.
     """
 
     user_uid: UserUid
@@ -140,6 +157,9 @@ class UserRecord:
     password_updated_at: datetime
     token_epoch: int
     token_epoch_updated_at: datetime
+    failed_sign_ins: int
+    last_failed_sign_in_at: datetime | None
+    sign_in_blocked_until: datetime | None
 
 
 def is_user_uid(value: object) -> bool:

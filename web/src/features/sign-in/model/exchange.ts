@@ -61,6 +61,21 @@ export const SIGN_IN_REFUSAL_PARAM = 'refusal';
  * whether the login or the password was the wrong half, and a screen that said so would
  * put back the account-enumeration oracle the API refuses to be: an attacker who can tell
  * "no such user" from "wrong password" can harvest logins at leisure.
+ *
+ * **`W40-LIMIT` added a rate limit and a lockout to the exchange and did NOT add a fifth
+ * value here**, which is the decision rather than an oversight. The API answers a shut
+ * account with exactly the `401 authentication_required` it answers a wrong password with,
+ * so this tier could not tell them apart if it wanted to — and it must not want to. A
+ * `throttled` refusal on this screen would say "this account exists and somebody is
+ * attacking it right now" to anybody who can type a login, which is the same oracle one
+ * level out.
+ *
+ * What the `credentials` sentence gained instead is a statement of the **policy**, which
+ * is public knowledge and says nothing about any particular account: it is shown on every
+ * refusal, whether or not the account in front of it is anywhere near its allowance. A
+ * reviewer who has mistyped five times and then types their real password needs to be told
+ * that waiting is the answer, or they will conclude their password is broken — and the
+ * screen is the only place that can be said.
  */
 export const SIGN_IN_REFUSALS = ['credentials', 'validation', 'unconfigured', 'upstream'] as const;
 
@@ -78,7 +93,10 @@ export function signInRefusalMessage(refusal: SignInRefusal): string {
       return (
         'Войти не удалось: такая пара имени пользователя и пароля не принята. ' +
         'Какая из двух частей не подошла, не сообщается — иначе по одному лишь ответу ' +
-        'можно было бы перебирать имена. Ничего не изменено.'
+        'можно было бы перебирать имена. Ничего не изменено. ' +
+        'После нескольких неудачных попыток подряд вход в учётную запись ненадолго ' +
+        'приостанавливается, и тогда не принимается даже верный пароль: подождите ' +
+        'несколько минут и попробуйте снова.'
       );
     case 'validation':
       return 'Заполните оба поля: имя пользователя и пароль. Запрос никуда не отправлен.';
