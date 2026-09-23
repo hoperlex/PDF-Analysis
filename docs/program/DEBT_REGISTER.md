@@ -34,7 +34,6 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
 | D-61 | the journey guard still matches by substring against concatenated source | compare against **rendered** output |
-| D-58 | a screen names `uploadDocument` and `document_uid` to a reviewer | one sentence |
 | D-52 | the legacy icon set is at least partly Feather, MIT, notice absent | a `NOTICE` file if we copy; **not** `D-11`'s shape |
 | **D-46** | a failed run cannot say *which* dependency | owner — a reseal either way |
 | D-50 | a character offset no second extractor can resolve | registered |
@@ -2310,7 +2309,7 @@ narrower than its contract, one level up.
 
 Check: `grep -n "runs.detail" web/src/entities/audit-run/api/use-run-status.ts web/src/_pages/review/ui/review-page.tsx`
 
-### D-58 — a screen tells a reviewer about the transport — **the row was wrong twice, and what is left is smaller**
+### D-58 — a screen tells a reviewer about the transport — **CLOSED**, after the row was wrong twice
 
 **Re-measured by the integrator 2026-09-23, and both of the row's own facts were false.**
 
@@ -2338,7 +2337,16 @@ its closure.
 The first sentence earns its place — without it a reviewer wonders whether a version is missing,
 which is worse. The bolded clause is the `R-18` offence: *a finished application does not explain
 its own transport to the person using it*, and "a limitation in data transfer, not in storage" is
-exactly that explanation. **Repair is a deletion**, like `D-62`'s.
+exactly that explanation.
+
+**Closed 2026-09-23 by deletion**, like `D-62`'s. The screen now reads *"Одна версия на загрузку:
+сегодня каждая загрузка заводит новый документ, а не новую версию уже загруженного. Ничего из
+загруженного не потеряно."* — the two things a reviewer needs (one row is expected, nothing was
+lost) without the mechanism. **The reason moved into the module comment**, which renders to
+nobody, with a note saying why it is not on screen — so the next author does not put it back.
+
+Check: `grep -n 'передаче данных' web/src/widgets/version-list/ui/version-list.tsx` returns
+nothing; `npm --prefix web run typecheck` exits 0.
 
 This is the class `D-54` closed twice in wave 31 — the footer that addressed a developer, and
 `RoutePlaceholder` showing developers' notes — **recurring in a third place that no wave-31

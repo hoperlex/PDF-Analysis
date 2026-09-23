@@ -11,7 +11,11 @@
  * `document_uid` this screen needs no change.
  *
  * It says so on screen, too, rather than leaving a reviewer to wonder whether a version
- * is missing.
+ * is missing — but **the on-screen sentence deliberately does not carry the reason.** It
+ * said "a limitation in data transfer, not in storage", and `R-18` is that a finished
+ * application does not explain its own transport to the person using it. A reviewer needs
+ * to know that one row is expected and that nothing was lost; why the transport is shaped
+ * that way is for this comment, which renders to nobody. `D-58`.
  */
 
 import { useState } from 'react';
@@ -76,8 +80,7 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
       <p className="am-note">
         <em>
           Одна версия на загрузку: сегодня каждая загрузка заводит новый документ, а не
-          новую версию уже загруженного. Ограничение в передаче данных, а не в хранилище:
-          вторую версию оно умеет публиковать, и ничего из загруженного не потеряно.
+          новую версию уже загруженного. Ничего из загруженного не потеряно.
         </em>
       </p>
       <div className="am-pager">
