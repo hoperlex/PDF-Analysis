@@ -79,7 +79,7 @@ const schema = (name: string) => {
   return found as { required?: string[]; properties?: Record<string, unknown> };
 };
 
-describe('the sixteen seam operations', () => {
+describe('the eighteen seam operations', () => {
   it('are exactly the operations the client exposes', () => {
     expect([...OPERATION_IDS].sort()).toEqual(SEAM_OPERATIONS.map(([id]) => id).sort());
   });
