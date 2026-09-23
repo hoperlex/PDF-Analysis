@@ -1,6 +1,6 @@
 # Current state
 
-> **Updated 2026-09-23 by the integrator, at `d8ef5f9`** (wave 41). `AGENTS.md` §1.1 makes this
+> **Updated 2026-09-23 by the integrator, at `8feda0e`** (wave 42). `AGENTS.md` §1.1 makes this
 > file the first thing every agent reads, and **this line moving is now part of closing a wave**,
 > for the reason the rest of this block records.
 >
@@ -22,15 +22,38 @@
 
 ## Where the programme is, 2026-09-23
 
-**`origin/main` = `origin/dev` = `origin/planning/prototype-roadmap` = `d8ef5f9`, tagged
-`alpha-w41` — a gated tip, not a certification.** All three refs are equal, and that sentence is
+**`origin/main` = `origin/dev` = `origin/planning/prototype-roadmap` = `8feda0e`, tagged
+`alpha-w42` — a gated tip, not a certification.** All three refs are equal, and that sentence is
 part of the state: for waves 39 and 40 they were not, `dev` sat **41 commits** behind `main`, and
 a peer session wrote a pre-flight review for the owner measured on the stale one (`D-77`).
 
-`make gate` → **`GATE OK`**: battery **2361 passed / 5 skipped / 1 warning / 169 subtests**,
-foundation **35**, frontend **1022 in 72 files**. Read from the `GATE OK` line of
-`/root/w41-integrator-gate2.log`, taken at this commit with a clean tree — not from a status a
-harness returned (`OPERATING_CONSTRAINTS.md` §4.62). Wave 40's figures were 2315 / 35 / 1014.
+`make gate` → **`GATE OK`**: battery **2442 passed / 5 skipped / 4 warnings / 169 subtests**,
+foundation **35**, frontend **1032 in 72 files**. Read from the `GATE OK` line of
+`/root/w42-integrator-gate2.log`, taken at this commit with a clean tree — not from a status a
+harness returned (`OPERATING_CONSTRAINTS.md` §4.62). Wave 41: 2361 / 35 / 1022.
+
+**The contract surface is 15 paths / 18 operations / 51 schemas** and wave 42's reseal **moved
+none of the three** — the first reseal in this programme that adds no path and no operation. It
+carried `RunStatus.terminal_detail` (declared inline, as `ErrorEnvelope.details` already is) and
+two corrected descriptions. **The error catalog is 22 codes and frozen.**
+
+**Migration head: `0010_run_terminal_detail`.** `0009` adds a reviewer display name; both roll
+back independently. **Upgrading signs everyone out once**, as `0007` did, because the credential
+format moved `am1` → `am2` to carry the name.
+
+**Wave 42 was the fix wave, and it ran eight owner rulings** (`R-30`–`R-37`, §3.13 of
+`OWNER_RULINGS_2026-09-17.md`). A decision is attributed to the reviewer's **display name**, with
+the login as a fallback that is queryable rather than silent (`R-37`). The four documentation
+routes — `/openapi.json`, `/docs`, `/redoc`, `/docs/oauth2-redirect` — **now require a
+credential** (`R-31`, `D-73`); the obvious repair was a no-op, because FastAPI installs them as
+plain Starlette routes that no dependency reaches, and a stream that had trusted the brief would
+have shipped a green gate with four open doors. Every border in both palettes meets WCAG
+1.4.11's 3:1 (`R-33`, `D-81`) — `--am-line` on `--am-paper` went from 1.36:1 to 4.77:1 light and
+1.30:1 to 4.34:1 dark. A failed run can now say **which** dependency (`D-46`).
+
+**The stand runs in `recorded` mode** (`R-30`), because `D-72`'s repair made the certification
+stub's host-less URL a startup refusal. The whole journey is drivable without a provider key;
+an analysis still needs one, and that is `D-70`.
 
 **Wave 41 was the debt wave.** A decision is now attributed to the reviewer who made it rather
 than to the constant `"local-reviewer"` (`D-78`), a proxy URL with no host is refused at
