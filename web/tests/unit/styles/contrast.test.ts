@@ -688,6 +688,82 @@ describe('every pair that meets on a screen clears the threshold its role asks o
   });
 });
 
+// ================================================================== R-33: the border floor
+
+describe('R-33: every border that meets on a screen clears 3:1, in both palettes', () => {
+  /**
+   * The product-wide floor, asserted WITHOUT consulting the register.
+   *
+   * This is deliberately not a row in `REGISTERED`'s question. The register answers *"is
+   * this particular failing pair knowingly excused"*, and for six waves the answer for
+   * `--am-line` was yes — eight rows of it, across two fills and four states, every one of
+   * them ending in the same sentence: this is a scale decision with an owner. The owner
+   * took it on 2026-09-23 (`R-33`, `D-81`) and chose the product-wide change over the
+   * targeted one, so the floor is no longer a pair-by-pair negotiation and this assertion
+   * is no longer excusable by writing a paragraph.
+   *
+   * It overlaps `every pair that meets on a screen clears the threshold its role asks of
+   * it` by design, and the overlap is not redundancy: that assertion routes through
+   * `thresholdFor` and through `isRegistered`, so a future row could excuse a border there.
+   * Nothing excuses one here. If a border below 3:1 is ever deliberate again, it takes a
+   * ruling that edits this test, not a register entry that slips past it.
+   *
+   * WHAT COUNTS AS A BORDER: every `edge` occurrence the census produces — the four
+   * `border-*` properties and `outline`, on any element, in any state, in either palette.
+   * Not graphics, which answer to 1.4.11 for a different reason and already did.
+   */
+  it('names the theme, the ratio and the site of every border under the floor', () => {
+    const under = THEMES.flatMap((theme) =>
+      measured(theme)
+        .filter((m) => m.occurrence.kind === 'edge')
+        .filter((m) => !(m.ratio >= AA_NON_TEXT))
+        .map((m) => ({
+          theme,
+          pair: m.key,
+          ratio: Number(m.ratio.toFixed(2)),
+          needs: AA_NON_TEXT,
+          where: m.occurrence.sites[0],
+        })),
+    ).sort((a, b) => a.ratio - b.ratio || a.pair.localeCompare(b.pair));
+    expect(
+      under,
+      'R-33: every border in this product clears 3:1 against the surface it is drawn on, ' +
+        'in BOTH palettes. These do not. The repair is the token, not an exemption: this ' +
+        'assertion reads no register.',
+    ).toEqual([]);
+  });
+
+  it('measures borders at all, so an empty census cannot satisfy the floor', () => {
+    // Anti-vacuity, and it is the one this assertion needs most: `.filter(kind === 'edge')`
+    // over a census that produced no edges is an empty list agreeing with an empty list.
+    for (const theme of THEMES) {
+      const edges = measured(theme).filter((m) => m.occurrence.kind === 'edge');
+      expect({ theme, edges: edges.length >= 20 }).toEqual({ theme, edges: true });
+      // And every one of them is a real measurement rather than a NaN that `>=` swallows.
+      expect({ theme, measurable: edges.every((m) => Number.isFinite(m.ratio)) })
+        .toEqual({ theme, measurable: true });
+    }
+  });
+
+  it('asks 3:1 of a border whatever the markup around it says', () => {
+    // The ruling's own words -- "not only the load-bearing ones" -- as a property of
+    // `thresholdFor` rather than of today's census: a decorative separator, a disabled
+    // control's edge and an interactive control's sole boundary all answer to the same
+    // number now. Built from a literal occurrence so it stays true when the screens change.
+    const edge = (over: Partial<Occurrence>): Occurrence => ({
+      kind: 'edge', foreground: '--am-line', background: '--am-paper',
+      state: null, pseudo: 'border', site: 'synthetic', interactive: false,
+      fillDistinguishes: false, ...over,
+    });
+    expect(thresholdFor(edge({}))).toBe(AA_NON_TEXT);
+    expect(thresholdFor(edge({ interactive: true, fillDistinguishes: true }))).toBe(AA_NON_TEXT);
+    expect(thresholdFor(edge({ state: 'disabled' }))).toBe(AA_NON_TEXT);
+    expect(thresholdFor(edge({ state: 'hover' }))).toBe(AA_NON_TEXT);
+    // Text is untouched by the ruling and still answers to 1.4.3.
+    expect(thresholdFor(edge({ kind: 'text' }))).toBe(AA_TEXT);
+  });
+});
+
 describe('the register is held to the census in both directions, and in both palettes', () => {
   it('every registered row is still produced and still below its threshold, in every theme it names', () => {
     const stale: string[] = [];

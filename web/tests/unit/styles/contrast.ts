@@ -894,21 +894,42 @@ export const AA_TEXT = 4.5;
 export const AA_NON_TEXT = 3;
 
 /**
- * The threshold a pair answers to, or `null` when WCAG asks nothing of it.
+ * The threshold a pair answers to, or `null` when nothing asks anything of it.
  *
  * This is the whole of the classification, and it is a FUNCTION of what the pair is
  * rather than a list of which pairs matter. Text is text. A graphic that carries meaning
  * — the verdict dot in the decision history is the only thing that says accepted or
- * rejected in colour — is 1.4.11. A boundary is 1.4.11 only when it is the sole thing
+ * rejected in colour — is 1.4.11.
+ *
+ * ## `R-33`: EVERY border answers to 3:1, not only the load-bearing ones
+ *
+ * Until wave 42 the last clause read *"a boundary is 1.4.11 only when it is the sole thing
  * identifying a control: an interactive element, per the markup, whose own fill does not
- * already separate it from what is behind it. Everything else is a separator and WCAG
- * asks nothing of it.
+ * already separate it from what is behind it. Everything else is a separator and WCAG asks
+ * nothing of it."* That was a correct reading of 1.4.11 and it is no longer the rule this
+ * product holds itself to.
+ *
+ * The owner ruled on 2026-09-23 (`R-33`, `D-81`) for the **product-wide** floor over the
+ * targeted one, explicitly — the option `W32-CONTRAST` §3 and `W33-THEME` had each declined
+ * because it turns every rule in the product into a hard line. So the threshold for an edge
+ * is no longer a question about the element it surrounds. It is 3:1, everywhere.
+ *
+ * Two consequences worth stating, because both are the ruling and not an accident:
+ *
+ *   - `interactive` and `fillDistinguishes` are no longer consulted for an edge. They stay
+ *     on `Occurrence` because they are measured facts about a site and the register, the
+ *     report and any future ruling can still read them; nothing in the THRESHOLD reads them.
+ *   - The `disabled` exception goes with them. 1.4.11 excepts an inactive component in as
+ *     many words, and that exception is a floor WCAG PERMITS rather than one the owner
+ *     kept: a product-wide border floor that a disabled control could sit under would be
+ *     the targeted rule again, wearing the word "except".
  */
 export function thresholdFor(occurrence: Occurrence): number | null {
   if (occurrence.kind === 'text') return AA_TEXT;
-  // 1.4.11 excepts inactive user interface components, in as many words.
+  // R-33. Every border, every state, both palettes.
+  if (occurrence.kind === 'edge') return AA_NON_TEXT;
+  // 1.4.11 excepts inactive user interface components, in as many words. It now reaches
+  // graphics alone: an edge answered above, and text answered above that.
   if (occurrence.state === 'disabled') return null;
-  if (occurrence.kind === 'graphic') return AA_NON_TEXT;
-  if (occurrence.interactive && !occurrence.fillDistinguishes) return AA_NON_TEXT;
-  return null;
+  return AA_NON_TEXT;
 }
