@@ -682,9 +682,20 @@ class CredentialAdapter(_SessionHolder):
     key. A router that held one would be a router that reads configuration, and the
     composition root exists so that nothing else does.
 
-    **Authenticating writes nothing.** No session row, no last-login column, no attempt
-    counter. A credential is a signed statement about a subject, not a row -- which is why
-    nothing here has to be cleaned up when it expires, and why this surface has no logout.
+    **Authenticating writes, and until `W40-LIMIT` it did not.** This paragraph said *"No
+    session row, no last-login column, no attempt counter"*, and the third of those is
+    exactly what `R-26`'s second half adds: a refused exchange raises the account's
+    consecutive-failure count and, when that count is spent, shuts the account for a
+    cooling-off period; a successful one clears both. So :meth:`issue` opens a **write**
+    session rather than a read one, and a sentence that described the old behaviour is
+    replaced rather than left standing beside the new -- ``OPERATING_CONSTRAINTS.md`` §4.7,
+    in the module that holds the credential.
+
+    The first two are still true and are the load-bearing half: **no session row and no
+    last-login column.** A credential is a signed statement about a subject, not a row --
+    which is why nothing here has to be cleaned up when it expires, and why this surface
+    has no logout. What is written is a count of failures, which is not a record of who is
+    signed in.
 
     **Changing a password writes exactly once**, and revoking is the same write. `W39-REVOKE`
     added the two halves that make a credential retractable: ``change_password`` opens a
@@ -714,7 +725,18 @@ class CredentialAdapter(_SessionHolder):
         self._signer = signer
 
     def issue(self, *, login: str, password: str) -> IssuedCredential | None:
-        record = self._read(lambda session: self._users.authenticate(session, login, password))
+        """Prove a password and mint, and commit whatever the attempt recorded either way.
+
+        ``_write`` and not ``_read``, and the difference is the whole of `W40-LIMIT`'s
+        durability. ``authenticate`` records a refused attempt and clears the record on a
+        successful one, and the caller owns the transaction: a read session would discard
+        both on the way out, so an attacker would get an unlimited allowance and the log
+        would say the brake was applied.
+
+        It commits on a refusal as readily as on a success. That is not an oddity of the
+        session helper -- a refusal is precisely the outcome whose evidence has to survive.
+        """
+        record = self._write(lambda session: self._users.authenticate(session, login, password))
         if record is None:
             # One answer for an unknown login, a wrong password and a login that could not
             # have been stored. The repository already spends a key derivation on all

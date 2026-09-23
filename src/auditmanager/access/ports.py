@@ -30,6 +30,17 @@ The port still has no *session* concept and no token in it anywhere. It does not
 does not verify, and it cannot read or write a signing key. What it publishes is one
 integer that the seam stamps and compares; the seam's half stays in
 :mod:`auditmanager.api.security`, and neither module imports the other.
+
+**Wave 40 added a rate limit and a lockout and added nothing here, which is the decision
+rather than an omission.** The brake is applied inside ``authenticate`` -- whose contract
+below says so -- and the two operations that *release* it,
+``clear_failed_sign_ins`` and ``accounts_blocked_from_signing_in``, are on the adapter and
+deliberately not on this port, exactly as ``users_on_default_credentials`` already is. The
+port is what a caller outside this boundary may depend on, and the only such caller is the
+API's credential adapter. An unlock it could reach is an unlock somebody eventually
+publishes, and *who may unlock whom* is the role vocabulary this system has not got and
+`T-6` forbids inventing at that seam. Releasing a brake stays where revoking does: in an
+operator's shell.
 """
 
 from __future__ import annotations
@@ -66,6 +77,16 @@ class UserRepository(Protocol):
         would let anyone with the login form enumerate which accounts exist. The
         implementation must also spend comparable work on both paths, because a timing
         difference is the same oracle with extra steps.
+
+        **Since `W40-LIMIT` a fourth case answers ``None`` too: an account inside its
+        cooling-off period**, whatever password was offered, including the right one. It
+        is the same answer costing the same work for the same reason -- a caller able to
+        tell it apart would learn that the account exists *and* that it is under attack.
+
+        **And this operation writes.** A refused attempt is recorded and a successful one
+        clears what earlier refusals recorded; the caller owns the transaction, so an
+        implementation's brake only survives if the caller commits. That is a change to
+        this method's contract and it is stated here rather than left in an adapter.
         """
 
     def create_user(self, session: Session, login: str, password: str) -> UserRecord:

@@ -116,6 +116,28 @@ describe('every refusal is Russian, and says nothing about which half was wrong'
     }
   });
 
+  it('states the throttling policy, and says nothing about the account in front of it', () => {
+    // `W40-LIMIT`. The API answers a shut account with exactly the `401
+    // authentication_required` it answers a wrong password with, so this tier could not
+    // tell them apart if it wanted to -- and it must not want to: a `throttled` refusal
+    // would say "this account exists and somebody is attacking it right now" to anybody
+    // who can type a login.
+    //
+    // What the screen may say is the POLICY, which is public and is about nobody: it is
+    // rendered on every credentials refusal, whether or not this account is anywhere near
+    // its allowance. Without it, a reviewer who has mistyped five times and then types
+    // their real password concludes their password is broken -- and this screen is the
+    // only place that can be said.
+    const message = signInRefusalMessage('credentials');
+    expect(/приостанавлива/i.test(message)).toBe(true);
+    expect(/подожд/i.test(message)).toBe(true);
+    // Not a per-account report: no count, no deadline, no "this account".
+    expect(/\d/.test(message)).toBe(false);
+    expect(/эт(а|у|ой) учётн/i.test(message)).toBe(false);
+    // And the refusal vocabulary did not grow a value for it.
+    expect([...SIGN_IN_REFUSALS]).toEqual(['credentials', 'validation', 'unconfigured', 'upstream']);
+  });
+
   it('never names the login or the password as the part that failed', () => {
     const message = signInRefusalMessage('credentials');
     // The two words this sentence must not carry as a diagnosis. It may name the pair —
