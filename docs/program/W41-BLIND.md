@@ -448,3 +448,72 @@ And the source half, through `prove_the_guard_can_fail.py` against the **real** 
 which **came back GREEN** against the first version of the repair. That green is the reason
 comments are stripped and the boundary is there.
 
+## 6. B3 — the tally, and how far a structural check actually reaches
+
+The brief asks for the seven-row table extended with **what now reaches each state** and
+**which of the seven a structural check would have caught**. The honest answer is **three of
+seven**, and the other four need something this wave did not build.
+
+The four checks this wave added, named so the table can refer to them:
+
+| | what it asserts | where |
+|---|---|---|
+| **C1** | every member of every `TRANSLATED_SCHEMAS` schema is rendered, read from the contract | `rendered-language.guard.test.ts` |
+| **C2** | every mandatory-state branch and pager control literal in `web/src` is rendered | `rendered-language.guard.test.ts` |
+| **C3** | every colour-bearing rule in the stylesheets is reached by a rendered screen | `contrast.test.ts` |
+| **C4** | no `expects_rendered` sentence is on the screen before its step runs | `rendered-language.guard.test.ts` |
+
+### The seven
+
+| wave | guard | why it was blind | what reaches it now | structural? |
+|---|---|---|---|---|
+| 35 | contrast census | matched **authored** class names; the markup carries the bundler's | **C3.** Measured, not argued: with `scopedCss` returning the authored text — the pre-wave-35 instrument — C3 goes red naming `.activity`, `.aside`, `.ordinal`, `.outcome[data-run-outcome='…']` and every other module rule | **YES** |
+| 35 | `rendered-language` | rendered four of eight run states | **C1.** Demonstrated on the same mechanism in §2.3 Case C: the pre-repair seed leaves the language half green over an English label and C1 red, naming the members | **YES** |
+| 37 | `rendered-language` | the empty branch is also Russian, so the `D-57` mutation stayed green | the branch *was* rendered; the mutation could not distinguish it | **NO** |
+| 37 | seam sweep | two of six mutations reddened nothing | nothing here reaches `src/auditmanager` | **NO** |
+| 38 | `rendered-language` | every seeded page had `next_cursor: null`, so pagination never rendered | **C2.** The pager scan puts `Дальше` in the required set; with every page `next_cursor: null` it is rendered nowhere and C2 names it and its module | **YES** |
+| 39 | three guards (`W39-REVOKE`) | two mutations never reached the code — a subprocess `PYTHONPATH` resolved to the pristine checkout; one assertion read a fixture flag that was already `False` | neither is a coverage gap | **NO** |
+| 40 | `W40-LIMIT`'s `L5` | the test aged the row by an hour, so the served-block branch was never reached and the assertion passed for the wrong reason | the shape is a coverage gap, but in Python, and nothing here measures it | **NO** |
+
+**Three of seven.** And `D-61`'s third instance — the manifest asserting a sentence no screen
+renders — is a fourth case of the same family that C4 now reaches, but it is not in the
+seven-row table, so it is not counted here.
+
+### What the other four need, stated so the next wave can cost it
+
+The four split cleanly into two kinds, and neither is *"more coverage"*.
+
+**1. Two are mutation-adequacy, not coverage** — wave 37's empty branch and wave 39's `G7`.
+The state *was* reached; the mutation could not tell the difference, or the assertion was
+built out of the thing under test. **Nothing structural can tell you the mutation you chose
+was too weak.** What would help is not a guard: it is the rule `W32-SEE` already wrote down
+— *when a mutation reddens nothing, the first hypothesis is missing coverage, not a weak
+assertion* — plus a mutation harness that reports **which branch the mutation sits in**, so
+"the branch was never executed" and "the branch was executed and nothing noticed" stop
+looking identical.
+
+**2. Two need branch coverage over `src/auditmanager`, which this programme does not have**
+— wave 37's seam sweep and wave 40's `L5`. `L5` is the sharpest statement of it in the whole
+register: *a test that reaches the right outcome through the wrong branch*, indefinitely and
+with no symptom. C1–C4 are all frontend, and all four answer *"did the rendered output ever
+contain this"*. The backend analogue is a per-branch coverage instrument, or — cheaper and
+in the same spirit as C1 — **an assertion that the mutated line was executed at all**, which
+would also have caught wave 39's `G10`/`G11` from the other side.
+
+**3. And one is instrument plumbing** — wave 39's `G10`/`G11`, where the mutation never
+reached the code. `OPERATING_CONSTRAINTS.md` §2 and §10 already carry the rule; what is
+missing is that it must hold for **every process the test spawns**, not only for pytest's
+own import. That is a line in the mutation target, not a guard.
+
+### The claim this wave can make, and the one it cannot
+
+**Can:** for the first time on this programme, a blindness of the `D-69` kind was found by a
+**structural check** rather than by a mutation dying quietly — five times over, in one wave:
+thirteen unseeded contract members, seven unrendered widget branches, thirty-one unreached
+colour rules, four vacuous journey sentences, and `D-64`'s repair re-verified by mutation
+rather than by reading the register.
+
+**Cannot:** *"a guard can no longer be sound and blind."* Four of the seven are outside what
+was built, three of them because they are backend, and one of them because no structure can
+audit a mutation's strength. A row that claimed otherwise is how `D-4` and `D-2` closed early.
+
