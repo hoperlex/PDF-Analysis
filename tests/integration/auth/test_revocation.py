@@ -225,9 +225,57 @@ def test_changing_the_password_raises_the_epoch_in_the_same_write(
     assert changed is not None
     assert changed.token_epoch == user.token_epoch + 1
     assert changed.password_updated_at > user.password_updated_at
-    # `0006_app_user`'s own column comment: "Whoever changes the password sets this to false
-    # in the same statement."
-    assert changed.is_default_credential is False
+
+
+def test_changing_the_password_clears_the_default_credential_flag(
+    app_user_table: object, session_factory: sessionmaker[Session]
+) -> None:
+    """`0006_app_user`'s own column comment, which until this wave had no code under it.
+
+    *"Whoever changes the password sets this to false in the same statement."* Nothing could
+    change a password at all before `W39-REVOKE`, so that sentence described an obligation
+    with no implementation; this is the implementation and this is the assertion.
+
+    **The account is created with the flag already TRUE, and that is the whole point of the
+    fixture being local rather than the module's.** The first version of this check lived in
+    ``test_changing_the_password_raises_the_epoch_in_the_same_write`` and read
+    ``assert changed.is_default_credential is False`` against the shared ``user`` fixture --
+    whose flag is ``False`` from the moment it is created. Mutating
+    ``is_default_credential = false`` to ``is_default_credential = is_default_credential``
+    in the UPDATE **reddened nothing**: 160 passed. The assertion was true either way, which
+    is a coverage report and not a check.
+    """
+    login = f"w39rev-{secrets.token_hex(6)}"
+    repository = UserRepository()
+    with session_factory() as session:
+        seeded = repository.create_user(
+            session, login, PASSWORD, is_default_credential=True
+        )
+        session.commit()
+    assert seeded.is_default_credential is True, "the fixture must start from a flagged row"
+    try:
+        with session_factory() as session:
+            changed = repository.change_password(
+                session,
+                user_uid=str(seeded.user_uid),
+                current_password=PASSWORD,
+                new_password=NEW_PASSWORD,
+            )
+            session.commit()
+        assert changed is not None
+        assert changed.is_default_credential is False
+        # And read back, not merely returned: the RETURNING clause and the row must agree.
+        with session_factory() as session:
+            again = repository.find_by_login(session, login)
+            assert again is not None
+            assert again.is_default_credential is False
+            assert again.token_epoch == seeded.token_epoch + 1
+    finally:
+        with session_factory() as session:
+            session.execute(
+                text("DELETE FROM app_user WHERE login = :login"), {"login": login}
+            )
+            session.commit()
 
 
 def test_the_old_password_stops_working_and_the_new_one_starts(
