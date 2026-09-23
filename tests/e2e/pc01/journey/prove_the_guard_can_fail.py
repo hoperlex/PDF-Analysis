@@ -100,13 +100,25 @@ mutations = [
   ("drop the upload-failure marker",
    lambda m: m['refusals'].__setitem__('failure_marker','data-upload-verdict'),
    "test_every_marker_a_refusal_names_still_exists_in_the_application"),
+  # D-61, third instance. The check these two drive was rewritten by `W41-BLIND`: its
+  # subject moved from a concatenation of the whole of `web/src` to the import closure of
+  # the `control_module` the manifest itself names, over authored STRINGS only. Both
+  # mutations redden it for the same reason they always should have.
   ("require a sentence no screen renders",
    lambda m: m['refusals']['cases'][2].__setitem__(
        'expects_rendered',['Enter the document password to continue']),
-   "test_every_sentence_the_journey_requires_still_appears_in_the_application"),
+   "test_every_sentence_the_journey_requires_is_authored_by_the_control_it_presses"),
   ("reword the write half's own panel",
    lambda m: m['write']['steps'][0].__setitem__('expects_rendered',['Project made']),
-   "test_every_sentence_the_journey_requires_still_appears_in_the_application"),
+   "test_every_sentence_the_journey_requires_is_authored_by_the_control_it_presses"),
+  # D-61 itself, as the manifest actually carried it: a sentence that IS in `web/src` and
+  # is an identifier rather than a label. The old check passed this.
+  ("declare a sentence that is only an identifier in the source",
+   lambda m: m['write']['steps'][0].__setitem__('expects_rendered',['Run']),
+   "test_every_sentence_the_journey_requires_is_authored_by_the_control_it_presses"),
+  # The other half: a sentence the screen renders whether or not the step ran. It is
+  # checked against RENDERED output, in web/tests/guards/rendered-language.guard.test.ts,
+  # so this one is driven there rather than here and is named in the report.
   ("require an envelope sentence its own constraint contradicts",
    lambda m: m['refusals']['cases'][3].__setitem__('constraint','a_constraint_no_envelope_carries'),
    "test_every_envelope_sentence_a_refusal_requires_is_part_of_its_own_constraint"),

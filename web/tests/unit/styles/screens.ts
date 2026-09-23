@@ -20,13 +20,17 @@ import type { ReactElement } from 'react';
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 
-import { AppFrame } from '@/_app';
 import { DocumentDetailPage } from '@/_pages/document-detail';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectsPage } from '@/_pages/projects';
 import { ReviewPage } from '@/_pages/review';
 import { RunPage } from '@/_pages/run';
 import { VersionDetailPage } from '@/_pages/version-detail';
+import { AppFrame } from '@/_app';
+import { ChangePasswordPage } from '@/_pages/change-password';
+import { KnowledgeBasePage } from '@/_pages/knowledge-base';
+import { SignInPage } from '@/_pages/sign-in';
+import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { DocumentList } from '@/widgets/document-list';
@@ -38,9 +42,13 @@ import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
-import type { ErrorCode, ErrorEnvelope, Finding, RunState, RunStatus } from '@/shared/api';
+import type { DecisionRecord, ErrorCode, ErrorEnvelope, Finding, RunState, RunStatus } from '@/shared/api';
+import type { DocumentVersion, Project } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import { groupByCategory } from '@/entities/finding';
+import { PROJECT_PAGE_LIMIT } from '@/entities/project';
+import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
+import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 
 import {
   DOCUMENT_UID,
@@ -52,6 +60,7 @@ import {
   decisionEvent,
   evidence,
   finding,
+  findingDetail,
   observation,
   render,
   runStatus,
@@ -103,6 +112,76 @@ const FINDINGS: readonly Finding[] = [
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}C`, category: 'explicit_placeholder' }),
 ];
 
+const SHA = '6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f';
+
+const project = (): Project => ({
+  project_uid: PROJECT_UID,
+  name: 'Договор поставки',
+  created_at: '2026-09-10T08:00:00.000Z',
+  document_count: 2,
+});
+
+const version = (): DocumentVersion => ({
+  version_uid: VERSION_UID,
+  document_uid: DOCUMENT_UID,
+  project_uid: PROJECT_UID,
+  version_ordinal: 1,
+  media_type: 'application/pdf',
+  byte_size: 58978,
+  sha256: SHA,
+  page_count: 8,
+  published_at: '2026-09-18T06:55:52.642022Z',
+  input_manifest: [
+    { role: 'source.document', media_type: 'application/pdf', sha256: SHA, size_bytes: 58978 },
+  ],
+  display_title: 'Годовой отчёт',
+  source_filename: 'отчёт.pdf',
+});
+
+/**
+ * A client whose four lists have ROWS IN THEM, and a next page.
+ *
+ * Every list in this census was cold, so `li.am-state` -- the class every project row and
+ * every run row carries -- was reached by no screen, and with it the whole populated-list
+ * surface and the pager. `W41-BLIND` found that by asking which colour-bearing rules no
+ * screen reaches. The lists had been in the census by name since wave 32 and in a state
+ * that renders a spinner.
+ */
+function populatedClient() {
+  const client = newClient();
+  const page = { next_cursor: 'Y3Vyc29y' } as { next_cursor: string };
+  client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), { items: [project()], page });
+  client.setQueryData(queryKeys.projects.detail(PROJECT_UID), project());
+  client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), { items: [version()], page });
+  client.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), { items: [version()], page });
+  client.setQueryData(queryKeys.versions.detail(VERSION_UID), version());
+  client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [runStatus({ run_id: RUN_ID })], page });
+  // `diagnostic_observation_count` on purpose: the review header's diagnostics sentence
+  // renders only above zero, and every fixture in this file left it at the default.
+  client.setQueryData(
+    queryKeys.runs.detail(RUN_ID),
+    runStatus({ run_id: RUN_ID, diagnostic_observation_count: 1 }),
+  );
+  return client;
+}
+
+/** Journal rows for the knowledge base, one per verdict the contract publishes. */
+const RECORDS: readonly DecisionRecord[] = (
+  ['accepted', 'rejected', 'needs_manual_review', 'pending'] as const
+).map((verdict, index) => ({
+  ...decisionEvent({
+    decision_id: `${decisionEvent().decision_id.slice(0, -1)}${'ABCD'[index] ?? 'A'}`,
+    verdict,
+    comment: 'Замечание проверяющего.',
+  }),
+  project_uid: PROJECT_UID,
+  run_id: RUN_ID,
+  category: index % 2 === 0 ? 'internal_contradiction' : 'explicit_placeholder',
+  finding_text: 'Срок поставки указан как 30 дней в §4 и как 45 дней в §9.',
+  current_verdict: verdict,
+  decision_event_count: index + 1,
+}));
+
 export function screens(): Screen[] {
   const out: Screen[] = [];
   /**
@@ -138,7 +217,19 @@ export function screens(): Screen[] {
 
   // ------------------------------------------------------- the run, in every outcome
   add('RunProgress published', runScreen('published'));
-  add('RunProgress partial', runScreen('published', { stages: runStatus().stages }));
+  /*
+   * A PARTIAL run, and it is a repair rather than an addition.
+   *
+   * This line read `runScreen('published', { stages: runStatus().stages })` -- named
+   * `partial` and seeded `published`. So `.am-badge--degraded` and the run outcome
+   * module's `[data-run-outcome='partial']` rule were reached by no screen in a census
+   * whose own list said it covered them. `W41-BLIND` found it by asking which
+   * colour-bearing rules no screen reaches, not by reading the list.
+   */
+  add(
+    'RunProgress partial',
+    runScreen('partial', { degradation_set: ['text_analysis'], published_finding_count: 1 }),
+  );
   add('RunProgress failed', runScreen('failed', { terminal_reason: 'analysis_failed' as ErrorCode }));
   add('RunProgress validating', runScreen('validating'));
   add('RunProgress queued', runScreen('queued'));
@@ -214,7 +305,13 @@ export function screens(): Screen[] {
         currentVerdict: 'accepted',
         observationId: OBSERVATION_ID,
         onAccept: noop, onReject: noop, onComment: noop,
-        refusal: 'Пустой комментарий не отправляется.',
+        /*
+         * `'empty'` and not a sentence. `decision-panel.tsx` renders
+         * `.am-decision__refusal` only for `refusal === 'empty'`, so this screen was
+         * named `DecisionPanel refused` and rendered no refusal at all -- one more
+         * fixture whose NAME said it reached a state it never reached.
+         */
+        refusal: 'empty',
       }),
     ),
   );
@@ -270,6 +367,113 @@ export function screens(): Screen[] {
         runId: RUN_ID, runState: 'published', providerMode: 'live', onExport: noop, isPending: true,
         error: { title: 'Выгрузка не удалась', detail: 'Файл не создан.', correlationId: 'cid-contrast-1' },
       }),
+    ),
+  );
+
+  // ------------------------------------------------ the lists, with something in them
+  {
+    const client = populatedClient();
+    const at = (element: ReactElement): string =>
+      renderWith(client, createElement(AppRouterContext.Provider, { value: stubRouter() }, element));
+    add('ProjectList loaded', at(createElement(ProjectList, {})));
+    add('DocumentList loaded', at(createElement(DocumentList, { projectUid: PROJECT_UID })));
+    add('VersionList loaded', at(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
+    add('RunList loaded', at(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+    add('ProjectsPage loaded', at(createElement(ProjectsPage, {})));
+    add('VersionDetailPage loaded', at(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+  }
+
+  /*
+   * The review screen WITH DATA IN ITS FOUR CACHES.
+   *
+   * `.am-review__finding h2`, `.am-review__recommendation`, `.am-review__diagnostics` and
+   * `.am-uid` were reached by no screen: the census held `ReviewPage cold`, which is a
+   * spinner. Three of the four caches hold the transport envelope rather than the model,
+   * which is the shape `D-57` was about and the reason seeding the wrong one renders a
+   * blank screen.
+   */
+  {
+    const client = populatedClient();
+    const page = { next_cursor: null } as { next_cursor: null };
+    client.setQueryData(queryKeys.runs.findings(RUN_ID), { data: { items: FINDINGS, page } });
+    client.setQueryData(queryKeys.findings.detail(FINDING_UID), {
+      data: findingDetail({ finding_uid: FINDING_UID, decision_event_count: 2 }),
+    });
+    client.setQueryData(queryKeys.findings.decisions(FINDING_UID), {
+      data: { items: [decisionEvent({ verdict: 'accepted' })], page },
+    });
+    add(
+      'ReviewPage loaded',
+      renderWith(
+        client,
+        createElement(
+          AppRouterContext.Provider,
+          { value: stubRouter() },
+          createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+        ),
+      ),
+    );
+  }
+
+  // The evidence viewer with no quotation on the page a reader is looking at.
+  add(
+    'EvidenceViewer no quotation on this page',
+    render(
+      createElement(EvidenceViewer, {
+        observation: observation({ evidence: [evidence({ evidence_ordinal: 1, page_number: 2 })] }),
+        activePage: 7,
+        onPageChange: noop,
+        documentUrl: null,
+      }),
+    ),
+  );
+
+  // ------------------------------------------------------- the screens the list forgot
+  /*
+   * `W41-BLIND`, 2026-09-23. Measured, not guessed: of the 137 colour-bearing rules in
+   * this application's stylesheets, **31 were reached by no screen this census renders**
+   * -- 23% of the surface the census is named after. Eight of them were the knowledge
+   * base, which has been in the tree since `R-23` and in this file never.
+   *
+   * The cause is `D-69`'s, one wave on: the census's list of screens is a hand-written
+   * literal and nothing checked it against the tree. `contrast.test.ts` even asserted a
+   * list of eighteen component names -- a literal checked against a literal, which is the
+   * exact shape `OPERATING_CONSTRAINTS.md` §12 is about. That assertion is now derived
+   * from `web/src` instead, and these are the screens it demanded.
+   */
+
+  // The knowledge base, `R-23`: eight `.am-kb__*` colour rules reached nothing before it.
+  add('KnowledgeBasePage cold', withRouter(createElement(KnowledgeBasePage, {})));
+  add('KnowledgeBase', render(createElement(KnowledgeBase, { records: RECORDS })));
+  add('KnowledgeBase empty', render(createElement(KnowledgeBase, { records: [] })));
+
+  // The session screens, `R-26`. Neither takes a query, and both carry `.am-note`.
+  add('SignInPage', render(createElement(SignInPage, {})));
+  add('SignInPage refused', render(createElement(SignInPage, { refusal: 'credentials' })));
+  add('SignInPage open', render(createElement(SignInPage, { login: 'проверяющий' })));
+  add('ChangePasswordPage signed out', render(createElement(ChangePasswordPage, {})));
+  add('ChangePasswordPage', render(createElement(ChangePasswordPage, { login: 'проверяющий' })));
+  add(
+    'ChangePasswordPage refused',
+    render(createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'credentials' })),
+  );
+  add(
+    'ChangePasswordPage changed',
+    render(createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'changed' })),
+  );
+
+  /*
+   * A screen carrying `UnsupportedState`, which is the `warning` tone.
+   *
+   * `.am-state--warning` and `.am-state--warning .am-state__title` were reached by no
+   * screen: every state block in this census was `neutral` or `error`, and the third tone
+   * -- the one that says "no retry will help" -- was never measured in either palette. An
+   * address that is not an identifier is the one way one static pass reaches it.
+   */
+  add(
+    'VersionDetailPage unsupported address',
+    withRouter(
+      createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: 'not-an-identifier' }),
     ),
   );
 

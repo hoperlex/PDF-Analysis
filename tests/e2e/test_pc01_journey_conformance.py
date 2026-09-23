@@ -56,6 +56,32 @@ the same against the *real* manifest, which a synthetic control cannot.
 
 **`W28-GUARD` widened it again, for the refusal half.** See the section at the foot of
 this file.
+
+**`W41-BLIND` moved one check's SUBJECT, 2026-09-23, and it is the only change in this file
+that is not a widening.** ``expects_rendered`` was asserted by substring containment against
+a concatenation of every ``.ts``/``.tsx`` byte under ``web/src``. That is `D-61`: the
+manifest declared ``"Run"`` and passed, because ``Run`` occurs inside ``RunPage``, and no
+screen renders it. Containment had deceived two guards before it and both were repaired by
+matching on a word boundary; **this one could not be, because the subject was wrong rather
+than the matcher.**
+
+The question splits in two, and neither half is the old one:
+
+* *are these the application's own words?* -- source can answer that, scoped to the import
+  closure of the ``control_module`` the manifest itself names and to authored STRINGS only.
+  That is ``test_every_sentence_the_journey_requires_is_authored_by_the_control_it_presses``;
+* *is the sentence evidence that the step RAN, or is it on the screen anyway?* -- only
+  rendered output can answer that, and it is asserted in
+  ``web/tests/guards/rendered-language.guard.test.ts`` over `W32-SEE`'s renderer, reused
+  rather than rebuilt. ``test_the_rendered_half_of_d61_has_not_left_the_frontend_guard``
+  keeps that obligation from leaving the gate in silence.
+
+**Measured at `abe1c15`, before the repair: none of the manifest's fifteen sentences was
+verified by either half.** Eleven are rendered by no screen this harness can reach -- they
+live in branches driven by ``useState`` and by a settled ``useMutation`` -- and the other
+four passed by matching text the screen renders whatever happened, in the browser as well
+as in the gate. Those four were removed from the manifest, each with the reason in its own
+step.
 """
 
 from __future__ import annotations
@@ -216,6 +242,99 @@ def application_source(web_src: Path) -> str:
         for path in sorted(web_src.rglob("*.ts*"))
         if path.is_file()
     )
+
+
+# --------------------------------------------------------------------------------------
+# `D-61`'s third instance. The subject was wrong, not the matcher.
+# --------------------------------------------------------------------------------------
+
+_IMPORT = re.compile(r"""^\s*(?:import|export)\s[^'"\n]*?from\s*['"]([^'"]+)['"]""", re.M)
+#: Quoted runs of any of the three kinds, and JSX text between a `>` and the next `<`.
+_LITERAL = re.compile(r"'([^'\\\n]*)'|\"([^\"\\\n]*)\"|`([^`\\]*)`|>([^<>{}\n]+)<")
+
+
+def resolve_module(specifier: str, importer: Path, web_src: Path) -> Path | None:
+    """``@/features/x`` or ``../model/y`` -> the file on disk, or ``None`` if it leaves ``web/src``."""
+    if specifier.startswith("@/"):
+        base = web_src / specifier[2:]
+    elif specifier.startswith("."):
+        base = (importer.parent / specifier).resolve()
+    else:
+        return None  # a package, not this application's source
+    for candidate in (
+        base.with_suffix(".ts"), base.with_suffix(".tsx"),
+        base / "index.ts", base / "index.tsx", base,
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def module_closure(entry: Path, web_src: Path) -> list[Path]:
+    """``entry`` and every module under ``web/src`` it imports, transitively.
+
+    This is the scope a sentence may be authored in. The old check used the concatenation
+    of the WHOLE of ``web/src``, which is how the manifest asserted ``Run`` and passed on
+    ``RunPage``; the closure of the module the manifest itself names is the honest subject
+    for the question *"are these the application's own words"*.
+    """
+    seen: set[Path] = set()
+    stack = [entry]
+    while stack:
+        current = stack.pop()
+        if current in seen or not current.is_file():
+            continue
+        seen.add(current)
+        for specifier in _IMPORT.findall(current.read_text(encoding="utf-8")):
+            resolved = resolve_module(specifier, current, web_src)
+            if resolved is not None and resolved not in seen:
+                stack.append(resolved)
+    return sorted(seen)
+
+
+def authors(text: str, sentence: str) -> bool:
+    """Is ``sentence`` a WHOLE-WORD occurrence in ``text``?
+
+    The boundary is the third repair of the same defect and it is not a substitute for
+    moving the subject -- it is what is left once the subject is right. Scoping to the
+    control module's closure and to authored strings removes ``Run`` inside the identifier
+    ``RunPage``; it does not remove ``Run`` inside the string literal ``'RunStateBadge'``,
+    which `run-state-badge.tsx` really does carry. Measured: without this, declaring
+    ``expects_rendered: ["Run"]`` on the create-project step still passed.
+
+    ``\\w`` is Unicode-aware in Python, so this holds for the Cyrillic sentences too: the
+    full stop after ``Ничего не отправлено`` is a boundary and the ``S`` after ``Run`` is
+    not.
+    """
+    return re.search(rf"(?<!\w){re.escape(sentence)}(?!\w)", text) is not None
+
+
+#: `/* … */` and a `//` that is not the `//` of a scheme.
+_COMMENT = re.compile(r"/\*[\s\S]*?\*/|(?<!:)//[^\n]*")
+
+
+def authored_strings(modules: list[Path]) -> str:
+    """Only the STRINGS these modules author: quoted literals and JSX text, comments removed.
+
+    Identifiers are excluded on purpose. ``Run`` inside ``RunPage`` is an identifier, and
+    the whole of `D-61` is that a source scan which cannot tell one from a label will
+    confirm a sentence no screen renders.
+
+    **Comments are stripped first, and that is not tidying.** This repository documents
+    itself in markdown inside doc comments, so ``RunStatus``, ``useStartRun`` and
+    ``listRuns`` all appear between backticks in prose -- and a literal scan that reads a
+    backtick run as a template literal picks every one of them up. Measured: with comments
+    left in, declaring ``expects_rendered: ["Run"]`` on the create-project step still
+    passed, which is `D-61` surviving its own repair. The negative control
+    ``declare a sentence that is only an identifier in the source`` in
+    ``prove_the_guard_can_fail.py`` is what says so.
+    """
+    out: list[str] = []
+    for module in modules:
+        text = _COMMENT.sub(" ", module.read_text(encoding="utf-8"))
+        for groups in _LITERAL.findall(text):
+            out.extend(part for part in groups if part)
+    return "\n".join(out)
 
 
 def responses_published_for(openapi: dict, method: str, path: str) -> set[int]:
@@ -993,35 +1112,111 @@ def test_every_marker_a_refusal_names_still_exists_in_the_application(
     )
 
 
-def test_every_sentence_the_journey_requires_still_appears_in_the_application(
+#: The frontend guard that carries the half of `D-61` this file cannot check.
+RENDERED_EVIDENCE_GUARD = REPOSITORY_ROOT / "web" / "tests" / "guards" / "rendered-language.guard.test.ts"
+
+
+def test_every_sentence_the_journey_requires_is_authored_by_the_control_it_presses(
     manifest: dict,
 ) -> None:
-    """The copy-rot check, and it covers the write half too.
+    """The copy-rot check, with its subject corrected. `D-61`, third instance.
 
-    `expects_rendered` was in `manifest.json` from `W22-E2E` and **no checker but
-    `write.mjs` had ever read it** -- so "Created" could be reworded and the gate stayed
-    green while the journey went quietly red. Every sentence here is the application's own
-    words, so the application's own source is where they have to be.
+    **What this used to do, and why a word boundary would not have fixed it.** It asserted
+    each ``expects_rendered`` sentence by substring containment against
+    ``application_source(WEB_SRC)`` -- *every* ``.ts``/``.tsx`` byte under ``web/src``,
+    concatenated. So the manifest declared the sentence ``"Run"`` and passed, because
+    ``Run`` occurs inside ``RunPage``, and **no screen renders it**. Containment had
+    already deceived two guards before this one and both were repaired by matching on a
+    word boundary; this one could not be, because **the subject was wrong rather than the
+    matcher**.
 
-    `expects_rendered_from_envelope` is deliberately NOT checked here: the server supplies
-    those words at run time and they are not in `web/src` at all. They are checked against
-    the declared `constraint` instead, one test down.
+    **The subject, corrected, is two questions and neither is the old one.**
+
+    1. *Are these the application's own words, written by the thing the journey presses?*
+       That is answerable from source, and it is what this test asks -- but scoped to the
+       **import closure of the ``control_module`` the manifest itself names**, and over
+       **authored strings only**: quoted literals and JSX text, never identifiers. ``Run``
+       inside ``RunPage`` is an identifier and is no longer visible to this check.
+    2. *Is the sentence evidence that the step ran, or is it on the screen anyway?* That is
+       answerable only from **rendered output**, and it is asserted in
+       ``web/tests/guards/rendered-language.guard.test.ts`` -- `W32-SEE`'s renderer, reused
+       rather than rebuilt, because two renderers is two truths. The test below keeps that
+       obligation from leaving the gate in silence.
+
+    ``expects_rendered_from_envelope`` is still not checked here: the server supplies those
+    words at run time and they are in ``web/src`` at all. They are checked against the
+    declared ``constraint``, one test down.
     """
     _require(WEB_SRC)
-    source = application_source(WEB_SRC)
-    missing: list[tuple[str, str]] = []
-    for step in write_steps(manifest):
-        for sentence in step.get("expects_rendered") or ():
-            if sentence not in source:
-                missing.append((step["name"], sentence))
-    for case in refusal_cases(manifest):
-        for sentence in case.get("expects_rendered") or ():
-            if sentence not in source:
-                missing.append((case["fixture"], sentence))
+    missing: list[str] = []
+    for where, module_path, sentences in _sentences_with_their_control(manifest):
+        control = REPOSITORY_ROOT / module_path
+        assert control.is_file(), (
+            f"{where} names control_module {module_path!r} and no such file exists. "
+            "test_every_module_the_journey_names_is_on_disk covers the routes; this is "
+            "the control half of the same claim."
+        )
+        authored = authored_strings(module_closure(control, WEB_SRC))
+        for sentence in sentences:
+            if not authors(authored, sentence):
+                missing.append(f"{where}: {sentence!r} (not authored by {module_path} or what it imports)")
     assert not missing, (
-        f"the journey requires {len(missing)} sentence(s) that no longer appear anywhere "
-        f"in web/src: {missing}. A reworded panel turns the journey red only when someone "
-        "runs a browser, which is the rot this file exists to stop."
+        f"the journey requires {len(missing)} sentence(s) that the control it presses does "
+        f"not author: {missing}. A reworded panel turns the journey red only when someone "
+        "runs a browser, which is the rot this file exists to stop. Note the scope: this "
+        "reads the control module's import closure and only its STRING literals, so a "
+        "sentence that merely occurs somewhere in web/src no longer satisfies it -- that "
+        "was D-61."
+    )
+
+
+def _sentences_with_their_control(manifest: dict) -> list[tuple[str, str, list[str]]]:
+    """``(where, control_module, sentences)`` for every step and case that declares any."""
+    out: list[tuple[str, str, list[str]]] = []
+    for step in write_steps(manifest):
+        sentences = list(step.get("expects_rendered") or ())
+        if sentences:
+            out.append((step["name"], step["control_module"], sentences))
+    section = refusal_section(manifest)
+    for case in refusal_cases(manifest):
+        sentences = list(case.get("expects_rendered") or ())
+        if sentences:
+            out.append((case["fixture"], section["control_module"], sentences))
+    return out
+
+
+def test_the_rendered_half_of_d61_has_not_left_the_frontend_guard(manifest: dict) -> None:
+    """The obligation this file hands to the renderer must not be able to leave in silence.
+
+    `OPERATING_CONSTRAINTS.md` §4.65 is the precedent and the reason: a rule that lives in
+    a command nothing runs is documentation. ``query-key-shape.guard.test.ts`` asserts the
+    ``Makefile`` line that runs the typechecker for exactly this reason.
+
+    Here the risk is sharper, because deleting the rendered check would leave **this** file
+    green and looking complete: the source half above would go on passing and nobody would
+    be told that the *"is it evidence"* half had gone. So the marker is named, and its
+    absence is red in the canonical battery, which runs with no ``node_modules`` at all.
+    """
+    _require(RENDERED_EVIDENCE_GUARD)
+    guard = RENDERED_EVIDENCE_GUARD.read_text(encoding="utf-8")
+    for marker in (
+        "D-61: every sentence the journey calls evidence is evidence",
+        "export function journeySentences",
+        "tests/e2e/pc01/journey/manifest.json",
+        "STILL_EVIDENCE_THOUGH_RENDERED",
+    ):
+        assert marker in guard, (
+            f"{RENDERED_EVIDENCE_GUARD.name} no longer carries {marker!r}. The half of D-61 "
+            "that needs a RENDERED screen -- that a sentence offered as proof a step ran is "
+            "not already on the screen before it runs -- lives there and nowhere else. "
+            "Restore it, or move it somewhere this assertion names."
+        )
+    # Non-vacuous: the sentences this file checks and the ones that guard checks are the
+    # same set, so a manifest that stopped declaring any would make BOTH halves trivial.
+    declared = sum(len(s) for _, _, s in _sentences_with_their_control(manifest))
+    assert declared > 5, (
+        f"the manifest declares {declared} expects_rendered sentence(s); both halves of "
+        "D-61 are close to vacuous and that is the state this check exists to report"
     )
 
 
@@ -1197,6 +1392,52 @@ def test_control_a_reworded_panel_is_detected() -> None:
     source_after_the_rewrite = "Этот файл не является PDF. Мы его не загрузили."
     missing = [s for s in case["expects_rendered"] if s not in source_after_the_rewrite]
     assert missing == ["Ничего не отправлено"]
+
+
+def test_control_a_sentence_that_is_only_an_identifier_is_detected() -> None:
+    """`D-61` itself, in miniature and over a synthetic source. Reads nothing on disk.
+
+    The three things the repaired subject rules out, one per assertion: an identifier, a
+    sentence authored by a module the control does not import, and a word that is only a
+    fragment of a longer one inside a real string literal.
+    """
+    source = "export function RunPage() { return <p>Прогон завершился</p>; } const n = 'RunStateBadge';"
+    # The old check -- containment against source -- accepted all three of these.
+    assert "Run" in source and "RunPage" in source
+    # The repaired one accepts none.
+    assert not authors(authored_strings_of(source), "Run")
+    assert not authors(authored_strings_of(source), "RunPage")
+    # And still accepts what a screen actually renders.
+    assert authors(authored_strings_of(source), "Прогон завершился")
+
+
+def test_control_a_doc_comment_does_not_author_a_sentence() -> None:
+    """Comments are stripped before literals are read, and the control says why it matters.
+
+    This repository writes markdown in its doc comments, so an identifier between
+    backticks reads as a template literal to any scan that does not strip them first --
+    measured on the real tree, where it kept `D-61`'s own `Run` alive through the first
+    version of this repair.
+    """
+    commented = "/** `RunStatus` and `useStartRun` are the seam. */ const a = 1;"
+    assert not authors(authored_strings_of(commented), "RunStatus")
+    assert authors(authored_strings_of("const a = 'RunStatus';"), "RunStatus")
+
+
+def authored_strings_of(source: str) -> str:
+    """`authored_strings` over one in-memory module, for the controls above."""
+    out: list[str] = []
+    for groups in _LITERAL.findall(_COMMENT.sub(" ", source)):
+        out.extend(part for part in groups if part)
+    return "\n".join(out)
+
+
+def test_control_the_rendered_half_cannot_leave_without_being_noticed() -> None:
+    """The marker check is only worth having if a deletion really reddens it."""
+    guard = RENDERED_EVIDENCE_GUARD.read_text(encoding="utf-8")
+    marker = "D-61: every sentence the journey calls evidence is evidence"
+    assert marker in guard
+    assert marker not in guard.replace(marker, "some other describe title")
 
 
 def test_control_an_envelope_sentence_that_contradicts_its_constraint_is_detected() -> None:

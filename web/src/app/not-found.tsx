@@ -36,7 +36,7 @@ export default function NotFound() {
     >
       <UnsupportedState
         title="Такого адреса в приложении нет."
-        detail="A project, a document, a version and a run are each addressed by an opaque identifier. This path does not carry one, so nothing was requested — this is not a report that the server could not find something."
+        detail="Проект, документ, версия и прогон адресуются непрозрачным идентификатором. В этом пути его нет, поэтому запрос не отправлялся — это не сообщение о том, что сервер чего-то не нашёл."
       />
     </PageShell>
   );

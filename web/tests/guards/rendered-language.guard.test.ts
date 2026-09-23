@@ -70,6 +70,7 @@ import type {
   Project,
   RunStatus,
   StageId,
+  StageStatus,
 } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
@@ -85,8 +86,11 @@ import { SignInPage } from '@/_pages/sign-in';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { RunPage } from '@/_pages/run';
 import { VersionDetailPage } from '@/_pages/version-detail';
+import NotFound from '@/app/not-found';
+import { DecisionHistory } from '@/widgets/decision-history';
+import { EvidenceViewer } from '@/widgets/evidence-viewer';
 
-import { CONTRACT_PATH, SEAMS_PATH, readJson, readText } from './lib/repo';
+import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderWith, seedError } from '../unit/screens/harness';
@@ -267,7 +271,15 @@ const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp
   // The designator is matched only where a timestamp precedes it, so a bare `UTC` in a
   // sentence is still an offence.
   { name: 'ISO 8601 timestamps', pattern: /\b\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|\s*UTC)?\b/g },
-  { name: 'the product designation', pattern: /\bPC-\d{2}\b/g },
+  {
+    // `PC-01` is the product; `P02` is the PROGRAMME PHASE, and the evidence viewer names
+    // it to the reviewer -- "Шлюз свидетельств P02 делает такое невозможным". Both are
+    // designations this programme fixes in `docs/program/`, neither is English, and the
+    // shape is the authority rather than a list of them. Narrow on purpose: a bare `P`
+    // and a bare `PC` are still offences.
+    name: 'the product and phase designations',
+    pattern: /\b(?:PC-\d{2}|P\d{2})\b/g,
+  },
   {
     name: 'units attached to a number',
     // A unit is Latin because the unit is Latin. Bound to a preceding number so that a
@@ -425,8 +437,30 @@ const version = (over: Partial<DocumentVersion> = {}): DocumentVersion => ({
   ...over,
 });
 
-const STAGES: readonly StageId[] = [
-  'source_preparation', 'page_geometry_extraction', 'document_context_build', 'text_analysis',
+/*
+ * ALL NINE stage ids, and each with a DIFFERENT stage status.
+ *
+ * It was four, all `succeeded`, and that was five `StageId` members and three
+ * `StageStatus` members this guard never rendered. `W41-BLIND` did not find that by
+ * reading the list -- a list is exactly what nobody re-reads. The coverage assertion at
+ * the foot of this file names every contract member no screen puts on a badge, and it is
+ * what this seed answers to.
+ *
+ * Hand-written on purpose. Deriving the seeds from the contract would make a tenth stage
+ * cover itself, silently, with whatever default a builder chose -- which is the shape
+ * this task exists to stop. A new member must redden, so that somebody decides what the
+ * screen does with it.
+ */
+const STAGES: readonly { readonly id: StageId; readonly status: StageStatus }[] = [
+  { id: 'source_preparation', status: 'succeeded' },
+  { id: 'page_geometry_extraction', status: 'succeeded' },
+  { id: 'document_context_build', status: 'partial' },
+  { id: 'text_analysis', status: 'succeeded' },
+  { id: 'block_analysis', status: 'failed' },
+  { id: 'finding_merge', status: 'skipped' },
+  { id: 'finding_review', status: 'succeeded' },
+  { id: 'finding_correction', status: 'skipped' },
+  { id: 'norm_verification', status: 'partial' },
 ];
 
 const run = (over: Partial<RunStatus> = {}): RunStatus => ({
@@ -439,12 +473,12 @@ const run = (over: Partial<RunStatus> = {}): RunStatus => ({
   terminal_at: '2026-09-10T08:04:00.000Z',
   terminal_reason: null,
   interrupted_reason: null,
-  stages: STAGES.map((stage_id) => ({
-    stage_id,
-    status: 'succeeded' as const,
+  stages: STAGES.map(({ id, status }) => ({
+    stage_id: id,
+    status,
     started_at: '2026-09-10T08:00:00.000Z',
     finished_at: '2026-09-10T08:01:00.000Z',
-    error_code: null,
+    error_code: status === 'failed' ? ('analysis_failed' as ErrorCode) : null,
     stage_version: '1.0.0',
   })),
   degradation_set: [],
@@ -502,7 +536,7 @@ const detail = (): FindingDetail => ({
   latest_comment: 'Замечание проверяющего.',
 });
 
-const decision = (): DecisionEvent => ({
+const decision = (over: Partial<DecisionEvent> = {}): DecisionEvent => ({
   decision_id: `dec_${ULID}`,
   finding_uid: FINDING_UID,
   finding_observation_id: OBSERVATION_ID,
@@ -511,7 +545,58 @@ const decision = (): DecisionEvent => ({
   comment: 'Подтверждено.',
   author_label: 'проверяющий',
   recorded_at: '2026-09-10T09:00:00.000Z',
+  ...over,
 });
+
+/*
+ * ONE FINDING PER `FindingCategory`, AND ONE PER `Verdict`.
+ *
+ * The list used to hold a single `internal_contradiction` finding whose verdict was
+ * `pending`, so `explicit_placeholder`, `rejected` and `needs_manual_review` never
+ * reached a badge -- three contract members with a Russian label each, rendered by no
+ * state in this matrix. The coverage assertion at the foot of this file is what now says
+ * so out loud, and this is its answer.
+ *
+ * Hand-written for the reason `STAGES` is: a fifth verdict must redden rather than seed
+ * itself.
+ */
+const FINDINGS: readonly Finding[] = [
+  finding({ current_verdict: 'pending' }),
+  finding({
+    finding_uid: `${FINDING_UID.slice(0, -1)}C`,
+    category: 'internal_contradiction',
+    current_verdict: 'accepted',
+    latest_decision_id: `dec_${ULID}`,
+    decision_recorded_at: '2026-09-10T09:00:00.000Z',
+  }),
+  finding({
+    finding_uid: `${FINDING_UID.slice(0, -1)}D`,
+    category: 'explicit_placeholder',
+    current_verdict: 'rejected',
+    latest_decision_id: `dec_${ULID}`,
+    decision_recorded_at: '2026-09-10T09:00:00.000Z',
+  }),
+  finding({
+    finding_uid: `${FINDING_UID.slice(0, -1)}E`,
+    category: 'explicit_placeholder',
+    current_verdict: 'needs_manual_review',
+    latest_decision_id: `dec_${ULID}`,
+    decision_recorded_at: '2026-09-10T09:00:00.000Z',
+  }),
+];
+
+/** One decision event per `Verdict`, for the same reason the findings are four. */
+const DECISIONS: readonly DecisionEvent[] = [
+  decision(),
+  decision({ decision_id: `dec_${ULID}B`, event_type: 'reject', verdict: 'rejected', comment: 'Отклонено.' }),
+  decision({
+    decision_id: `dec_${ULID}C`,
+    event_type: 'comment',
+    verdict: 'needs_manual_review',
+    comment: 'Требует ручной проверки.',
+  }),
+  decision({ decision_id: `dec_${ULID}D`, event_type: 'revoke', verdict: 'pending', comment: 'Решение отозвано.' }),
+];
 
 /**
  * One journal record. Cyrillic everywhere the application did not author the string, and
@@ -582,9 +667,9 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.version, version());
   client.setQueryData(KEYS.runs, { items: [run(runOverrides)], page });
   client.setQueryData(KEYS.run, run(runOverrides));
-  client.setQueryData(KEYS.findings, { items: [finding()], page });
+  client.setQueryData(KEYS.findings, { items: FINDINGS, page });
   client.setQueryData(KEYS.finding, detail());
-  client.setQueryData(KEYS.decisions, { items: [decision()], page });
+  client.setQueryData(KEYS.decisions, { items: DECISIONS, page });
   /*
    * TWO records, and the second one is not decoration.
    *
@@ -599,7 +684,22 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
    * English word in either is now an offence.
    */
   client.setQueryData(KEYS.journal, {
-    items: [record(), record({ decision_id: `dec_${ULID}A`, decision_event_count: 1 })],
+    items: [
+      record(),
+      record({ decision_id: `dec_${ULID}A`, decision_event_count: 1 }),
+      // One row per remaining `Verdict` and per remaining `FindingCategory`, so the
+      // knowledge base puts every badge this contract publishes on a screen. Before this
+      // the journal held `accepted`/`internal_contradiction` twice and nothing else.
+      ...DECISIONS.slice(1).map((event, index) =>
+        record({
+          ...event,
+          decision_id: `${event.decision_id}J`,
+          current_verdict: event.verdict ?? 'pending',
+          category: index === 0 ? 'explicit_placeholder' : 'internal_contradiction',
+          decision_event_count: index + 1,
+        }),
+      ),
+    ],
     page,
   });
   return client;
@@ -614,9 +714,9 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
 function loadedReviewClient(runOverrides: Partial<RunStatus> = {}): Client {
   const client = loadedClient(runOverrides);
   const page = { next_cursor: null } as { next_cursor: null };
-  client.setQueryData(KEYS.findings, { data: { items: [finding()], page } });
+  client.setQueryData(KEYS.findings, { data: { items: FINDINGS, page } });
   client.setQueryData(KEYS.finding, { data: detail() });
-  client.setQueryData(KEYS.decisions, { data: { items: [decision()], page } });
+  client.setQueryData(KEYS.decisions, { data: { items: DECISIONS, page } });
   return client;
 }
 
@@ -797,6 +897,68 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
     make: () =>
       createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'changed' }),
   },
+  /*
+   * SEVEN MORE, APPENDED, and not one of them was thought of: the branch scan below
+   * named each by the literal its widget passes to a mandatory state, and this matrix
+   * reached none of them.
+   *
+   * Four are `UnsupportedState` — the tone that says no retry will help — which was
+   * rendered by no screen at all. One of them, `app/not-found.tsx`, carried a WHOLE
+   * ENGLISH SENTENCE to a reviewer who had mistyped an address, and it is repaired in
+   * the same commit that made it visible. That is `D-53` again on a screen nobody had
+   * rendered, three waves after `D-53` was closed.
+   *
+   * The evidence viewer and the decision history are rendered here as widgets rather
+   * than through the review page, because their failure branches are chosen by props
+   * the page only produces from a query state a static pass cannot put it in.
+   * `tests/unit/styles/screens.ts` has rendered widgets directly since wave 32 for the
+   * same reason.
+   */
+  { name: 'not-found', make: () => createElement(NotFound, {}) },
+  {
+    name: 'project-detail-bad-address',
+    make: () => createElement(ProjectDetailPage, { projectUid: 'not-an-identifier' }),
+  },
+  {
+    name: 'document-detail-bad-address',
+    make: () =>
+      createElement(DocumentDetailPage, {
+        projectUid: PROJECT_UID,
+        documentUid: 'not-an-identifier',
+      }),
+  },
+  {
+    name: 'version-detail-bad-address',
+    make: () =>
+      createElement(VersionDetailPage, {
+        projectUid: PROJECT_UID,
+        versionUid: 'not-an-identifier',
+      }),
+  },
+  {
+    name: 'evidence-viewer-no-evidence',
+    make: () =>
+      createElement(EvidenceViewer, {
+        observation: { ...finding().observation, evidence: [] },
+        activePage: 1,
+        onPageChange: () => {},
+        documentUrl: null,
+      }),
+  },
+  {
+    name: 'evidence-viewer-no-document',
+    make: () =>
+      createElement(EvidenceViewer, {
+        observation: finding().observation,
+        activePage: 7,
+        onPageChange: () => {},
+        documentUrl: null,
+      }),
+  },
+  {
+    name: 'decision-history-pending',
+    make: () => createElement(DecisionHistory, { events: [], isLoading: true }),
+  },
 ];
 
 /**
@@ -850,6 +1012,22 @@ export const CACHE_STATES: readonly {
   { state: 'created-run', run: { state: 'created', terminal_at: null, published_finding_count: 0 } },
   { state: 'queued-run', run: { state: 'queued', terminal_at: null, published_finding_count: 0 } },
   { state: 'validating-run', run: { state: 'validating', terminal_at: null, published_finding_count: 0 } },
+  /*
+   * The OTHER provider mode and the OTHER cost basis, added by `W41-BLIND`.
+   *
+   * Every other state in this matrix seeds `provider_mode: 'recorded'` and
+   * `cost_basis: 'measured'`, so `live` and `estimated` -- two contract members that the
+   * owner's ruling puts on screen in Russian, and that a PHOTOGRAPH of the run screen
+   * caught in English once already -- were rendered by no state here. The guard was sound
+   * and blind, for the seventh and eighth time, and in the same file.
+   *
+   * One state rather than two: they are independent fields of the same reading, and
+   * nothing on the screen couples them.
+   */
+  {
+    state: 'live-estimated-run',
+    run: { provider_mode: 'live', cost_basis: 'estimated' },
+  },
 ];
 
 export function renderedScreens(): readonly { readonly where: string; readonly markup: string }[] {
@@ -1084,9 +1262,20 @@ describe('the guard renders the screens it claims to render', () => {
     // trivially satisfied.
     expect(SCREENS.length).toBeGreaterThan(1);
     expect(CACHE_STATES.length).toBeGreaterThan(1);
+    /*
+     * The floor is 100 and it used to be 200. It is here to catch a screen that rendered
+     * NOTHING, and three entries in `SCREENS` are now widgets rendered directly -- a
+     * pending decision history is one `am-state` block, 122 characters, and legitimately
+     * so. A floor tuned to the largest page would have refused the branches this matrix
+     * was extended to reach, which is the wrong direction for a coverage guard.
+     */
     for (const { where, markup } of screens) {
-      expect(markup.length, `${where} rendered nothing`).toBeGreaterThan(200);
+      expect(markup.length, `${where} rendered nothing`).toBeGreaterThan(100);
     }
+    // And the pages are still pages: the floor above cannot be met by a matrix that
+    // quietly became a list of state blocks.
+    const substantial = screens.filter((screen) => screen.markup.length > 2000);
+    expect(substantial.length, 'no screen rendered a whole page').toBeGreaterThan(20);
   });
 
   it('reaches past the loading state into a real reading', () => {
@@ -1096,6 +1285,167 @@ describe('the guard renders the screens it claims to render', () => {
     expect(loaded.some((s) => s.markup.includes(`data-run-id="${RUN_ID}"`))).toBe(true);
     expect(loaded.some((s) => s.markup.includes('Договор поставки'))).toBe(true);
     expect(loaded.some((s) => s.markup.includes('Срок поставки'))).toBe(true);
+  });
+});
+
+// ================================================== the matrix's COVERAGE is an assertion
+
+/**
+ * `D-69`, and the reason this section exists rather than one more seeded state.
+ *
+ * Seven waves running, a guard on this programme has been **sound and blind**: it
+ * rendered, saw, and permitted, because the state that carries the defect was never
+ * reached. Three of the seven are this file. Each repair was *"seed one more state"*, and
+ * each fixed the instance and left the cause:
+ *
+ * > **a guard's seed matrix is a hand-written literal, and nothing anywhere checks that
+ * > the literal covers the space.**
+ *
+ * A guard answers, and an answer is read as coverage. So the coverage is asserted here,
+ * against the contract rather than against a list: every member of every schema the
+ * owner's ruling put on screen in Russian must be **rendered by some state in this
+ * matrix**, and a member that is not makes this file red **naming the member**.
+ *
+ * ## Why a `data-` attribute is the evidence, and not the label
+ *
+ * A translated screen renders `Опубликован`, not `published`, so the rendered *word*
+ * cannot say which contract member reached the screen. The machine value keeps its home
+ * in a `data-` attribute — that is the whole of `D-62`'s repair and `PA-01` criterion 4
+ * is re-driven from those attributes — so the attribute is where a member's arrival is
+ * observable, and it is read from the raw markup rather than through `visibleText`,
+ * which never reads `data-*` by design.
+ *
+ * Reading the LABEL instead would break `OPERATING_CONSTRAINTS.md` §12: the label is
+ * produced by the same map the language half of this file judges, so the query would
+ * share an assumption with its subject and could not see the subject being wrong.
+ *
+ * ## Why the seeds are still hand-written
+ *
+ * Deriving the fixtures from the contract would make a new member seed itself, and this
+ * assertion would go green over a state nobody had looked at — the same silence, one
+ * level up. A new member must redden, so that somebody decides what the screen does with
+ * it. The derivation is on the **question**, never on the answer.
+ */
+const SCHEMA_MARKERS: readonly {
+  readonly schema: (typeof TRANSLATED_SCHEMAS)[number];
+  readonly attribute: string;
+  readonly why: string;
+}[] = [
+  {
+    schema: 'RunState',
+    attribute: 'data-run-state',
+    why: '`shared/ui/run-state-badge.tsx` and every sentence in `run-progress` that names an outcome.',
+  },
+  {
+    schema: 'StageStatus',
+    attribute: 'data-stage-status',
+    why: '`shared/ui/stage-status-badge.tsx`, one per row of the stage table.',
+  },
+  {
+    schema: 'Verdict',
+    attribute: 'data-verdict',
+    why: '`entities/expert-decision/ui/verdict-badge.tsx`, the decision history and the knowledge base.',
+  },
+  {
+    schema: 'FindingCategory',
+    attribute: 'data-category',
+    why: "`widgets/finding-list`'s group heading and the knowledge base's row.",
+  },
+  {
+    schema: 'StageId',
+    attribute: 'data-stage-id',
+    why: '`entities/audit-run/ui/stage-table.tsx`, one row per stage. `D-62` put the id here.',
+  },
+  {
+    schema: 'ProviderMode',
+    attribute: 'data-provider-mode',
+    why: 'the run screen twice, the run-state badge qualifier and the evidence viewer.',
+  },
+  {
+    schema: 'CostBasis',
+    attribute: 'data-cost-basis',
+    why: "the run screen's cost block, which prints the basis beside the amount.",
+  },
+];
+
+/** `data-x="y"` pairs, read out of the raw markup of every screen in every state. */
+function markerValuesOnScreens(): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const { attribute } of SCHEMA_MARKERS) out.set(attribute, new Set<string>());
+  for (const { markup } of renderedScreens()) {
+    for (const [attribute, values] of out) {
+      for (const match of markup.matchAll(new RegExp(`\\s${attribute}="([^"]*)"`, 'g'))) {
+        values.add(match[1] ?? '');
+      }
+    }
+  }
+  return out;
+}
+
+describe('the matrix covers the contract, and says which member it does not', () => {
+  const observed = markerValuesOnScreens();
+  const openapi = readJson<OpenApi>(CONTRACT_PATH);
+
+  it('decides for every translated schema HOW a member becomes observable', () => {
+    // A schema added to `TRANSLATED_SCHEMAS` with no marker would be excused by silence,
+    // which is the class of defect this section exists to close. Both directions.
+    const marked = SCHEMA_MARKERS.map((entry) => entry.schema);
+    expect([...TRANSLATED_SCHEMAS].filter((name) => !marked.includes(name))).toEqual([]);
+    expect(marked.filter((name) => !([...TRANSLATED_SCHEMAS] as string[]).includes(name))).toEqual([]);
+    for (const { schema, why } of SCHEMA_MARKERS) {
+      expect(why.length, `${schema} names no module that renders it`).toBeGreaterThan(40);
+    }
+  });
+
+  it('renders every attribute it claims to read, so a renamed one is red and not merely empty', () => {
+    // Anti-vacuity, and it is not the same case as the one below. An attribute that was
+    // renamed in `web/src` makes EVERY member of its schema look unseeded; this case says
+    // which of the two happened, instead of leaving a reader to seed nine states that were
+    // already seeded.
+    const silent = SCHEMA_MARKERS.filter(({ attribute }) => (observed.get(attribute)?.size ?? 0) === 0);
+    expect(
+      silent.map(({ schema, attribute }) => `${schema} -> ${attribute}`),
+      'no rendered screen carries this attribute at all. Either the application renamed ' +
+        'it -- in which case fix the name here and the coverage below is unaffected -- or ' +
+        'the component that carried it stopped being rendered by this matrix.',
+    ).toEqual([]);
+  });
+
+  it('renders every member of every translated schema, and NAMES the one it does not', () => {
+    /*
+     * THE ASSERTION THIS SECTION EXISTS FOR.
+     *
+     * Measured at `295ff04`, before this was written: 18 of 31 members reached a screen.
+     * `StageId` 4/9, `StageStatus` 1/4, `Verdict` 2/4, `FindingCategory` 1/2,
+     * `ProviderMode` 1/2, `CostBasis` 1/2 -- thirteen contract members, every one of them
+     * carrying a Russian label a mutation could have put back into English with this file
+     * staying green. `RunState` was the only schema at 8/8, and only because a wave-33
+     * judge's mutation died quietly and somebody chased it.
+     */
+    const unseeded: string[] = [];
+    for (const { schema, attribute } of SCHEMA_MARKERS) {
+      const declared = openapi.components.schemas[schema]?.enum ?? [];
+      const seen = observed.get(attribute) ?? new Set<string>();
+      for (const member of declared) {
+        if (!seen.has(member)) unseeded.push(`${schema}.${member} (no ${attribute}="${member}")`);
+      }
+    }
+    expect(
+      unseeded.sort(),
+      'the contract publishes these members and NO state in CACHE_STATES renders one. ' +
+        'They are not "allowed" and they are not "absent" -- they are UNSEEDED, and every ' +
+        'assertion in this file about them is vacuous. Seed a state that puts each on a ' +
+        'screen; do not delete it from TRANSLATED_SCHEMAS, and do not derive the fixtures ' +
+        'from the contract, which would make the next member cover itself in silence.',
+    ).toEqual([]);
+
+    // And the question itself is non-trivial: a contract that parsed to nothing would
+    // otherwise satisfy the line above by asking nothing.
+    const total = SCHEMA_MARKERS.reduce(
+      (sum, { schema }) => sum + (openapi.components.schemas[schema]?.enum ?? []).length,
+      0,
+    );
+    expect(total, 'the translated schemas declare no members at all').toBeGreaterThan(20);
   });
 });
 
@@ -1274,3 +1624,294 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
     expect([...offencesOnScreens().keys()]).toEqual([]);
   });
 });
+
+// ======================================= the WIDGETS' branches, derived from the tree
+
+/**
+ * Every branch a widget actually has is rendered by some state in this matrix.
+ *
+ * ## The other half of `D-69`, and the contract cannot express it
+ *
+ * The coverage assertion above answers *"is every contract member seeded"*. It says
+ * nothing about the branches a widget has that no schema declares: **pending, error,
+ * empty, non-empty, and a listing with a next page.** Four of the seven blindnesses in
+ * the register are exactly those — `W32-SEE`'s empty branch, `W37`'s empty branch again,
+ * `W38-KB`'s `next_cursor: null`, and `W38-KB`'s singular arm.
+ *
+ * ## What identifies a branch, derived rather than listed
+ *
+ * `shared/ui/states.tsx` declares the five mandatory states, and every list, panel and
+ * viewer in PC-01 renders one of them when it has no content to show. Each is given a
+ * `title` (or, for `LoadingState`, a `what`), and **where that argument is a literal it
+ * names the branch uniquely**. So the required set is read out of `web/src` by scanning
+ * for those five component names and taking the literal argument beside each — the
+ * filesystem decides it, and a widget added next wave brings its own branches with it.
+ *
+ * The same scan takes the **pager's** two controls, which are the `next_cursor` branch
+ * and the first-page branch that `D-69`'s wave-38 row is about.
+ *
+ * A literal that no rendered screen carries is a branch this guard does not reach, and
+ * **every assertion it makes about that branch is vacuous** — which is how an English
+ * sentence in `ProjectList`'s `EmptyState` survived until a mutation died quietly.
+ */
+const STATE_COMPONENTS = ['LoadingState', 'EmptyState', 'ErrorState', 'UnsupportedState', 'NotApplicableState'] as const;
+
+/** `title="…"`/`what="…"` on a mandatory state, plus the two pager controls, from `web/src`. */
+export function branchLabelsInSource(): readonly { readonly label: string; readonly module: string }[] {
+  const out: { label: string; module: string }[] = [];
+  const seen = new Set<string>();
+  const add = (label: string, module: string): void => {
+    const trimmed = label.trim();
+    if (trimmed.length === 0 || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    out.push({ label: trimmed, module });
+  };
+  const files = walkFiles(join(REPO_ROOT, 'web', 'src'), (path) => path.endsWith('.tsx'));
+  const opening = new RegExp(`<(${STATE_COMPONENTS.join('|')})\\b([\\s\\S]*?)(?:/>|>)`, 'g');
+  for (const file of files) {
+    const source = readText(file);
+    const module = repoRelative(file);
+    for (const match of source.matchAll(opening)) {
+      const body = match[2] ?? '';
+      const title = /\stitle="([^"]+)"/.exec(body);
+      const what = /\swhat="([^"]+)"/.exec(body);
+      if (title !== null) add(title[1] as string, module);
+      else if (what !== null) add(`Загрузка: ${what[1] as string}…`, module);
+    }
+    // The pager. `className="am-pager"` wraps two buttons whose text is a literal, and a
+    // listing renders each only in one of the two `next_cursor` / cursor states.
+    for (const pager of source.matchAll(/className="am-pager"[\s\S]*?<\/div>/g)) {
+      for (const button of (pager[0] ?? '').matchAll(/>\s*([^<>{}\n]+?)\s*<\/button>/g)) {
+        add(button[1] as string, module);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Branches one static render pass cannot select. Each says why, and the list may only shrink.
+ *
+ * `W32-SEE` measured this boundary and `contrast.ts` restates it: the harness renders one
+ * pass and cannot fire an event, run an effect, or render an instance twice. So a branch
+ * chosen by `useState` after a click, or by a `useMutation` that has settled, is out of
+ * reach — and **saying so by name is the whole point**, because the alternative is a
+ * matrix that looks complete.
+ *
+ * **Three of these are English strings on a screen a reviewer can reach**, and they are
+ * reported rather than repaired: `rendered-language`'s own ratchet cannot see them for
+ * the same reason this list exists, and translating them is a `web/src` change that no
+ * defect this task newly catches requires.
+ */
+const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
+  {
+    label: 'Загрузка: the new project…',
+    why:
+      "`create-project-form.tsx`, while its `useMutation` is in flight. One server pass " +
+      'never has a settled mutation, and the harness cannot fire the submit that starts ' +
+      'one. ENGLISH ON A SCREEN, reported: `W32-SEE` §4 listed it and it is still there.',
+  },
+  {
+    label: 'Загрузка: the upload…',
+    why:
+      '`upload-document-form.tsx`, while the upload is in flight; same mechanism as the ' +
+      'new project. ENGLISH ON A SCREEN, reported and not repaired here.',
+  },
+  {
+    label: 'Загрузка: the run request…',
+    why:
+      '`start-run-control.tsx`, between the press and the run id. Same mechanism. ' +
+      'ENGLISH ON A SCREEN, reported and not repaired here.',
+  },
+  {
+    label: 'Файл выходит за допустимые ограничения.',
+    why:
+      'The upload pre-check panel, selected by a `useState` the harness cannot set: it is ' +
+      'written by the file input\'s change handler. This is the branch the journey\'s six ' +
+      'refusal cases drive in a real browser, and `tests/e2e/pc01/journey/refusals.mjs` is ' +
+      'the only instrument that reaches it.',
+  },
+  {
+    label: 'В начало',
+    why:
+      "The pager's first-page control, rendered only when a list widget's own `cursor` " +
+      'state is set — which one render cannot do. `W38-KB` stated this limit when it added ' +
+      'the `paged` cache state and it is unchanged: the NEXT-page control is reached, the ' +
+      'return to the first page is not.',
+  },
+];
+
+describe('every branch the widgets have is rendered by some state in this matrix', () => {
+  const labels = branchLabelsInSource();
+
+  it('finds the branches by scanning web/src, not by listing them', () => {
+    // Non-vacuous in both factors: a scan that stopped matching would otherwise make the
+    // case below pass by having nothing to require.
+    expect(labels.length, 'no mandatory-state branch was found in web/src at all').toBeGreaterThan(15);
+    expect(
+      labels.filter((entry) => entry.label.includes('Загрузка: ')).length,
+      'no LoadingState `what=` was found; the scan has stopped matching',
+    ).toBeGreaterThan(3);
+    expect(
+      labels.some((entry) => entry.label === 'Дальше'),
+      'the pager scan found no next-page control',
+    ).toBe(true);
+  });
+
+  it('renders every one of them, and NAMES the branch it does not reach', () => {
+    const rendered = renderedScreens()
+      .flatMap((screen) => visibleText(screen.markup))
+      .join('\n');
+    const excused = new Set(UNREACHABLE_IN_ONE_PASS.map((entry) => entry.label));
+    const unreached = labels
+      .filter(({ label }) => !excused.has(label) && !rendered.includes(label))
+      .map(({ label, module }) => `${JSON.stringify(label)}  (${module})`)
+      .sort();
+    expect(
+      unreached,
+      'a widget has this branch and NO state in CACHE_STATES renders it, so every ' +
+        'assertion this guard makes about it is vacuous — which is how an English sentence ' +
+        "in ProjectList's EmptyState survived until a mutation died quietly. Seed a state " +
+        'that reaches it, or add it to UNREACHABLE_IN_ONE_PASS with the reason one pass ' +
+        'cannot select it.',
+    ).toEqual([]);
+
+    // The other direction: the ratchet may only shrink.
+    expect(
+      [...excused].filter((label) => rendered.includes(label)).sort(),
+      'these are excused as unreachable and a state now renders them. Delete their entries.',
+    ).toEqual([]);
+
+    for (const { label, why } of UNREACHABLE_IN_ONE_PASS) {
+      expect(why.length, `${label} carries no reason`).toBeGreaterThan(80);
+    }
+  });
+});
+
+// ============================== D-61's third instance: the journey's own sentences
+
+/**
+ * `tests/e2e/pc01/journey/manifest.json` declares, per step, the sentences a screen must
+ * render once that step has run. **This is the check that they are evidence of anything.**
+ *
+ * ## What was there, and why a word boundary could not fix it
+ *
+ * `tests/e2e/test_pc01_journey_conformance.py` asserted them by substring containment
+ * against a **concatenation of every `.ts`/`.tsx` byte under `web/src`**. That is `D-61`:
+ * the manifest asserted `"Run"` and passed, because `Run` occurs inside `RunPage`, and no
+ * screen renders it. Containment had already deceived two guards before it and both were
+ * repaired by matching on a word boundary. **This one is not**, because the subject is
+ * wrong rather than the matcher: it read source where the claim is about a screen.
+ *
+ * ## What a renderer can decide here, and what it cannot — measured, because the brief
+ * assumed it could decide more
+ *
+ * Measured at `abe1c15` over `renderedScreens()`: of the manifest's **15** declared
+ * sentences, **11 are rendered by no screen this harness can reach**, and it is not
+ * because the manifest is wrong. They live in the upload form's pre-check panel, the
+ * created-project panel and the version panel — branches driven by `useState` and by a
+ * settled `useMutation`, which one static pass cannot select. `contrast.ts` says the same
+ * thing in its own words about `.am-form__created`, `.am-form__problem` and
+ * `.am-form__chosen`. **A renderer cannot confirm those sentences positively**, and a
+ * check that claimed to would be the same false affordance one layer along.
+ *
+ * ## What it CAN decide, and it is the half that was actually wrong
+ *
+ * The other **4 of 15 passed by matching text the screen renders whatever happened**:
+ *
+ * | declared | matched | what it really is |
+ * |---|---|---|
+ * | `Создан` | `Создан 2026-09-10 08:00:00 UTC · документов 2` | every project row's created date |
+ * | `Эта версия` | `Эта версия и её манифест неизменяемы.` | the version panel's standing prose |
+ * | `Прогон` | `Прогон использует тот режим провайдера…` | the start-run control's own note |
+ * | `25 MiB` | `Не более 25 MiB.` | the upload envelope, printed before any file is chosen |
+ *
+ * **Every one of those passes in the live browser too**, because `write.mjs` and
+ * `refusals.mjs` test `bodyText.includes(needle)` against the page the journey is already
+ * on. So the deception was not only in the gate: four of the journey's own assertions
+ * could not fail.
+ *
+ * The corpus this guard renders performs **no write at all** — it is the application
+ * before any of these steps has run. So:
+ *
+ * > **a sentence offered as evidence that a step happened must not be on the screen
+ * > before it happens.**
+ *
+ * That is decidable from rendered output, it is derived from the manifest rather than
+ * listed here, and it is what this case asserts.
+ */
+const STILL_EVIDENCE_THOUGH_RENDERED: readonly { readonly text: string; readonly why: string }[] = [
+  /*
+   * EMPTY, and the empty is the assertion.
+   *
+   * An entry would be legitimate in exactly one shape: a sentence this corpus renders only
+   * because its FIXTURE seeds a state the journey's own fresh project cannot be in. `Прогон
+   * завершился как` is the candidate — this matrix seeds a published run, and the journey's
+   * project has no run until it starts one. Nothing needs the exemption today, and a reader
+   * adding one must make that argument in writing rather than silencing a red.
+   */
+];
+
+interface JourneyManifest {
+  readonly write?: { readonly steps?: readonly { readonly name?: string; readonly expects_rendered?: readonly string[] }[] };
+  readonly refusals?: { readonly cases?: readonly { readonly fixture?: string; readonly expects_rendered?: readonly string[] }[] };
+}
+
+/** Every `expects_rendered` sentence the manifest declares, with the step that declares it. */
+export function journeySentences(): readonly { readonly where: string; readonly text: string }[] {
+  const manifest = readJson<JourneyManifest>(
+    join(REPO_ROOT, 'tests/e2e/pc01/journey/manifest.json'),
+  );
+  const out: { where: string; text: string }[] = [];
+  for (const step of manifest.write?.steps ?? []) {
+    for (const text of step.expects_rendered ?? []) out.push({ where: step.name ?? 'write', text });
+  }
+  for (const item of manifest.refusals?.cases ?? []) {
+    for (const text of item.expects_rendered ?? []) out.push({ where: item.fixture ?? 'refusal', text });
+  }
+  return out;
+}
+
+describe('D-61: every sentence the journey calls evidence is evidence', () => {
+  const sentences = journeySentences();
+
+  it('reads sentences out of the manifest at all', () => {
+    // Non-vacuous: a manifest that stopped declaring them would otherwise satisfy the case
+    // below by having nothing to check, which is the failure mode it exists to prevent.
+    expect(sentences.length, 'the manifest declares no expects_rendered sentence').toBeGreaterThan(5);
+  });
+
+  it('finds none of them already on a screen before the step that is supposed to produce it', () => {
+    const excused = new Set(STILL_EVIDENCE_THOUGH_RENDERED.map((entry) => entry.text));
+    const screens = renderedScreens().map((screen) => ({
+      where: screen.where.replace(/ \(.*$/, ''),
+      text: visibleText(screen.markup).join(' '),
+    }));
+
+    const vacuous = sentences
+      .filter(({ text }) => !excused.has(text))
+      .map(({ where, text }) => {
+        const on = [...new Set(screens.filter((s) => s.text.includes(text)).map((s) => s.where))];
+        return on.length === 0 ? null : `${where}: ${JSON.stringify(text)} is already on [${on.sort().join(', ')}]`;
+      })
+      .filter((entry): entry is string => entry !== null)
+      .sort();
+
+    expect(
+      vacuous,
+      'the journey declares these as proof that a step succeeded, and the application ' +
+        'renders them with no step having run. The assertion cannot fail, in the gate or ' +
+        'in the browser. Declare a sentence only that outcome renders, or drop the ' +
+        'sentence and say in the step why its marker is the evidence -- do not reach for ' +
+        'a longer substring of the same standing prose.',
+    ).toEqual([]);
+
+    // The other direction, so the exemption list is a ratchet and may only shrink.
+    expect(
+      [...excused].filter((text) => !screens.some((s) => s.text.includes(text))).sort(),
+      'these are excused from the rule and no screen renders them any more. Delete their ' +
+        'entries.',
+    ).toEqual([]);
+  });
+});
+

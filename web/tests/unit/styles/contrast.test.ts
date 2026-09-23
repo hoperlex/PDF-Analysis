@@ -50,9 +50,14 @@ import {
   census,
   contrastRatio,
   declaredPairs,
+  descendants,
+  matches,
   palette,
+  parseMarkup,
   parseRules,
+  parseSelector,
   readColour,
+  splitSelectorList,
   relativeLuminance,
   resolve,
   thresholdFor,
@@ -109,6 +114,20 @@ function scopedCss(relative: string): string {
 }
 
 const MODULES = Object.keys(MODULE_EXPORTS).sort();
+
+/**
+ * The properties that can carry a colour, taken from the cascade's own `applyRule`.
+ *
+ * Listed here rather than exported from `contrast.ts` because `EDGE_PROPERTIES` is the
+ * edges alone; this is that set plus the two fill properties, which is the whole of what
+ * a rule can contribute to a pair.
+ */
+const COLOUR_PROPERTIES = new Set([
+  'color', 'background', 'background-color',
+  'border', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left',
+  'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+  'outline', 'outline-color',
+]);
 
 function moduleRules(): Rule[] {
   return MODULES.map((relative) => parseRules(scopedCss(relative), relative)).flat();
@@ -190,6 +209,65 @@ const REGISTERED: readonly Registered[] = [
       '`--am-accent` outline — 7.62:1 light, 7.67:1 dark — which passes and is the thing ' +
       '2.4.7 and 1.4.11 actually ask for here; this row is the resting border still ' +
       'showing underneath it, and repairing it would change nothing a keyboard user can see.',
+  },
+  /*
+   * FOUR ROWS ADDED BY `W41-BLIND`, 2026-09-23, and every one of them is a pair this
+   * census had never measured rather than a pair it had excused.
+   *
+   * Widening the screen list -- populated lists, a seeded review screen, the knowledge
+   * base, the two session screens -- took the census from 31 unreached colour rules to
+   * 11, and the newly reached elements carry `--am-line` on `--am-paper`: **1.30:1 in the
+   * dark palette and 1.36:1 in the light one, against the 3:1 that 1.4.11 asks of the
+   * only boundary an interactive control has.**
+   *
+   * The sites are `button.am-finding-row.am-button` inside the review list, `li.am-state`
+   * -- every project row and every run row -- while hovered, and the theme control in the
+   * application bar. **No census had ever rendered a populated list or a review screen
+   * with data in it**, which is why a pair on the row a reviewer clicks first has been
+   * unmeasured since wave 32.
+   *
+   * Registered and NOT repaired, and the reason is the one four rows above already give:
+   * this is `--am-line` at the 1.4.11 ceiling, the repair is `--am-line-strong`'s own
+   * territory in both palettes, and a three-level border scale cannot carry two levels at
+   * that ceiling. `W32-CONTRAST` §3 did not take that decision and `W33-THEME` did not
+   * take it either; it is a scale decision with an owner, and `W41-BLIND`'s grant is the
+   * instruments. What this wave changes is that the pair is now MEASURED, named, and held
+   * in both directions, instead of being invisible.
+   */
+  {
+    key: 'edge|--am-line|--am-paper|-|border',
+    themes: ['light', 'dark'],
+    why:
+      '`--am-line` at 1.36:1 on `--am-paper` in the light palette and 1.30:1 in the dark ' +
+      'one, at the theme control in the application bar. Exactly the scale decision the ' +
+      '`--am-surface` rows above describe, on the other fill; the two cannot be taken ' +
+      'apart, because one token draws both. W32-CONTRAST §3.',
+  },
+  {
+    key: 'edge|--am-line|--am-paper|hover|border',
+    themes: ['light', 'dark'],
+    why:
+      'The same token on `li.am-state` -- every project row and every run row -- while ' +
+      'hovered, in both palettes. Reached for the first time in wave 41, because every ' +
+      'list in this census had been rendered COLD since wave 32 and a cold list has no ' +
+      'rows. The hover change itself is carried by `--am-line-strong`, which clears 3:1.',
+  },
+  {
+    key: 'edge|--am-line|--am-paper|focus-visible|border',
+    themes: ['light', 'dark'],
+    why:
+      'The same token on the review screen\'s finding row, focused, in both palettes. ' +
+      'What indicates focus is the `--am-accent` outline at 7.6:1, which passes and is ' +
+      'what 2.4.7 asks for; this row is the resting border underneath it. Reached for the ' +
+      'first time in wave 41: the review screen had only ever been censused COLD.',
+  },
+  {
+    key: 'edge|--am-line|--am-paper|active|border',
+    themes: ['light', 'dark'],
+    why:
+      'The same token on the finding row while the pointer is down, in both palettes. The ' +
+      'active state is indicated by the shadow dropping to `--am-shadow-0`, not by this ' +
+      'border. Same token, same scale decision, same owner as the `--am-surface` rows.',
   },
   {
     key: 'edge|--am-line|--am-surface|active|border',
@@ -285,18 +363,180 @@ describe('the formula is WCAG 2.1 and not an approximation of it', () => {
 describe('the census is taken over rendered screens, not over a list', () => {
   it('reaches enough of the application to be worth calling a census', () => {
     const rendered = screens();
-    expect(rendered.length).toBeGreaterThanOrEqual(25);
+    // The floors moved with the census: 25 screens and 90 pairs at wave 32, 49 screens
+    // and 148 pairs at wave 41. A floor left at the old figure lets twenty screens be
+    // deleted in silence, which is this file's own defect one level up.
+    expect(rendered.length).toBeGreaterThanOrEqual(45);
     const pairs = everyPair('light');
-    expect(pairs.size).toBeGreaterThanOrEqual(90);
-    // Every page and every widget in `web/src` renders into it.
-    const names = rendered.map((s) => s.name).join(' ');
-    for (const screen of [
-      'AppFrame', 'ProjectsPage', 'ProjectDetailPage', 'VersionDetailPage',
-      'DocumentDetailPage', 'RunPage', 'ReviewPage', 'RunProgress', 'ProjectList',
-      'DocumentList', 'VersionList', 'RunList', 'UploadPanel', 'FindingList',
-      'EvidenceViewer', 'DecisionPanel', 'DecisionHistory', 'ExportPanel',
-    ]) {
-      expect({ screen, present: names.includes(screen) }).toEqual({ screen, present: true });
+    expect(pairs.size).toBeGreaterThanOrEqual(140);
+    /*
+     * THE LIST OF EIGHTEEN COMPONENT NAMES THAT STOOD HERE IS GONE, and its deletion is
+     * the repair rather than a tidy-up.
+     *
+     * It was a literal checked against a literal: `screens.ts` names a component and this
+     * file asserts that `screens.ts` names it. Nothing anywhere asked the TREE. So the
+     * knowledge base, the sign-in screen and the change-password screen -- three screens a
+     * reviewer meets, two of them the first thing they meet -- were outside this census
+     * and this case was green. `OPERATING_CONSTRAINTS.md` §12: the query shared an
+     * assumption with its subject, so it could not see the subject being wrong.
+     *
+     * What replaces it is below, and it asks the stylesheet instead: every rule that
+     * declares a colour must be REACHED by some rendered screen. A widget the census does
+     * not render fails that by the rules it takes with it, and a screen list nobody
+     * maintains cannot make it pass.
+     */
+    expect(new Set(rendered.map((s) => s.name)).size).toBe(rendered.length);
+  });
+
+  /**
+   * Every colour-bearing rule in the stylesheets is REACHED by a rendered screen.
+   *
+   * ## Why this exists, measured at `295ff04` before it was written
+   *
+   * **31 of the 137 colour-bearing rules in this application were reached by no screen
+   * this census renders** — 23% of the surface a file called a census is named after. The
+   * screens it renders were a hand-written list, and `D-69` is the seventh consecutive
+   * wave in which a guard was **sound and blind**: it rendered, saw, and permitted,
+   * because the state that carries the defect was never reached.
+   *
+   * `D-64` was the same census's previous blindness — it matched **authored** class names
+   * while the markup carries the bundler's — and it was repaired in wave 35. This is not
+   * that defect returning. It is the layer outside it: the names now resolve, and the
+   * screens that would carry them were never rendered.
+   *
+   * ## What this does not claim
+   *
+   * A rule this reaches is a rule the census EVALUATES. It is not a claim that the pair
+   * passes — `every pair that meets on a screen clears the threshold its role asks of it`
+   * is that claim, and it is only as wide as this. Nor is an unreached rule a defect in
+   * the application: three of the entries below are branches one static pass cannot
+   * select, and two are dead CSS.
+   */
+  const UNREACHED_BY_ANY_SCREEN: readonly { readonly selector: string; readonly why: string }[] = [
+    {
+      selector: '::selection',
+      why:
+        'A browser pseudo-element on the user\'s own selection highlight. No element in any ' +
+        'markup carries it, and no render can produce one: the browser composes it. Its two ' +
+        'colours are declared in the same block, so `declaredPairs` measures the pair without ' +
+        'markup at all.',
+    },
+    {
+      selector: 'hr',
+      why:
+        'No module in `web/src` renders an `<hr>`. Measured, not assumed: `grep -rn "<hr" ' +
+        'web/src` is empty. The rule is dead CSS and is reported as such rather than deleted, ' +
+        'because `globals.css` is not this task\'s to edit.',
+    },
+    {
+      selector: '.am-app__instance',
+      why:
+        '`_app/app-frame.tsx` renders it only when a deployment instance label is configured, ' +
+        'and a static render pass has no environment to read one from. The label is the ' +
+        'operator\'s, never the application\'s prose.',
+    },
+    {
+      selector: '.am-app__context',
+      why:
+        'Declared in `globals.css` and rendered by no module in `web/src`. Measured the same ' +
+        'way as `hr` and dead for the same reason; reported rather than deleted.',
+    },
+    {
+      selector: ".am-theme__option[aria-pressed='true']",
+      why:
+        'Which theme option is pressed is decided in the browser, by the script that reads ' +
+        'the stored preference. A server pass presses none, so the selected state of the ' +
+        'theme control is outside every instrument this suite has.',
+    },
+    {
+      selector: '.am-evidence__none',
+      why:
+        'UNREACHABLE BY ANY INPUT, and that is a finding rather than a limit. ' +
+        '`evidence-viewer.tsx` chooses `page` out of `pages`, which it derives from the ' +
+        'observation\'s own evidence — so a page carrying no quotation cannot be the active ' +
+        'page, and this branch cannot render. It is dead code in `web/src` and is reported, ' +
+        'not repaired: nothing this task changed exposed a defect that requires it.',
+    },
+    {
+      selector: '.am-quotation:has(.am-quotation__inconsistent)',
+      why:
+        '`:has()` is one of the two constructs this matcher does not implement, and it is ' +
+        'already named by `unsupported()` one case up. The rule sets `border-left-color` to ' +
+        'the same `--am-degraded` its own child declares, so the pair is in the census anyway.',
+    },
+    {
+      selector: '.am-export__disclosure[open] > summary',
+      why:
+        'A `<details>` is closed until a reader opens it, and the harness cannot fire the ' +
+        'event that opens one. The summary in its CLOSED state is censused; only the open ' +
+        'state is out of reach.',
+    },
+    {
+      selector: '.am-form__chosen',
+      why:
+        'Renders only after a file has been chosen, which needs a change event the harness ' +
+        'cannot fire. It declares its ink and its tint in the SAME block, so `declaredPairs` ' +
+        'measures the pair with no markup — the union of the two censuses is why this costs ' +
+        'nothing rather than being excused.',
+    },
+    {
+      selector: '.am-form__problem',
+      why:
+        'Renders only after a refused submission, which needs a click the harness cannot ' +
+        'fire. Declares both halves in one block, so `declaredPairs` measures it; see ' +
+        '`.am-form__chosen`.',
+    },
+    {
+      selector: '.am-form__created',
+      why:
+        'Renders only after a project has been created, which needs a mutation to settle. ' +
+        'Declares both halves in one block, so `declaredPairs` measures it; see ' +
+        '`.am-form__chosen`.',
+    },
+  ];
+
+  it('names every colour-bearing rule that NO rendered screen reaches', () => {
+    const rules = [
+      ...parseRules(readFileSync(GLOBALS, 'utf8'), 'globals.css'),
+      ...moduleRules(),
+    ].filter((rule) => [...rule.declarations.keys()].some((name) => COLOUR_PROPERTIES.has(name)));
+    const elements = screens().flatMap((screen) => descendants(parseMarkup(screen.markup)));
+
+    const unreached: string[] = [];
+    for (const rule of rules) {
+      const parsed = splitSelectorList(rule.selector)
+        .map((one) => parseSelector(one))
+        .filter((one): one is NonNullable<typeof one> => one !== null);
+      const reached =
+        parsed.length > 0 && parsed.some((one) => elements.some((el) => matches(el, one.base)));
+      if (!reached) unreached.push(rule.selector.trim());
+    }
+
+    const excused = new Set(UNREACHED_BY_ANY_SCREEN.map((entry) => entry.selector));
+    // The census has to be worth taking: a stylesheet that parsed to nothing, or a screen
+    // list that rendered nothing, would satisfy every line below by having no work to do.
+    expect(rules.length, 'no colour-bearing rule parsed at all').toBeGreaterThan(100);
+    expect(elements.length, 'the screens rendered no elements').toBeGreaterThan(1000);
+
+    expect(
+      unreached.filter((selector) => !excused.has(selector)).sort(),
+      'these rules declare a colour and NO screen in `screens.ts` renders an element they ' +
+        'match, so their contrast is not measured by anything. Render the screen that ' +
+        'carries them. If one truly cannot be rendered, add it to UNREACHED_BY_ANY_SCREEN ' +
+        'with the reason — and an entry whose reason is only "it is not rendered" is the ' +
+        'defect being laundered.',
+    ).toEqual([]);
+
+    // The other direction, so the list is a ratchet and may only shrink. A selector that
+    // became reachable and stayed on the list would quietly re-hide the next one.
+    expect(
+      [...excused].filter((selector) => !unreached.includes(selector)).sort(),
+      'these are excused from the census and a screen now reaches them. Delete their ' +
+        'entries: a ratchet that keeps a repaired line goes back to proving nothing.',
+    ).toEqual([]);
+
+    for (const { selector, why } of UNREACHED_BY_ANY_SCREEN) {
+      expect(why.length, `${selector} carries no reason`).toBeGreaterThan(80);
     }
   });
 
