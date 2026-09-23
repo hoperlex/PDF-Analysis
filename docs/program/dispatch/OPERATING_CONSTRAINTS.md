@@ -630,3 +630,42 @@ integrator cited it as `docs/program/OPERATING_CONSTRAINTS.md` in briefs for a w
 repository never carried the wrong path, so only dispatched sessions met it. A session that
 took the path literally would have found nothing — **§12 applied to §12's own location.**
 
+
+### A seventh entry, 2026-09-23: the shapes in this section are recurring, and that is the finding
+
+**Two of the six shapes above came back within two weeks, and in each case the session that
+committed the error was the session that had written that shape up.** That is no longer a list
+of mistakes. It is a measurement of what writing a shape down does and does not buy.
+
+- **The fifth shape came back inside its own repair.** *"A document nobody reads cannot be
+  checked by anyone reading"* was written from `CURRENT_STATE.md` sitting **nine waves** out of
+  date. The repair was an edit plus a note recording the staleness. **The file then went six
+  waves stale again underneath that note**, and one of its stale sentences said `/bff/v1` served
+  all fifteen operations, writes included, with no credential — untrue since wave 34, and sitting
+  in the file `AGENTS.md` makes every dispatched session read first. `D-79`.
+- **The sixth shape came back in a document written for the owner.** A session read
+  `provider.env.example`, saw `AUDITMANAGER_RUN_COST_CEILING_USD=` empty, and reported in a
+  pre-flight review that **a live run has no ceiling to stop at**. It has one: `config.py:88`
+  and `settings.py:122` both substitute `1.00` on an empty value, both refuse a non-numeric or
+  non-positive one, and `stage.py:214` enforces it through `CostMeter`. **A correct reading of a
+  file that is not the whole of its subject** — the exact words of the shape that session had
+  itself written for §12 from the wave-31 case. Self-reported and corrected the same hour.
+  *An empty value in an example file is not an absence; it is a question about a default.*
+
+**What this changes about how the section is used.** Writing a shape down is what let both be
+recognised in minutes rather than waves — the second was caught by a peer within one message,
+and the first by a sweep that existed because the shape was named. **It did not stop either
+from happening**, and no amount of rereading will, because every one of these errors is
+invisible from inside the reasoning that produces it.
+
+So the operative rule is not *"remember the six shapes"*. It is:
+
+> **A claim about state is checked by something other than the person making it, or it is not
+> checked.** A peer, a check command run at the moment of writing, or a guard in the gate.
+
+Both recurrences were caught by exactly those three and by nothing else: a peer session for the
+ceiling, and a sweep plus a check command for the document — where `D-79`'s own row named the
+guard at a path that did not exist and **its own check command caught that within the minute.**
+The structural gap is named there and is measurable: every count the gate checks is a count in
+**code**, and `tests/contract/api_v1/test_surface_counts_in_prose.py` reads
+`src/auditmanager/api`, `infra/deploy` and `web/src` — **not `docs/`.**
