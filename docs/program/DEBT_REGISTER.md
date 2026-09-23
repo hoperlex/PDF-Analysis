@@ -15,6 +15,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-63 | a dashboard | **deferred by the owner**; a reseal when it comes |
 | **D-65** | the account exists and nothing around it does — no rate limit, lockout, password change or **revocation** | **owner**: which belong in the alpha |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
+| **D-70** | the stand runs a certification stub — **blocks the owner's manual pass** | **owner: a real credential** |
+| D-71 | `D-59` is 121 blocks not 79, and 25 of them are a different defect | **owner: widen `R-19`?** |
+| D-72 | a URL with no host becomes a retryable outage | argue it from the catalog, as `D-13` was |
 | D-66 | two seam guards absent: fail-closed default, and `compare_digest` | one test each |
 | D-67 | 200-with-empty vs 404 on two of nine collections | a decision, then seven or two change |
 | D-68 | the certification's criterion-4 selector is too wide | use `span.am-badge[data-run-state]` |
@@ -1469,6 +1472,81 @@ A mutation dying quietly is the only thing that has ever found one of these.
 
 The fix is proved loaded rather than assumed: the same mutation against the **old** seed is
 green.
+
+### D-70 — the owner's stand is running a certification stub, and a session reported restoring it
+
+**Found by `W39-CORPUS` 2026-09-23 while looking for the key `R-27` authorised. Verified by
+the integrator three independent ways. THIS BLOCKS THE OWNER'S MANUAL PASS.**
+
+`infra/deploy/env/provider.env` holds `W37-CERT4`'s certification stub, not a provider
+credential:
+
+```
+PROXY_LLM_BASE_URL = http://:59990     <- hostname is None; the port refuses
+PROXY_LLM_MODEL    = stub/w37cert4
+mtime 2026-09-22 19:57                 <- inside that session's window
+```
+
+**And the stand is running it.** `docker exec auditmanager-w19a-api-1` reports
+`MODEL=stub/w37cert4 URL=http://:59990`. **A run the owner starts by hand today fails with
+`dependency_unavailable`** — and `D-9` is gated by `R-9` on exactly that manual pass, so the
+one open row waiting on the owner *doing* something is blocked by this.
+
+**`W37-CERT4`'s own report says it restored the file.** It wrote that it had used "a copy of
+the stand's, repointed for criterion 9, restored". It did not restore it. The session is gone
+and cannot be asked; what remains is the shape.
+
+**The shape is worth more than the incident.** `provider.env` is **git-ignored**, so nothing in
+the tree records what it should contain, no gate reads it, `verify-deployed.sh` compares images
+against the tree and never looks at it, and `git status` is clean whatever it holds. A file
+that decides whether the product can work at all, that every certification borrows, and that
+**no instrument in this programme can see.** Every stand verification since 19:57 was green
+over a stand that could not make a provider call.
+
+**Two things follow, and the second is the integrator's own error.** The owner must place a
+real credential, because `R-27`'s authorisation named this file and it is empty of one. And
+`R-27` rests on a premise I asserted without reading the file: I told the owner it *"is on the
+host and already pays for live runs"*, from the stand's history.
+
+Check:
+```
+docker exec auditmanager-w19a-api-1 sh -c 'echo $PROXY_LLM_MODEL $PROXY_LLM_BASE_URL'
+```
+A stub answers; a real provider names a real model and a host.
+
+### D-71 — `D-59` is 53% larger than recorded, and part of it is a different defect
+
+**Measured by `W39-CORPUS` 2026-09-23.** `D-59` says 79 blocks in 34 documents. The population
+is **121 blocks in 54 documents, 1 820 150 characters**, and the extra 42 split two ways:
+
+- **17 are the same defect in a different spelling** — the model narrating the page with **no
+  first-person pronoun**, so `D-59`'s `The user wants me to` grep could not see them. They
+  include the **second, third and fourth largest degenerate blocks in the corpus**: 50 989,
+  38 436 and 37 199 characters.
+- **25 are a different defect nobody has ruled on** — the pipeline's own JSON envelope,
+  `[{"text": …`, written into the document body across 20 documents, 94 821 characters.
+
+**And `D-59`'s own split was wrong**: 47 blocks carry no Russian, not 55, so `R-20`'s "24
+mixed" is **32**. The 55 does not reproduce at any threshold.
+
+**`R-19` covers 79 of the 96 blocks of that nature. Widening it is the owner's**, and the
+stream measured and named the 17 rather than assuming the ruling reached them.
+
+Check: `docs/program/W39-CORPUS.md` §2 carries the queries.
+
+### D-72 — `ProxySettings` accepts a URL with no host and calls the failure retryable
+
+**Found by `W39-CORPUS` in code outside its grant, reported not repaired.**
+`ProxySettings.__post_init__` validates only the `http://` / `https://` prefix, so
+`http://:59990` constructs successfully and fails later as **`dependency_unavailable`, which
+the frozen catalog marks `retryable: true`.**
+
+So a lane pointed at nowhere retries a ladder against a configuration error. **This is `D-7`'s
+shape and `D-12`'s consequence**: a condition that cannot succeed reported as one that might,
+in the single field a client automates against. `D-70` is what it looks like in production.
+
+Check: construct `ProxySettings` with `http://:59990` and read the error code it eventually
+raises.
 
 ### D-66 — two seam guards are absent, found by mutation and not exploitable today
 
