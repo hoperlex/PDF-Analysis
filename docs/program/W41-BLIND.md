@@ -535,11 +535,26 @@ grep -c 'GATE OK' /root/w41b-gate.log   ->  1
 | whitespace | pass |
 | | `GATE OK: battery, foundation, frontend and whitespace all pass` |
 
-The frontend figure at the base `295ff04` was 72 files / 1010 tests: this wave adds **12
-frontend cases** and no file — 7 to `rendered-language.guard.test.ts` (3 coverage, 2 branch,
-2 journey-evidence) and 1 to `contrast.test.ts` (rule coverage), plus the four the two
-existing cases were split into. The battery figure includes **3 new cases** in
-`tests/e2e/test_pc01_journey_conformance.py` (51 → 54).
+### The deltas, each measured rather than recalled
+
+**The first version of this section gave two figures from memory and both were wrong** — it
+said 1010 frontend tests at the base and 51 conformance tests, against 1014 and 50. They are
+re-measured here at `295ff04` in `/root/w41blind-mut`, and the method is the point: a count
+quoted without the command that produced it is not a measurement (`OPERATING_CONSTRAINTS.md`
+§7, §12).
+
+```
+git archive 295ff04 contracts docs web/src web/tests tests | tar -x -C /root/w41blind-mut
+cd /root/w41blind-mut/web && npm exec -- vitest run
+cd /root/w41blind-mut && /root/w41blind/.venv/bin/python -m pytest tests/e2e/test_pc01_journey_conformance.py -q
+```
+
+| suite | `295ff04` | `f4add83` | delta |
+|---|---|---|---|
+| frontend, whole | 72 files, **1014** | 72 files, **1022** | **+8**, no new file |
+| `rendered-language.guard.test.ts` | 12 | **19** | **+7** — 3 contract coverage, 2 branch coverage, 2 journey evidence |
+| `contrast.test.ts` | 15 | **16** | **+1** — the rule-coverage assertion, which also replaced the eighteen-name literal |
+| `test_pc01_journey_conformance.py` | **50** | **54** | **+4** — the rendered-half marker check and three negative controls |
 
 ## 8. What this wave did not do
 
