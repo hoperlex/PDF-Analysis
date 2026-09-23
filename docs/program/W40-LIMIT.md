@@ -691,7 +691,12 @@ docs/manual-tests/PC-01_prototype.md:39:**Observe the migration head is `0005_tr
      blind, found only because a mutation was expected to kill something and did not. Its
      check command is the `L5` row in §10.
 9. **Nothing was tagged, pushed, merged, or written to `main`/`dev`.** No rebase. Branch
-   `agent/w40-limit`, five commits on `ccaeed8`. **`GATE OK` twice**, and the second —
+   `agent/w40-limit`, six commits on `ccaeed8`. **The final gate ran on `687bfa2`**, one
+   commit below `HEAD`; the commit above it changes `docs/program/W40-LIMIT.md` and nothing
+   else, which no guard in the gate reads — `test_surface_counts_in_prose.py` reads
+   `src/auditmanager/api`, `infra/deploy` and `web/src`, not `docs/`. Saying so rather than
+   letting a figure stand over a tree it does not describe. **`GATE OK` twice**, and the
+   second —
    `/root/w40-logs/limit-gate-final.log`, battery **2298 / 5 / 169**, foundation **35**,
    frontend **1014 in 72 files** — is the one that describes the tree being handed over.
 10. **`R-29`: §7 is the part that needs your eye.** Building the lockout is execution under
