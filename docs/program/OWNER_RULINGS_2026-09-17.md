@@ -527,12 +527,69 @@ existing vertical first.
 **The dashboard itself stays deferred by the owner's separate instruction the same day** —
 *"важно, но не в этой волне"* — and is `D-63`.
 
+## 3.12 — `R-26` … `R-29`, ruled 2026-09-23 by direct poll
+
+### `R-26` — all four account guards land in the alpha
+
+**Ruled: rate limit, lockout, password change AND revocation, all inside the alpha.** The
+integrator had recommended revocation alone; the owner took the wider option.
+
+The argument for revocation stands and is now the argument for finishing the set on the same
+pass: the other three make an account weak **now** and are fixed by adding them later;
+revocation makes an **already issued** credential permanent, and no later work reaches
+backwards to a token in someone's browser. With `R-4` putting real client documents on the
+pilot server, *"the pilot has ended"* is a claim the system cannot currently make true.
+
+**This is roughly two waves.** Revocation and password change need contract operations, a
+migration, and a revocation check on every authenticated request; rate limit and lockout are
+state around the token endpoint. `D-65` carries the measurement.
+
+### `R-27` — the corpus re-recognition uses the stand's own provider key
+
+**Ruled.** `infra/deploy/env/provider.env` is on the host and already pays for live runs. The
+integrator had declined to spend it without a word, because re-recognising 79 pages is not
+pilot work; the owner authorised it.
+
+Priced at **$2.58–$3.17** for 79 page crops, which is inside the $5-per-wave ceiling `R-29`
+sets. **The key is read from that file and never printed** — not into a log, not into a report,
+not into a commit. `D-42` measured that `docker compose config` prints it in clear, so the same
+care applies.
+
+### `R-28` — `R-1`'s host is not here yet, and may be here today
+
+**Ruled: plan without it.** With one qualification the owner added and it changes sequencing:
+**the host is expected later today, so a plan whose horizon runs past about six hours may
+assume it.**
+
+So `PA-01` criteria 1 and 2 stay `cannot be established` in the near waves and a **later** wave
+may be written against a real machine. `W26-HOST` already prepared everything that can exist
+without one — the TLS block inert until a certificate appears, and the runbook — so what
+remains when the machine arrives is configuration, not authorship.
+
+### `R-29` — autonomy: everything except security decisions and spending
+
+**Ruled.** The integrator runs waves without asking: contract reseals, migrations, screens,
+guards, advancing `origin/main`, tagging. **It stops at two things:**
+
+1. **spending above roughly $5 in a wave**, and
+2. **anything that changes who can reach the system, or exposes something that was not
+   exposed** — a port binding, a credential's reach, a default account, a published surface.
+
+**One distinction the integrator records rather than assumes.** `R-26` is a security *ruling*,
+and building what it rules is **execution, not a new decision** — so wave 39 does not stop to
+ask again. What would stop it is a choice the ruling did not make: if revocation turns out to
+need the stand published, or a default changed, that is a new exposure and it comes back here.
+
 ## 4. Still open, and still the owner's
 
 - **`OD-18`** — three to five named experts with committed slots; `P4-BHV-01` waits on it alone.
 - **`OD-17`** — the next corpus shape. **`R-16` and `R-17` bear on this but do not close it**:
   they settle how the *normative* corpus is vectorised, dated and attributed, not what the next
   evidence corpus should be.
+- **`D-9`, the norms corpus** — `R-9` placed it after the owner's own manual pass, and that
+  pass has not happened. The stand is current, Russian, and reachable over a tunnel, so nothing
+  on this side is in the way. **This is the only open row waiting on the owner doing something
+  rather than deciding something.**
 - **`R-4`'s two halves** — who uploads a real document, and what event counts as *"the end of the
   pilot"* and therefore triggers the wipe. **`D-17` now bears on this**: the restore is broken for
   writing, so the mechanism the wipe depends on is not yet sound.
