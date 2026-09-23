@@ -628,3 +628,90 @@ need the stand published, or a default changed, that is a new exposure and it co
   export`"* was proposed by the drafting session and adopted by the integrator. **It has not been
   put to the owner in those words.** If the owner wants a different line, this is the sentence to
   change.
+
+## 3.13 — `R-30` … `R-37`, ruled 2026-09-23 by direct poll after wave 41
+
+**Asked because wave 41's own repairs produced two of them**, and because the owner said to
+resolve by poll whatever a poll can resolve and to name explicitly, in the next report, what it
+cannot.
+
+### `R-30` — the stand runs in `recorded` mode until a provider key arrives
+
+`D-72`'s repair made a host-less proxy URL a **startup** refusal, and the stand's certification
+stub is exactly that, so wave 41's redeploy took the API down (`D-70`). The owner chose
+`recorded` over the two cheaper restorations.
+
+**It is the better answer and the reason is not cost.** A hostname on the stub would have
+restored the interface and left every run failing; `recorded` replays real recorded responses,
+so **the whole journey is drivable without a key** — upload, run, findings, a verdict, the CSV.
+A document with no recording says so, which is `D-46`'s open question and not a lie.
+
+Applied the same hour. The effective setting is **`infra/deploy/env/alpha.env:15`**, not
+`provider.env` — compose's `environment:` overrides the service's `env_file:`, and the first
+attempt edited the file that loses. Verified: `/api/v1/openapi.json` **200**,
+`verify-deployed.sh` reports the deployed stack IS the tree.
+
+### `R-31` — the four documentation routes close behind a credential
+
+`/openapi.json`, `/docs`, `/redoc`, `/docs/oauth2-redirect` answered `200` with no credential
+while every real operation answered `401` — the doors locked and the blueprint on the doorstep.
+`D-73` closes: the authorization dependency moves from the router to the application.
+
+**Ruled over "leave them open", which the tunnel would have justified.** The owner took the
+narrower reading.
+
+### `R-32` — the published account stays; the tunnel is the boundary
+
+`D-75` — one account, its login printed in programme documents, and a lockout an
+unauthenticated caller could aim at it — is **accepted as a risk, not repaired**, because the
+stand is bound to `127.0.0.1` and reachable only through the owner's SSH tunnel. Without the
+tunnel the sign-in form cannot be reached at all; with it, the caller is the owner.
+
+**Reopens the moment there is a host with a public name**, which is `R-1`. The row stays in the
+register carrying this reasoning rather than being closed.
+
+### `R-33` — every border rises to 3:1, not only the load-bearing ones
+
+`D-81`: `--am-line` on `--am-paper` measures **1.36:1** light and **1.30:1** dark against WCAG
+1.4.11's 3:1, and it is the only boundary under every finding row. The owner chose the
+product-wide change over the targeted one — the option `W32-CONTRAST` §3 and `W33-THEME` had
+each declined.
+
+**So the visual change is intended, not a side effect**, and the wave implementing it does not
+need to protect the old look.
+
+### `R-34` — `R-19` widens to all 96 blocks of that nature
+
+The extra **17** are the same defect spelled differently — the model narrating a page with no
+first-person pronoun, which `D-59`'s grep could not see — and they include the corpus's
+**second, third and fourth largest** degenerate blocks at 50 989, 38 436 and 37 199 characters.
+
+### `R-35` — the 25 JSON-envelope blocks are re-recognised with the rest
+
+A different defect nobody had ruled on: the pipeline's own `[{"text": …` envelope written into
+the document body, 20 documents, 94 821 characters.
+
+**Recorded with the trade the owner accepted, because it is the integrator's job to say it
+once.** These 25 have a strict machine-made shape and a parser could unwrap them for nothing,
+deterministically and checkably; re-recognition pays a model to redo what a parser can do and
+substitutes a probabilistic result for a deterministic one. The owner chose one pass over all
+121 for operational simplicity. **The price is measured before anything is spent and `R-29`'s
+$5 ceiling still stops the wave** — and none of it can run at all until `D-70` clears, because
+re-recognition needs a provider and the stand has none.
+
+### `R-36` — the run cost ceiling is decided after the first live run
+
+It is **1.00 USD** by default today and an empty value does not disable it; measured runs are
+**0.1147** synthetic and **0.018305** live. The owner declined to tune a number against no
+measurement of a real 30-page document. **Nothing changes**, and the first live run answers it
+for free.
+
+### `R-37` — a decision shows a display name, not a login
+
+Wave 41 made `author_label` the authenticated reviewer's **login** (`D-78`), which reaches every
+other reviewer through `listDecisionHistory`, `listDecisions` and two screens. The owner ruled
+for a **display name** instead.
+
+**This is a migration plus a contract reseal**, and it therefore joins the batch already forming:
+`D-46`'s `terminal_detail` and `D-86`'s now-false description of this very field. One reseal,
+one owner, per `R-24`'s note and `R-11`'s cost.
