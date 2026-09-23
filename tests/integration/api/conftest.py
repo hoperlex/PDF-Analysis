@@ -607,7 +607,12 @@ class LedgerDecisionAdapter:
         event_type: str,
         comment: str | None,
         idempotency_key: str,
+        author_label: str,
     ) -> _Appended:
+        # `D-78`. The author is part of the fingerprint, as it is in the shipped
+        # `append_decision_under_key`: two reviewers presenting one idempotency key are two
+        # different payloads, and answering the second with the first one's event would
+        # attribute a decision to somebody who did not take it.
         claim = self._commands.begin(
             self._session,
             command_type=self.COMMAND_TYPE,
@@ -618,6 +623,7 @@ class LedgerDecisionAdapter:
                     "finding_observation_id": finding_observation_id,
                     "event_type": event_type,
                     "comment": comment,
+                    "author_label": author_label,
                 }
             ),
         )
@@ -628,6 +634,7 @@ class LedgerDecisionAdapter:
             event_type=event_type,
             comment=comment,
             command_id=str(claim.command_id),
+            author_label=author_label,
         )
         if isinstance(claim, CommandStarted):
             self._commands.succeed(

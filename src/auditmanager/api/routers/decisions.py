@@ -25,6 +25,7 @@ from auditmanager.api.schemas.decisions import (
     decision_record_body,
     check_comment_is_present_for_a_comment_event,
 )
+from auditmanager.api.security import CurrentSubject
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = ["build_decision_routes"]
@@ -55,6 +56,7 @@ def build_decision_routes(
         finding_uid: Annotated[models.FindingUid, Path()],
         body: models.AppendDecisionRequest,
         idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
     ) -> WireResponse:
         # One rule the contract states in prose and no JSON Schema keyword can express:
         # a `comment` event must carry a comment. It is checked here, against the
@@ -63,12 +65,23 @@ def build_decision_routes(
         check_comment_is_present_for_a_comment_event(
             event_type=body.event_type.value, comment=body.comment
         )
+        # `D-78`. `subject.login` and never `body`: this is the second operation on the
+        # surface to read who the caller is, and it reads it for the same reason
+        # `changePassword` does -- the answer is about *identity*, not about permission,
+        # which is the roles work `T-6` says must not be invented here. The ledger recorded
+        # one configured constant for every reviewer until this line existed.
+        #
+        # The login rather than `user_uid`: `author_label` is what a reviewer reads on a
+        # decision somebody else took, and an opaque identity would make the field
+        # unreadable to the only audience it has. It is a signed claim, so no client can
+        # choose it, and `AppendDecisionRequest` is closed, so no body can carry one.
         appended = decisions.append_decision(
             finding_uid=finding_uid,
             finding_observation_id=body.finding_observation_id,
             event_type=body.event_type.value,
             comment=body.comment,
             idempotency_key=idempotency_key,
+            author_label=subject.login,
         )
         payload = append_decision_body(appended.event, appended.current_verdict)
         return json_response(201, encode_json(payload))

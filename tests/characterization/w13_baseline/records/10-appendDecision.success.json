@@ -4,7 +4,17 @@
   "purpose": "the append-only ledger's 201, the event and the verdict it produces",
   "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
   "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
-  "exception": null,
+  "exception": {
+    "debt": [
+      "D-78"
+    ],
+    "ruling": "No owner ruling is engaged, on the same reading that `D-20` was given for record 03. Nothing in `contracts/**` moved: `DecisionEvent.author_label` is declared by the seal with the same type and the same 1..128 bounds, and no property was added to any schema, so neither R-5's kind of authority (adding a property) nor R-10's (filling a declared property that had no producer) is what this is. What changed is the VALUE the server writes into a field it has always written: it was one configured constant for every reviewer and is now the login of the reviewer the authorization seam verified. The frozen document's *description* of the field still calls it \"one configured local reviewer label\" and is now wrong; correcting that sentence is a reseal and is the owner's, and it is reported rather than done here.",
+    "status": "taken",
+    "decided_by": "agent/w41-author@A1",
+    "decided_by_subject": "feat(A1): D-78 -- a decision is attributed to the reviewer who made it",
+    "decided_on": "2026-09-23",
+    "permitted_change": "`author_label` was `\"local-reviewer\"` -- `CONFIGURED_AUTHOR_LABEL` in `auditmanager.decisions.ledger`, one string for every verdict by every reviewer. It is now the `login` of the `Subject` the authorization seam verified for the request, which in this journey is the account `journey.static_token()` provisions: `w13-baseline`. The body is otherwise byte-identical -- same status, same headers, same properties in the same order -- and the declared length moves by the two bytes the shorter login costs. Record 11 renders the same event through `listDecisionHistory` and moves with it for the same reason; the two are one change seen twice, which is why they are separate entries rather than one."
+  },
   "unordered": null,
   "request": {
     "method": "POST",
@@ -44,8 +54,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 364,
-      "text": "{\"event\": {\"decision_id\": \"{{decision_id}}\", \"finding_uid\": \"{{finding_uid}}\", \"finding_observation_id\": \"{{finding_observation_id}}\", \"event_type\": \"accept\", \"verdict\": \"accepted\", \"comment\": \"W13 response baseline\", \"author_label\": \"local-reviewer\", \"recorded_at\": \"{{ts_6}}\"}, \"current_verdict\": \"accepted\"}",
+      "length": 362,
+      "text": "{\"event\": {\"decision_id\": \"{{decision_id}}\", \"finding_uid\": \"{{finding_uid}}\", \"finding_observation_id\": \"{{finding_observation_id}}\", \"event_type\": \"accept\", \"verdict\": \"accepted\", \"comment\": \"W13 response baseline\", \"author_label\": \"w13-baseline\", \"recorded_at\": \"{{ts_6}}\"}, \"current_verdict\": \"accepted\"}",
       "note": ""
     }
   },

@@ -18,10 +18,27 @@ Two things this module refuses, and why:
   create a producer the programme has not decided to have. The refusal names that,
   rather than failing on a constraint the caller cannot read.
 
-``author_label`` is ``OD-12``: one configured local reviewer label, persisted server-side
-with each event. It is a label, not a subject identity, and it authorizes nothing. It is
-never taken from a request body — PC-01 has no authentication, and a client-supplied
-"who did this" would be a subject identity in all but name.
+``author_label`` is ``OD-12``, and since `D-78` it is **the login of the reviewer who made
+the decision**, persisted server-side with each event. It still authorizes nothing: it is
+what the ledger records about who judged, not a permission anybody holds.
+
+Two rules stood beside it, and only one of them was still true.
+
+* **It is never taken from a request body.** Unchanged, and the reason is unchanged: a
+  client-supplied "who did this" would be a subject identity in all but name, and an
+  operation one reviewer could aim at another. ``AppendDecisionRequest`` is closed, so a
+  body naming an author is a ``422`` before this module is reached at all.
+* **"PC-01 has no authentication" was false from wave 34.** The seam builds a verified
+  ``Subject`` on every authenticated request and publishes it; what was missing was a route
+  that read it. Until `D-78` this module therefore wrote one configured constant,
+  ``"local-reviewer"``, for every verdict by every reviewer -- so ``P04``, which exists to
+  learn whose judgement was whose, measured nothing it was built to measure.
+
+``author_label`` has **no default**, and that is the point of it being a required argument.
+A default is what a caller with no authenticated subject would fall into, and a row
+attributed to a configuration constant is worse than a refusal, because it looks like a
+decision somebody took. The composition root passes the login the seam verified; there is
+nothing else to pass.
 """
 
 from __future__ import annotations
@@ -54,10 +71,6 @@ VERDICT_FOR_EVENT: Final[dict[str, str | None]] = {
     "comment": None,
     "revoke": "pending",
 }
-
-#: OD-12. The single local reviewer label this deployment records. A different label is
-#: a configuration change at the composition root, never a field in a request.
-CONFIGURED_AUTHOR_LABEL: Final[str] = "local-reviewer"
 
 _INSERT_EVENT = text(
     """
@@ -160,12 +173,14 @@ def record_decision(
     comment: str | None = None,
     command_id: str | None = None,
     correlation_id: str | None = None,
-    author_label: str = CONFIGURED_AUTHOR_LABEL,
+    author_label: str,
 ) -> DecisionEvent:
     """Append one expert decision event. Never updates and never deletes.
 
-    ``author_label`` defaults to the deployment's configured label and is supplied by
-    the composition root when it differs — it is not a field a client fills in.
+    ``author_label`` is **required and has no default**. `D-78`: it is the login of the
+    reviewer the authorization seam verified, handed down from the command surface, and it
+    is not a field a client fills in. A default here would be a decision recorded with no
+    named author -- which must be a refusal, not a row attributed to a constant.
 
     Replaying the same command under one idempotency key appends exactly one event: the
     unique index on ``command_id`` is the enforcement, and a second attempt returns the
@@ -284,7 +299,7 @@ def append_decision_under_key(
     idempotency_key: str,
     comment: str | None = None,
     correlation_id: str | None = None,
-    author_label: str = CONFIGURED_AUTHOR_LABEL,
+    author_label: str,
 ) -> tuple[DecisionEvent, bool]:
     """Append one decision event under an idempotency key, or replay the first one.
 

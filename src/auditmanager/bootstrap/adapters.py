@@ -590,9 +590,18 @@ class DecisionAdapter(_SessionHolder):
         finding_observation_id: str,
         event_type: str,
         idempotency_key: str,
+        author_label: str,
         comment: str | None = None,
-        **_: Any,
     ) -> Any:
+        """`D-78`. ``author_label`` is named, not swallowed, and has no default.
+
+        The ``**_`` this signature used to end with is the shape
+        ``test_every_adapter_accepts_every_parameter_its_port_declares`` exists because of:
+        the finding adapter once took one and dropped both its filters, so a filtered
+        request returned everything and looked like it had worked. A swallowed author would
+        have been worse -- the row would still be written, attributed to whatever the ledger
+        defaulted to -- so the argument is named and nothing here supplies a fallback.
+        """
         from auditmanager.decisions import append_decision_under_key, current_verdict
 
         def work(session: Session) -> Any:
@@ -603,6 +612,7 @@ class DecisionAdapter(_SessionHolder):
                 event_type=event_type,
                 idempotency_key=idempotency_key,
                 comment=comment,
+                author_label=author_label,
             )
             verdict = current_verdict(session, finding_uid)
             return _AppendedDecision(_event_view(event), getattr(verdict, "current_verdict", "pending"))

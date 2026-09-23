@@ -276,11 +276,24 @@ class DecisionPort(Protocol):
         event_type: str,
         comment: str | None,
         idempotency_key: str,
+        author_label: str,
     ) -> AppendedDecision:
         """Append exactly one event, whatever a replay under one key does.
 
         The database enforces the "exactly one" rather than the handler promising it:
         ``expert_decision_event`` carries at most one event per ``command_id``.
+
+        ``author_label`` is `D-78`, and it is the one parameter here that does **not** come
+        from the request. It is the login of the reviewer the authorization seam verified,
+        read by the router through
+        :data:`~auditmanager.api.security.CurrentSubject`. It is declared on the port
+        rather than resolved behind it because the identity is a property of the *request*,
+        which only the surface can see -- an adapter reaching for it would be a module
+        below the seam asking who the caller is.
+
+        It has no default, here or in the ledger. A decision with no named author is a
+        refusal, and every operation that can reach this method is one the seam guards, so
+        there is always a subject to name.
         """
 
     def decision_history(self, *, finding_uid: str) -> Sequence[DecisionEventView]:

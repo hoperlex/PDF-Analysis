@@ -192,7 +192,11 @@ def test_a_record_carries_the_finding_context_it_was_recorded_against(
         assert record["finding_text"] == detail["observation"]["finding_text"]
         assert record["current_verdict"] == detail["current_verdict"] == "accepted"
         assert record["decision_event_count"] == detail["decision_event_count"] == 2
-        assert record["author_label"] == "local-reviewer"
+        # `D-78`. The login of the account whose credential this suite presents, not a
+        # configured constant: until the command surface could see the verified subject,
+        # every verdict by every reviewer went into this column as "local-reviewer" and the
+        # journal could not say whose judgement it was reporting.
+        assert record["author_label"] == "api-suite"
 
     by_type = {r["event_type"]: r for r in records}
     assert by_type["comment"]["verdict"] is None, (
