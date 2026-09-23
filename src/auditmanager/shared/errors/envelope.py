@@ -115,6 +115,64 @@ class ErrorEnvelope:
         return body
 
 
+def screen_details(
+    code: ErrorCode, details: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    """The catalog's detail rules for ``code``, applied to ``details``.
+
+    Four rules, and each raises rather than dropping, so a caller learns at once instead of
+    shipping a redaction that silently did nothing:
+
+    * the key is one of ``code.safe_detail_keys``;
+    * the value is a scalar;
+    * a string value is at most :data:`_MAX_DETAIL_VALUE` characters;
+    * a string value carries none of the six shapes :data:`_FORBIDDEN` describes -- the
+      same screen a message gets, because a key being declared safe says nothing about
+      what a call site put under it. `B6` found that the hard way: its
+      ``additionalProperties`` refusal echoed the caller's own property name into
+      ``details.field``, so a property named ``/etc/passwd`` came back inside the envelope.
+
+    **It is a function rather than four lines inside :func:`build`, and `D-46` is why.**
+    ``RunStatus.terminal_detail`` is a **200** body -- not an error envelope -- carrying
+    classifiers the catalog declares safe for the code in ``terminal_reason``, so it is
+    bound by exactly these rules and by nothing else. A second implementation of them,
+    beside this one, would be two spellings of one fact in a codebase that has been caught
+    by that shape before (``OPERATING_CONSTRAINTS.md`` §12). So there is one screen, and
+    the restriction holds by construction wherever it is called rather than by a second
+    author remembering it.
+    """
+    checked: dict[str, Any] = {}
+    if not details:
+        return checked
+    allowed = code.safe_detail_keys
+    for key, value in details.items():
+        if key not in allowed:
+            raise UnsafeDetailKey(
+                f"{code.value} declares safe_detail_keys {sorted(allowed)}; "
+                f"{key!r} is not one of them"
+            )
+        if not isinstance(value, (str, int, float, bool, type(None))):
+            raise UnsafeDetailKey(
+                f"detail {key!r} must be a scalar, got {type(value).__name__}"
+            )
+        if isinstance(value, str):
+            if len(value) > _MAX_DETAIL_VALUE:
+                raise UnsafeDetailKey(
+                    f"detail {key!r} exceeds {_MAX_DETAIL_VALUE} characters"
+                )
+            for what, pattern in _FORBIDDEN:
+                if pattern.search(value):
+                    raise UnsafeDetailValue(
+                        f"detail {key!r} appears to contain {what}; the catalog's "
+                        "safety rules forbid it. Details carry classifiers, not "
+                        "raw input - map the input to a classifier first."
+                    )
+        checked[key] = value
+    if len(checked) > _MAX_DETAILS:
+        raise UnsafeDetailKey(f"details carries more than {_MAX_DETAILS} keys")
+    return checked
+
+
 def build(
     code: ErrorCode,
     correlation_id: str,
@@ -124,39 +182,9 @@ def build(
 ) -> ErrorEnvelope:
     """Construct an envelope. ``retryable`` is never an argument."""
     text = screen_message(message) if message is not None else code.summary
-    checked: dict[str, Any] = {}
-    if details:
-        allowed = code.safe_detail_keys
-        for key, value in details.items():
-            if key not in allowed:
-                raise UnsafeDetailKey(
-                    f"{code.value} declares safe_detail_keys {sorted(allowed)}; "
-                    f"{key!r} is not one of them"
-                )
-            if not isinstance(value, (str, int, float, bool, type(None))):
-                raise UnsafeDetailKey(f"detail {key!r} must be a scalar, got {type(value).__name__}")
-            if isinstance(value, str):
-                if len(value) > _MAX_DETAIL_VALUE:
-                    raise UnsafeDetailKey(
-                        f"detail {key!r} exceeds {_MAX_DETAIL_VALUE} characters"
-                    )
-                # Screen the value with the same patterns as a message. The catalog says
-                # details carry "safe scalar classifiers only ... raw inputs and secrets
-                # are not", and a key being declared safe says nothing about what a call
-                # site puts under it. B6 found this the hard way: its additionalProperties
-                # refusal echoed the caller's own property name into details.field, so a
-                # property named /etc/passwd came back inside the envelope. The key was
-                # legitimate; the value was the caller's raw input.
-                for what, pattern in _FORBIDDEN:
-                    if pattern.search(value):
-                        raise UnsafeDetailValue(
-                            f"detail {key!r} appears to contain {what}; the catalog's "
-                            "safety rules forbid it. Details carry classifiers, not "
-                            "raw input - map the input to a classifier first."
-                        )
-            checked[key] = value
-        if len(checked) > _MAX_DETAILS:
-            raise UnsafeDetailKey(f"details carries more than {_MAX_DETAILS} keys")
     return ErrorEnvelope(
-        error_code=code, correlation_id=correlation_id, message=text, details=checked
+        error_code=code,
+        correlation_id=correlation_id,
+        message=text,
+        details=screen_details(code, details),
     )

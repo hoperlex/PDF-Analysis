@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 29b3fa5fa34b561deda9795283e77a0236c154d9bc47db4a2b0282b9d7225fc0
+ *   sha256 013e22ae46ee528d7a4b5fd2b9f24a22d3cb8754152a28e41977d93029f9ef9d
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '29b3fa5fa34b561deda9795283e77a0236c154d9bc47db4a2b0282b9d7225fc0';
+export const CONTRACT_DIGEST = '013e22ae46ee528d7a4b5fd2b9f24a22d3cb8754152a28e41977d93029f9ef9d';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -124,7 +124,7 @@ export type Cursor = string;
 
 /** One appended event. Never updated and never removed. */
 export type DecisionEvent = {
-  /** OD-12: one configured local reviewer label, persisted server-side. It is a label, not a subject identity, and it authorizes nothing. */
+  /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
   author_label: string;
   comment?: string | null;
   decision_id: DecisionId;
@@ -159,7 +159,7 @@ export const DECISION_ID_PATTERN = "^dec_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. */
 export type DecisionRecord = {
-  /** OD-12: one configured local reviewer label, persisted server-side. It is a label, not a subject identity, and it authorizes nothing. */
+  /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
   author_label: string;
   category: FindingCategory;
   comment?: string | null;
@@ -453,6 +453,10 @@ export type RunStatus = {
   stages: Array<StageState>;
   state: RunState;
   terminal_at?: string | null;
+  /** D-46: safe scalar classifiers saying WHICH dependency a `failed` run terminated on, restricted to the `safe_detail_keys` the domain catalog declares for the code in `terminal_reason`. Present only beside a `terminal_reason`, because the allowlist that bounds these keys is a property of the reported code; absent when there is nothing to say, and never an empty object. The same shape and the same rule as `ErrorEnvelope.details`, applied to a 200 run reading rather than to a failure -- which is why it had to be added at all: a run reading is not an error envelope and carried no detail object. It classifies; it never identifies. No path, object key, URL, credential, token, prompt, payload or host appears here, and no error code was added to the catalog for it. */
+  terminal_detail?: {
+    [key: string]: string | number | boolean | null;
+  };
   /** The catalog code a `failed` run terminated with. Null otherwise. */
   terminal_reason?: ErrorCode | null;
   version_uid: VersionUid;

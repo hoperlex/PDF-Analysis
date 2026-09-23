@@ -427,6 +427,11 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         prompt_bundle_id=run.prompt_bundle_id,
         degradation_set=tuple(run.degradation_set or ()),
         terminal_reason=run.terminal_reason,
+        # `D-46`. Carried straight through: it was screened when the terminal was chosen
+        # and again when the row was written, and `run_status_body` screens it once more
+        # before it reaches a client. An adapter that filtered it here would be a fourth
+        # place the catalog's rule lives.
+        terminal_detail=run.terminal_detail,
         interrupted_reason=run.interrupted_reason,
         # W17VIEW-1: both counts are declared by the frozen `RunStatus`, carried by
         # `RunStatusView` and emitted by `run_status_body` whenever they are not None -

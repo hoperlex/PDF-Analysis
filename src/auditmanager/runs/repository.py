@@ -36,7 +36,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from auditmanager.shared.db import SQLSTATE_TO_CATALOG_CODE
-from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.shared.errors import DomainError, ErrorCode, screen_details
 from auditmanager.shared.statemachine import Topology, assert_initial, assert_transition
 from auditmanager.shared.statemachine import load as load_topology
 
@@ -60,6 +60,7 @@ PC01_STAGES: Final[tuple[str, ...]] = (
 _RUN_COLUMNS = (
     "run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id, "
     "norms_snapshot_id, provider_mode, frozen_input_digest, command_id, terminal_reason, "
+    "terminal_detail, "
     "interrupted_reason, degradation_set, terminal_at, created_at"
 )
 
@@ -108,6 +109,7 @@ _TERMINATE = text(
            terminal_at = statement_timestamp(),
            updated_at = statement_timestamp(),
            terminal_reason = :terminal_reason,
+           terminal_detail = CAST(:terminal_detail AS jsonb),
            interrupted_reason = :interrupted_reason,
            degradation_set = CAST(:degradation_set AS jsonb)
      WHERE run_id = :run_id AND state = :from_state
@@ -228,6 +230,10 @@ class RunRow:
     frozen_input_digest: str
     command_id: str | None
     terminal_reason: str | None
+    #: `D-46`. The classifiers that say which dependency, screened against
+    #: ``terminal_reason``'s own ``safe_detail_keys``. ``None`` when there is no detail;
+    #: never an empty object.
+    terminal_detail: Mapping[str, Any] | None
     interrupted_reason: str | None
     degradation_set: tuple[str, ...]
     #: Required by the frozen `RunStatus`. The column existed in the schema from the first
@@ -287,6 +293,7 @@ def _run_row(row: Any) -> RunRow:
         frozen_input_digest,
         command_id,
         terminal_reason,
+        terminal_detail,
         interrupted_reason,
         degradation_set,
         terminal_at,
@@ -304,6 +311,7 @@ def _run_row(row: Any) -> RunRow:
         frozen_input_digest=frozen_input_digest,
         command_id=command_id,
         terminal_reason=terminal_reason,
+        terminal_detail=terminal_detail or None,
         interrupted_reason=interrupted_reason,
         degradation_set=tuple(degradation_set or ()),
         terminal_at=terminal_at,
@@ -493,6 +501,7 @@ class RunRepository:
         to_state: str,
         degradation_set: Sequence[str] = (),
         terminal_reason: str | None = None,
+        terminal_detail: Mapping[str, Any] | None = None,
         interrupted_reason: str | None = None,
     ) -> None:
         """Move a run to a terminal state, recording everything that terminal requires.
@@ -511,6 +520,22 @@ class RunRepository:
                     "from_state": from_state,
                     "to_state": to_state,
                     "terminal_reason": terminal_reason,
+                    # `D-46`. Screened once more on the way in, against the reason this
+                    # very statement writes: the row and the allowlist that bounds it have
+                    # to be decided together, or a later reader has nothing to screen
+                    # against. An empty result is written as NULL, because "no detail" and
+                    # "an empty detail" are the same fact and the column spells it one way.
+                    "terminal_detail": (
+                        None
+                        if not terminal_detail or terminal_reason is None
+                        else json.dumps(
+                            dict(
+                                screen_details(
+                                    ErrorCode(terminal_reason), terminal_detail
+                                )
+                            )
+                        )
+                    ),
                     "interrupted_reason": interrupted_reason,
                     "degradation_set": json.dumps(list(degradation_set)),
                 },

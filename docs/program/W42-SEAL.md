@@ -110,9 +110,12 @@ asserted.** `AGENTS.md` §4 forbids a silent fallback, and a fallback that only 
 one `or` expression is exactly one. So it is said in four places, three of which a person
 can query rather than remember:
 
-1. **one function, named for what it does** —
-   `auditmanager.access.models.display_name_for(record)`, beside `normalize_login`, where
-   the account's rules already live. Nothing else in the tree resolves this;
+1. **one expression, named for what it answers** —
+   `auditmanager.access.models.UserRecord.display_label`, a property on the account's own
+   record, where the account's rules already live. Nothing else in the tree resolves this.
+   It is a property on `UserRecord` and not a free function, so that the composition
+   root can reach it without importing the `access` boundary to name a type it only
+   passes through — which is the deep import `AGENTS.md` §4 forbids;
 2. **the column stays nullable, so the state is a query** —
    `SELECT login FROM app_user WHERE display_name IS NULL` names every account on the
    fallback. This is `is_default_credential`'s own idiom: `0006` made "still on the seeded
@@ -131,7 +134,10 @@ can query rather than remember:
 
 ### 1.2 Where the name comes from, and why it travels in the credential
 
-`Subject` gains **`display_name: str`, required, no default.** The no-default is the point,
+`Subject` gains **`display_label: str`, required, no default.** The name is
+`display_label` and not `display_name` on purpose: `UserRecord.display_name` is the
+*nullable thing the reviewer chose* and `display_label` is the *resolved, always-present*
+answer. Two names for two facts, spelled the same way at every layer. The no-default is the point,
 exactly as it is for `token_epoch`: a caller that could omit it would attribute a decision
 to whatever the default said, which is `D-66`'s shape and the thing
 `TestThereIsNoConfiguredDefaultToFallBackInto` exists to keep out.

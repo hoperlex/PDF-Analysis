@@ -718,15 +718,24 @@ def execute_run(
         # of flattening every failure into analysis_failed. Read back from the persisted
         # rows for the same reason stage_statuses is: the terminal is chosen from what
         # was actually written, not from an in-process tally.
+        persisted = run_repo.stage_results(session, run_id)
         stage_errors = {
-            row.stage_id: (row.error or {}).get("code")
-            for row in run_repo.stage_results(session, run_id)
+            row.stage_id: (row.error or {}).get("code") for row in persisted
+        }
+        # `D-46`. The classifiers the failing stage recorded, read back from the same
+        # persisted rows and for the same reason: the terminal is chosen from what was
+        # actually written. `StageError.from_domain_error` already screened these against
+        # the catalog when the row was built, and `select_terminal` screens them again
+        # against the code the RUN ends up reporting, which is not always the stage's.
+        stage_details = {
+            row.stage_id: (row.error or {}).get("details") for row in persisted
         }
         selection = select_terminal(
             statuses,
             required_stages=PC01_STAGES,
             gate_ran=gate_ran,
             stage_errors=stage_errors,
+            stage_details=stage_details,
         )
 
     run_repo.terminate(
@@ -736,6 +745,7 @@ def execute_run(
         to_state=selection.state,
         degradation_set=selection.degradation_set,
         terminal_reason=selection.terminal_reason,
+        terminal_detail=selection.terminal_detail,
     )
 
     return ExecutionResult(
