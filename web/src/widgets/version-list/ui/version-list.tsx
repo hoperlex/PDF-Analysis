@@ -80,7 +80,7 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
       <p className="am-note">
         <em>
           Одна версия на загрузку: сегодня каждая загрузка заводит новый документ, а не
-          новую версию уже загруженного. Ничего из загруженного не потеряно.
+          новую версию уже существующего — ничего из загруженного не потеряно.
         </em>
       </p>
       <div className="am-pager">
