@@ -143,3 +143,142 @@ members the old matrix never reached, `StageId.block_analysis` among them:
 previous instances, only a quietly-dying mutation had ever found — and it caught it without
 anybody having to think of the mutation first.
 
+## 3. B1, the other half — the contrast census
+
+### 3.1 First, the premise the brief told me to check: is `D-64` still real?
+
+**No. It was repaired in wave 35, the repair holds, and the register is not stale.**
+
+`D-64` is that the census matched **authored** class names while the rendered markup carries
+the bundler's, so no rule in any `*.module.css` ever matched. `DEBT_REGISTER.md` records it
+as *"Opened and closed the same day"*, and the tree agrees: `contrast.test.ts` reads the
+modules through `import.meta.glob` and rewrites each class name through that module's own
+export.
+
+I did not take the register's word for it. Measured in `/root/w41blind-mut`, a `git archive`
+of `3544fa3`, **baselined green first** (41 passed):
+
+```
+web/src/widgets/run-progress/ui/run-progress.module.css
++ .mode { color: var(--am-line); }          <- ink only; the tint comes from an ancestor
+```
+
+A colour-only rule is the exact `D-64` shape: `declaredPairs` cannot see it, so only the
+cascade can, and only if the module's names resolve.
+
+```
+× every pair that meets on a screen clears the threshold its role asks of it
++   "pair": "text|--am-line|--am-surface|-|-", "ratio": 1.26, "theme": "light",
++   "where": "RunProgress published div > p._mode_5f66a5 > span"
++   "pair": "text|--am-line|--am-surface|-|-", "ratio": 1.44, "theme": "dark"
+Tests  1 failed | 40 passed (41)
+```
+
+**`p._mode_5f66a5` is the proof**: the site is named with the *bundler's* class, which is
+what the wave-35 repair produces. Then the counter-measurement — the same mutation against
+the pre-wave-35 instrument, `scopedCss` returning the authored text:
+
+```
+✓ … holds in BOTH palettes, and names the theme and the ratio of anything that does not
+Tests  1 passed | 15 skipped (16)
+```
+
+**Green.** The blindness was real, the repair is load-bearing, and `D-69`'s wave-35 row is
+history rather than an open item.
+
+### 3.2 The blindness that IS live, and it is one layer out
+
+`D-64` was *"the names the census reads do not match the markup"*. What is live at `295ff04`
+is *"the screens that carry those names are never rendered"*.
+
+**Measured before writing anything**: of the **137** colour-bearing rules in this
+application's stylesheets, **31 were reached by no screen the census renders** — 23% of the
+surface a file called a census is named after.
+
+The cause is the same as B1's, and `contrast.test.ts` stated it in its own words:
+
+```ts
+for (const screen of ['AppFrame', 'ProjectsPage', …18 names…]) {
+  expect({ screen, present: names.includes(screen) }).toEqual({ screen, present: true });
+}
+```
+
+**A literal checked against a literal.** `screens.ts` names a component and this case asserts
+that `screens.ts` names it. Nothing anywhere asked the tree — so the knowledge base (`R-23`),
+the sign-in screen and the change-password screen (`R-26`) were outside the census entirely,
+two of them the first thing a reviewer ever sees, and this case was green.
+
+### 3.3 The repair
+
+`3544fa3`. The eighteen-name list is **deleted** and replaced by a question derived from the
+stylesheet: **every rule that declares a colour must be reached by some rendered screen**, or
+carry a written reason in `UNREACHED_BY_ANY_SCREEN`, held in **both directions** so the list
+may only shrink. A widget the census does not render fails that by the rules it takes with
+it, and a screen list nobody maintains cannot make it pass.
+
+Screens added, each because the assertion demanded it and named it:
+
+| added | rules it recovered |
+|---|---|
+| the knowledge base widget and page | the eight `.am-kb__*` rules |
+| the three sign-in and four change-password shapes | `.am-note` and the session chrome |
+| a screen carrying `UnsupportedState` | `.am-state--warning` — the **third state tone, measured in neither palette** |
+| the four lists **with rows in them** | `li.am-state`, every project and run row |
+| the review screen **with data in its four caches** | `.am-review__*`, `.am-uid` |
+| a genuinely partial run | `.am-badge--degraded`, `[data-run-outcome='partial']` |
+
+**31 unreached → 11.** Census: 25 → **49 screens**, 90 → **143 pairs per palette**, 1573
+elements. The floors in `reaches enough of the application to be worth calling a census` were
+raised with it, because a floor left at the old figure lets twenty screens be deleted in
+silence.
+
+Two fixtures were repaired that **named a state they did not reach** — the same defect as the
+guards, inside the census's own seeds:
+
+- `add('RunProgress partial', runScreen('published', …))` — named partial, seeded published;
+- `add('DecisionPanel refused', { refusal: 'Пустой комментарий не отправляется.' })` —
+  `decision-panel.tsx` compares `refusal === 'empty'`, so this screen rendered no refusal at
+  all. The prop is typed `string | null | undefined` and compared against one magic value;
+  that is a `web/src` smell, reported and not repaired.
+
+### 3.4 What the widening found: four real WCAG 1.4.11 failures
+
+Reaching those screens produced a red immediately, and it is not an instrument fault.
+
+| pair | light | dark | needs | where |
+|---|---|---|---|---|
+| `edge\|--am-line\|--am-paper\|-\|border` | 1.36:1 | 1.30:1 | 3:1 | the theme control in the application bar |
+| `…\|hover\|border` | 1.36:1 | 1.30:1 | 3:1 | `li.am-state` — every project row and run row |
+| `…\|focus-visible\|border` | 1.36:1 | 1.30:1 | 3:1 | the review screen's finding row |
+| `…\|active\|border` | 1.36:1 | 1.30:1 | 3:1 | the same row, pointer down |
+
+`--am-line` is the **only** boundary those interactive controls have, and their own fill does
+not separate them from the page, which is exactly the case 1.4.11 covers. **A pair on the row
+a reviewer clicks first has been unmeasured since wave 32**, because no census had ever
+rendered a populated list or a review screen with data in it.
+
+**Registered with their ratios, not repaired.** The register four rows above already carries
+the identical decision for `--am-line` on `--am-surface`: the repair is `--am-line-strong`'s
+own territory in both palettes, a three-level border scale cannot carry two levels at the
+1.4.11 ceiling, and `W32-CONTRAST` §3 and `W33-THEME` each declined it. It is a scale
+decision with an owner and this task's grant is the instruments. What changed is that the
+pair is now **measured, named and held in both directions** instead of invisible.
+
+### 3.5 The eleven rules that remain unreached, and why
+
+Each carries its reason in `UNREACHED_BY_ANY_SCREEN`; two of them are findings rather than
+limits and are **reported, not repaired**, because nothing this task changed requires them:
+
+- **`.am-evidence__none` is unreachable by any input.** `evidence-viewer.tsx` chooses `page`
+  out of `pages`, which it derives from the observation's own evidence — so a page carrying
+  no quotation cannot be the active page and this branch cannot render. Dead code.
+- **`hr` and `.am-app__context` are dead CSS.** No module in `web/src` renders either;
+  `grep -rn "<hr" web/src` and the `am-app__context` grep are both empty.
+
+The other nine are honest limits: `::selection` is composed by the browser;
+`.am-app__instance` needs a configured deployment label; `.am-theme__option[aria-pressed]`
+is decided by the browser's stored preference; `.am-quotation:has(…)` is the `:has()` the
+matcher declines and already names; `[open] > summary` needs a click; and the three
+`.am-form__*` rules render only after a mutation settles — all three declare ink and tint in
+one block, so `declaredPairs` measures them with no markup at all.
+
