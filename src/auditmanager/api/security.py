@@ -148,6 +148,7 @@ __all__ = [
     "build_signer",
     "current_subject",
     "derive_signing_key",
+    "is_authorization_seam",
 ]
 
 #: The document's ``components.securitySchemes`` key. Not the class name FastAPI would
@@ -496,7 +497,32 @@ def build_authorization_dependency(
         # else.
         request.state.subject = subject
 
+    # `R-31`. The stamp that lets a guard find this seam inside an assembled application's
+    # dependant trees without matching on a function name. `D-73` is closed by attaching
+    # the seam where it reaches *every* route the application serves, and a guard that only
+    # drove the four documentation paths would pass the day somebody added a fifth -- so the
+    # guard walks `app.routes` and asks each route whether it carries this. A name match
+    # would be a guard a rename silently disables.
+    setattr(require_authorization, _SEAM_MARKER, True)
     return Depends(require_authorization)
+
+
+#: The attribute :func:`build_authorization_dependency` stamps on the callable it returns.
+#: Private because nothing outside this module may set it; :func:`is_authorization_seam` is
+#: the reader.
+_SEAM_MARKER: Final[str] = "__auditmanager_authorization_seam__"
+
+
+def is_authorization_seam(candidate: object) -> bool:
+    """True when ``candidate`` is a callable this module produced as the seam.
+
+    Accepts the ``dependency`` attribute of a solved dependant, a ``Depends`` object, or the
+    raw function -- all three, because a caller walking FastAPI's dependant tree meets the
+    first, a caller reading ``app.router.dependencies`` meets the second, and a guard that
+    had to know which it was holding would be a guard coupled to a FastAPI version.
+    """
+    dependency = getattr(candidate, "dependency", candidate)
+    return bool(getattr(dependency, _SEAM_MARKER, False))
 
 
 def current_subject(request: Request) -> Subject:

@@ -25,7 +25,13 @@ import sys
 from collections.abc import AsyncIterator
 from typing import Any, Final, Mapping
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.openapi.docs import (
+    get_redoc_html,
+    get_swagger_ui_html,
+    get_swagger_ui_oauth2_redirect_html,
+)
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from auditmanager.api.composition import Application, ConfigurationError, build_application
 from auditmanager.api.routers import (
@@ -46,6 +52,8 @@ _log = logging.getLogger(__name__)
 __all__ = [
     "BASE_PATH",
     "CONTRACT_VERSION",
+    "DOCUMENTATION_PATHS",
+    "OPENAPI_PATH",
     "Application",
     "ConfigurationError",
     "create_app",
@@ -53,6 +61,37 @@ __all__ = [
     "create_documentation_app",
     "main",
 ]
+
+#: Where this application serves its own description, and the three pages built from it.
+#:
+#: **They are declared here rather than left to FastAPI, and `R-31` is why.** ``setup()``
+#: installs these four with ``self.add_route(...)`` -- Starlette's ``Router.add_route``,
+#: which builds a plain ``starlette.routing.Route``. A ``Route`` has no dependant tree, so
+#: **no** dependency reaches it: not one passed to ``include_router``, and not one passed to
+#: the ``FastAPI`` constructor either. Measured on FastAPI 0.141.1 rather than reasoned
+#: about, because the reasoned answer -- "move the argument up one level" -- produces four
+#: routes that still answer ``200`` to a caller with no credential and a suite that stays
+#: green. `D-73` is exactly that: every real operation answered ``401`` while the full
+#: description of the surface, ``/auth/token``'s shape included, was on the doorstep.
+#:
+#: So the four built-in routes are suppressed (``openapi_url=None`` and the three below it
+#: in :func:`_assemble`) and the same four routes are declared as ``APIRoute``s, which do
+#: carry the application's dependencies. They stay out of the document --
+#: ``include_in_schema=False`` -- because the contract declares fifteen paths and these are
+#: not among them.
+OPENAPI_PATH: Final[str] = "/openapi.json"
+_DOCS_PATH: Final[str] = "/docs"
+_REDOC_PATH: Final[str] = "/redoc"
+_OAUTH2_REDIRECT_PATH: Final[str] = "/docs/oauth2-redirect"
+
+#: The four, as one value a guard can read. `R-31` closed them together and they are
+#: guarded together.
+DOCUMENTATION_PATHS: Final[tuple[str, ...]] = (
+    OPENAPI_PATH,
+    _DOCS_PATH,
+    _REDOC_PATH,
+    _OAUTH2_REDIRECT_PATH,
+)
 
 #: ``info.title`` and ``info.description`` of the served document. Prose: the conformance
 #: gate drops both under `N4`, and ``info.version`` is the one field in here that is not
@@ -251,6 +290,66 @@ def _run_lifespan(application: Application) -> Any:
     return lifespan
 
 
+def _declare_the_documentation_routes(app: FastAPI) -> None:
+    """The four of :data:`DOCUMENTATION_PATHS`, as routes the seam can reach.
+
+    **Nothing about what they serve is reimplemented.** The document comes from
+    ``app.openapi()`` -- the same call the conformance gate reads -- and the three pages
+    come from ``fastapi.openapi.docs``, which is where ``setup()`` gets them too. What
+    changes is only the *kind* of route: an ``APIRoute``, which carries
+    ``app.router.dependencies``, instead of a ``starlette.routing.Route``, which carries
+    nothing.
+
+    ``include_in_schema=False`` on all four. The contract declares fifteen paths and these
+    are not among them; a documentation route that described itself would be a sixteenth.
+
+    None of them declares an ``operation_id``, so
+    :func:`auditmanager.api.security._operation_of` answers ``None`` for each, ``None`` is
+    in no register, and the seam guards them under the rule it already states: an
+    unreadable route is a closed route. **Nothing was added to
+    ``UNAUTHENTICATED_OPERATIONS``**, which is still exactly ``{"issueToken"}`` -- the one
+    door with a handle on the inside.
+    """
+
+    @app.get(OPENAPI_PATH, include_in_schema=False)
+    def served_document(request: Request) -> JSONResponse:
+        # The `root_path` rewrite is FastAPI's own, kept verbatim rather than dropped: this
+        # deployment sets no `root_path` and the branch is unreachable today, but a
+        # difference introduced here would be a difference nobody asked for and nobody
+        # would find. `_SERVERS` already declares `/api/v1`, so the rewrite has nothing to
+        # add even when it does fire.
+        root_path = request.scope.get("root_path", "").rstrip("/")
+        document = app.openapi()
+        if root_path and app.root_path_in_servers:
+            declared = {server.get("url") for server in document.get("servers", [])}
+            if root_path not in declared:
+                document = dict(document)
+                document["servers"] = [{"url": root_path}, *document.get("servers", [])]
+        return JSONResponse(document)
+
+    @app.get(_DOCS_PATH, include_in_schema=False)
+    def swagger_ui(request: Request) -> HTMLResponse:
+        root_path = request.scope.get("root_path", "").rstrip("/")
+        return get_swagger_ui_html(
+            openapi_url=root_path + OPENAPI_PATH,
+            title=f"{app.title} - Swagger UI",
+            oauth2_redirect_url=root_path + _OAUTH2_REDIRECT_PATH,
+        )
+
+    @app.get(_OAUTH2_REDIRECT_PATH, include_in_schema=False)
+    def swagger_ui_redirect() -> HTMLResponse:
+        return get_swagger_ui_oauth2_redirect_html()
+
+    @app.get(_REDOC_PATH, include_in_schema=False)
+    def redoc(request: Request) -> HTMLResponse:
+        root_path = request.scope.get("root_path", "").rstrip("/")
+        return get_redoc_html(
+            openapi_url=root_path + OPENAPI_PATH, title=f"{app.title} - ReDoc"
+        )
+
+    del served_document, swagger_ui, swagger_ui_redirect, redoc
+
+
 def _assemble(
     router: Router,
     environ: Mapping[str, str],
@@ -269,6 +368,33 @@ def _assemble(
         version=CONTRACT_VERSION,
         servers=list(_SERVERS),
         openapi_tags=list(_TAGS),
+        # `R-31`. The four documentation routes FastAPI would install itself are
+        # suppressed here and declared below, because the ones `setup()` builds are plain
+        # Starlette routes that no dependency can reach. See :data:`DOCUMENTATION_PATHS`.
+        openapi_url=None,
+        docs_url=None,
+        redoc_url=None,
+        swagger_ui_oauth2_redirect_url=None,
+        # `R-31`, the other half. These seed `app.router.dependencies`, which
+        # `add_api_route` copies onto **every** route the application carries -- the
+        # eighteen merged in by `include_router` below and the four declared beneath it.
+        # They were arguments to `include_router` until this wave, which is what left the
+        # four outside the seam. The order is unchanged: an included route ends up with
+        # `app.router.dependencies + <include_router's> + <the route's own>`, so moving
+        # both of these up moves them together and the generated document does not shift.
+        dependencies=[
+            Depends(declare_correlation_id),
+            # `W39-REVOKE`. The seam verifies a credential's signature with the key this
+            # environment derives, and then asks the account whether it still accepts that
+            # credential's generation. The second half needs a port, and the port travels
+            # on the router: see `auditmanager.api.routers.Router`. A router assembled with
+            # no credential port -- `create_documentation_app` -- yields `None` here, and
+            # the dependency refuses every guarded request rather than admitting it, which
+            # is the same rule the module already applies to a missing deployment secret.
+            build_authorization_dependency(
+                environ, epochs=getattr(router, "credentials", None)
+            ),
+        ],
         # A model with a default would otherwise be emitted twice, as `X-Input` and
         # `X-Output`. The 51 schema names are pinned by the contract and by the frontend's
         # generated client, so the split is a conformance failure -- and the fix belongs
@@ -287,22 +413,11 @@ def _assemble(
         # completion of the real work instead of on a duration somebody guessed.
         app.state.run_carrier = application.carrier
     install_exception_handlers(app)
-    app.include_router(
-        router,
-        dependencies=[
-            Depends(declare_correlation_id),
-            # `W39-REVOKE`. The seam verifies a credential's signature with the key this
-            # environment derives, and then asks the account whether it still accepts that
-            # credential's generation. The second half needs a port, and the port travels on
-            # the router: see `auditmanager.api.routers.Router`. A router assembled with no
-            # credential port -- `create_documentation_app` -- yields `None` here, and the
-            # dependency refuses every guarded request rather than admitting it, which is
-            # the same rule the module already applies to a missing deployment secret.
-            build_authorization_dependency(
-                environ, epochs=getattr(router, "credentials", None)
-            ),
-        ],
-    )
+    # No `dependencies=` here, and that absence is the repair. They are on the application
+    # now; an argument added back to this call would guard the eighteen and leave the four
+    # below open again, which is `D-73`.
+    app.include_router(router)
+    _declare_the_documentation_routes(app)
     # Outermost first. `add_middleware` puts the last one added on the outside, so the
     # order below is the reverse of the order a request meets them:
     #   CorrelationMiddleware -> FailureEnvelopeMiddleware -> BodyCapMiddleware -> routing.

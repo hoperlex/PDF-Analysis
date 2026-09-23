@@ -545,7 +545,13 @@ def test_the_exchange_declares_the_empty_requirement(router: Surface) -> None:
     document = router.app.openapi()
     assert document["paths"]["/auth/token"]["post"]["security"] == []
 
-    served = TestClient(router.app, raise_server_exceptions=False).get("/openapi.json")
+    # `R-31`. The route that serialises the document is itself behind the seam now -- see
+    # `test_the_documentation_routes_are_behind_the_seam.py` -- so this reads the bytes with
+    # a credential. It is still the *served* bytes and not the in-memory object, which is
+    # the only reason this half of the assertion exists.
+    served = TestClient(router.app, raise_server_exceptions=False).get(
+        "/openapi.json", headers={"Authorization": f"Bearer {TEST_TOKEN}"}
+    )
     assert served.status_code == 200
     assert b'"security":[]' in served.content.replace(b", ", b",").replace(b": ", b":")
 
