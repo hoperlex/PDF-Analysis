@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 976df5c1492575754394bafc3131f8a42d1951c774279f6ccbbadde25e204619
+ *   sha256 29b3fa5fa34b561deda9795283e77a0236c154d9bc47db4a2b0282b9d7225fc0
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,6 +17,7 @@
 import type {
   AppendDecisionRequest,
   AppendDecisionResponse,
+  ChangePasswordRequest,
   CorrelationId,
   CreateProjectRequest,
   Cursor,
@@ -47,6 +48,7 @@ import type {
 /** Every operationId in the contract, sorted. */
 export const OPERATION_IDS = [
   'appendDecision',
+  'changePassword',
   'createProject',
   'exportRunCsv',
   'getDocumentVersion',
@@ -99,6 +101,37 @@ export type AppendDecisionInput = {
 
 /** Success body of `appendDecision` (`application/json`, HTTP 201). */
 export type AppendDecisionResult = AppendDecisionResponse;
+
+// ------------------------------------------------------------------------------------
+// changePassword - POST /auth/password
+// ------------------------------------------------------------------------------------
+
+/**
+ * Change the signed-in account's password and revoke its old credentials.
+ *
+ * Two things happen here and they are one write. The account's password becomes the one supplied, and every credential this deployment ever minted for that account stops being accepted -- **including the credential this request presented**. A password change that leaves the old password's credentials working is a password change in name only, so the two are not offered separately and cannot land separately.
+ *
+ * **Whose password changes is decided by the credential, never by the body.** There is no login property and there will not be one: the caller may change their own password and no other, and a login in the body would be an operation one caller could aim at another.
+ *
+ * **The response is the replacement credential**, minted after the change, and the only one this account now accepts. It is answered rather than left to a second exchange because the caller's own credential was revoked by this very request: a `204` would leave them holding something already dead with no way to tell that from a failure.
+ *
+ * The `403` is declared because every operation behind the seam declares it: `permission_denied` means an authenticated subject was refused, a generated client needs a typed shape for it on every authorized operation, and an operation that omitted it would be claiming a property about a role model this document does not describe. This surface raises it nowhere, here included.
+ *
+ * Nothing is created, so there is no idempotency key. A repeat of the same request is refused by its own `current_password`, which is no longer current -- it is not replayed and there is no `409` here.
+ *
+ * Revocation has no operation of its own on this surface. Ending a pilot -- taking credentials away from accounts whose passwords nobody is changing -- is an operator's action taken on the deployment, and publishing it would require deciding who may revoke whom, which is the role vocabulary this document deliberately does not have.
+ */
+export type ChangePasswordInput = {
+  /** Request body, sent as `application/json`. */
+  body: ChangePasswordRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `changePassword` (`application/json`, HTTP 200). */
+export type ChangePasswordResult = IssueTokenResponse;
 
 // ------------------------------------------------------------------------------------
 // createProject - POST /projects
@@ -565,6 +598,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['decisions'],
+  },
+  changePassword: {
+    operationId: 'changePassword',
+    method: 'POST',
+    path: '/auth/password',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['auth'],
   },
   createProject: {
     operationId: 'createProject',

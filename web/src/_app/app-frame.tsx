@@ -45,6 +45,19 @@ export function AppFrame({ children }: AppFrameProps) {
         <Link className="am-app__nav" href="/knowledge-base">
           База знаний
         </Link>
+        {/*
+         * `R-26`, `W39-REVOKE`. The password screen is where a reviewer revokes their own
+         * credentials, and it is in the frame for the reason the two links above it are: a
+         * screen nothing points at is a screen a reviewer reaches only by typing the
+         * address, and the one thing an account guard must not be is hard to find. It is
+         * shown to everybody rather than only to an open session, because the frame is a
+         * server component that reads no cookie and a link that appeared and vanished with
+         * a session would be chrome that moves under a reviewer; the screen itself says
+         * what to do when there is no session.
+         */}
+        <Link className="am-app__nav" href="/account/password">
+          Смена пароля
+        </Link>
         <Link className="am-app__signin" href="/login">
           Вход
         </Link>

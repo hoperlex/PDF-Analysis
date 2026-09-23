@@ -45,23 +45,29 @@ from auditmanager.ingest import MAX_BYTES
 #: presents is minted from it below.
 DEPLOYMENT_SECRET = "size-guard-static-token"
 
-def _minted_credential(secret: str, login: str) -> str:
-    """A credential minted with this suite's deployment secret.
+_STATIC_TOKEN_CACHE: str | None = None
 
-    `W34-API` replaced the seam's body: the configured string is the signing material and
-    is no longer a credential. The subject is this suite's own -- what these cases are
-    about is behind the seam, not who the caller is.
+
+def static_token() -> str:
+    """A credential this lane's API accepts, for an account this lane really has.
+
+    **Lazy and memoised on purpose.** It opens a database connection, and doing that at
+    import time would turn a lane whose services are not up into a *collection* error --
+    which reads as a broken suite rather than as an absent lane.
+
+    `W39-REVOKE`: a credential is refused unless the account it names exists and still
+    accepts that credential's generation, so this suite's old habit of minting for an
+    identity it invented is now presenting something the seam is correct to reject. The row
+    is written, the epoch is read back out of it, and the credential is minted from what the
+    database says. See ``tests/support/accounts.py``.
     """
-    from auditmanager.api.security import Subject, build_signer
+    global _STATIC_TOKEN_CACHE
+    if _STATIC_TOKEN_CACHE is None:
+        from am_test_accounts import provisioned_credential
 
-    signer = build_signer({API_TOKEN_VARIABLE: secret})
-    assert signer is not None, "this suite's own secret derives a signing key"
-    return signer.issue(
-        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991T", login=login)
-    ).token
+        _STATIC_TOKEN_CACHE = provisioned_credential(DEPLOYMENT_SECRET, "size-guard-suite")
+    return _STATIC_TOKEN_CACHE
 
-
-STATIC_TOKEN = _minted_credential(DEPLOYMENT_SECRET, "size-guard-suite")
 
 #: Between the two limits, with room for the multipart framing on either side. Asserted
 #: below rather than trusted: if either limit moves, the window may close or this value
@@ -86,7 +92,7 @@ def _upload(app, project_uid: str, payload: bytes):
     return app.client.post(
         f"/projects/{project_uid}/documents",
         headers={
-            "Authorization": f"Bearer {STATIC_TOKEN}",
+            "Authorization": f"Bearer {static_token()}",
             "Idempotency-Key": f"size-{uuid.uuid4().hex[:12]}",
             "Content-Type": f"multipart/form-data; boundary={boundary}",
         },
@@ -126,7 +132,7 @@ def project_uid(app) -> str:
     response = app.client.post(
         "/projects",
         headers={
-            "Authorization": f"Bearer {STATIC_TOKEN}",
+            "Authorization": f"Bearer {static_token()}",
             "content-type": "application/json",
             "Idempotency-Key": f"proj-{uuid.uuid4().hex[:12]}",
         },

@@ -69,15 +69,30 @@
  *
  * ## The reserved segment
  *
- * `/bff/v1/session` and `/bff/v1/session/end` are this tier's own, are answered here, and
- * are **never forwarded**: no contract path begins `session`, and a forwarder that passed
- * them through would put a password on the wire to an operation that does not exist.
+ * `/bff/v1/session`, `/bff/v1/session/end` and `/bff/v1/session/password` are this tier's
+ * own, are answered here, and are **never forwarded**: no contract path begins `session`,
+ * and a forwarder that passed them through would put a password on the wire to an operation
+ * that does not exist.
  *
  * The exchange itself is a forward like any other — `POST /auth/token` — with one
  * difference that is the whole point of doing it here: the answer's body is read in this
  * process and is not returned. The browser receives a `303` and an opaque, `HttpOnly`
  * cookie. The minted token never crosses the network to the browser, so it is in no
  * bundle, no `localStorage` and no script's reach.
+ *
+ * `POST /bff/v1/session/password` is the same shape for the same reason, and the reason is
+ * sharper there. `changePassword` answers with a **credential** — it has to, because it
+ * revokes the one the caller presented in the act of succeeding — so a browser that reached
+ * `/auth/password` through the catch-all would be handed a live credential in a page body.
+ * That is exactly what `JUDGE-SEC` drove against `issueToken`, which is why the whole `auth`
+ * segment is refused to the browser. Here the Node process reads the replacement, swaps it
+ * into the register under a **new** session id, and answers a redirect and a cookie.
+ *
+ * **The old session row is deleted rather than updated**, and the cookie carries a new
+ * number. The credential it held is dead the instant the API answers, so a row still naming
+ * it is a row that authorises nothing; and a session id that survives a credential change is
+ * one identifier standing for two credentials, which is the kind of thing that later turns
+ * out to have been reused somewhere.
  *
  * This file is deliberately thin. The forwarding rules — the two header allowlists, the
  * path-segment check, the verbatim status and body — are in
@@ -100,6 +115,7 @@ import {
   readSessionId,
   requestIsSecure,
   sessionCookie,
+  subjectOf,
 } from '../../session/store';
 
 /**
@@ -119,8 +135,14 @@ const EXCHANGE_SEGMENT = 'auth';
 /** The second segment that ends a session, so the two intents are two addresses. */
 const SESSION_END_SEGMENT = 'end';
 
+/** The second segment that changes the password, for the same reason: one intent, one address. */
+const SESSION_PASSWORD_SEGMENT = 'password';
+
 /** The exchange the API publishes, addressed by path so no generated import is needed. */
 const EXCHANGE_SEGMENTS = ['auth', 'token'] as const;
+
+/** The password change the API publishes, addressed the same way and for the same reason. */
+const CHANGE_PASSWORD_SEGMENTS = ['auth', 'password'] as const;
 
 /**
  * The three strings the redirect answers are built from, and why they are written here
@@ -139,8 +161,28 @@ const SIGN_IN_SCREEN = '/login';
 const AFTER_SIGN_IN = '/projects';
 const REFUSAL_PARAM = 'refusal';
 
+/**
+ * The password screen's own three, held here for the reason the four above are: this module
+ * is the one the deployment credential reaches, and importing `@/features/change-password`
+ * would pull a React component tree — and, through `shared/ui`, a `'use client'` boundary —
+ * into the module that holds the secret, to obtain three constants.
+ * `web/tests/unit/session/bff-session.test.ts` imports both sides and asserts every outcome
+ * this handler can answer is one that screen can render.
+ */
+const CHANGE_PASSWORD_SCREEN = '/account/password';
+const OUTCOME_PARAM = 'outcome';
+
 /** The four ways the exchange refuses. The sign-in feature translates each one. */
 type Refusal = 'credentials' | 'validation' | 'unconfigured' | 'upstream';
+
+/**
+ * The six ways the password change can end, success included.
+ *
+ * Success is a member of the same set because a redirect has no body, so "it worked" has to
+ * survive as an address exactly as a refusal does; one set means one parameter and one
+ * translation function that cannot disagree with a second one.
+ */
+type ChangeOutcome = 'changed' | 'unchanged' | Refusal;
 
 interface RouteContext {
   /** Next 15 hands route params as a promise. */
@@ -278,6 +320,11 @@ function refuseSignIn(refusal: Refusal): Response {
   return seeOther(`${SIGN_IN_SCREEN}?${REFUSAL_PARAM}=${refusal}`);
 }
 
+/** Back to the password screen, saying how it ended. Carries a cookie only on success. */
+function reportChange(outcome: ChangeOutcome, cookie?: string): Response {
+  return seeOther(`${CHANGE_PASSWORD_SCREEN}?${OUTCOME_PARAM}=${outcome}`, cookie);
+}
+
 /**
  * Read the two fields out of a posted form.
  *
@@ -372,6 +419,136 @@ async function openTheSession(request: Request): Promise<Response> {
   return seeOther(AFTER_SIGN_IN, sessionCookie(id, minted.expires_in, requestIsSecure(request)));
 }
 
+/**
+ * Read the two passwords out of a posted form.
+ *
+ * Form-encoded only, exactly as the sign-in exchange is, and for a reason that is stronger
+ * here: this form carries two passwords, one of which is about to become live. Accepting a
+ * JSON body as well would invite the client-side call this design exists to avoid.
+ */
+async function postedPasswords(
+  request: Request,
+): Promise<{ readonly current: string; readonly next: string } | null> {
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return null;
+  }
+  const current = form.get('current_password');
+  const next = form.get('new_password');
+  if (typeof current !== 'string' || typeof next !== 'string') return null;
+  // Neither is trimmed. A password is bytes somebody typed, and stripping a space the
+  // reviewer meant to type would change the password behind their back — which is the one
+  // thing a password field may never do. The login above is trimmed because a login is a
+  // name and a leading space in one is always a copy-paste artifact.
+  if (current.length === 0 || next.length === 0) return null;
+  return { current, next };
+}
+
+/**
+ * Change the password, and replace the credential this tier holds with the one that comes back.
+ *
+ * The order is the whole of it. The API revokes every credential for the account **in the
+ * same write** that stores the new digest, so the moment it answers, the credential in the
+ * register is dead. If this function returned before swapping it, the very next request
+ * would meet `staleSession` and the reviewer would be signed out by a successful password
+ * change — indistinguishable, from the browser, from a failed one.
+ *
+ * The replacement never reaches the browser. It is read here, put in a new row, and what
+ * goes back is a redirect and an opaque cookie.
+ */
+async function changeThePassword(request: Request): Promise<Response> {
+  const sessionId = readSessionId(request.headers.get('cookie'));
+  const held = sessionId === null ? null : credentialOf(sessionId);
+  if (held === null) {
+    // No live session: there is no credential to present and nothing to revoke. Back to the
+    // sign-in screen rather than to the password screen, because signing in is the next
+    // thing to do and a password screen with no session can only refuse.
+    return seeOther(SIGN_IN_SCREEN, clearedSessionCookie(requestIsSecure(request)));
+  }
+  const subject = subjectOf(sessionId);
+  if (subject === null) return seeOther(SIGN_IN_SCREEN, clearedSessionCookie(requestIsSecure(request)));
+
+  const passwords = await postedPasswords(request);
+  if (passwords === null) return reportChange('validation');
+  if (passwords.current === passwords.next) {
+    // Refused here, before anything is sent, and refused independently by the API. The
+    // API's rule is the one that counts; this one means no request carrying two passwords
+    // goes out for nothing and the reviewer reads a Russian sentence rather than a
+    // translated API message.
+    return reportChange('unchanged');
+  }
+
+  let upstream: string;
+  try {
+    upstream = getApiUpstreamUrl();
+  } catch {
+    return reportChange('unconfigured');
+  }
+
+  // `getApiToken()` is deliberately NOT read here, and that is the difference from the
+  // exchange above. The exchange has no reviewer credential yet, so it forwards the
+  // deployment's; this operation is behind the seam and must present the REVIEWER's, which
+  // is what makes the API change that reviewer's password and no one else's. The deployment
+  // secret is the key the API signs with -- forwarding it would be the `W37CERT4-3` defect
+  // again, one operation over.
+  const correlationId = request.headers.get('x-correlation-id');
+  const headers = new Headers({ 'content-type': 'application/json', accept: 'application/json' });
+  if (correlationId !== null) headers.set('x-correlation-id', correlationId);
+
+  const answer = await forwardWithCredential(
+    new Request('http://web.invalid/bff/v1/auth/password', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        current_password: passwords.current,
+        new_password: passwords.next,
+      }),
+    }),
+    [...CHANGE_PASSWORD_SEGMENTS],
+    { upstream, token: held },
+  );
+
+  // 401 is both "that is not the current password" and "this credential is no longer
+  // accepted". One answer from the API, one outcome here: the reviewer is told the current
+  // password did not match, which is the reading that costs them nothing if it is the other
+  // one — they are about to meet the sign-in screen anyway.
+  if (answer.status === 401) return reportChange('credentials');
+  // 422 is the API's own copy of the "must differ" rule, plus the mechanical bounds.
+  if (answer.status === 422) return reportChange('unchanged');
+  if (answer.status !== 200) return reportChange('upstream');
+
+  let minted: MintedToken;
+  try {
+    minted = (await answer.json()) as MintedToken;
+  } catch {
+    return reportChange('upstream');
+  }
+  if (typeof minted.token !== 'string' || typeof minted.expires_in !== 'number') {
+    return reportChange('upstream');
+  }
+
+  let replacement: string;
+  try {
+    replacement = openSession(subject.login, minted.token, minted.expires_in);
+  } catch {
+    // A lifetime this tier will not hold is an answer it does not understand. The password
+    // HAS changed -- the API committed it -- so the honest report is not `upstream`: the old
+    // session is closed and the reviewer is sent to sign in with the new password rather
+    // than told nothing happened.
+    closeSession(sessionId);
+    return seeOther(SIGN_IN_SCREEN, clearedSessionCookie(requestIsSecure(request)));
+  }
+  // The old row last, and only once the new one exists. Deleting first would leave a window
+  // in which a concurrent request from the same browser met `staleSession`.
+  closeSession(sessionId);
+  return reportChange(
+    'changed',
+    sessionCookie(replacement, minted.expires_in, requestIsSecure(request)),
+  );
+}
+
 /** End the session: the register forgets the credential, the browser forgets the number. */
 function closeTheSession(request: Request): Response {
   closeSession(readSessionId(request.headers.get('cookie')));
@@ -384,6 +561,9 @@ async function ownDoor(request: Request, segments: readonly string[]): Promise<R
   if (segments.length === 1) return openTheSession(request);
   if (segments.length === 2 && segments[1] === SESSION_END_SEGMENT) {
     return closeTheSession(request);
+  }
+  if (segments.length === 2 && segments[1] === SESSION_PASSWORD_SEGMENT) {
+    return changeThePassword(request);
   }
   return noSuchDoor(request);
 }

@@ -167,23 +167,29 @@ def _get(router: Any, target: str) -> dict[str, Any]:
 #: presents is minted from it below.
 _DEPLOYMENT_SECRET = "p02-journey-static-token"
 
-def _minted_credential(secret: str, login: str) -> str:
-    """A credential minted with this suite's deployment secret.
+_STATIC_TOKEN_CACHE: str | None = None
 
-    `W34-API` replaced the seam's body: the configured string is the signing material and
-    is no longer a credential. The subject is this suite's own -- what these cases are
-    about is behind the seam, not who the caller is.
+
+def _static_token() -> str:
+    """A credential this lane's API accepts, for an account this lane really has.
+
+    **Lazy and memoised on purpose.** It opens a database connection, and doing that at
+    import time would turn a lane whose services are not up into a *collection* error --
+    which reads as a broken suite rather than as an absent lane.
+
+    `W39-REVOKE`: a credential is refused unless the account it names exists and still
+    accepts that credential's generation, so this suite's old habit of minting for an
+    identity it invented is now presenting something the seam is correct to reject. The row
+    is written, the epoch is read back out of it, and the credential is minted from what the
+    database says. See ``tests/support/accounts.py``.
     """
-    from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
+    global _STATIC_TOKEN_CACHE
+    if _STATIC_TOKEN_CACHE is None:
+        from am_test_accounts import provisioned_credential
 
-    signer = build_signer({API_TOKEN_VARIABLE: secret})
-    assert signer is not None, "this suite's own secret derives a signing key"
-    return signer.issue(
-        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991T", login=login)
-    ).token
+        _STATIC_TOKEN_CACHE = provisioned_credential(_DEPLOYMENT_SECRET, "p02-query-suite")
+    return _STATIC_TOKEN_CACHE
 
-
-_STATIC_TOKEN = _minted_credential(_DEPLOYMENT_SECRET, "p02-query-suite")
 
 
 class _Built:
@@ -226,7 +232,7 @@ def _client(router: Any) -> Any:
 
 def _request(router: Any, target: str) -> Any:
     return _client(router).get(
-        target, headers={"Authorization": f"Bearer {_STATIC_TOKEN}"}
+        target, headers={"Authorization": f"Bearer {_static_token()}"}
     )
 
 

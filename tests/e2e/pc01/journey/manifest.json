@@ -211,6 +211,36 @@
         }
       ],
       "follow": null
+    },
+    {
+      "name": "change-password",
+      "path": "/account/password",
+      "page_module": "web/src/app/account/password/page.tsx",
+      "$comment": [
+        "The password screen, R-26, added by W39-REVOKE -- which owns this file this wave,",
+        "unlike W38-KB, which had it in its forbidden_hotspots and correctly stopped.",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission -- the same claim the",
+        "sign-in entry above makes, for the same reason. The screen renders a `<form>` and",
+        "asks the API nothing until it is submitted, and the submission is a browser",
+        "navigation to `/bff/v1/session/password`, which is this tier's own reserved segment",
+        "and not a contract path. The contract operation it reaches -- changePassword, POST",
+        "/auth/password -- is called by the NODE process, never by the browser: the whole",
+        "`auth` segment is refused to a browser precisely because that operation answers with",
+        "a credential, and a credential in a page body is what JUDGE-SEC drove out of",
+        "issueToken.",
+        "",
+        "So a declared call here would be false in the way this manifest is least able to",
+        "tolerate: the run-time walk asserts what the BROWSER requested, and the browser",
+        "requests nothing of the API on this screen.",
+        "",
+        "`follow: null` -- it captures no identity a later step needs, and it is deliberately",
+        "not the last thing the write half does: succeeding here revokes every credential the",
+        "account holds, so a journey that changed the password mid-walk would be walking with",
+        "a dead one."
+      ],
+      "expects_api": [],
+      "follow": null
     }
   ],
   "write": {

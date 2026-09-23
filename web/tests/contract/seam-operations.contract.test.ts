@@ -58,6 +58,12 @@ const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> = [
   // knowledge base reads. `listDecisionHistory` answers for one finding and this
   // answers for all of them; it creates nothing and `ADR-0012` calls it a projection.
   ['listDecisions', 'GET', '/decisions'],
+  // W39-REVOKE, 2026-09-23: `R-26`. The password change, and with it the only way this
+  // surface can take a credential back -- the account's credential generation is raised by
+  // the same write that stores the new digest, so every credential minted under the old
+  // password stops being accepted. It answers `IssueTokenResponse`, because it revokes the
+  // caller's own credential in the act of succeeding and has to hand back the replacement.
+  ['changePassword', 'POST', '/auth/password'],
 ];
 
 const document = JSON.parse(readText(CONTRACT_PATH)) as {
