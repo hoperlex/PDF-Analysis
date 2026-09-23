@@ -1,7 +1,8 @@
 # Current state
 
-> **Updated 2026-09-23 by the integrator, at `6aeda82`.** `AGENTS.md` §1.1 makes this file the
-> first thing every agent reads.
+> **Updated 2026-09-23 by the integrator, at `d8ef5f9`** (wave 41). `AGENTS.md` §1.1 makes this
+> file the first thing every agent reads, and **this line moving is now part of closing a wave**,
+> for the reason the rest of this block records.
 >
 > **It has now gone stale twice, and the second time was inside the note written to record the
 > first.** That note — kept below — says the file sat nine waves out of date and that every
@@ -21,15 +22,23 @@
 
 ## Where the programme is, 2026-09-23
 
-**`origin/main` = `origin/dev` = `origin/planning/prototype-roadmap` = `6aeda82`, tagged
-`alpha-w40` — a gated tip, not a certification.** All three refs are equal, and that sentence is
+**`origin/main` = `origin/dev` = `origin/planning/prototype-roadmap` = `d8ef5f9`, tagged
+`alpha-w41` — a gated tip, not a certification.** All three refs are equal, and that sentence is
 part of the state: for waves 39 and 40 they were not, `dev` sat **41 commits** behind `main`, and
 a peer session wrote a pre-flight review for the owner measured on the stale one (`D-77`).
 
-`make gate` → **`GATE OK`**: battery **2315 passed / 5 skipped / 1 warning / 169 subtests**,
-foundation **35**, frontend **1014 in 72 files**. Read from the `GATE OK` line of
-`/root/w40-logs/integrator-gate2.log`, taken 2026-09-23 14:29 at this tip — not from a status a
-harness returned (`OPERATING_CONSTRAINTS.md` §4.62).
+`make gate` → **`GATE OK`**: battery **2361 passed / 5 skipped / 1 warning / 169 subtests**,
+foundation **35**, frontend **1022 in 72 files**. Read from the `GATE OK` line of
+`/root/w41-integrator-gate2.log`, taken at this commit with a clean tree — not from a status a
+harness returned (`OPERATING_CONSTRAINTS.md` §4.62). Wave 40's figures were 2315 / 35 / 1014.
+
+**Wave 41 was the debt wave.** A decision is now attributed to the reviewer who made it rather
+than to the constant `"local-reviewer"` (`D-78`), a proxy URL with no host is refused at
+construction instead of retried as an outage (`D-72`), an existence check no longer costs a full
+parent read (`D-74`), and the guards were made to reach the states that carry defects — the
+language guard rendered **18 of 31** contract members and the contrast census reached **106 of
+137** colour-bearing rules, both now assertions rather than hand-written lists (`D-69`, three of
+seven instances closed at the cause).
 
 **The application has authorization, and as of wave 40 it has all four guards around it.**
 Wave 34 added `POST /auth/token`, a sign-in screen and migration `0006_app_user`. Wave 39 added
