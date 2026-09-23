@@ -122,13 +122,24 @@ def normalize_login(raw: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class UserRecord:
-    """One user, as anything outside the repository is allowed to see them."""
+    """One user, as anything outside the repository is allowed to see them.
+
+    ``token_epoch`` is the generation of credentials this account currently accepts. It is
+    on the public record and not beside the digest, because it is not credential material:
+    it is a small integer that says nothing about the password and is *meant* to travel --
+    the seam stamps it into every credential it mints and compares it on every request.
+    Reading it tells an attacker how many times this account has been revoked and nothing
+    else, and hiding it would mean the one value the seam must check on every request could
+    only be reached through the one statement that also reads the digest.
+    """
 
     user_uid: UserUid
     login: str
     is_default_credential: bool
     created_at: datetime
     password_updated_at: datetime
+    token_epoch: int
+    token_epoch_updated_at: datetime
 
 
 def is_user_uid(value: object) -> bool:

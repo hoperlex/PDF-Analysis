@@ -8,7 +8,7 @@ never under ``/api/v1``.* Three consequences, each of them a decision and not an
   again", and the failure mode is a health check that starts returning 401 in a deployment.
   `W13-SEAL` section 8.3 names exactly that: *if it inherits an app-wide dependency it stops
   answering and wave 14 discovers that in a deployment.*
-* **it is not on the contract document.** The contract declares seventeen operations and
+* **it is not on the contract document.** The contract declares eighteen operations and
   ``web/tests/contract/openapi-drift.contract.test.ts`` counts them; `W13-CONF`'s
   ``test_an_extra_operation_is_caught`` is the case that catches this plane leaking onto the
   API document. ``openapi_url=None`` so this app publishes no document of its own either --

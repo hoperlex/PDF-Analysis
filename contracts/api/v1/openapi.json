@@ -4,7 +4,7 @@
     "title": "AuditManager PC-01 API",
     "version": "1.0.0-draft.1",
     "summary": "The exact PC-01 journey: one project, one AR PDF, one text-consistency run, one CSV.",
-    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, roles, rate limiting, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates, other than the credential exchange the authorization seam needs and `W34-CONTRACT` adds below.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-two-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.\n\nResealed 2026-09-18 under owner ruling `R-5`, which closes `DEBT_REGISTER.md` `D-16` and `D-21` together. Three list operations -- `listDocuments`, `listVersions` and `listRuns` -- make published work reachable after a page reload: before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. And `RunStatus` gained `cost_micros`, `cost_basis` and `model_call_count`, so what a run spent is readable by a user for the first time. Each listing is a `GET` of the collection its parent creates into, pages with the same `cursor` and `limit` and returns the same `{items, page}` envelope as `listProjects`. No error code was added: an unknown parent is the catalog's `not_found` and a malformed cursor is `validation_failed`.\n\nAmended 2026-09-18 under owner ruling `R-8`, which closes `DEBT_REGISTER.md` `D-18`. The domain catalog gains one code, `staged_upload_lost`, and the `ErrorCode` enum below carries it: twenty-one becomes twenty-two. Two blob-store failures demanding opposite operator responses -- *stop, the instance was restored wrong* against *retry the upload* -- both answered `conflict` with `aggregate_type` `Blob`, so their envelopes were byte-identical apart from `correlation_id`. A widened `safe_detail_keys` was offered and rejected, because a detail key cannot fix `retryable`: the envelope reads that flag from the catalog for the reported code, so only a separate code carries a separate value. **No path, operation or schema changed** -- that amendment moved none of the three counts -- and the new code travels on the `503` every staging write already declares.\n\nResealed 2026-09-22 by `W34-CONTRACT`. `R-3` declared the seam and left no way to get through it: the document required a bearer credential on every operation and described no operation that hands one out, so the only caller this surface admitted was one already holding a credential from somewhere the document does not name. One operation closes that -- `issueToken`, `POST /auth/token` -- and it is a credential *exchange* and nothing more: a login and a password in, an opaque credential and its lifetime out. It is the single operation whose `security` is the empty requirement, because requiring a credential to obtain one is a closed door with a handle on the inside.\n\n**What this reseal deliberately does not add, because `T-6` forbids it.** No issuer, no discovery URL, no flow, no `bearerFormat`, and no role, subject or capability vocabulary. The returned `token` is a string this document states no structure for; the deployment decides what it is, and the operations keep working when that decision changes. No error code was added either: an unaccepted login and password pair is the catalog's `authentication_required`, a malformed body is `validation_failed`. `permission_denied` is **not** declared here, because it means an authenticated subject refused a resource and this operation has no authenticated subject in it -- it is the operation that produces one. That reseal added one path, one operation and two schemas, and the sentence that stated the totals it produced has been rewritten as this delta: a reseal's own arithmetic stops being true at the next reseal, and `tests/contract/api_v1/test_surface_counts_in_prose.py` reads every such claim in this block against the live document. The totals are stated once, below.\n\nResealed 2026-09-22 by `W38-KB` under owner ruling `R-24`, which was ruled against the recommendation the owner was given: a client-side walk over runs and findings is cheaper and lives only as long as the alpha, and a listing operation costs a reseal and outlives it. One operation closes it -- `listDecisions`, `GET /decisions` -- because `listDecisionHistory` reads the history of **one** finding and nothing in this document enumerated decisions at all, so the knowledge base `R-23` requires had no source but a walk over every run. It is a projection in the sense `ADR-0012` fixes and creates nothing. Two component schemas were added, `DecisionRecord` and `DecisionRecordPage`; no parameter was, because `category` and `verdict` already exist and already mean the finding's category and the finding's current verdict. No error code was added: a malformed cursor is the catalog's `validation_failed`, an absent or refused credential is `authentication_required`, and there is no `404` on it at all -- the path addresses no parent identity, so an empty journal is an empty page. The surface moves to fourteen paths, seventeen operations and fifty schemas.",
+    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, roles, rate limiting, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates, other than the credential exchange the authorization seam needs and `W34-CONTRACT` adds below.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-two-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.\n\nResealed 2026-09-18 under owner ruling `R-5`, which closes `DEBT_REGISTER.md` `D-16` and `D-21` together. Three list operations -- `listDocuments`, `listVersions` and `listRuns` -- make published work reachable after a page reload: before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. And `RunStatus` gained `cost_micros`, `cost_basis` and `model_call_count`, so what a run spent is readable by a user for the first time. Each listing is a `GET` of the collection its parent creates into, pages with the same `cursor` and `limit` and returns the same `{items, page}` envelope as `listProjects`. No error code was added: an unknown parent is the catalog's `not_found` and a malformed cursor is `validation_failed`.\n\nAmended 2026-09-18 under owner ruling `R-8`, which closes `DEBT_REGISTER.md` `D-18`. The domain catalog gains one code, `staged_upload_lost`, and the `ErrorCode` enum below carries it: twenty-one becomes twenty-two. Two blob-store failures demanding opposite operator responses -- *stop, the instance was restored wrong* against *retry the upload* -- both answered `conflict` with `aggregate_type` `Blob`, so their envelopes were byte-identical apart from `correlation_id`. A widened `safe_detail_keys` was offered and rejected, because a detail key cannot fix `retryable`: the envelope reads that flag from the catalog for the reported code, so only a separate code carries a separate value. **No path, operation or schema changed** -- that amendment moved none of the three counts -- and the new code travels on the `503` every staging write already declares.\n\nResealed 2026-09-22 by `W34-CONTRACT`. `R-3` declared the seam and left no way to get through it: the document required a bearer credential on every operation and described no operation that hands one out, so the only caller this surface admitted was one already holding a credential from somewhere the document does not name. One operation closes that -- `issueToken`, `POST /auth/token` -- and it is a credential *exchange* and nothing more: a login and a password in, an opaque credential and its lifetime out. It is the single operation whose `security` is the empty requirement, because requiring a credential to obtain one is a closed door with a handle on the inside.\n\n**What this reseal deliberately does not add, because `T-6` forbids it.** No issuer, no discovery URL, no flow, no `bearerFormat`, and no role, subject or capability vocabulary. The returned `token` is a string this document states no structure for; the deployment decides what it is, and the operations keep working when that decision changes. No error code was added either: an unaccepted login and password pair is the catalog's `authentication_required`, a malformed body is `validation_failed`. `permission_denied` is **not** declared here, because it means an authenticated subject refused a resource and this operation has no authenticated subject in it -- it is the operation that produces one. That reseal added one path, one operation and two schemas, and the sentence that stated the totals it produced has been rewritten as this delta: a reseal's own arithmetic stops being true at the next reseal, and `tests/contract/api_v1/test_surface_counts_in_prose.py` reads every such claim in this block against the live document. The totals are stated once, below.\n\nResealed 2026-09-22 by `W38-KB` under owner ruling `R-24`, which was ruled against the recommendation the owner was given: a client-side walk over runs and findings is cheaper and lives only as long as the alpha, and a listing operation costs a reseal and outlives it. One operation closes it -- `listDecisions`, `GET /decisions` -- because `listDecisionHistory` reads the history of **one** finding and nothing in this document enumerated decisions at all, so the knowledge base `R-23` requires had no source but a walk over every run. It is a projection in the sense `ADR-0012` fixes and creates nothing. Two component schemas were added, `DecisionRecord` and `DecisionRecordPage`; no parameter was, because `category` and `verdict` already exist and already mean the finding's category and the finding's current verdict. No error code was added: a malformed cursor is the catalog's `validation_failed`, an absent or refused credential is `authentication_required`, and there is no `404` on it at all -- the path addresses no parent identity, so an empty journal is an empty page. That reseal added one path, one operation and two schemas.\n\nResealed 2026-09-23 by `W39-REVOKE` under owner ruling `R-26`, which rules four account guards into the alpha. This is the one of them that **cannot be added later**: the other three make an account weak now and are fixed by adding them, while a credential already issued is permanent until it expires, and no later work reaches one sitting in somebody's browser. One operation closes it -- `changePassword`, `POST /auth/password` -- and it carries revocation with it, because the two share a mechanism: the account's credential generation is raised by the same write that stores the new digest, which is what makes every credential minted under the old password stop being accepted.\n\n**What this does not add.** No response schema: a credential and its lifetime is one shape and `IssueTokenResponse` already names it. No error code: a wrong current password is the catalog's `authentication_required` and a new password that is the current one is `validation_failed`. No revocation operation: taking credentials away from accounts whose passwords nobody is changing is an operator's action on the deployment, and publishing it would require deciding who may revoke whom -- the role vocabulary `T-6` forbids inventing here. One path, one operation and one schema. The surface moves to fifteen paths, eighteen operations and fifty-one schemas.",
     "contact": {
       "name": "docs/program/P02_SEAMS.md - seam S8"
     },
@@ -97,6 +97,63 @@
           },
           "401": {
             "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/auth/password": {
+      "post": {
+        "operationId": "changePassword",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change the signed-in account's password and revoke its old credentials.",
+        "description": "Two things happen here and they are one write. The account's password becomes the one supplied, and every credential this deployment ever minted for that account stops being accepted -- **including the credential this request presented**. A password change that leaves the old password's credentials working is a password change in name only, so the two are not offered separately and cannot land separately.\n\n**Whose password changes is decided by the credential, never by the body.** There is no login property and there will not be one: the caller may change their own password and no other, and a login in the body would be an operation one caller could aim at another.\n\n**The response is the replacement credential**, minted after the change, and the only one this account now accepts. It is answered rather than left to a second exchange because the caller's own credential was revoked by this very request: a `204` would leave them holding something already dead with no way to tell that from a failure.\n\nThe `403` is declared because every operation behind the seam declares it: `permission_denied` means an authenticated subject was refused, a generated client needs a typed shape for it on every authorized operation, and an operation that omitted it would be claiming a property about a role model this document does not describe. This surface raises it nowhere, here included.\n\nNothing is created, so there is no idempotency key. A repeat of the same request is refused by its own `current_password`, which is no longer current -- it is not replayed and there is no `409` here.\n\nRevocation has no operation of its own on this surface. Ending a pilot -- taking credentials away from accounts whose passwords nobody is changing -- is an operator's action taken on the deployment, and publishing it would require deciding who may revoke whom, which is the role vocabulary this document deliberately does not have.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The password was changed. Every credential minted for this account before this response -- including the one this request presented -- is refused from now on. The body carries the replacement.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -2601,6 +2658,28 @@
             "type": "integer",
             "description": "How long the credential stays valid, in seconds counted from this response. A lifetime and never a clock reading, so no clock has to agree between the two sides. A caller exchanges again before it elapses; an elapsed credential is `authentication_required` like any other the deployment does not accept.",
             "minimum": 1
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "description": "The password the account holds now, proved before anything is changed. It appears in no response body, no error detail and no diagnostic record. A value that is not this account's is `authentication_required` -- the same refusal a missing credential gets, because 'this deployment does not accept this' is one fact.",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "new_password": {
+            "type": "string",
+            "description": "The password the account will hold. The bounds are mechanical, not a policy: this surface declares no minimum length, no complexity rule, no history and no expiry. A value equal to `current_password` is `validation_failed`, because a change that changes nothing would report a password as changed when it was not.",
+            "minLength": 1,
+            "maxLength": 1024
           }
         }
       }

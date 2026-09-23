@@ -125,7 +125,7 @@ class TestAMissingTokenRefusesAtConstruction:
         """
         application = build_application(environ=_base_env())
         assert application.settings.api_token == _A_TOKEN
-        assert len(application.router.routes) == 17
+        assert len(application.router.routes) == 18
 
     def test_settings_alone_refuses_too(self) -> None:
         """The refusal is in ``load``, so anything that resolves settings inherits it."""

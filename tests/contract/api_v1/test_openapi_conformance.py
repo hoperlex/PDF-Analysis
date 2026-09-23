@@ -86,17 +86,19 @@ surface = conformance.surface
 
 #: `ALPHA_ROADMAP.md` §3 `T-1` and the measurement in the `W13-CONF` brief.
 FROZEN_OPENAPI_VERSION = "3.1.0"
-FROZEN_OPERATION_COUNT = 17
-FROZEN_SCHEMA_COUNT = 50
+FROZEN_OPERATION_COUNT = 18
+FROZEN_SCHEMA_COUNT = 51
 FROZEN_SERVER_URL = "/api/v1"
 
-#: The seventeen operations, written out. Deliberately not derived from the document: an
+#: The eighteen operations, written out. Deliberately not derived from the document: an
 #: operation that disappears from the contract has to fail *here*, not silently reduce the
 #: size of the thing both sides are compared through.
 #:
 #: Twelve until the `R-5` reseal of 2026-09-18 added the three listings, fifteen until
-#: `W34-CONTRACT` added the credential exchange on 2026-09-22, and sixteen until `W38-KB`
-#: added the decision journal under `R-24` the same day.
+#: `W34-CONTRACT` added the credential exchange on 2026-09-22, sixteen until `W38-KB`
+#: added the decision journal under `R-24` the same day, and seventeen until `W39-REVOKE`
+#: added the password change under `R-26` on 2026-09-23 -- the operation that makes a
+#: credential retractable.
 FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("POST", "/projects", "createProject"),
     ("GET", "/projects", "listProjects"),
@@ -115,12 +117,16 @@ FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("GET", "/versions/{version_uid}/runs", "listRuns"),
     ("POST", "/auth/token", "issueToken"),
     ("GET", "/decisions", "listDecisions"),
+    ("POST", "/auth/password", "changePassword"),
 )
 
-#: The fifty `components.schemas` keys, written out. Forty-three until the `R-5`
+#: The fifty-one `components.schemas` keys, written out. Forty-three until the `R-5`
 #: reseal, which added `DocumentVersionPage`, `RunStatusPage` and `CostBasis`,
-#: forty-six until `W34-CONTRACT` added `IssueTokenRequest` and `IssueTokenResponse`, and
-#: forty-eight until `W38-KB` added `DecisionRecord` and `DecisionRecordPage`.
+#: forty-six until `W34-CONTRACT` added `IssueTokenRequest` and `IssueTokenResponse`,
+#: forty-eight until `W38-KB` added `DecisionRecord` and `DecisionRecordPage`, and fifty
+#: until `W39-REVOKE` added `ChangePasswordRequest`. That reseal added **no** response
+#: schema: `changePassword` answers `IssueTokenResponse`, because a credential and its
+#: lifetime is one shape and the document already had a name for it.
 #: These are the names the
 #: Pydantic models must carry (`ALPHA_ROADMAP.md` §4, stage 2: *"named exactly as the
 #: contract's `components.schemas` keys"*). If FastAPI splits a model into `X-Input` and
@@ -158,6 +164,7 @@ FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
         "InputManifestEntry",
         "IssueTokenRequest",
         "IssueTokenResponse",
+        "ChangePasswordRequest",
         "ModelCallId",
         "ObservationProvenance",
         "PageInfo",
@@ -219,14 +226,14 @@ class TestTheFrozenDocument:
     def test_declares_openapi_3_1_0(self, contract: dict[str, Any]) -> None:
         assert contract["openapi"] == FROZEN_OPENAPI_VERSION
 
-    def test_declares_exactly_fifteen_operations(self, contract: dict[str, Any]) -> None:
+    def test_declares_exactly_eighteen_operations(self, contract: dict[str, Any]) -> None:
         index = conformance.operation_index(contract)
         assert len(index) == FROZEN_OPERATION_COUNT
         assert index == {
             (method, path): operation_id for method, path, operation_id in FROZEN_OPERATIONS
         }
 
-    def test_declares_exactly_the_forty_three_schemas(self, contract: dict[str, Any]) -> None:
+    def test_declares_exactly_the_fifty_one_schemas(self, contract: dict[str, Any]) -> None:
         names = set(contract["components"]["schemas"])
         assert len(names) == FROZEN_SCHEMA_COUNT
         assert names == set(FROZEN_SCHEMA_NAMES), {

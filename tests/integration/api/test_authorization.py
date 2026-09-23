@@ -92,6 +92,12 @@ GUARDED = (
     # path, so it is the first one whose 401 cannot be mistaken for the 404 an unknown
     # parent would produce. That makes the row below the only thing asserting it.
     ("listDecisions", "GET", "/decisions"),
+    # `R-26`, `W39-REVOKE`. The password change is behind the seam like everything else, and
+    # its row here matters more than most: it is the operation that takes credentials away,
+    # so an unauthenticated caller reaching it would be able to revoke an account's
+    # credentials without holding one. The request below carries no body on purpose --
+    # authorization must refuse it before the body model is ever parsed.
+    ("changePassword", "POST", "/auth/password"),
 )
 
 #: The catalog's own summary for the code, as a literal. `W13-SEAL` section 8.1 requires
@@ -157,15 +163,15 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Sixteen, not fifteen.
+    """One request per guarded operation, with no credential. Seventeen, not sixteen.
 
-    The set comparison is what makes this a sweep rather than a list: a seventeenth
+    The set comparison is what makes this a sweep rather than a list: an eighteenth
     operation is either written into ``GUARDED`` and swept, or named in
     :data:`~auditmanager.api.security.UNAUTHENTICATED_OPERATIONS` and reported by
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 16
+    assert len(GUARDED) == 17
     assert UNAUTHENTICATED_OPERATIONS == {"issueToken"}
     assert {operation for operation, _, _ in GUARDED} | UNAUTHENTICATED_OPERATIONS == (
         router.operation_ids
@@ -544,28 +550,51 @@ def test_the_exchange_declares_the_empty_requirement(router: Surface) -> None:
     assert b'"security":[]' in served.content.replace(b", ", b",").replace(b": ", b":")
 
 
-def test_a_subject_is_published_for_the_next_session_and_read_by_nobody_now(
+def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
     router: Surface,
 ) -> None:
-    """The seam decides *who*; it does not decide *what they may do*.
+    """The seam decides *who*; it still does not decide *what they may do*.
 
     ``request.state.subject`` carries the verified subject, so the day roles exist there
-    is something to attach them to. That it is currently read by nothing is the `T-6`
-    boundary this session was told not to cross, and this asserts the boundary from both
-    sides: the value is there, and no router module reads it.
+    is something to attach them to. **This test was named
+    ``..._and_read_by_nobody_now`` and asserted that no router module contained the string
+    ``state.subject``.** `W39-REVOKE` made that formulation blind: ``changePassword`` reads
+    the subject -- it must, or the account whose password changes would have to be named in
+    a body, which is an operation one reviewer could aim at another -- and it reads it
+    through :data:`~auditmanager.api.security.CurrentSubject`, so the old string check would
+    have gone on passing while the thing it described stopped being true.
+
+    So the boundary is asserted where it actually is, and in the form that can still fail:
+
+    * no router reaches into ``request.state`` itself, because a router that read the
+      request's state bag could read anything the seam ever puts there;
+    * exactly one router module depends on the seam's accessor, and it is the one that
+      changes a password -- an operation about *identity*, not about permission;
+    * the value on the request is the whole verified subject, epoch included.
     """
     import pathlib
 
     routers = pathlib.Path("src/auditmanager/api/routers")
-    readers = [
+    raw_readers = [
         path.name
         for path in routers.rglob("*.py")
         if "state.subject" in path.read_text(encoding="utf-8")
     ]
-    assert readers == [], (
-        f"{readers} read the subject off the request. Deciding what a subject may do is "
-        "the next session's work (roles), and doing it here would make this seam an "
-        "authorization model nobody specified."
+    assert raw_readers == [], (
+        f"{raw_readers} read the subject off the request state directly. The seam publishes "
+        "it through `CurrentSubject`, which is one place to change and one place to audit; "
+        "a router reading `request.state` can read whatever else is ever put there."
+    )
+    subject_readers = sorted(
+        path.name
+        for path in routers.rglob("*.py")
+        if "CurrentSubject" in path.read_text(encoding="utf-8")
+    )
+    assert subject_readers == ["auth.py"], (
+        f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "
+        "the seam's own vocabulary and `changePassword` needs it; deciding WHAT they may do "
+        "is the roles work `T-6` says must not be invented here, and a second operation "
+        "reaching for the subject is where that would start."
     )
 
     seen: list = []
@@ -583,5 +612,163 @@ def test_a_subject_is_published_for_the_next_session_and_read_by_nobody_now(
     assert client.get("/projects", headers={"Authorization": f"Bearer {TEST_TOKEN}"}).status_code == 200
     assert seen and seen[0] is not None, seen
     assert seen[0] == Subject(
-        user_uid=TEST_SUBJECT.user_uid, login=TEST_SUBJECT.login
+        user_uid=TEST_SUBJECT.user_uid,
+        login=TEST_SUBJECT.login,
+        # The epoch is part of what the seam publishes, because it is part of what the seam
+        # verified: the credential named this generation and the account confirmed it.
+        # Comparing the whole `Subject` rather than two of its fields is what makes a fourth
+        # field somebody adds later visible here rather than silent.
+        token_epoch=TEST_SUBJECT.token_epoch,
     ), seen
+
+
+# =======================================================================================
+# `R-26`, `W39-REVOKE`. The epoch, on the served surface.
+# =======================================================================================
+
+
+def test_a_credential_minted_under_a_stale_epoch_is_refused(router: Surface) -> None:
+    """The credential is this deployment's, unexpired, and names the suite's own subject.
+
+    The **only** thing wrong with it is the generation, which is what makes this a test of
+    the epoch rather than of the signature. ``TEST_EPOCH`` is deliberately not 1, so the
+    stale value below is a real number and not "the default somebody would have assumed":
+    a seam that ignored ``ver`` entirely would answer 200 here.
+    """
+    from w13_api_driver import TEST_EPOCH
+
+    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
+    assert signer is not None
+    stale = signer.issue(
+        Subject(
+            user_uid=TEST_SUBJECT.user_uid,
+            login=TEST_SUBJECT.login,
+            token_epoch=TEST_EPOCH - 1,
+        )
+    ).token
+    # Verified by the signer: so the refusal below cannot be a malformed credential.
+    assert signer.verify(stale) is not None
+
+    answer = dispatch(router, Request.build("GET", "/projects"), credential=stale)
+    assert answer.status == 401, answer.body
+    assert _envelope(answer)["error_code"] == AUTHENTICATION_REQUIRED
+
+
+def test_a_credential_naming_an_account_this_deployment_has_not_got_is_refused(
+    router: Surface,
+) -> None:
+    """``epoch_of`` answers ``None``, and ``None`` is a refusal and never a permissive default.
+
+    This is the property that makes deleting a row a revocation: before `W39-REVOKE` a
+    credential for a deleted account went on working until its expiry, because nothing on
+    the request path ever asked whether the account was still there.
+    """
+    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
+    assert signer is not None
+    orphan = signer.issue(
+        Subject(user_uid="usr_01M2545JSD15ETSNNV904X9912", login="nobody", token_epoch=1)
+    ).token
+    assert signer.verify(orphan) is not None
+
+    answer = dispatch(router, Request.build("GET", "/projects"), credential=orphan)
+    assert answer.status == 401, answer.body
+    assert _envelope(answer)["error_code"] == AUTHENTICATION_REQUIRED
+
+
+def test_a_credential_with_no_epoch_at_all_is_refused(router: Surface) -> None:
+    """Every credential minted before this wave is one of these.
+
+    Built by re-signing a payload with the field removed, so it is a credential this
+    deployment's key really produced -- which is what the pre-wave ones are. An unreadable
+    epoch is refused by the same path that refuses an unknown format version, and that is
+    why deploying this change signs everybody out once.
+    """
+    import base64
+    import hashlib
+    import hmac
+    import json
+
+    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
+    assert signer is not None
+    version, body, _ = signer.issue(TEST_SUBJECT).token.split(".")
+    payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+    assert "ver" in payload, "the fixture must start from a credential that HAS an epoch"
+    del payload["ver"]
+
+    def b64(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+    key = hmac.new(
+        DEPLOYMENT_SECRET.encode("utf-8"),
+        b"auditmanager/api/token-signing/v1",
+        hashlib.sha256,
+    ).digest()
+    rebodied = b64(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+    signed = f"{version}.{rebodied}"
+    tag = b64(hmac.new(key, signed.encode("utf-8"), hashlib.sha256).digest())
+    epochless = f"{signed}.{tag}"
+
+    # Non-vacuous: the tag really is this deployment's, so the refusal is about the payload.
+    assert signer.verify(epochless) is None, "the signer itself must refuse an epochless one"
+    answer = dispatch(router, Request.build("GET", "/projects"), credential=epochless)
+    assert answer.status == 401, answer.body
+
+
+def test_changing_the_password_answers_a_credential_and_revokes_the_one_presented(
+    router: Surface,
+) -> None:
+    """The operation, through the served surface, against the suite's own account port.
+
+    The port's ``change_password`` raises its epoch in the same step that stores the
+    password, exactly as the repository does in one UPDATE -- so the credential that made
+    this request is refused by the next one, and the replacement is accepted.
+    """
+    import json as _json
+
+    answer = dispatch(
+        router,
+        Request.build(
+            "POST",
+            "/auth/password",
+            headers={"Content-Type": "application/json"},
+            body=_json.dumps(
+                {"current_password": SUITE_PASSWORD, "new_password": "a-quite-different-one"}
+            ).encode(),
+        ),
+    )
+    assert answer.status == 200, answer.body
+    body = _json.loads(answer.body)
+    assert sorted(body) == ["expires_in", "token"], body
+    replacement = body["token"]
+    assert replacement != TEST_TOKEN
+
+    # The credential this request presented is now refused.
+    refused = dispatch(router, Request.build("GET", "/projects"), credential=TEST_TOKEN)
+    assert refused.status == 401, refused.body
+    # And the replacement is not.
+    accepted = dispatch(router, Request.build("GET", "/projects"), credential=replacement)
+    assert accepted.status == 200, accepted.body
+
+
+def test_the_password_change_is_refused_without_a_credential_before_its_body_is_read(
+    router: Surface,
+) -> None:
+    """A malformed body must not be able to tell an unauthenticated caller anything.
+
+    The body below could not satisfy the model, so a surface that parsed first would answer
+    ``422`` -- which would confirm to an anonymous caller that the operation exists and what
+    shape it wants. Authorization runs first, and the answer is the same ``401`` every other
+    guarded operation gives.
+    """
+    answer = dispatch(
+        router,
+        Request.build(
+            "POST",
+            "/auth/password",
+            headers={"Content-Type": "application/json"},
+            body=b'{"nonsense": true}',
+        ),
+        credential=None,
+    )
+    assert answer.status == 401, answer.body
+    assert _envelope(answer)["error_code"] == AUTHENTICATION_REQUIRED

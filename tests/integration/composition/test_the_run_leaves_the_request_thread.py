@@ -56,7 +56,9 @@ from starlette.testclient import TestClient
 
 from auditmanager.analysis.text import ProviderMode, RecordedAdapter
 from auditmanager.api.app import create_asgi_app
+from auditmanager.access.repository import UserRepository as UserAccessRepository
 from auditmanager.api.routers import build_router
+from auditmanager.bootstrap.adapters import CredentialAdapter
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
 from auditmanager.bootstrap.adapters import RunAdapter
@@ -89,23 +91,38 @@ else:
 #: the signing key is derived from; the credential is minted from it below.
 DEPLOYMENT_SECRET = "w20-exec-carrier-token"
 
-def _minted_credential(secret: str) -> str:
-    """A credential minted with this suite's deployment secret.
+def _credential_signer() -> Any:
+    """This suite's signer, built from the same secret its credential is minted with."""
+    from auditmanager.api.security import build_signer
 
-    `W34-API`: the configured string is the signing material and no longer a credential,
-    so a suite that presents it is refused. The subject is this suite's own; what is under
-    test here is the wiring behind the seam, not who the caller is.
-    """
-    from auditmanager.api.security import Subject, build_signer
-
-    signer = build_signer({API_TOKEN_VARIABLE: secret})
+    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None, "this suite's own secret derives a signing key"
-    return signer.issue(
-        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991S", login="composition-suite")
-    ).token
+    return signer
 
 
-STATIC_TOKEN = _minted_credential(DEPLOYMENT_SECRET)
+_STATIC_TOKEN_CACHE: str | None = None
+
+
+def static_token() -> str:
+    """A credential this lane's API accepts, for an account this lane really has.
+
+    **Lazy and memoised on purpose.** It opens a database connection, and doing that at
+    import time would turn a lane whose services are not up into a *collection* error --
+    which reads as a broken suite rather than as an absent lane.
+
+    `W39-REVOKE`: a credential is refused unless the account it names exists and still
+    accepts that credential's generation, so this suite's old habit of minting for an
+    identity it invented is now presenting something the seam is correct to reject. The row
+    is written, the epoch is read back out of it, and the credential is minted from what the
+    database says. See ``tests/support/accounts.py``.
+    """
+    global _STATIC_TOKEN_CACHE
+    if _STATIC_TOKEN_CACHE is None:
+        from am_test_accounts import provisioned_credential
+
+        _STATIC_TOKEN_CACHE = provisioned_credential(DEPLOYMENT_SECRET, "composition-suite")
+    return _STATIC_TOKEN_CACHE
+
 
 #: The four `audit_run` terminals, written out rather than read from the topology this
 #: suite drives: an expectation taken from the thing under test cannot report that it
@@ -254,6 +271,15 @@ def _client(
         findings=None,  # type: ignore[arg-type]
         decisions=None,  # type: ignore[arg-type]
         exports=None,  # type: ignore[arg-type]
+        # `W39-REVOKE`. The seam reads the account's credential generation on every guarded
+        # request, through the port the router carries, so a router built with none refuses
+        # everything -- correctly, since an application that cannot tell a live credential
+        # from a revoked one must fail closed. The shipped adapter, not a stub: it is the
+        # object the composition root wires and the one that answers for the account
+        # `static_token()` provisioned.
+        credentials=CredentialAdapter(
+            sessions, users=UserAccessRepository(), signer=_credential_signer()
+        ),
     )
     app = create_asgi_app(
         environ={API_TOKEN_VARIABLE: DEPLOYMENT_SECRET},
@@ -270,13 +296,15 @@ def _resolve_profile() -> Any:
 
 _PROFILE = _resolve_profile()
 
-_AUTH = {"Authorization": f"Bearer {STATIC_TOKEN}"}
+def _auth() -> dict[str, str]:
+    """The header every request here carries. A function, because the credential is now lazy."""
+    return {"Authorization": f"Bearer {static_token()}"}
 
 
 def _start(client: TestClient, version_uid: str) -> dict[str, Any]:
     answer = client.post(
         "/runs",
-        headers=_AUTH
+        headers=_auth()
         | {
             IDEMPOTENCY_HEADER: f"w20exec-{uuid.uuid4().hex[:16]}",
             "Content-Type": "application/json",
@@ -288,7 +316,7 @@ def _start(client: TestClient, version_uid: str) -> dict[str, Any]:
 
 
 def _status(client: TestClient, run_id: str) -> dict[str, Any]:
-    answer = client.get(f"/runs/{run_id}", headers=_AUTH)
+    answer = client.get(f"/runs/{run_id}", headers=_auth())
     assert answer.status_code == 200, answer.content
     return answer.json()  # type: ignore[no-any-return]
 

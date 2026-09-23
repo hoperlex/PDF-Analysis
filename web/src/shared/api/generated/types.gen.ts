@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 976df5c1492575754394bafc3131f8a42d1951c774279f6ccbbadde25e204619
+ *   sha256 29b3fa5fa34b561deda9795283e77a0236c154d9bc47db4a2b0282b9d7225fc0
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,13 +17,14 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '976df5c1492575754394bafc3131f8a42d1951c774279f6ccbbadde25e204619';
+export const CONTRACT_DIGEST = '29b3fa5fa34b561deda9795283e77a0236c154d9bc47db4a2b0282b9d7225fc0';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
   'AnalysisProfileId',
   'AppendDecisionRequest',
   'AppendDecisionResponse',
+  'ChangePasswordRequest',
   'CorrelationId',
   'CostBasis',
   'CreateProjectRequest',
@@ -89,6 +90,13 @@ export type AppendDecisionRequest = {
 export type AppendDecisionResponse = {
   current_verdict: Verdict;
   event: DecisionEvent;
+};
+
+export type ChangePasswordRequest = {
+  /** The password the account holds now, proved before anything is changed. It appears in no response body, no error detail and no diagnostic record. A value that is not this account's is `authentication_required` -- the same refusal a missing credential gets, because 'this deployment does not accept this' is one fact. */
+  current_password: string;
+  /** The password the account will hold. The bounds are mechanical, not a policy: this surface declares no minimum length, no complexity rule, no history and no expiry. A value equal to `current_password` is `validation_failed`, because a change that changes nothing would report a password as changed when it was not. */
+  new_password: string;
 };
 
 /** Not an entity identity. Never a foreign key and authorizes nothing. */

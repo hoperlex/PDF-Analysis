@@ -386,18 +386,29 @@ DEPLOYMENT_SECRET = "w13-baseline-static-token"
 API_TOKEN_VARIABLE = "AUDITMANAGER_API_TOKEN"
 
 
-def _minted_credential() -> str:
-    """The credential every request in this journey presents, minted with that secret."""
-    from auditmanager.api.security import Subject, build_signer
-
-    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
-    assert signer is not None, "this journey's own secret derives a signing key"
-    return signer.issue(
-        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991R", login="w13-baseline")
-    ).token
+_STATIC_TOKEN_CACHE: str | None = None
 
 
-STATIC_TOKEN = _minted_credential()
+def static_token() -> str:
+    """A credential this lane's API accepts, for an account this lane really has.
+
+    **Lazy and memoised on purpose.** It opens a database connection, and doing that at
+    import time would turn a lane whose services are not up into a *collection* error --
+    which reads as a broken suite rather than as an absent lane.
+
+    `W39-REVOKE`: a credential is refused unless the account it names exists and still
+    accepts that credential's generation, so this suite's old habit of minting for an
+    identity it invented is now presenting something the seam is correct to reject. The row
+    is written, the epoch is read back out of it, and the credential is minted from what the
+    database says. See ``tests/support/accounts.py``.
+    """
+    global _STATIC_TOKEN_CACHE
+    if _STATIC_TOKEN_CACHE is None:
+        from am_test_accounts import provisioned_credential
+
+        _STATIC_TOKEN_CACHE = provisioned_credential(DEPLOYMENT_SECRET, "w13-baseline")
+    return _STATIC_TOKEN_CACHE
+
 
 
 # --- O1: the one ordering this baseline does not pin -------------------------------
@@ -847,7 +858,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         # `T-6`: every operation is behind the authorization dependency, so every request
         # in this journey presents the credential -- and every record says so. The header
         # goes first, before the case's own, so the recorded order is stable.
-        headers = {AUTHORIZATION_HEADER: f"Bearer {STATIC_TOKEN}", **dict(headers)}
+        headers = {AUTHORIZATION_HEADER: f"Bearer {static_token()}", **dict(headers)}
         status, response_headers, payload = (caller or api).send(
             method, target, headers=headers, body=body
         )
@@ -938,7 +949,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "POST",
         "/projects",
         headers={
-            AUTHORIZATION_HEADER: f"Bearer {STATIC_TOKEN}",
+            AUTHORIZATION_HEADER: f"Bearer {static_token()}",
             "Idempotency-Key": f"w13base-{tag}-cursor-setup",
             **json_headers,
         },
@@ -1793,7 +1804,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         api.send(
             "GET",
             f"/runs/{run_id}",
-            headers={AUTHORIZATION_HEADER: f"Bearer {STATIC_TOKEN}"},
+            headers={AUTHORIZATION_HEADER: f"Bearer {static_token()}"},
             body=b"",
         )[2].decode("utf-8")
     )

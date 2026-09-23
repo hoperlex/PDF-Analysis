@@ -1,4 +1,4 @@
-"""The surface is exactly the seventeen operations the frozen document declares.
+"""The surface is exactly the eighteen operations the frozen document declares.
 
 Asserted **against the document**, never against a list written out here. A list in a
 test is a second declaration that can drift from the first, and the whole reason
@@ -41,7 +41,7 @@ def test_the_router_declares_exactly_the_frozen_operations(
     )
 
 
-def test_the_document_declares_seventeen_and_the_router_implements_seventeen(
+def test_the_document_declares_eighteen_and_the_router_implements_eighteen(
     router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     """The count is checked separately from the set.
@@ -52,11 +52,12 @@ def test_the_document_declares_seventeen_and_the_router_implements_seventeen(
     **Twelve until the `R-5` reseal of 2026-09-18**, which added `listDocuments`,
     `listVersions` and `listRuns`; **fifteen until `W34-CONTRACT`**, which added
     `issueToken`, the credential exchange; **sixteen until `W38-KB`**, which added
-    `listDecisions` under `R-24`. The number moved because an owner ruling moved it;
+    `listDecisions` under `R-24`; **seventeen until `W39-REVOKE`**, which added
+    `changePassword` under `R-26`. The number moved because an owner ruling moved it;
     nothing else may move it.
     """
-    assert len(declared_operations(openapi_document)) == 17
-    assert len(router.routes) == 17
+    assert len(declared_operations(openapi_document)) == 18
+    assert len(router.routes) == 18
 
 
 def test_every_declared_operation_is_reachable(
@@ -91,7 +92,7 @@ def test_every_declared_operation_is_reachable(
                 assert bound[name] == samples[name]
 
 
-def test_no_eighteenth_operation_answers(router: Surface) -> None:
+def test_no_nineteenth_operation_answers(router: Surface) -> None:
     """A path the document does not declare is not a resource.
 
     Includes a method the document does not declare on a path that *is* declared:
@@ -134,11 +135,19 @@ def test_the_document_declares_no_operation_outside_the_declared_capabilities(
     still a widening and still fails here, and `/login`, `/token` and the rest are
     untouched. `tests/contract/domain_p02/test_openapi_document.py` owns the shape of the
     scheme itself.
+
+    **Wave 39 moved it again, by exactly one more path, and the register is the reason that
+    is a small statement rather than a large one.** `W39-REVOKE` declared `/auth/password`,
+    the operation that changes a password and revokes every credential minted under the old
+    one. It is admitted by name. `/auth/users`, `/auth/register`, `/auth/roles` and
+    everything else under the fragment are still a widening and still fail here -- which is
+    precisely the property a rule of "anything under `/auth`" would have thrown away, and
+    the reason `W34-CONTRACT` wrote a register instead of relaxing the fragment.
     """
     paths = set(openapi_document["paths"])
     #: The exact paths admitted under an otherwise forbidden fragment. Exact, because
     #: "anything under /auth" would readmit the user management this surface does not have.
-    ADMITTED = {"/auth/token"}
+    ADMITTED = {"/auth/token", "/auth/password"}
     forbidden = ("/auth", "/login", "/token", "/tenants", "/exports", "/jobs", "/imports")
     for fragment in forbidden:
         trespassers = sorted(
@@ -158,16 +167,19 @@ def test_the_document_declares_no_operation_outside_the_declared_capabilities(
     assert list(openapi_document["components"]["securitySchemes"]) == ["bearerAuth"], (
         "the authorization seam is one bearer scheme declared once, per R-3"
     )
-    assert len(paths) == 14 and sum(
+    assert len(paths) == 15 and sum(
         1
         for item in openapi_document["paths"].values()
         for method in item
         if method in {"get", "put", "post", "delete", "options", "head", "patch"}
-    ) == 17, (
+    ) == 18, (
         "10 paths / 12 operations before the `R-5` reseal, 12 / 15 after it, 13 / 16 "
         "after `W34-CONTRACT` added the credential exchange, 14 / 17 after `W38-KB` added "
-        "the decision journal under `R-24`. The three operations `R-5` added are named in "
+        "the decision journal under `R-24`, 15 / 18 after `W39-REVOKE` added the password "
+        "change under `R-26`. The three operations `R-5` added are named in "
         "`REQUIRED_OPERATIONS`; the one wave 34 added is `issueToken`, and it is the only "
         "one this surface answers without a credential; the one wave 38 added is "
-        "`listDecisions`, and it is the only listing with no parent in its path."
+        "`listDecisions`, and it is the only listing with no parent in its path; the one "
+        "wave 39 added is `changePassword`, and it is the only operation that invalidates "
+        "the credential it was called with."
     )

@@ -90,7 +90,22 @@ class TestFindingAUser:
             "is_default_credential",
             "created_at",
             "password_updated_at",
+            # `W39-REVOKE`. Two fields, and neither is credential material: `token_epoch` is
+            # a counter the seam stamps into every credential it mints and compares on every
+            # request, so it is *meant* to travel, and `token_epoch_updated_at` is when it
+            # last moved. What this assertion is about is the four columns that must never
+            # appear -- the algorithm, the iteration count, the salt and the digest -- and
+            # the way it says so is by being a closed set that reports anything new. It did.
+            "token_epoch",
+            "token_epoch_updated_at",
         }, "a credential column reached the record the boundary hands out"
+        for forbidden in (
+            "password_algorithm",
+            "password_iterations",
+            "password_salt",
+            "password_hash",
+        ):
+            assert forbidden not in fields, forbidden
 
 
 class TestAuthentication:

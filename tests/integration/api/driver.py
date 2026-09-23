@@ -36,7 +36,9 @@ from fastapi import APIRouter, FastAPI
 from starlette.testclient import TestClient
 
 from auditmanager.api.app import create_asgi_app
+from auditmanager.api.routers import Router
 from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
     "Answer",
@@ -46,6 +48,7 @@ __all__ = [
     "SUITE_PASSWORD",
     "Surface",
     "SuiteCredentialAdapter",
+    "TEST_EPOCH",
     "TEST_SUBJECT",
     "TEST_TOKEN",
     "dispatch",
@@ -60,12 +63,24 @@ __all__ = [
 #: alpha's static token really is gone rather than still quietly accepted.
 DEPLOYMENT_SECRET = "w13-api-suite-token"
 
+#: The generation of credentials this suite's account accepts.
+#:
+#: A literal, and deliberately **not** 1. `W39-REVOKE` made the seam compare a credential's
+#: epoch against what the account currently accepts, and a suite pinned at the initial value
+#: would pass just as well against an implementation that ignored the field and defaulted to
+#: it. ``test_a_credential_minted_under_a_stale_epoch_is_refused`` mints at
+#: ``TEST_EPOCH - 1`` and requires a refusal, which is a thing a default cannot produce.
+TEST_EPOCH = 7
+
 #: The subject the minted credential names. This suite has no user table -- it wires the
 #: six ports itself -- so the credential is minted directly from the seam's signer, the way
-#: the credential exchange mints one for a user the repository proved. What is under test
-#: here is every operation *behind* the seam; the exchange itself is tested where it can be
-#: driven against real rows, in ``tests/integration/auth``.
-TEST_SUBJECT = Subject(user_uid="usr_01M2545JSD15ETSNNV904X991Q", login="api-suite")
+#: the credential exchange mints one for a user the repository proved, and the epoch comes
+#: from :data:`TEST_EPOCH` rather than from a row. What is under test here is every
+#: operation *behind* the seam; the exchange itself is tested where it can be driven against
+#: real rows, in ``tests/integration/auth``.
+TEST_SUBJECT = Subject(
+    user_uid="usr_01M2545JSD15ETSNNV904X991Q", login="api-suite", token_epoch=TEST_EPOCH
+)
 
 #: The credential this suite presents on every request. Minted, not written down: a literal
 #: would have to be re-minted by hand at every change to the format and could not carry an
@@ -82,17 +97,57 @@ SUITE_PASSWORD = "w13-api-suite-password"
 
 
 class SuiteCredentialAdapter:
-    """``CredentialPort`` for this suite: one pair in, one minted credential out.
+    """``CredentialPort`` for this suite: one account, in memory, with a credential epoch.
 
-    Deliberately not a stub that says yes to everything. The refusal is the half of this
-    operation the seam's own tests are about, and an adapter that could not refuse would
+    Deliberately not a stub that says yes to everything. The refusal is the half of these
+    operations the seam's own tests are about, and an adapter that could not refuse would
     make ``test_a_refused_pair_is_the_same_refusal_a_missing_credential_gets`` vacuous.
+
+    **The epoch is mutable and the password is not a constant**, because `W39-REVOKE` made
+    both of them behaviour rather than configuration: changing the password has to raise the
+    epoch, and raising the epoch has to refuse every credential minted before it. An adapter
+    that held the epoch fixed would let the seam's check pass while checking nothing, which
+    is the vacuity this suite exists to avoid.
+
+    It is one account and not a table. There is no user store behind this suite, and the
+    real one is driven where rows exist, in ``tests/integration/auth``.
     """
 
+    __slots__ = ("epoch", "password")
+
+    def __init__(self) -> None:
+        self.password = SUITE_PASSWORD
+        self.epoch = TEST_EPOCH
+
+    def _subject(self) -> Subject:
+        return Subject(
+            user_uid=TEST_SUBJECT.user_uid, login=TEST_SUBJECT.login, token_epoch=self.epoch
+        )
+
     def issue(self, *, login: str, password: str) -> Any:
-        if (login, password) != (SUITE_LOGIN, SUITE_PASSWORD):
+        if (login, password) != (SUITE_LOGIN, self.password):
             return None
-        return _SIGNER.issue(TEST_SUBJECT)
+        return _SIGNER.issue(self._subject())
+
+    def change_password(
+        self, *, user_uid: str, current_password: str, new_password: str
+    ) -> Any:
+        if user_uid != TEST_SUBJECT.user_uid or current_password != self.password:
+            return None
+        if current_password == new_password:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message="the new password must differ from the current one",
+            )
+        self.password = new_password
+        # Raised in the same step that stores the password, because that is the property
+        # the real repository holds in one UPDATE and the one a suite must not quietly
+        # relax: a credential minted before this line is refused after it.
+        self.epoch += 1
+        return _SIGNER.issue(self._subject())
+
+    def epoch_of(self, user_uid: str) -> int | None:
+        return self.epoch if user_uid == TEST_SUBJECT.user_uid else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,6 +346,12 @@ class _PreBuilt:
         self.router = router
         self.carrier = InlineCarrier()
 
+    # No ``credential_epochs`` attribute and no ``session_factory``: since `W39-REVOKE` the
+    # seam reads the account's credential generation through the port the **router** carries
+    # (``auditmanager.api.routers.Router.credentials``), which this suite wires itself in
+    # ``conftest.py``. That is why this class needed no change for the epoch check and why
+    # ``create_documentation_app`` -- a router built with no port -- refuses instead.
+
 
 def dispatch(
     surface: Surface,
@@ -322,8 +383,17 @@ def probe_surface(handler: Any) -> Surface:
     That is strictly more evidence than the old probe gave: the old one exercised
     ``dispatch``'s own try/except, which is gone, and this one exercises the path a real
     failure now takes.
+
+    **The probe router is a `Router` and carries the credential port**, which it did not
+    need to before `W39-REVOKE`. ``probe`` is not in
+    :data:`~auditmanager.api.security.UNAUTHENTICATED_OPERATIONS`, so the seam guards it like
+    any other operation, and the seam now reads an account's credential generation through
+    the port the router carries. A bare ``APIRouter`` carries none, so every probe answered
+    ``401`` before its handler ran -- and the tests that read it saw *authentication_required*
+    where they expected the failure they had staged. That is the seam working; the probe was
+    the thing that had stopped being a caller.
     """
-    router = APIRouter()
+    router = Router(credentials=SuiteCredentialAdapter())
 
     @router.get("/probe", operation_id="probe", tags=["probe"])
     def probe() -> Any:

@@ -307,17 +307,25 @@ class CsvExportPort(Protocol):
 
 @runtime_checkable
 class CredentialPort(Protocol):
-    """``issueToken``. Produced by `W34-API`'s adapter over `W34-DOM`'s user repository.
+    """``issueToken`` and ``changePassword``, and the epoch read the seam performs.
 
-    One method, and deliberately not three. The port cannot read a password digest, cannot
-    write one, cannot list users and cannot revoke a credential: everything it offers is
-    "here is a login and a password, mint a credential or do not". Registration, password
-    change and revocation are the next piece of work, and a port that guessed at their
-    shape now would be a contract nobody agreed to.
+    Three methods. The port still cannot read a password digest, cannot write one and
+    cannot list users: everything it offers is "here is a login and a password, mint a
+    credential or do not", "here is a proven subject and two passwords, replace one",
+    and "here is an identity, what generation of credentials does it accept". Registration
+    is still the next piece of work and this port still does not guess at its shape.
 
     The token is minted **behind** this port rather than in the router, because minting
     needs the deployment's signing key and a router that held one would be a router that
     reads configuration -- which is the composition root's job and nobody else's.
+
+    :meth:`epoch_of` is here rather than on a seventh port because it is the same adapter's
+    job: the one object in the tree that holds both the user repository and the signer is
+    the only one that can answer it, and a second port over the same two halves would be a
+    second thing for the composition root to forget to wire. It is also what
+    :class:`auditmanager.api.security.CredentialEpochs` asks for, structurally -- the seam
+    declares the single method it needs and this port satisfies it, so the seam does not
+    import the router's vocabulary to be handed one value.
     """
 
     def issue(self, *, login: str, password: str) -> IssuedCredential | None:
@@ -333,4 +341,32 @@ class CredentialPort(Protocol):
         that cannot be reached, a stored credential this deployment cannot parse. Reporting
         one of those as "wrong password" would hide a defect behind the most plausible
         explanation available, which is the silent fallback `AGENTS.md` section 4 forbids.
+        """
+
+    def change_password(
+        self, *, user_uid: str, current_password: str, new_password: str
+    ) -> IssuedCredential | None:
+        """Replace a proven subject's password and hand back a credential that still works.
+
+        ``None`` when the current password is not theirs -- the same single answer the
+        exchange gives, and for the same reason.
+
+        **The subject is an identity, never a login and never a body field.** It comes from
+        the credential the seam verified, so this operation can only ever change the
+        password of the caller who proved themselves. A login in the body would be an
+        operation one reviewer could aim at another.
+
+        The returned credential is minted **after** the change and under the new epoch, so
+        it is the only credential in the world that this account now accepts: the one the
+        caller presented to make this request is revoked by the same statement that wrote
+        the new digest. A ``DomainError`` with ``VALIDATION_FAILED`` is the answer when the
+        new password is the current one or fails the mechanical bounds.
+        """
+
+    def epoch_of(self, user_uid: str) -> int | None:
+        """The generation of credentials this account accepts, or ``None`` for no account.
+
+        Read by the authorization seam on every request it guards; see
+        :class:`auditmanager.api.security.CredentialEpochs` for why ``None`` refuses rather
+        than admits, and why nothing caches the answer.
         """

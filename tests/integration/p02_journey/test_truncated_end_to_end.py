@@ -478,8 +478,10 @@ def test_the_api_run_body_reports_partial_through_the_shipped_adapter(
     shipped one reports the same thing. This dispatches a real request at the adapter
     the composition root wires.
     """
+    from auditmanager.access.repository import UserRepository as UserAccessRepository
     from auditmanager.api.routers import build_router
     from auditmanager.bootstrap.adapters import (
+        CredentialAdapter,
         DecisionAdapter,
         CsvExportAdapter,
         FindingAdapter,
@@ -504,6 +506,15 @@ def test_the_api_run_body_reports_partial_through_the_shipped_adapter(
         findings=FindingAdapter(session_factory),
         decisions=DecisionAdapter(session_factory),
         exports=CsvExportAdapter(session_factory),
+        # `W39-REVOKE`. The seam reads the account's credential generation on every
+        # guarded request, through the port the router carries, so a router built with none
+        # refuses everything -- correctly, since an application that cannot tell a live
+        # credential from a revoked one must fail closed. The shipped adapter is wired here
+        # rather than a stub, because it is the object the composition root wires and it is
+        # the one that answers for the account this suite provisioned.
+        credentials=CredentialAdapter(
+            session_factory, users=UserAccessRepository(), signer=_credential_signer()
+        ),
     )
     response = _request(router, f"/runs/{truncated_run['run_id']}")
     assert response.status_code == 200, response.content
@@ -520,23 +531,38 @@ def test_the_api_run_body_reports_partial_through_the_shipped_adapter(
 #: presents is minted from it below.
 _DEPLOYMENT_SECRET = "p02-journey-static-token"
 
-def _minted_credential(secret: str, login: str) -> str:
-    """A credential minted with this suite's deployment secret.
+def _credential_signer() -> Any:
+    """This suite's signer, built from the same secret its credential is minted with."""
+    from auditmanager.api.security import API_TOKEN_VARIABLE as _VARIABLE, build_signer
 
-    `W34-API` replaced the seam's body: the configured string is the signing material and
-    is no longer a credential. The subject is this suite's own -- what these cases are
-    about is behind the seam, not who the caller is.
-    """
-    from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
-
-    signer = build_signer({API_TOKEN_VARIABLE: secret})
+    signer = build_signer({_VARIABLE: _DEPLOYMENT_SECRET})
     assert signer is not None, "this suite's own secret derives a signing key"
-    return signer.issue(
-        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991T", login=login)
-    ).token
+    return signer
 
 
-_STATIC_TOKEN = _minted_credential(_DEPLOYMENT_SECRET, "p02-truncated-suite")
+_STATIC_TOKEN_CACHE: str | None = None
+
+
+def _static_token() -> str:
+    """A credential this lane's API accepts, for an account this lane really has.
+
+    **Lazy and memoised on purpose.** It opens a database connection, and doing that at
+    import time would turn a lane whose services are not up into a *collection* error --
+    which reads as a broken suite rather than as an absent lane.
+
+    `W39-REVOKE`: a credential is refused unless the account it names exists and still
+    accepts that credential's generation, so this suite's old habit of minting for an
+    identity it invented is now presenting something the seam is correct to reject. The row
+    is written, the epoch is read back out of it, and the credential is minted from what the
+    database says. See ``tests/support/accounts.py``.
+    """
+    global _STATIC_TOKEN_CACHE
+    if _STATIC_TOKEN_CACHE is None:
+        from am_test_accounts import provisioned_credential
+
+        _STATIC_TOKEN_CACHE = provisioned_credential(_DEPLOYMENT_SECRET, "p02-truncated-suite")
+    return _STATIC_TOKEN_CACHE
+
 
 
 class _Built:
@@ -579,5 +605,5 @@ def _client(router: Any) -> Any:
 
 def _request(router: Any, target: str) -> Any:
     return _client(router).get(
-        target, headers={"Authorization": f"Bearer {_STATIC_TOKEN}"}
+        target, headers={"Authorization": f"Bearer {_static_token()}"}
     )

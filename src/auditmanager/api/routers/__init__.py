@@ -1,4 +1,4 @@
-"""The seventeen operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The eighteen operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the seven router modules. It takes its
 dependencies as arguments and constructs none of them: choosing what sits behind each port
@@ -65,8 +65,31 @@ from auditmanager.api.routers.projects import build_project_routes
 from auditmanager.api.routers.runs import build_run_routes
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 
-#: What ``build_router`` returns. The name the composition root's type annotation uses.
-Router = APIRouter
+class Router(APIRouter):
+    """What ``build_router`` returns: the surface, and the credential port behind it.
+
+    It was ``Router = APIRouter`` until wave 39. What made it a class is that the
+    authorization seam now needs a **database read** -- an account's credential generation,
+    compared against the one the presented credential carries -- and the seam is assembled in
+    ``api/app.py`` from an environment, which knows nothing about ports.
+
+    ``api/app.py`` is handed exactly two things: this router, and the environment. So the
+    port travels on the router, which is the object that already went through the composition
+    root holding it. The alternative was to reach for the port on an ``Application`` field, and
+    that field does not exist: ``bootstrap/composition.py`` is a single-owner hotspot, and a
+    seam that depended on a field being added there would be a seam nobody could wire without
+    taking that lock.
+
+    ``credentials`` is ``None`` for ``create_documentation_app``, which is handed no ports at
+    all. A ``None`` here is a refusal downstream, never an open door: see
+    :func:`auditmanager.api.security.build_authorization_dependency`.
+    """
+
+    __slots__ = ("credentials",)
+
+    def __init__(self, *, credentials: CredentialPort | None = None) -> None:
+        super().__init__()
+        self.credentials = credentials
 
 __all__ = [
     "BASE_PATH",
@@ -125,7 +148,7 @@ def build_router(
     exports: CsvExportPort,
     credentials: CredentialPort | None = None,
 ) -> Router:
-    """Assemble the seventeen operations.
+    """Assemble the eighteen operations.
 
     Keyword-only, because seven same-shaped dependencies passed positionally is a wiring
     defect waiting to happen and the type checker cannot see it.
@@ -140,8 +163,14 @@ def build_router(
     the document is a function of the declarations, and serving a request is not.
     ``test_the_wired_application_can_answer_the_exchange`` is what says the composition root
     really hands one over.
+
+    **Since wave 39 the returned router also carries that port**, because the authorization
+    seam reads an account's credential generation on every request it guards and is assembled
+    in ``api/app.py``, which is handed the router and an environment and nothing else. See
+    :class:`Router`. Nothing about the six changes, and an application built with no
+    credential port refuses every guarded request rather than serving one.
     """
-    router = APIRouter()
+    router = Router(credentials=credentials)
     # One router, registered onto directly, rather than six included into a seventh.
     # ``include_router`` wraps each sub-router instead of copying its routes, so
     # ``router.routes`` would carry seven opaque wrappers and the whole-surface

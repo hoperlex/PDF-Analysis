@@ -44,7 +44,12 @@ from auditmanager.api.security import (
 
 SECRET = "a-deployment-secret-for-this-suite"
 OTHER_SECRET = "another-deployments-secret"
-SUBJECT = Subject(user_uid="usr_01M2545JSD15ETSNNV904X991Q", login="ada")
+#: The subject this suite mints for.
+#:
+#: ``token_epoch`` is 4 and deliberately not 1: `W39-REVOKE` made the epoch part of the
+#: payload, and a suite that always minted at the initial value would pass equally against
+#: an implementation that dropped the field and defaulted to it.
+SUBJECT = Subject(user_uid="usr_01M2545JSD15ETSNNV904X991Q", login="ada", token_epoch=4)
 
 
 @pytest.fixture
@@ -102,9 +107,21 @@ def test_the_payload_carries_the_subject_and_nothing_else(signer: TokenSigner) -
     ``sorted(payload)`` rather than "the fields I thought of": a field added later is
     reported here, which is the only kind of assertion that can catch the credential
     growing a claim nobody agreed to.
+
+    **It worked.** `W39-REVOKE` added ``ver`` and this assertion is what reported it, which
+    is the whole reason the list is written out rather than sampled. ``ver`` is the account's
+    credential generation at the moment of minting -- the one field on this payload the seam
+    checks against the *database* rather than against the key, and therefore the one that
+    makes a credential retractable. It is not a claim about the subject and grants nothing:
+    a caller who reads it learns how many times that account has been revoked.
     """
     payload = _payload(signer.issue(SUBJECT).token)
-    assert sorted(payload) == ["exp", "iat", "login", "sub"], payload
+    assert sorted(payload) == ["exp", "iat", "login", "sub", "ver"], payload
+    assert payload["ver"] == SUBJECT.token_epoch, (
+        "the credential must carry the epoch it was minted under, not a constant: a "
+        "hard-coded 1 here would verify against every account that had never been revoked "
+        "and fail against every one that had"
+    )
     assert payload["sub"] == SUBJECT.user_uid
     assert payload["login"] == SUBJECT.login
     assert payload["exp"] - payload["iat"] == TOKEN_LIFETIME_SECONDS
@@ -223,7 +240,7 @@ def test_a_credential_that_is_not_one_is_refused(
     token = signer.issue(SUBJECT).token
     if label == "the tag replaced by another credential's":
         other_tag = signer.issue(
-            Subject(user_uid="usr_01M2545JSD15ETSNNV904X991Z", login="bob")
+            Subject(user_uid="usr_01M2545JSD15ETSNNV904X991Z", login="bob", token_epoch=4)
         ).token.split(".")[2]
         version, body, _ = _parts(token)
         presented = f"{version}.{body}.{other_tag}"

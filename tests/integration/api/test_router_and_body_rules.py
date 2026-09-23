@@ -101,11 +101,11 @@ class TestTheRouterRefusesADuplicateOperationId:
         """The consequence, asserted so the rule is not merely a raise.
 
         Distinct ids give a surface whose ``operation_ids`` has one entry per route. A
-        duplicate would leave ``routes`` at seventeen and ``operation_ids`` at sixteen,
-        which is exactly what ``len(router.routes) == 17`` cannot see.
+        duplicate would leave ``routes`` at eighteen and ``operation_ids`` at seventeen,
+        which is exactly what ``len(router.routes) == 18`` cannot see.
         """
-        assert len(router.routes) == 17
-        assert len(router.operation_ids) == 17
+        assert len(router.routes) == 18
+        assert len(router.operation_ids) == 18
         assert len(router.operation_ids) == len(router.routes)
 
 

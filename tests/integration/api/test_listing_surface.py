@@ -35,7 +35,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-from w13_api_driver import Answer, Request, Surface, dispatch
+from w13_api_driver import Answer, Request, Surface, SuiteCredentialAdapter, dispatch
 from auditmanager.api.routers import build_router
 from auditmanager.shared.identity import (
     AnalysisProfileId,
@@ -351,6 +351,9 @@ def listing_router(
             findings=DatabaseFindingAdapter(session),
             decisions=LedgerDecisionAdapter(session),
             exports=SeamExportAdapter(session),
+            # See the note on the other router in this module: a router with no credential
+            # port refuses every guarded request since `W39-REVOKE`.
+            credentials=SuiteCredentialAdapter(),
         )
     )
 
@@ -385,6 +388,13 @@ def counting_router(ingest: Any, session: Session) -> Surface:
             findings=_Unused(),
             decisions=_Unused(),
             exports=_Unused(),
+            # `W39-REVOKE`. The seam reads the account's credential generation through
+            # the port the router carries, so a router built with none refuses every
+            # guarded request -- which is the correct behaviour for an application that
+            # cannot tell a live credential from a revoked one, and which this suite has to
+            # satisfy like any other caller. The adapter is the driver's own: it answers
+            # `epoch_of` for exactly the subject `TEST_TOKEN` names.
+            credentials=SuiteCredentialAdapter(),
         )
     )
 

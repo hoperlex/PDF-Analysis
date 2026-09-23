@@ -682,11 +682,18 @@ class CredentialAdapter(_SessionHolder):
     key. A router that held one would be a router that reads configuration, and the
     composition root exists so that nothing else does.
 
-    **The session is opened for a read.** Authentication writes nothing: no session row, no
-    last-login column, no attempt counter. A credential is a signed statement about a
-    subject, not a row -- which is also why nothing here has to be cleaned up when it
-    expires, and why this surface has no logout. Both of those are the next session's
-    question; see the report.
+    **Authenticating writes nothing.** No session row, no last-login column, no attempt
+    counter. A credential is a signed statement about a subject, not a row -- which is why
+    nothing here has to be cleaned up when it expires, and why this surface has no logout.
+
+    **Changing a password writes exactly once**, and revoking is the same write. `W39-REVOKE`
+    added the two halves that make a credential retractable: ``change_password`` opens a
+    write session for one UPDATE that replaces the digest and raises the account's
+    ``token_epoch``, and ``epoch_of`` is the read the seam performs on every guarded request
+    to find out whether the credential it has just verified is still the generation this
+    account accepts. Neither puts a token in the ``access`` boundary or a password in the
+    seam: one integer crosses, in each direction, and this adapter is still the only object
+    that holds both halves.
     """
 
     __slots__ = ("_users", "_signer")
@@ -714,5 +721,50 @@ class CredentialAdapter(_SessionHolder):
             # three, so this returns in comparable time as well as with one answer.
             return None
         return self._signer.issue(
-            Subject(user_uid=str(record.user_uid), login=record.login)
+            Subject(
+                user_uid=str(record.user_uid),
+                login=record.login,
+                # The epoch as the row has it at this instant, never a constant and never
+                # an assumption. A credential minted under a stale epoch is refused by the
+                # very next request, which looks exactly like a broken sign-in.
+                token_epoch=record.token_epoch,
+            )
         )
+
+    def change_password(
+        self, *, user_uid: str, current_password: str, new_password: str
+    ) -> IssuedCredential | None:
+        """Change the password, then mint under the epoch the change produced.
+
+        The order is the property. ``change_password`` returns the record **after** the
+        UPDATE, so ``record.token_epoch`` is the new generation and the credential minted
+        from it is the only one this account now accepts. Minting before the write, or from
+        a record read before it, would hand back a credential that the next request refuses
+        -- a password change that appears to sign the caller out, which is indistinguishable
+        from a broken one.
+        """
+        record = self._write(
+            lambda session: self._users.change_password(
+                session,
+                user_uid=user_uid,
+                current_password=current_password,
+                new_password=new_password,
+            )
+        )
+        if record is None:
+            return None
+        return self._signer.issue(
+            Subject(
+                user_uid=str(record.user_uid),
+                login=record.login,
+                token_epoch=record.token_epoch,
+            )
+        )
+
+    def epoch_of(self, user_uid: str) -> int | None:
+        """The account's current credential generation, for the seam to compare against.
+
+        A read, so no transaction is committed. ``None`` reaches the seam as a refusal: see
+        :class:`auditmanager.api.security.CredentialEpochs`.
+        """
+        return self._read(lambda session: self._users.token_epoch(session, user_uid))

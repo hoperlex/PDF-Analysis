@@ -165,7 +165,7 @@ class Client:
         """
         sent = {name: value for name, value in dict(headers).items()}
         if not any(name.lower() == "authorization" for name in sent):
-            sent["Authorization"] = f"Bearer {STATIC_TOKEN}"
+            sent["Authorization"] = f"Bearer {static_token()}"
         response = self._client.request(method, target, headers=sent, content=body)
         return Answer(
             response.status_code,
@@ -317,26 +317,35 @@ def build_client(**overrides: str) -> Client:
 DEPLOYMENT_SECRET = "c2-pc01-static-token"
 API_TOKEN_VARIABLE = "AUDITMANAGER_API_TOKEN"
 
-#: The credential this suite presents. **Minted with the deployment's own key**, for a
-#: subject of this driver's choosing, rather than exchanged through ``issueToken``: this
-#: suite has no user table of its own, and a criterion about the PC-01 journey should not
-#: fail because an account was renamed. The exchange itself is driven against real rows in
-#: ``tests/integration/auth``.
+#: The credential this suite presents. **Minted with the deployment's own key**, for an
+#: account in this lane's own database, rather than exchanged through ``issueToken``: the
+#: exchange itself is driven against real rows in ``tests/integration/auth``, and a
+#: criterion about the PC-01 journey should not fail because a password was rotated.
 #:
-#: Note what this shows about the credential: it is a signed statement and not a row, so
-#: it names a subject the deployment need not still have. Revocation before expiry does
-#: not exist yet -- see the wave report.
-def _minted_credential() -> str:
-    from auditmanager.api.security import Subject, build_signer
-
-    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
-    assert signer is not None, "the suite's own secret derives a signing key"
-    return signer.issue(
-        Subject(user_uid="usr_01M2545JSD15ETSNNV904X991P", login="pc01-acceptance")
-    ).token
+#: **This paragraph used to end with a sentence that is now false, and the sentence was
+#: the interesting part.** It read: *"it is a signed statement and not a row, so it names a
+#: subject the deployment need not still have. Revocation before expiry does not exist yet
+#: -- see the wave report."* `W39-REVOKE` is that work. A credential is now refused unless
+#: the account it names exists **and** still accepts that credential's generation, so a
+#: driver minting for an invented identity is presenting something the seam is correct to
+#: reject -- and the fiction this comment accurately described is the thing that stopped
+#: being free.
+_STATIC_TOKEN_CACHE: str | None = None
 
 
-STATIC_TOKEN = _minted_credential()
+def static_token() -> str:
+    """A credential this lane's API accepts, for an account this lane really has.
+
+    Lazy and memoised: it opens a database connection, and doing that at import time would
+    turn a lane whose services are not up into a collection error, which reads as a broken
+    suite rather than as an absent lane. See ``tests/support/accounts.py``.
+    """
+    global _STATIC_TOKEN_CACHE
+    if _STATIC_TOKEN_CACHE is None:
+        from am_test_accounts import provisioned_credential
+
+        _STATIC_TOKEN_CACHE = provisioned_credential(DEPLOYMENT_SECRET, "pc01-acceptance")
+    return _STATIC_TOKEN_CACHE
 
 
 def key(label: str, *, unique: bool = False) -> str:
