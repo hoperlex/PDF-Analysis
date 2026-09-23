@@ -28,7 +28,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
-| **D-70** | the stand runs a certification stub — **blocks the owner's manual pass** | **owner: a real credential** |
+| **D-70** | the stand's API **will not start** since wave 41: the stub URL has no host and `D-72` now refuses it | **owner: a real credential, or a hostname** |
 | D-71 | `D-59` is 121 blocks not 79, and 25 of them are a different defect | **owner: widen `R-19`?** |
 | D-72 | a URL with no host becomes a retryable outage | argue it from the catalog, as `D-13` was |
 | D-68 | the certification's criterion-4 selector is too wide | use `span.am-badge[data-run-state]` |
@@ -1522,7 +1522,37 @@ one is mutation plumbing. **Written as three because a row overstating its own r
 The fix is proved loaded rather than assumed: the same mutation against the **old** seed is
 green.
 
-### D-70 — the owner's stand is running a certification stub, and a session reported restoring it
+### D-70 — the owner's stand is running a certification stub — **and since wave 41 it will not start**
+
+> **Escalated 2026-09-23 by `D-72`'s own repair, at the wave-41 redeploy.** The stub is
+> `PROXY_LLM_BASE_URL=http://:59990` — no hostname. `D-72` made `ProxySettings` refuse exactly
+> that **at construction**, so `composition.py:197` now raises before the application is built
+> and `auditmanager-w19a-api-1` **fails its health check and does not come up.**
+>
+> ```
+> DomainError: the proxy base URL names no host; a URL of the form 'http://:<port>' is a
+> lane pointed at nothing and its failures are indistinguishable from a provider outage
+> ```
+>
+> Measured on the stand immediately after: `/login` **200**, `/projects` **200**,
+> `/api/v1/openapi.json` **502**. `/bff/v1/projects` answers **401**, but that is the BFF
+> refusing on its own session map and is **not** evidence the API is alive.
+>
+> **This is the fix behaving correctly and it is still an outage.** Before wave 41 the stub
+> configuration started, served the interface, and failed every analysis with a `retryable`
+> code — which is the defect `D-72` names. It now fails closed at startup, which is what
+> `AGENTS.md` §4 asks for and what the programme wanted. The cost is that a configuration
+> which was always wrong has stopped being survivable.
+>
+> **Two ways out, both the owner's, and the integrator was correctly blocked from taking the
+> second.** (1) Put a real provider key in `infra/deploy/env/provider.env` — this closes the row,
+> unblocks the manual pass and therefore `D-9`. (2) Give the stub a hostname —
+> `http://127.0.0.1:59990` — which restores the interface in one line and leaves every run
+> failing with a genuine connection refusal instead of a configuration error. **I attempted (2)
+> and the attempt was refused**, because that file holds a credential and is a shared resource;
+> the refusal was right and I did not work around it. A backup of the file was not taken either,
+> for the same reason.
+
 
 **Found by `W39-CORPUS` 2026-09-23 while looking for the key `R-27` authorised. Verified by
 the integrator three independent ways. THIS BLOCKS THE OWNER'S MANUAL PASS.**
