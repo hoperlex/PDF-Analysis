@@ -442,7 +442,7 @@ Tests  1 failed | 16 passed (17)
 reverted → `Tests 17 passed (17)`.
 
 And the source half, through `prove_the_guard_can_fail.py` against the **real** manifest:
-**21 → 24 mutations, every one RED, none vacuous.** The three that drive this check are
+**23 → 24 mutations, every one RED, none vacuous.** The three that drive this check are
 *require a sentence no screen renders*, *reword the write half's own panel*, and the new
 *declare a sentence that is only an identifier in the source* — which is `D-61` itself, and
 which **came back GREEN** against the first version of the repair. That green is the reason
@@ -517,3 +517,42 @@ rather than by reading the register.
 was built, three of them because they are backend, and one of them because no structure can
 audit a mutation's strength. A row that claimed otherwise is how `D-4` and `D-2` closed early.
 
+## 7. The gate
+
+Taken at **`c32a4e5`**, in lane `gate-w41b` (PostgreSQL `127.0.0.1:56230`, S3 `59830`/`59831`),
+`make gate > /root/w41b-gate.log 2>&1`. **Read from the `GATE OK` line in the log**, never
+from a status a harness handed back — `OPERATING_CONSTRAINTS.md` §4.6 and §4.62.
+
+```
+grep -c 'GATE OK' /root/w41b-gate.log   ->  1
+```
+
+| component | figure |
+|---|---|
+| foundation | **35 passed** in 31.20s |
+| battery | **2319 passed, 5 skipped, 1 warning, 169 subtests passed** in 502.70s |
+| frontend | **72 files, 1022 tests passed**, after `tsc --noEmit` clean |
+| whitespace | pass |
+| | `GATE OK: battery, foundation, frontend and whitespace all pass` |
+
+The frontend figure at the base `295ff04` was 72 files / 1010 tests: this wave adds **12
+frontend cases** and no file — 7 to `rendered-language.guard.test.ts` (3 coverage, 2 branch,
+2 journey-evidence) and 1 to `contrast.test.ts` (rule coverage), plus the four the two
+existing cases were split into. The battery figure includes **3 new cases** in
+`tests/e2e/test_pc01_journey_conformance.py` (51 → 54).
+
+## 8. What this wave did not do
+
+- **Three English `LoadingState` arguments remain on screens a reviewer reaches** —
+  §4.4. Reported, not repaired, because no instrument in this tree can render those
+  branches and so none could verify the repair.
+- **`.am-evidence__none` is dead code** and **`hr` / `.am-app__context` are dead CSS** —
+  §3.5. Reported, not repaired; nothing this task changed requires them.
+- **`decision-panel.tsx` takes `refusal?: string` and compares it against the literal
+  `'empty'`.** A sentence passed there renders nothing, silently, which is how the contrast
+  census had a screen called `DecisionPanel refused` that showed no refusal. The fixture is
+  repaired; the prop's type is not.
+- **Four WCAG 1.4.11 failures are registered rather than repaired** — §3.4. The repair is a
+  border-scale decision with an owner.
+- **Eleven of the journey's fifteen `expects_rendered` sentences are still verified by no
+  instrument in the gate** — §5.2. Only `refusals.mjs` against a running stack reaches them.
