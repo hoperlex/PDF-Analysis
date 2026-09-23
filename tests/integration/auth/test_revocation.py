@@ -43,7 +43,28 @@ from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
 from auditmanager.bootstrap.adapters import CredentialAdapter
 from auditmanager.shared.errors import DomainError, ErrorCode
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+def _tree_under_test() -> Path:
+    """The root of the tree pytest actually imported, derived from the module under test.
+
+    **Not** ``Path(__file__).parents[3]``, and the difference is the whole reason this
+    function exists. The operator command below is driven as a *subprocess*, so it gets its
+    own interpreter and its own ``PYTHONPATH``; a path derived from **this file** points at
+    whichever checkout the test module was read from, which in a
+    ``make mutation-copy`` run is the pristine one. The subprocess would then execute
+    unmutated code and report green, and a green from a mutation that never reached the
+    code is indistinguishable from a guard that cannot fail.
+
+    Measured, not feared: the first sweep of this wave mutated
+    ``access/revoke.py``'s required-argument group and its "nothing matched" exit status,
+    and **both cases reddened nothing** -- ``20 passed`` twice -- because of exactly this.
+    ``OPERATING_CONSTRAINTS.md`` §10 records the same fix for the ledger tool, in the same
+    words: resolve it *test-side* from ``auditmanager.__file__`` so a mutation run gets the
+    copy rather than silently reading the pristine tree.
+    """
+    import auditmanager
+
+    return Path(auditmanager.__file__).resolve().parents[2]
+
 
 #: This suite's deployment secret. Not a credential: it is what the signing key is derived
 #: from, and presenting it is a refusal like any other string.
@@ -500,12 +521,13 @@ def test_no_password_reaches_the_answer_or_the_credential(
 
 def _run_revoke(*arguments: str) -> subprocess.CompletedProcess[str]:
     """Run the command as an operator runs it: a subprocess, reading its own environment."""
+    tree = _tree_under_test()
     environment = dict(os.environ)
-    environment["PYTHONPATH"] = str(REPOSITORY_ROOT / "src")
+    environment["PYTHONPATH"] = str(tree / "src")
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     return subprocess.run(
         [sys.executable, "-m", "auditmanager.access.revoke", *arguments],
-        cwd=REPOSITORY_ROOT,
+        cwd=tree,
         env=environment,
         capture_output=True,
         text=True,
