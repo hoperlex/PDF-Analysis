@@ -82,6 +82,7 @@ import { ProjectsPage } from '@/_pages/projects';
 import { KnowledgeBasePage } from '@/_pages/knowledge-base';
 import { ReviewPage } from '@/_pages/review';
 import { SignInPage } from '@/_pages/sign-in';
+import { ChangePasswordPage } from '@/_pages/change-password';
 import { RunPage } from '@/_pages/run';
 import { VersionDetailPage } from '@/_pages/version-detail';
 
@@ -759,6 +760,43 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
    * *result* of choosing one, and that is a query key rather than a string.
    */
   { name: 'knowledge-base', make: () => createElement(KnowledgeBasePage, {}) },
+  /*
+   * The password screen, `R-26`, APPENDED for the reason stated twice above:
+   * `renderedScreens()` reaches the review screen by index, so a screen inserted anywhere
+   * but the end renders a different page under the review screen's name.
+   *
+   * FOUR entries, one more than the sign-in screen, because this screen has four shapes a
+   * static pass can select between and all four carry prose a reviewer reads:
+   *
+   *   - signed out: no form at all, because a form that could only be refused teaches a
+   *     reviewer that a refusal means nothing;
+   *   - signed in, nothing attempted: the form and the sentence that says what pressing the
+   *     button will revoke;
+   *   - refused: the `ErrorState` wording, which `W32-SEE` measured as the exact place an
+   *     English sentence survives -- a branch nothing renders reddens nothing;
+   *   - changed: the one outcome that is NOT an error, and therefore the one shape whose
+   *     markup this file would otherwise never see.
+   *
+   * The other four refusal sentences are judged by
+   * `web/tests/unit/session/change-password.test.ts`, which renders all six outcomes.
+   * The login is Cyrillic for the reason every fixture in this file is: it is the server's
+   * data, not this programme's prose.
+   */
+  { name: 'change-password-signed-out', make: () => createElement(ChangePasswordPage, {}) },
+  {
+    name: 'change-password',
+    make: () => createElement(ChangePasswordPage, { login: 'проверяющий' }),
+  },
+  {
+    name: 'change-password-refused',
+    make: () =>
+      createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'credentials' }),
+  },
+  {
+    name: 'change-password-changed',
+    make: () =>
+      createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'changed' }),
+  },
 ];
 
 /**

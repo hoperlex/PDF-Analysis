@@ -56,7 +56,9 @@ from starlette.testclient import TestClient
 
 from auditmanager.analysis.text import ProviderMode, RecordedAdapter
 from auditmanager.api.app import create_asgi_app
+from auditmanager.access.repository import UserRepository as UserAccessRepository
 from auditmanager.api.routers import build_router
+from auditmanager.bootstrap.adapters import CredentialAdapter
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
 from auditmanager.bootstrap.adapters import RunAdapter
@@ -88,6 +90,15 @@ else:
 #: `T-6`. Written out, not imported from the seam it authenticates against. The secret
 #: the signing key is derived from; the credential is minted from it below.
 DEPLOYMENT_SECRET = "w20-exec-carrier-token"
+
+def _credential_signer() -> Any:
+    """This suite's signer, built from the same secret its credential is minted with."""
+    from auditmanager.api.security import build_signer
+
+    signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
+    assert signer is not None, "this suite's own secret derives a signing key"
+    return signer
+
 
 _STATIC_TOKEN_CACHE: str | None = None
 
@@ -260,6 +271,15 @@ def _client(
         findings=None,  # type: ignore[arg-type]
         decisions=None,  # type: ignore[arg-type]
         exports=None,  # type: ignore[arg-type]
+        # `W39-REVOKE`. The seam reads the account's credential generation on every guarded
+        # request, through the port the router carries, so a router built with none refuses
+        # everything -- correctly, since an application that cannot tell a live credential
+        # from a revoked one must fail closed. The shipped adapter, not a stub: it is the
+        # object the composition root wires and the one that answers for the account
+        # `static_token()` provisioned.
+        credentials=CredentialAdapter(
+            sessions, users=UserAccessRepository(), signer=_credential_signer()
+        ),
     )
     app = create_asgi_app(
         environ={API_TOKEN_VARIABLE: DEPLOYMENT_SECRET},

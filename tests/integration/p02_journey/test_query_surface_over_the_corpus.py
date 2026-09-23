@@ -77,7 +77,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from auditmanager.access.repository import UserRepository as UserAccessRepository
 from auditmanager.api.routers import build_router
+from auditmanager.bootstrap.adapters import CredentialAdapter
 from auditmanager.api.schemas.models import FindingCategory, Verdict
 from auditmanager.bootstrap.adapters import (
     CsvExportAdapter,
@@ -94,6 +96,15 @@ from auditmanager.runs import InlineCarrier
 #: true population is whatever the instance has accumulated, and is asserted rather than
 #: assumed in :func:`test_the_population_is_not_a_fixture_of_three_rows`.
 NEIGHBOUR_RUNS = 6
+
+
+def _credential_signer() -> Any:
+    """This suite's signer, built from the same secret its credential is minted with."""
+    from auditmanager.api.security import API_TOKEN_VARIABLE as _VARIABLE, build_signer
+
+    signer = build_signer({_VARIABLE: _DEPLOYMENT_SECRET})
+    assert signer is not None, "this suite's own secret derives a signing key"
+    return signer
 
 
 @pytest.fixture(scope="module")
@@ -118,6 +129,17 @@ def router(session_factory):
         findings=FindingAdapter(session_factory),
         decisions=DecisionAdapter(session_factory),
         exports=CsvExportAdapter(session_factory),
+        # `W39-REVOKE`. The seam reads the account's credential generation on every
+        # guarded request, through the port the router carries, so a router built with none
+        # refuses everything -- correctly, since an application that cannot tell a live
+        # credential from a revoked one must fail closed. The shipped adapter is wired here
+        # rather than a stub, because it is the object the composition root wires and it is
+        # the one that answers for the account `static_token()` provisioned.
+        credentials=CredentialAdapter(
+            session_factory,
+            users=UserAccessRepository(),
+            signer=_credential_signer(),
+        ),
     )
 
 
