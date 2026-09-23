@@ -37,6 +37,7 @@ class TestTheKeyIsClaimedNotHashed:
                 finding_observation_id=observation_id,
                 event_type="accept",
                 idempotency_key=key,
+                author_label="reviewer-1",
             )
             second, replayed_second = append_decision_under_key(
                 session,
@@ -44,6 +45,7 @@ class TestTheKeyIsClaimedNotHashed:
                 finding_observation_id=observation_id,
                 event_type="accept",
                 idempotency_key=key,
+                author_label="reviewer-1",
             )
             assert replayed_first is False
             assert replayed_second is True
@@ -63,6 +65,7 @@ class TestTheKeyIsClaimedNotHashed:
                 finding_observation_id=observation_id,
                 event_type="reject",
                 idempotency_key=_key(),
+                author_label="reviewer-1",
             )
             assert event.command_id is not None
             row = session.execute(
@@ -90,6 +93,7 @@ class TestTheKeyIsClaimedNotHashed:
                 finding_observation_id=observation_id,
                 event_type="accept",
                 idempotency_key=key,
+                author_label="reviewer-1",
             )
             with pytest.raises(DomainError) as caught:
                 append_decision_under_key(
@@ -98,6 +102,7 @@ class TestTheKeyIsClaimedNotHashed:
                     finding_observation_id=observation_id,
                     event_type="reject",
                     idempotency_key=key,
+                    author_label="reviewer-1",
                 )
             assert caught.value.code is ErrorCode.IDEMPOTENCY_KEY_REUSE
             assert len(decision_history(session, finding_uid)) == 1

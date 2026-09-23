@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass
@@ -63,6 +64,32 @@ class ProxySettings:
             raise DomainError(
                 ErrorCode.INTERNAL_ERROR,
                 message="the proxy base URL is not an absolute http or https address",
+            )
+        # `D-72`. The prefix check above accepts `http://:59990` -- a URL with a port and
+        # no host -- because the string really does start with `http://`. It then fails at
+        # call time out of `urllib` as `dependency_unavailable`, which the frozen catalog
+        # marks `retryable: true`, so a lane pointed at nothing retries a ladder against a
+        # configuration error and reports a provider outage. `infra/deploy/env/provider.env`
+        # on the owner's stand carries exactly that value today (`D-70`).
+        #
+        # `urlsplit().hostname` rather than a second string test: it is the same parse
+        # `urllib.request` will perform on this string a moment later, so what is refused
+        # here is what the transport would have found missing. It raises `ValueError` on a
+        # malformed authority -- an unbracketed IPv6 literal, a non-numeric port -- and that
+        # is the same defect arriving by another route, so it is caught and refused with it
+        # rather than escaping as an unclassified 500.
+        try:
+            host = urllib.parse.urlsplit(self.base_url).hostname
+        except ValueError:
+            host = None
+        if not host:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message=(
+                    "the proxy base URL names no host; a URL of the form "
+                    "'http://:<port>' is a lane pointed at nothing and its failures are "
+                    "indistinguishable from a provider outage"
+                ),
             )
         if not self.token:
             raise DomainError(

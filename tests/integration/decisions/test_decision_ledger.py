@@ -14,7 +14,6 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from auditmanager.decisions import (
-    CONFIGURED_AUTHOR_LABEL,
     DECLARED_EVENT_TYPES,
     PC01_EVENT_TYPES,
     current_verdict,
@@ -37,6 +36,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="reviewer-1",
         )
         commented = record_decision(
             session,
@@ -44,12 +44,14 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_observation_id=published.finding_observation_id,
             event_type="comment",
             comment="Проверено по разделу АР.",
+            author_label="reviewer-1",
         )
         reject = record_decision(
             session,
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
+            author_label="reviewer-1",
         )
 
         identities = {accept.decision_id, commented.decision_id, reject.decision_id}
@@ -71,6 +73,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="reviewer-1",
         )
         projection = current_verdict(session, published.finding_uid)
         assert projection is not None
@@ -81,6 +84,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
+            author_label="reviewer-1",
         )
         projection = current_verdict(session, published.finding_uid)
         assert projection.current_verdict == "rejected"
@@ -96,6 +100,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="reviewer-1",
         )
         before = current_verdict(session, published.finding_uid)
         assert before.current_verdict == "accepted"
@@ -107,6 +112,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_observation_id=published.finding_observation_id,
             event_type="comment",
             comment="Согласовано с ГИП.",
+            author_label="reviewer-1",
         )
         after = current_verdict(session, published.finding_uid)
 
@@ -136,6 +142,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_observation_id=published.finding_observation_id,
             event_type="comment",
             comment="Нужна проверка.",
+            author_label="reviewer-1",
         )
         projection = current_verdict(session, published.finding_uid)
         assert projection.current_verdict == "pending"
@@ -172,6 +179,7 @@ class TestTheProjectionIsRebuildable:
                 finding_observation_id=published.finding_observation_id,
                 event_type=event_type,
                 comment=comment,
+                author_label="reviewer-1",
             )
 
         stored = current_verdict(session, published.finding_uid)
@@ -201,12 +209,14 @@ class TestTheProjectionIsRebuildable:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="reviewer-1",
         )
         record_decision(
             session,
             finding_uid=published.second_finding_uid,
             finding_observation_id=published.second_finding_observation_id,
             event_type="reject",
+            author_label="reviewer-1",
         )
         assert current_verdict(session, published.finding_uid).current_verdict == "accepted"
         assert (
@@ -235,7 +245,7 @@ class TestRevocation:
                 "d": decision_id,
                 "f": published.finding_uid,
                 "o": published.finding_observation_id,
-                "label": CONFIGURED_AUTHOR_LABEL,
+                "label": "planted-by-the-test",
             },
         )
         return decision_id
@@ -249,6 +259,7 @@ class TestRevocation:
                 finding_uid=published.finding_uid,
                 finding_observation_id=published.finding_observation_id,
                 event_type="revoke",
+                author_label="reviewer-1",
             )
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
         assert "revoke" in DECLARED_EVENT_TYPES
@@ -262,6 +273,7 @@ class TestRevocation:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="reviewer-1",
         )
         assert current_verdict(session, published.finding_uid).current_verdict == "accepted"
 
@@ -279,12 +291,14 @@ class TestRevocation:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="reviewer-1",
         )
         second = record_decision(
             session,
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
+            author_label="reviewer-1",
         )
         self._revoke(session, published)
 
@@ -312,6 +326,7 @@ class TestRevocation:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="reviewer-1",
         )
         self._revoke(session, published)
         assert current_verdict(session, published.finding_uid).current_verdict == "pending"
@@ -321,6 +336,7 @@ class TestRevocation:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="reviewer-1",
         )
         projection = current_verdict(session, published.finding_uid)
         assert projection.current_verdict == "accepted"
@@ -334,6 +350,7 @@ class TestTheLedgerRefusesRewriting:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="reviewer-1",
         )
         with pytest.raises(DBAPIError) as caught:
             with nested_transaction(session):
@@ -363,6 +380,7 @@ class TestTheLedgerRefusesRewriting:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
+            author_label="reviewer-1",
         )
         with pytest.raises(DBAPIError) as caught:
             with nested_transaction(session):
@@ -428,6 +446,7 @@ class TestWhatMayBeJudged:
                 finding_uid=FindingUid.new().value,
                 finding_observation_id=published.finding_observation_id,
                 event_type="accept",
+                author_label="reviewer-1",
             )
         assert caught.value.code is ErrorCode.NOT_FOUND
 
@@ -459,6 +478,7 @@ class TestWhatMayBeJudged:
                 finding_uid=published.finding_uid,
                 finding_observation_id=rejected,
                 event_type="accept",
+                author_label="reviewer-1",
             )
         assert caught.value.code is ErrorCode.NOT_FOUND
 
@@ -469,6 +489,7 @@ class TestWhatMayBeJudged:
                 finding_uid=FindingUid.new().value,
                 finding_observation_id=rejected,
                 event_type="accept",
+                author_label="reviewer-1",
             )
         assert caught.value.code is ErrorCode.NOT_FOUND
 
@@ -499,6 +520,7 @@ class TestWhatMayBeJudged:
                 finding_uid=published.finding_uid,
                 finding_observation_id=published.second_finding_observation_id,
                 event_type="accept",
+                author_label="reviewer-1",
             )
         assert caught.value.code is ErrorCode.NOT_FOUND
 
@@ -511,6 +533,7 @@ class TestWhatMayBeJudged:
                 finding_uid=published.finding_uid,
                 finding_observation_id=published.finding_observation_id,
                 event_type="comment",
+                author_label="reviewer-1",
             )
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
 
@@ -523,6 +546,7 @@ class TestWhatMayBeJudged:
                 finding_uid=published.finding_uid,
                 finding_observation_id=published.finding_observation_id,
                 event_type="needs_manual_review",
+                author_label="reviewer-1",
             )
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
 
@@ -538,6 +562,7 @@ class TestIdempotency:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             command_id=command_id,
+            author_label="reviewer-1",
         )
         second = record_decision(
             session,
@@ -545,6 +570,7 @@ class TestIdempotency:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             command_id=command_id,
+            author_label="reviewer-1",
         )
         assert second.decision_id == first.decision_id
         assert current_verdict(session, published.finding_uid).decision_event_count == 1
@@ -563,6 +589,7 @@ class TestIdempotency:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             command_id=command_id,
+            author_label="reviewer-1",
         )
         with pytest.raises(IntegrityError):
             with nested_transaction(session):
@@ -601,6 +628,7 @@ class TestIdempotency:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             command_id=command_id,
+            author_label="reviewer-1",
         )
 
         real = ledger_module._existing_event
@@ -620,6 +648,7 @@ class TestIdempotency:
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
             command_id=command_id,
+            author_label="reviewer-1",
         )
         assert calls["n"] == 2, "the insert must have been attempted and refused"
         assert second.decision_id == first.decision_id
@@ -635,6 +664,7 @@ class TestIdempotency:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             command_id=command("expert-accept-003"),
+            author_label="reviewer-1",
         )
         two = record_decision(
             session,
@@ -642,28 +672,91 @@ class TestIdempotency:
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
             command_id=command("expert-reject-003"),
+            author_label="reviewer-1",
         )
         assert one.decision_id != two.decision_id
         assert current_verdict(session, published.finding_uid).decision_event_count == 2
 
 
 class TestAuthorLabel:
-    def test_the_configured_label_is_persisted_with_every_event(
+    """`D-78`. The author the caller names is the author the ledger keeps.
+
+    **This class used to be vacuous and `W12-DEC` said so at the time.** It imported
+    ``CONFIGURED_AUTHOR_LABEL`` and compared both sides of the assertion to it, so mutation
+    ``M21`` -- the constant changed from ``"local-reviewer"`` to ``"someone-else"`` --
+    moved the expectation along with the subject and reddened nothing. `W12-DEC` recorded
+    that as deliberate: pinning the literal would have frozen what the module called a
+    composition-root knob.
+
+    It is no longer a knob. The label is the login of the reviewer the seam verified, so
+    there is a real question to ask here and it is asked with **literals this file owns**:
+    two different labels go in, the same two come back out of the database, and neither of
+    them is read from the module under test.
+    """
+
+    def test_the_label_the_caller_gives_is_the_label_the_row_keeps(
         self, session: Session, published
     ) -> None:
-        """OD-12: a label, not a subject identity, and it authorizes nothing."""
         event = record_decision(
             session,
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="anna.petrova",
         )
-        assert event.author_label == CONFIGURED_AUTHOR_LABEL
+        assert event.author_label == "anna.petrova"
         stored = session.execute(
             text("SELECT author_label FROM expert_decision_event WHERE decision_id = :d"),
             {"d": event.decision_id},
         ).scalar_one()
-        assert stored == CONFIGURED_AUTHOR_LABEL
+        assert stored == "anna.petrova"
+
+    def test_a_second_author_is_a_second_label(self, session: Session, published) -> None:
+        """The control, and the whole of `D-78` at this level.
+
+        One event proves a string survives a round trip. Two events by two authors prove the
+        column carries *whose* judgement it was -- which is what `P04` reads it for, and what
+        a single configured constant could never answer.
+        """
+        first = record_decision(
+            session,
+            finding_uid=published.finding_uid,
+            finding_observation_id=published.finding_observation_id,
+            event_type="accept",
+            author_label="anna.petrova",
+        )
+        second = record_decision(
+            session,
+            finding_uid=published.finding_uid,
+            finding_observation_id=published.finding_observation_id,
+            event_type="reject",
+            author_label="boris.smirnov",
+        )
+        rows = session.execute(
+            text(
+                "SELECT decision_id, author_label FROM expert_decision_event "
+                "WHERE finding_uid = :f ORDER BY sequence_no"
+            ),
+            {"f": published.finding_uid},
+        ).all()
+        assert [(row[0], row[1]) for row in rows] == [
+            (first.decision_id, "anna.petrova"),
+            (second.decision_id, "boris.smirnov"),
+        ]
+
+    def test_the_ledger_offers_no_default_author(self) -> None:
+        """`D-66`'s shape, kept out by construction.
+
+        A default is what a caller with no authenticated subject falls into, and a row
+        attributed to a configuration constant reads like a decision somebody took.
+        """
+        import inspect
+
+        parameter = inspect.signature(record_decision).parameters["author_label"]
+        assert parameter.default is inspect.Parameter.empty, (
+            f"record_decision defaults `author_label` to {parameter.default!r}; a decision "
+            "with no named author must be a refusal, not an anonymous row."
+        )
 
     def test_an_empty_label_is_refused(self, session: Session, published) -> None:
         with pytest.raises(DomainError) as caught:
@@ -691,6 +784,7 @@ class TestOrdering:
                 finding_observation_id=published.finding_observation_id,
                 event_type="comment",
                 comment=f"Замечание {index}.",
+                author_label="reviewer-1",
             )
             for index in range(3)
         ]
@@ -711,6 +805,7 @@ class TestOrdering:
             finding_uid=published.finding_uid,
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
+            author_label="reviewer-1",
         )
         assert not hasattr(event, "sequence_no")
         projection = current_verdict(session, published.finding_uid)

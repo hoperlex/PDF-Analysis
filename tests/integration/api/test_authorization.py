@@ -568,9 +568,18 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
 
     * no router reaches into ``request.state`` itself, because a router that read the
       request's state bag could read anything the seam ever puts there;
-    * exactly one router module depends on the seam's accessor, and it is the one that
-      changes a password -- an operation about *identity*, not about permission;
+    * exactly two router modules depend on the seam's accessor, and both read it to answer
+      a question about *identity* rather than about permission;
     * the value on the request is the whole verified subject, epoch included.
+
+    **The second reader arrived with `D-78`.** ``appendDecision`` records which reviewer
+    took a decision, and before it read the subject the ledger wrote one configured string
+    -- ``"local-reviewer"`` -- for every verdict by every reviewer, which made `P04`'s
+    question *whose judgement was this* unanswerable. It reads ``subject.login`` and writes
+    it; it reads no role, grants nothing and refuses nothing on the strength of who the
+    caller is. **The count in the assertion below is the thing to defend.** A third module
+    reaching for the subject is where an invented role model would start, and the
+    assertion's job is to make that a decision somebody takes on purpose.
     """
     import pathlib
 
@@ -585,15 +594,24 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "it through `CurrentSubject`, which is one place to change and one place to audit; "
         "a router reading `request.state` can read whatever else is ever put there."
     )
+    # **Imports, not occurrences.** The first version of this line asked whether the string
+    # ``CurrentSubject`` appeared anywhere in the file, and `D-78` walked straight into what
+    # that cannot tell apart: ``ports.py`` names the accessor in a docstring, to say where
+    # ``author_label`` comes from, and depends on nothing. A module *depends* on the seam's
+    # accessor when it imports it, so that is the question asked -- through the module's
+    # own syntax tree rather than through a substring, because a substring is how the
+    # previous formulation went blind. It is strictly narrower than the old check and can
+    # still fail: ``test_the_subject_reader_check_can_fail`` below imports the accessor into
+    # a module that is not named here and requires this assertion to reject it.
     subject_readers = sorted(
         path.name
         for path in routers.rglob("*.py")
-        if "CurrentSubject" in path.read_text(encoding="utf-8")
+        if _imports_the_seam_accessor(path)
     )
-    assert subject_readers == ["auth.py"], (
+    assert subject_readers == ["auth.py", "decisions.py"], (
         f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "
-        "the seam's own vocabulary and `changePassword` needs it; deciding WHAT they may do "
-        "is the roles work `T-6` says must not be invented here, and a second operation "
+        "the seam's own vocabulary and two operations need it; deciding WHAT they may do "
+        "is the roles work `T-6` says must not be invented here, and a third operation "
         "reaching for the subject is where that would start."
     )
 
@@ -620,6 +638,60 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # field somebody adds later visible here rather than silent.
         token_epoch=TEST_SUBJECT.token_epoch,
     ), seen
+
+
+def _imports_the_seam_accessor(path: "pathlib.Path") -> bool:
+    """Does this module import the seam's subject accessor?
+
+    ``from auditmanager.api.security import CurrentSubject`` -- or ``current_subject``, the
+    dependency behind it. Read off the module's syntax tree, so a mention in prose is not a
+    dependency and an import hidden inside a function still is.
+    """
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "auditmanager.api.security":
+            if any(alias.name in ("CurrentSubject", "current_subject") for alias in node.names):
+                return True
+        if isinstance(node, ast.Attribute) and node.attr in (
+            "CurrentSubject",
+            "current_subject",
+        ):
+            return True
+    return False
+
+
+def test_the_subject_reader_check_can_fail(tmp_path: object) -> None:
+    """The anti-vacuity half of the check above, and the reason it is a function.
+
+    A guard that answers "no module imports this" is indistinguishable from a guard that
+    cannot see an import at all. So an import is planted, in each of the three spellings a
+    router could reach the accessor by, and the reader has to find every one of them --
+    and has to keep ignoring a module that only names it in prose, which is the false
+    positive `D-78` produced on ``ports.py``.
+    """
+    import pathlib
+
+    plants = {
+        "as_a_type.py": "from auditmanager.api.security import CurrentSubject\n",
+        "as_a_dependency.py": "from auditmanager.api.security import current_subject\n",
+        "by_attribute.py": (
+            "import auditmanager.api.security as seam\n"
+            "X = seam.current_subject\n"
+        ),
+    }
+    for name, source in plants.items():
+        planted = pathlib.Path(tmp_path) / name
+        planted.write_text(source, encoding="utf-8")
+        assert _imports_the_seam_accessor(planted), name
+
+    prose = pathlib.Path(tmp_path) / "only_prose.py"
+    prose.write_text(
+        '"""A module that says CurrentSubject and current_subject and imports neither."""\n',
+        encoding="utf-8",
+    )
+    assert not _imports_the_seam_accessor(prose)
 
 
 # =======================================================================================

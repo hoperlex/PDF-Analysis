@@ -25,6 +25,8 @@ from auditmanager.api.schemas.decisions import (
     decision_record_body,
     check_comment_is_present_for_a_comment_event,
 )
+from auditmanager.api.security import CurrentSubject
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = ["build_decision_routes"]
 
@@ -54,6 +56,7 @@ def build_decision_routes(
         finding_uid: Annotated[models.FindingUid, Path()],
         body: models.AppendDecisionRequest,
         idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
     ) -> WireResponse:
         # One rule the contract states in prose and no JSON Schema keyword can express:
         # a `comment` event must carry a comment. It is checked here, against the
@@ -62,12 +65,23 @@ def build_decision_routes(
         check_comment_is_present_for_a_comment_event(
             event_type=body.event_type.value, comment=body.comment
         )
+        # `D-78`. `subject.login` and never `body`: this is the second operation on the
+        # surface to read who the caller is, and it reads it for the same reason
+        # `changePassword` does -- the answer is about *identity*, not about permission,
+        # which is the roles work `T-6` says must not be invented here. The ledger recorded
+        # one configured constant for every reviewer until this line existed.
+        #
+        # The login rather than `user_uid`: `author_label` is what a reviewer reads on a
+        # decision somebody else took, and an opaque identity would make the field
+        # unreadable to the only audience it has. It is a signed claim, so no client can
+        # choose it, and `AppendDecisionRequest` is closed, so no body can carry one.
         appended = decisions.append_decision(
             finding_uid=finding_uid,
             finding_observation_id=body.finding_observation_id,
             event_type=body.event_type.value,
             comment=body.comment,
             idempotency_key=idempotency_key,
+            author_label=subject.login,
         )
         payload = append_decision_body(appended.event, appended.current_verdict)
         return json_response(201, encode_json(payload))
@@ -97,12 +111,12 @@ def build_decision_routes(
         # the same line in `findings.py`, and applies word for word: the `404` is the
         # frozen contract's statement about this operation, and the operation is here.
         #
-        # It costs a read of the finding, and the shipped `FindingAdapter.get_finding`
-        # reads its evidence, its current verdict and -- this listing's own rows -- its
-        # history, to answer a yes/no. `D-67`'s repair is deliberately not widened into a
-        # narrower port method: `ports.py`'s implementations live outside this stream's
-        # allowed paths.
-        findings.get_finding(finding_uid=finding_uid)
+        # `D-74`. It used to call `get_finding`, which reads the finding's evidence, its
+        # current verdict and -- this listing's own rows -- its whole history, to answer a
+        # yes/no, and the line below then read that history a second time. `finding_exists`
+        # is the narrow question; the refusal stays here, where the operation is.
+        if not findings.finding_exists(finding_uid=finding_uid):
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Finding")
         rows = decisions.decision_history(finding_uid=finding_uid)
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_decision_sort_key)
         body = page_body([decision_event_body(view) for view in page.items], page.next_cursor)

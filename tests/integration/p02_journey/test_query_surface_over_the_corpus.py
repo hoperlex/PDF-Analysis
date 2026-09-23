@@ -290,6 +290,7 @@ def verdicts(corpus, session_factory, router):
             finding_observation_id=str(rows[0].finding_observation_id),
             event_type="accept",
             comment="w2-qa: accepted for the verdict filter",
+            author_label="reviewer-1",
         )
         record_decision(
             session,
@@ -297,6 +298,7 @@ def verdicts(corpus, session_factory, router):
             finding_observation_id=str(rows[1].finding_observation_id),
             event_type="reject",
             comment="w2-qa: rejected for the verdict filter",
+            author_label="reviewer-1",
         )
         session.commit()
         return {

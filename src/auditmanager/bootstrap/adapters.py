@@ -362,6 +362,20 @@ class RunAdapter(_SessionHolder):
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._read(lambda session: _run_status_view(session, run_id))
 
+    def run_exists(self, *, run_id: str) -> bool:
+        """`D-74`. One row of ``audit_run``, and nothing else.
+
+        ``RunRepository.find`` is the repository's own narrow read -- the same
+        ``_SELECT_RUN`` its ``get`` uses, without the refusal -- so this adds no query to
+        the tree and reads no stage result and no model call. ``get_run_status`` reads all
+        three, which is what made proving a parent exists cost a full parent.
+        """
+        from auditmanager.runs import RunRepository
+
+        return self._read(
+            lambda session: RunRepository().find(session, run_id) is not None
+        )
+
     def list_runs(self, *, version_uid: str) -> Sequence[RunStatusView]:
         """Every run of one version, each built through ``_run_status_view``.
 
@@ -554,6 +568,19 @@ class FindingAdapter(_SessionHolder):
 
         return self._read(work)
 
+    def finding_exists(self, *, finding_uid: str) -> bool:
+        """`D-74`. The question the decision ledger has always asked, offered to the router.
+
+        ``auditmanager.findings.queries.finding_exists`` is not new: ``record_decision``
+        calls it before appending, for the same reason and with the same meaning -- an
+        ungrounded observation carries no ``finding_uid`` and is ``False`` here. Using it
+        rather than a second query is what keeps "is this a published finding" one
+        sentence in one place.
+        """
+        from auditmanager.findings import finding_exists
+
+        return self._read(lambda session: finding_exists(session, finding_uid))
+
 
 class DecisionAdapter(_SessionHolder):
     def append_decision(
@@ -563,9 +590,18 @@ class DecisionAdapter(_SessionHolder):
         finding_observation_id: str,
         event_type: str,
         idempotency_key: str,
+        author_label: str,
         comment: str | None = None,
-        **_: Any,
     ) -> Any:
+        """`D-78`. ``author_label`` is named, not swallowed, and has no default.
+
+        The ``**_`` this signature used to end with is the shape
+        ``test_every_adapter_accepts_every_parameter_its_port_declares`` exists because of:
+        the finding adapter once took one and dropped both its filters, so a filtered
+        request returned everything and looked like it had worked. A swallowed author would
+        have been worse -- the row would still be written, attributed to whatever the ledger
+        defaulted to -- so the argument is named and nothing here supplies a fallback.
+        """
         from auditmanager.decisions import append_decision_under_key, current_verdict
 
         def work(session: Session) -> Any:
@@ -576,6 +612,7 @@ class DecisionAdapter(_SessionHolder):
                 event_type=event_type,
                 idempotency_key=idempotency_key,
                 comment=comment,
+                author_label=author_label,
             )
             verdict = current_verdict(session, finding_uid)
             return _AppendedDecision(_event_view(event), getattr(verdict, "current_verdict", "pending"))

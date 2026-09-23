@@ -11,7 +11,6 @@ is a view of. All three are projections over the one event stream.
 """
 
 from auditmanager.decisions.ledger import (
-    CONFIGURED_AUTHOR_LABEL,
     DECLARED_EVENT_TYPES,
     PC01_EVENT_TYPES,
     VERDICT_FOR_EVENT,
@@ -29,7 +28,6 @@ from auditmanager.decisions.projection import (
 )
 
 __all__ = [
-    "CONFIGURED_AUTHOR_LABEL",
     "DECLARED_EVENT_TYPES",
     "PC01_EVENT_TYPES",
     "VERDICT_FOR_EVENT",

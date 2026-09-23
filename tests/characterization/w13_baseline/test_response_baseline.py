@@ -157,12 +157,28 @@ NON_TERMINAL_RUN_STATES = ("created", "queued", "running", "validating")
 #: those bodies are the published shape they have always been. Three records that moved
 #: together twice not moving together a third time is the reason `debt` is a list and the
 #: reason this map is written out case by case.
+#: **`W41-AUTHOR` added the eighth and ninth entries**, records 10 and 11, under `D-78`.
+#: They are one change seen twice: ``author_label`` was the constant ``"local-reviewer"``
+#: -- one string for every verdict by every reviewer -- and is now the login of the
+#: reviewer the authorization seam verified. Record 10 is the ``appendDecision`` response
+#: that writes the event; record 11 renders the same event back through
+#: ``listDecisionHistory``. Two entries and not one, because a record moved is a record
+#: named, and "the decision records" is not a countable thing.
+#:
+#: They cite **no ruling**, on `D-20`'s reading: nothing in ``contracts/**`` moved, no
+#: property was added to any schema, and ``DecisionEvent.author_label`` is declared by the
+#: seal with the same type and the same bounds. What moved is the value the server writes
+#: into a field it has always written. The frozen document's *description* of that field
+#: still calls it "one configured local reviewer label" and is now wrong; correcting it is
+#: a reseal and the owner's, and `W41-AUTHOR` reported it rather than doing it.
 PERMITTED_EXCEPTIONS = {
     "03-startRun.success": ("D-19", "D-21", "D-20"),
     "04-startRun.replay": ("D-19", "D-21"),
     "05-startRun.replay_with_normalised_property": ("D-19", "D-21"),
     "06-getRunStatus.success": ("D-19", "D-21"),
     "07-getRunStatus.correlation_supplied": ("D-19", "D-21"),
+    "10-appendDecision.success": ("D-78",),
+    "11-listDecisionHistory.success": ("D-78",),
     "16-listProjects.success": ("D-16",),
     "31-streamDocumentVersionContent.storage_credential_refused": ("D-7",),
 }
@@ -194,6 +210,12 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     enum has always declared and the frozen `audit_run` machine has always had an edge to
     -- instead of the terminal the inline executor had already reached. No property was
     added, so neither R-5's nor R-10's kind of authority is engaged.
+
+    `D-78` is records 10 and 11, and needs no ruling for `D-20`'s reason: `author_label`
+    is declared by the seal and has always been written, and what changed is the value the
+    server puts in it -- the login of the reviewer the seam verified, instead of one
+    constant for every reviewer. The two records are the same event written and then read
+    back.
     """
     marked = {
         path.stem: json.loads(path.read_text(encoding="utf-8"))["exception"]

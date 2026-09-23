@@ -104,13 +104,16 @@ def test_decision_ledger_is_append_only_and_projects_the_latest(composed_run, se
 
     record_decision(session, finding_uid=str(accepted.finding_uid),
                     finding_observation_id=str(accepted.finding_observation_id),
-                    event_type="accept", comment="verified against the page")
+                    event_type="accept", comment="verified against the page",
+                    author_label="reviewer-1")
     record_decision(session, finding_uid=str(rejected.finding_uid),
                     finding_observation_id=str(rejected.finding_observation_id),
-                    event_type="reject", comment="different objects")
+                    event_type="reject", comment="different objects",
+                    author_label="reviewer-1")
     record_decision(session, finding_uid=str(accepted.finding_uid),
                     finding_observation_id=str(accepted.finding_observation_id),
-                    event_type="comment", comment="checked again after restart")
+                    event_type="comment", comment="checked again after restart",
+                    author_label="reviewer-1")
     session.commit()
 
     verdict = current_verdict(session, str(accepted.finding_uid))
