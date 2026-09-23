@@ -13,9 +13,10 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 |---|---|---|
 | **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
 | D-63 | a dashboard | **deferred by the owner**; a reseal when it comes |
-| **D-65** | the account exists and nothing around it does — no rate limit, lockout, password change or **revocation** | **owner**: which belong in the alpha |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
-| D-76 | a manual-test document names a head three versions stale | reported once already, still stale |
+| D-76 | a manual-test document names a head three versions stale | **closed 2026-09-23**, corrected in place |
+| **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |
+| D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
 | **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -1582,6 +1583,63 @@ second time this programme has watched prose rot after being measured (`D-23`).
 
 Check: `grep -n 000 docs/manual-tests/PC-01_prototype.md` against `ls db/migrations/versions/`.
 
+### D-77 — `origin/dev` sat 41 commits behind `origin/main`, and a peer measured the programme on it
+
+**Found 2026-09-23 by `pdf-analysis-04`, not by the integrator who caused it.**
+
+This programme's version discipline says `origin/main` carries gated checkpoints and **`origin/dev`
+is the working tip**. For two waves it was the other way round: `main` advanced to `6aeda82` while
+`dev` and `planning/prototype-roadmap` both stayed at `94ff927` — **41 commits**, the whole of
+waves 39 and 40.
+
+**The cost was not theoretical and it was not paid by the person who caused it.** A peer session
+wrote `DEPLOY-READINESS.md` — a pre-flight review addressed to the owner — measured on `dev`,
+because measuring `dev` is what this programme's own rule tells a reader to do. Four of its rows
+were already closed: `D-65` had been ruled as `R-26` and all four account guards built, revocation
+among them. Its central argument — *that revocation could not be deferred* — was answered by
+revocation existing. **The document was correct about the tree it named and wrong about the
+programme, and no reader could have told the difference from inside it.**
+
+**The integrator's own close-of-wave report claimed both pushes had happened.** They had not. The
+report was written from intent rather than from `git rev-parse`, which is the same failure mode as
+`D-76` one level up: *a statement about state, taken from what was meant rather than from what is.*
+
+Fixed the same day: `dev` and `planning/prototype-roadmap` fast-forwarded to `6aeda82`, and the
+stale local `main` and `dev` pointers with them.
+
+**The rule this earns:** a wave is not closed until `git rev-parse origin/main origin/dev` is
+**read back and quoted**. A push that is not verified is a push that did not happen, and a branch
+other sessions are told to measure is a shared resource in exactly the sense
+`OPERATING_CONSTRAINTS.md` §4.5 means.
+
+Check: `git rev-list --count origin/dev..origin/main` — it must be `0` at the close of a wave.
+
+### D-78 — every verdict by every reviewer is attributed to the same constant
+
+**Raised 2026-09-23 by `pdf-analysis-04` from its authorization audit; verified by the integrator
+and taken into wave 41 as `W41-AUTHOR` the same hour.**
+
+`src/auditmanager/decisions/ledger.py:60` is `CONFIGURED_AUTHOR_LABEL: Final[str] = "local-reviewer"`.
+`OD-18` wants three to five named experts in the alpha and `P04` exists to learn **whose** judgement
+was whose. With this constant in place it cannot: three experts produce one indistinguishable voice.
+
+**It touches no contract.** `DecisionEvent.author_label` is already in the schema
+(`api/schemas/models.py:561,594`, `min_length=1, max_length=128`) and the column already exists.
+
+**Two rules meet at that constant, and wave 34 made one of them false without moving it.** The
+docstring says the label *"is never taken from a request body — PC-01 has no authentication, and a
+client-supplied 'who did this' would be a subject identity in all but name."* The first half is
+still exactly right and must survive any repair. The second half stopped being true in wave 34:
+`api/security.py:403` builds `Subject(user_uid, login, token_epoch)` on every authenticated
+request, and `require_authorization` **returns `None`** — the identity is established and then
+discarded. **A justification that outlived its premise, which is `OPERATING_CONSTRAINTS.md` §4.7.**
+
+`W12-DEC` recorded mutation `M21` — `"local-reviewer"` → `"someone-else"` — as **deliberately
+green**. That is the measurement of this row, and after `W41-AUTHOR` it must be red.
+
+Check: `grep -n CONFIGURED_AUTHOR_LABEL src/auditmanager/decisions/ledger.py` and read what
+`require_authorization` returns.
+
 ### D-73 — four routes answer 200 with no credential, because the seam is on the router
 
 **Found by `W40-GUARDS` 2026-09-23 and verified by the integrator on the live stand.**
@@ -1964,11 +2022,35 @@ narrower than its contract, one level up.
 
 Check: `grep -n "runs.detail" web/src/entities/audit-run/api/use-run-status.ts web/src/_pages/review/ui/review-page.tsx`
 
-### D-58 — a screen tells a reviewer about `uploadDocument` and `document_uid`
+### D-58 — a screen tells a reviewer about the transport — **the row was wrong twice, and what is left is smaller**
 
-**Found by `W32-SEE` 2026-09-21.** `web/src/_pages/version-detail/ui/version-list.tsx:7`
-renders a sentence naming an **operation id** and a **contract field** to the person doing the
-review.
+**Re-measured by the integrator 2026-09-23, and both of the row's own facts were false.**
+
+**The path did not exist.** The row named `web/src/_pages/version-detail/ui/version-list.tsx:7`.
+There is no such file. The widget is `web/src/widgets/version-list/ui/version-list.tsx`, and
+`_pages/version-detail/` holds a different component entirely. That is the fourth row on this
+register to name a path nobody opened — `D-57`, `D-62`, `D-67` and now this one — and the reason
+is the same every time: **the row was written from a guard's report rather than from the file.**
+
+**And line 7 is inside a JSDoc comment.** `uploadDocument` and `document_uid` are named in the
+module docstring, where they belong: they explain to the next author why the widget is written
+for a list that returns one row. A comment renders to nobody. *The row was about a rendered
+sentence and cited a line that is not rendered.*
+
+**What was actually on screen has since been translated**, by whichever wave closed `D-53`, and
+names neither the operation nor the field. So the original defect is gone and nothing recorded
+its closure.
+
+**What remains is real but is one clause, not a row's worth:**
+
+> Одна версия на загрузку: сегодня каждая загрузка заводит новый документ, а не новую версию
+> уже загруженного. **Ограничение в передаче данных, а не в хранилище:** вторую версию оно умеет
+> публиковать, и ничего из загруженного не потеряно.
+
+The first sentence earns its place — without it a reviewer wonders whether a version is missing,
+which is worse. The bolded clause is the `R-18` offence: *a finished application does not explain
+its own transport to the person using it*, and "a limitation in data transfer, not in storage" is
+exactly that explanation. **Repair is a deletion**, like `D-62`'s.
 
 This is the class `D-54` closed twice in wave 31 — the footer that addressed a developer, and
 `RoutePlaceholder` showing developers' notes — **recurring in a third place that no wave-31

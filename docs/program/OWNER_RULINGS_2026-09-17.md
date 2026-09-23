@@ -501,6 +501,33 @@ to git.
 | **queue** | waits for a full vertical |
 | **work schedule** | important, deferrable to later alpha releases |
 
+**`R-23`'s same-day addendum — four more screens, and the rule they made general.** Ruled the
+same day and landed 2026-09-23, on **blocks, optimisation, logs and workers**: all four are
+wanted, each is wired up as its vertical lands, and **the front-end preparation may be done
+now.** Out of that and the six above the owner's drafting session extracted a rule worth stating
+once instead of per screen:
+
+> **The front end carries the structure before the back end does, with honest stubs.**
+> A section that does not exist yet looks like a finished section saying it is unavailable —
+> not missing, and not pretending to work.
+
+This is `R-18` (*breadth of finish over depth of function*) applied to the whole of navigation,
+and it has already run on the fourteen project sections: thirteen stubs, one working, and the
+screen saying plainly that sections are navigation.
+
+**Preparation means four things, none of which touches the contract:** a place in the navigation;
+a `RoutePlaceholder` carrying a `promise` — what will be here, not *"not implemented"*; the data
+shape written down and checked against the contract, so a future reseal is seen now rather than
+at the end of a wave; and **no invented numbers** — an empty screen is more honest than a
+plausible one.
+
+**And what preparation does not buy, stated plainly because a stub reads like progress:** none
+of the four verticals moves. Blocks has no block geometry in the data — `coords_norm` is
+`[0,0,1,1]` on all **28 249** corpus blocks and `polygon_points` is empty, so there is no vector
+graph to draw. Optimisation has one visible analysis stage against legacy's seventeen, so there
+is nothing to tune. Logs exist on the server with no contract operation to read them. Workers
+are excluded outright by `PROTOTYPE_PROFILE.md` §7.
+
 ### `R-24` — the knowledge base gets a listing operation in the contract
 
 **Ruled against the drafting session's recommendation, and the owner took the expensive option
