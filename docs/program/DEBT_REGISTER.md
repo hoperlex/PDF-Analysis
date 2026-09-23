@@ -19,6 +19,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
 | **D-79** | `CURRENT_STATE.md` — the file `AGENTS.md` makes every agent read first — went stale twice, and said the system was open when it is closed | the gate does not read `docs/` |
 | **D-80** | no `.dockerignore`: the web image's `node_modules` is the build host's, not the lockfile's — and criterion 1 is blind to it by construction | one file, verified by a build |
+| **D-81** | four real WCAG 1.4.11 failures: `--am-line` on `--am-paper` is **1.36:1** light, **1.30:1** dark, against 3:1 | **owner** — a border-scale decision twice declined |
+| D-82 | three English `LoadingState` strings no instrument in the tree can render | a repair nothing can verify is not a repair |
+| D-83 | eleven journey sentences are verified by nothing inside the gate | only `refusals.mjs` against a live stand |
 | **D-73** | four routes answer 200 with no credential — `/docs`, `/openapi.json` | **owner: `R-29` reserves exposure** |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -1475,6 +1478,45 @@ rendered in four list widgets**, because **every page its matrix seeded carried
 rendered, saw, and permitted — because the state that carries the defect was never reached.**
 A mutation dying quietly is the only thing that has ever found one of these.
 
+---
+
+**Wave 41 closed the cause for three of the seven, and the sentence above stopped being true.**
+`W41-BLIND` measured the language guard's reach before writing a line: **18 of the 31 members**
+of the seven `TRANSLATED_SCHEMAS` were rendered. `StageId` 4/9, `StageStatus` 1/4, `Verdict`
+2/4, `FindingCategory` 1/2, `ProviderMode` 1/2, `CostBasis` 1/2 — **thirteen contract members
+carrying a Russian label that no cache state ever put on a screen.**
+
+**The repair is a distinction worth keeping**, and it is the stream's wording:
+
+> **Coverage is derived from the contract. The seeds are not.** The contract asks whether every
+> member is seeded; **a human has to answer.** Deriving the seeds would let a tenth stage cover
+> itself, silently, with whatever default a builder chose — which is the shape this row exists
+> to stop.
+
+**The falsification is the deliverable and case C is the one that matters.** Driven against the
+matrix *as it stood at `295ff04`*, an English label on the run screen leaves the language half
+**green** while the new coverage check goes **red and names all eight unreachable members**.
+**A structural check caught a blindness that in all seven prior instances only a quietly dying
+mutation ever found.**
+
+**And it caught two live ones on the way**: a whole English paragraph on the 404 screen and
+`"the decision history"` in a loading state. `D-53` was closed on the claim that *"from here one
+English word reaching a reviewer is a red gate"* — **the guard could not reach these two.** That
+closure was true about the strings it had measured and overstated about the property it claimed.
+
+**The contrast census had the same disease one layer up, and it was larger.** **31 of 137
+colour-bearing rules reached no screen at all — 23% of the surface** — because the census
+matched a **literal list of eighteen component names** against `screens.ts`. The knowledge base,
+the sign-in screen and the password screen were **not in the census at all**. The list is gone,
+replaced by the derived question *every colour-bearing rule must be reached*: **31 → 11**, census
+**25 → 49 screens**, **90 → 143 pairs per palette**.
+
+**Honest reach: three of seven, not seven of seven** — waves 35 (both rows) and 38. The other
+four are out of structural range and the stream said which and why: two are mutation
+insufficiency, two need branch coverage in `src/auditmanager` that this programme does not have,
+one is mutation plumbing. **Written as three because a row overstating its own repair is how
+`D-2` and `D-4` closed early.**
+
 The fix is proved loaded rather than assumed: the same mutation against the **old** seed is
 green.
 
@@ -1754,6 +1796,81 @@ gates are running.
 
 Check: `ls .dockerignore` (absent), `grep -n 'COPY web/' infra/deploy/Dockerfile.web`, and
 `du -sh --exclude=.git .` against `du -sh .local web/node_modules`.
+
+### D-81 — the only border under every finding row fails WCAG 1.4.11 in both palettes
+
+**Found by `W41-BLIND` as a side effect of widening the contrast census from 25 screens to 49.
+Reported, not repaired, and the integrator reproduced both figures before registering them.**
+
+`--am-line` against `--am-paper`:
+
+| palette | tokens | measured | required |
+|---|---|---|---|
+| light | `#d9dde3` on `#ffffff` | **1.36:1** | 3:1 |
+| dark | `#27323f` on `#151d28` | **1.30:1** | 3:1 |
+
+`1.4.11` is *non-text contrast*, and this is not decoration: it is **the only boundary of every
+finding row on the review screen**, of every project and run row on hover, and of the theme
+control. A reviewer working down a list of findings is separating them by a border at 40% of
+the required ratio.
+
+**Not repaired because the repair is a decision already declined twice.** `W32-CONTRAST` §3 and
+`W33-THEME` both looked at the border scale and both left it: raising `--am-line` to 3:1 makes
+every rule on every screen a hard line, which is a visual-design change across the product, not
+a token tweak. **A third session taking it unilaterally would be the third answer to a question
+nobody has asked the owner.** It is `R-29`-adjacent rather than `R-29` clause 2 — it changes
+nothing about reach — so it is registered for the owner as *design*, not held as a blocker.
+
+Check: compute the two ratios from `web/src/app/globals.css:104,128` (light) and `254,260`
+(dark). Both reproduce exactly.
+
+### D-82 — three English strings on screens, and no instrument in the tree can render them
+
+**Found and reported by `W41-BLIND`, deliberately not repaired.**
+
+`LoadingState` renders `the new project`, `the upload` and `the run request` to a reviewer.
+They survive the repaired language guard for a reason that is the point of the row: **they live
+in branches selected by `useState` and a settled `useMutation`, which no static pass reaches.**
+
+**So the repair is trivial and unverifiable, and the stream refused to make it on those
+grounds.** Changing three strings takes a minute; **nothing in the gate could then show the
+change was right, or catch the fourth one.** `D-53` closed three times on repairs that looked
+convincing in a diff, and the register's own rule is that a string is removed **because a guard
+says it is gone from a rendered screen**, never because a diff looked convincing.
+
+This is the honest residue of `D-69`'s repair: the coverage assertion covers what the renderer
+can reach, and these are outside it. **The row is a request for an instrument, not for an edit.**
+
+Check: `grep -rn 'what="the ' web/src` — three hits, all `LoadingState`.
+
+### D-83 — the browser journey's manifest was asserting nothing, and eleven sentences still are
+
+**Found by `W41-BLIND`, and it falsified the brief's premise rather than executing it.**
+`D-61`'s third instance said the journey compared `expects_rendered` by substring containment
+against a concatenation of `web/src`. True — and the repair the brief asked for is impossible
+for most of the manifest:
+
+- **11 of 15 sentences cannot be positively confirmed by any static renderer**, because they
+  live in branches selected by `useState` and a settled `useMutation`.
+- **The other 4 were passing against text the screen draws regardless of the step.** `Создан`
+  matched the creation date in a project row; `Эта версия` the version panel's permanent prose;
+  `Прогон` the start control's own note; `25 MiB` the upload envelope notice. **All four pass in
+  a live browser too**, because `write.mjs` and `refusals.mjs` assert `bodyText.includes`.
+
+**So none of the fifteen was verifying anything, and four of the journey's own assertions could
+not fail.** Two checks now replace the old one — a rendered check asserting a proof sentence is
+**absent before its step**, and a source check with the subject corrected — and the mutation
+battery went **23 → 24, all red, none vacuous**. Each of the new check's four parts is
+load-bearing: **with comments left in, `"Run"` still passed**, because doc-comment markdown in
+this repository puts backticked text where a template literal would be.
+
+**What remains open is the eleven.** Inside the gate they are verified by nothing; outside it
+`refusals.mjs` drives them against a live stand, which is a real check that **is not in
+`make gate`** and so cannot redden a merge. `frontend-battery-cannot-see-the-journey` is the
+same fact from the other side.
+
+Check: `docs/program/W41-BLIND.md` §B2 carries the fifteen sentences and which of the four
+matched what.
 
 ### D-73 — four routes answer 200 with no credential, because the seam is on the router
 
