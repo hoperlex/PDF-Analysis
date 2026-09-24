@@ -58,6 +58,51 @@ export function AppFrame({ children }: AppFrameProps) {
         <Link className="am-app__nav" href="/account/password">
           Смена пароля
         </Link>
+        {/*
+         * `R-23`'s addendum, `W43-PREP`. Four sections the owner ruled wanted, each
+         * prepared on the front end before its vertical lands, under the rule that
+         * addendum made general: the front end carries the structure before the back end
+         * does, with honest stubs.
+         *
+         * **The layout decision, and it is a decision rather than four more lines.** The
+         * bar is one non-wrapping flex row — `display: flex`, no `flex-wrap`, no
+         * breakpoint of its own — and it now carries six links where it carried two. Two
+         * alternatives were considered and rejected for reasons that are about this
+         * repository rather than about taste:
+         *
+         *   - a second row, or a grouped/disclosed nav, needs a rule in
+         *     `web/src/app/globals.css`. That file is not in this task's `allowed_paths`,
+         *     it is the shared global stylesheet `AGENTS.md` §1.5 puts behind ownership,
+         *     and `W43-COMPARE` is editing `web/src` in another worktree this same wave —
+         *     two lanes in one stylesheet is exactly what §3 forbids;
+         *   - declaring the class in a CSS module instead would pass
+         *     `styling-layer.test.ts` (it reads globals.css PLUS every `*.module.css`)
+         *     and still render nothing, because a module hashes its class names and this
+         *     file would be naming the unhashed one. A green guard over a class that
+         *     does not apply is worse than no class.
+         *
+         * So: existing classes only, and the working sections stay first. The cost is
+         * reported rather than hidden — six links plus the right-hand cluster will
+         * overflow this bar on a narrow viewport, and the repair is one `flex-wrap: wrap`
+         * in a file this task does not own.
+         *
+         * The labels are the screens' own titles. `Журнал выполнения` is not shortened to
+         * `Журнал` on purpose: the decision journal is `База знаний`, two links to its
+         * left, and two things called the journal in one bar is the confusion this
+         * programme keeps paying for.
+         */}
+        <Link className="am-app__nav" href="/blocks">
+          Блоки
+        </Link>
+        <Link className="am-app__nav" href="/optimisation">
+          Оптимизация
+        </Link>
+        <Link className="am-app__nav" href="/logs">
+          Журнал выполнения
+        </Link>
+        <Link className="am-app__nav" href="/workers">
+          Исполнители
+        </Link>
         <Link className="am-app__signin" href="/login">
           Вход
         </Link>

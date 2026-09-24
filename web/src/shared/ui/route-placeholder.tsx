@@ -26,6 +26,24 @@ export interface RoutePlaceholderProps {
   readonly owner?: string | undefined;
   /** One sentence on what will be here, shown to the reviewer. */
   readonly promise?: string | undefined;
+  /**
+   * The two sentences that say WHY the section is not here, for a section whose default
+   * reading would be false.
+   *
+   * Both default to today's wording and neither may be left out where the default is
+   * wrong. `«Раздел пока недоступен»` and `«Этот раздел ещё не готов.»` both carry a
+   * *yet*: they tell a reviewer the section is on its way. That is true of the thirteen
+   * project sections and of three of `W43-PREP`'s four, and it is **false of workers** —
+   * `PROTOTYPE_PROFILE.md` §7.2 defers remote/distributed executors and the whole
+   * `Job/Attempt` framework, so nobody has decided to build them. `R-18` says a stub may
+   * not claim something false about the system, and *"coming soon"* is a claim.
+   *
+   * They are optional and default to the existing strings, so every caller that predates
+   * this prop renders exactly the bytes it rendered before.
+   */
+  readonly unavailability?: string | undefined;
+  /** The headline above the promise. Defaults to the "not ready yet" wording. */
+  readonly headline?: string | undefined;
 }
 
 export function RoutePlaceholder({
@@ -34,9 +52,11 @@ export function RoutePlaceholder({
   awaitingModule,
   owner,
   promise,
+  unavailability,
+  headline,
 }: RoutePlaceholderProps) {
   return (
-    <PageShell title={screen} subtitle="Раздел пока недоступен">
+    <PageShell title={screen} subtitle={unavailability ?? 'Раздел пока недоступен'}>
       <div
         className="am-state am-state--neutral"
         role="status"
@@ -44,7 +64,7 @@ export function RoutePlaceholder({
         {...(awaitingModule === undefined ? {} : { 'data-awaiting-module': awaitingModule })}
         {...(owner === undefined ? {} : { 'data-owner': owner })}
       >
-        <p className="am-state__title">Этот раздел ещё не готов.</p>
+        <p className="am-state__title">{headline ?? 'Этот раздел ещё не готов.'}</p>
         <div className="am-state__detail">
           <p>
             {promise ??
