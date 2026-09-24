@@ -113,10 +113,25 @@ is not at fault; it prints the sha *for the record*. **What the script actually 
 that the images and the working tree agree, whatever the sha is.** **It is the only stand on this host** — the two abandoned ones were removed on
 2026-09-21 under ruling `R-6`, and with them the stale worktrees of sixteen merged waves
 (13 GB; every branch kept, `BRANCH_INVENTORY.md` says which).
-A browser creates a project, uploads a PDF, starts a run, watches it go `queued → running →
-published`, opens a finding at its quotation, records an accept, a reject and a comment, and
-downloads the CSV — all through one origin, with **no request carrying a credential**, which
-a server-side route holds instead.
+> **This paragraph said, until 2026-09-24:** *"A browser creates a project, uploads a PDF,
+> starts a run, watches it go `queued → running → published`, opens a finding at its quotation,
+> records an accept, a reject and a comment, and downloads the CSV — all through one origin,
+> with no request carrying a credential."*
+>
+> **It was true at `ac7c348` and has not been true since wave 34**, and `W43-JUDGE-B` is the
+> first reader to drive it rather than repeat it. The automated journey **stops at route 2 of
+> 15**: the BFF answers `401` without a session cookie, by design; `cdp.mjs` gives every route a
+> **fresh browser with an empty profile**, by design (`D-16`); the manifest has no sign-in step
+> and the write half knows three verbs — `fill`, `click`, `attach_file`. **The journey is
+> written for an application that has no authorization, and this one has had authorization for
+> nine waves.** `D-92`.
+>
+> **What is true today**, measured on the stand the same day: a reviewer signs in at `/login`
+> and the fourteen addresses answer; with a session raised by hand the same origin serves
+> sixteen projects with their documents, versions and runs. **The journey that proved the
+> sentence is what stopped working, not the product** — but a certification proposition nobody
+> can drive is not evidence, and this file is the one `AGENTS.md` §1 makes every agent read
+> first.
 
 ### `PA-01`, certified criterion by criterion
 

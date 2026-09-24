@@ -26,6 +26,10 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-88** | `D-69`'s repair reached the **members** and not the **screens**: an all-English new screen is green | the subject is a list, not the tree |
 | D-90 | a route guard inside a component that nothing asserts, and whose naive mutation dies from `tsc` | one test |
 | **D-91** | two streams drew `R-18`'s line in different places in one wave | **owner**: where does it fall |
+| **D-92** | the browser journey **has not run since wave 34** — it stops at route 2 of 15 | a design decision, not a patch |
+| D-93 | wave 43 put a horizontal scrollbar on **every** screen below 839 px — **repaired**; the class is not | nothing in the gate expresses layout |
+| D-94 | the integrator's own executable changes are the only ones no judge is planned against | a standing rule, costs nothing |
+| D-95 | *«Такого версии не существует»* — gender agreement, and the language guard is blind to it by construction | a class, not a typo |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | **D-70** | the stand's API **will not start** since wave 41: the stub URL has no host and `D-72` now refuses it | **owner: a real credential, or a hostname** |
@@ -2261,6 +2265,132 @@ sounds like to an expert, which is what `R-18` is about.
 
 Check: read the three `promise=` strings against `web/src/widgets/stage-comparison/` and against
 `D-58`'s closure.
+
+### D-92 — the browser journey has not run since wave 34, and a certification proposition outlived it
+
+**Found by `W43-JUDGE-B` 2026-09-24, by driving it. Verified independently by the integrator.**
+
+`npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:31500 --phase all` stops at **route 2
+of 15**. Three facts, each in the tree and each deliberate, make it structural:
+
+- the BFF answers **`401`** without a session cookie — wave 34, by design;
+- `cdp.mjs` gives **every route a fresh browser with an empty profile** — `D-16`, by design, and
+  that property is load-bearing;
+- the manifest has **no sign-in step**, and `tests/e2e/pc01/journey/write.mjs` knows exactly three
+  verbs: `fill`, `click`, `attach_file` (confirmed: `grep` returns those three and nothing else,
+  and the manifest's `write` half mentions neither login nor session).
+
+**The journey is written for an application without authorization, and this one has had
+authorization for nine waves.** The stand is not the problem: with a session raised by hand the
+same origin serves sixteen projects with documents, versions and runs.
+
+**And the document half is worse than the instrument half.** `CURRENT_STATE.md` carried the
+sentence *"A browser creates a project, uploads a PDF, starts a run… all through one origin"* as
+a statement of what holds. It was true at `ac7c348`. **`W43-JUDGE-B` is the first reader in nine
+waves to drive it rather than repeat it** — and it sat in the file `AGENTS.md` §1 makes every
+agent read first. Corrected the same day, with the history kept.
+
+**What it costs right now:** the five routes wave 43 added to the manifest are checked **only
+statically** — that the page module exists, that the segments match, that the operation is real.
+**That a screen answers, renders and makes its call is checked by nothing.**
+
+**The repair is a decision, not a patch.** Either a `sign_in` verb in the write half plus a way
+to carry one session through the walk, or an explicit `--session`. `D-16`'s cold-browser property
+must survive whichever is chosen. `D-83` is the same instrument seen from the other side and
+should be read with this row.
+
+Check: `npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:31500 --phase all`, and
+`grep -oE "'(fill|click|attach_file)'" tests/e2e/pc01/journey/write.mjs | sort -u`.
+
+### D-93 — four links put a horizontal scrollbar on every screen in the product — **REPAIRED**, and the class is not
+
+**Measured by `W43-JUDGE-B` in a browser on the deployed stand, which is the only place it was
+visible.**
+
+Wave 43's four new navigation links widened `.am-app__bar` past the viewport. The overflow
+threshold moved **from 482 px to 839 px** — inside it sit a small laptop and every tablet. And
+because `AppFrame` is global, the regression was not on the five new screens but on **all
+fourteen**.
+
+| viewport | with the four links | without them |
+|---|---|---|
+| 780 | `scrollWidth` **839** — overflow | 765 — none |
+| 600 | **839** | 600 |
+| 375 | **839** | 482 |
+
+**Repaired** by `flex-wrap: wrap` on `.am-app__bar`, with the measurement and the reason written
+beside it. **The design question is not repaired and is not mine:** whether six sections belong
+in a wrapping bar, a narrower cluster or a menu is the owner's, and wrapping is what stops the
+defect rather than what answers it.
+
+**The class is the row and it is open.** `W43-PREP` predicted this in prose — *"six links plus
+the right-hand cluster will overflow the bar"* — and `W43-JUDGE-A` counted the prediction as
+honesty. **Nobody measured, and the number is what decides.** Nothing in `make gate` could have:
+the frontend battery renders through `renderToStaticMarkup`, which has no layout, no box and no
+viewport. **This programme has 1085 frontend tests and not one of them can express a width.**
+
+`W43-JUDGE-B`'s proposal, recorded because it is cheap and structural: one assertion **in the
+journey** — `scrollWidth <= innerWidth` at a declared width, on every route — so the next added
+link reddens by itself. **It is blocked on `D-92`**, because the journey does not run.
+
+Check: `grep -n 'flex-wrap' web/src/app/globals.css` in `.am-app__bar`; and drive any screen at
+780 px with and without the four links.
+
+### D-94 — the integrator's own executable changes are the only ones no judge is planned against
+
+**Found by `W43-JUDGE-B`, and it found them only because the brief put them in its subject by
+name.**
+
+Wave 43's grants were clean: two streams, **zero shared files**, no merge conflict at all. What
+fell outside every grant was the work that belonged to nobody — the journey manifest,
+`routes.comparison()`, and the link from the version screen. All three landed in **the
+integration commit, the one commit of the wave against which no judge was planned.**
+
+Both of the executable ones are asserted by nothing:
+
+- **`routes.comparison()`** — point the builder at a non-existent address (`/comparison` →
+  `/compare`) and the whole suite stays green, 75 files, 1085 tests. `routes.test.ts` imports the
+  module and never calls it.
+- **The only navigational road to the wave's flagship screen** — delete the entire `<p>` carrying
+  the link and 1085/1085 stay green. Not `D-90`'s shape: `Link` and `routes` remain used on that
+  page, so there is no unused-import artefact. It is simply an unasserted line.
+
+**The contrast is the finding.** `W43-PREP` has a case asserting *"the frame links to all four
+addresses"*, and `W43-JUDGE-A` killed a mutation against it. `W43-COMPARE` reported its missing
+link as someone else's grant, the integrator added it — and the case that would have come with it
+**inside** a grant did not come. **`D-89` one level down: work that falls between all grants falls
+between all guards.**
+
+**The rule, which costs nothing and is adopted from here:** *the integrator's executable changes
+are the subject of the stage-B judge, named in its brief.* Wave 43's brief named them by
+accident of thoroughness; from here it is the standing instruction.
+
+Check: change the path inside `routes.comparison` and run the frontend suite; then delete the
+link paragraph and run it again.
+
+### D-95 — *«Такого версии не существует»*, and the language guard is blind to it by construction
+
+**Found by `W43-JUDGE-B` on a screen reachable only through wave 43's new address.**
+
+`web/src/shared/lib/listing-failure.ts:108` substitutes `PARENT_GENITIVE.version = 'версии'` — a
+**feminine** noun — into sentences written for the masculine `проекта` / `документа`. A reviewer
+on a well-formed but absent version reads:
+
+> Такого версии не существует. · На сервере нет этого версии, поэтому перечислять здесь нечего.
+
+**The module predates wave 43** — `run-list.tsx` already passes `parent: 'version'` — so the
+defect is older than the screen that exposed it. Wave 43 is simply the first time anybody read it.
+
+**The guard cannot see this and never could.** `rendered-language.guard.test.ts` fails on **Latin**
+words a contract did not put there. This is Cyrillic throughout and merely wrong. **A guard built
+to catch untranslated text is structurally blind to badly translated text**, and the same
+substitution mechanism is in `upload-failure.ts`, `run-failure.ts` and `catalog-message.ts`.
+
+**The class, not the typo, is the row.** The renderer that walks every screen already exists; it
+looks for the wrong thing. Given the templates and the nouns, agreement is checkable.
+
+Check: drive `…/versions/{well-formed but absent}/comparison` on the stand, or read
+`PARENT_GENITIVE` against the sentence templates above it.
 
 ### D-74 — a parent-existence check costs a full parent read
 

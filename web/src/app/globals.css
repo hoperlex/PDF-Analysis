@@ -660,6 +660,25 @@ input[type='file']::file-selector-button:hover {
   top: 0;
   z-index: 10;
   display: flex;
+  /*
+   * `flex-wrap` because wave 43 added four links and measured what that cost.
+   *
+   * `W43-JUDGE-B` drove the deployed stand and found the bar's own width had pushed the
+   * overflow threshold from **482 px to 839 px** -- so every screen in the product, not
+   * the five new ones, carried a horizontal scrollbar on a small laptop and on every
+   * tablet. `AppFrame` is global, which is what turned four links into a product-wide
+   * regression.
+   *
+   * NOTHING IN THE GATE CAN SEE THIS. The frontend battery renders through
+   * `renderToStaticMarkup`: no layout, no box, no viewport. `W43-PREP` predicted the
+   * risk in prose and `W43-JUDGE-A` counted the prediction as honesty -- and the number
+   * is what decides, so it took a browser on the stand to find it.
+   *
+   * Wrapping is the repair that stops the defect, not the answer to the design question.
+   * Whether six sections belong in a wrapping bar, a narrower cluster or a menu is the
+   * owner's, and is registered rather than decided here.
+   */
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 12px;
   padding: 14px 32px;

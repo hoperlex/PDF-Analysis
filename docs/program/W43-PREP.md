@@ -171,7 +171,7 @@ reason is not enough.
 | provider calls: how many, costing what | **on the surface, aggregated only.** `RunStatus.model_call_count`, `cost_micros`, `cost_basis`. The individual calls are in the `model_call` table and no operation returns them. |
 | an event stream for a run | **in the tree, not on the surface.** `contract_state_transition` and `command_record` are written by the application and no operation reads them. |
 | a general audit trail | **partly nowhere.** An `audit_event` table exists in migration `0002_pc01_schema` and **nothing under `src/` writes to it or reads it** — its only writers in this repository are integration tests. |
-| the server's own log lines | **nowhere on the surface.** Two modules call `logging.getLogger`; those lines go to the process's output and are readable only by whoever can read the container. |
+| the server's own log lines | **nowhere on the surface.** **Three** modules call `logging.getLogger` — `api/app.py:50`, `runs/carrier.py:106` and `access/repository.py:118`. *(Corrected 2026-09-24: this note said **two** and gave no command for the number. `W43-JUDGE-A` found it — the single place in either stream's report where §12's "show the query" was not honoured, out of 32 checkable claims. The note's conclusion is unaffected. Query: `grep -rn getLogger src/`.)*; those lines go to the process's output and are readable only by whoever can read the container. |
 
 **The brief's premise, checked and qualified.** *"It exists on the server; there is no contract
 operation to read it."* The second half is exactly right: **none of the 18 operations reads a log.**
