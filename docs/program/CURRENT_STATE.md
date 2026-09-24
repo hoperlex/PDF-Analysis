@@ -1,8 +1,9 @@
 # Current state
 
-> **Updated 2026-09-24 by the integrator, at `c3413ee`** (wave 43, after its stage-B audit). `AGENTS.md` §1.1 makes this
-> file the first thing every agent reads, and **this line moving is now part of closing a wave**,
-> for the reason the rest of this block records.
+> **Updated 2026-09-24 by the integrator for wave 44.** The gated and deployed release
+> candidate is `20a14de`; `alpha-w44` tags the docs-only closeout immediately after it.
+> `AGENTS.md` §1.1 makes this file the first thing every agent reads, and **this line moving is
+> part of closing a wave**, for the reason the rest of this block records.
 >
 > **It has now gone stale twice, and the second time was inside the note written to record the
 > first.** That note — kept below — says the file sat nine waves out of date and that every
@@ -20,7 +21,60 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Where the programme is, 2026-09-23
+## Where the programme is, 2026-09-24
+
+**Wave 44 is closed as `alpha-w44`.** Its executable release candidate is `20a14de`; this
+state/registry closeout changes no deployed path. The closing push advances `origin/main`,
+`origin/dev` and `origin/planning/prototype-roadmap` together to the tag. This is a gated alpha
+tip, not a new PA-01 certification.
+
+The wave obeyed the corrected order from wave 43: two implementation streams; a judge over both
+before merge; two independent cross-judges over the merged tree; cross-examination; repairs; then
+**one final gate and one tag**. The primary cross-verdict was REJECT. Before the gate, four
+confirmed false greens were repaired:
+
+- missing credentials are tested by calling `credentialsFromEnvironment`, not by parsing the
+  line that reads the environment;
+- the D-16 starting jar is read through the real private `Page` and a fake CDP
+  `Storage.getCookies` reply, not compared with caller input twice;
+- authentication capability is derived from OpenAPI `securitySchemes`, and denials are checked
+  across the 66-entry state-aware screen inventory with both judges' paraphrases as controls;
+- the undefined `screens` diagnostic was removed while the complete, proven `where` list
+  remains. The renderer count was corrected: five old screen-wide copies remain and the shared
+  helper is a sixth, registered as `D-97`.
+
+All four repaired classes were then re-mutated and went red. The remaining live-only English
+`Chosen:` became `Выбран файл:`; its prefix is manifest-owned, gate-checked against the control
+module and asserted by the live refusal drive.
+
+`make gate` at `20a14de` → **`GATE OK`**: battery **2466 passed / 5 skipped / 4 warnings /
+169 subtests**, foundation **35 passed**, frontend **1110 tests in 78 files**. Full log:
+`/root/w44-integrator-gate.log`.
+
+The browser evidence is again current as an instrument. The restored journey drove **15/15**
+routes and **3/3** write steps; the refusal drive drove **6 fixtures / 0 findings**. Reverting the
+global bar wrap produced **9/9** named width failures at **839 > 780**. Closing judge X drove all
+14 address-bearing screens in explicit light and dark — **28 unique screen/palette pairs, zero
+failures and no overflow**. Those judge runs were on the pre-wave owner stand, whose stale
+Projects sentence they correctly rejected as release evidence; the deployment below replaces it.
+
+**The owner stand is now the wave-44 tree.** `infra/deploy/deploy.sh` rebuilt and replaced the
+API and web images, kept PostgreSQL/S3/proxy healthy, confirmed migration head
+`0010_run_terminal_detail`, received 401 from the protected published API, and compared the
+served 18 operations with the frozen contract: **0 differences**. `verify-deployed.sh` then
+reported **164 src / 14 db / 34 contract / 7 recorded-fixture / 309 web files identical** and
+printed *“the deployed stack IS this tree (20a14de)”*. Logs:
+`/root/w44-deploy.log`, `/root/w44-verify-candidate.log`.
+
+**Wave 44 changes no contract, migration, dependency, lockfile, composition root or global
+style.** The contract remains **15 paths / 18 operations / 51 schemas**, the error catalog
+remains **22 codes**, and the migration head remains **0010**. `D-82`, `D-88`, `D-90`,
+`D-92`, `D-93`, `D-94` and `D-95` close. `D-83` remains honestly open because the
+stack-free gate renders 0 of the twelve browser refusal sentences; the restored live drive is
+real evidence but is not `make gate`. `D-97` is the newly measured renderer-consolidation
+residue.
+
+## Previous release state — wave 43 (historical record)
 
 **`origin/main` = `origin/dev` = `origin/planning/prototype-roadmap` = `c3413ee`, tagged
 `alpha-w43.1` — a gated tip, not a certification.**
@@ -109,36 +163,23 @@ that renders the screens and fails on one English word a contract did not put th
 `/root/w19-integrator-logs/gate-w29.log` with `EXIT=0` appended by the shell that ran `make`.
 
 **The application is deployed, drivable by hand, and provably the tree.** One alpha stack
-answers on `127.0.0.1:31500` — `auditmanager-w19a`, `AUDITMANAGER_PROVIDER_MODE=proxy`,
-brought up by `infra/deploy/deploy.sh`. Redeployed from `6aeda82` on 2026-09-23;
-`infra/deploy/verify-deployed.sh` exits 0 and prints *"the deployed stack IS this tree"*, file
-by file: 141 in `src/`, 9 in `db/`, 34 in `contracts/`, 223 in `web/`, all identical. **The sha
-that sentence prints is the repository's working tree at the moment you run it, not a property
-of the stack** — this document quoted `(ac7c348)` as though it were fixed, and `W30-CERT3` read
-`(2fdb12c)` a few commits later and correctly called the sentence false as stated. The script
-is not at fault; it prints the sha *for the record*. **What the script actually certifies is
-that the images and the working tree agree, whatever the sha is.** **It is the only stand on this host** — the two abandoned ones were removed on
-2026-09-21 under ruling `R-6`, and with them the stale worktrees of sixteen merged waves
-(13 GB; every branch kept, `BRANCH_INVENTORY.md` says which).
-> **This paragraph said, until 2026-09-24:** *"A browser creates a project, uploads a PDF,
-> starts a run, watches it go `queued → running → published`, opens a finding at its quotation,
-> records an accept, a reject and a comment, and downloads the CSV — all through one origin,
-> with no request carrying a credential."*
+answers on `127.0.0.1:31500` — `auditmanager-w19a`,
+`AUDITMANAGER_PROVIDER_MODE=recorded`, brought up by `infra/deploy/deploy.sh`. Redeployed
+from `20a14de` on 2026-09-24; `verify-deployed.sh` exits 0 and compares every tracked path
+the Dockerfiles ship: 164 in `src/`, 14 in `db/`, 34 in `contracts/`, 7 recorded fixtures,
+the deployment lock/serve files, and 309 in `web/`, all identical. The sha the script prints
+is the repository working tree at verification time; its durable claim is byte identity, not
+a label embedded in the image. This is the only stand on the host.
+> **Wave-43 historical note:** the journey stopped at route 2 of 15 after authorization
+> arrived in wave 34; `W43-JUDGE-B` was the first reader in nine waves to drive it rather than
+> repeat an obsolete certification sentence.
 >
-> **It was true at `ac7c348` and has not been true since wave 34**, and `W43-JUDGE-B` is the
-> first reader to drive it rather than repeat it. The automated journey **stops at route 2 of
-> 15**: the BFF answers `401` without a session cookie, by design; `cdp.mjs` gives every route a
-> **fresh browser with an empty profile**, by design (`D-16`); the manifest has no sign-in step
-> and the write half knows three verbs — `fill`, `click`, `attach_file`. **The journey is
-> written for an application that has no authorization, and this one has had authorization for
-> nine waves.** `D-92`.
->
-> **What is true today**, measured on the stand the same day: a reviewer signs in at `/login`
-> and the fourteen addresses answer; with a session raised by hand the same origin serves
-> sixteen projects with their documents, versions and runs. **The journey that proved the
-> sentence is what stopped working, not the product** — but a certification proposition nobody
-> can drive is not evidence, and this file is the one `AGENTS.md` §1 makes every agent read
-> first.
+> **Wave 44 repaired the instrument, not the history.** It signs in once through the real
+> screen, deliberately carries one session cookie into each fresh browser, records the actual
+> starting jar, and fails loudly when a credential is absent. Its measured result is now 15/15
+> routes and 3/3 write steps; the separate refusal drive is 6/6 fixtures with 0 findings.
+> These browser commands remain outside `make gate`; the 78-test conformance file is what makes
+> their route, operation, control, credential and readback declarations rot loudly in the gate.
 
 ### `PA-01`, certified criterion by criterion
 

@@ -49,6 +49,7 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56300`, `59900/59901` | `gate-w44b` — `W44-SEE` | 2026-09-24 | wave 44 merges |
 | `56310`, `59910/59911` | `gate-w44j` — `W44-JUDGE-A`, then cross-judge **X** | 2026-09-24 | wave 44 closes |
 | `56320`, `59920/59921` | `gate-w44k` — cross-judge **Y**, which runs beside X | 2026-09-24 | wave 44 closes |
+| `56290–56320`, `59890–59921` | wave 44 | 2026-09-24 | **released** — streams and two cross-judges merged; containers, volumes and worktrees removed |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
