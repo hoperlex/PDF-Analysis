@@ -522,11 +522,37 @@ at the end of a wave; and **no invented numbers** — an empty screen is more ho
 plausible one.
 
 **And what preparation does not buy, stated plainly because a stub reads like progress:** none
-of the four verticals moves. Blocks has no block geometry in the data — `coords_norm` is
-`[0,0,1,1]` on all **28 249** corpus blocks and `polygon_points` is empty, so there is no vector
-graph to draw. Optimisation has one visible analysis stage against legacy's seventeen, so there
-is nothing to tune. Logs exist on the server with no contract operation to read them. Workers
-are excluded outright by `PROTOTYPE_PROFILE.md` §7.
+of the four verticals moves.
+
+> **Corrected 2026-09-24 by `W43-PREP`, which was told to verify these four rather than copy
+> them and found three of them wrong. The gloss was the integrator's, not the owner's; the
+> ruling itself is untouched.**
+>
+> - **Blocks — the original sentence was materially false.** It said *"no block geometry in the
+>   data… no vector graph to draw"*, inferring the application from the corpus. The corpus half
+>   is right and was re-measured over all 674 `blocks.json`: `coords_norm` is `[0,0,1,1]` on all
+>   **28 249** blocks and `polygon_points` is **`null`, not empty**. But **this application
+>   produces real geometry** — `analysis/stages/page_geometry_extraction.py:226` writes a
+>   `bbox {x0,y0,x1,y1}` in points, top-left origin, one per text line, with `bbox_unit` and
+>   `bbox_origin` beside it. What is missing is **an operation that returns it**: the only
+>   block-shaped field on the surface is `Evidence.block_id`, which the contract itself calls
+>   *"Not a contract identifier"*. **So blocks is a reseal, not an impossibility.**
+> - **Optimisation** — right in substance. Four stages are scheduled and visible in
+>   `RunStatus.stages`; exactly **one** (`text_analysis`) is an analysis stage, out of nine
+>   canonical ids. Legacy's seventeen are *stage directories observed*, not a declared pipeline.
+>   `StartRunRequest` has two properties under `additionalProperties: false`, so **nothing is
+>   settable**: a read-only view is buildable today, anything settable is a **reseal**.
+> - **Logs** — *"exist on the server"* needed qualifying. **The `audit_event` table is never
+>   written by `src/`; its only writers in this repository are tests.** What exists is
+>   `stage_result`, `model_call`, `contract_state_transition`, `command_record` and stdout. Still
+>   **a reseal**, plus a decision on what is safe to publish.
+> - **Workers — `deferred`, not `excluded`, and the word matters.** `PROTOTYPE_PROFILE.md` §7.2
+>   lists *"remote/distributed workers"* under **Deferred**. Nobody ruled against them, so a
+>   screen promising them promises something nobody has decided either way — which is why that
+>   screen carries **no promise** at all. **No reseal: it is blocked by a decision not taken.**
+>
+> **Three reseals are now on paper rather than discovered at the end of the wave that tries to
+> build them**, which is what `P3` was for and what `R-11` cost a whole wave.
 
 ### `R-24` — the knowledge base gets a listing operation in the contract
 
