@@ -451,8 +451,8 @@ The frozen surface remains **15 paths / 18 operations / 51 schemas**, the error 
 4. **I did not claim semantic completeness for the language or grammar checks.** Their declared
    scope and literal human answers are in §3. F2 is precisely what happens when a literal scope
    is presented as a semantic class.
-5. **Cross-examination is pending.** Which Y finding can be falsified or strengthened, and where
-   Y's method shares an assumption with its subject, cannot be answered until Y's report exists.
+5. **At the phase-1 handoff, cross-examination was pending.** Judge Y's report did not yet exist;
+   the completed cross-examination is recorded in §9 below.
 
 ---
 
@@ -467,3 +467,220 @@ docs/program/reviews/W44-JUDGE-X.md
 No contract, migration, dependency, lock, composition-root, global-style, product, test or
 infrastructure path is part of this report commit. Probe mutations were reverted and the
 worktree was clean before this file was added.
+
+---
+
+## 9. Mandatory cross-examination of `W44-JUDGE-Y`
+
+**Report examined:** `991efd3143c254911800f89e32530993c701334d`, in full. This section
+answers the two required questions separately. It does not treat agreement as evidence: Y's
+four findings were re-measured through a different seam, and one of Y's own evidence limits was
+falsified.
+
+### 9.1 Which Y findings can be falsified or strengthened by a measurement Y did not take?
+
+#### Y1 — strengthened: the bypass survives the whole conformance file and changes behaviour
+
+Y patched `Path.read_text` in memory and called only the credential guard. My phase-1 probe made
+the equivalent two-line mutation in the actual module, ran the **entire** conformance file, and
+then called the exported function:
+
+```diff
+-  const password = env[PASSWORD_ENV];
++  const password = env[PASSWORD_ENV];
++  const effectivePassword = password || 'password';
+   ...
+-  return { login, password };
++  return { login, password: effectivePassword };
+```
+
+```text
+.venv/bin/pytest tests/e2e/test_pc01_journey_conformance.py -q
+78 passed
+
+credentialsFromEnvironment({E2E_PC01_LOGIN: 'admin'})
+{"login":"admin","password":"password"}
+```
+
+That is more than a syntactic false green: missing `E2E_PC01_PASSWORD` observably becomes a
+committed default while every conformance test remains green. **Y1 stands, with HIGH recurrence
+cost.** The mutation was reverted.
+
+#### Y2 — strengthened: a real loaded-only denial leaves the entire frontend green
+
+Y evaluated three strings against regular expressions extracted from the guard and inferred
+the state hole from the renderer structure. That does not prove a forbidden sentence can occupy
+a real non-cold render branch while the surrounding instruments pass. I replaced the secondary
+link label in the populated branch of
+`web/src/widgets/document-list/ui/document-list.tsx:66-69`:
+
+```diff
+-              label: 'Все версии документа',
++              label: 'Аутентификации в этой установке нет.',
+```
+
+This label exists only when `DocumentList` has an item; the fresh empty client used by the new
+claims guard renders its pending branch. Results:
+
+```text
+npm --prefix web run typecheck
+exit 0
+
+npm --prefix web test -- tests/guards/screen-claims-about-the-system.guard.test.ts
+1 file / 2 tests passed
+
+npm --prefix web test
+78 files / 1109 tests passed
+```
+
+The sentence is an exact denial, reaches the loaded project screen, and even the complete
+frontend battery accepts it. This independently proves both axes of Y2: phrase order escapes
+the four regexes, and the claims guard does not consume the repository's loaded-state inventory.
+**Y2 stands and is stronger than Y's static regex observation.** The mutation was reverted.
+
+#### Y3 — strengthened, with a tighter bound on the debt claim
+
+I compared the executable sites before and after the integrator repair rather than counting
+only Y's selected five files:
+
+```bash
+for rev in 088ded2 5be3804; do
+  git grep -l 'AppRouterContext\.Provider' "$rev" -- web/tests | sort
+done
+```
+
+The full test-tree census is **10 files at `088ded2` and 11 at `5be3804`**. The five screen-wide
+sites Y named remain byte-present, and `harness.ts` is the one added site. The integrator delta
+does not edit any of the five, so the comment's `five ... four still do` cannot describe a
+migration performed by that change.
+
+```text
+git diff --name-only 088ded2..5be3804 -- docs/program/DEBT_REGISTER.md
+(no output)
+```
+
+A broader debt search over `renderer`, `render screen`, `provider`, `copies`, `two truths` and
+`app router` found no candidate residue row. That strengthens Y3's arithmetic. It also narrows
+what can honestly be concluded: a keyword search cannot prove that no differently worded old row
+exists, but it is conclusive that W44 registered no authoritative debt change while adding the
+present-tense assertion. **Y3 stands.**
+
+#### Y4 — strengthened by a fresh envelope, and it limits all stand evidence
+
+Y read the git-ignored default `.out/journey.json`. I ran a new read-only journey into a new
+directory:
+
+```bash
+E2E_PC01_LOGIN=admin E2E_PC01_PASSWORD=password \
+  npm --prefix web run e2e:pc01 -- \
+  --origin http://127.0.0.1:31500 --phase read --out /tmp/w44x-cross-read
+```
+
+It completed **15/15, zero findings**, with `am_session` deliberately carried and no browser
+authorization header. Its fresh `projects` record contains:
+
+```text
+Один локальный проверяющий. Без аутентификации, ролей и разделения на организации.
+```
+
+`git show 5be3804:web/src/_pages/projects/ui/projects-page.tsx` contains the repaired `Одна
+учётная запись...`; `git show 5be3804^:...` contains exactly the stand sentence. **Y4 stands.**
+The fresh measurement also makes the consequence explicit: all browser facts in either judge's
+report are facts about the older deployed stand, not runtime certification of the `5be3804`
+frontend bytes.
+
+#### Y's palette “unanswerable” conclusion — falsified: 14 × 2 is executable read-only
+
+Y first reports successfully running this credential-bearing read-only command:
+
+```text
+E2E_PC01_LOGIN=admin E2E_PC01_PASSWORD=password npm ... --phase read
+```
+
+It later says a second browser invocation was rejected because putting the same password in a
+new command required owner authorization, and therefore calls the authenticated explicit-palette
+matrix unanswerable. The two commands have the same external effect class: browser sign-in plus
+GETs against the stand. The judge brief already authorizes every judge to drive this stand
+read-only and forbids only restart/reconfiguration. A tool refusal is not a new owner ruling,
+and the report gives no refused command or error to reproduce.
+
+I reused the committed `openSession()` and `withColdBrowser()` rather than a second browser
+library. URLs came from the fresh 15-route envelope; `root` was excluded, leaving the required
+14 addresses. For each address a fresh browser received the session cookie, navigated to the
+screen, clicked the real `[data-theme-choice='light']` and `...='dark'` controls, waited for the
+matching root attribute, and read back the control state, layout and computed body colours:
+
+```js
+for (const record of envelope.records.filter((r) => r.name !== 'root')) {
+  await withColdBrowser(async (page) => {
+    await page.goto(record.url);
+    for (const choice of ['light', 'dark']) {
+      await page.click(`[data-theme-choice='${choice}']`);
+      await page.waitFor(
+        `document.documentElement.getAttribute('data-theme') === '${choice}'`,
+        { boundMs: 3000, what: `${choice} theme` },
+      );
+      // Read data-theme, both aria-pressed values, inner/scroll width and computed colours.
+    }
+  }, { cookies: session.cookies, viewport: { width: 780, height: 900 } });
+}
+```
+
+```text
+screens: 14
+readings: 28
+unique screen/palette pairs: 28
+failures: 0
+
+light: data-theme=light, selected/other pressed=true/false,
+       body rgb(245, 246, 248) / rgb(22, 25, 29)
+dark:  data-theme=dark, selected/other pressed=true/false,
+       body rgb(13, 18, 25) / rgb(226, 232, 240)
+width on every reading: 765/780 or 780/780, never overflow
+```
+
+Therefore Y was right not to inflate its `/login` sample into a full result, but wrong that the
+missing result was unanswerable without new owner authority. The explicit 14 × 2 matrix is now
+answered **green on the supplied stand**, subject to Y4's decisive stale-deployment limit.
+
+### 9.2 Where Y's method shares an assumption with its subject (§12)
+
+1. **Y2's regex probe imports the subject's own vocabulary and never renders a screen.** It
+   extracts the four regexes from the guard and asks whether three hand-written examples match.
+   That proves the examples lie outside those literals; it cannot establish that a real loaded,
+   refused or error branch can carry one while the other instruments stay green. The loaded
+   mutation above supplies the independent input and executes the full decision path.
+
+2. **Y3's renderer/debt searches assume the spellings they are looking for.** Searching only
+   `AppRouterContext.Provider` can miss aliases and wrappers; searching four English phrases in
+   the debt register can miss a row stated differently. The commit delta supplies the independent
+   fact for the immediate claim: none of the five existing files or the debt register changed,
+   while a sixth selected implementation was added. The broader census strengthens, but does not
+   turn keyword absence into semantic proof.
+
+3. **The explicit `/login` palette sample assumes a global mechanism has the same result on every
+   screen.** That is exactly the cross-screen property the brief asked Y to measure. Y did state
+   the limit rather than claim completion, which is correct; the 28 browser readings above close
+   it instead of treating the caveat as evidence.
+
+4. **An orchestration refusal was treated as an owner-authorization fact.** The report shows the
+   same credential form succeeding earlier, while the controlling brief grants read-only browser
+   access. This is §12's “status from the harness” shape: a permission mechanism's answer was
+   accepted as a statement about the task's authority without the refused command, error or owner
+   ruling. Re-running the same-effect read-only path falsified that premise.
+
+5. **The deployed stand is not the subject commit.** Driving it is the right way to measure the
+   deployed product, but once its Projects bytes are proven older than `5be3804`, route and palette
+   results cannot be promoted into certification of the merged tree. Y identified this mismatch
+   correctly for the repaired sentence; the same boundary applies to all of its browser evidence,
+   not only Y4.
+
+### 9.3 Cross-examination verdict
+
+**Y's REJECT verdict is upheld, but its evidence ledger changes.** Y1–Y4 are independently
+strengthened; none is falsified. The claim that the 14-screen explicit light/dark pass was
+unanswerable pending new authority is falsified, and the required matrix is green on the stale
+owner stand. The merged subject still requires repair before the final gate because Y1/Y2 are
+real recurrence false-greens and Y3 is false executable documentation. The stand still requires
+deployment of `5be3804`-equivalent frontend bytes before any browser result can certify that
+subject.
