@@ -22,48 +22,58 @@ certifications.
 **So these waves are chosen to be the work that is not waiting on either**, and to make the
 host wave short when it comes rather than to substitute for it.
 
-## W45 — the second section vertical, and the readiness that shortens the host wave
+## W45 — the blocks screen made real, and the readiness that shortens the host wave
 
-**`R-25` ruled the order and the reason is measured**: the sections whose answers live in prose
-and tables reuse the AR vertical almost entirely; the ones whose answers live in drawings reuse
-none of it, because `PC-01` does no visual detection. **ПОС, ТХ, ПБ first.**
-
-**And `R-25`'s own warning is the design constraint:** *«вертикаль одна и обобщать было не на
-чем — второй раздел покажет швы»*. `AGENTS.md` §4 forbids a generic without proven semantics, so
-**W45 does not extract one.** It builds the second instance and **measures** the seams.
-
-**The seams, located rather than guessed** (`alpha-w44`):
-
-| what is hard-coded to AR | where |
-|---|---|
-| `DISCIPLINE: Final[str] = "AR"` | `src/auditmanager/analysis/text/profile.py:35` |
-| `CATEGORIES = ("internal_contradiction", "explicit_placeholder")` | `analysis/text/prompt.py:41` |
-| `PROMPT_BUNDLE_ID` — one module constant | `analysis/text/prompt.py:46` |
-| the bundle's `content_sha256`, which enters **every request checksum** | `prompt.py:192` |
-
-The AR vertical is **5 175 lines** in `src/auditmanager/analysis/`. A second bundle is a second
-identity, not a parameter.
+> **This section replaced a plan for a second section vertical (ПОС), written and committed
+> an hour earlier and withdrawn before any stream saw it.** Two facts in the tree forbid it and
+> I had not read either: `PROTOTYPE_PROFILE.md` §7.2 lists *"disciplines other than the single
+> AR validation profile"* under **Deferred**, and `analysis/text/profile.py`'s own docstring says
+> *"a second profile is a scope change"*. `R-25` also sequenced the thirteen sections **after the
+> first deploy**, which is `R-1` and the owner's. **Building ПОС now would have reordered the
+> owner's sequencing and taken a deferred scope decision on their behalf** — `D-96`'s exact
+> shape, caught by the check it asks for, one step before four sessions were dispatched on it.
 
 | stream | subject |
 |---|---|
-| `W45-POS` | ПОС as a real second vertical: bundle, categories, fixtures, acceptance. **Stops hard at `D-70`** — it can be built and cannot be shown to work, and simulating around that is the silent fallback `AGENTS.md` §4 forbids by name |
-| `W45-READY` | what must be true before the host arrives: `D-80`'s `.dockerignore` **verified by a real build**, `D-79`'s structural repair so the gate reads `docs/`, and a deploy rehearsal from a clean clone |
+| `W45-BLOCKS` | the `/blocks` screen stops being a stub, **using data the pipeline already produces** |
+| `W45-READY` | `D-80`'s `.dockerignore` **verified by a real build**, `D-79`'s repair so the gate reads `docs/`, and a deploy rehearsal from a clean clone |
+
+**Why blocks is buildable today when almost nothing else is.** `W43-PREP`'s data-shape note —
+the deliverable a stream would have skipped — found that *"there is no geometry to draw"* was
+false: `analysis/stages/page_geometry_extraction.py:226` writes a real `bbox {x0,y0,x1,y1}` in
+points, top-left origin, **one per text line**, with its unit and origin beside it. What is
+missing is **an operation that returns it**.
+
+**And that stage needs no provider.** It is one of the four in `PC01_STAGES` and carries no
+adapter, no model and no provider reference, so it runs in `recorded` mode exactly as in `live`.
+**`D-70` does not block this**, which is what makes it the right work while the key is missing.
+
+It is a reseal — an operation, its client, the mirror and `FRONTEND_LOCK.json` — and under
+`R-29` the shape is the integrator's to pick. `R-23` ruled the screen wanted and said each is
+wired *"as its vertical lands"*; a deterministic read is that vertical landing.
 
 **`W45-READY` is the wave's leverage.** Every hour it spends is an hour the host wave does not,
-and the host wave is the only thing that moves a certification criterion.
+and the host wave is the only thing that moves a `PA-01` criterion.
 
-## W46 — the extraction, with two instances to argue from
+## W46 — the logs read operation, or the debt wave
 
-Only after W45 exists is there a proof of semantics. W46 extracts what the two verticals share
-and **leaves what they do not** — and the register row it must answer to is that this programme
-forbids a base service written from one example.
+The second of the three reseals `W43-PREP` put on paper: an execution journal a reviewer can
+read. **Its note needs re-reading first** — `audit_event` is never written by `src/`; what exists
+is `stage_result`, `model_call`, `contract_state_transition` and `command_record`, so the
+operation's subject is a decision before it is a schema.
+
+If that decision is not ready, W46 becomes the debt wave and W47 moves up.
 
 ## W47 — the debt wave, on cadence
 
 `D-97` (six renderer copies against one contract), `D-87`, `D-89`'s rule, `D-96`'s discipline,
 `D-74`, and whatever W45 and W46 leave. Named now so it is not invented at the end.
 
-## W48 — ТХ, or the host wave if it has arrived
+## W48 — the host wave if it has arrived, and otherwise the optimisation view
+
+**The thirteen section verticals are not in this plan at all**, and that is deliberate: `R-25`
+placed them after the first deploy, and `PROTOTYPE_PROFILE.md` §7.2 defers a second discipline.
+**They start when the owner's host does.**
 
 **The host wave pre-empts whichever wave it lands in.** It does not queue.
 

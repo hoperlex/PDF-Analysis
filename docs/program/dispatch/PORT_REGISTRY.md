@@ -48,7 +48,11 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56290`, `59890/59891` | `gate-w44a` — `W44-JOURNEY` | 2026-09-24 | wave 44 merges |
 | `56300`, `59900/59901` | `gate-w44b` — `W44-SEE` | 2026-09-24 | wave 44 merges |
 | `56310`, `59910/59911` | `gate-w44j` — `W44-JUDGE-A`, then cross-judge **X** | 2026-09-24 | wave 44 closes |
-| `56320`, `59920/59921` | `gate-w44k` — cross-judge **Y**, which runs beside X | 2026-09-24 | wave 44 closes |
+| `56290–56320`, `59890–59921` | wave 44 | 2026-09-24 | **released** — merged, tagged `alpha-w44` |
+| `56330`, `59930/59931` | `gate-w45a` — `W45-POS` | 2026-09-24 | wave 45 merges |
+| `56340`, `59940/59941` | `gate-w45b` — `W45-READY` | 2026-09-24 | wave 45 merges |
+| `56350`, `59950/59951` | `gate-w45j` — judge A, then cross-judge X | 2026-09-24 | wave 45 closes |
+| `56360`, `59960/59961` | `gate-w45k` — cross-judge Y | 2026-09-24 | wave 45 closes |
 | `56290–56320`, `59890–59921` | wave 44 | 2026-09-24 | **released** — streams and two cross-judges merged; containers, volumes and worktrees removed |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
 
