@@ -132,7 +132,7 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
         />
       ) : null}
 
-      {mutation.isPending ? <LoadingState what="the upload" /> : null}
+      {mutation.isPending ? <LoadingState what="загружаемый файл" /> : null}
 
       {failure !== null && failure.presentation === 'unsupported' ? (
         <UnsupportedState

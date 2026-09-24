@@ -50,7 +50,7 @@ export function StartRunControl({ versionUid, onStarted }: StartRunControlProps)
         </em>
       </p>
 
-      {mutation.isPending ? <LoadingState what="the run request" /> : null}
+      {mutation.isPending ? <LoadingState what="запрос на прогон" /> : null}
 
       {failure !== null && failure.presentation === 'unsupported' ? (
         <UnsupportedState

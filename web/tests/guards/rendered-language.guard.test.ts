@@ -1863,30 +1863,37 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  * reach — and **saying so by name is the whole point**, because the alternative is a
  * matrix that looks complete.
  *
- * **Three of these are English strings on a screen a reviewer can reach**, and they are
- * reported rather than repaired: `rendered-language`'s own ratchet cannot see them for
- * the same reason this list exists, and translating them is a `web/src` change that no
- * defect this task newly catches requires.
+ * **Three of these WERE English strings on a screen a reviewer can reach**, carried here
+ * for three waves with the words *reported and not repaired*. `D-82`. The reading that
+ * kept them was that this list excuses a branch from everything, and it only ever excused
+ * it from COVERAGE — `no branch label carries English, reachable or not`, below, is the
+ * assertion that says so, and it was committed RED over all three before they were
+ * translated. Their entries are unchanged except for the label, so the ratchet's reverse
+ * direction still holds them: a state that starts rendering one of these makes this file
+ * red rather than leaving a stale excuse in place.
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
   {
-    label: 'Загрузка: the new project…',
+    label: 'Загрузка: новый проект…',
     why:
       "`create-project-form.tsx`, while its `useMutation` is in flight. One server pass " +
       'never has a settled mutation, and the harness cannot fire the submit that starts ' +
-      'one. ENGLISH ON A SCREEN, reported: `W32-SEE` §4 listed it and it is still there.',
+      'one. `useMutation` builds its own observer and reads no cache, so there is nothing ' +
+      'to seed: unlike a query, a pending mutation cannot be put into a client. `D-82`.',
   },
   {
-    label: 'Загрузка: the upload…',
+    label: 'Загрузка: загружаемый файл…',
     why:
       '`upload-document-form.tsx`, while the upload is in flight; same mechanism as the ' +
-      'new project. ENGLISH ON A SCREEN, reported and not repaired here.',
+      'new project, and the same reason no seed reaches it. The words it carries are ' +
+      'judged by `no branch label carries English, reachable or not`. `D-82`.',
   },
   {
-    label: 'Загрузка: the run request…',
+    label: 'Загрузка: запрос на прогон…',
     why:
-      '`start-run-control.tsx`, between the press and the run id. Same mechanism. ' +
-      'ENGLISH ON A SCREEN, reported and not repaired here.',
+      '`start-run-control.tsx`, between the press and the run id. Same mechanism, same ' +
+      'reason no seed reaches it, and the words it carries are judged by `no branch label ' +
+      'carries English, reachable or not` rather than by this matrix. `D-82`.',
   },
   {
     label: 'Файл выходит за допустимые ограничения.',
@@ -1993,20 +2000,23 @@ describe('every branch the widgets have is rendered by some state in this matrix
       .filter((entry) => entry.label.startsWith('Загрузка: '))
       .map((entry) => entry.label);
     expect(composed.length, 'the scan found no LoadingState argument at all').toBeGreaterThan(3);
-    const excused = new Set(UNREACHABLE_IN_ONE_PASS.map((entry) => entry.label));
-    const reachable = composed.filter((label) => !excused.has(label));
+    // POSITIVE evidence only, and deliberately so: *"which branches are unreached"* is the
+    // case above and this one must not restate it, or a new unreachable branch would fail
+    // here with a message about the formula that is not true of it.
+    const verbatim = composed.filter((label) => rendered.includes(label));
     expect(
-      reachable.length,
-      'every composed loading label is excused as unreachable, so the formula below is ' +
-        'checked against nothing',
-    ).toBeGreaterThan(3);
-    expect(
-      reachable.filter((label) => !rendered.includes(label)).sort(),
+      verbatim.length,
       '`branchLabelsInSource()` composes `Загрузка: ${what}…` the way `LoadingState` does, ' +
-        'and a screen that renders this argument does NOT carry that sentence. The formula ' +
-        'and the component have diverged, so every language judgement made through the ' +
-        'formula below is about a string no reviewer reads.',
-    ).toEqual([]);
+        'and NO screen carries the sentence it composes. The formula and the component have ' +
+        'diverged, so every language judgement made through the formula is about a string ' +
+        'no reviewer reads.',
+    ).toBeGreaterThan(3);
+    // And the match is the composition rather than the argument: a formula that had lost
+    // its prefix or its ellipsis would still contain the noun and would satisfy the line
+    // above by accident.
+    const sample = verbatim[0] as string;
+    expect(sample.startsWith('Загрузка: ') && sample.endsWith('…')).toBe(true);
+    expect(rendered).not.toContain(sample.replace('Загрузка: ', 'Загрузка ['));
   });
 
   it('D-82: no branch label carries English, reachable or not', () => {
