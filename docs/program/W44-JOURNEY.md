@@ -635,7 +635,29 @@ a run whose `$?` was `1` at least twice today.
 | `redden-write.manifest.json --phase write` | `049a672` | `rc=1`, **6 findings, write 1/3** — the documented figures, restored | `/root/w44a-redden-write2.log` |
 | `redden-write-bound.manifest.json --phase write` | `049a672`+ | `rc=1`, **4 findings**, the first *"the run did not reach a terminal within the stated bound of 1 ms … still rendering 'in_flight' after 503 ms"*, plus the `202` declared as `200` and `state` declared as `published`. Steps now **3/3** rather than 1/3 | `/root/w44a-redden-bound2.log` |
 | `redden-refusals.json` via `refusals.mjs --cases` | `12b8b14` | `rc=1`, 2 driven, **7 findings** | `/root/w44a-redden-rest.log` |
+| **`make gate`** | **`3e224c0`** | **`GATE OK: battery, foundation, frontend and whitespace all pass`**, and `GATE_EXIT=0` from `$?` after the redirect. Battery **2466 passed**, 5 skipped, 169 subtests, 778.64 s; foundation **35 passed**; frontend **1085 passed in 75 files**; `tsc --noEmit` clean | `/root/w44a-gate.log` |
 | `pytest tests/e2e --ignore=tests/e2e/pc01` | `049a672` | 89 passed, 8 errors — all eight `p02`, all `connection refused` on `127.0.0.1:56290`, i.e. the lane's PostgreSQL was not up. Unrelated to this branch; `make gate` brings it up | `/root/w44a-e2e-py.log` |
+
+### The gate's figures against wave 43's
+
+| | wave 43 close | this branch | why |
+|---|---|---|---|
+| battery | 2442 | **2466** | `+24`, and they are accounted for exactly: `tests/e2e/test_pc01_journey_conformance.py` went from **54 to 78** tests — the session section, the viewport, the refusal controls and their controls |
+| foundation | 35 | **35** | unchanged |
+| frontend | 1085 in 75 files | **1085 in 75 files** | unchanged, and it must be: `web/tests/**` is `W44-SEE`'s and this branch does not touch it |
+
+**And the figure this wave did not move is the one `D-93` is about.** 1085 frontend tests
+still cannot express a width, and nothing here makes them able to — the assertion is in
+the journey, which `make gate` cannot run. What changed is that the class now has *an*
+instrument, with a proof that it reddens. `D-93`'s repair and its residue are different
+things and this report does not merge them.
+
+**One condition on that gate reading, stated rather than left to a judge to find.**
+`gate-w44b` — `W44-SEE`'s lane — was up and running its own work during this run
+(`docker ps`, measured). `OPERATING_CONSTRAINTS.md` §4.6 says a wall clock on a shared
+host is evidence about the machine; the battery's 778 s is therefore not comparable with
+wave 43's numbers, and nothing in this report reads a duration as a verdict. The verdict
+is the `GATE OK` line, which contention cannot produce.
 
 ## §8 For the integrator
 
