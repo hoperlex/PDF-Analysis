@@ -44,7 +44,11 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56240–56250`, `59840–59851` | wave 42 | 2026-09-23 | **released** — merged at `01421b7`, tagged `alpha-w42` |
 | `56260`, `59860/59861` | `gate-w43a` — `W43-COMPARE` | 2026-09-24 | wave 43 merges |
 | `56270`, `59870/59871` | `gate-w43b` — `W43-PREP` | 2026-09-24 | wave 43 merges |
-| `56280`, `59880/59881` | `gate-w43j` — **the judges**, stage A and stage B | 2026-09-24 | wave 43 closes |
+| `56260–56280`, `59860–59881` | wave 43 | 2026-09-24 | **released** — merged, tagged `alpha-w43.1` |
+| `56290`, `59890/59891` | `gate-w44a` — `W44-JOURNEY` | 2026-09-24 | wave 44 merges |
+| `56300`, `59900/59901` | `gate-w44b` — `W44-SEE` | 2026-09-24 | wave 44 merges |
+| `56310`, `59910/59911` | `gate-w44j` — `W44-JUDGE-A`, then cross-judge **X** | 2026-09-24 | wave 44 closes |
+| `56320`, `59920/59921` | `gate-w44k` — cross-judge **Y**, which runs beside X | 2026-09-24 | wave 44 closes |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
