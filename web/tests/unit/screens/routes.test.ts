@@ -32,10 +32,12 @@ import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectsPage } from '@/_pages/projects';
 import { RunPage } from '@/_pages/run';
 import { VersionDetailPage } from '@/_pages/version-detail';
+import { StageComparisonPage } from '@/_pages/stage-comparison';
 
 import DocumentRoute from '@/app/projects/[project_uid]/documents/[document_uid]/page';
 import ProjectRoute from '@/app/projects/[project_uid]/page';
 import VersionRoute from '@/app/projects/[project_uid]/versions/[version_uid]/page';
+import ComparisonRoute from '@/app/projects/[project_uid]/versions/[version_uid]/comparison/page';
 import ProjectsRoute from '@/app/projects/page';
 import ReviewRoute from '@/app/projects/[project_uid]/runs/[run_id]/review/page';
 import RootPage from '@/app/page';
@@ -99,6 +101,31 @@ describe('each route delegates to its screen and to no other', () => {
     expect(element.props).toEqual({ projectUid: A_PROJECT, versionUid: A_VERSION });
   });
 
+  it('.../comparison passes both to the comparison screen, and does not cross them', async () => {
+    const element = await ComparisonRoute({
+      params: Promise.resolve({ project_uid: A_PROJECT, version_uid: A_VERSION }),
+    });
+    expect(element.type).toBe(StageComparisonPage);
+    expect(element.props).toEqual({ projectUid: A_PROJECT, versionUid: A_VERSION });
+  });
+
+  it('comparison is mounted under the version, not under a run', () => {
+    /*
+     * The URL is the claim, as it is for the review screen one case below. A comparison is
+     * only meaningful between two runs of the SAME published version: the version is
+     * immutable, so a difference between two of its runs is a difference in the analysis
+     * rather than in the document. Mounting it under one run would make the other run a
+     * parameter of the first, which is a relationship nothing in the contract supports.
+     *
+     * NOTE FOR WHOEVER OWNS `shared/lib/routes.ts` NEXT: this address has a route file and
+     * NO builder in `routes`, so it is served and linked to from nowhere. `W43-COMPARE`'s
+     * grant covers neither that module nor the version screen. `docs/program/W43-COMPARE.md`
+     * §7 carries the two-line repair, and until it lands this address is reachable only by
+     * being typed.
+     */
+    expect(A_VERSION).not.toBe(A_RUN);
+  });
+
   it('review is mounted under the run, not beside it', () => {
     // The URL is the claim: a finding is only meaningful against the run that produced
     // it. This is the file layout that makes the claim true.
@@ -139,6 +166,20 @@ describe('a malformed address is a 404, not a screen reporting a failure', () =>
         route({ params: Promise.resolve({ project_uid: A_PROJECT, run_id: BAD }) }),
       ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
     }
+  });
+
+  it('a malformed version address 404s on the comparison route too', async () => {
+    await expect(
+      ComparisonRoute({ params: Promise.resolve({ project_uid: A_PROJECT, version_uid: BAD }) }),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
+    // And the PARENT segment, which is the half a route that trusted its ancestor misses.
+    await expect(
+      ComparisonRoute({ params: Promise.resolve({ project_uid: BAD, version_uid: A_VERSION }) }),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
+    // The other direction, so this is not a route that is simply always red.
+    await expect(
+      ComparisonRoute({ params: Promise.resolve({ project_uid: A_PROJECT, version_uid: A_VERSION }) }),
+    ).resolves.toBeDefined();
   });
 
   it('a malformed document or version address 404s', async () => {

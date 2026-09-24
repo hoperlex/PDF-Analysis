@@ -28,6 +28,20 @@ export {
   stageRows,
 } from './model/run-presentation';
 
+export type { ComparedFact, ComparedStage, Comparison, FactId, StageSide } from './model/run-comparison';
+export {
+  comparableCostMicros,
+  compareReadings,
+  comparedCount,
+  comparedFacts,
+  comparedStages,
+  defaultPair,
+  differenceCount,
+  runElapsedMs,
+  terminalDetailDigest,
+  terminalDetailKeys,
+} from './model/run-comparison';
+
 export type { TerminalReasonNote } from './model/terminal-reason';
 export { ABSENT_SENTENCE, UNDESCRIBED_PREFIX, terminalReasonNote } from './model/terminal-reason';
 
