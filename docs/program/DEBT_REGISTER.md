@@ -30,6 +30,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-93 | wave 43 put a horizontal scrollbar on **every** screen below 839 px — **repaired**; the class is not | nothing in the gate expresses layout |
 | D-94 | the integrator's own executable changes are the only ones no judge is planned against | a standing rule, costs nothing |
 | D-95 | *«Такого версии не существует»* — gender agreement, and the language guard is blind to it by construction | a class, not a typo |
+| D-96 | three register rows in three waves sent a stream to a file that does not carry what the row says | the check command is the row |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | **D-70** | the stand's API **will not start** since wave 41: the stub URL has no host and `D-72` now refuses it | **owner: a real credential, or a hostname** |
@@ -2133,7 +2134,7 @@ wave 43 was designed to take, and it came back negative.**
 
 `D-69`'s repair made `rendered-language.guard.test.ts` derive **which contract members must be
 rendered** from the contract. It did not touch **which screens are rendered**:
-`web/tests/guards/rendered-language.guard.test.ts:795` is a hand-written
+`web/tests/guards/rendered-language.guard.test.ts` — **line 892 as of `843082f`; this row said 795, which was a wave stale, and a line number in prose is a fact with a short life** — is a hand-written
 `const SCREENS = [...]` of page components, and `web/tests/unit/styles/screens.ts` is a
 hand-written import list.
 
@@ -2389,8 +2390,62 @@ substitution mechanism is in `upload-failure.ts`, `run-failure.ts` and `catalog-
 **The class, not the typo, is the row.** The renderer that walks every screen already exists; it
 looks for the wrong thing. Given the templates and the nouns, agreement is checkable.
 
+> **Corrected 2026-09-24 by `W44-SEE`, which was told to verify and did.** This row said *"the
+> same substitution mechanism is in `upload-failure.ts`, `run-failure.ts` and
+> `catalog-message.ts`"*. **It is in none of them.** Those three build their sentences from fixed
+> literals with the determiner already agreed — *"Такого прогона или версии не существует."*,
+> *"Такого проекта не существует."* — and `catalog-message.ts` has no parameterised noun at all.
+> Measured: `grep -rln GENITIVE web/src` returns **one** file, and `GENITIVE[` appears **once**.
+>
+> **The class is real and is one module wide today**, which changes the repair: a scan over all
+> of `web/src` that forbids a gendered word beside a `${…}` — so the mechanism cannot reappear —
+> rather than three edits to modules that never had it. **A row that sends the next stream to
+> three innocent files costs a wave's attention**, which is the same failure as `D-58`'s
+> non-existent path and `D-74`'s miscount: written from a plausible reading rather than from a
+> query. The query is one line and is now in this row.
+
 Check: drive `…/versions/{well-formed but absent}/comparison` on the stand, or read
 `PARENT_GENITIVE` against the sentence templates above it.
+
+### D-96 — three rows in three waves sent a stream to a file that does not carry what the row says
+
+**The pattern, registered because the instances have stopped being separable.**
+
+| wave | row | what it named | what was there |
+|---|---|---|---|
+| 42 | `D-58` | `web/src/_pages/version-detail/ui/version-list.tsx:7` | **no such file**, and the real line was inside a JSDoc comment |
+| 42 | `D-74` | "one implementation in `bootstrap/` and three in `tests/`" | **two and two**; only the total was right |
+| 43 | `D-88` | `rendered-language.guard.test.ts:795` | **line 892** — one wave stale |
+| 44 | `D-95` | "the same mechanism is in `upload-failure.ts`, `run-failure.ts`, `catalog-message.ts`" | **in none of them**; `grep -rln GENITIVE web/src` returns one file |
+| 44 | the `W44-SEE` brief | "the fourteen addresses `web/src/app` offers" | **fifteen** — fourteen is the count of *screens* |
+
+**Every one was caught by the stream it was given to, because every brief since wave 42 has told
+streams to verify their premises and report the false ones.** That instruction is working and
+should not be relaxed. **But the rows keep being written the same way**, and a stream that spends
+an hour proving a row wrong is an hour not spent on the defect.
+
+**The cause is visible in the table.** Each false row is a **plausible reading of something true**:
+a widget's name inferred from its screen's name; a count remembered from a different wave; a line
+number that was right when it was written; a module named for the failure it reports rather than
+for the mechanism it uses; a count of screens used as a count of addresses. None is careless and
+none would be caught by rereading — they are `OPERATING_CONSTRAINTS.md` §12's shape applied to
+the register itself.
+
+**The rule this register already has and does not enforce on its own rows:** *every row carries
+its own check command.* **The rows above all had one — and the command was written from the same
+reading as the claim, so running it would not have helped.** The repair is narrower and harder:
+**a row that names a path, a line or a count must be written with the output of the query pasted
+into it**, not with a command a reader could run. The three wave-44 corrections above are written
+that way; compare them with the originals.
+
+**The fifteenth address is the sharpest instance and it is worth keeping.** The brief said
+fourteen. Fifteen `page.tsx` exist; the fifteenth is `/`, a `redirect()` that renders nothing.
+**The difference between those two numbers is exactly the opt-out the task had to design** — so
+the imprecision in the brief was not beside the work, it was the work, and only a stream told to
+verify could have discovered that.
+
+Check: `find web/src/app -name page.tsx | wc -l` against any prose in `docs/` claiming a count of
+addresses.
 
 ### D-74 — a parent-existence check costs a full parent read
 
