@@ -1,10 +1,11 @@
 # The PC-01 browser journey
 
 ```
-npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:PORT
+E2E_PC01_LOGIN=<login> E2E_PC01_PASSWORD=<password> \
+  npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:PORT
 ```
 
-Two phases, one instrument, one envelope, one exit code.
+A sign-in, two phases, one instrument, one envelope, one exit code.
 
 **The write half** creates a project, uploads the AR PDF and starts a run — through the
 app's own controls, on the public origin — then waits for the run's terminal by reading
@@ -100,23 +101,100 @@ finding with its correlation id and body — which is `D-5`, stated as a check.
 ## Cold loads
 
 Every route is visited by a **separate operating-system browser process with its own
-throwaway profile directory** — no cache, no `localStorage`, no cookies, no prior client
-state. `D-16` ("no screen can reach anything after a page reload") survived four
-certifications because every one of them navigated inside a single warm page.
+throwaway profile directory** — no cache, no `localStorage`, no prior client state, and
+no cookies except the one the walk explicitly hands it. `D-16` ("no screen can reach
+anything after a page reload") survived four certifications because every one of them
+navigated inside a single warm page.
 
-`cdp.mjs` exposes `withColdBrowser(fn)` and nothing else: there is no API for reusing a
-browser across routes, so the property cannot be lost by forgetting it.
+`cdp.mjs` exposes `withColdBrowser(fn, { cookies, viewport })` and nothing else: there is
+still no API for reusing a browser across routes, so the property cannot be lost by
+forgetting it. Both options are **values the caller states**, never values carried over
+from a previous call, and `page.startedWith()` reports the jar as it stood before the
+first navigation — so the property is measured per route rather than asserted here.
 
-## One origin, no credential, following the app's own links
+## One origin, one session, following the app's own links
 
-The journey is given an origin and nothing else. It is handed no project, document, version
-or run identifier: it starts at `/`, and each route's `follow` rule extracts the next
-identifier from a link the page actually rendered. A screen that renders no link to its
-children fails the route that needed it, and the walk stops rather than reporting on routes
-it did not reach.
+The journey is given an origin and a login, and nothing else. It is handed no project,
+document, version or run identifier: it starts at `/`, and each route's `follow` rule
+extracts the next identifier from a link the page actually rendered. A screen that renders
+no link to its children fails the route that needed it, and the walk stops rather than
+reporting on routes it did not reach.
 
 `T-6` puts the API credential in the BFF route handler, server-side. The journey asserts
-that **no** browser request carried an `Authorization` header.
+that **no** browser request carried an `Authorization` header. That is still true and is
+not what the session below is.
+
+### The sign-in, and why the journey has one now — `D-92`
+
+**The BFF answers `401` without a session cookie.** That has been true since wave 34, by
+design. This journey was written for the application as it stood before that, so it
+reached **route 2 of 15** and stopped — for nine waves, while reporting a red nobody read
+as "the instrument is blind to thirteen screens".
+
+`session.mjs` opens **one** cold browser at `/login`, types the two fields through the
+browser's own editing pipeline, presses the control by its own label, and carries the
+single `HttpOnly` cookie the exchange sets into every later cold browser. The manifest's
+`session` section declares the screen, the controls, the exchange and the landing; the
+same two checkers read it as they read everything else here.
+
+**The credential is not in this repository and may never be.** Each `fill` names the
+*field* it fills — `login` or `password` — and the value comes from `E2E_PC01_LOGIN` and
+`E2E_PC01_PASSWORD` at run time. There is no default. A session action carrying a literal
+`value` fails `make gate`, so the obvious shortcut is caught by a guard rather than by a
+reviewer.
+
+**A run that cannot sign in stops.** It names the sign-in as the reason, walks nothing,
+and exits 1. A journey that quietly covers fewer routes is exactly how `D-92` survived
+nine waves.
+
+### A session carried deliberately is not state leaking between routes
+
+They look identical in a passing run and they are opposite properties, so the difference
+is built rather than described:
+
+* the cookie is obtained **once, before the walk**, and the same value is handed to every
+  route. Route 15's browser receives exactly what route 1's received, so no route depends
+  on any route before it having run;
+* nothing is ever read **out of** a route's browser. `cdp.mjs` has no jar shared between
+  calls and still has no way to reuse a browser;
+* every profile reports the cookies it held **before its first navigation**, and the walk
+  asserts per route that this is exactly what it handed over — printed as
+  `jar=[am_session]` on each line. State leaking forward would show up there as a jar that
+  grows.
+
+## The declared width — `D-93`
+
+Wave 43's four navigation links widened `.am-app__bar` past the viewport and moved the
+overflow threshold from **482 px to 839 px**, so every screen in the product scrolled
+sideways on a small laptop and on every tablet. **1085 frontend tests could not see it**:
+the battery renders through `renderToStaticMarkup`, which has no layout, no box and no
+viewport.
+
+Every route is now laid out at the manifest's declared `viewport` — **780 × 900**, the
+width `W43-JUDGE-B` measured the regression at — and asserted:
+`document.documentElement.scrollWidth <= window.innerWidth`. A finding names the route,
+both numbers, the overflow in pixels and the widest boxes crossing the right edge.
+
+`innerWidth` and not `clientWidth`, stated once: a vertical scrollbar makes `clientWidth`
+smaller than the viewport, so a page exactly filling the viewport would redden for a
+scrollbar rather than for a layout. The looser comparison is the one that cannot produce a
+false red.
+
+**Shown failing**, because a width assertion nobody has watched fail is one nobody can
+trust:
+
+```
+node tests/e2e/pc01/journey/prove_the_width_assertion_can_fail.mjs \
+  --origin http://127.0.0.1:PORT
+```
+
+It writes a scratch copy of `web/src/app/globals.css` with wave 43's `flex-wrap: wrap`
+removed and checks the copy's `.am-app__bar` block then declares no `flex-wrap` at all;
+`nowrap` is that property's initial value, so the block computes to `nowrap`. It then
+injects exactly that on the live screens and **reads the computed style back on both
+sides** — `wrap`, then `nowrap` — which is what makes the scratch copy and the injection
+the same mutation rather than a claim that they are. It imports `width.mjs`, the
+journey's own assertion, rather than a second copy written to agree with it.
 
 ## No dependency
 
@@ -204,6 +282,17 @@ took attached. The other three catch the `202` declared as `200` and `state` dec
 The fixtures are not read by the conformance guard, so their deliberate wrongs never redden
 `make gate`.
 
+**And that is also why three of them stopped proving anything.** `W44-JOURNEY` found the
+two write fixtures pressing controls labelled `Create`, `Upload` and `Start run` — the
+application says `Создать`, `Загрузить` and `Запустить прогон` — so each died at its first
+click and reported findings about a control it could not press **instead of** the
+deliberate wrongs it declares. The real manifest did not rot, because `make gate` reads
+it; the fixtures are exempt from that guard by design, and the exemption is what let them
+go stale. Labels corrected and all three re-measured; the figures above are this wave's.
+The four `fixtures/w28-live/*.manifest.json` carry the same stale labels and no `session`
+section, and are deliberately left alone — nothing drives them, and a run of one now fails
+loudly naming `D-92`.
+
 ## What it costs to run
 
 Measured on 2026-09-19, both halves against `http://127.0.0.1:31500`: **248 s**, exit `0`,
@@ -226,6 +315,21 @@ negative spec set, a leakage spec, a restart spec, a byte-identity export spec a
 anti-vacuity spec, and none of those are here. A green from a partial suite that does not
 say it is partial is `D-23` in a different costume; this paragraph is the weaker mitigation
 and it is stated rather than claimed solved.
+
+### What the refusal drive's own controls cost, and it is the same shape
+
+`W28-GUARD` moved the six refusal *expectations* into `manifest.json`, stating the cost it
+was paying off: expectations in a script's own source are expectations `make gate` cannot
+read. It left the *controls* — `Create`, `Upload`, `Retry`, `Chosen: ` — in
+`refusals.mjs`. The application was then translated and **all four stopped matching**.
+
+Measured 2026-09-24: `node tests/e2e/pc01/journey/refusals.mjs --origin ...` threw
+`click form button[type="submit"] [text="Create"]: no element matches it` **before driving
+a single fixture**. `D-83` says the eleven refusal sentences are "verified only against a
+live stand" by this script. They were not: they were verified by nothing, anywhere. The
+controls are declared in `manifest.json` now, the drive replays the manifest's own
+`create-project` step instead of a second copy of it, and `make gate` reddens the next
+time one is relabelled.
 
 **One negative set is now partly here, and only partly.** The write half proves the happy
 path of create, upload and start. It does not drive the refusals the upload screen renders

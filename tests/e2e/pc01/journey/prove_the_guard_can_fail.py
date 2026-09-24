@@ -15,7 +15,9 @@ It restores the file after every mutation and again at the end. If it is interru
 
 Measured 2026-09-19 on `agent/w22-e2e`: ten mutations, ten reds, zero vacuous checks.
 `W28-GUARD` added thirteen more for the refusal half and the sentence check; its figures
-are in `docs/program/reviews/W28-GUARD.md`.
+are in `docs/program/reviews/W28-GUARD.md`. `W44-JOURNEY` added twelve more for the
+sign-in section (`D-92`), the declared viewport (`D-93`) and the refusal drive's own
+controls; its figures are in `docs/program/W44-JOURNEY.md`.
 
 Sibling: `tests/e2e/prove_the_headroom_guard_can_fail.py` does the same for `D-44`'s
 guard, and never writes the tree at all -- the two files it would have to mutate,
@@ -125,6 +127,44 @@ mutations = [
   ("surrender a named fault to the generic classification",
    lambda m: m['refusals']['cases'][4].__setitem__('failure_kind','server_error'),
    "test_no_refusal_declares_the_generic_classification_it_exists_to_rule_out"),
+  # --- `W44-JOURNEY`. The sign-in (`D-92`), the declared width (`D-93`), and the refusal
+  # --- drive's own controls, which `W28-GUARD` left in a file the gate cannot read.
+  ("drop the sign-in section",
+   lambda m: m.pop('session'),
+   "test_the_manifest_has_a_session_half_at_all"),
+  ("type the password into the manifest",
+   lambda m: m['session']['actions'][1].__setitem__('value','hunter2'),
+   "test_no_session_action_carries_a_credential"),
+  ("fill a field the environment does not supply",
+   lambda m: m['session']['actions'][0].__setitem__('from','totp'),
+   "test_no_session_action_carries_a_credential"),
+  ("move the sign-in to a screen the read walk does not cover",
+   lambda m: m['session'].__setitem__('at','/sign-in'),
+   "test_the_session_stands_on_a_screen_the_read_walk_also_covers"),
+  ("rename the password input's id",
+   lambda m: m['session']['actions'][1].__setitem__('selector','#sign-in-secret'),
+   "test_every_control_the_sign_in_presses_still_exists_in_the_application"),
+  ("relabel the sign-in button",
+   lambda m: m['session']['actions'][2].__setitem__('text','Log in'),
+   "test_every_control_the_sign_in_presses_still_exists_in_the_application"),
+  ("rename the session cookie",
+   lambda m: m['session'].__setitem__('cookie','am_sess'),
+   "test_the_session_cookie_and_mount_are_the_ones_the_application_uses"),
+  ("remove the bound on the sign-in wait",
+   lambda m: m['session'].__setitem__('bound_ms',0),
+   "test_the_manifest_has_a_session_half_at_all"),
+  ("drop the declared viewport",
+   lambda m: m.pop('viewport'),
+   "test_the_viewport_declares_a_width_every_route_is_held_to"),
+  ("declare a width the wave-43 bar already fitted inside",
+   lambda m: m['viewport'].__setitem__('width',1024),
+   "test_the_viewport_declares_a_width_every_route_is_held_to"),
+  ("relabel the upload control the refusals press",
+   lambda m: m['refusals']['controls'].__setitem__('submit_label','Upload'),
+   "test_every_control_the_refusals_press_still_exists_in_the_application"),
+  ("rename the file input the refusals attach to",
+   lambda m: m['refusals']['controls'].__setitem__('file_input','#document-file'),
+   "test_every_control_the_refusals_press_still_exists_in_the_application"),
 ]
 
 ok = True

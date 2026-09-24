@@ -63,6 +63,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { withColdBrowser } from './cdp.mjs';
+import { openSession } from './session.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..', '..', '..');
@@ -81,7 +82,36 @@ const REPO = resolve(HERE, '..', '..', '..', '..');
  * The rest of this file is unchanged, so `--cases` files written against the old shape --
  * `fixtures/redden-refusals.json` among them -- still declare exactly what they did.
  */
-const REFUSALS = JSON.parse(readFileSync(resolve(HERE, 'manifest.json'), 'utf8')).refusals;
+const MANIFEST = JSON.parse(readFileSync(resolve(HERE, 'manifest.json'), 'utf8'));
+const REFUSALS = MANIFEST.refusals;
+
+/**
+ * The controls, from the manifest. `W44-JOURNEY`.
+ *
+ * They were literals in this file -- `Create`, `Upload`, `Retry`, `Chosen: ` -- and the
+ * gate cannot read this file. The application was translated and every one of them
+ * stopped matching: measured 2026-09-24, this script threw
+ * `click form button[type="submit"] [text="Create"]: no element matches it` before it
+ * drove a single fixture. `D-83` said the eleven sentences were at least verified here,
+ * against a live stand; they were not verified anywhere.
+ *
+ * `W28-GUARD` moved the EXPECTATIONS into the manifest for exactly this reason and left
+ * the controls behind. This is the other half of that move.
+ */
+const CONTROLS = REFUSALS?.controls ?? null;
+if (CONTROLS === null) {
+  throw new Error(
+    'manifest.json declares no `refusals.controls`. The controls this script presses are ' +
+      'declared there so `make gate` reddens when one is relabelled -- which is how all ' +
+      'four of them went stale unnoticed.',
+  );
+}
+
+/** The viewport every drive is laid out at, so a refusal panel is read at a stated width. */
+const VIEWPORT =
+  MANIFEST.viewport === undefined
+    ? null
+    : { width: MANIFEST.viewport.width, height: MANIFEST.viewport.height };
 
 function manifestCases(section) {
   if (section === undefined || !Array.isArray(section.cases) || section.cases.length === 0) {
@@ -184,6 +214,9 @@ function apiExchanges(page) {
 
 /** Read the panel `web/src` renders for a refusal, by its own marker attributes. */
 const READ_PANEL = `(() => {
+  const SUBMIT_LABEL = ${JSON.stringify(CONTROLS.submit_label)};
+  const RETRY_SELECTOR = ${JSON.stringify(CONTROLS.retry_action_selector)};
+  const CHOSEN_SELECTOR = ${JSON.stringify(CONTROLS.chosen_selector)};
   const pick = (sel, attr) => {
     const el = document.querySelector(sel);
     return el === null ? null : {
@@ -195,27 +228,51 @@ const READ_PANEL = `(() => {
     };
   };
   const submit = Array.from(document.querySelectorAll('form button[type="submit"]'))
-    .find((b) => (b.innerText ?? '').trim() === 'Upload') ?? null;
+    .find((b) => (b.innerText ?? '').trim() === SUBMIT_LABEL) ?? null;
   return {
     precheck: pick('[data-precheck-problem]', 'data-precheck-problem'),
     uploadFailure: pick('[data-upload-failure]', 'data-upload-failure'),
     alertText: (document.querySelector('[role="alert"]')?.innerText ?? '').trim() || null,
     submitDisabled: submit === null ? null : submit.disabled === true,
-    chosen: (Array.from(document.querySelectorAll('p')).map((p) => (p.innerText ?? '').trim())
-      .find((t) => t.startsWith('Chosen: ')) ?? null),
-    retryOffered: Array.from(document.querySelectorAll('button'))
-      .some((b) => (b.innerText ?? '').trim().startsWith('Retry')),
+    chosen: (document.querySelector(CHOSEN_SELECTOR)?.innerText ?? '').trim() || null,
+    // By STRUCTURE, not by label: shared/ui's ErrorState puts its action in
+    // .am-state__action whatever the action says, and a check keyed to the word
+    // 'Retry' was a check that could never fire once the screen spoke Russian.
+    retryOffered: document.querySelector(RETRY_SELECTOR) !== null,
     body: document.body ? document.body.innerText.replace(/\\n{3,}/g, '\\n\\n') : '',
   };
 })()`;
 
-/** Create one project through the app's own control, so no existing data is disturbed. */
-async function seedProject(origin, stamp) {
+/**
+ * Create one project through the app's own controls, so no existing data is disturbed.
+ *
+ * **It replays the manifest's own `create-project` step** rather than declaring the same
+ * form a second time. That step's selectors, its control label and its capture marker are
+ * already checked against `web/src` by `make gate`; a second copy of them here is a second
+ * thing to rot, and it did rot -- this function pressed a control labelled `Create` for as
+ * long as the screen has said `Создать`.
+ */
+async function seedProject(origin, stamp, cookies) {
+  const step = (MANIFEST.write?.steps ?? []).find((s) => s.name === 'create-project');
+  if (step === undefined) {
+    throw new Error(
+      "manifest.json declares no write step named 'create-project'; this drive seeds its " +
+        'own project by replaying it and cannot invent one.',
+    );
+  }
   return await withColdBrowser(async (page) => {
-    await page.goto(`${origin}/projects`);
-    const name = `W27-REFUSE ${stamp}`;
-    await page.fill('#new-project-name', name);
-    await page.click('form button[type="submit"]', { text: 'Create' });
+    await page.goto(`${origin}${step.at}`);
+    let name = `W27-REFUSE ${stamp}`;
+    for (const action of step.actions) {
+      if (action.do === 'fill') {
+        name = action.value.replaceAll('%STAMP%', `W27-REFUSE ${stamp}`);
+        await page.fill(action.selector, name, { text: action.text ?? null });
+      } else if (action.do === 'click') {
+        await page.click(action.selector, { text: action.text ?? null });
+      } else {
+        throw new Error(`seedProject: the create-project step uses '${action.do}', which this drive does not replay`);
+      }
+    }
     await page.settle();
     const waited = await page.waitFor(
       `(() => {
@@ -235,11 +292,11 @@ async function seedProject(origin, stamp) {
       throw new Error(`the screen stated ${JSON.stringify(uid)}, which is not a project uid`);
     }
     return { projectUid: uid, name };
-  });
+  }, { cookies, viewport: VIEWPORT });
 }
 
 /** One fixture, one cold browser, at the app's own upload control. */
-async function drive(origin, projectUid, testCase, stamp) {
+async function drive(origin, projectUid, testCase, stamp, cookies) {
   const file = resolve(REPO, FIXTURE_DIR, testCase.fixture);
   if (!existsSync(file)) {
     return { fixture: testCase.fixture, drivingError: `${file} is not on disk`, findings: [`${testCase.fixture}: the fixture is not on disk at ${file}`] };
@@ -272,11 +329,11 @@ async function drive(origin, projectUid, testCase, stamp) {
       record.landedOn = await page.location();
 
       // ---- the user chooses the file -------------------------------------------
-      record.attached = await page.attachFile('#upload-file', file);
+      record.attached = await page.attachFile(CONTROLS.file_input, file);
       if (record.attached.size !== bytesOnDisk) {
         fail(`the browser attached ${record.attached.size} bytes but the fixture is ${bytesOnDisk} on disk`);
       }
-      await page.fill('#upload-title', `W27-REFUSE ${testCase.fixture} ${stamp}`);
+      await page.fill(CONTROLS.title_input, `W27-REFUSE ${testCase.fixture} ${stamp}`);
       record.timingsMs.settleAfterChoosing = await page.settle();
       record.afterChoosing = await page.evaluate(READ_PANEL);
 
@@ -286,7 +343,7 @@ async function drive(origin, projectUid, testCase, stamp) {
       // ---- the user presses Upload, if the app still lets them ------------------
       if (!refusedByClient) {
         record.clickedUpload = true;
-        await page.click('form button[type="submit"]', { text: 'Upload' });
+        await page.click('form button[type="submit"]', { text: CONTROLS.submit_label });
         // Either the screen renders a failure, or it navigates to the published version.
         const waited = await page.waitFor(
           `(() => {
@@ -314,7 +371,7 @@ async function drive(origin, projectUid, testCase, stamp) {
       record.api = apiExchanges(page);
       record.consoleErrors = page.consoleErrors();
       record.pageErrors = page.pageErrors();
-    });
+    }, { cookies, viewport: VIEWPORT });
   } catch (error) {
     record.drivingError = error.message;
     fail(`could not be driven: ${error.message}`);
@@ -340,7 +397,10 @@ async function drive(origin, projectUid, testCase, stamp) {
   if (testCase.refused_by === 'client') {
     // 2. the control's own state
     if (record.afterChoosing.submitDisabled !== true) {
-      fail('the pre-check refused the file but Upload is still pressable.');
+      fail(
+        `the pre-check refused the file but the '${CONTROLS.submit_label}' control is ` +
+          `${record.afterChoosing.submitDisabled === null ? 'not on the screen at all' : 'still pressable'}.`,
+      );
     }
     if (uploads.length !== 0) {
       fail(
@@ -442,14 +502,40 @@ async function main() {
 
   const started = Date.now();
   if (casesFile !== null) console.log(`cases declared by ${casesFile} (not the built-in table)`);
-  const seeded = await seedProject(origin, stamp);
+
+  // `D-92`. The BFF answers 401 without a session cookie, so before this every drive
+  // here uploaded nothing and read an authorization refusal instead of an envelope
+  // refusal -- if it had got that far, which it had not since the screens were
+  // translated. A drive that cannot sign in STOPS and says so.
+  let session;
+  try {
+    session = await openSession({ origin, manifest: MANIFEST });
+  } catch (error) {
+    console.error(error.message);
+    process.exit(2);
+  }
+  if (!session.ok) {
+    console.error('\nrefusals: could not sign in, so NOTHING was driven:\n');
+    for (const f of session.failures) console.error(`  - ${f}`);
+    console.error(
+      '\nSix refusal drives that silently measured an authorization refusal instead of ' +
+        'an envelope refusal would be worse than none.',
+    );
+    process.exit(1);
+  }
+  console.log(
+    `signed in at ${MANIFEST.session.at}, carrying '${session.record.cookieObtained.name}' ` +
+      'into every cold browser',
+  );
+
+  const seeded = await seedProject(origin, stamp, session.cookies);
   console.log(`seeded project ${seeded.projectUid} ("${seeded.name}")`);
 
   const cases = only === null ? table : table.filter((c) => c.fixture === only);
   const records = [];
   for (const testCase of cases) {
     process.stdout.write(`\n-- ${testCase.fixture} (${testCase.rule}) `);
-    const record = await drive(origin, seeded.projectUid, testCase, stamp);
+    const record = await drive(origin, seeded.projectUid, testCase, stamp, session.cookies);
     records.push(record);
     console.log(`${record.findings.length === 0 ? 'as declared' : `${record.findings.length} FINDING(S)`} in ${record.timingsMs.total} ms`);
     console.log(`   refused by: ${record.refusedBy ?? '(nothing refused it)'}`);

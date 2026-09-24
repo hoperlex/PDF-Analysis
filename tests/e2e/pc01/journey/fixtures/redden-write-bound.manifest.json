@@ -15,6 +15,55 @@
   ],
   "api_prefix": "/bff/v1",
   "identifier_pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+  "session": {
+    "$comment": [
+      "The sign-in and the declared viewport are copied from the real manifest by",
+      "`W44-JOURNEY`. They are NOT what this fixture is demonstrating: it demonstrates the",
+      "findings below, and since D-92 every manifest needs a session to reach any screen at",
+      "all. A fixture without one would redden for the wrong reason and prove nothing."
+    ],
+    "at": "/login",
+    "page_module": "web/src/app/login/page.tsx",
+    "control_module": "web/src/features/sign-in/ui/sign-in-form.tsx",
+    "cookie": "am_session",
+    "api": {
+      "method": "POST",
+      "path": "/session",
+      "expect_status": 303,
+      "$why": "the exchange is this tier's own and is never forwarded: the browser receives a 303 and an opaque cookie, and the minted credential never crosses the network. See web/src/app/bff/v1/[...path]/route.ts."
+    },
+    "actions": [
+      {
+        "do": "fill",
+        "selector": "#sign-in-login",
+        "from": "login"
+      },
+      {
+        "do": "fill",
+        "selector": "#sign-in-password",
+        "from": "password"
+      },
+      {
+        "do": "click",
+        "selector": "form button[type=\"submit\"]",
+        "text": "Войти"
+      }
+    ],
+    "lands_on": "/projects",
+    "bound_ms": 30000,
+    "refusal_marker": "data-sign-in-refusal"
+  },
+  "viewport": {
+    "$comment": [
+      "The sign-in and the declared viewport are copied from the real manifest by",
+      "`W44-JOURNEY`. They are NOT what this fixture is demonstrating: it demonstrates the",
+      "findings below, and since D-92 every manifest needs a session to reach any screen at",
+      "all. A fixture without one would redden for the wrong reason and prove nothing."
+    ],
+    "width": 780,
+    "height": 900,
+    "measured_at": "W43-JUDGE-B, 2026-09-24, on the deployed stand"
+  },
   "routes": [
     {
       "name": "root",
@@ -195,7 +244,7 @@
           {
             "do": "click",
             "selector": "form button[type=\"submit\"]",
-            "text": "Create"
+            "text": "Создать"
           }
         ],
         "expects_api": [
@@ -224,9 +273,6 @@
           "matches": "^(prj_%ID%)$",
           "bound_ms": 30000
         },
-        "expects_rendered": [
-          "Created"
-        ],
         "forbids_rendered": [
           "[role=\"alert\"]",
           "[data-create-problem]"
@@ -251,7 +297,7 @@
           {
             "do": "click",
             "selector": "form button[type=\"submit\"]",
-            "text": "Upload"
+            "text": "Загрузить"
           }
         ],
         "expects_api": [
@@ -295,9 +341,6 @@
           ],
           "bound_ms": 30000
         },
-        "expects_rendered": [
-          "This version"
-        ],
         "forbids_rendered": [
           "[data-upload-failure]",
           "[data-precheck-problem]"
@@ -312,7 +355,7 @@
           {
             "do": "click",
             "selector": "button",
-            "text": "Start run"
+            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -369,13 +412,12 @@
             "operationId": "getRunStatus"
           }
         ],
-        "expects_rendered": [
-          "Run"
-        ],
         "forbids_rendered": [
           "[data-run-failure]"
         ]
       }
-    ]
+    ],
+    "$why_the_labels_were_corrected": "W44-JOURNEY 2026-09-24. These steps pressed controls labelled Create, Upload and Start run. The application was translated and says Создать, Загрузить and Запустить прогон, so this fixture died at the first click and produced findings about a control it could not press INSTEAD of the deliberate wrongs it declares -- 5 findings where the README documents 6, and 4 where it documents 4 but for different reasons. A proof that fails for an accidental reason has stopped proving what it says it proves. The real manifest did not rot because make gate reads it (test_every_control_the_write_half_presses_still_exists_in_the_application); fixtures are not read by that guard, by design, so their deliberate wrongs never redden the gate -- and that is also why nothing caught this.",
+    "$why_the_rendered_sentences_were_removed": "W44-JOURNEY 2026-09-24. Steps 1 and 2 carried expects_rendered [\"Created\"] and [\"This version\"], and step 3 carried [\"Run\"] -- all pre-translation English, and \"Run\" is the exact D-61 defect W41-BLIND removed from the real manifest because it matched the identifier RunPage. This fixture's comment says steps 1 and 2 MUST PASS, and they could not: the drive stopped at create-project with two findings and never reached the 1 ms bound this fixture exists to demonstrate. The evidence steps 1 and 2 really have is capture, exactly as in the real manifest. The deliberate wrongs here are the 1 ms bound, the 202 declared as 200 and state declared as published -- and nothing else."
   }
 }

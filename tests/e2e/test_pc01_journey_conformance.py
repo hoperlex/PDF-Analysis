@@ -1512,3 +1512,486 @@ def test_control_a_removed_screenshot_is_detected() -> None:
     renamed = _require(CDP).read_text(encoding="utf-8").replace("async screenshot(", "async capture(")
     assert "async screenshot(" not in renamed
     assert "page.screenshot(" not in "  await page.capture(join(OUT_DIR, name));"
+
+
+# =====================================================================================
+# `W44-JOURNEY`: the sign-in and the declared width.
+#
+# `D-92`. The BFF has answered `401` without a session cookie since wave 34 and the
+# journey had no sign-in, so it walked route 2 of 15 for nine waves. The repair is a
+# `session` section here and `tests/e2e/pc01/journey/session.mjs` beside the walk.
+#
+# What these checks are for is the same thing the rest of this file is for -- the journey
+# rots when the application moves under it -- plus one property the others do not have:
+# **the gate, not a paragraph, is what keeps a credential out of this repository.** A
+# `session` action names the FIELD it fills and never a value, and
+# `test_no_session_action_carries_a_credential` is what makes that true rather than
+# intended.
+#
+# `D-93`. The `viewport` section is the declared width `journey.mjs` lays every route out
+# at. These checks cannot see a layout -- nothing in a stack-free gate can, which is the
+# whole of the row -- so they check that the declaration is well-formed and that the
+# assertion is still wired to it. The behavioural proof is
+# `tests/e2e/pc01/journey/prove_the_width_assertion_can_fail.mjs`, which needs a browser.
+# =====================================================================================
+
+SESSION_MODULE = JOURNEY_DIR / "session.mjs"
+WIDTH_MODULE = JOURNEY_DIR / "width.mjs"
+JOURNEY_SCRIPT = JOURNEY_DIR / "journey.mjs"
+WIDTH_PROOF = JOURNEY_DIR / "prove_the_width_assertion_can_fail.mjs"
+
+#: The two fields the environment supplies, and the only two a `fill` may name.
+SESSION_FIELDS = {"login", "password"}
+
+
+def session_section(manifest: dict) -> dict:
+    return manifest["session"]
+
+
+def handles_named_by_session(section: dict) -> set[str]:
+    """The same three kinds as a write step: ids, ``data-`` markers and control labels."""
+    selectors = [action["selector"] for action in section["actions"]]
+    texts = [a["text"] for a in section["actions"] if a.get("text") is not None]
+    selectors.append(f"[{section['refusal_marker']}]")
+    out: set[str] = set()
+    for selector in selectors:
+        for ident in _ID_SELECTOR.findall(selector):
+            out.add(f'id="{ident}"')
+        for attribute in _DATA_ATTRIBUTE.findall(selector):
+            out.add(attribute)
+    out.update(texts)
+    return out
+
+
+def test_the_manifest_has_a_session_half_at_all(manifest: dict) -> None:
+    """A manifest with no sign-in is `D-92` exactly, and it went nine waves unnoticed."""
+    assert "session" in manifest, (
+        "manifest.json declares no `session` section. The BFF answers 401 without a "
+        "session cookie (wave 34, by design), so a journey without one walks two routes "
+        "of fifteen and reports on thirteen it never opened. That is D-92."
+    )
+    section = session_section(manifest)
+    for key in ("at", "page_module", "control_module", "cookie", "api", "actions",
+                "lands_on", "bound_ms", "refusal_marker"):
+        assert key in section, f"the session section declares no `{key}`"
+    assert section["actions"], "the session section presses nothing"
+    assert isinstance(section["bound_ms"], int) and section["bound_ms"] > 0, (
+        "the session's wait carries no positive bound; an unbounded wait reports nothing "
+        "at all, which is the D-5 failure mode"
+    )
+
+
+def test_no_session_action_carries_a_credential(manifest: dict) -> None:
+    """The guard that keeps a password out of this repository.
+
+    A `fill` in the `write` half declares `value` and that is right there -- a project
+    name is not a secret. A `fill` in the `session` half declares `from`, naming which of
+    the two values the ENVIRONMENT supplies, and may not declare `value` at all. So the
+    obvious way to make the journey run on somebody's machine -- typing the password into
+    the manifest -- fails in `make gate` rather than in review.
+    """
+    section = session_section(manifest)
+    offending = [a for a in section["actions"] if "value" in a]
+    assert not offending, (
+        f"{len(offending)} session action(s) carry a literal `value`: {offending}. The "
+        "sign-in's two values come from E2E_PC01_LOGIN and E2E_PC01_PASSWORD at run time "
+        "and may never be written down here. A credential in a manifest is a credential "
+        "in this repository."
+    )
+    fills = [a for a in section["actions"] if a["do"] == "fill"]
+    assert fills, "the session section fills nothing, so it types no credential at all"
+    named = {a.get("from") for a in fills}
+    assert named <= SESSION_FIELDS, (
+        f"a session `fill` names {sorted(named - SESSION_FIELDS)}, which the environment "
+        f"does not supply. It supplies exactly {sorted(SESSION_FIELDS)}."
+    )
+    assert named == SESSION_FIELDS, (
+        f"the session fills {sorted(named)} and the exchange needs both of "
+        f"{sorted(SESSION_FIELDS)}"
+    )
+
+
+def test_the_session_stands_on_a_screen_the_read_walk_also_covers(manifest: dict) -> None:
+    """Two claims about one address, so a moved sign-in screen cannot pass here."""
+    section = session_section(manifest)
+    routes = {route["path"]: route for route in manifest["routes"]}
+    assert section["at"] in routes, (
+        f"the journey signs in at {section['at']}, which is not a route it walks. A "
+        "screen the journey uses and does not check is a screen nobody checks."
+    )
+    assert routes[section["at"]]["page_module"] == section["page_module"], (
+        f"the session says the sign-in screen is {section['page_module']} and the route "
+        f"for {section['at']} says {routes[section['at']]['page_module']}"
+    )
+    assert section["lands_on"] in routes, (
+        f"a completed sign-in lands on {section['lands_on']}, which is not a route this "
+        "journey walks"
+    )
+    assert (REPOSITORY_ROOT / section["page_module"]).is_file(), (
+        f"the sign-in screen {section['page_module']} does not exist"
+    )
+    assert (REPOSITORY_ROOT / section["control_module"]).is_file(), (
+        f"the sign-in form {section['control_module']} does not exist"
+    )
+
+
+def test_every_control_the_sign_in_presses_still_exists_in_the_application(
+    manifest: dict,
+) -> None:
+    """Rename `#sign-in-password` or relabel `Войти` and the journey signs in nowhere."""
+    _require(WEB_SRC)
+    source = application_source(WEB_SRC)
+    missing = sorted(h for h in handles_named_by_session(session_section(manifest))
+                     if h not in source)
+    assert not missing, (
+        f"the sign-in names {len(missing)} handle(s) that no longer appear anywhere in "
+        f"web/src: {missing}. The journey would address the right screen and be unable "
+        "to type into it -- and would then walk two routes of fifteen, which is D-92."
+    )
+
+
+def test_the_session_cookie_and_mount_are_the_ones_the_application_uses(
+    manifest: dict,
+) -> None:
+    """The two strings that decide whether a session can be carried at all.
+
+    Both are spelled in `web/src` -- `SESSION_COOKIE` in `app/bff/session/store.ts` and
+    the exchange's own mount in `features/sign-in/model/exchange.ts`. Renaming either
+    leaves every route and every operation in this manifest correct and leaves the walk
+    signed out, which is exactly the shape this file exists to catch for controls.
+    """
+    _require(WEB_SRC)
+    source = application_source(WEB_SRC)
+    section = session_section(manifest)
+    assert f"'{section['cookie']}'" in source or f'"{section["cookie"]}"' in source, (
+        f"the journey carries a cookie named {section['cookie']!r}, which no longer "
+        "appears in web/src. A session it cannot carry is no session."
+    )
+    mount = f"{manifest['api_prefix']}{section['api']['path']}"
+    assert mount.startswith(manifest["api_prefix"]), mount
+    assert f"{section['api']['path']}`" in source or section["api"]["path"] in source, (
+        f"the exchange path {section['api']['path']!r} no longer appears in web/src"
+    )
+
+
+def test_the_session_is_never_forwarded_as_a_contract_operation(
+    manifest: dict, openapi: dict
+) -> None:
+    """`/session` is this tier's own and is deliberately NOT a contract path.
+
+    The BFF refuses to forward the whole `auth` segment, because `changePassword` answers
+    with a credential and a browser that reached it through the catch-all would be handed
+    one in a page body -- what `JUDGE-SEC` drove against `issueToken`. So a `session`
+    entry appearing in the contract would mean the seam had moved, and this journey would
+    be posting a password at an operation.
+    """
+    section = session_section(manifest)
+    assert section["api"]["path"] not in openapi["paths"], (
+        f"{section['api']['path']} is now a contract path. The journey posts a password "
+        "at it, and the BFF answers it locally precisely because it is not forwarded."
+    )
+
+
+def test_the_viewport_declares_a_width_every_route_is_held_to(manifest: dict) -> None:
+    """`D-93`. A width assertion against an unstated viewport measures nothing."""
+    assert "viewport" in manifest, (
+        "manifest.json declares no `viewport`, so no route can be held to a width. Wave "
+        "43 put a horizontal scrollbar on every screen in the product below 839 px and "
+        "1085 frontend tests could not see it."
+    )
+    viewport = manifest["viewport"]
+    for key in ("width", "height"):
+        assert isinstance(viewport[key], int) and viewport[key] > 0, (
+            f"the viewport's {key} is {viewport[key]!r} and must be a positive integer"
+        )
+    assert viewport["width"] < 839, (
+        f"the declared width is {viewport['width']} px, which is at or above the 839 px "
+        "threshold W43-JUDGE-B measured. A width the wave-43 bar already fitted inside "
+        "cannot see the class this assertion exists for."
+    )
+
+
+def test_the_instrument_still_asserts_a_width_on_every_route() -> None:
+    """The assertion is one import and one call away from silently leaving.
+
+    Same shape as the screenshot pair above: a capability nothing checks is a capability
+    that goes away. This checks it is wired, not that it fires -- the firing is
+    `prove_the_width_assertion_can_fail.mjs`, which needs a browser.
+    """
+    width = _require(WIDTH_MODULE).read_text(encoding="utf-8")
+    assert "scrollWidth" in width and "innerWidth" in width, (
+        "width.mjs no longer compares scrollWidth to innerWidth, so whatever it returns "
+        "is not D-93's assertion"
+    )
+    journey = _require(JOURNEY_SCRIPT).read_text(encoding="utf-8")
+    assert "widthFindings(" in journey, (
+        "journey.mjs no longer calls widthFindings, so no route is held to a width"
+    )
+    assert "measureWidth(" in journey, "journey.mjs no longer measures a width"
+    proof = _require(WIDTH_PROOF).read_text(encoding="utf-8")
+    assert "widthFindings" in proof, (
+        "the proof no longer imports the journey's own assertion, so it would prove a "
+        "second copy of it can fail. OPERATING_CONSTRAINTS.md section 12."
+    )
+
+
+def test_the_instrument_still_reads_back_the_jar_every_route_started_with() -> None:
+    """`D-16`, and the reason this check is worth its four lines.
+
+    A session carried deliberately and state leaking between routes look identical in a
+    passing run. What tells them apart is that every route's profile is read BEFORE it
+    navigates and must hold exactly what the walk handed it. Delete that and the journey
+    still passes, and nothing distinguishes it from a warm browser again.
+    """
+    cdp = _require(JOURNEY_DIR / "cdp.mjs").read_text(encoding="utf-8")
+    assert "recordStartingJar" in cdp and "startedWith" in cdp, (
+        "cdp.mjs no longer records the jar a profile started with, so D-16's cold-load "
+        "property is back to being a claim in a comment"
+    )
+    assert "Page(" not in cdp.replace("new Page(", ""), (
+        "cdp.mjs appears to hand a Page out beyond withColdBrowser. There is deliberately "
+        "no API for reusing a browser across routes, and that is what keeps D-16 closed."
+    )
+    journey = _require(JOURNEY_SCRIPT).read_text(encoding="utf-8")
+    assert "startedWith" in journey, (
+        "journey.mjs no longer asserts what each route's browser started with"
+    )
+
+
+def test_the_journey_reads_its_credential_only_from_the_environment() -> None:
+    """No default, no file, no command line.
+
+    `D-92` named `--session <cookie>` as the other candidate shape. It puts a live
+    credential on a command line, where it reaches the process table and every transcript
+    of the run. This asserts the names that are read and that neither has a fallback --
+    a `?? 'admin'` here would be a password in this repository however it was spelled.
+    """
+    source = _require(SESSION_MODULE).read_text(encoding="utf-8")
+    assert "E2E_PC01_LOGIN" in source and "E2E_PC01_PASSWORD" in source
+    assert "process.env" in source
+    for smell in ("?? 'admin'", '?? "admin"', "?? 'password'", '?? "password"'):
+        assert smell not in source, (
+            f"session.mjs carries the fallback {smell}, which is a credential in this "
+            "repository wearing a default's clothes"
+        )
+
+
+# --------------------------------------------------------------------------------------
+# Controls. Every check above, against a declaration that is wrong in exactly one way.
+# --------------------------------------------------------------------------------------
+
+
+def _session_of(**overrides: object) -> dict:
+    base = json.loads(MANIFEST.read_text(encoding="utf-8"))["session"]
+    return {**base, **overrides}
+
+
+def test_control_a_session_action_with_a_password_in_it_is_detected() -> None:
+    actions = [dict(a) for a in _session_of()["actions"]]
+    actions[1]["value"] = "hunter2"
+    offending = [a for a in actions if "value" in a]
+    assert offending, "the control did not construct the thing it is controlling for"
+    assert offending[0]["value"] == "hunter2"
+
+
+def test_control_a_session_fill_naming_a_field_nobody_supplies_is_detected() -> None:
+    actions = [dict(a) for a in _session_of()["actions"]]
+    actions[0]["from"] = "totp"
+    named = {a.get("from") for a in actions if a["do"] == "fill"}
+    assert named - SESSION_FIELDS == {"totp"}
+
+
+def test_control_a_sign_in_screen_that_moved_is_detected() -> None:
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    moved = _session_of(at="/sign-in")
+    assert moved["at"] not in {route["path"] for route in manifest["routes"]}
+
+
+def test_control_a_renamed_sign_in_control_is_detected() -> None:
+    renamed = _session_of(
+        actions=[{"do": "fill", "selector": "#sign-in-username", "from": "login"}],
+        refusal_marker="data-sign-in-refusal",
+    )
+    assert 'id="sign-in-username"' in handles_named_by_session(renamed)
+    assert 'id="sign-in-username"' not in application_source(WEB_SRC)
+
+
+def test_control_a_relabelled_sign_in_button_is_detected() -> None:
+    relabelled = _session_of(
+        actions=[{"do": "click", "selector": "form button", "text": "Log in"}],
+        refusal_marker="data-sign-in-refusal",
+    )
+    assert "Log in" in handles_named_by_session(relabelled)
+    assert "Log in" not in application_source(WEB_SRC)
+
+
+def test_control_an_unbounded_session_wait_is_detected() -> None:
+    for bound in (0, -1, None):
+        unbounded = _session_of(bound_ms=bound)
+        assert not (isinstance(unbounded["bound_ms"], int) and unbounded["bound_ms"] > 0)
+
+
+def test_control_a_viewport_too_wide_to_see_the_class_is_detected() -> None:
+    """839 is the threshold wave 43 produced, so a width at or above it sees nothing."""
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    assert manifest["viewport"]["width"] < 839
+    for blind in (839, 1024, 1440):
+        assert not blind < 839
+
+
+def test_control_a_width_assertion_that_left_is_detected() -> None:
+    journey = _require(JOURNEY_SCRIPT).read_text(encoding="utf-8")
+    assert "widthFindings(" in journey
+    assert "widthFindings(" not in journey.replace("widthFindings(", "somethingElse(")
+    width = _require(WIDTH_MODULE).read_text(encoding="utf-8")
+    assert "scrollWidth" not in width.replace("scrollWidth", "clientWidthOnly")
+
+
+# --------------------------------------------------------------------------------------
+# `W44-JOURNEY`: the refusal drive's own controls, which `W28-GUARD` left behind.
+#
+# `W28-GUARD` moved the six refusal EXPECTATIONS into the manifest, stating the cost it
+# was paying off: expectations in a script's own source are expectations `make gate`
+# cannot read. It left the CONTROLS -- `Create`, `Upload`, `Retry`, `Chosen: ` -- in
+# `refusals.mjs`. The application was then translated and all four stopped matching.
+#
+# Measured 2026-09-24: `node tests/e2e/pc01/journey/refusals.mjs --origin ...` threw
+# `click form button[type="submit"] [text="Create"]: no element matches it` before driving
+# a single fixture. So `D-83`'s standing sentence -- the eleven sentences are "verified
+# only against a live stand" by this script -- was itself untrue: they were verified by
+# nothing anywhere. A check nobody has run since the screens changed is not a check.
+# --------------------------------------------------------------------------------------
+
+
+def refusal_controls(manifest: dict) -> dict:
+    return refusal_section(manifest)["controls"]
+
+
+def closure_source(control_module: Path) -> str:
+    """Every byte of the control module and what it imports, comments stripped."""
+    return "\n".join(
+        _COMMENT.sub(" ", module.read_text(encoding="utf-8"))
+        for module in module_closure(control_module, WEB_SRC)
+    )
+
+
+def test_the_refusal_half_declares_the_controls_it_presses(manifest: dict) -> None:
+    section = refusal_section(manifest)
+    assert "controls" in section, (
+        "the refusal half declares no `controls`. They were literals in refusals.mjs, "
+        "which the gate cannot read, and every one of them went stale when the "
+        "application was translated."
+    )
+    controls = section["controls"]
+    for key in ("file_input", "title_input", "submit_label",
+                "retry_action_selector", "chosen_selector"):
+        assert controls.get(key), f"the refusal half declares no `{key}`"
+
+
+def test_every_control_the_refusals_press_still_exists_in_the_application(
+    manifest: dict,
+) -> None:
+    """Relabel the upload button and the six drives press nothing -- red here instead.
+
+    **The LABEL is scoped to the control module's own import closure and matched on a word
+    boundary**, not by containment against every byte of ``web/src``. That is not a
+    refinement, it is the difference between a check and a vacuous one: ``Upload`` -- the
+    literal that actually rotted -- is contained in ``web/src`` right now, inside
+    ``import { UploadPanel } from '@/widgets/upload-panel'``. A containment check would
+    have stayed green over the exact defect it is written for, and the first draft of this
+    one did.
+
+    It reads the closure's **source with comments stripped** rather than
+    ``authored_strings``, and the reason is measured: ``_LITERAL``'s JSX arm is
+    ``>([^<>{}\n]+)<``, which requires the text to sit between the two angle brackets on
+    one line. This repository formats a labelled button over four lines, so ``Загрузить``
+    is authored and invisible to that helper. Widening ``_LITERAL`` would loosen the
+    `D-61` sentence guard that shares it, which is the wrong direction; scoping plus a word
+    boundary is strictly stronger than the whole-tree containment this replaces, and the
+    control below proves it.
+
+    Selectors keep the broad scan, as ids and markers do everywhere else in this file:
+    ``#upload-file`` and ``am-state__action`` are not words and cannot be matched by
+    accident.
+    """
+    _require(WEB_SRC)
+    source = application_source(WEB_SRC)
+    controls = refusal_controls(manifest)
+    section = refusal_section(manifest)
+
+    control_module = REPOSITORY_ROOT / section["control_module"]
+    assert control_module.is_file(), section["control_module"]
+    authored = closure_source(control_module)
+    assert authors(authored, controls["submit_label"]), (
+        f"the refusal drive presses a control labelled {controls['submit_label']!r}, "
+        f"which {section['control_module']} and what it imports do not author. The six "
+        "drives would attach the right files and press nothing -- which is exactly what "
+        "happened while the label was the literal `Upload` inside refusals.mjs."
+    )
+
+    handles: set[str] = set()
+    for key in ("file_input", "title_input", "retry_action_selector", "chosen_selector"):
+        for ident in _ID_SELECTOR.findall(controls[key]):
+            handles.add(f'id="{ident}"')
+        for klass in re.findall(r"\.([a-z][\w-]*)", controls[key]):
+            handles.add(klass)
+    missing = sorted(h for h in handles if h not in source)
+    assert not missing, (
+        f"the refusal drive names {len(missing)} control(s) that no longer appear "
+        f"anywhere in web/src: {missing}."
+    )
+
+
+def test_the_refusal_drive_reads_its_controls_from_the_manifest() -> None:
+    """The literals must not come back, and a source check is what stops them.
+
+    Narrow on purpose: it asserts the four that rotted are no longer addressed by word in
+    `refusals.mjs`. A wider "no string literals" rule would be unenforceable and would
+    redden on prose.
+    """
+    source = (JOURNEY_DIR / "refusals.mjs").read_text(encoding="utf-8")
+    assert "REFUSALS?.controls" in source or "REFUSALS.controls" in source, (
+        "refusals.mjs no longer reads its controls from the manifest, so the gate is "
+        "back to guarding nothing about them"
+    )
+    for gone in ("text: 'Create'", 'text: "Create"', "text: 'Upload'", 'text: "Upload"',
+                 "startsWith('Retry')", "startsWith('Chosen: ')"):
+        assert gone not in source, (
+            f"refusals.mjs addresses a control as {gone}. Those four literals are what "
+            "the application's translation broke silently; they are declared in "
+            "manifest.json so `make gate` reddens next time."
+        )
+
+
+def test_the_refusal_drive_signs_in_before_it_drives_anything() -> None:
+    """`D-92` reaches this script too: without a session every upload is a 401."""
+    source = (JOURNEY_DIR / "refusals.mjs").read_text(encoding="utf-8")
+    assert "openSession" in source, (
+        "refusals.mjs does not open a session. The BFF answers 401 without one, so the "
+        "six drives would measure an authorization refusal and report it as an envelope "
+        "refusal -- a passing-looking measurement of the wrong thing."
+    )
+
+
+def test_control_a_relabelled_upload_control_is_detected(manifest: dict) -> None:
+    """And it doubles as the proof that containment would NOT have detected it.
+
+    ``Upload`` is the label that rotted. It is still contained in ``web/src`` -- inside
+    ``UploadPanel`` -- so the first version of the check above passed over it. Under the
+    authored-strings subject it is correctly not authored, and the live label is.
+    """
+    section = refusal_section(manifest)
+    authored = closure_source(REPOSITORY_ROOT / section["control_module"])
+    assert authors(authored, refusal_controls(manifest)["submit_label"])
+    assert not authors(authored, "Upload"), (
+        "the control did not construct a label the application has stopped authoring"
+    )
+    assert "Upload" in application_source(WEB_SRC), (
+        "the second half of this control: a containment check over all of web/src would "
+        "have stayed GREEN over the very rename this guard exists to catch"
+    )
+
+
+def test_control_a_refusal_drive_that_lost_its_session_is_detected() -> None:
+    source = (JOURNEY_DIR / "refusals.mjs").read_text(encoding="utf-8")
+    assert "openSession" not in source.replace("openSession", "someOtherThing")

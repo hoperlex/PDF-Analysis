@@ -72,7 +72,14 @@ function decodeJson(text) {
  * browser itself cannot be driven -- everything the *application* got wrong comes back as
  * a finding, so the envelope is written and the other steps still report.
  */
-export async function runWritePhase({ origin, manifest, repositoryRoot, stamp }) {
+export async function runWritePhase({
+  origin,
+  manifest,
+  repositoryRoot,
+  stamp,
+  cookies = [],
+  viewport = null,
+}) {
   const spec = manifest.write;
   const ID = manifest.identifier_pattern;
   const API_PREFIX = manifest.api_prefix;
@@ -108,6 +115,11 @@ export async function runWritePhase({ origin, manifest, repositoryRoot, stamp })
     let ok = true;
     try {
       await withColdBrowser(async (page) => {
+        // `D-92`: every step of the write half POSTs, and the BFF answers 401 without a
+        // session. The cookie is the one `session.mjs` obtained by driving `/login`, and
+        // each step receives the SAME value rather than a jar carried on from the step
+        // before -- so a step is still openable on its own, which is `D-16`'s property.
+        record.startedWith = page.startedWith();
         await page.goto(url);
         record.landedOn = await page.location();
         record.navigateTimingsMs = page.timingsMs;
@@ -290,7 +302,7 @@ export async function runWritePhase({ origin, manifest, repositoryRoot, stamp })
             );
           }
         }
-      });
+      }, { cookies, viewport });
     } catch (error) {
       // The browser could not be driven through this step. That is a finding about the
       // application or the origin, not a reason to report nothing.
@@ -301,6 +313,23 @@ export async function runWritePhase({ origin, manifest, repositoryRoot, stamp })
     }
 
     record.timingsMs.total = Date.now() - t0;
+
+    // `D-16`, measured per step rather than claimed: this step opened in a profile holding
+    // nothing but the cookies the journey explicitly handed it. A jar with anything else
+    // in it means a browser was reused, which is the property `W19-SHELL` bought with one
+    // process per step and the one this file must not spend.
+    if (Array.isArray(record.startedWith)) {
+      const startedWith = [...record.startedWith].sort();
+      const handed = cookies.map((c) => c.name).sort();
+      if (startedWith.join(',') !== handed.join(',')) {
+        ok = false;
+        fail(
+          step.name,
+          `its browser started with cookies [${startedWith.join(', ') || '(none)'}] and ` +
+            `the journey handed it [${handed.join(', ') || '(none)'}]`,
+        );
+      }
+    }
 
     // ---- assertions over the recorded envelope ----------------------------------
     const exchanges = record.exchanges ?? [];
