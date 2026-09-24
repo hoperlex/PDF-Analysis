@@ -57,7 +57,15 @@ import { classifyListingFailure } from '@/shared/lib';
 
 import { CONTRACT_PATH, REPO_ROOT, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
-import { renderedScreens, visibleText } from './rendered-language.guard.test';
+
+import { createElement } from 'react';
+import type { ReactElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
 
 // ======================================================================= the lexicon
 
@@ -166,6 +174,20 @@ describe('the rule can tell agreement from disagreement, and says which it canno
 
 // ============================================== the mechanism: no bet on a substitution
 
+/**
+ * Source with its comments removed, because a comment is not a sentence anybody reads.
+ *
+ * This is here because the scan below went red on the doc-comment of the very module it
+ * had just repaired: that comment QUOTES the defect — «Такого ${parent}» — so a reader can
+ * see what was wrong. `D-83` recorded the same shape from the other side: *"with comments
+ * left in, `\"Run\"` still passed, because doc-comment markdown in this repository puts
+ * backticked text where a template literal would be."* A scan over raw source measures the
+ * documentation as well as the code, and in both directions that is wrong.
+ */
+export function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
 describe('D-95: no sentence hard-codes a gendered word next to a substituted noun', () => {
   const SOURCES = walkFiles(
     join(REPO_ROOT, 'web', 'src'),
@@ -183,7 +205,7 @@ describe('D-95: no sentence hard-codes a gendered word next to a substituted nou
     );
     const hits: string[] = [];
     for (const file of SOURCES) {
-      const source = readText(file);
+      const source = withoutComments(readText(file));
       for (const match of source.matchAll(pattern)) {
         const at = source.slice(0, match.index ?? 0).split('\n').length;
         hits.push(`${repoRelative(file)}:${at}  ${(match[0] ?? '').replace(/\s+/g, ' ')}`);
@@ -200,13 +222,22 @@ describe('D-95: no sentence hard-codes a gendered word next to a substituted nou
     ).toEqual([]);
   });
 
-  it('would catch the defect it was written for', () => {
+  it('would catch the defect it was written for, and only in code', () => {
     // Anti-vacuity, and the shape `prepared-sections.guard.test.ts` uses: the scan is run
-    // once against a deliberately broken input, so a pattern that stopped matching is red
-    // here rather than merely quiet over the tree.
-    const broken = 'const t = `Такого ${parent} не существует.`;';
+    // against a deliberately broken input, so a pattern that stopped matching is red here
+    // rather than merely quiet over the tree.
     const pattern = new RegExp(`(${DETERMINERS.map((d) => d.word).join('|')})\\s+\\$\\{`, 'gi');
-    expect([...broken.matchAll(pattern)].length).toBe(1);
+    const broken = 'const t = `Такого ${parent} не существует.`;';
+    expect([...withoutComments(broken).matchAll(pattern)].length).toBe(1);
+    // And BOTH ways round: the same words in a doc comment are documentation, and the
+    // repaired module's own comment quotes the defect so a reader can see what it was.
+    const documented = '/** it used to read `Такого ${parent} не существует.` */\nconst t = 1;';
+    expect([...withoutComments(documented).matchAll(pattern)].length).toBe(0);
+    const lineComment = '// it used to read `этого ${parent}`\nconst t = 1;';
+    expect([...withoutComments(lineComment).matchAll(pattern)].length).toBe(0);
+    // The stripper must not eat the code it is protecting: a `//` inside a URL string is
+    // the one place this substitution would otherwise cut a line in half.
+    expect(withoutComments("const u = 'https://example.test/a';")).toContain('example.test');
   });
 });
 
@@ -270,6 +301,78 @@ function listingSentences(): readonly { readonly where: string; readonly text: s
   return out;
 }
 
+/**
+ * The prose on every screen the route tree offers, in its cold state and in its refusals.
+ *
+ * ## Why this renders its own pass instead of importing `renderedScreens()`
+ *
+ * `rendered-language.guard.test.ts` exports it, and importing it would run that file's
+ * nineteen cases a second time inside this one — a duplicated suite, a doubled render, and
+ * two test counts a reader has to reconcile. What matters is that the two guards judge the
+ * SAME SET of screens, and they do: both consume `derivedScreens()` and
+ * `malformedVariants()` from `tests/unit/screens/route-screens.ts`, so a screen cannot be
+ * in one and out of the other. That is the property; sharing a render pass is not.
+ *
+ * One cold pass and the refusals are enough for this rule and it is worth saying why the
+ * sixteen cache states are not repeated here: this is a check on the application's OWN
+ * prose, the sentences are written in the components, and a seeded cache changes which
+ * sentence renders rather than what a sentence says. The listing classifier's whole
+ * surface — every parent, every contract error code — is exercised directly above, which
+ * is the one place a cache state would have mattered.
+ */
+function stubRouter(): AppRouterInstance {
+  return {
+    push: () => {}, replace: () => {}, back: () => {}, forward: () => {},
+    refresh: () => {}, prefetch: () => {},
+  } as unknown as AppRouterInstance;
+}
+
+function renderCold(element: ReactElement): string {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, refetchOnMount: false, retryOnMount: false } },
+  });
+  return renderToStaticMarkup(
+    createElement(
+      QueryClientProvider,
+      { client },
+      createElement(AppRouterContext.Provider, { value: stubRouter() }, element),
+    ),
+  );
+}
+
+const ULID = '01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+const IDENTITIES = {
+  projectUid: `prj_${ULID}`,
+  documentUid: `doc_${ULID}`,
+  versionUid: `ver_${ULID}`,
+  runId: `run_${ULID}`,
+};
+
+/** Text nodes only. An attribute is machinery a developer reads, not prose. */
+function textNodes(markup: string): string[] {
+  return markup
+    .replace(/<(script|style)[\s\S]*?<\/\1>/g, ' ')
+    .split(/<[^>]*>/)
+    .map((piece) => piece.replace(/&[a-z]+;|&#\d+;/g, ' ').trim())
+    .filter((piece) => piece.length > 0);
+}
+
+function renderedProse(): readonly { readonly where: string; readonly text: string }[] {
+  const out: { where: string; text: string }[] = [];
+  const segments = wellFormed(IDENTITIES);
+  for (const screen of derivedScreens()) {
+    for (const text of textNodes(renderCold(screen.make(segments)))) {
+      out.push({ where: `${screen.name} (cold)`, text });
+    }
+  }
+  for (const variant of malformedVariants(IDENTITIES)) {
+    for (const text of textNodes(renderCold(variant.make()))) {
+      out.push({ where: variant.name, text });
+    }
+  }
+  return out;
+}
+
 describe('D-95: every sentence a reviewer can read agrees with itself', () => {
   it('exercises the whole listing surface, derived from the module and the contract', () => {
     const parents = listingParents();
@@ -295,12 +398,9 @@ describe('D-95: every sentence a reviewer can read agrees with itself', () => {
   });
 
   it('finds no disagreement on any rendered screen', () => {
-    // The renderer that walks every screen already exists; it looked for the wrong thing.
-    const offences = renderedScreens()
-      .flatMap((screen) =>
-        visibleText(screen.markup).flatMap((text) =>
-          disagreements(text).map((d) => `«${d.phrase}»  (${screen.where})`),
-        ),
+    const offences = renderedProse()
+      .flatMap(({ where, text }) =>
+        disagreements(text).map((d) => `«${d.phrase}»  (${where})`),
       )
       .sort();
     expect([...new Set(offences)], 'a rendered screen disagrees with itself').toEqual([]);
@@ -312,7 +412,7 @@ describe('D-95: every sentence a reviewer can read agrees with itself', () => {
     // has had at least once.
     const all = [
       ...listingSentences().map((s) => s.text),
-      ...renderedScreens().flatMap((screen) => visibleText(screen.markup)),
+      ...renderedProse().map((s) => s.text),
     ];
     let judged = 0;
     let unjudged = 0;
@@ -326,6 +426,10 @@ describe('D-95: every sentence a reviewer can read agrees with itself', () => {
         else judged += 1;
       }
     }
+    expect(
+      renderedProse().length,
+      'the screens rendered no text at all, so the case above judged nothing',
+    ).toBeGreaterThan(120);
     expect(judged, 'the rule classified no determiner-noun pair at all').toBeGreaterThan(20);
     // The decline is reported rather than hidden: a rule that suddenly declined everything
     // would keep passing, and this is the line that stops it.
