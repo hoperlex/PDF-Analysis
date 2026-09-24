@@ -262,6 +262,59 @@ Both of the register's mutations driven:
 | `routes.comparison` → `/compare` | 2 cases red, naming `routes.comparison() -> /compare` **and** the address left unbuilt |
 | delete the comparison `<p>` from `version-detail-page.tsx` | 1 case red, naming the full address |
 
+## 4b. Every new assertion, shown failing
+
+Twenty-four mutations, one at a time, each reverted before the next. The full script is
+reproducible and each row names the case it reddened. **Every case this wave adds appears
+in this table at least once.**
+
+| mutation | case(s) it reddens |
+|---|---|
+| a new `page.tsx` with no seed | `has a seed for every address…`, `every derived screen renders real markup…` |
+| a seed for an address the tree does not serve | `has no seed for an address the tree no longer offers` |
+| an opt-out whose `proof` no longer holds | `runs every opt-out claim against the route file it is about` |
+| a discipline answer for a segment the address lacks | `answers for every segment the tree has…` |
+| a seed that renders a stub | `every derived screen renders real markup…`, `reaches every screen in every state…` |
+| a route walk that finds nothing | 10 cases across all four instruments, including `finds the route tree at all…` and `finds the (screen, segment) pairs by deriving them…` |
+| the language guard stops spreading the derived set | `renders every address web/src/app offers…` |
+| the census stops consuming the derived set | `opens every screen web/src/app offers…` |
+| a seed that claims `refuses` where the screen defers | `refuses exactly the segments the seeds say it refuses…` |
+| delete `looksLikeProjectUid`, keep the import used | `refuses exactly the segments…` — **`D-90`'s own check**, with a clean `tsc` |
+| a screen that refuses a **well-formed** address | `is about the segment and not about the harness…` |
+| `routes.run` pointed at an address nothing serves | `every address a builder builds is served by a route file`, `…is built by a builder`, `…served by a file that exists` |
+| `routes.comparison` → `/compare` | the same two, naming the builder and the orphaned address — **`D-94`'s own check** |
+| a builder renamed out of the module | `calls every builder there is…`, `…is linked from some rendered screen` |
+| a builder that puts an ordinal in an address | `carries no identity a route file cannot receive` + two more |
+| delete the comparison `<p>` | `every address a builder builds is linked from some rendered screen` — **`D-94`'s own check** |
+| a gendered determiner beside a `${…}` again | `finds no determiner adjacent to a \`${…}\`…` |
+| a noun table whose forms disagree with the noun | `finds no disagreement in anything the listing classifier produces` |
+| a disagreeing sentence put on a rendered screen | `finds no disagreement on any rendered screen` |
+| a rule that never fires | `calls the defect a disagreement` |
+| a rule that classifies nothing | `calls the defect…`, `declines rather than guesses…` |
+| a rule that reads the gender the wrong way round | `calls the repaired sentence agreement…` + three more |
+| a scan that reads no source | `reads web/src at all` |
+| a comment stripper that strips nothing | `would catch the defect it was written for, and only in code` + the scan |
+| a parent union that lost a member | `exercises the whole listing surface…` |
+| a fourth English `LoadingState` argument | `D-82: no branch label carries English, reachable or not` + the coverage case |
+| `LoadingState` composing its sentence differently | `proves its composition against the screens that DO render a loading label` |
+
+## 4c. The gate
+
+`make gate > /root/w44b-gate.log 2>&1` at `2684a0b`, verdict read from the **`GATE OK`**
+line and from nothing else:
+
+```
+============================= 35 passed in 23.90s ==============================
+2442 passed, 5 skipped, 4 warnings, 169 subtests passed in 450.16s (0:07:30)
+ Test Files  77 passed (77)
+      Tests  1107 passed (1107)
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+Battery **2442** and foundation **35** are wave 43's figures unchanged. The frontend went
+**1085 in 75 files → 1107 in 77 files**: two new guard files, and `routes.test.ts` lost a
+net case when its six parametrised `it.each` rows became four derived ones.
+
 ## 5. Premises in the brief that are false
 
 1. **«The same substitution mechanism is in `upload-failure.ts`, `run-failure.ts` and
@@ -305,10 +358,12 @@ literal and the hand-written import list; `listing-failure.ts:108` as the substi
 ## 7. Risks and known limitations
 
 1. **The derived set renders one cold pass per screen inside `screen-set.guard.test.ts` and
-   sixteen cache states per screen inside the language guard.** Four screens joined the
-   matrix, so the language guard's render count rose from 385 to 411. The three
-   `*-bad-address` entries that used to be multiplied by all sixteen states are now appended
-   once each, which is why the increase is smaller than the screen count suggests.
+   fourteen cache states per screen inside the language guard.** Counted rather than
+   estimated: `SCREENS` went from 23 to 24 entries over 14 cache states, so the language
+   guard's render count went **323 → 348** (24 × 14 + 1 detail-pending + 11 malformed
+   variants). The three `*-bad-address` entries that used to be multiplied by all fourteen
+   states are now appended once each, which is why eleven refusal shapes cost less than
+   three used to.
 2. **A route group (`(name)`) or a parallel route (`@slot`) would come through the
    derivation with its bracket in the address.** It would then match no seed and be **named**
    by the guard, which is the intended outcome for anything the derivation has not been
