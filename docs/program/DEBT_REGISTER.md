@@ -24,6 +24,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-87 | a full-tree mutation copy still cannot redden a migration — §10.1 names only half the trap | one fixture exists; the class is wider |
 | **D-89** | a shared hotspot with no owner: the journey manifest, and I wrote both grants | the rule is in the row |
 | **D-88** | `D-69`'s repair reached the **members** and not the **screens**: an all-English new screen is green | the subject is a list, not the tree |
+| D-90 | a route guard inside a component that nothing asserts, and whose naive mutation dies from `tsc` | one test |
+| **D-91** | two streams drew `R-18`'s line in different places in one wave | **owner**: where does it fall |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | **D-70** | the stand's API **will not start** since wave 41: the stub URL has no host and `D-72` now refuses it | **owner: a real credential, or a hostname** |
@@ -2149,6 +2151,40 @@ closed the half that was easy to derive.
 reason the measurement exists — the brief asked for the honest answer and got it, and
 `W43-JUDGE-A` was dispatched to take the same measurement independently.
 
+**`W43-JUDGE-A` took the measurement again, harder, and it is worse than this row said.**
+
+The streams renamed a title. The judge replaced **the sentence a reviewer actually reads** with
+English prose on all four prepared screens, four different sentences so the stream's own guard
+could not mask the result. **The entire frontend suite stayed green — 73 files, 1047 tests, 0
+failed.**
+
+**And the nuance neither stream had:** the **navigation labels are covered**, because `AppFrame`
+is in `SCREENS`. The screens behind them are not. So the guard sees a word in the panel and not
+one word on the page that panel opens — `Блоки`→`Blocks` in the frame reddens it; an entire
+English screen behind that link does not.
+
+**The contrast census is two defects, not one, and they cost differently:**
+
+1. **A screen that brings its own `*.module.css`** is seen by `import.meta.glob` — and the thing
+   the census then says is **false**: *"no screen in `screens.ts` renders an element they match"*.
+   The screen renders them. `screens.ts` does not render the screen. A reader sent to look for a
+   rule nobody uses finds a rule the product uses on a page the census cannot open.
+2. **A screen built from the global `am-*` classes** — which is what the thirteen project-section
+   stubs and these four are — **moves the census in neither direction.** It is invisible, and
+   silence reads as coverage.
+
+**So the census's reach is a property of whether a screen brought a stylesheet, not of whether
+the screen exists.** That is the sentence to repair against.
+
+**`R-33`'s 3:1 floor evaluated none of the five new screens**, measured the same way: a 1.08:1
+border on a really-rendered element left all three `R-33` cases green in the un-pointed state and
+red at the tip. Wave 43 kept both states as separate commits precisely so this could be told
+apart.
+
+**The repair both streams and the judge independently arrived at is the same one:** derive the
+screen list from the route tree under `web/src/app`, the way `rglob("page.tsx")` already does in
+the journey check.
+
 Check: `grep -n 'const SCREENS' web/tests/guards/rendered-language.guard.test.ts` — a literal;
 then `grep -n rglob tests/e2e/test_pc01_journey_conformance.py` — the tree.
 
@@ -2175,6 +2211,56 @@ of screens is the same shape one layer up.
 
 Check: `grep -n allowed_paths -A 12 docs/program/dispatch/W43-PREP.md` against
 `grep -rn manifest.json tests/e2e/test_pc01_journey_conformance.py`.
+
+### D-90 — a live condition inside a component that nothing asserts, and a mutation that dies for the wrong reason
+
+**Found by `W43-JUDGE-A`, the one survivor of thirteen mutations across both branches.**
+
+`StageComparisonPage` re-checks `looksLikeProjectUid` on its own. Remove the check and the whole
+frontend suite — 74 files, 1070 tests — stays **green**. The route file has a test; the component
+does not.
+
+**The part worth the row is how it hides.** The naive mutation — delete the call — dies at
+`tsc`, because `noUnusedLocals` then rejects the now-unused import. A session reading that red
+would record the condition as guarded. **It is `OPERATING_CONSTRAINTS.md` §12's "right answer
+from a wrong premise":** the red is real, it is about the import, and it says nothing about the
+condition. Keeping the import used and dropping only the branch is green.
+
+Cost is low — the route 404s first — but the condition is live and indistinguishable from `true`.
+
+**Beside it, smaller and from the same audit:** the comparison table prints `dependency_unavailable`
+to a reviewer as a **bare code**, while the run screen prints the same code with a Russian note
+from `terminalReasonNote(...)`. Not a rule broken; a reviewer meeting an English identifier with
+nothing beside it, on one screen and not the other.
+
+Check: delete the `looksLikeProjectUid` call from `StageComparisonPage`, keep the import used,
+and run `npm --prefix web run test -- --run`.
+
+### D-91 — two streams drew `R-18`'s line in different places in one wave, and both argued it
+
+**Raised by `W43-JUDGE-A` as a question rather than a verdict, which was the right call: it could
+measure what the screens say and quote the rule, and it could not rule.**
+
+`R-18` and `D-58`: *a finished application does not explain its own transport to the person using
+it.* `D-58` closed by deleting a clause that explained our transport.
+
+**Three of the four prepared screens explain the contract to a reviewer** — *"…не отдаёт ни одна
+операция договора"* (`/blocks`), *"операции, которая отдала бы их приложению, в договоре нет"*
+(`/logs`), *"запуск прогона принимает только версию документа и режим работы с провайдером"*
+(`/optimisation`). **`W43-COMPARE` holds the opposite line and has a test enforcing it.**
+
+**Both positions are defensible and that is the problem.** The prepared screens are stubs whose
+whole job is to say why they are empty, and *"нет операции договора"* is a true, domain-Russian
+sentence naming nothing internal. But it is the same shape as the clause `D-58` deleted.
+
+**The owner's question, in one sentence:** may a screen that does not work yet explain **why** in
+terms of what the system can and cannot do, or must it say only that it is not ready?
+
+This is not `R-29` clause 2 and costs nothing either way — it is a question about what the alpha
+sounds like to an expert, which is what `R-18` is about.
+
+Check: read the three `promise=` strings against `web/src/widgets/stage-comparison/` and against
+`D-58`'s closure.
 
 ### D-74 — a parent-existence check costs a full parent read
 

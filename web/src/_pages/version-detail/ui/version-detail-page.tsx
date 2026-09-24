@@ -86,6 +86,10 @@ export function VersionDetailPage({ projectUid, versionUid }: VersionDetailPageP
       )}
 
       <h2>Прогоны</h2>
+      <p className="am-note">
+        <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
+        что изменилось в анализе одной и той же версии.
+      </p>
       <RunList
         projectUid={ownerProjectUid}
         versionUid={versionUid}

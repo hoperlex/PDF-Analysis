@@ -109,6 +109,32 @@
       }
     },
     {
+      "name": "comparison",
+      "path": "/projects/{project_uid}/versions/{version_uid}/comparison",
+      "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/comparison/page.tsx",
+      "$comment": [
+        "Two runs of one published version, side by side. W43-COMPARE.",
+        "",
+        "PLACED AFTER `version` AND NOT BESIDE THE FOUR PREPARED SECTIONS, and the reason is",
+        "this file's own follow-chain: the read walk captures identifiers in the order the",
+        "routes appear, so a route naming {project_uid} and {version_uid} must come after the",
+        "routes that captured them. The four prepared sections take no identifier at all and",
+        "so sit at the end with `sign-in`'s neighbours.",
+        "",
+        "`expects_api` names one operation and that is a claim, not a floor. The screen calls",
+        "`listRuns` on mount in EVERY state it has -- two runs, one run, and none -- so the",
+        "assertion holds whatever the stand contains, which is what makes it worth asserting."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}/runs",
+          "operationId": "listRuns"
+        }
+      ],
+      "follow": null
+    },
+    {
       "name": "run",
       "path": "/projects/{project_uid}/runs/{run_id}",
       "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
@@ -238,6 +264,62 @@
         "not the last thing the write half does: succeeding here revokes every credential the",
         "account holds, so a journey that changed the password mid-walk would be walking with",
         "a dead one."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "blocks",
+      "path": "/blocks",
+      "page_module": "web/src/app/blocks/page.tsx",
+      "$comment": [
+        "Блоки -- front-end preparation under R-23's addendum. W43-PREP.",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this",
+        "entry gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "optimisation",
+      "path": "/optimisation",
+      "page_module": "web/src/app/optimisation/page.tsx",
+      "$comment": [
+        "Оптимизация -- front-end preparation under R-23's addendum. W43-PREP.",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this",
+        "entry gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "logs",
+      "path": "/logs",
+      "page_module": "web/src/app/logs/page.tsx",
+      "$comment": [
+        "Логи -- front-end preparation under R-23's addendum. W43-PREP.",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this",
+        "entry gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "workers",
+      "path": "/workers",
+      "page_module": "web/src/app/workers/page.tsx",
+      "$comment": [
+        "Исполнители -- front-end preparation under R-23's addendum. W43-PREP.",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this",
+        "entry gains operations and the assertion starts carrying weight."
       ],
       "expects_api": [],
       "follow": null

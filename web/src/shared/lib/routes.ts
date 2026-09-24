@@ -49,6 +49,15 @@ export const routes = {
   version: (projectUid: string, versionUid: string): string =>
     `/projects/${projectUid}/versions/${versionUid}`,
 
+  /**
+   * Two runs of one published version, side by side.
+   *
+   * A child of the version and not of a run, because a version is immutable: a difference
+   * between two of its runs is a difference in the analysis and not in the document.
+   */
+  comparison: (projectUid: string, versionUid: string): string =>
+    `/projects/${projectUid}/versions/${versionUid}/comparison`,
+
   /** One run's progress. */
   run: (projectUid: string, runId: string): string => `/projects/${projectUid}/runs/${runId}`,
 
