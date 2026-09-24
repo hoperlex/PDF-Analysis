@@ -66,7 +66,7 @@ grepping for it:
 |---|---|---|---|
 | `refusals.mjs` | `Create`, `Upload`, `Retry`, `Chosen: ` | `Создать`, `Загрузить`, `Повторить…`, `.am-form__chosen` | died before driving anything |
 | `fixtures/redden-write.manifest.json` | `Create`, `Upload`, `Start run` | `Создать`, `Загрузить`, `Запустить прогон` | **5** findings where the README documents **6**, and one of the five is the dead click rather than a declared wrong |
-| `fixtures/redden-write-bound.manifest.json` | same three | same three | **4** findings, but the first is the dead click and **not** the 1 ms bound the fixture exists to demonstrate |
+| `fixtures/redden-write-bound.manifest.json` | same three, **plus** `expects_rendered` `Created`, `This version`, `Run` | `Создан…`, the version panel, the run screen | stopped at step 1 and **never reached the 1 ms bound the fixture exists to demonstrate**. `Run` is `D-61`'s own defect, still in this file after `W41-BLIND` removed it from the real manifest |
 | `fixtures/w28-live/*.manifest.json` (×4) | same three | same three | nothing drives them; reported in §6 |
 
 **`manifest.json` did not rot, and the reason is the whole lesson**:
@@ -632,3 +632,45 @@ a run whose `$?` was `1` at least twice today.
 | `pytest tests/e2e/test_pc01_journey_conformance.py` | `a3b8ee6` | **78 passed** | `/root/w44a-conformance.log` |
 | `prove_the_guard_can_fail.py` | `12b8b14` | **36 mutations, 36 reds, 0 vacuous**; restored → 78 passed | `/root/w44a-prove-guard.log` |
 | `redden.manifest.json --phase read` | `12b8b14` | `rc=1`, **5 findings, routes 3/4** — the documented figures | `/root/w44a-redden-read.log` |
+| `redden-write.manifest.json --phase write` | `049a672` | `rc=1`, **6 findings, write 1/3** — the documented figures, restored | `/root/w44a-redden-write2.log` |
+| `redden-write-bound.manifest.json --phase write` | `049a672`+ | `rc=1`, **4 findings**, the first *"the run did not reach a terminal within the stated bound of 1 ms … still rendering 'in_flight' after 503 ms"*, plus the `202` declared as `200` and `state` declared as `published`. Steps now **3/3** rather than 1/3 | `/root/w44a-redden-bound2.log` |
+| `redden-refusals.json` via `refusals.mjs --cases` | `12b8b14` | `rc=1`, 2 driven, **7 findings** | `/root/w44a-redden-rest.log` |
+| `pytest tests/e2e --ignore=tests/e2e/pc01` | `049a672` | 89 passed, 8 errors — all eight `p02`, all `connection refused` on `127.0.0.1:56290`, i.e. the lane's PostgreSQL was not up. Unrelated to this branch; `make gate` brings it up | `/root/w44a-e2e-py.log` |
+
+## §8 For the integrator
+
+**Nothing in `contracts/**`, `src/auditmanager/**`, `db/**`, `infra/**`, `web/src/**`,
+`web/tests/**`, `web/FRONTEND_LOCK.json`, `Makefile`, `docs/program/DEBT_REGISTER.md` or
+`docs/program/dispatch/**` was touched. This wave changes no contract.** Every changed file
+is under `tests/e2e/**` or is `docs/program/W44-JOURNEY.md`. `package.json` and
+`web/package.json` were **not** changed: the sign-in needed no new script and no new
+dependency — `cdp.mjs` already spoke `Input` and `DOM`, and `Storage` and `Emulation` are
+in the same stable half of the protocol.
+
+**The journey now needs two environment variables to run at all.** Any runbook, brief or
+CI step that invokes `e2e:pc01` must pass `E2E_PC01_LOGIN` and `E2E_PC01_PASSWORD`, or it
+exits 2 with instructions. That is deliberate and it is the `D-92` repair's whole point,
+but it is a change to how the instrument is invoked and it belongs in whatever the
+integrator hands the cross-judges. The stand seeds `admin` with the password
+`db/migrations/versions/20260922_0006_app_user.py` publishes in its own docstring.
+
+**Three things for the register, none of them mine to write:**
+
+1. **`D-83`'s standing claim is false and the row should say so** — the eleven sentences
+   were not "verified only against a live stand"; `refusals.mjs` had not driven since the
+   screens were translated. §0 and §4.
+2. **A new row, or `D-82` widened**: `/projects` tells a signed-in reviewer there is no
+   authentication (§6.1). It is the only finding here with a security-adjacent edge.
+3. **`D-82` has a fourth string** and its row predicted one (§6.2). The journey now
+   *reaches* `useState` and `isPending` branches; what it still lacks is an assertion
+   inside `make gate`.
+
+**For `W44-SEE`**, whose subject is `D-88`, `D-82`, `D-95`, `D-90` and `D-94`: §6.1 and
+§6.2 are both in `web/src` and both are yours. The second changes what `D-88`'s widened
+census can be held to, because the reach now exists even though the assertion does not.
+
+**Run order for a judge on this branch:** `npm --prefix web ci`, then the journey with
+credentials, then `prove_the_width_assertion_can_fail.mjs`, then `refusals.mjs`, then
+`pytest tests/e2e/test_pc01_journey_conformance.py` and
+`prove_the_guard_can_fail.py`. The first four need the stand at `127.0.0.1:31500`; the
+last two need nothing.
