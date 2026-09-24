@@ -1,0 +1,111 @@
+/*
+ * The comparison screen's styling layer.
+ *
+ * Collocated rather than added to `globals.css`, and that is a grant boundary rather than
+ * a preference: `W43-COMPARE`'s `allowed_paths` do not include `web/src/app/**` beyond its
+ * own route folder, so this stream may not write a rule into the global stylesheet. It is
+ * also the right shape — `stage-table.module.css` set the precedent, and a rule that only
+ * one widget's cells need does not belong in the sheet every screen loads.
+ *
+ * Nothing below restates a rule `globals.css` already makes about a `table`, a `th` or a
+ * `td`: those are styled by ELEMENT selector there, so every table on this screen already
+ * reaches the token layer and both palettes. Duplicating them with literals is what `D-62`
+ * actually found in the stage table, and the copy that wins is the one a theme change
+ * cannot reach.
+ *
+ * Every colour is a token read and no token is declared here: `styling-layer.test.ts`
+ * asserts both over every collocated module, and `contrast.test.ts` picks this file up
+ * automatically through its `import.meta.glob` over `src/**\/*.module.css` — so every
+ * colour-bearing rule below is censused, and a rule no rendered screen reaches makes that
+ * file red naming it.
+ */
+
+/* The one thing the element selectors cannot know about: a wide table on a narrow screen. */
+.scroller {
+  overflow-x: auto;
+}
+
+.comparison {
+  display: block;
+}
+
+/* The two run choosers. Same shape as the knowledge base's filters, its own class. */
+.choosers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap);
+  margin-bottom: var(--am-gap-lg);
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--am-text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--am-tracking-caps);
+  color: var(--am-ink-muted);
+}
+
+/*
+ * The one sentence above the tables. It carries two counts and both are read off the
+ * comparison, never computed for effect: how many facts were comparable, and how many of
+ * those differ.
+ */
+.summary {
+  margin: 0 0 var(--am-gap-lg);
+  color: var(--am-ink);
+}
+
+/* The row header column. A fact's name, not a figure. */
+.factName {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.stageName {
+  font-weight: 500;
+}
+
+/*
+ * The ordinal, carrying `stage-table.module.css`'s rule unchanged: it numbers the sequence
+ * PC-01 schedules and nothing else, because the contract's nine stages fork and a position
+ * for an unscheduled one would be an invention.
+ */
+.ordinal {
+  width: 1%;
+  color: var(--am-ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A figure, so a column of figures reads as a column. */
+.figure {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.instant {
+  color: var(--am-ink-muted);
+  white-space: nowrap;
+}
+
+/*
+ * The verdict column. Quiet ink: the verdict is a reading aid beside the two values, and
+ * the values are what a reviewer compares.
+ *
+ * `--am-ink-muted` and never `--am-ink-soft`, for `W32-CONTRAST` §3's measured reason: the
+ * third ink level is spent, AA on the darkest surface it carries text over caps it at
+ * 1.10:1 from muted, so reaching for it buys no visible step.
+ */
+.verdict {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  white-space: nowrap;
+}
+
+/* Nothing was reported on this side. Not zero, and never printed as one. */
+.absent {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}

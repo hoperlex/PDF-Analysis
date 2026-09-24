@@ -83,6 +83,7 @@ export type FactId =
   | 'diagnostic_observation_count'
   | 'model_call_count'
   | 'cost_micros'
+  | 'cost_basis'
   | 'terminal_reason'
   | 'terminal_detail';
 
@@ -154,7 +155,7 @@ export function terminalDetailDigest(run: RunStatus): string | null {
 }
 
 /**
- * The eleven facts, in the order a reviewer reads them: what the run IS, when it ran, what
+ * The twelve facts, in the order a reviewer reads them: what the run IS, when it ran, what
  * it produced, what it cost, and why it stopped.
  */
 export function comparedFacts(left: RunStatus, right: RunStatus): readonly ComparedFact[] {
@@ -183,6 +184,17 @@ export function comparedFacts(left: RunStatus, right: RunStatus): readonly Compa
     ),
     fact('model_call_count', left.model_call_count, right.model_call_count),
     fact('cost_micros', comparableCostMicros(left), comparableCostMicros(right)),
+    /*
+     * The BASIS is a row of its own and not a qualifier inside the cost cell.
+     *
+     * Two runs can report the same figure on different bases -- one measured, one
+     * estimated -- and a single `cost_micros` row reading «совпадает» with the bases
+     * printed quietly beside it would be a screen saying the runs agree about a number
+     * whose accuracy they disagree about. `costBasisCaption` is explicit that `estimated`
+     * is the ORDINARY case for a recorded run and not a fault, so this row is a
+     * difference in how well the figure is known, never a complaint about either run.
+     */
+    fact('cost_basis', left.cost_basis, right.cost_basis),
     fact('terminal_reason', left.terminal_reason, right.terminal_reason),
     fact('terminal_detail', terminalDetailDigest(left), terminalDetailDigest(right)),
   ];
