@@ -26,6 +26,7 @@ import { ProjectsPage } from '@/_pages/projects';
 import { ReviewPage } from '@/_pages/review';
 import { RunPage } from '@/_pages/run';
 import { VersionDetailPage } from '@/_pages/version-detail';
+import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { KnowledgeBasePage } from '@/_pages/knowledge-base';
@@ -498,6 +499,72 @@ export function screens(): Screen[] {
     'ChangePasswordPage changed',
     render(createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'changed' })),
   );
+
+  /*
+   * The stage comparison, `R-23` / `W43-COMPARE`, 2026-09-24.
+   *
+   * THREE entries, because its colour-bearing rules are spread across its states and this
+   * census measures what a screen RENDERS rather than what a file declares. The loaded
+   * pair is the one that reaches `.summary`, `.choice`, `.verdict`, `.ordinal`,
+   * `.instant` and `.absent` — six rules that `names every colour-bearing rule that NO
+   * rendered screen reaches` listed by name the moment the module was added and this file
+   * was not. That red is the reason these three lines exist, and it is worth recording
+   * that it is the ONLY way this census noticed a new screen: a screen that had reused
+   * the global classes and declared no module of its own would have been invisible here.
+   */
+  add('StageComparisonPage cold', withRouter(createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+  add(
+    'StageComparisonPage unsupported address',
+    withRouter(createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: 'not-an-identifier' })),
+  );
+  {
+    const client = populatedClient();
+    // A SECOND run of the same version: the screen renders its tables only for a pair,
+    // and a one-run cache renders the not-applicable block instead -- which would leave
+    // every rule in the comparison module reached by nothing, with this file's own list
+    // saying it covered them. That is the fixture-name failure this file records three
+    // instances of already.
+    client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), {
+      items: [
+        runStatus({
+          run_id: RUN_ID,
+          state: 'failed',
+          terminal_reason: 'dependency_unavailable' as ErrorCode,
+          terminal_detail: { dependency: 'provider' },
+          published_finding_count: 0,
+          diagnostic_observation_count: 2,
+          model_call_count: 4,
+          cost_micros: 1234,
+          created_at: '2026-09-11T09:00:00.000Z',
+          terminal_at: '2026-09-11T09:02:30.000Z',
+          stages: [
+            { stage_id: 'source_preparation', status: 'succeeded', started_at: '2026-09-11T09:00:00.000Z', finished_at: '2026-09-11T09:00:30.000Z', error_code: null },
+            { stage_id: 'text_analysis', status: 'failed', started_at: '2026-09-11T09:01:00.000Z', finished_at: '2026-09-11T09:02:00.000Z', error_code: 'analysis_failed' as ErrorCode },
+          ],
+        }),
+        runStatus({
+          run_id: `${RUN_ID.slice(0, -1)}C`,
+          state: 'published',
+          published_finding_count: 3,
+          stages: [
+            { stage_id: 'source_preparation', status: 'succeeded', started_at: '2026-09-10T08:00:00.000Z', finished_at: '2026-09-10T08:00:30.000Z', error_code: null },
+          ],
+        }),
+      ],
+      page: { next_cursor: null },
+    });
+    add(
+      'StageComparisonPage with two runs',
+      renderWith(
+        client,
+        createElement(
+          AppRouterContext.Provider,
+          { value: stubRouter() },
+          createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+        ),
+      ),
+    );
+  }
 
   /*
    * A screen carrying `UnsupportedState`, which is the `warning` tone.

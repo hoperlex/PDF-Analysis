@@ -86,6 +86,7 @@ import { SignInPage } from '@/_pages/sign-in';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { RunPage } from '@/_pages/run';
 import { VersionDetailPage } from '@/_pages/version-detail';
+import { StageComparisonPage } from '@/_pages/stage-comparison';
 import NotFound from '@/app/not-found';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
@@ -783,6 +784,102 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   return client;
 }
 
+/**
+ * A reading with named optional fields REMOVED rather than set to `undefined`.
+ *
+ * `tsconfig.json` sets `exactOptionalPropertyTypes`, under which an omitted property and a
+ * property explicitly `undefined` are different types — and the distinction is the whole
+ * subject of the rows below: a run that made no provider call does not carry a cost, and
+ * one that made free calls carries `0`. The fixture spreads its overrides over defaults,
+ * so the only way to seed the first is to take the field off afterwards.
+ */
+function without(status: RunStatus, fields: readonly (keyof RunStatus)[]): RunStatus {
+  const copy = { ...status } as Record<string, unknown>;
+  for (const field of fields) delete copy[field];
+  return copy as unknown as RunStatus;
+}
+
+/**
+ * A version with TWO runs of it, which is the one cache state a comparison screen has.
+ *
+ * `W43-COMPARE`, 2026-09-24. Every other state in this file seeds ONE run, because every
+ * other screen reads one; `loadedClient` puts a single item in `KEYS.runs` and `paged`
+ * puts the same one behind a cursor. The comparison screen renders its tables only when
+ * the version has two, so with the existing states it would have rendered its
+ * `NotApplicableState` in all nine of them and **every assertion this guard makes about
+ * its tables would have been vacuous** — the shape §12 and this file's own seven
+ * sound-and-blind entries are about.
+ *
+ * The pair is chosen so that **all four comparison verdicts render in one pass**, because
+ * each verdict is a Russian sentence and a sentence no state renders is a sentence an
+ * English word could sit in:
+ *
+ *   `differs`     `state`, `created_at`, `terminal_at`, `duration`,
+ *                 `published_finding_count`;
+ *   `same`        `provider_mode` — both recorded;
+ *   `one_sided`   `diagnostic_observation_count`, `model_call_count`, `cost_micros`,
+ *                 `terminal_reason`, `terminal_detail`, and every stage the newer run
+ *                 reported and the older one did not;
+ *   `absent`      `cost_basis` — the newer run reports a cost with no basis beside it and
+ *                 the older reports neither, so nothing was compared and the row says so
+ *                 rather than «совпадает».
+ *
+ * `listRuns` answers *newest first* and the screen reads that order rather than re-sorting,
+ * so `items[0]` is the run it puts on the RIGHT.
+ *
+ * **It takes the loaded builder rather than calling `loadedClient` itself**, for the reason
+ * `pagedClient` states: the review screen's three finding queries hold the transport
+ * envelope and the other screens hold the bare model, so seeding the wrong one renders a
+ * screen blank — or, as it did here on the first run of this state, throws inside
+ * `review-page.tsx` reading `.data.items` off a bare model. That is `D-57` seen from
+ * inside a test, and it is the second time this file's own machinery has produced it.
+ */
+function twoRunClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
+  const client = loaded();
+  const page = { next_cursor: null } as { next_cursor: null };
+  client.setQueryData(KEYS.runs, {
+    items: [
+      // No basis beside the figure, on purpose: with neither run reporting one, the
+      // `cost_basis` row is the state `absent` exists for.
+      without(
+        run({
+          run_id: RUN_ID,
+          state: 'failed',
+          terminal_reason: 'dependency_unavailable' as ErrorCode,
+          terminal_detail: { dependency: 'provider' },
+          published_finding_count: 0,
+          diagnostic_observation_count: 2,
+          model_call_count: 4,
+          cost_micros: 1234,
+          created_at: '2026-09-11T09:00:00.000Z',
+          terminal_at: '2026-09-11T09:02:30.000Z',
+        }),
+        ['cost_basis'],
+      ),
+      without(
+        run({
+          run_id: `run_${ULID.slice(0, -1)}C`,
+          state: 'published',
+          published_finding_count: 3,
+          created_at: '2026-09-10T08:00:00.000Z',
+          terminal_at: '2026-09-10T08:04:00.000Z',
+        // Four stages rather than nine, so stage rows in `same`, `differs` and `one_sided`
+        // all render — and the "не сообщён" cell with them.
+        stages: [
+          { stage_id: 'source_preparation', status: 'succeeded', started_at: '2026-09-10T08:00:00.000Z', finished_at: '2026-09-10T08:00:30.000Z', error_code: null, stage_version: '1.0.0' },
+          { stage_id: 'page_geometry_extraction', status: 'failed', started_at: '2026-09-10T08:00:30.000Z', finished_at: '2026-09-10T08:01:00.000Z', error_code: 'analysis_failed' as ErrorCode, stage_version: '1.0.0' },
+          { stage_id: 'document_context_build', status: 'skipped', started_at: null, finished_at: null, error_code: null, stage_version: '1.0.0' },
+          { stage_id: 'text_analysis', status: 'succeeded', started_at: '2026-09-10T08:01:00.000Z', finished_at: '2026-09-10T08:01:00.000Z', error_code: null, stage_version: '1.0.0' },
+          ],
+        }),
+        ['cost_basis', 'cost_micros', 'model_call_count', 'diagnostic_observation_count'],
+      ),
+    ],
+    page,
+  });
+  return client;
+}
+
 /** A client in which every question failed. */
 function failedClient(): Client {
   const client = newClient();
@@ -959,6 +1056,20 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
     name: 'decision-history-pending',
     make: () => createElement(DecisionHistory, { events: [], isLoading: true }),
   },
+  /*
+   * The stage comparison, `R-23` / `W43-COMPARE`, APPENDED for the reason stated above:
+   * `renderedScreens()` reaches the review screen by index, so a screen inserted anywhere
+   * but the end renders a different page under the review screen's name.
+   *
+   * One entry, because its four branches are selected by the CACHE STATE and not by its
+   * props: `cold` is the spinner, `refused` the failure, `empty` the version with no runs,
+   * `paged` the version with exactly one, and `two-runs` the comparison itself.
+   */
+  {
+    name: 'stage-comparison',
+    make: () =>
+      createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+  },
 ];
 
 /**
@@ -1028,6 +1139,14 @@ export const CACHE_STATES: readonly {
     state: 'live-estimated-run',
     run: { provider_mode: 'live', cost_basis: 'estimated' },
   },
+  /*
+   * A version with TWO runs of it, added 2026-09-24 by `W43-COMPARE`. See `twoRunClient`
+   * for why one run is not enough and for which verdict each fact of the pair reaches.
+   *
+   * `run: null` because this state builds its own pair rather than overriding the single
+   * seeded run, the way `empty`, `refused` and `paged` do.
+   */
+  { state: 'two-runs', run: null },
 ];
 
 export function renderedScreens(): readonly { readonly where: string; readonly markup: string }[] {
@@ -1045,7 +1164,9 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
               ? emptyClient()
               : state === 'paged'
                 ? pagedClient(loaded)
-                : loaded(overrides ?? {});
+                : state === 'two-runs'
+                  ? twoRunClient(loaded)
+                  : loaded(overrides ?? {});
       out.push({ where: `${screen.name} (${state})`, markup: renderScreen(client, screen.make()) });
     }
   }
