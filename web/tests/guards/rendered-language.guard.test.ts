@@ -76,17 +76,9 @@ import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
-import { DocumentDetailPage } from '@/_pages/document-detail';
-import { ProjectDetailPage } from '@/_pages/project-detail';
 import { AppFrame } from '@/_app';
-import { ProjectsPage } from '@/_pages/projects';
-import { KnowledgeBasePage } from '@/_pages/knowledge-base';
-import { ReviewPage } from '@/_pages/review';
 import { SignInPage } from '@/_pages/sign-in';
 import { ChangePasswordPage } from '@/_pages/change-password';
-import { RunPage } from '@/_pages/run';
-import { VersionDetailPage } from '@/_pages/version-detail';
-import { StageComparisonPage } from '@/_pages/stage-comparison';
 import NotFound from '@/app/not-found';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
@@ -95,6 +87,7 @@ import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles 
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderWith, seedError } from '../unit/screens/harness';
+import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
 
 // ===================================================================== the vocabulary
 
@@ -407,6 +400,14 @@ const PROJECT_UID = `prj_${ULID}`;
 const DOCUMENT_UID = `doc_${ULID}`;
 const VERSION_UID = `ver_${ULID}`;
 const RUN_ID = `run_${ULID}`;
+
+/** The same four identities, keyed by the names `web/src/app`'s directories give them. */
+const IDENTITIES = {
+  projectUid: PROJECT_UID,
+  documentUid: DOCUMENT_UID,
+  versionUid: VERSION_UID,
+  runId: RUN_ID,
+};
 const FINDING_UID = `fnd_${ULID}`;
 const OBSERVATION_ID = `fobs_${ULID}`;
 const SHA = '6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f';
@@ -889,27 +890,53 @@ function failedClient(): Client {
   return client;
 }
 
-const SCREENS: readonly { readonly name: string; readonly make: () => ReactElement }[] = [
-  { name: 'projects', make: () => createElement(ProjectsPage, {}) },
-  {
-    name: 'project-detail',
-    make: () => createElement(ProjectDetailPage, { projectUid: PROJECT_UID }),
-  },
-  {
-    name: 'document-detail',
+/**
+ * The screens this guard renders: **the route tree, plus the shapes an address alone does
+ * not select.**
+ *
+ * ## What changed here, and why, `D-88`
+ *
+ * This was `const SCREENS = [...]` — a hand-written array of page components. It did not
+ * read `web/src/app`, so a screen that existed was invisible to this guard until somebody
+ * remembered to add it. `W43-JUDGE-A` put a different English sentence on each of four new
+ * screens and **the whole frontend suite stayed green — 73 files, 1047 tests, 0 failed.**
+ * The nav labels were covered, because `AppFrame` is below; the pages behind them were not,
+ * so this guard saw a word in the panel and not one word on the page that panel opens.
+ *
+ * `derivedScreens()` reads the route tree in `tests/unit/screens/route-screens.ts`, and
+ * `screen-set.guard.test.ts` is what makes an address with no seed red **naming the
+ * address**. A screen added next wave arrives here whether or not anybody remembers.
+ *
+ * ## What the derivation CANNOT supply, and is listed below
+ *
+ * An address selects a screen; it does not select the screen's SHAPE. The entries after
+ * the derived set are the shapes a reviewer reads that no address distinguishes — the
+ * chrome around every page, a form carrying a refusal, a password screen after it
+ * succeeded, two widgets whose failure branches a page only produces from a query state a
+ * static pass cannot reach. Each carries the argument for its own existence, unchanged
+ * from when it was written.
+ *
+ * The three `*-bad-address` entries that used to be here are **gone from this list and
+ * derived instead**: `malformedVariants()` produces one per (screen, dynamic segment) pair
+ * from the directory layout, so eleven refusal branches are now read by this guard where
+ * three were before. They are appended once rather than rendered in all sixteen cache
+ * states, because the refusal returns before any query is read.
+ */
+const DERIVED_SCREENS: readonly { readonly name: string; readonly make: () => ReactElement }[] =
+  derivedScreens().map((screen) => ({
+    name: screen.name,
     make: () =>
-      createElement(DocumentDetailPage, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID }),
-  },
-  {
-    name: 'version-detail',
-    make: () =>
-      createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
-  },
-  { name: 'run', make: () => createElement(RunPage, { projectUid: PROJECT_UID, runId: RUN_ID }) },
-  {
-    name: 'review',
-    make: () => createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
-  },
+      screen.make(
+        wellFormed({
+          projectUid: PROJECT_UID,
+          documentUid: DOCUMENT_UID,
+          versionUid: VERSION_UID,
+          runId: RUN_ID,
+        }),
+      ),
+  }));
+
+const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => ReactElement }[] = [
   /*
    * `AppFrame` is a SCREEN here, not a wrapper, and that is the repair.
    *
@@ -922,51 +949,31 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
    * Wrapping the six pages in it would work too, and is worse: a string would then have to
    * be found somewhere in a whole page's markup, and a chrome regression would look like a
    * page regression. As its own entry it names itself in the failure.
+   *
+   * It is not an address and never was, which is why it survives the derivation: `AppFrame`
+   * is mounted by `app/layout.tsx` around every screen.
    */
   { name: 'app-frame', make: () => createElement(AppFrame, { children: null }) },
   /*
-   * The sign-in screen, and its two other shapes, APPENDED.
+   * The sign-in screen's two OTHER shapes. The credentials form itself is derived, because
+   * `/login` is an address; these two are not, because a refusal and a signed-in panel are
+   * selected by props the address does not carry.
    *
-   * Appended and not inserted: `renderedScreens()` reaches the review screen by index --
-   * `SCREENS[5]!.make()` for the detail-pending pass -- so a screen put anywhere but the end
-   * silently renders a different page under the review screen's name. That is a footgun of
-   * this file's own making and it is cheaper to write the rule down than to remove the index.
-   *
-   * Three entries rather than one because the screen has three shapes and a static pass
-   * renders exactly what its props select: the credentials form, the form carrying a
-   * refusal, and the panel a signed-in reviewer sees. `W32-SEE` measured the cost of the
-   * opposite choice -- an English sentence in a branch nothing rendered reddened nothing --
-   * and the branch here is the whole refusal wording, which is the one string on this
-   * screen a reviewer reads only when something has gone wrong.
+   * `W32-SEE` measured the cost of leaving them out — an English sentence in a branch
+   * nothing rendered reddened nothing — and the branch here is the whole refusal wording,
+   * which is the one string on this screen a reviewer reads only when something has gone
+   * wrong.
    *
    * The login is Cyrillic for the reason every fixture in this file is: it is the server's
    * data, not this programme's prose. The other three refusal sentences are judged by
    * `web/tests/unit/session/sign-in-screen.test.ts`, which renders all four.
    */
-  { name: 'sign-in', make: () => createElement(SignInPage, {}) },
   { name: 'sign-in-refused', make: () => createElement(SignInPage, { refusal: 'credentials' }) },
   { name: 'sign-in-open', make: () => createElement(SignInPage, { login: 'проверяющий' }) },
   /*
-   * The knowledge base, `R-23`, APPENDED for the reason stated above: `renderedScreens()`
-   * reaches the review screen by index, so a screen inserted anywhere but the end renders
-   * a different page under the review screen's name.
+   * The password screen's three OTHER shapes, `R-26`. The signed-out shape is derived,
+   * because `/account/password` is an address; these three are selected by props:
    *
-   * One entry and not three, unlike the sign-in screen: its two filters are `select`
-   * elements whose every option is rendered in a single static pass, so the labels a
-   * reviewer can choose between are all in this markup. What one pass cannot reach is the
-   * *result* of choosing one, and that is a query key rather than a string.
-   */
-  { name: 'knowledge-base', make: () => createElement(KnowledgeBasePage, {}) },
-  /*
-   * The password screen, `R-26`, APPENDED for the reason stated twice above:
-   * `renderedScreens()` reaches the review screen by index, so a screen inserted anywhere
-   * but the end renders a different page under the review screen's name.
-   *
-   * FOUR entries, one more than the sign-in screen, because this screen has four shapes a
-   * static pass can select between and all four carry prose a reviewer reads:
-   *
-   *   - signed out: no form at all, because a form that could only be refused teaches a
-   *     reviewer that a refusal means nothing;
    *   - signed in, nothing attempted: the form and the sentence that says what pressing the
    *     button will revoke;
    *   - refused: the `ErrorState` wording, which `W32-SEE` measured as the exact place an
@@ -976,10 +983,7 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
    *
    * The other four refusal sentences are judged by
    * `web/tests/unit/session/change-password.test.ts`, which renders all six outcomes.
-   * The login is Cyrillic for the reason every fixture in this file is: it is the server's
-   * data, not this programme's prose.
    */
-  { name: 'change-password-signed-out', make: () => createElement(ChangePasswordPage, {}) },
   {
     name: 'change-password',
     make: () => createElement(ChangePasswordPage, { login: 'проверяющий' }),
@@ -995,43 +999,19 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
       createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'changed' }),
   },
   /*
-   * SEVEN MORE, APPENDED, and not one of them was thought of: the branch scan below
-   * named each by the literal its widget passes to a mandatory state, and this matrix
-   * reached none of them.
-   *
-   * Four are `UnsupportedState` — the tone that says no retry will help — which was
-   * rendered by no screen at all. One of them, `app/not-found.tsx`, carried a WHOLE
-   * ENGLISH SENTENCE to a reviewer who had mistyped an address, and it is repaired in
-   * the same commit that made it visible. That is `D-53` again on a screen nobody had
-   * rendered, three waves after `D-53` was closed.
-   *
+   * `app/not-found.tsx` is a FILE in the route tree and not an address, so no derivation
+   * reaches it and it stays a hand-written entry. It carried a WHOLE ENGLISH SENTENCE to a
+   * reviewer who had mistyped an address until the wave that first rendered it — `D-53`
+   * again, on a screen nobody had rendered, three waves after `D-53` was closed.
+   */
+  { name: 'not-found', make: () => createElement(NotFound, {}) },
+  /*
    * The evidence viewer and the decision history are rendered here as widgets rather
    * than through the review page, because their failure branches are chosen by props
    * the page only produces from a query state a static pass cannot put it in.
    * `tests/unit/styles/screens.ts` has rendered widgets directly since wave 32 for the
    * same reason.
    */
-  { name: 'not-found', make: () => createElement(NotFound, {}) },
-  {
-    name: 'project-detail-bad-address',
-    make: () => createElement(ProjectDetailPage, { projectUid: 'not-an-identifier' }),
-  },
-  {
-    name: 'document-detail-bad-address',
-    make: () =>
-      createElement(DocumentDetailPage, {
-        projectUid: PROJECT_UID,
-        documentUid: 'not-an-identifier',
-      }),
-  },
-  {
-    name: 'version-detail-bad-address',
-    make: () =>
-      createElement(VersionDetailPage, {
-        projectUid: PROJECT_UID,
-        versionUid: 'not-an-identifier',
-      }),
-  },
   {
     name: 'evidence-viewer-no-evidence',
     make: () =>
@@ -1056,20 +1036,11 @@ const SCREENS: readonly { readonly name: string; readonly make: () => ReactEleme
     name: 'decision-history-pending',
     make: () => createElement(DecisionHistory, { events: [], isLoading: true }),
   },
-  /*
-   * The stage comparison, `R-23` / `W43-COMPARE`, APPENDED for the reason stated above:
-   * `renderedScreens()` reaches the review screen by index, so a screen inserted anywhere
-   * but the end renders a different page under the review screen's name.
-   *
-   * One entry, because its four branches are selected by the CACHE STATE and not by its
-   * props: `cold` is the spinner, `refused` the failure, `empty` the version with no runs,
-   * `paged` the version with exactly one, and `two-runs` the comparison itself.
-   */
-  {
-    name: 'stage-comparison',
-    make: () =>
-      createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
-  },
+];
+
+const SCREENS: readonly { readonly name: string; readonly make: () => ReactElement }[] = [
+  ...DERIVED_SCREENS,
+  ...EXTRA_SHAPES,
 ];
 
 /**
@@ -1170,10 +1141,44 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
       out.push({ where: `${screen.name} (${state})`, markup: renderScreen(client, screen.make()) });
     }
   }
+  /*
+   * The review screen with its detail and history still in flight, appended once.
+   *
+   * It is looked up BY NAME. This read `SCREENS[5]!.make()`, which made the position of
+   * every entry load-bearing -- the old list carried three comments warning that a screen
+   * inserted anywhere but the end would silently render a different page under the review
+   * screen's name. The derived set is sorted by address, so the index would now be wrong
+   * as well as fragile. A name that no longer exists throws here rather than rendering the
+   * wrong screen quietly.
+   */
+  const review = SCREENS.find((screen) => screen.name === 'review');
+  if (review === undefined) {
+    throw new Error(
+      'no screen named `review` is in the derived set, so the detail-pending state below ' +
+        'would render nothing. The review address was renamed or removed; say which.',
+    );
+  }
   out.push({
     where: 'review (detail-pending)',
-    markup: renderScreen(reviewDetailPendingClient(), SCREENS[5]!.make()),
+    markup: renderScreen(reviewDetailPendingClient(), review.make()),
   });
+  /*
+   * Every (screen, dynamic segment) pair with that ONE segment malformed, derived from the
+   * directory layout in `tests/unit/screens/route-screens.ts`.
+   *
+   * Three of these were hand-written entries in `SCREENS` -- `project-detail-bad-address`
+   * and two siblings -- and the comparison screen's two, the run screen's two and the
+   * review screen's two were rendered by nothing. The refusal wording is prose a reviewer
+   * reads only when they have mistyped an address, which is exactly the class `W32-SEE`
+   * measured as the place an English sentence survives.
+   *
+   * Appended once rather than multiplied by `CACHE_STATES`: a screen that refuses its own
+   * address returns before it reads a cache, and a screen that does not refuse renders the
+   * same markup the well-formed pass already covers in all sixteen states.
+   */
+  for (const variant of malformedVariants(IDENTITIES)) {
+    out.push({ where: variant.name, markup: renderScreen(newClient(), variant.make()) });
+  }
   return out;
 }
 
@@ -1373,12 +1378,22 @@ describe('the guard can tell an English label from a legitimate Latin string', (
 describe('the guard renders the screens it claims to render', () => {
   const screens = renderedScreens();
 
-  it('reaches all six screens in every state, and none of them throws', () => {
+  it('reaches every screen in every state, and none of them throws', () => {
     // A RELATIONSHIP, not a number. This read `SCREENS.length * 7 + 1` and went red the
     // moment the matrix grew, which teaches the next reader to update a literal — exactly how
     // a vacuity check stops checking. `W30-LISTS` ruled against hard-coded counts two waves
     // ago and this was one of them.
-    expect(screens.length).toBe(SCREENS.length * CACHE_STATES.length + 1);
+    expect(screens.length).toBe(
+      SCREENS.length * CACHE_STATES.length + 1 + malformedVariants(IDENTITIES).length,
+    );
+    // The derived half is non-trivial too: a route walk that returned nothing would leave
+    // this file rendering only the shapes below the derivation and still satisfy the
+    // relationship above.
+    expect(derivedScreens().length, 'the route tree contributed no screens').toBeGreaterThan(10);
+    expect(
+      malformedVariants(IDENTITIES).length,
+      'no malformed-segment variant was derived',
+    ).toBeGreaterThan(8);
     // And both factors are non-trivial, so a matrix that silently emptied is red rather than
     // trivially satisfied.
     expect(SCREENS.length).toBeGreaterThan(1);
@@ -1397,6 +1412,35 @@ describe('the guard renders the screens it claims to render', () => {
     // quietly became a list of state blocks.
     const substantial = screens.filter((screen) => screen.markup.length > 2000);
     expect(substantial.length, 'no screen rendered a whole page').toBeGreaterThan(20);
+  });
+
+  /**
+   * `D-88`: this guard renders every screen the product offers.
+   *
+   * The case above asks whether the matrix is BIG. This asks whether it is the right set,
+   * of `web/src/app` and not of this file's own list. `W43-JUDGE-A` put a different English
+   * sentence on each of four screens and the whole suite stayed green; the reason was
+   * neither soundness nor blindness in the rules below but that the SUBJECT was a literal.
+   */
+  it('renders every address web/src/app offers, derived rather than listed', () => {
+    // `where` is `"<name> (<state>)"` for the matrix and the variant's own name for the
+    // appended ones, so both spellings are kept and each list is matched against the one
+    // it is about.
+    const where = new Set(screens.map((screen) => screen.where));
+    const rendered = new Set(screens.map((screen) => screen.where.replace(/ \([^()]*\)$/, '')));
+    const derived = derivedScreens();
+    expect(derived.length, 'the route tree contributed no screens').toBeGreaterThan(10);
+    expect(
+      derived.filter((screen) => !rendered.has(screen.name)).map((screen) => screen.address).sort(),
+      'these addresses exist in `web/src/app` and this guard renders no screen for them, so ' +
+        'an entirely English page behind a Russian nav label is green here. The derived set ' +
+        'comes from `tests/unit/screens/route-screens.ts`; a screen missing here means the ' +
+        'spread that consumes it was removed.',
+    ).toEqual([]);
+    expect(
+      malformedVariants(IDENTITIES).filter((v) => !where.has(v.name)).map((v) => v.name).sort(),
+      'a malformed-segment refusal is no longer rendered by this guard',
+    ).toEqual([]);
   });
 
   it('reaches past the loading state into a real reading', () => {
