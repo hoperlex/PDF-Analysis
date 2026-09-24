@@ -18,6 +18,55 @@
   ],
   "api_prefix": "/bff/v1",
   "identifier_pattern": "[0-9A-HJKMNP-TV-Z]{26}",
+  "session": {
+    "$comment": [
+      "The sign-in and the declared viewport are copied from the real manifest by",
+      "`W44-JOURNEY`. They are NOT what this fixture is demonstrating: it demonstrates the",
+      "findings below, and since D-92 every manifest needs a session to reach any screen at",
+      "all. A fixture without one would redden for the wrong reason and prove nothing."
+    ],
+    "at": "/login",
+    "page_module": "web/src/app/login/page.tsx",
+    "control_module": "web/src/features/sign-in/ui/sign-in-form.tsx",
+    "cookie": "am_session",
+    "api": {
+      "method": "POST",
+      "path": "/session",
+      "expect_status": 303,
+      "$why": "the exchange is this tier's own and is never forwarded: the browser receives a 303 and an opaque cookie, and the minted credential never crosses the network. See web/src/app/bff/v1/[...path]/route.ts."
+    },
+    "actions": [
+      {
+        "do": "fill",
+        "selector": "#sign-in-login",
+        "from": "login"
+      },
+      {
+        "do": "fill",
+        "selector": "#sign-in-password",
+        "from": "password"
+      },
+      {
+        "do": "click",
+        "selector": "form button[type=\"submit\"]",
+        "text": "Войти"
+      }
+    ],
+    "lands_on": "/projects",
+    "bound_ms": 30000,
+    "refusal_marker": "data-sign-in-refusal"
+  },
+  "viewport": {
+    "$comment": [
+      "The sign-in and the declared viewport are copied from the real manifest by",
+      "`W44-JOURNEY`. They are NOT what this fixture is demonstrating: it demonstrates the",
+      "findings below, and since D-92 every manifest needs a session to reach any screen at",
+      "all. A fixture without one would redden for the wrong reason and prove nothing."
+    ],
+    "width": 780,
+    "height": 900,
+    "measured_at": "W43-JUDGE-B, 2026-09-24, on the deployed stand"
+  },
   "routes": [
     {
       "name": "root",

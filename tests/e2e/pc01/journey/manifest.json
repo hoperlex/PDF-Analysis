@@ -737,10 +737,12 @@
         "refused_by": "client",
         "precheck_problem": "too_large",
         "expects_rendered": [
+          "Этот файл больше, чем",
           "Ничего не отправлено"
         ],
         "$why_the_size_case_is_client_side": "`D-44`. It is client-side only while the pre-check limit stays strictly below nginx's `client_max_body_size`; tests/e2e/test_upload_limit_headroom.py is what keeps that true.",
-        "$why_not_the_limit": "D-61, W41-BLIND 2026-09-23. This case declared \"25 MiB\" as well, and the upload panel prints `Не более 25 MiB.` before any file is chosen -- so that half of the assertion was satisfied by the envelope notice on an untouched screen. `Ничего не отправлено` is rendered only by the pre-check refusal panel and is the half that is evidence."
+        "$why_not_the_limit": "D-61, W41-BLIND 2026-09-23. This case declared \"25 MiB\" as well, and the upload panel prints `Не более 25 MiB.` before any file is chosen -- so that half of the assertion was satisfied by the envelope notice on an untouched screen. `Ничего не отправлено` is rendered only by the pre-check refusal panel and is the half that is evidence.",
+        "$why_the_rule_specific_half_is_back": "W44-JOURNEY 2026-09-24. W41-BLIND removed \"25 MiB\" from this case because the upload panel prints `Не более 25 MiB.` before any file is chosen, so that half could not fail -- and left the case with only `Ничего не отправлено`, which says a refusal happened and not WHICH rule was broken. This is the rule-specific half in the form D-61 asks for: `Этот файл больше, чем` is authored in entities/document-version/model/upload-envelope.ts and rendered by the too_large pre-check and by nothing else. The size itself is interpolated, so the sentence stops where the template does -- declaring the number back would be declaring a value the source does not author."
       },
       {
         "fixture": "encrypted.pdf",

@@ -292,16 +292,269 @@ missing link rather than as thirteen unopened screens.
 
 ## §4 J2 — `D-83`: the eleven sentences, in three honest categories
 
-PLACEHOLDER_J2
+`D-83` asks the right question and states one premise that is false. **The false premise
+is measured in §0: `refusals.mjs` could not drive at all**, so "verified only against a
+live stand" described a script that had not run since the screens were translated. Both
+halves of `D-83` were therefore "verified by nothing".
+
+The repair is in two parts. `refusals.mjs` now signs in (`D-92` reaches it too) and reads
+its four controls from `manifest.json` rather than from its own source — which is
+`W28-GUARD`'s move applied to the half it left behind. Driven today:
+
+```
+$ E2E_PC01_LOGIN=… E2E_PC01_PASSWORD=… \
+    node tests/e2e/pc01/journey/refusals.mjs --origin http://127.0.0.1:31500
+signed in at /login, carrying 'am_session' into every cold browser
+seeded project prj_01M39DVRD71ZMFPF0JFTMF8Y53
+
+-- not_a_pdf.txt        (ENV-PDF)       as declared in 22511 ms  refused by: client
+-- companion_archive.zip (ENV-PDF)      as declared in 29738 ms  refused by: client
+-- oversize.pdf         (ENV-SIZE)      as declared in 27594 ms  refused by: client
+-- encrypted.pdf        (ENV-ENCRYPTED) as declared in 28278 ms  refused by: server
+                                        POST …/documents -> 422
+-- image_only.pdf       (ENV-TEXT)      as declared in 28640 ms  refused by: server
+                                        POST …/documents -> 422
+-- too_many_pages.pdf   (ENV-PAGES)     as declared in  7853 ms  refused by: server
+                                        POST …/documents -> 422
+
+6 fixture(s) driven, 0 finding(s), 204965 ms
+rc=0
+```
+
+### The sentences, one line each, in three categories
+
+**"Verified in the gate" means: a browser inside `make gate` asserted that a screen
+rendered it. By that meaning the answer for all twelve is no, and it cannot be yes** —
+the gate has no browser, no built web image and no bound port, which is the stated cost of
+keeping it stack-free. What the gate *does* check is in the third column, and it is not
+the same claim.
+
+| # | case | sentence | what the gate checks | live | was |
+|---|---|---|---|---|---|
+| 1 | `not_a_pdf.txt` | `не является PDF` | authored by the pressed control's closure | ✅ driven | nothing |
+| 2 | `not_a_pdf.txt` | `Ничего не отправлено` | authored by the closure | ✅ driven | nothing |
+| 3 | `companion_archive.zip` | `не является PDF` | authored by the closure | ✅ driven | nothing |
+| 4 | `companion_archive.zip` | `Ничего не отправлено` | authored by the closure | ✅ driven | nothing |
+| 5 | `oversize.pdf` | `Ничего не отправлено` | authored by the closure | ✅ driven | nothing |
+| **5a** | `oversize.pdf` | **`Этот файл больше, чем`** | authored by the closure | ✅ driven | **not declared at all** |
+| 6 | `encrypted.pdf` | `выходит за допустимые ограничения` | authored by the closure | ✅ driven | nothing |
+| 7 | `encrypted.pdf` | `not_encrypted` (envelope) | is a substring of the declared `constraint` — **data against data** | ✅ driven | nothing |
+| 8 | `image_only.pdf` | `выходит за допустимые ограничения` | authored by the closure | ✅ driven | nothing |
+| 9 | `image_only.pdf` | `every_page_has_extractable_text` (envelope) | substring of the declared `constraint` | ✅ driven | nothing |
+| 10 | `too_many_pages.pdf` | `выходит за допустимые ограничения` | authored by the closure | ✅ driven | nothing |
+| 11 | `too_many_pages.pdf` | `page_count` (envelope) | substring of the declared `constraint` | ✅ driven | nothing |
+
+**Category 1 — verified in the gate: zero of twelve, and the number cannot move without a
+browser in the gate.** Saying "eight are checked in the gate" would be the optimistic
+count `D-83` warns about: *authored by the control's import closure* is a real check (it
+reddens on a reworded panel and `prove_the_guard_can_fail.py` shows it doing so twice),
+but it answers "are these the application's own words" and not "does a screen render
+them". The three envelope sentences are weaker still — they are checked against a
+`constraint` string declared three lines above them in the same file.
+
+**Category 2 — verified only against a live stand: all twelve, as of today.** `refusals.mjs`,
+`0 findings`. This is a real check and it is **not in `make gate`**, so it cannot redden a
+merge. That has not changed and this wave does not claim it has.
+
+**Category 3 — verified by nothing: all twelve, before today**, and that includes the
+eight `D-83` credited to the live drive.
+
+### Two things worth having found, beside the count
+
+**`ENV-SIZE` had no rule-specific sentence at all, and now does.** `W41-BLIND` correctly
+removed `25 MiB` from that case — the upload panel prints `Не более 25 MiB.` before any
+file is chosen, so it could not fail — and left the case asserting only
+`Ничего не отправлено`, which says *a* refusal happened and not *which rule* was broken.
+`Этот файл больше, чем` is authored in
+`web/src/entities/document-version/model/upload-envelope.ts` and rendered by the
+`too_large` pre-check and nothing else. The size itself is interpolated, so the declared
+sentence stops where the template does: declaring the number back would be declaring a
+value the source does not author.
+
+**Three of the twelve carry no rule-specific information and that is correct.**
+`выходит за допустимые ограничения` is `UnsupportedState`'s generic title and is identical
+for all three server refusals — and is also what a *client* refusal renders. It is
+evidence that a refusal panel appeared; the rule is carried by the envelope sentence
+beside it. The manifest already splits them for exactly this reason, and the split is
+worth stating rather than leaving as an apparent redundancy.
+
+**And two of `refusals.mjs`'s own checks were vacuous.** The retry check tested
+`innerText.startsWith('Retry')` on a screen whose retry says
+`Повторить с тем же ключом` — it could not fire. It now reads
+`.am-state__action button`, which is structure the application owns rather than a word.
+And `submitDisabled` came back `null` rather than `true`/`false` whenever the label did
+not match, which the check read as "still pressable"; the finding now distinguishes
+"still pressable" from "not on the screen at all".
 
 ---
 
 ## §5 J3 — `D-93`: the width assertion, and it seen red
 
-PLACEHOLDER_J3
+**The assertion.** `document.documentElement.scrollWidth <= window.innerWidth`, on every
+route, at the manifest's declared `viewport` — **780 × 900**, deliberately the same width
+`W43-JUDGE-B` measured the regression at, so the two measurements are comparable. It lives
+in `width.mjs`, which `journey.mjs` and the proof both import: a proof that exercises a
+second copy of the assertion proves nothing about the first
+(`OPERATING_CONSTRAINTS.md` §12).
+
+`innerWidth` and not `clientWidth`, stated once rather than discovered later: a vertical
+scrollbar makes `clientWidth` smaller than the viewport, so a page exactly filling the
+viewport would redden for a scrollbar rather than for a layout. The looser comparison is
+the one that cannot produce a false red — and the numbers below show the difference is
+real, 765 against 780 on every scrolling screen.
+
+**The fifteen routes, green** (from the run in §3): `scrollWidth` is 765 on the nine
+screens with a vertical scrollbar and 780 on the six without; `innerWidth` is 780 on all
+fifteen. No route overflows.
+
+### Seen red
+
+```
+$ node tests/e2e/pc01/journey/prove_the_width_assertion_can_fail.mjs \
+    --origin http://127.0.0.1:31500
+
+scratch copy: /tmp/w44-journey-width-DcYxyT/globals.reverted.css
+  .am-app__bar in the repository declares 'flex-wrap: wrap;'; the copy declares no flex-wrap at all
+  `nowrap` is flex-wrap's initial value, so that block computes to `nowrap`. The injection
+  below is required to read back exactly that.
+
+ok  root             before  765/780 (wrap)  ->  after  839/780 (nowrap)
+      root: the screen scrolls sideways at the declared width. scrollWidth 839 > innerWidth 780
+      (clientWidth 765), overflowing by 59 px. 11 element(s) cross the right edge; widest:
+      <div.am-theme> right=839 width=71; <button.am-theme__option> right=836 width=32;
+      <svg> right=826 width=12; <path> right=824 width=9;
+      <button.am-theme__option> right=802 width=32.
+      D-93: AppFrame is global, so this is every screen in the product and not this one.
+ok  projects         before  765/780 (wrap)  ->  after  839/780 (nowrap)
+ok  sign-in          before  780/780 (wrap)  ->  after  839/780 (nowrap)
+ok  knowledge-base   before  765/780 (wrap)  ->  after  839/780 (nowrap)
+ok  change-password  before  780/780 (wrap)  ->  after  839/780 (nowrap)
+ok  blocks           before  780/780 (wrap)  ->  after  839/780 (nowrap)
+ok  optimisation     before  780/780 (wrap)  ->  after  839/780 (nowrap)
+ok  logs             before  780/780 (wrap)  ->  after  839/780 (nowrap)
+ok  workers          before  780/780 (wrap)  ->  after  839/780 (nowrap)
+
+routes measured: 9/9 placeholder-free route(s) at 780x900
+
+prove_the_width_assertion_can_fail OK -- every route was green at 780 px with the repair
+and red with it reverted. D-93's assertion has been seen failing.
+rc=0
+```
+
+**The route it names: all nine it can open on its own**, which is the point rather than a
+flourish — `AppFrame` is global, so the class is product-wide and an assertion that
+reddened on one screen would be under-reporting. The six routes behind a captured
+identifier are not in this probe because it is not the walk; the assertion itself runs on
+all fifteen.
+
+**The number is 839.** That is `W43-JUDGE-B`'s measured figure, reproduced exactly, per
+route, from a scratch copy of the stylesheet with wave 43's one-line repair removed — and
+it is **59 px over** the declared viewport. The widest offender is `.am-theme`, the
+right-hand theme cluster, which is where the bar runs out of room.
+
+### Why an injected rule is the same mutation as the scratch copy, and not merely near it
+
+The deployed stand is read-only to this session; its image was built from the repaired
+tree and cannot be rebuilt to carry the defect. So the probe joins the two halves rather
+than asserting they are equivalent:
+
+1. it writes the scratch copy, and **checks that the copy's `.am-app__bar` block then
+   declares no `flex-wrap` at all** — if removing the line had left a second declaration,
+   it exits 2 and says so;
+2. `nowrap` is `flex-wrap`'s initial value, so that block computes to `nowrap`; and the
+   probe **reads the computed style back off the live bar on both sides** — `wrap` before,
+   `nowrap` after — and reddens if either reading is not what it declares. The two halves
+   meet at the computed value, which is what the browser lays out from.
+
+It also fails if a route was **already** overflowing before the mutation, because a route
+that was red to begin with proves nothing about the assertion.
+
+### One observation the measurement produced and the verdict does not use
+
+The `run` route reports **13 elements crossing the right edge while `scrollWidth` is 765**
+— no overflow. Those boxes are clipped by an ancestor's `overflow`, so they extend past
+the viewport without making the page scroll. The offender list is **diagnostic only**: the
+verdict is `scrollWidth` against `innerWidth` and nothing else. Worth writing down because
+a reader meeting `offenderCount: 13` in a green envelope would reasonably ask.
 
 ---
 
 ## §6 Outside the grant: reported, not repaired
 
-PLACEHOLDER_J6
+### 1. A **fourth** English string on a reviewer's screen — `D-82`'s own missing one
+
+`D-82` names three, all `LoadingState what="the …"` props, and says in its last line that
+nothing in the gate could *"catch the fourth one"*. **Here it is, measured in a browser on
+the deployed stand today** rather than grepped:
+
+```
+web/src/features/upload-document/ui/upload-document-form.tsx:105
+  <p className="am-form__chosen">Chosen: {file.name} · {formatBytes(file.size)}</p>
+
+rendered, from the refusal drive's envelope, on a Russian screen:
+  "Chosen: not_a_pdf.txt · 489 B"
+  "Chosen: oversize.pdf · 26.0 MiB"
+  "Chosen: too_many_pages.pdf · 64.9 KiB"
+```
+
+It is in a branch selected by `useState` (`file !== null`), which is the same class
+`D-82` says no static pass reaches — and it is on the upload screen, beside a refusal, in
+front of the reviewer `R-18` is about. **Not repaired: `web/src` is `W44-SEE`'s.**
+
+`D-82`'s three are confirmed unchanged and all three are in `mutation.isPending`
+branches: `create-project-form.tsx:99` (`the new project`), `upload-document-form.tsx:135`
+(`the upload`), `start-run-control.tsx:53` (`the run request`). Each renders as a
+**mixed-language sentence** — `LoadingState` builds `Загрузка: ${what}…`, so a reviewer
+sees `Загрузка: the upload…`, not an English panel.
+
+**And `D-82`'s row is a request for an instrument rather than for an edit. This wave is
+half of that instrument.** The journey reaches `useState` branches — the `Chosen:` line
+above came out of its envelope — and the refusals drive presses the control that enters
+the `isPending` branch. What is still missing is an *assertion*: neither instrument runs
+inside `make gate`, so reaching the branch is not yet reddening on it. `W44-SEE` should
+know that the reach now exists before deciding what `D-88`'s census can be widened to.
+
+### 2. `CURRENT_STATE.md` describes a defect this branch repairs
+
+The paragraph at `docs/program/CURRENT_STATE.md:129-134` says the journey *"stops at route
+2 of 15"* and that it is *"written for an application that has no authorization"*. Both
+become false when this branch merges. It is outside `allowed_paths` and is **reported, not
+edited** — and it is the file `AGENTS.md` §1 makes every agent read first, which is
+`D-79`'s exact shape, so it should not wait for a documentation pass. The measured
+replacement is §3 of this file: write 3/3, routes 15/15, `e2e:pc01 OK`.
+
+The same paragraph says *"the fourteen addresses answer"*; the manifest declares **fifteen
+routes** and all fifteen answered.
+
+### 3. The wave-28 live fixtures have no `session` section
+
+`tests/e2e/pc01/journey/fixtures/w28-live/*.manifest.json` — four of them — predate the
+sign-in. They are inputs for a provider-mode drive nobody has run this wave, they are not
+named by any documented proof command, and a run of one now fails loudly with *"this
+manifest declares no `session` section … That is D-92"*. Left alone deliberately: adding a
+session to a manifest nobody drives is speculative maintenance, and the failure names its
+own fix. The three `redden*` fixtures, which the README's proof commands **do** name, were
+given one and re-measured (§7).
+
+### 4. The stand has accumulated the journey's projects
+
+Every full run creates one project, uploads a PDF and publishes a run; every refusal drive
+creates one more. The walk's own `projects` screen listed **20** by the end of today.
+Nothing here deletes anything — the journey has never had a teardown and this wave did not
+give it one — but the integrator and the cross-judges should know the stand's project
+count is now a function of how many times the journey has been driven, not of the
+product.
+
+### 5. A blind spot in the `D-61` sentence guard, found by walking into it
+
+`authored_strings`'s JSX arm is `>([^<>{}\n]+)<`: it requires the text to sit between the
+two angle brackets **on one line**. This repository formats a labelled button over four
+lines, so `Загрузить` is authored by `upload-document-form.tsx` and **invisible to that
+helper**. The failure mode is conservative — a false *red*, not a false green — so nothing
+is unsafe today; the consequence is that a sentence rendered as multi-line JSX text cannot
+be declared in `expects_rendered`.
+
+**Not repaired**: widening `_LITERAL` would loosen the `D-61` sentence guard that shares
+it, which is the wrong direction for a guard three waves of work went into. The new label
+check works around it by scoping to the control module's closure and matching on a word
+boundary, and its control records the blind spot as a test.
