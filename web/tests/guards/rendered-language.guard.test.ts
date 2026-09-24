@@ -1951,6 +1951,78 @@ describe('every branch the widgets have is rendered by some state in this matrix
       expect(why.length, `${label} carries no reason`).toBeGreaterThan(80);
     }
   });
+
+  /**
+   * `D-82`: **being unrenderable excuses COVERAGE, and it does not excuse LANGUAGE.**
+   *
+   * Three English strings — `Загрузка: the new project…`, `Загрузка: the upload…`,
+   * `Загрузка: the run request…` — sat in the list above for three waves, each carrying
+   * the words *ENGLISH ON A SCREEN, reported and not repaired here*. The row was opened
+   * deliberately unrepaired, because `D-53` closed three times on repairs that looked
+   * convincing in a diff and this register's rule is that a string is removed **because a
+   * guard says it is gone**, never because a diff read well. The row asks for an
+   * instrument, not an edit.
+   *
+   * ## Why this instrument is not the source scan `D-53` proved useless
+   *
+   * `D-53`'s three failed rounds each grepped `web/src` for English and each missed the
+   * survivors, because *the string a reviewer reads does not exist until React composes
+   * it*: `what="the run"` is an ARGUMENT, and `Загрузка: the run…` is the sentence.
+   *
+   * This reads the argument and **composes the sentence the way the component does** —
+   * `branchLabelsInSource()` builds `Загрузка: ${what}…` — so its subject is the rendered
+   * string and not the literal. That composition is a claim, and a claim this file makes
+   * about the thing it is measuring is `OPERATING_CONSTRAINTS.md` §12 waiting to happen,
+   * so it is **proved rather than assumed**: the case below requires the composed form of
+   * every label a screen DOES render to appear verbatim in that screen's text. If
+   * `LoadingState` changed its wording, the formula would stop matching the markup and
+   * this file would go red before it could judge anything by it.
+   *
+   * ## What it still cannot do, stated rather than left to look like coverage
+   *
+   * It judges the WORDS in an argument that reaches a mandatory state. It does not render
+   * the branch, so it cannot see a sentence composed some other way, and it is not a
+   * replacement for the matrix above — it is the half of the matrix's subject that one
+   * static pass cannot select, judged by the only means available.
+   */
+  it('proves its composition against the screens that DO render a loading label', () => {
+    const rendered = renderedScreens()
+      .flatMap((screen) => visibleText(screen.markup))
+      .join('\n');
+    const composed = labels
+      .filter((entry) => entry.label.startsWith('Загрузка: '))
+      .map((entry) => entry.label);
+    expect(composed.length, 'the scan found no LoadingState argument at all').toBeGreaterThan(3);
+    const excused = new Set(UNREACHABLE_IN_ONE_PASS.map((entry) => entry.label));
+    const reachable = composed.filter((label) => !excused.has(label));
+    expect(
+      reachable.length,
+      'every composed loading label is excused as unreachable, so the formula below is ' +
+        'checked against nothing',
+    ).toBeGreaterThan(3);
+    expect(
+      reachable.filter((label) => !rendered.includes(label)).sort(),
+      '`branchLabelsInSource()` composes `Загрузка: ${what}…` the way `LoadingState` does, ' +
+        'and a screen that renders this argument does NOT carry that sentence. The formula ' +
+        'and the component have diverged, so every language judgement made through the ' +
+        'formula below is about a string no reviewer reads.',
+    ).toEqual([]);
+  });
+
+  it('D-82: no branch label carries English, reachable or not', () => {
+    const offences = labels
+      .map(({ label, module }) => ({ label, module, words: unexplainedLatin(label, VOCABULARY) }))
+      .filter((entry) => entry.words.length > 0)
+      .map((entry) => `${JSON.stringify(entry.label)}  ${entry.words.join(' ')}  (${entry.module})`)
+      .sort();
+    expect(
+      offences,
+      'a widget passes this literal to a mandatory state and it carries a Latin word no ' +
+        'contract put there. `UNREACHABLE_IN_ONE_PASS` excuses a branch from the COVERAGE ' +
+        'assertion above — it says one static pass cannot select the branch — and it has ' +
+        'never excused the branch from R-18. A reviewer reaches these branches in a browser.',
+    ).toEqual([]);
+  });
 });
 
 // ============================== D-61's third instance: the journey's own sentences
