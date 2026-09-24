@@ -49,6 +49,8 @@ import { fileURLToPath } from 'node:url';
 
 import { withColdBrowser } from './cdp.mjs';
 import { runWritePhase } from './write.mjs';
+import { openSession } from './session.mjs';
+import { measureWidth, widthFindings } from './width.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -139,6 +141,71 @@ const PHASE = args.phase;
 const REPOSITORY_ROOT = resolve(HERE, '..', '..', '..', '..');
 const STAMP = new Date().toISOString().replace(/[:.]/g, '-');
 
+/** Where the envelope goes, whatever happens after this point. */
+function writeEnvelope(body) {
+  mkdirSync(OUT_DIR, { recursive: true });
+  const at = join(OUT_DIR, 'journey.json');
+  writeFileSync(at, JSON.stringify(body, null, 2));
+  return at;
+}
+
+// ---- the sign-in -------------------------------------------------------------------
+// `D-92`. Everything after this point needs a session, because the BFF answers 401
+// without one. It is obtained ONCE, by driving `/login` in a cold browser, and the single
+// cookie it yields is handed to every later cold browser as a value.
+//
+// A run that cannot sign in STOPS HERE. It does not walk the routes that happen to work
+// anonymously: `D-92` survived nine waves because a two-route walk read as a walk, and a
+// journey that quietly covers less is worth less than no journey.
+let session;
+try {
+  session = await openSession({ origin: ORIGIN, manifest });
+} catch (error) {
+  if (error.isMissingCredential) {
+    console.error(error.message);
+    process.exit(2);
+  }
+  throw error;
+}
+console.log(
+  session.ok
+    ? `sign-in: ok at ${manifest.session.at} -- carrying '${session.record.cookieObtained.name}' ` +
+        `(HttpOnly=${session.record.cookieObtained.httpOnly}, ` +
+        `SameSite=${session.record.cookieObtained.sameSite}) into every cold browser\n`
+    : 'sign-in: FAILED\n',
+);
+const SESSION_COOKIES = session.cookies;
+const COOKIE_NAMES = SESSION_COOKIES.map((c) => c.name).sort();
+const VIEWPORT =
+  manifest.viewport === undefined
+    ? null
+    : { width: manifest.viewport.width, height: manifest.viewport.height };
+
+if (!session.ok) {
+  const envelopePath = writeEnvelope({
+    origin: ORIGIN,
+    manifest: MANIFEST_PATH,
+    phase: PHASE,
+    startedAt: new Date().toISOString(),
+    session: { opened: false, ...session.record },
+    write: { ran: false, why: 'the journey could not sign in' },
+    captured: {},
+    routesChecked: 0,
+    routesDeclared: manifest.routes.length,
+    failures: session.failures,
+    records: [],
+  });
+  console.error(
+    `\ne2e:pc01 FAILED -- the journey could not sign in, so NOTHING was walked.\n` +
+      `0 of ${manifest.routes.length} routes and 0 of ` +
+      `${manifest.write === undefined ? 0 : manifest.write.steps.length} write steps were ` +
+      `checked. This is D-92's own failure mode and it is reported rather than survived:\n`,
+  );
+  for (const f of session.failures) console.error(`  - ${f}`);
+  console.error(`\nEvery request, status and header is in ${envelopePath}.`);
+  process.exit(1);
+}
+
 // ---- the write half ----------------------------------------------------------------
 let write = null;
 if (PHASE === 'read') {
@@ -157,6 +224,8 @@ if (PHASE === 'read') {
     manifest,
     repositoryRoot: REPOSITORY_ROOT,
     stamp: STAMP,
+    cookies: SESSION_COOKIES,
+    viewport: VIEWPORT,
   });
   failures.push(...write.failures);
   if (write.stopped !== null) {
@@ -177,6 +246,11 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
   const url = ORIGIN + fill(route.path, captured);
 
   const record = await withColdBrowser(async (page) => {
+    // Before anything is navigated: what this profile actually holds. An empty profile
+    // plus exactly the cookie names the sign-in produced is `D-16`'s property, measured
+    // per route instead of claimed in a comment. Anything else means the browser is not
+    // cold, and that is a finding about the instrument rather than about the screen.
+    const startedWith = page.startedWith() ?? [];
     await page.goto(url);
     const landedOn = await page.evaluate('document.location.pathname');
     const title = await page.evaluate('document.title');
@@ -189,6 +263,9 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
     return {
       name: route.name,
       url,
+      startedWith,
+      viewport: page.viewport ?? null,
+      width: await measureWidth(page),
       landedOn,
       title,
       bodyText,
@@ -197,7 +274,31 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
       consoleErrors: page.consoleErrors(),
       pageErrors: page.pageErrors(),
     };
-  });
+  }, { cookies: SESSION_COOKIES, viewport: VIEWPORT });
+
+  // ---- D-16: this route's browser was cold, plus exactly what it was handed ---------
+  const started = [...record.startedWith].sort();
+  if (started.join(',') !== COOKIE_NAMES.join(',')) {
+    fail(
+      route.name,
+      `its browser started with cookies [${started.join(', ') || '(none)'}] and the ` +
+        `journey handed it [${COOKIE_NAMES.join(', ') || '(none)'}]. D-16 requires every ` +
+        'route to open in a profile holding nothing but what this walk explicitly gave it',
+    );
+  }
+
+  // ---- D-93: the screen does not scroll sideways at the declared width -------------
+  if (VIEWPORT === null) {
+    fail(
+      route.name,
+      'this manifest declares no `viewport`, so no route can be held to a width. D-93: ' +
+        'the frontend battery cannot express one either, which is why this assertion is here',
+    );
+  } else {
+    for (const finding of widthFindings(route.name, record.width, manifest.viewport)) {
+      failures.push(finding);
+    }
+  }
 
   // ---- the document itself, redirects included -------------------------------------
   // `/` is a redirect, so "the document" is a chain and not one response. Every hop is
@@ -262,6 +363,29 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
     .map((e) => `${e.method} ${new URL(e.url).pathname}`);
   record.observedApi = [...new Set(observed)];
 
+  // A call on the seam that answered an error, whatever the screen then chose to render.
+  // `D-28`: `/projects/<anything>` answers 200 and renders an error state, so a route can
+  // look walked while every call under it refused. The write half has asserted this since
+  // `W22-E2E`; the read walk never did, which is half of why `D-92` looked like a link
+  // that was missing rather than like fifteen screens with no session. It is also what
+  // makes a session that expires mid-walk loud instead of invisible.
+  for (const exchange of record.exchanges) {
+    let path;
+    try {
+      path = new URL(exchange.url).pathname;
+    } catch {
+      continue;
+    }
+    if (!path.startsWith(API_PREFIX)) continue;
+    if (typeof exchange.status !== 'number' || exchange.status < 400) continue;
+    fail(
+      route.name,
+      `${exchange.method} ${path} answered ${exchange.status}. ` +
+        `correlation-id: ${exchange.responseHeaders?.['x-correlation-id'] ?? '(none)'}; ` +
+        `body: ${JSON.stringify((exchange.responseBody ?? '').slice(0, 400))}`,
+    );
+  }
+
   const required = (route.expects_api ?? []).map((e) => concreteApi(e, captured));
   // An optional call may name an identifier this walk never captured -- the review screen
   // opens a *finding*, and no earlier route hands out a finding uid. Optional calls are
@@ -320,9 +444,12 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
   records.push(record);
   const verdict = failures.some((f) => f.startsWith(`${route.name}:`)) ? 'RED ' : 'ok  ';
   console.log(
-    `${verdict}${route.name.padEnd(10)} ${String(record.documentStatus).padEnd(4)} ` +
+    `${verdict}${route.name.padEnd(14)} ${String(record.documentStatus).padEnd(4)} ` +
       `api=${record.observedApi.length} auth=${credentialled.length} ` +
-      `console=${record.consoleErrors.length} ${record.captured ? JSON.stringify(record.captured) : ''}`,
+      `console=${record.consoleErrors.length} ` +
+      `jar=[${record.startedWith.join(',')}] ` +
+      `w=${record.width?.scrollWidth ?? '?'}/${record.width?.innerWidth ?? '?'} ` +
+      `${record.captured ? JSON.stringify(record.captured) : ''}`,
   );
 
   // A route that could not capture the identifier the next route needs makes every
@@ -336,16 +463,26 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
   }
 }
 
-mkdirSync(OUT_DIR, { recursive: true });
-const envelopePath = join(OUT_DIR, 'journey.json');
-writeFileSync(
-  envelopePath,
-  JSON.stringify(
-    {
+// Pushed BEFORE the envelope is written, not after: an envelope that is missing the one
+// finding that says the walk stopped early is the same impoverishment `D-5` is about.
+if (PHASE !== 'write' && records.length < manifest.routes.length) {
+  failures.push(
+    `only ${records.length} of ${manifest.routes.length} routes were reached; ` +
+      'an unfinished walk is not a pass',
+  );
+}
+
+const envelopePath = writeEnvelope(
+  {
       origin: ORIGIN,
       manifest: MANIFEST_PATH,
       phase: PHASE,
       startedAt: new Date().toISOString(),
+      // The sign-in, as itself: what it pressed, where it landed, and the NAME and
+      // attributes of the cookie it carried. Never its value -- the same rule `cdp.mjs`
+      // applies to `Authorization`.
+      session: { opened: true, ...session.record },
+      viewport: VIEWPORT,
       write:
         write === null
           ? { ran: false, why: PHASE === 'read' ? 'phase: read' : 'no write section' }
@@ -363,10 +500,7 @@ writeFileSync(
       routesDeclared: manifest.routes.length,
       failures,
       records,
-    },
-    null,
-    2,
-  ),
+  },
 );
 
 console.log(`\nenvelope: ${envelopePath}`);
@@ -376,13 +510,6 @@ console.log(
 console.log(
   `routes checked: ${PHASE === 'write' ? 'not run' : `${records.length}/${manifest.routes.length}`}`,
 );
-
-if (PHASE !== 'write' && records.length < manifest.routes.length) {
-  failures.push(
-    `only ${records.length} of ${manifest.routes.length} routes were reached; ` +
-      'an unfinished walk is not a pass',
-  );
-}
 
 if (failures.length > 0) {
   console.error(`\ne2e:pc01 FAILED -- ${failures.length} finding(s):\n`);

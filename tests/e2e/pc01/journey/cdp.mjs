@@ -165,8 +165,43 @@ class Connection {
  * certifications missed `D-16` by never reloading a page, and it is preserved here by
  * construction rather than by discipline -- there is no API in this module for reusing a
  * browser across routes.
+ *
+ * ## `W44-JOURNEY`: two options, and why neither weakens the property above
+ *
+ * `D-92`. The BFF answers `401` without a session cookie -- wave 34, by design -- so a
+ * walk of empty profiles reaches route 2 of 15 and stops. Two things are now settable on
+ * the profile **before** the callback runs, and both are **values the caller states**,
+ * never values this module carries over from a previous call:
+ *
+ *   `cookies`  -- an explicit list of cookie declarations. There is no jar shared between
+ *                 calls and nothing is read out of one browser and into the next by this
+ *                 module: the caller obtains a value once, from its own sign-in, and hands
+ *                 the SAME value to every call. So route 15's browser receives exactly
+ *                 what route 1's received, which is the difference between a session
+ *                 *carried deliberately* and state *leaking forward*. `page.startedWith()`
+ *                 reports the jar as it stood before the first navigation, so a caller can
+ *                 assert per route that the profile held nothing else -- the property is
+ *                 measured rather than asserted in a comment.
+ *   `viewport` -- `D-93`. A layout claim needs a declared width; the default window is
+ *                 whatever the host gives, which is not a measurement. Set before
+ *                 navigation, because a width applied afterwards measures a reflow.
+ *
+ * What is deliberately still absent is any way to reuse a browser, so the cold-load
+ * property cannot be lost by forgetting it. Adding a `Page` to this signature, or
+ * returning one, is the change that would end `D-16`'s guarantee.
  */
-export async function withColdBrowser(fn) {
+export async function withColdBrowser(fn, { cookies = [], viewport = null } = {}) {
+  if (!Array.isArray(cookies)) {
+    throw new Error('withColdBrowser: `cookies` must be an array of cookie declarations');
+  }
+  for (const cookie of cookies) {
+    if (typeof cookie?.name !== 'string' || typeof cookie?.value !== 'string') {
+      throw new Error(
+        'withColdBrowser: every cookie must declare a string `name` and a string `value`; ' +
+          `got ${JSON.stringify(cookie)}`,
+      );
+    }
+  }
   const executable = findChrome();
   const profile = mkdtempSync(join(tmpdir(), 'e2e-pc01-'));
   const child = spawn(
@@ -217,6 +252,12 @@ export async function withColdBrowser(fn) {
     });
     const page = new Page(connection, sessionId);
     await page.enable();
+    if (viewport !== null) await page.setViewport(viewport);
+    if (cookies.length > 0) await page.setCookies(cookies);
+    // Read back what this profile actually holds, BEFORE the first navigation. A fresh
+    // profile plus exactly the declarations the caller passed is the whole of `D-16`'s
+    // cold-load property, and this is the reading that makes it checkable from outside.
+    await page.recordStartingJar();
     return await fn(page);
   } finally {
     connection?.close();
@@ -278,6 +319,8 @@ class Page {
   #lastActivity = Date.now();
   #redirectSeq = 0;
   #domEnabled = false;
+  /** The jar as it stood before the first navigation. `W44-JOURNEY`, `D-16`. */
+  #startedWith = null;
 
   constructor(connection, sessionId) {
     this.#connection = connection;
@@ -779,6 +822,83 @@ class Page {
   /** Where the browser currently is. A `router.push` moves this without a navigation. */
   async location() {
     return await this.evaluate('document.location.pathname + document.location.search');
+  }
+
+  // ------------------------------------------------------------------------------------
+  // `W44-JOURNEY`. The session and the viewport: two things a profile can be told before
+  // it navigates, and nothing else.
+  // ------------------------------------------------------------------------------------
+
+  /**
+   * Fix the viewport. `D-93`.
+   *
+   * A width assertion against whatever window the host happened to give is not a
+   * measurement, and `Emulation.setDeviceMetricsOverride` is the same call `screenshot`
+   * already makes for the same reason. It is applied before the first navigation, so the
+   * page is laid out at the declared width rather than reflowed into it.
+   */
+  async setViewport({ width, height }) {
+    if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
+      throw new Error(
+        `setViewport: width and height must be positive integers; got ${width}x${height}`,
+      );
+    }
+    await this.#send('Emulation.setDeviceMetricsOverride', {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    this.viewport = { width, height };
+  }
+
+  /**
+   * Put explicit cookies into this profile's jar.
+   *
+   * Through the **protocol**, not through `document.cookie`: the session cookie is
+   * `HttpOnly` by design -- `app/bff/session/store.ts` -- and page script cannot read or
+   * write it. Driving it from page script would mean the journey could only work against a
+   * session the application does not actually issue, which is a measurement of a different
+   * system.
+   */
+  async setCookies(cookies) {
+    await this.#send('Network.setCookies', { cookies });
+  }
+
+  /**
+   * One cookie, whole, so a caller can hand the same declaration to the next cold
+   * profile.
+   *
+   * This is the only method in this file that returns a secret-shaped value, and it is
+   * named so that a reader looking for "where could a credential leave the browser"
+   * finds it. Its caller -- `session.mjs` -- keeps the value in a variable and puts the
+   * cookie's NAME, never its value, into the envelope.
+   */
+  async cookieFor(name) {
+    const { cookies } = await this.#send('Network.getCookies', {});
+    return cookies.find((c) => c.name === name) ?? null;
+  }
+
+  /** Every cookie this profile holds, names and attributes; values are never returned. */
+  async cookieNames() {
+    const { cookies } = await this.#send('Network.getCookies', {});
+    return cookies.map((c) => c.name).sort();
+  }
+
+  /** Taken once, before the first navigation. `#startedWith` is what `D-16` is about. */
+  async recordStartingJar() {
+    this.#startedWith = await this.cookieNames();
+  }
+
+  /**
+   * The cookie names this profile held **before it navigated anywhere**.
+   *
+   * A caller that injects one session cookie and reads back `['am_session']` on every
+   * route has measured that each route began from an empty profile plus one stated value.
+   * A caller that reads back anything else is looking at a browser that is not cold.
+   */
+  startedWith() {
+    return this.#startedWith === null ? null : [...this.#startedWith];
   }
 
   exchanges() {
