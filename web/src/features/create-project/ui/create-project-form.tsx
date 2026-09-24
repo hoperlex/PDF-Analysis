@@ -96,7 +96,7 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
         </p>
       ) : null}
 
-      {mutation.isPending ? <LoadingState what="the new project" /> : null}
+      {mutation.isPending ? <LoadingState what="новый проект" /> : null}
 
       {failure !== null && failure.presentation === 'unsupported' ? (
         <UnsupportedState title={failure.title} detail={failure.detail} />

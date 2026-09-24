@@ -20,16 +20,12 @@ import type { ReactElement } from 'react';
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 
-import { DocumentDetailPage } from '@/_pages/document-detail';
-import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectsPage } from '@/_pages/projects';
 import { ReviewPage } from '@/_pages/review';
-import { RunPage } from '@/_pages/run';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
 import { ChangePasswordPage } from '@/_pages/change-password';
-import { KnowledgeBasePage } from '@/_pages/knowledge-base';
 import { SignInPage } from '@/_pages/sign-in';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { DecisionHistory } from '@/widgets/decision-history';
@@ -67,6 +63,7 @@ import {
   runStatus,
 } from '../review/fixtures';
 import { newClient, renderWith, seedError } from '../screens/harness';
+import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 
 import type { Screen } from './contrast';
 
@@ -96,6 +93,15 @@ function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError
 }
 
 const noop = (): void => {};
+
+/** The four identities this census uses, keyed as `web/src/app`'s directories spell them. */
+const IDENTITIES = {
+  projectUid: PROJECT_UID,
+  documentUid: DOCUMENT_UID,
+  versionUid: VERSION_UID,
+  runId: RUN_ID,
+};
+const IDENTITY_SEGMENTS = wellFormed(IDENTITIES);
 
 /** A seeded run screen in a given terminal outcome. */
 function runScreen(state: RunState, overrides: Partial<RunStatus> = {}): string {
@@ -223,13 +229,37 @@ export function screens(): Screen[] {
     }
   }
 
-  // ------------------------------------------------------------------- the pages
-  add('ProjectsPage cold', withRouter(createElement(ProjectsPage, {})));
-  add('ProjectDetailPage cold', withRouter(createElement(ProjectDetailPage, { projectUid: PROJECT_UID })));
-  add('VersionDetailPage cold', withRouter(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
-  add('DocumentDetailPage cold', withRouter(createElement(DocumentDetailPage, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
-  add('RunPage cold', withRouter(createElement(RunPage, { projectUid: PROJECT_UID, runId: RUN_ID })));
-  add('ReviewPage cold', withRouter(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })));
+  /*
+   * ------------------------------------------------- the pages, DERIVED from `web/src/app`
+   *
+   * `D-88`. This was six hand-written lines and, further down, nine more added one wave at
+   * a time as somebody noticed a screen was missing. The census's reach was therefore a
+   * property of whether anybody had remembered a screen, and wave 43 measured what that
+   * costs: a border at **1.08:1** on an element `BlocksPage` really rendered left `R-33`'s
+   * 3:1 floor GREEN, because no screen here opened that page. The one red it did produce
+   * said something false — *"no screen in `screens.ts` renders an element they match"* —
+   * and named a bundler hash rather than the screen.
+   *
+   * `derivedScreens()` reads the route tree; `screen-set.guard.test.ts` makes an address
+   * with no seed red naming the address. A screen added next wave is censused whether or
+   * not anybody remembers, and a screen that brings no stylesheet of its own is now visible
+   * here too — which is the half of `D-88` that moved the census in neither direction.
+   */
+  for (const screen of derivedScreens()) {
+    add(`${screen.name} cold`, withRouter(screen.make(IDENTITY_SEGMENTS)));
+  }
+
+  /*
+   * Every (screen, dynamic segment) pair with that one segment malformed, also derived.
+   *
+   * `.am-state--warning` and its title are the `UnsupportedState` tone — the one that says
+   * no retry will help — and before wave 42 no screen in this census reached it at all.
+   * Two hand-written entries reached it afterwards; eleven reach it now, and the eleven
+   * come from the directory layout rather than from anybody's memory.
+   */
+  for (const variant of malformedVariants(IDENTITIES)) {
+    add(variant.name, withRouter(variant.make()));
+  }
 
   // A page whose query has failed: `.am-state--error` and everything inside it.
   {
@@ -481,15 +511,18 @@ export function screens(): Screen[] {
    */
 
   // The knowledge base, `R-23`: eight `.am-kb__*` colour rules reached nothing before it.
-  add('KnowledgeBasePage cold', withRouter(createElement(KnowledgeBasePage, {})));
+  // The PAGE is derived above; the widget is not an address and stays here.
   add('KnowledgeBase', render(createElement(KnowledgeBase, { records: RECORDS })));
   add('KnowledgeBase empty', render(createElement(KnowledgeBase, { records: [] })));
 
-  // The session screens, `R-26`. Neither takes a query, and both carry `.am-note`.
-  add('SignInPage', render(createElement(SignInPage, {})));
+  /*
+   * The session screens' OTHER SHAPES, `R-26`. `/login` and `/account/password` are
+   * addresses and are derived above; a refusal and a signed-in panel are selected by props
+   * that no address carries, so they stay hand-written — which is the line this file now
+   * draws everywhere: the address is derived, the shape is answered.
+   */
   add('SignInPage refused', render(createElement(SignInPage, { refusal: 'credentials' })));
   add('SignInPage open', render(createElement(SignInPage, { login: 'проверяющий' })));
-  add('ChangePasswordPage signed out', render(createElement(ChangePasswordPage, {})));
   add('ChangePasswordPage', render(createElement(ChangePasswordPage, { login: 'проверяющий' })));
   add(
     'ChangePasswordPage refused',
@@ -512,11 +545,8 @@ export function screens(): Screen[] {
    * that it is the ONLY way this census noticed a new screen: a screen that had reused
    * the global classes and declared no module of its own would have been invisible here.
    */
-  add('StageComparisonPage cold', withRouter(createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
-  add(
-    'StageComparisonPage unsupported address',
-    withRouter(createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: 'not-an-identifier' })),
-  );
+  // The cold screen and its two malformed-address shapes are derived above. What is left
+  // here is the one state a derivation cannot reach: the loaded PAIR.
   {
     const client = populatedClient();
     // A SECOND run of the same version: the screen renders its tables only for a pair,
@@ -574,12 +604,5 @@ export function screens(): Screen[] {
    * -- the one that says "no retry will help" -- was never measured in either palette. An
    * address that is not an identifier is the one way one static pass reaches it.
    */
-  add(
-    'VersionDetailPage unsupported address',
-    withRouter(
-      createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: 'not-an-identifier' }),
-    ),
-  );
-
   return out;
 }

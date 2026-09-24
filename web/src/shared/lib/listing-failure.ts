@@ -62,11 +62,42 @@ export type ListingFailureKind =
  */
 export type ListingParent = 'project' | 'document' | 'version';
 
-/** The parent in the genitive, which is the case every sentence below puts it in. */
-const PARENT_GENITIVE: Readonly<Record<ListingParent, string>> = {
-  project: 'проекта',
-  document: 'документа',
-  version: 'версии',
+/**
+ * A parent noun in the genitive, **with the determiners that have to agree with it**.
+ *
+ * `D-95`, and the reason this is a record rather than a string. The table used to hold the
+ * noun alone and the sentences below wrote `Такого ${parent}` and `этого ${parent}` around
+ * it — masculine forms, correct for `проекта` and `документа`. `версии` is **feminine**,
+ * so a reviewer on a well-formed but absent version read:
+ *
+ * > Такого версии не существует. · На сервере нет этого версии, поэтому перечислять здесь
+ * > нечего.
+ *
+ * Cyrillic throughout, well-formed word by word, and wrong as a sentence — which is why
+ * `rendered-language.guard.test.ts` could not see it and never could: it fails on Latin
+ * words a contract did not put there, and there is no Latin here.
+ *
+ * **A gendered word hard-coded beside a substitution is a bet that every value the
+ * substitution can take has that gender.** The repair is to stop betting: the determiner
+ * travels with the noun, so adding a fourth parent forces whoever adds it to write the
+ * forms that go with it, and the compiler refuses an entry that leaves one out.
+ * `web/tests/guards/gender-agreement.guard.test.ts` holds both halves — that no module
+ * writes a determiner next to a `${…}` again, and that no sentence this classifier can
+ * produce disagrees with itself.
+ */
+interface ParentNoun {
+  /** The noun in the genitive, which is the case every sentence below puts it in. */
+  readonly genitive: string;
+  /** `Такого` / `Такой` — sentence-initial, agreeing with `genitive`. */
+  readonly noSuch: string;
+  /** `этого` / `этой` — mid-sentence, agreeing with `genitive`. */
+  readonly thisOne: string;
+}
+
+const PARENT_GENITIVE: Readonly<Record<ListingParent, ParentNoun>> = {
+  project: { genitive: 'проекта', noSuch: 'Такого', thisOne: 'этого' },
+  document: { genitive: 'документа', noSuch: 'Такого', thisOne: 'этого' },
+  version: { genitive: 'версии', noSuch: 'Такой', thisOne: 'этой' },
 };
 
 export interface ListingSubject {
@@ -105,10 +136,10 @@ export function classifyListingFailure(error: unknown, subject: ListingSubject):
         return {
           ...base,
           kind: 'parent_not_found',
-          title: `Такого ${parent} не существует.`,
+          title: `${parent.noSuch} ${parent.genitive} не существует.`,
           detail:
-            `На сервере нет этого ${parent}, поэтому перечислять здесь нечего. ` +
-            'Это не то же самое, что пустой список, и повтор не выполняется.',
+            `На сервере нет ${parent.thisOne} ${parent.genitive}, поэтому перечислять ` +
+            'здесь нечего. Это не то же самое, что пустой список, и повтор не выполняется.',
           retryable: false,
         };
       case 'dependency_unavailable':

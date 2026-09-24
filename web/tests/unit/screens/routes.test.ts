@@ -50,6 +50,8 @@ import { AppFrame, AppProviders } from '@/_app';
 import { routes } from '@/shared/lib';
 
 import { DOCUMENT_UID, PROJECT_UID, RUN_ID, VERSION_UID } from '../review/fixtures';
+import { routeAddresses } from './route-screens';
+import { screens as censusScreens } from '../styles/screens';
 
 /** Distinct values, so a route that crossed its two parameters is red rather than green. */
 const A_PROJECT = PROJECT_UID;
@@ -364,43 +366,153 @@ describe('the root layout wires the providers outside the frame', () => {
  * compared to the directory layout on disk rather than to another copy of themselves.
  */
 describe('every screen address is built once and matches a route file on disk', () => {
-  const ADDRESSES: ReadonlyArray<{ url: string; file: string }> = [
-    { url: routes.projects(), file: 'src/app/projects/page.tsx' },
-    { url: routes.project(A_PROJECT), file: 'src/app/projects/[project_uid]/page.tsx' },
-    {
-      url: routes.document(A_PROJECT, A_DOCUMENT),
-      file: 'src/app/projects/[project_uid]/documents/[document_uid]/page.tsx',
-    },
-    {
-      url: routes.version(A_PROJECT, A_VERSION),
-      file: 'src/app/projects/[project_uid]/versions/[version_uid]/page.tsx',
-    },
-    { url: routes.run(A_PROJECT, A_RUN), file: 'src/app/projects/[project_uid]/runs/[run_id]/page.tsx' },
-    {
-      url: routes.review(A_PROJECT, A_RUN),
-      file: 'src/app/projects/[project_uid]/runs/[run_id]/review/page.tsx',
-    },
-  ];
+  /*
+   * THE LIST OF SIX `{url, file}` PAIRS THAT STOOD HERE IS GONE, and its deletion is
+   * `D-94`.
+   *
+   * It was hand-written, and `routes.comparison()` was not in it — so the whole frontend
+   * suite stayed green, 75 files and 1085 tests, with the comparison builder pointed at
+   * `/compare`, an address nothing serves. `routes.test.ts` imported the module and never
+   * called that function.
+   *
+   * The reason it was missing is the row: wave 43's grants were clean and `routes.ts` fell
+   * outside all of them, so the builder landed in the INTEGRATION commit — the one commit
+   * of the wave against which no judge was planned. `W43-PREP` has a case asserting *"the
+   * frame links to all four addresses"* and a judge's mutation died against it; the
+   * comparison link had no such case because it landed outside every grant. **Work that
+   * falls between all grants falls between all guards.**
+   *
+   * What replaces it asks the filesystem. Every builder `routes` exports is CALLED, and
+   * the address it produces must be one `web/src/app` serves — so a builder added next
+   * wave is held whether or not anybody remembers to list it here, and a builder pointed
+   * at nothing is red naming the builder.
+   */
 
-  it.each(ADDRESSES)('$url is served by a file that exists', ({ url, file }) => {
-    expect(existsSync(join(WEB_ROOT, file))).toBe(true);
-    // The directory layout, turned back into the URL Next serves it at. A route file
-    // moved without its builder -- or a builder that spelled a segment differently --
-    // makes these two disagree.
-    const served = file
-      .replace(/^src\/app/, '')
-      .replace(/\/page\.tsx$/, '')
-      .replace('[project_uid]', A_PROJECT)
-      .replace('[document_uid]', A_DOCUMENT)
-      .replace('[version_uid]', A_VERSION)
-      .replace('[run_id]', A_RUN);
-    expect(url).toBe(served);
+  /** A value per parameter position, distinct so a crossed pair cannot cancel out. */
+  const SENTINELS = ['sentinel_one', 'sentinel_two', 'sentinel_three'] as const;
+
+  /** Every builder, called, with its address reduced to its SHAPE. */
+  function builtShapes(): readonly { readonly builder: string; readonly shape: string }[] {
+    return Object.entries(routes).map(([builder, build]) => {
+      const arity = (build as (...args: string[]) => string).length;
+      const url = (build as (...args: string[]) => string)(...SENTINELS.slice(0, arity));
+      let shape = url;
+      for (const sentinel of SENTINELS) shape = shape.split(sentinel).join('[*]');
+      return { builder, shape };
+    });
+  }
+
+  /** The tree's addresses, reduced to the same shape. */
+  function servedShapes(): ReadonlySet<string> {
+    return new Set(
+      routeAddresses().map((route) => route.address.replace(/\[[^\]]+\]/g, '[*]')),
+    );
+  }
+
+  it('calls every builder there is, rather than a list of them', () => {
+    const shapes = builtShapes();
+    // Anti-vacuity: an `Object.entries` over something that stopped being an object of
+    // functions would make every case below pass by having nothing to check.
+    expect(shapes.length, 'no builder was called at all').toBeGreaterThan(5);
+    expect(shapes.map((s) => s.builder)).toContain('comparison');
+    expect(shapes.every((s) => s.shape.startsWith('/'))).toBe(true);
+    // And the parameters really are interpolated, or the shapes below are constants.
+    expect(shapes.filter((s) => s.shape.includes('[*]')).length).toBeGreaterThan(4);
+  });
+
+  it('D-94: every address a builder builds is served by a route file', () => {
+    const served = servedShapes();
+    expect(served.size, 'the route tree produced no addresses').toBeGreaterThan(10);
+    expect(
+      builtShapes()
+        .filter((s) => !served.has(s.shape))
+        .map((s) => `routes.${s.builder}() -> ${s.shape}`)
+        .sort(),
+      'this builder produces an address `web/src/app` does not serve, so a Link using it ' +
+        'is a 404 in a real browser. `D-94`: pointing `routes.comparison` at `/compare` ' +
+        'left 75 files and 1085 tests green, because the list this case replaces was ' +
+        'hand-written and did not name it.',
+    ).toEqual([]);
+  });
+
+  it('D-94: every address with a dynamic segment is built by a builder', () => {
+    // The other direction, so a new addressable screen brings its builder with it rather
+    // than having its URL written into a `Link` by hand — which is the defect
+    // `shared/lib/routes.ts`'s own header names: an address that exists in four places is
+    // an address that can be wrong in three of them.
+    const built = new Set(builtShapes().map((s) => s.shape));
+    expect(
+      routeAddresses()
+        .filter((route) => route.segments.length > 0)
+        .map((route) => route.address)
+        .filter((address) => !built.has(address.replace(/\[[^\]]+\]/g, '[*]')))
+        .sort(),
+      'this address takes a dynamic segment and no builder in `shared/lib/routes.ts` ' +
+        'produces it, so whoever links to it will build the string by hand.',
+    ).toEqual([]);
+  });
+
+  it('every address a builder builds is served by a file that exists', () => {
+    const files = new Map(
+      routeAddresses().map((route) => [route.address.replace(/\[[^\]]+\]/g, '[*]'), route.file]),
+    );
+    for (const { builder, shape } of builtShapes()) {
+      const file = files.get(shape);
+      expect(file, `routes.${builder}() -> ${shape} is served by no file`).toBeDefined();
+      expect(existsSync(join(WEB_ROOT, '..', file as string))).toBe(true);
+    }
+  });
+
+  /**
+   * `D-94`'s second half: **the only navigational road to a screen is an unasserted line.**
+   *
+   * Deleting the entire `<p>` that carries the comparison link from `version-detail-page`
+   * left 1085/1085 green. It is not `D-90`'s shape — `Link` and `routes` stay used on that
+   * page, so there is no unused-import artefact — it was simply a line nothing asserted.
+   *
+   * The census in `tests/unit/styles/screens.ts` renders every screen the route tree
+   * offers, in its cold state and with its caches populated, and that markup carries every
+   * `href` the product draws. Reading it here costs no new render: `screens.ts` is a
+   * module and not a suite, so nothing is run twice.
+   *
+   * It is the LOADED states that make this work, and that is worth saying: the link to a
+   * document and the link to a review are drawn only once a query has answered, so a cold
+   * pass reaches neither. A check built on cold renders alone would have been green with
+   * both links deleted.
+   */
+  it('D-94: every address a builder builds is linked from some rendered screen', () => {
+    const drawn = new Set<string>();
+    for (const screen of censusScreens()) {
+      for (const match of screen.markup.matchAll(/href="([^"]*)"/g)) drawn.add(match[1] ?? '');
+    }
+    expect(drawn.size, 'the census markup carries no href at all').toBeGreaterThan(10);
+    const built: Record<string, string> = {
+      projects: routes.projects(),
+      project: routes.project(PROJECT_UID),
+      document: routes.document(PROJECT_UID, DOCUMENT_UID),
+      version: routes.version(PROJECT_UID, VERSION_UID),
+      comparison: routes.comparison(PROJECT_UID, VERSION_UID),
+      run: routes.run(PROJECT_UID, RUN_ID),
+      review: routes.review(PROJECT_UID, RUN_ID),
+    };
+    // The names are checked against the module rather than trusted, so a builder added
+    // without a line here is red rather than silently unlinked.
+    expect(Object.keys(built).sort()).toEqual(Object.keys(routes).sort());
+    expect(
+      Object.entries(built)
+        .filter(([, url]) => !drawn.has(url))
+        .map(([builder, url]) => `routes.${builder}() -> ${url}`)
+        .sort(),
+      'no screen this census renders draws a link to this address, so the only way a ' +
+        'reviewer reaches it is by typing it. `D-94`: deleting the whole paragraph that ' +
+        'carries the comparison link left 1085/1085 green.',
+    ).toEqual([]);
   });
 
   it('carries no identity a route file cannot receive', () => {
     // `version_ordinal` is a display and ordering value; the contract refuses it as a path
     // parameter. An address built from one would be an identity invented by the UI.
-    for (const { url } of ADDRESSES) expect(url).not.toMatch(/\/\d+(\/|$)/);
+    for (const { shape } of builtShapes()) expect(shape).not.toMatch(/\/\d+(\/|$)/);
   });
 
   it('gives a document and a version each an address of their own', () => {

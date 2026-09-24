@@ -73,6 +73,16 @@ import {
 } from './contrast';
 import type { Occurrence, Rule, Theme, TokenName } from './contrast';
 import { screens } from './screens';
+import { derivedScreens, malformedVariants } from '../screens/route-screens';
+import { DOCUMENT_UID, PROJECT_UID, RUN_ID, VERSION_UID } from '../review/fixtures';
+
+/** The identities the census seeds, in the shape `route-screens.ts` asks for. */
+const IDENTITIES = {
+  projectUid: PROJECT_UID,
+  documentUid: DOCUMENT_UID,
+  versionUid: VERSION_UID,
+  runId: RUN_ID,
+};
 
 const WEB = fileURLToPath(new URL('../../..', import.meta.url));
 const GLOBALS = join(WEB, 'src', 'app', 'globals.css');
@@ -305,6 +315,34 @@ describe('the census is taken over rendered screens, not over a list', () => {
      * maintains cannot make it pass.
      */
     expect(new Set(rendered.map((s) => s.name)).size).toBe(rendered.length);
+  });
+
+  /**
+   * `D-88`: the census opens every screen the product offers.
+   *
+   * The case above asks whether the census is BIG. This one asks whether it is the right
+   * set, and it asks `web/src/app` rather than `screens.ts` — which is the difference
+   * between this and the list of eighteen component names deleted above. The two defects
+   * `D-88` names cost differently and this closes both: a screen that brought its own
+   * `*.module.css` made the unreached-rule case say something FALSE, and a screen built
+   * from the global `am-*` classes moved this census in neither direction and its silence
+   * read as coverage.
+   */
+  it('opens every screen web/src/app offers, derived rather than listed', () => {
+    const censused = new Set(screens().map((screen) => screen.name));
+    const derived = derivedScreens();
+    expect(derived.length, 'the route tree contributed no screens').toBeGreaterThan(10);
+    expect(
+      derived.filter((screen) => !censused.has(`${screen.name} cold`)).map((s) => s.address).sort(),
+      'these addresses exist in `web/src/app` and this census renders no screen for them, ' +
+        'so nothing measures the contrast of anything they draw. `screens.ts` takes the ' +
+        'derived set; a screen missing here means the loop that consumes it was removed.',
+    ).toEqual([]);
+    // The refusal shapes too, so the `warning` tone is not reached by accident.
+    expect(
+      malformedVariants(IDENTITIES).filter((v) => !censused.has(v.name)).map((v) => v.name).sort(),
+      'a malformed-segment shape is no longer censused',
+    ).toEqual([]);
   });
 
   /**
