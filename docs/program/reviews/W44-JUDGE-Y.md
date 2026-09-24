@@ -184,3 +184,110 @@ docs/program/reviews/W44-JUDGE-Y.md
 ```
 
 No checkpoint or tag was created.
+
+## 8. Phase 2 — cross-examination of W44-JUDGE-X
+
+**Report examined:** `9aa25fd97871267ff35440837891c9117206e82a:docs/program/reviews/W44-JUDGE-X.md`.
+
+**Cross-examination verdict:** X's F1, F2 and F3 survive and are strengthened by independent measurements that X did not run. F4 survives as a real contradictory instruction, but its cost is documentation-level because the executable type and local interface comment point the other way. F5's core observation survives — `screens` is not a count of the `Screen` entries that the census executed — while X's more specific claim that `20` is an *inflated* count relative to fourteen route screens is not established. That comparison imports a different unit into a census that intentionally includes pages, widgets and states. The overall **REJECT** verdict is therefore unchanged, but F5 must be restated as an undefined/heuristic unit rather than a proven inflated route-screen count.
+
+### 8.1 F1 — strengthened with a second guard-green shape and its actual behavior
+
+X moved a fallback into `effectivePassword`, changed the missing-value check and observed the direct call return `password`. I used a different, smaller data-flow break: alias the environment read and default the alias on the next line, leaving the rest of the function untouched:
+
+```js
+const passwordFromEnvironment = env[PASSWORD_ENV];
+const password = passwordFromEnvironment || 'judge-default';
+```
+
+The actual Python guard remained green (the primary Y report gives the in-memory invocation). For phase 2 I also loaded that altered module entirely in memory and called the real exported function with only `E2E_PC01_LOGIN`. It did not throw; it returned:
+
+```json
+{"login":"admin","password":"judge-default"}
+```
+
+The module was loaded from a `data:` URL after rebasing only its relative `cdp.mjs` import to the same checked-out file; no repository byte changed. This is new behavioral evidence beyond X's particular mutation: any downstream alias can defeat the line-shape query. F1 is strengthened, not falsified.
+
+### 8.2 F2 — strengthened semantically; X also narrows one part of Y2
+
+X exercised one paraphrase through the full frontend suite. I independently extracted the four actual regular expressions and tested three further semantic denials that X did not use:
+
+```bash
+node -e "const fs=require('fs'); const s=fs.readFileSync('web/tests/guards/screen-claims-about-the-system.guard.test.ts','utf8'); const b=s.match(/denials:\s*\[([\s\S]*?)\]/)[1]; const rs=[...b.matchAll(/\/(.+)\/i/g)].map(x=>new RegExp(x[1],'i')); for (const p of ['Проверка личности пользователя в приложении не выполняется.','Для работы учётные данные не нужны.','Входить в систему не требуется.']) console.log(JSON.stringify({phrase:p,matched:rs.some(r=>r.test(p))}))"
+```
+
+All three produced `matched:false`. This strengthens X's semantic finding: the blind spot is not peculiar to his sentence `Приложение работает без входа в систему`.
+
+X's separate pending-label probe does, however, falsify the broadest reading of my primary Y2 cost statement. An exact denial added as a new `useMutation.isPending` label is not silently absent: D-82's branch-coverage ratchet reddens. The supported Y2/X-F2 conclusion is narrower and stronger: semantic equivalents evade the capability guard; it is not proven that every newly introduced non-cold branch also evades the rest of the suite.
+
+### 8.3 F3 — strengthened by a real caller/browser divergence, not another source-only mutation
+
+X showed that the conformance suite accepts replacing the browser readback with caller input, but did not exhibit a browser state on which those two values differ. I supplied Chromium an already-expired cookie declaration and compared the caller's names with the actual `Storage.getCookies` readback through the unmodified `withColdBrowser`:
+
+```bash
+node --input-type=module -e "import {withColdBrowser} from './tests/e2e/pc01/journey/cdp.mjs'; const declared=[{name:'judge_expired',value:'x',url:'http://127.0.0.1/',expires:1}]; const observed=await withColdBrowser(async p=>({startedWith:p.startedWith(),jar:await p.cookieNames()}),{cookies:declared}); console.log(JSON.stringify({caller:declared.map(c=>c.name),...observed}));"
+```
+
+```json
+{"caller":["judge_expired"],"startedWith":[],"jar":[]}
+```
+
+The local browser discarded the expired declaration. Under X's guard-green mutation, `startedWith` would instead be `['judge_expired']`, despite the jar being empty. This is the missing observable witness: caller declarations and browser state are not interchangeable. It strengthens F3 from a plausible tautology to a demonstrated false-positive case. No owner-stand request was made.
+
+### 8.4 F4 — confirmed, with a narrower executable cost
+
+I parsed `route-screens.ts` with the TypeScript AST rather than relying only on the two prose excerpts. The file contains one stale `predicate over the route file's own source` instruction, one local `what the route file DOES` instruction, and the actual `proof` function type accepts zero parameters:
+
+```bash
+node -e "const ts=require('./web/node_modules/typescript'); const fs=require('fs'); const p='web/tests/unit/screens/route-screens.ts'; const s=fs.readFileSync(p,'utf8'); const ast=ts.createSourceFile(p,s,ts.ScriptTarget.Latest,true); let proofParams=null; function v(n){if(ts.isPropertySignature(n)&&n.name?.getText(ast)==='proof'&&ts.isFunctionTypeNode(n.type)) proofParams=n.type.parameters.length; ts.forEachChild(n,v)} v(ast); console.log(JSON.stringify({proofParameters:proofParams,stalePhrase:(s.match(/predicate over the route file's own source/g)||[]).length,behaviourPhrase:(s.match(/what the route file DOES/g)||[]).length}))"
+```
+
+```json
+{"proofParameters":0,"stalePhrase":1,"behaviourPhrase":1}
+```
+
+F4 is therefore a measured internal contradiction, not merely a difference in X's reading. The qualification is cost: the executable signature supplies no source argument, the interface-local comment demands behavior, and the only current proof invokes `RootPage()`. A future author could still close over source and follow the stale opening paragraph, so the text should be corrected; but this is a misleading documentation seam, not evidence that the repaired opt-out currently accepts the old bypass.
+
+### 8.5 F5 — the core holds; the `20 > 14` framing is falsified
+
+I executed the exported `screens()` inventory itself under the repository's Vitest/Vite configuration and counted both its actual entries and the exact first-token equivalence relation used by the diagnostic:
+
+```ts
+import { screens } from '/root/w44judge2/web/tests/unit/styles/screens.ts';
+const xs = screens();
+console.log({
+  entries: xs.length,
+  prefixes: new Set(xs.map((screen) => screen.name.split(' ')[0])).size,
+});
+```
+
+```text
+entries: 66
+prefixes: 34
+```
+
+There are twenty multi-entry prefix groups, including `AppFrame`, six states of `RunProgress`, cold/loaded list pairs, refusal/change states, and malformed variants. This independently strengthens the core of F5: `screens: 20` is not the number of `Screen` values executed by the census.
+
+It also falsifies X's precise interpretation that `20` is demonstrated to be an *inflated screen count* because there are fourteen rendering routes. The contrast subject is explicitly broader than routes: its own `screens()` returns 66 page/widget/state entries and 34 first-token families. `20` may be greater than 14 routes, but it is smaller than both census-based quantities. No authoritative identity relation says whether two states, a widget and its page, or malformed/valid variants are one “screen”. The defensible finding is therefore: the diagnostic publishes a heuristic prefix-family count under an undefined `screens` label. X has not established the direction of its error.
+
+### 8.6 Direct answers required by the cross-examination brief
+
+| X finding | New Y measurement X did not perform | Cross-exam disposition |
+|---|---|---|
+| F1 credential guard | A distinct alias/default mutation stayed guard-green and the real exported function returned `judge-default` with `PASSWORD_ENV` absent | **Strengthened** |
+| F2 semantic denial | Three additional Russian semantic denials matched none of the four regexes | **Strengthened**; X's D-82 result narrows Y's earlier state-axis wording |
+| F3 D-16 caller-input tautology | Chromium discarded an expired declared cookie: caller name present, actual starting/readback jars empty | **Strongly strengthened** with observable divergence |
+| F4 stale opt-out instruction | AST measured one stale phrase, one behavioral phrase and a zero-argument executable proof contract | **Confirmed, cost narrowed** to contradictory guidance |
+| F5 `screens: 20` | The subject inventory contains 66 executed entries and 34 prefix families | **Core strengthened; “inflated versus 14” falsified** |
+
+**Where X shares an assumption with its subject (§12).** F5 is the clear instance. The subject assumes that the first whitespace-delimited token of a free-form site label is a screen identity. X rejects that answer by assuming route addresses are the independent screen identity and comparing `20` with fourteen, even though the measured census includes widgets and explicit states as first-class `Screen` values. Both methods infer identity from the same naming/topology conventions they are supposed to judge; neither joins occurrences to an independent screen key. Under §12, X's `20 is inflated` direction is not a measurement. The independent facts are only the three reproducible counts — 14 rendering routes, 66 census entries, 34 prefix families — plus the complete `where` list.
+
+I found no comparable §12 defect in X's F1–F3 method: each uses a value independent of the query being challenged (observable missing-password behavior, a paraphrase outside the literal list, and caller declarations versus Chromium state). F4 is a direct contradictory-text observation with executable context, not a completeness claim.
+
+### 8.7 Phase-2 scope and cleanup
+
+- The owner stand was not restarted, reconfigured, written to, or contacted during these probes.
+- The rejected authenticated palette procedure was not retried or bypassed.
+- F1 mutations existed only in process memory; the D-16 probe used an automatically removed cold Chromium profile.
+- Temporary F5 bundles in `/tmp` were deleted after the measurement.
+- No product, test, contract, migration, dependency, lock, infrastructure, or foreign-worktree file was changed.
