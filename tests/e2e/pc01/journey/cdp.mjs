@@ -875,14 +875,27 @@ class Page {
    * cookie's NAME, never its value, into the envelope.
    */
   async cookieFor(name) {
-    const { cookies } = await this.#send('Network.getCookies', {});
-    return cookies.find((c) => c.name === name) ?? null;
+    return (await this.#jar()).find((c) => c.name === name) ?? null;
   }
 
   /** Every cookie this profile holds, names and attributes; values are never returned. */
   async cookieNames() {
-    const { cookies } = await this.#send('Network.getCookies', {});
-    return cookies.map((c) => c.name).sort();
+    return (await this.#jar()).map((c) => c.name).sort();
+  }
+
+  /**
+   * The whole profile's jar -- `Storage.getCookies`, not `Network.getCookies`.
+   *
+   * Measured, and it cost a run: `Network.getCookies` with no `urls` answers for the
+   * **frames of the current page**, so on `about:blank` -- which is where a profile sits
+   * before its first navigation -- it answers `[]` however many cookies the profile
+   * holds. That is the reading `D-16`'s check is taken from, and an empty answer there
+   * reads exactly like a cookie that was never set. `Storage.getCookies` answers for the
+   * browser, which is the thing the question is about.
+   */
+  async #jar() {
+    const { cookies } = await this.#send('Storage.getCookies', {});
+    return cookies;
   }
 
   /** Taken once, before the first navigation. `#startedWith` is what `D-16` is about. */

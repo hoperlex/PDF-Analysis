@@ -199,14 +199,23 @@ export async function openSession({ origin, manifest }) {
 
       await page.settle();
 
-      // The application's own answer to "did this work": the address it sends a signed-in
-      // browser to. Not the cookie -- a cookie is set on a refusal too if anything ever
-      // goes wrong in the exchange, and the landing is what a reviewer sees.
+      // The application's own answer to "did this work", and it has two shapes: the
+      // address it sends a signed-in browser to, or the refusal it renders. BOTH are
+      // waited for, because waiting only for the landing would spend the whole bound on
+      // an answer the screen gave in a second -- and a refusal is an answer, not a
+      // timeout. Which one arrived decides the finding below.
       const waited = await page.waitFor(
-        `(() => (document.location.pathname === ${JSON.stringify(spec.lands_on)}
-           ? document.location.pathname : null))()`,
-        { boundMs: spec.bound_ms, what: `the address to become ${spec.lands_on}` },
+        `(() => {
+           if (document.location.pathname === ${JSON.stringify(spec.lands_on)}) return 'landed';
+           const el = document.querySelector('[' + ${JSON.stringify(spec.refusal_marker)} + ']');
+           return el === null ? null : 'refused:' + el.getAttribute(${JSON.stringify(spec.refusal_marker)});
+         })()`,
+        {
+          boundMs: spec.bound_ms,
+          what: `the address to become ${spec.lands_on}, or the screen to refuse`,
+        },
       );
+      const landed = waited.ok && waited.value === 'landed';
       record.waitedMs = waited.waitedMs;
       record.boundMs = waited.boundMs;
       record.readings = waited.readings;
@@ -223,7 +232,7 @@ export async function openSession({ origin, manifest }) {
         };
       })()`);
 
-      if (!waited.ok) {
+      if (!landed) {
         failures.push(
           `session: after ${waited.waitedMs} ms (bound ${waited.boundMs} ms) the browser ` +
             `was at ${JSON.stringify(record.landedOn)} and not at ${spec.lands_on}` +
