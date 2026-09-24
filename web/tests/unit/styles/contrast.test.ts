@@ -631,7 +631,14 @@ describe('every pair that meets on a screen clears the threshold its role asks o
           pair: m.key,
           ratio: Number(m.ratio.toFixed(2)),
           needs: m.threshold,
-          where: m.occurrence.sites[0],
+          // ALL the sites, not the first. `W44-JUDGE-A` put one failing border on two
+          // screens at once and the message named only `blocks`; `workers` never
+          // appeared. The verdict was never wrong -- the message was -- and `D-93` is
+          // precisely the class where a product-wide regression reads as a local one,
+          // because `AppFrame` is on every screen and a reader who sees one name looks
+          // at one screen.
+          where: m.occurrence.sites,
+          screens: new Set(m.occurrence.sites.map((site) => site.split(' ')[0])).size,
         })),
     ).sort((a, b) => a.ratio - b.ratio);
     expect(failing).toEqual([]);
@@ -692,7 +699,14 @@ describe('R-33: every border that meets on a screen clears 3:1, in both palettes
           pair: m.key,
           ratio: Number(m.ratio.toFixed(2)),
           needs: AA_NON_TEXT,
-          where: m.occurrence.sites[0],
+          // ALL the sites, not the first. `W44-JUDGE-A` put one failing border on two
+          // screens at once and the message named only `blocks`; `workers` never
+          // appeared. The verdict was never wrong -- the message was -- and `D-93` is
+          // precisely the class where a product-wide regression reads as a local one,
+          // because `AppFrame` is on every screen and a reader who sees one name looks
+          // at one screen.
+          where: m.occurrence.sites,
+          screens: new Set(m.occurrence.sites.map((site) => site.split(' ')[0])).size,
         })),
     ).sort((a, b) => a.ratio - b.ratio || a.pair.localeCompare(b.pair));
     expect(

@@ -89,6 +89,7 @@ import type { ReactElement } from 'react';
 
 import { BlocksPage } from '@/_pages/blocks';
 import { ChangePasswordPage } from '@/_pages/change-password';
+import RootPage from '@/app/page';
 import { DocumentDetailPage } from '@/_pages/document-detail';
 import { KnowledgeBasePage } from '@/_pages/knowledge-base';
 import { LogsPage } from '@/_pages/logs';
@@ -102,7 +103,7 @@ import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { WorkersPage } from '@/_pages/workers';
 
-import { REPO_ROOT, readText, repoRelative, walkFiles } from '../../guards/lib/repo';
+import { REPO_ROOT, repoRelative, walkFiles } from '../../guards/lib/repo';
 import { join } from 'node:path';
 
 // ==================================================================== the derived question
@@ -185,8 +186,21 @@ export interface OptedOutSeed {
   readonly make?: undefined;
   readonly optOut: {
     readonly why: string;
-    /** Run against the route file's own source. A claim that stops holding is red. */
-    readonly proof: (source: string) => boolean;
+    /**
+     * **Run against what the route file DOES, not against what it says.**
+     *
+     * `W44-JUDGE-A` defeated the first version of this, which was a predicate over the
+     * file's source: `/\bredirect\(/.test(source) && !/\breturn\s*\(/.test(source)`.
+     * A page that renders a whole screen of English prose satisfies both halves, so the
+     * proof did not check the claim it exists for — *"it renders nothing"* — and the
+     * guard that runs every opt-out claim stayed green while `/` rendered.
+     *
+     * A text predicate over a file is a claim about a file. **The claim here is about
+     * behaviour**, so `invoke` calls the route module's own default export and the proof
+     * answers from what happened. A screen that returns anything at all fails it,
+     * whatever its source looks like.
+     */
+    readonly proof: () => boolean;
   };
 }
 
@@ -203,7 +217,18 @@ export const SEEDS: readonly Seed[] = [
         'element for the contrast census to measure. `routes.test.ts` asserts the redirect ' +
         'itself, which is the whole behaviour of this address; adding it here would put an ' +
         'empty screen in two censuses and make both of them slightly less true.',
-      proof: (source) => /\bredirect\(/.test(source) && !/\breturn\s*\(/.test(source),
+      proof: () => {
+        // It renders nothing, so calling it must not RETURN anything: `redirect()`
+        // throws Next's redirect signal before an element exists. A page that returns
+        // an element -- however its source is written -- fails here.
+        try {
+          RootPage();
+          return false;
+        } catch (thrown) {
+          const digest = (thrown as { digest?: unknown })?.digest;
+          return typeof digest === 'string' && digest.includes('NEXT_REDIRECT');
+        }
+      },
     },
   },
   {
@@ -404,7 +429,7 @@ export function staleSeeds(): readonly string[] {
   return SEEDS.filter((seed) => !addresses.has(seed.address)).map((seed) => seed.address);
 }
 
-/** The opt-outs, joined to the route file their proof is run against. */
+/** The opt-outs, each proof RUN — see `OptedOutSeed.proof` for why not read. */
 export function optOuts(): readonly {
   readonly address: string;
   readonly why: string;
@@ -412,9 +437,14 @@ export function optOuts(): readonly {
 }[] {
   const files = new Map(routeAddresses().map((route) => [route.address, route.file]));
   return SEEDS.filter((seed): seed is OptedOutSeed => seed.optOut !== undefined).map((seed) => {
+    // The file is still resolved, because an opt-out for an address the tree no longer
+    // serves must not quietly pass; `staleSeeds()` is the case that reports it.
     const file = files.get(seed.address);
-    const source = file === undefined ? '' : readText(join(REPO_ROOT, file));
-    return { address: seed.address, why: seed.optOut.why, holds: seed.optOut.proof(source) };
+    return {
+      address: seed.address,
+      why: seed.optOut.why,
+      holds: file !== undefined && seed.optOut.proof(),
+    };
   });
 }
 

@@ -22,6 +22,8 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
 
@@ -54,6 +56,29 @@ export function newClient(): QueryClient {
 /** Render `element` inside a provider over `client`, to static markup. */
 export function renderWith(client: QueryClient, element: ReactElement): string {
   return render(createElement(QueryClientProvider, { client }, element));
+}
+
+/**
+ * Render a SCREEN: a provider over `client`, **and a mounted app router**.
+ *
+ * `renderWith` above is enough for a component; a screen is not, because any screen that
+ * calls `useRouter` throws *"invariant expected app router to be mounted"* without this.
+ *
+ * **This lives here because five test files had written their own copy of it** — four
+ * still do, and that is registered rather than swept up at the close of a wave. The rule
+ * this programme already has about renderers is that two renderers are two truths and the
+ * older one keeps being cited; five is that argument with a bigger number.
+ */
+export function renderScreen(client: QueryClient, element: ReactElement): string {
+  const router = {
+    push: () => {},
+    replace: () => {},
+    back: () => {},
+    forward: () => {},
+    refresh: () => {},
+    prefetch: () => {},
+  } as unknown as AppRouterInstance;
+  return renderWith(client, createElement(AppRouterContext.Provider, { value: router }, element));
 }
 
 /**

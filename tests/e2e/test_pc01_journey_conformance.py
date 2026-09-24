@@ -1763,17 +1763,36 @@ def test_the_journey_reads_its_credential_only_from_the_environment() -> None:
 
     `D-92` named `--session <cookie>` as the other candidate shape. It puts a live
     credential on a command line, where it reaches the process table and every transcript
-    of the run. This asserts the names that are read and that neither has a fallback --
-    a `?? 'admin'` here would be a password in this repository however it was spelled.
+    of the run.
+
+    **THIS CHECK USED TO LIST FOUR LITERALS AND CLAIM TO CATCH ANY SPELLING.**
+    `W44-JUDGE-A` defeated it in one character: it forbade `?? 'admin'` and three
+    siblings, and `||` is not `??`. `env[PASSWORD_ENV] || 'password'` put the stand's
+    password in this repository with all 78 tests green and `rc=2` no longer firing --
+    and a ternary, a destructuring default and `?? DEFAULT` with a named constant all
+    pass the same way. A docstring saying *"however it was spelled"* over a list of four
+    spellings is `OPERATING_CONSTRAINTS.md` §12: the query shared its assumption with its
+    subject, because both were written by somebody thinking of `??`.
+
+    **So the shape is asserted instead of the spellings enumerated.** Each read must end
+    at the environment and nothing else, which no fallback of any spelling satisfies.
     """
     source = _require(SESSION_MODULE).read_text(encoding="utf-8")
     assert "E2E_PC01_LOGIN" in source and "E2E_PC01_PASSWORD" in source
     assert "process.env" in source
-    for smell in ("?? 'admin'", '?? "admin"', "?? 'password'", '?? "password"'):
-        assert smell not in source, (
-            f"session.mjs carries the fallback {smell}, which is a credential in this "
-            "repository wearing a default's clothes"
-        )
+
+    for name in ("LOGIN_ENV", "PASSWORD_ENV"):
+        reads = re.findall(rf"^\s*(?:const|let|var)\s+\w+\s*=\s*env\[{name}\][^\n]*$",
+                           source, re.M)
+        assert reads, f"session.mjs never reads env[{name}]"
+        for read in reads:
+            assert read.rstrip().endswith(f"env[{name}];"), (
+                f"session.mjs reads env[{name}] and then does something with it on the "
+                f"same line:\n    {read.strip()}\n"
+                "A credential read must end at the environment. A fallback of ANY "
+                "spelling -- `??`, `||`, a ternary, a destructuring default -- is a "
+                "password in this repository wearing a default's clothes."
+            )
 
 
 # --------------------------------------------------------------------------------------

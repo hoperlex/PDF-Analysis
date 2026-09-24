@@ -11,7 +11,7 @@ A sign-in, two phases, one instrument, one envelope, one exit code.
 app's own controls, on the public origin — then waits for the run's terminal by reading
 what the run screen's own poller renders.
 
-**The read walk** then visits all seven routes, each in a cold browser, discovering every
+**The read walk** then visits all **fifteen** routes, each in a cold browser, discovering every
 identifier by following links the pages render.
 
 Exit `0` means both halves did what `manifest.json` says they do. Non-zero prints every
@@ -295,9 +295,20 @@ loudly naming `D-92`.
 
 ## What it costs to run
 
-Measured on 2026-09-19, both halves against `http://127.0.0.1:31500`: **248 s**, exit `0`,
-**206 exchanges** recorded, a **5.3 MB** envelope — 3 write steps in 83 s and 7 read routes
-in 165 s.
+> **These figures were 2026-09-19's and this file was rewritten around them in wave 44
+> without any of them being re-taken.** `W44-JUDGE-A` caught that: the paragraph said
+> *248 s, 206 exchanges, a 5.3 MB envelope, 7 read routes* while the manifest carried
+> fifteen. **`D-23`'s class, in a file the same wave edited 132 lines of** — prose next to
+> code outlives the code, and `make gate` does not read this file.
+
+Re-measured 2026-09-24 against `http://127.0.0.1:31500`, both halves, with the sign-in
+`D-92` added: **~20 minutes**, exit `0`, a **12.8 MB** envelope — **3 write steps and 15
+read routes**, each route in its own cold browser.
+
+**The route count is the number to distrust first.** It was seven when this paragraph was
+written and is fifteen now, and it changes whenever `web/src/app` gains a screen — which
+is exactly what `test_the_journey_walks_every_screen_the_application_offers` reddens on.
+The seconds are a property of this host under whatever else it was running.
 
 Almost all of that is **browser startup**: in a warm browser the same navigation takes
 16 ms, against 3.8–25 s for the first navigation in a fresh process. One process per route
