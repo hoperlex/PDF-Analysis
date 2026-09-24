@@ -1867,6 +1867,14 @@ def refusal_controls(manifest: dict) -> dict:
     return refusal_section(manifest)["controls"]
 
 
+def closure_source(control_module: Path) -> str:
+    """Every byte of the control module and what it imports, comments stripped."""
+    return "\n".join(
+        _COMMENT.sub(" ", module.read_text(encoding="utf-8"))
+        for module in module_closure(control_module, WEB_SRC)
+    )
+
+
 def test_the_refusal_half_declares_the_controls_it_presses(manifest: dict) -> None:
     section = refusal_section(manifest)
     assert "controls" in section, (
@@ -1883,11 +1891,45 @@ def test_the_refusal_half_declares_the_controls_it_presses(manifest: dict) -> No
 def test_every_control_the_refusals_press_still_exists_in_the_application(
     manifest: dict,
 ) -> None:
-    """Relabel the upload button and the six drives press nothing -- red here instead."""
+    """Relabel the upload button and the six drives press nothing -- red here instead.
+
+    **The LABEL is scoped to the control module's own import closure and matched on a word
+    boundary**, not by containment against every byte of ``web/src``. That is not a
+    refinement, it is the difference between a check and a vacuous one: ``Upload`` -- the
+    literal that actually rotted -- is contained in ``web/src`` right now, inside
+    ``import { UploadPanel } from '@/widgets/upload-panel'``. A containment check would
+    have stayed green over the exact defect it is written for, and the first draft of this
+    one did.
+
+    It reads the closure's **source with comments stripped** rather than
+    ``authored_strings``, and the reason is measured: ``_LITERAL``'s JSX arm is
+    ``>([^<>{}\n]+)<``, which requires the text to sit between the two angle brackets on
+    one line. This repository formats a labelled button over four lines, so ``Загрузить``
+    is authored and invisible to that helper. Widening ``_LITERAL`` would loosen the
+    `D-61` sentence guard that shares it, which is the wrong direction; scoping plus a word
+    boundary is strictly stronger than the whole-tree containment this replaces, and the
+    control below proves it.
+
+    Selectors keep the broad scan, as ids and markers do everywhere else in this file:
+    ``#upload-file`` and ``am-state__action`` are not words and cannot be matched by
+    accident.
+    """
     _require(WEB_SRC)
     source = application_source(WEB_SRC)
     controls = refusal_controls(manifest)
-    handles: set[str] = {controls["submit_label"]}
+    section = refusal_section(manifest)
+
+    control_module = REPOSITORY_ROOT / section["control_module"]
+    assert control_module.is_file(), section["control_module"]
+    authored = closure_source(control_module)
+    assert authors(authored, controls["submit_label"]), (
+        f"the refusal drive presses a control labelled {controls['submit_label']!r}, "
+        f"which {section['control_module']} and what it imports do not author. The six "
+        "drives would attach the right files and press nothing -- which is exactly what "
+        "happened while the label was the literal `Upload` inside refusals.mjs."
+    )
+
+    handles: set[str] = set()
     for key in ("file_input", "title_input", "retry_action_selector", "chosen_selector"):
         for ident in _ID_SELECTOR.findall(controls[key]):
             handles.add(f'id="{ident}"')
@@ -1896,8 +1938,7 @@ def test_every_control_the_refusals_press_still_exists_in_the_application(
     missing = sorted(h for h in handles if h not in source)
     assert not missing, (
         f"the refusal drive names {len(missing)} control(s) that no longer appear "
-        f"anywhere in web/src: {missing}. This is what happened to `Create`, `Upload`, "
-        "`Retry` and `Chosen: ` while they were literals in refusals.mjs."
+        f"anywhere in web/src: {missing}."
     )
 
 
@@ -1933,11 +1974,22 @@ def test_the_refusal_drive_signs_in_before_it_drives_anything() -> None:
 
 
 def test_control_a_relabelled_upload_control_is_detected(manifest: dict) -> None:
-    controls = dict(refusal_controls(manifest), submit_label="Upload")
-    assert controls["submit_label"] not in application_source(WEB_SRC), (
-        "the control did not construct a label the application has stopped using"
+    """And it doubles as the proof that containment would NOT have detected it.
+
+    ``Upload`` is the label that rotted. It is still contained in ``web/src`` -- inside
+    ``UploadPanel`` -- so the first version of the check above passed over it. Under the
+    authored-strings subject it is correctly not authored, and the live label is.
+    """
+    section = refusal_section(manifest)
+    authored = closure_source(REPOSITORY_ROOT / section["control_module"])
+    assert authors(authored, refusal_controls(manifest)["submit_label"])
+    assert not authors(authored, "Upload"), (
+        "the control did not construct a label the application has stopped authoring"
     )
-    assert refusal_controls(manifest)["submit_label"] in application_source(WEB_SRC)
+    assert "Upload" in application_source(WEB_SRC), (
+        "the second half of this control: a containment check over all of web/src would "
+        "have stayed GREEN over the very rename this guard exists to catch"
+    )
 
 
 def test_control_a_refusal_drive_that_lost_its_session_is_detected() -> None:
