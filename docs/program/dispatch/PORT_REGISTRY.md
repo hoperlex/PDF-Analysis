@@ -41,7 +41,10 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56220`, `59820/59821` | `gate-w41a` — `W41-AUTHOR` | 2026-09-23 | wave 41 merges |
 | `56220–56230`, `59820–59831` | wave 41 | 2026-09-23 | **released** — merged at `6b5b500`, tagged `alpha-w41`; containers and volumes removed |
 | `56240`, `59840/59841` | `gate-w42a` — `W42-SEAL` | 2026-09-23 | wave 42 merges |
-| `56250`, `59850/59851` | `gate-w42b` — `W42-LOOK` | 2026-09-23 | wave 42 merges |
+| `56240–56250`, `59840–59851` | wave 42 | 2026-09-23 | **released** — merged at `01421b7`, tagged `alpha-w42` |
+| `56260`, `59860/59861` | `gate-w43a` — `W43-COMPARE` | 2026-09-24 | wave 43 merges |
+| `56270`, `59870/59871` | `gate-w43b` — `W43-PREP` | 2026-09-24 | wave 43 merges |
+| `56280`, `59880/59881` | `gate-w43j` — **the judges**, stage A and stage B | 2026-09-24 | wave 43 closes |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
