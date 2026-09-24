@@ -677,6 +677,33 @@
     },
     "precheck_marker": "data-precheck-problem",
     "failure_marker": "data-upload-failure",
+    "controls": {
+      "$comment": [
+        "The controls the six drives press and read. `W44-JOURNEY` 2026-09-24, and the",
+        "reason they are here is `W28-GUARD`'s reason applied to the half it did not move.",
+        "",
+        "They were literals in `refusals.mjs`'s own source -- `Create`, `Upload`, `Retry`,",
+        "`Chosen: ` -- and the gate cannot read that file. The application was translated",
+        "and every one of them stopped matching: MEASURED 2026-09-24, `refusals.mjs` threw",
+        "`click form button[type=\"submit\"] [text=\"Create\"]: no element matches it` before it",
+        "drove a single fixture. So `D-83`'s \"outside the gate `refusals.mjs` drives them",
+        "against a live stand\" was not true either: the eleven sentences were verified by",
+        "nothing at all, in the gate or out of it.",
+        "",
+        "Declared here, they are handles like any other and",
+        "`test_every_control_the_refusals_press_still_exists_in_the_application` reddens",
+        "`make gate` the next time one is relabelled.",
+        "",
+        "The retry and the chosen-file line are read by CLASS and not by label, because",
+        "both are structure the application owns and neither is a word: `.am-state__action`",
+        "is what `shared/ui`'s ErrorState puts its action in, whatever the action says."
+      ],
+      "file_input": "#upload-file",
+      "title_input": "#upload-title",
+      "submit_label": "Загрузить",
+      "retry_action_selector": ".am-state__action button",
+      "chosen_selector": ".am-form__chosen"
+    },
     "generic_kinds": [
       "server_error",
       "unknown",

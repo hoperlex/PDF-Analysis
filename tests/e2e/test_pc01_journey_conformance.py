@@ -1845,3 +1845,101 @@ def test_control_a_width_assertion_that_left_is_detected() -> None:
     assert "widthFindings(" not in journey.replace("widthFindings(", "somethingElse(")
     width = _require(WIDTH_MODULE).read_text(encoding="utf-8")
     assert "scrollWidth" not in width.replace("scrollWidth", "clientWidthOnly")
+
+
+# --------------------------------------------------------------------------------------
+# `W44-JOURNEY`: the refusal drive's own controls, which `W28-GUARD` left behind.
+#
+# `W28-GUARD` moved the six refusal EXPECTATIONS into the manifest, stating the cost it
+# was paying off: expectations in a script's own source are expectations `make gate`
+# cannot read. It left the CONTROLS -- `Create`, `Upload`, `Retry`, `Chosen: ` -- in
+# `refusals.mjs`. The application was then translated and all four stopped matching.
+#
+# Measured 2026-09-24: `node tests/e2e/pc01/journey/refusals.mjs --origin ...` threw
+# `click form button[type="submit"] [text="Create"]: no element matches it` before driving
+# a single fixture. So `D-83`'s standing sentence -- the eleven sentences are "verified
+# only against a live stand" by this script -- was itself untrue: they were verified by
+# nothing anywhere. A check nobody has run since the screens changed is not a check.
+# --------------------------------------------------------------------------------------
+
+
+def refusal_controls(manifest: dict) -> dict:
+    return refusal_section(manifest)["controls"]
+
+
+def test_the_refusal_half_declares_the_controls_it_presses(manifest: dict) -> None:
+    section = refusal_section(manifest)
+    assert "controls" in section, (
+        "the refusal half declares no `controls`. They were literals in refusals.mjs, "
+        "which the gate cannot read, and every one of them went stale when the "
+        "application was translated."
+    )
+    controls = section["controls"]
+    for key in ("file_input", "title_input", "submit_label",
+                "retry_action_selector", "chosen_selector"):
+        assert controls.get(key), f"the refusal half declares no `{key}`"
+
+
+def test_every_control_the_refusals_press_still_exists_in_the_application(
+    manifest: dict,
+) -> None:
+    """Relabel the upload button and the six drives press nothing -- red here instead."""
+    _require(WEB_SRC)
+    source = application_source(WEB_SRC)
+    controls = refusal_controls(manifest)
+    handles: set[str] = {controls["submit_label"]}
+    for key in ("file_input", "title_input", "retry_action_selector", "chosen_selector"):
+        for ident in _ID_SELECTOR.findall(controls[key]):
+            handles.add(f'id="{ident}"')
+        for klass in re.findall(r"\.([a-z][\w-]*)", controls[key]):
+            handles.add(klass)
+    missing = sorted(h for h in handles if h not in source)
+    assert not missing, (
+        f"the refusal drive names {len(missing)} control(s) that no longer appear "
+        f"anywhere in web/src: {missing}. This is what happened to `Create`, `Upload`, "
+        "`Retry` and `Chosen: ` while they were literals in refusals.mjs."
+    )
+
+
+def test_the_refusal_drive_reads_its_controls_from_the_manifest() -> None:
+    """The literals must not come back, and a source check is what stops them.
+
+    Narrow on purpose: it asserts the four that rotted are no longer addressed by word in
+    `refusals.mjs`. A wider "no string literals" rule would be unenforceable and would
+    redden on prose.
+    """
+    source = (JOURNEY_DIR / "refusals.mjs").read_text(encoding="utf-8")
+    assert "REFUSALS?.controls" in source or "REFUSALS.controls" in source, (
+        "refusals.mjs no longer reads its controls from the manifest, so the gate is "
+        "back to guarding nothing about them"
+    )
+    for gone in ("text: 'Create'", 'text: "Create"', "text: 'Upload'", 'text: "Upload"',
+                 "startsWith('Retry')", "startsWith('Chosen: ')"):
+        assert gone not in source, (
+            f"refusals.mjs addresses a control as {gone}. Those four literals are what "
+            "the application's translation broke silently; they are declared in "
+            "manifest.json so `make gate` reddens next time."
+        )
+
+
+def test_the_refusal_drive_signs_in_before_it_drives_anything() -> None:
+    """`D-92` reaches this script too: without a session every upload is a 401."""
+    source = (JOURNEY_DIR / "refusals.mjs").read_text(encoding="utf-8")
+    assert "openSession" in source, (
+        "refusals.mjs does not open a session. The BFF answers 401 without one, so the "
+        "six drives would measure an authorization refusal and report it as an envelope "
+        "refusal -- a passing-looking measurement of the wrong thing."
+    )
+
+
+def test_control_a_relabelled_upload_control_is_detected(manifest: dict) -> None:
+    controls = dict(refusal_controls(manifest), submit_label="Upload")
+    assert controls["submit_label"] not in application_source(WEB_SRC), (
+        "the control did not construct a label the application has stopped using"
+    )
+    assert refusal_controls(manifest)["submit_label"] in application_source(WEB_SRC)
+
+
+def test_control_a_refusal_drive_that_lost_its_session_is_detected() -> None:
+    source = (JOURNEY_DIR / "refusals.mjs").read_text(encoding="utf-8")
+    assert "openSession" not in source.replace("openSession", "someOtherThing")
