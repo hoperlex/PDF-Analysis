@@ -282,6 +282,17 @@ took attached. The other three catch the `202` declared as `200` and `state` dec
 The fixtures are not read by the conformance guard, so their deliberate wrongs never redden
 `make gate`.
 
+**And that is also why three of them stopped proving anything.** `W44-JOURNEY` found the
+two write fixtures pressing controls labelled `Create`, `Upload` and `Start run` — the
+application says `Создать`, `Загрузить` and `Запустить прогон` — so each died at its first
+click and reported findings about a control it could not press **instead of** the
+deliberate wrongs it declares. The real manifest did not rot, because `make gate` reads
+it; the fixtures are exempt from that guard by design, and the exemption is what let them
+go stale. Labels corrected and all three re-measured; the figures above are this wave's.
+The four `fixtures/w28-live/*.manifest.json` carry the same stale labels and no `session`
+section, and are deliberately left alone — nothing drives them, and a run of one now fails
+loudly naming `D-92`.
+
 ## What it costs to run
 
 Measured on 2026-09-19, both halves against `http://127.0.0.1:31500`: **248 s**, exit `0`,

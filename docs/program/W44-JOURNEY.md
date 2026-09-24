@@ -58,6 +58,24 @@ check tested `innerText.startsWith('Retry')` on a screen whose retry says
 `Повторить с тем же ключом`, so it was vacuous; and `submitDisabled` was `null` rather
 than `true`/`false` whenever the label did not match, which reads as "still pressable".
 
+**The rot is wider than one script: it is every English control literal in `tests/e2e`
+that `make gate` does not read.** Found by running the documented proofs rather than by
+grepping for it:
+
+| where | pressed | screen says | consequence |
+|---|---|---|---|
+| `refusals.mjs` | `Create`, `Upload`, `Retry`, `Chosen: ` | `Создать`, `Загрузить`, `Повторить…`, `.am-form__chosen` | died before driving anything |
+| `fixtures/redden-write.manifest.json` | `Create`, `Upload`, `Start run` | `Создать`, `Загрузить`, `Запустить прогон` | **5** findings where the README documents **6**, and one of the five is the dead click rather than a declared wrong |
+| `fixtures/redden-write-bound.manifest.json` | same three | same three | **4** findings, but the first is the dead click and **not** the 1 ms bound the fixture exists to demonstrate |
+| `fixtures/w28-live/*.manifest.json` (×4) | same three | same three | nothing drives them; reported in §6 |
+
+**`manifest.json` did not rot, and the reason is the whole lesson**:
+`test_every_control_the_write_half_presses_still_exists_in_the_application` reads it at
+gate time. The fixtures are exempt from that guard **by design** — their deliberate wrongs
+must not redden `make gate` — and the exemption is exactly what let them go stale. The two
+the README names as proofs are corrected and re-measured in §7; the four nobody drives are
+left alone and reported.
+
 ### A third premise, mine, that I had to correct mid-flight
 
 `Network.getCookies` with no `urls` answers **for the frames of the current page**, so on
@@ -481,7 +499,38 @@ a reader meeting `offenderCount: 13` in a green envelope would reasonably ask.
 
 ## §6 Outside the grant: reported, not repaired
 
-### 1. A **fourth** English string on a reviewer's screen — `D-82`'s own missing one
+### 1. `/projects` tells a reviewer, just after they sign in, that there is no authentication
+
+**The most serious thing this wave found, and it was found by driving rather than by
+reading.** The landing screen's own subtitle, quoted from the envelope of a run that had
+signed in thirty seconds earlier:
+
+```
+web/src/_pages/projects/ui/projects-page.tsx:18
+  subtitle="Один локальный проверяющий. Без аутентификации, ролей и разделения на организации."
+
+rendered, on /projects, in a browser holding a live session:
+  "Проекты
+   Один локальный проверяющий. Без аутентификации, ролей и разделения на организации."
+```
+
+A reviewer types a password at `/login`, is issued an `HttpOnly` session, is redirected to
+`/projects` by the application itself — and the first sentence under the heading says the
+product has **no authentication**. It has had authentication for nine waves.
+
+It is `D-23`'s shape with the direction `OPERATING_CONSTRAINTS.md` §4.7 warns about: not a
+stale count that a reader discards, but a **false statement about a security property**,
+on the screen every signed-in reviewer lands on. It stops short of §4.7's worst case only
+because it instructs nobody to do anything. `W43-JUDGE-B` had to raise a session by hand
+to see any of these screens; the journey now lands here on every run, which is why it
+turned up today.
+
+**Not repaired: `web/src` is `W44-SEE`'s.** The sentence and the two clauses after it
+(`roles`, `separation by organisation`) need re-checking together against what wave 34 and
+`W40-LIMIT` actually shipped — roles and multi-tenancy may still be absent, and the
+correct repair is not simply deleting the first clause.
+
+### 2. A **fourth** English string on a reviewer's screen — `D-82`'s own missing one
 
 `D-82` names three, all `LoadingState what="the …"` props, and says in its last line that
 nothing in the gate could *"catch the fourth one"*. **Here it is, measured in a browser on
@@ -514,7 +563,7 @@ the `isPending` branch. What is still missing is an *assertion*: neither instrum
 inside `make gate`, so reaching the branch is not yet reddening on it. `W44-SEE` should
 know that the reach now exists before deciding what `D-88`'s census can be widened to.
 
-### 2. `CURRENT_STATE.md` describes a defect this branch repairs
+### 3. `CURRENT_STATE.md` describes a defect this branch repairs
 
 The paragraph at `docs/program/CURRENT_STATE.md:129-134` says the journey *"stops at route
 2 of 15"* and that it is *"written for an application that has no authorization"*. Both
@@ -526,7 +575,7 @@ replacement is §3 of this file: write 3/3, routes 15/15, `e2e:pc01 OK`.
 The same paragraph says *"the fourteen addresses answer"*; the manifest declares **fifteen
 routes** and all fifteen answered.
 
-### 3. The wave-28 live fixtures have no `session` section
+### 4. The wave-28 live fixtures have no `session` section
 
 `tests/e2e/pc01/journey/fixtures/w28-live/*.manifest.json` — four of them — predate the
 sign-in. They are inputs for a provider-mode drive nobody has run this wave, they are not
@@ -536,7 +585,7 @@ session to a manifest nobody drives is speculative maintenance, and the failure 
 own fix. The three `redden*` fixtures, which the README's proof commands **do** name, were
 given one and re-measured (§7).
 
-### 4. The stand has accumulated the journey's projects
+### 5. The stand has accumulated the journey's projects
 
 Every full run creates one project, uploads a PDF and publishes a run; every refusal drive
 creates one more. The walk's own `projects` screen listed **20** by the end of today.
@@ -545,7 +594,7 @@ give it one — but the integrator and the cross-judges should know the stand's 
 count is now a function of how many times the journey has been driven, not of the
 product.
 
-### 5. A blind spot in the `D-61` sentence guard, found by walking into it
+### 6. A blind spot in the `D-61` sentence guard, found by walking into it
 
 `authored_strings`'s JSX arm is `>([^<>{}\n]+)<`: it requires the text to sit between the
 two angle brackets **on one line**. This repository formats a labelled button over four
@@ -558,3 +607,28 @@ be declared in `expects_rendered`.
 it, which is the wrong direction for a guard three waves of work went into. The new label
 check works around it by scoping to the control module's closure and matching on a word
 boundary, and its control records the blind spot as a test.
+
+---
+
+## §7 What was run, at which commit
+
+Every verdict below was read from a **file** — the command redirected, `$?` read after the
+redirect, and the instrument's own last line asserted. Never from a harness status:
+`OPERATING_CONSTRAINTS.md` §4.62, and the harness handed this session *"exit code 0"* over
+a run whose `$?` was `1` at least twice today.
+
+| check | commit | result | log |
+|---|---|---|---|
+| `make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12` | `2b3ac89` | `bootstrap OK` | `/root/w44a-bootstrap.log` |
+| `.venv/bin/python -c "import boto3"` | `2b3ac89` | boto3 1.43.90, printed by the bootstrap probe | same |
+| `npm --prefix web ci` | `2b3ac89` | `added 184 packages` | `/root/w44a-npmci.log` |
+| journey, **before** | `2b3ac89` | `rc=1`, write **1/3**, routes **2/15**, 9 findings | `/root/w44a-journey-before.log` |
+| `refusals.mjs`, **before** | `2b3ac89` | `rc=1`, threw on `[text="Create"]`, **0 fixtures driven** | `/root/w44a-refusals-before.log` |
+| journey, no credential | `48eee0c` | `rc=2`, nothing started | `/root/w44a-nocred.log` |
+| journey, credential refused | `48eee0c` | `rc=1`, **0/15 routes**, 0/3 write steps | `/root/w44a-badcred2.log` |
+| journey, **after** | `48eee0c` | `rc=0`, **`e2e:pc01 OK`**, write **3/3**, routes **15/15**, 0 findings | `/root/w44a-journey-after2.log` |
+| `prove_the_width_assertion_can_fail.mjs` | `71c27ed` | `rc=0`, 9/9 routes green→red, **839 vs 780** on every one | `/root/w44a-width-proof.log` |
+| `refusals.mjs`, **after** | `71c27ed` | `rc=0`, **6 driven, 0 findings**, 204 965 ms | `/root/w44a-refusals-after.log` |
+| `pytest tests/e2e/test_pc01_journey_conformance.py` | `a3b8ee6` | **78 passed** | `/root/w44a-conformance.log` |
+| `prove_the_guard_can_fail.py` | `12b8b14` | **36 mutations, 36 reds, 0 vacuous**; restored → 78 passed | `/root/w44a-prove-guard.log` |
+| `redden.manifest.json --phase read` | `12b8b14` | `rc=1`, **5 findings, routes 3/4** — the documented figures | `/root/w44a-redden-read.log` |

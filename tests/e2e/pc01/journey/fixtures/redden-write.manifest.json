@@ -247,7 +247,7 @@
           {
             "do": "click",
             "selector": "form button[type=\"submit\"]",
-            "text": "Create"
+            "text": "Создать"
           }
         ],
         "expects_api": [
@@ -308,7 +308,7 @@
           {
             "do": "click",
             "selector": "form button[type=\"submit\"]",
-            "text": "Upload"
+            "text": "Загрузить"
           }
         ],
         "expects_api": [
@@ -369,7 +369,7 @@
           {
             "do": "click",
             "selector": "button",
-            "text": "Start run"
+            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -439,6 +439,7 @@
           "[data-run-failure]"
         ]
       }
-    ]
+    ],
+    "$why_the_labels_were_corrected": "W44-JOURNEY 2026-09-24. These steps pressed controls labelled Create, Upload and Start run. The application was translated and says Создать, Загрузить and Запустить прогон, so this fixture died at the first click and produced findings about a control it could not press INSTEAD of the deliberate wrongs it declares -- 5 findings where the README documents 6, and 4 where it documents 4 but for different reasons. A proof that fails for an accidental reason has stopped proving what it says it proves. The real manifest did not rot because make gate reads it (test_every_control_the_write_half_presses_still_exists_in_the_application); fixtures are not read by that guard, by design, so their deliberate wrongs never redden the gate -- and that is also why nothing caught this."
   }
 }
