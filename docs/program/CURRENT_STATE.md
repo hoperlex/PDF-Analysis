@@ -1,6 +1,6 @@
 # Current state
 
-> **Updated 2026-09-23 by the integrator, at `8feda0e`** (wave 42). `AGENTS.md` §1.1 makes this
+> **Updated 2026-09-24 by the integrator, at `3e75c91`** (wave 43). `AGENTS.md` §1.1 makes this
 > file the first thing every agent reads, and **this line moving is now part of closing a wave**,
 > for the reason the rest of this block records.
 >
@@ -22,15 +22,28 @@
 
 ## Where the programme is, 2026-09-23
 
-**`origin/main` = `origin/dev` = `origin/planning/prototype-roadmap` = `8feda0e`, tagged
-`alpha-w42` — a gated tip, not a certification.** All three refs are equal, and that sentence is
-part of the state: for waves 39 and 40 they were not, `dev` sat **41 commits** behind `main`, and
-a peer session wrote a pre-flight review for the owner measured on the stale one (`D-77`).
+**`origin/main` = `origin/dev` = `origin/planning/prototype-roadmap` = `3e75c91`, tagged
+`alpha-w43` — a gated tip, not a certification.** All three refs are equal, and that sentence is
+part of the state: for waves 39 and 40 they were not, and a peer session wrote a pre-flight
+review for the owner measured on the stale one (`D-77`).
 
 `make gate` → **`GATE OK`**: battery **2442 passed / 5 skipped / 4 warnings / 169 subtests**,
-foundation **35**, frontend **1032 in 72 files**. Read from the `GATE OK` line of
-`/root/w42-integrator-gate2.log`, taken at this commit with a clean tree — not from a status a
-harness returned (`OPERATING_CONSTRAINTS.md` §4.62). Wave 41: 2361 / 35 / 1022.
+foundation **35**, frontend **1085 in 75 files**. Read from the `GATE OK` line of
+`/root/w43-integrator-gate.log`, at this commit with a clean tree. Wave 42: 2442 / 35 / 1032.
+
+**Fourteen addresses**, five of them added by wave 43: a stage comparison at
+`/projects/{project_uid}/versions/{version_uid}/comparison`, and prepared sections at `/blocks`,
+`/optimisation`, `/logs`, `/workers`. **Wave 43 changed no contract and added no Python test** —
+the battery figure is identical to wave 42's for that reason.
+
+**What wave 43 measured, and the answer was negative.** Five new screens were the first test of
+wave 41's coverage repair and wave 42's contrast floor on screens written *after* them.
+**Neither frontend instrument reaches any of the five.** `rendered-language.guard.test.ts`'s
+`SCREENS` is a hand-written literal and `web/tests/unit/styles/screens.ts` is a hand-written
+import list; the judge replaced the sentence a reviewer reads with English prose on four screens
+and the whole suite stayed green. The one instrument that caught all five derives its subject
+with `rglob("page.tsx")`. That is `D-88`, and `D-69` is closed on the axis wave 41 repaired and
+open on this one.
 
 **The contract surface is 15 paths / 18 operations / 51 schemas** and wave 42's reseal **moved
 none of the three** — the first reseal in this programme that adds no path and no operation. It
