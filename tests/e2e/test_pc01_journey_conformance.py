@@ -87,7 +87,9 @@ step.
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -1736,21 +1738,61 @@ def test_the_instrument_still_asserts_a_width_on_every_route() -> None:
 
 
 def test_the_instrument_still_reads_back_the_jar_every_route_started_with() -> None:
-    """`D-16`, and the reason this check is worth its four lines.
+    """`D-16`: exercise the real Page snapshot against an independent browser reply.
 
     A session carried deliberately and state leaking between routes look identical in a
     passing run. What tells them apart is that every route's profile is read BEFORE it
     navigates and must hold exactly what the walk handed it. Delete that and the journey
     still passes, and nothing distinguishes it from a warm browser again.
+
+    This used to assert only that several method names occurred somewhere in ``cdp.mjs``.
+    `W44-JUDGE-X` replaced the snapshot with the caller's cookie declarations and all 78
+    tests stayed green; `W44-JUDGE-Y` supplied an expired cookie and showed why the two
+    values are not interchangeable. The seam below constructs the real private ``Page``
+    inside its own module, feeds it a fake CDP connection, and requires the result to come
+    from ``Storage.getCookies``. It does not export ``Page`` or permit browser reuse.
     """
-    cdp = _require(JOURNEY_DIR / "cdp.mjs").read_text(encoding="utf-8")
-    assert "recordStartingJar" in cdp and "startedWith" in cdp, (
-        "cdp.mjs no longer records the jar a profile started with, so D-16's cold-load "
-        "property is back to being a claim in a comment"
+    module_url = json.dumps((JOURNEY_DIR / "cdp.mjs").as_uri())
+    script = f"""
+      import {{ recordStartingJarForConformance }} from {module_url};
+      const calls = [];
+      const connection = {{
+        async send(method, params, sessionId) {{
+          calls.push({{ method, params, sessionId }});
+          if (method !== 'Storage.getCookies') throw new Error(`unexpected ${{method}}`);
+          return {{ cookies: [{{ name: 'extra_cookie' }}, {{ name: 'am_session' }}] }};
+        }},
+      }};
+      const startedWith = await recordStartingJarForConformance(connection, 'judge-session');
+      process.stdout.write(JSON.stringify({{ startedWith, calls }}));
+    """
+    completed = subprocess.run(
+        ["node", "--input-type=module", "--eval", script],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
     )
-    assert "Page(" not in cdp.replace("new Page(", ""), (
-        "cdp.mjs appears to hand a Page out beyond withColdBrowser. There is deliberately "
-        "no API for reusing a browser across routes, and that is what keeps D-16 closed."
+    assert completed.returncode == 0, completed.stderr
+    observed = json.loads(completed.stdout)
+    assert observed == {
+        "startedWith": ["am_session", "extra_cookie"],
+        "calls": [
+            {
+                "method": "Storage.getCookies",
+                "params": {},
+                "sessionId": "judge-session",
+            }
+        ],
+    }, (
+        "recordStartingJar did not read the browser's Storage cookie jar. Copying the "
+        "caller's declarations here makes the live D-16 comparison a tautology."
+    )
+
+    cdp = _require(JOURNEY_DIR / "cdp.mjs").read_text(encoding="utf-8")
+    assert "export class Page" not in cdp, (
+        "cdp.mjs exports Page, so callers can reuse a browser across routes; the narrow "
+        "conformance seam must not become a browser-reuse API"
     )
     journey = _require(JOURNEY_SCRIPT).read_text(encoding="utf-8")
     assert "startedWith" in journey, (
@@ -1758,8 +1800,8 @@ def test_the_instrument_still_reads_back_the_jar_every_route_started_with() -> N
     )
 
 
-def test_the_journey_reads_its_credential_only_from_the_environment() -> None:
-    """No default, no file, no command line.
+def test_the_journey_requires_both_environment_credentials_at_runtime() -> None:
+    """No default survives the observable missing-value behaviour.
 
     `D-92` named `--session <cookie>` as the other candidate shape. It puts a live
     credential on a command line, where it reaches the process table and every transcript
@@ -1774,25 +1816,81 @@ def test_the_journey_reads_its_credential_only_from_the_environment() -> None:
     spellings is `OPERATING_CONSTRAINTS.md` §12: the query shared its assumption with its
     subject, because both were written by somebody thinking of `??`.
 
-    **So the shape is asserted instead of the spellings enumerated.** Each read must end
-    at the environment and nothing else, which no fallback of any spelling satisfies.
+    The line-shape replacement failed too: both closing judges moved a fallback to a
+    second assignment, and this suite remained green while the exported function returned
+    the default. The independent question is behavioural. With both process-environment
+    values it must return the exact sentinels; with either one absent it must throw and
+    name that environment variable. A fallback's spelling and location are irrelevant.
     """
-    source = _require(SESSION_MODULE).read_text(encoding="utf-8")
-    assert "E2E_PC01_LOGIN" in source and "E2E_PC01_PASSWORD" in source
-    assert "process.env" in source
-
-    for name in ("LOGIN_ENV", "PASSWORD_ENV"):
-        reads = re.findall(rf"^\s*(?:const|let|var)\s+\w+\s*=\s*env\[{name}\][^\n]*$",
-                           source, re.M)
-        assert reads, f"session.mjs never reads env[{name}]"
-        for read in reads:
-            assert read.rstrip().endswith(f"env[{name}];"), (
-                f"session.mjs reads env[{name}] and then does something with it on the "
-                f"same line:\n    {read.strip()}\n"
-                "A credential read must end at the environment. A fallback of ANY "
-                "spelling -- `??`, `||`, a ternary, a destructuring default -- is a "
-                "password in this repository wearing a default's clothes."
-            )
+    module_url = json.dumps(SESSION_MODULE.as_uri())
+    script = f"""
+      import {{ credentialsFromEnvironment, LOGIN_ENV, PASSWORD_ENV }} from {module_url};
+      const exact = credentialsFromEnvironment();
+      const missing = [];
+      for (const [name, env] of [
+        ['password', {{ [LOGIN_ENV]: 'login-sentinel' }}],
+        ['login', {{ [PASSWORD_ENV]: 'password-sentinel' }}],
+        ['both', {{}}],
+      ]) {{
+        try {{
+          credentialsFromEnvironment(env);
+          missing.push({{ name, threw: false }});
+        }} catch (error) {{
+          const headline = error.message.split('\\n', 1)[0];
+          missing.push({{
+            name,
+            threw: true,
+            marked: error.isMissingCredential === true,
+            loginNamed: headline.includes(LOGIN_ENV),
+            passwordNamed: headline.includes(PASSWORD_ENV),
+          }});
+        }}
+      }}
+      process.stdout.write(JSON.stringify({{ exact, missing }}));
+    """
+    environment = os.environ.copy()
+    environment["E2E_PC01_LOGIN"] = "login-sentinel"
+    environment["E2E_PC01_PASSWORD"] = "password-sentinel"
+    completed = subprocess.run(
+        ["node", "--input-type=module", "--eval", script],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    observed = json.loads(completed.stdout)
+    assert observed["exact"] == {
+        "login": "login-sentinel",
+        "password": "password-sentinel",
+    }
+    assert observed["missing"] == [
+        {
+            "name": "password",
+            "threw": True,
+            "marked": True,
+            "loginNamed": False,
+            "passwordNamed": True,
+        },
+        {
+            "name": "login",
+            "threw": True,
+            "marked": True,
+            "loginNamed": True,
+            "passwordNamed": False,
+        },
+        {
+            "name": "both",
+            "threw": True,
+            "marked": True,
+            "loginNamed": True,
+            "passwordNamed": True,
+        },
+    ], (
+        "credentialsFromEnvironment accepted a missing value or failed to name it. A "
+        "default after an environment read must fail this behavioural control."
+    )
 
 
 # --------------------------------------------------------------------------------------
@@ -1903,7 +2001,7 @@ def test_the_refusal_half_declares_the_controls_it_presses(manifest: dict) -> No
     )
     controls = section["controls"]
     for key in ("file_input", "title_input", "submit_label",
-                "retry_action_selector", "chosen_selector"):
+                "retry_action_selector", "chosen_selector", "chosen_label"):
         assert controls.get(key), f"the refusal half declares no `{key}`"
 
 
@@ -1947,6 +2045,11 @@ def test_every_control_the_refusals_press_still_exists_in_the_application(
         "drives would attach the right files and press nothing -- which is exactly what "
         "happened while the label was the literal `Upload` inside refusals.mjs."
     )
+    assert authors(authored, controls["chosen_label"]), (
+        f"the refusal drive expects the chosen-file prefix {controls['chosen_label']!r}, "
+        f"which {section['control_module']} and what it imports do not author. The line "
+        "would still be found by class while its visible wording silently rotted."
+    )
 
     handles: set[str] = set()
     for key in ("file_input", "title_input", "retry_action_selector", "chosen_selector"):
@@ -1972,6 +2075,10 @@ def test_the_refusal_drive_reads_its_controls_from_the_manifest() -> None:
     assert "REFUSALS?.controls" in source or "REFUSALS.controls" in source, (
         "refusals.mjs no longer reads its controls from the manifest, so the gate is "
         "back to guarding nothing about them"
+    )
+    assert "CONTROLS.chosen_label" in source, (
+        "refusals.mjs reads the chosen-file element by class but no longer checks its "
+        "manifest-declared visible prefix"
     )
     for gone in ("text: 'Create'", 'text: "Create"', "text: 'Upload'", 'text: "Upload"',
                  "startsWith('Retry')", "startsWith('Chosen: ')"):
@@ -2002,6 +2109,10 @@ def test_control_a_relabelled_upload_control_is_detected(manifest: dict) -> None
     section = refusal_section(manifest)
     authored = closure_source(REPOSITORY_ROOT / section["control_module"])
     assert authors(authored, refusal_controls(manifest)["submit_label"])
+    assert authors(authored, refusal_controls(manifest)["chosen_label"])
+    assert not authors(authored, "Chosen:"), (
+        "the English chosen-file prefix still appears in the upload control's closure"
+    )
     assert not authors(authored, "Upload"), (
         "the control did not construct a label the application has stopped authoring"
     )

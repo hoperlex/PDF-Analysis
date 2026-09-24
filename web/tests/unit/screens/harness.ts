@@ -64,10 +64,10 @@ export function renderWith(client: QueryClient, element: ReactElement): string {
  * `renderWith` above is enough for a component; a screen is not, because any screen that
  * calls `useRouter` throws *"invariant expected app router to be mounted"* without this.
  *
- * **This lives here because five test files had written their own copy of it** — four
- * still do, and that is registered rather than swept up at the close of a wave. The rule
- * this programme already has about renderers is that two renderers are two truths and the
- * older one keeps being cited; five is that argument with a bigger number.
+ * **This lives here because five existing test files had written their own copy of it.**
+ * None was migrated by the integration repair: those five remain, and this shared helper
+ * is a sixth implementation site consumed by newer guards. That residue is `D-97`, with
+ * the five files named there rather than hidden behind false consolidation arithmetic.
  */
 export function renderScreen(client: QueryClient, element: ReactElement): string {
   const router = {

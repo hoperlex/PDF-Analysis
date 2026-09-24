@@ -105,7 +105,7 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
 
         {file !== null ? (
           <p className="am-form__chosen">
-            Chosen: {file.name} · {formatBytes(file.size)}
+            Выбран файл: {file.name} · {formatBytes(file.size)}
           </p>
         ) : null}
 

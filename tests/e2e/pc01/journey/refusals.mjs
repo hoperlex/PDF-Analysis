@@ -336,6 +336,14 @@ async function drive(origin, projectUid, testCase, stamp, cookies) {
       await page.fill(CONTROLS.title_input, `W27-REFUSE ${testCase.fixture} ${stamp}`);
       record.timingsMs.settleAfterChoosing = await page.settle();
       record.afterChoosing = await page.evaluate(READ_PANEL);
+      if (record.afterChoosing.chosen === null) {
+        fail(`the chosen-file line ${CONTROLS.chosen_selector} is not rendered`);
+      } else if (!record.afterChoosing.chosen.startsWith(CONTROLS.chosen_label)) {
+        fail(
+          `the chosen-file line starts ${JSON.stringify(record.afterChoosing.chosen)}; ` +
+            `expected the declared label ${JSON.stringify(CONTROLS.chosen_label)}`,
+        );
+      }
 
       const refusedByClient = record.afterChoosing.precheck !== null;
       record.refusedBy = refusedByClient ? 'client' : null;

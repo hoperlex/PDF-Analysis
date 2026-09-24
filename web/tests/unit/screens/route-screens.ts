@@ -71,9 +71,9 @@
  * guard is red:
  *
  *   - a `why` a reader can act on, at least 80 characters;
- *   - a `proof` — a predicate over the route file's own source — which the guard RUNS
- *     against the file. An opt-out whose proof stops holding is red, so the claim decays
- *     into a failure rather than into silence;
+ *   - a `proof` — a zero-argument behavioural probe which the guard RUNS. The root
+ *     opt-out calls `RootPage()` and requires the `NEXT_REDIRECT` it claims, so changing
+ *     what the route does is red even if its source still contains the old words;
  *   - it is still counted. `routeAddresses().length` and the opt-out list are both
  *     asserted, so an address cannot leave the census by being excused.
  *

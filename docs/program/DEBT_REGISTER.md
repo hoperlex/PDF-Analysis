@@ -19,18 +19,12 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
 | **D-79** | `CURRENT_STATE.md` — the file `AGENTS.md` makes every agent read first — went stale twice, and said the system was open when it is closed | the gate does not read `docs/` |
 | **D-80** | no `.dockerignore`: the web image's `node_modules` is the build host's, not the lockfile's — and criterion 1 is blind to it by construction | one file, verified by a build |
-| D-82 | three English `LoadingState` strings no instrument in the tree can render | a repair nothing can verify is not a repair |
-| D-83 | eleven journey sentences are verified by nothing inside the gate | only `refusals.mjs` against a live stand |
+| **D-83** | twelve refusal sentences cannot be rendered by the stack-free gate | live drive restored: 6 fixtures / 0 findings; boundary remains explicit |
 | D-87 | a full-tree mutation copy still cannot redden a migration — §10.1 names only half the trap | one fixture exists; the class is wider |
 | **D-89** | a shared hotspot with no owner: the journey manifest, and I wrote both grants | the rule is in the row |
-| **D-88** | `D-69`'s repair reached the **members** and not the **screens**: an all-English new screen is green | the subject is a list, not the tree |
-| D-90 | a route guard inside a component that nothing asserts, and whose naive mutation dies from `tsc` | one test |
 | **D-91** | two streams drew `R-18`'s line in different places in one wave | **owner**: where does it fall |
-| **D-92** | the browser journey **has not run since wave 34** — it stops at route 2 of 15 | a design decision, not a patch |
-| D-93 | wave 43 put a horizontal scrollbar on **every** screen below 839 px — **repaired**; the class is not | nothing in the gate expresses layout |
-| D-94 | the integrator's own executable changes are the only ones no judge is planned against | a standing rule, costs nothing |
-| D-95 | *«Такого версии не существует»* — gender agreement, and the language guard is blind to it by construction | a class, not a typo |
 | D-96 | three register rows in three waves sent a stream to a file that does not carry what the row says | the check command is the row |
+| **D-97** | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | consolidate against one provider/state contract |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | **D-70** | the stand's API **will not start** since wave 41: the stub URL has no host and `D-72` now refuses it | **owner: a real credential, or a hostname** |
@@ -46,6 +40,10 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
+
+**Closed 2026-09-24 in wave 44** — `D-82`, `D-88`, `D-90`, `D-92`, `D-93`,
+`D-94` and `D-95`. `D-83` remains open on its exact stack-free-gate boundary, and `D-97`
+records the renderer multiplicity the closing judges found.
 
 **Closed 2026-09-23 in wave 42** — `D-73` (`R-31`), `D-86` and `D-46` by one reseal, `D-81`
 (`R-33`), `D-84`, `D-85`, and `D-58`. **Three of them closed differently than this register said
@@ -1921,6 +1919,16 @@ can reach, and these are outside it. **The row is a request for an instrument, n
 
 Check: `grep -rn 'what="the ' web/src` — three hits, all `LoadingState`.
 
+**Closed 2026-09-24 by `W44-SEE`, with the unrenderable boundary kept explicit.** The three
+`LoadingState what=` arguments are now Russian, and a source-derived branch-label guard uses the
+same Latin classifier as the rendered guard. Its composition is checked against labels the
+state-aware renderer can reach; a fourth English argument reddens the suite and names its module.
+
+The closing integration also repaired the fourth instance `W44-JOURNEY` found in the same
+`useState` class: `Chosen:` became `Выбран файл:`. Unlike a static-only edit, its prefix is
+declared in the refusal manifest, checked against the control module at gate time, and asserted
+from the live chosen-file line by `refusals.mjs`.
+
 ### D-83 — the browser journey's manifest was asserting nothing, and eleven sentences still are
 
 **Found by `W41-BLIND`, and it falsified the brief's premise rather than executing it.**
@@ -1949,6 +1957,13 @@ same fact from the other side.
 
 Check: `docs/program/W41-BLIND.md` §B2 carries the fifteen sentences and which of the four
 matched what.
+
+**Re-measured 2026-09-24 by `W44-JOURNEY`; still open on exactly the boundary in the title.**
+The live drive was repaired from zero fixtures to **6 driven / 0 findings** and now checks twelve
+sentences, including a new rule-specific size sentence. The gate proves which control owns the
+client sentences and relates envelope fragments to declared constraints, but it still has no
+browser, built image or bound port and therefore renders **0 of 12**. That separation is now
+tested and reported rather than hidden; it is not renamed into a gate close.
 
 ### D-84 — a widget widens a typed refusal to `string`, so the second one will render silence — **CLOSED**
 
@@ -2193,6 +2208,11 @@ the journey check.
 Check: `grep -n 'const SCREENS' web/tests/guards/rendered-language.guard.test.ts` — a literal;
 then `grep -n rglob tests/e2e/test_pc01_journey_conformance.py` — the tree.
 
+**Closed 2026-09-24 by `W44-SEE` and two independent judges.** Both the language guard and
+contrast census consume a route-tree-derived screen set: 15 `page.tsx` addresses, 14 renderable
+screens and one behavioural redirect opt-out. A new unseeded route reddens by address; the
+wave-43 English-screen and 1.08:1-border probes now redden across all fourteen screens.
+
 ### D-89 — a shared hotspot with no owner, and the integrator wrote both grants
 
 **The dispatch defect of wave 43, recorded because `AGENTS.md` §3 exists to prevent exactly it.**
@@ -2240,6 +2260,11 @@ nothing beside it, on one screen and not the other.
 
 Check: delete the `looksLikeProjectUid` call from `StageComparisonPage`, keep the import used,
 and run `npm --prefix web run test -- --run`.
+
+**Closed 2026-09-24 by `W44-SEE`.** The malformed-segment matrix is derived from dynamic
+route directories while each seed supplies an independent human answer. Removing the live
+`looksLikeProjectUid` branch while keeping its import used is typecheck-clean and now reddens
+`screen-set.guard.test.ts`, naming the comparison screen and `project_uid`.
 
 ### D-91 — two streams drew `R-18`'s line in different places in one wave, and both argued it
 
@@ -2303,6 +2328,13 @@ should be read with this row.
 Check: `npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:31500 --phase all`, and
 `grep -oE "'(fill|click|attach_file)'" tests/e2e/pc01/journey/write.mjs | sort -u`.
 
+**Closed 2026-09-24 by `W44-JOURNEY`.** Sign-in is driven once through the real screen and
+the same session value is injected into every fresh browser; the browser's actual starting jar
+is read through `Storage.getCookies` and compared per route. The restored walk reaches **15/15**
+routes and **3/3** write steps. Both closing judges attacked the credential and jar-readback
+guards; their false greens were replaced before release by runtime missing-value tests and a
+fake-CDP behavioural readback.
+
 ### D-93 — four links put a horizontal scrollbar on every screen in the product — **REPAIRED**, and the class is not
 
 **Measured by `W43-JUDGE-B` in a browser on the deployed stand, which is the only place it was
@@ -2337,6 +2369,11 @@ link reddens by itself. **It is blocked on `D-92`**, because the journey does no
 Check: `grep -n 'flex-wrap' web/src/app/globals.css` in `.am-app__bar`; and drive any screen at
 780 px with and without the four links.
 
+**Closed 2026-09-24 by the restored journey.** Every route is measured at the manifest's
+780×900 viewport and must satisfy `scrollWidth <= innerWidth`. Reverting the wrap produces
+**9/9** named failures at **839 > 780**; the cross-judge's explicit 14 screens × 2 palettes
+produced 28 unique readings and no overflow on the repaired tree's predecessor stand.
+
 ### D-94 — the integrator's own executable changes are the only ones no judge is planned against
 
 **Found by `W43-JUDGE-B`, and it found them only because the brief put them in its subject by
@@ -2368,6 +2405,12 @@ accident of thoroughness; from here it is the standing instruction.
 
 Check: change the path inside `routes.comparison` and run the frontend suite; then delete the
 link paragraph and run it again.
+
+**Closed as a standing integration rule in wave 44.** Both closing judges were dispatched
+against the merged tree before the final gate and cross-examined each other's reports. The route
+builder and comparison link now have executable tests as well: pointing the builder at
+`/compare` or deleting the link reddens by address. The same rule exposed and repaired the
+closing judges' credential, jar-readback, claims-language and diagnostic findings.
 
 ### D-95 — *«Такого версии не существует»*, and the language guard is blind to it by construction
 
@@ -2406,6 +2449,11 @@ looks for the wrong thing. Given the templates and the nouns, agreement is check
 
 Check: drive `…/versions/{well-formed but absent}/comparison` on the stand, or read
 `PARENT_GENITIVE` against the sentence templates above it.
+
+**Closed 2026-09-24 by `W44-SEE`.** The determiner travels with the noun in typed data; the
+classifier's 66 output sentences and all derived rendered screens are checked. A source scan
+forbids reintroducing a gendered determiner beside a substitution, with comment stripping proved
+in both directions. Restoring masculine forms for `версии` reddens and quotes both sentences.
 
 ### D-96 — three rows in three waves sent a stream to a file that does not carry what the row says
 
@@ -2446,6 +2494,31 @@ verify could have discovered that.
 
 Check: `find web/src/app -name page.tsx | wc -l` against any prose in `docs/` claiming a count of
 addresses.
+
+### D-97 — six screen-rendering implementations do not share one provider/state contract
+
+**Opened by both closing W44 judges, 2026-09-24.** The integration comment claimed five existing
+copies became four and that the residue was registered. The commit migrated none of the five and
+added `web/tests/unit/screens/harness.ts` as another implementation site.
+
+The five screen-wide copies the claim referred to remain in:
+
+- `web/tests/guards/prepared-sections.guard.test.ts`;
+- `web/tests/guards/screen-set.guard.test.ts`;
+- `web/tests/guards/gender-agreement.guard.test.ts`;
+- `web/tests/guards/rendered-language.guard.test.ts`;
+- `web/tests/unit/styles/screens.ts`.
+
+The full mechanical census is broader: `AppRouterContext.Provider` occurs in **10 test files**
+before the repair and **11 after it**, because several focused unit tests legitimately mount a
+router too. The debt is not “replace every provider occurrence”. It is that the six screen-wide
+renderers can disagree about router shape, cache states and fixtures; the first claims guard did
+exactly that by rendering cold state only.
+
+Check: compare the five files above against `web/tests/unit/screens/harness.ts`, then run
+`git grep -l 'AppRouterContext\.Provider' -- web/tests | sort`. Consolidation must preserve the
+derived route question and each explicit state answer; sharing an empty provider alone does not
+close the row.
 
 ### D-74 — a parent-existence check costs a full parent read
 

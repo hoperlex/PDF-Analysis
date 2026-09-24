@@ -1,111 +1,148 @@
 /**
- * A screen may not tell a reviewer that this system lacks something it has.
+ * A rendered screen may not deny authentication while the frozen contract carries an
+ * authentication scheme.
  *
- * ## Why this exists, and why it is narrow on purpose
+ * This guard was added after /projects told a reviewer who had just signed in that the
+ * system had no authentication. Its first version derived the route set, but rendered only
+ * the cold branch and recognised four literal phrasings. Both closing W44 judges put the
+ * same denial into different words and left all 1109 frontend tests green.
  *
- * `/projects` carried the subtitle *«Один локальный проверяющий. Без аутентификации,
- * ролей и разделения на организации.»* — and `SIGN_IN_LANDING_PATH` is `/projects`, so a
- * reviewer who had just typed a password was told, on the first screen the application
- * sent them to, that the system has no authentication.
+ * The subject now has two independent halves:
  *
- * **It is a recurrence, which is what makes it worth an instrument.** `W37CERT4-2` found
- * this exact claim in wave 37 and repaired **one of its two carriers**. No guard was
- * added, and the second carrier lived seven more waves until `W44-JOURNEY` read it while
- * doing something else. *A repair that fixes an instance and not the class is a repair
- * with a timer on it.*
+ * - capability comes from OpenAPI's securitySchemes, not from a path literal;
+ * - prose comes from the state-aware contrast inventory, which already renders cold,
+ *   loaded, refused, failed and widget-specific states.
  *
- * ## What is checked, and what deliberately is not
- *
- * Only this: **a rendered screen may not deny a capability the frozen contract carries.**
- * The contract is the authority, so the guard cannot drift from the product the way prose
- * does — and when a capability genuinely leaves the contract, this guard goes quiet by
- * itself rather than having to be remembered.
- *
- * It does **not** judge whether a sentence is well written, whether a limitation is worth
- * stating, or anything about roles and tenancy — which really are absent, and which this
- * screen may and should still say. **A guard that tried to judge all claims would be
- * judging prose; this one judges a contradiction between two things in the repository.**
+ * The language predicate is deliberately bounded. It composes an authentication vocabulary
+ * with an absence/non-requirement vocabulary inside one visible sentence; it is not a claim
+ * to solve arbitrary natural-language entailment. The controls below carry every wording
+ * both closing judges used, so widening or narrowing that boundary is an explicit edit.
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { derivedScreens, wellFormed } from '../unit/screens/route-screens';
-import { newClient, renderScreen } from '../unit/screens/harness';
-
-/** Well-formed identifiers, so every screen renders its real branch rather than its 404. */
-const ULID = '01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
-const SEGMENTS = wellFormed({
-  projectUid: `prj_${ULID}`,
-  documentUid: `doc_${ULID}`,
-  versionUid: `ver_${ULID}`,
-  runId: `run_${ULID}`,
-});
+import { screens } from '../unit/styles/screens';
 import { readText, REPO_ROOT } from './lib/repo';
 import { join } from 'node:path';
 
-/** A capability the contract demonstrably carries, and the denials of it. */
-interface Capability {
-  readonly name: string;
-  /** True when the frozen contract carries this capability. */
-  readonly inContract: (contract: string) => boolean;
-  /** Phrases that deny it. Matched case-insensitively against rendered text. */
-  readonly denials: readonly RegExp[];
+interface OpenApiDocument {
+  readonly components?: {
+    readonly securitySchemes?: Readonly<Record<string, { readonly type?: unknown }>>;
+  };
 }
 
-const CAPABILITIES: readonly Capability[] = [
-  {
-    name: 'authentication',
-    // `/auth/token` is the exchange a reviewer's password goes through. If it ever leaves
-    // the contract, this capability stops being carried and the guard stops asking.
-    inContract: (contract) => contract.includes('"/auth/token"'),
-    denials: [
-      /без\s+аутентификации/i,
-      /нет\s+аутентификации/i,
-      /no\s+authentication/i,
-      /без\s+учётных\s+данных/i,
-    ],
-  },
+const CONTRACT = JSON.parse(
+  readText(join(REPO_ROOT, 'contracts/api/v1/openapi.json')),
+) as OpenApiDocument;
+
+const SECURITY_SCHEME_TYPES = new Set([
+  'apiKey',
+  'http',
+  'mutualTLS',
+  'oauth2',
+  'openIdConnect',
+]);
+
+function contractCarriesAuthentication(contract: OpenApiDocument): boolean {
+  return Object.values(contract.components?.securitySchemes ?? {}).some(
+    (scheme) => typeof scheme.type === 'string' && SECURITY_SCHEME_TYPES.has(scheme.type),
+  );
+}
+
+const AUTHENTICATION_WORDS: readonly RegExp[] = [
+  /аутентификац\p{L}*/iu,
+  /авторизац\p{L}*/iu,
+  /(?:^|\s)вход(?:ить|а|у|ом)?(?:\s+в\s+систему)?(?:\s|$)/iu,
+  /уч[её]тн\p{L}*\s+данн\p{L}*/iu,
+  /проверк\p{L}*\s+личност\p{L}*\s+пользовател\p{L}*/iu,
+  /\bauthentication\b/iu,
+  /\bsign[ -]?in\b/iu,
+  /\bcredentials?\b/iu,
 ];
 
-const CONTRACT = readText(join(REPO_ROOT, 'contracts/api/v1/openapi.json'));
+const ABSENCE_WORDS: readonly RegExp[] = [
+  /(?:^|\s)без(?:\s|$)/iu,
+  /(?:^|\s)нет(?=\s|[.,!?;:]|$)/iu,
+  /отсутств\p{L}*/iu,
+  /не\s+(?:выполня\p{L}*|использ\p{L}*|нуж\p{L}*|поддерж\p{L}*|треб\p{L}*)/iu,
+  /\bno\b/iu,
+  /\bwithout\b/iu,
+  /\bnot\s+(?:used|required|supported)\b/iu,
+];
 
-describe('a screen does not deny a capability this system has', () => {
-  it('has at least one capability to ask about', () => {
-    // Without this, emptying CAPABILITIES would turn the guard green and silent, which is
-    // the shape `D-88` is about.
-    expect(CAPABILITIES.length).toBeGreaterThan(0);
+/** Visible sentence-sized segments; block boundaries must not invent a cross-node claim. */
+function visibleSegments(markup: string): readonly string[] {
+  return markup
+    .replace(/<\/(?:button|div|footer|form|h[1-6]|header|li|main|p|section)>/giu, '\n')
+    .replace(/<[^>]*>/gu, ' ')
+    .replace(/&nbsp;/giu, ' ')
+    .replace(/&(?:amp|quot|#39);/giu, ' ')
+    .split(/\n+|(?<=[.!?])\s+/u)
+    .map((part) => part.replace(/\s+/gu, ' ').trim())
+    .filter((part) => part.length > 0);
+}
+
+function authenticationDenials(markup: string): readonly string[] {
+  return visibleSegments(markup).filter(
+    (sentence) =>
+      AUTHENTICATION_WORDS.some((word) => word.test(sentence)) &&
+      ABSENCE_WORDS.some((word) => word.test(sentence)),
+  );
+}
+
+describe('screens do not deny authentication carried by the contract', () => {
+  it('derives the capability from securitySchemes and does not go vacuous today', () => {
+    expect(contractCarriesAuthentication({})).toBe(false);
+    expect(
+      contractCarriesAuthentication({
+        components: { securitySchemes: { bearerAuth: { type: 'http' } } },
+      }),
+    ).toBe(true);
+    expect(contractCarriesAuthentication(CONTRACT)).toBe(true);
   });
 
-  for (const capability of CAPABILITIES) {
-    it(`no screen denies ${capability.name}`, () => {
-      if (!capability.inContract(CONTRACT)) {
-        // The capability is not in the contract, so denying it would be TRUE. Nothing to
-        // check, and saying so out loud beats a silent skip.
-        return;
-      }
-      const offences: string[] = [];
-      for (const screen of derivedScreens()) {
-        // The markup, not the source: a sentence assembled from three constants is still
-        // a sentence a reviewer reads, and `D-61` is about guards that search source.
-        //
-        // `renderWith` is the harness every other screen guard uses, reused rather than
-        // rebuilt -- two renderers would be two truths, and the older one keeps being
-        // cited. A screen with no seeded data renders its empty or pending branch, which
-        // is a real branch a reviewer meets and carries prose like any other.
-        const text = renderScreen(newClient(), screen.make(SEGMENTS)).replace(/<[^>]*>/g, ' ');
-        for (const denial of capability.denials) {
-          const found = denial.exec(text);
-          if (found !== null) {
-            offences.push(`${screen.name}: "${found[0]}"`);
-          }
-        }
-      }
-      expect(
-        offences.sort(),
-        `these screens tell a reviewer that this system has no ${capability.name}, and the ` +
-          'frozen contract says it does. A reviewer reaches most of these screens BY USING ' +
-          'the capability the sentence denies.',
-      ).toEqual([]);
-    });
-  }
+  it('recognises the bounded denial vocabulary, including both judges\' paraphrases', () => {
+    const denials = [
+      'Без аутентификации.',
+      'Аутентификации в этой установке нет.',
+      'Система не использует аутентификацию.',
+      'Вход не требуется.',
+      'Входить в систему не требуется.',
+      'Приложение работает без входа в систему.',
+      'Проверка личности пользователя в приложении не выполняется.',
+      'Для работы учётные данные не нужны.',
+      'No authentication.',
+      'Sign-in is not required.',
+    ];
+    const permitted = [
+      'Аутентификация обязательна.',
+      'Вход выполнен.',
+      'Учётные данные приняты.',
+      'Authentication is required.',
+    ];
+
+    for (const sentence of denials) {
+      expect(authenticationDenials(`<p>${sentence}</p>`), sentence).toEqual([sentence]);
+    }
+    for (const sentence of permitted) {
+      expect(authenticationDenials(`<p>${sentence}</p>`), sentence).toEqual([]);
+    }
+  });
+
+  it('finds no denial in any state-aware rendered screen', () => {
+    if (!contractCarriesAuthentication(CONTRACT)) return;
+
+    const offences = screens().flatMap((screen) =>
+      authenticationDenials(screen.markup).map((sentence) => ({
+        screen: screen.name,
+        sentence,
+      })),
+    );
+
+    expect(
+      offences,
+      'These rendered states deny authentication, while components.securitySchemes carries it. ' +
+        'The renderer is the state-aware contrast inventory; the vocabulary boundary is tested above.',
+    ).toEqual([]);
+  });
 });

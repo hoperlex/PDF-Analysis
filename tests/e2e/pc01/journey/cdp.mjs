@@ -926,3 +926,19 @@ class Page {
     return [...this.#pageErrors];
   }
 }
+
+/**
+ * Exercise the real private Page snapshot without exporting a reusable browser page.
+ *
+ * This is deliberately narrower than a Page factory: the conformance suite supplies a
+ * fake CDP connection, this module constructs the same Page `withColdBrowser` constructs,
+ * and only the names recorded before navigation cross the seam. `W44-JUDGE-X` showed why
+ * a source-name check is insufficient; `W44-JUDGE-Y` showed an expired declaration can
+ * differ from the actual jar. Keeping construction here makes that divergence observable
+ * without weakening D-16's "no Page leaves this module" property.
+ */
+export async function recordStartingJarForConformance(connection, sessionId) {
+  const page = new Page(connection, sessionId);
+  await page.recordStartingJar();
+  return page.startedWith();
+}

@@ -638,7 +638,6 @@ describe('every pair that meets on a screen clears the threshold its role asks o
           // because `AppFrame` is on every screen and a reader who sees one name looks
           // at one screen.
           where: m.occurrence.sites,
-          screens: new Set(m.occurrence.sites.map((site) => site.split(' ')[0])).size,
         })),
     ).sort((a, b) => a.ratio - b.ratio);
     expect(failing).toEqual([]);
@@ -706,7 +705,6 @@ describe('R-33: every border that meets on a screen clears 3:1, in both palettes
           // because `AppFrame` is on every screen and a reader who sees one name looks
           // at one screen.
           where: m.occurrence.sites,
-          screens: new Set(m.occurrence.sites.map((site) => site.split(' ')[0])).size,
         })),
     ).sort((a, b) => a.ratio - b.ratio || a.pair.localeCompare(b.pair));
     expect(
