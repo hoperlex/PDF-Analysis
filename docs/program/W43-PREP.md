@@ -271,3 +271,79 @@ None of the four verticals moved. `make gate` is not one step closer to any of t
 surface is the same 15 paths / 18 operations / 51 schemas it was at `b7d9bc4`. What preparation
 buys is that the navigation is honest about the shape of the product, and that the four reseals
 above are on paper before a wave budgets against them.
+
+---
+
+## Which instruments reached these four screens without being told to
+
+`W43-PLAN.md` asks this of the judge because *"a stream that knows it is being measured on
+coverage will seed its own screens"*. Nothing below is arranged: no screen of this task was added
+to `rendered-language.guard.test.ts`'s `SCREENS`, to `tests/unit/styles/screens.ts`, or to the
+journey manifest. Each row was **probed** — the tree was mutated, one instrument was run, and the
+mutation was reverted.
+
+| instrument | reached them? | the probe |
+|---|---|---|
+| `tests/e2e/test_pc01_journey_conformance.py::test_the_journey_walks_every_screen_the_application_offers` | **yes, and it is the only red in the gate** | none needed: it names all four by path from the unmutated tree |
+| `tests/unit/styles/styling-layer.test.ts` — a class the markup names that the stylesheet does not declare | **yes** | added `className="am-blocks__grid"` to the blocks screen → `expected [ 'am-blocks__grid' ] to deeply equal []` |
+| `rendered-language.guard.test.ts` — the branch scan over `web/src` | **yes, for a mandatory-state branch** | added `<EmptyState title="Пробный ненайденный экран" />` → the guard named the file: `"Пробный ненайденный экран"  (web/src/_pages/blocks/ui/blocks-page.tsx)` |
+| `rendered-language.guard.test.ts` — the Latin-word check | **NO** | renamed the blocks screen to `Blocks overview`, a fully English title on a reachable screen → **19 passed, green** |
+| `tests/unit/styles/contrast.test.ts` — the contrast census | **NO** | `screens.ts` is a hand-written list of imports and names none of the four; the census's subject is colour-bearing *rules*, and four screens that add no rule cannot move it either way |
+| `npm run typecheck` / `npm run lint` | yes | both run over the whole tree |
+
+**The honest reading, and it is two findings rather than one.**
+
+1. **Wave 41's coverage repair is half-reaching.** The language guard now *walks* `web/src` — it
+   found a branch in a directory that did not exist when the repair was written, and named the
+   file. But its Latin-word check still judges only the hand-written `SCREENS` list, so **a screen
+   whose every word is English passes it**. The repair made the *branch* census derived and left
+   the *screen* census a list. That is the `D-69` shape, still open on this half.
+2. **The instrument that did catch the new screens is not a frontend instrument at all.** It is a
+   Python conformance check in the canonical battery, and it caught them because it derives its
+   subject from the tree — `rglob("page.tsx")` — rather than from a list.
+
+## The gate, and the one thing it reddened on
+
+Run at `d411b39`, lane `gate-w43b`, log `/root/w43b-gate.log`. **There is no `GATE OK` line**:
+foundation passed 35, the canonical battery came back `1 failed, 2441 passed, 5 skipped, 4
+warnings, 169 subtests passed in 578.17s`, and the gate stopped before the frontend suite. The
+frontend suite was therefore run on its own afterwards and is green: `npm run typecheck` clean,
+then **1047 tests in 73 files**, against `1032 in 72 files` at `alpha-w42` — `+15` in `+1` file,
+which is exactly `tests/guards/prepared-sections.guard.test.ts`. No test was lost.
+
+**The single failure is `test_the_journey_walks_every_screen_the_application_offers`**, and it is
+the guard working:
+
+```text
+AssertionError: 4 screen(s) exist that the PC-01 journey does not walk:
+['/blocks', '/logs', '/optimisation', '/workers']. Add them to
+tests/e2e/pc01/journey/manifest.json, or the journey certifies a shrinking
+fraction of the product while still reporting OK.
+```
+
+**`tests/e2e/pc01/journey/manifest.json` is in neither stream's `allowed_paths`** — not
+`W43-PREP`'s and not `W43-COMPARE`'s, whose grant was read from
+`docs/program/dispatch/W43-COMPARE.md`. Both streams add screens, so **both branches fail this
+same guard and so will the merged tree.** It is a shared hotspot with no owner this wave, which
+`AGENTS.md` §3 is written to prevent, so it is reported rather than repaired — and one edit by one
+owner covering all five new screens is cheaper and safer than two streams editing one JSON file in
+parallel.
+
+**The edit, ready to apply.** Append these to `manifest.json`'s `routes`, **after** `sign-in`, for
+the reason that route's own `$comment` gives: the read walk's follow-chain captures identifiers in
+order, and a route inserted before them walks a screen with nothing captured yet. The shape is
+`/login`'s, and `expects_api: []` is a claim rather than an omission — a `RoutePlaceholder` asks
+the API nothing, on load or ever.
+
+```json
+{ "name": "blocks",       "path": "/blocks",       "page_module": "web/src/app/blocks/page.tsx",       "expects_api": [], "follow": null },
+{ "name": "optimisation", "path": "/optimisation", "page_module": "web/src/app/optimisation/page.tsx", "expects_api": [], "follow": null },
+{ "name": "logs",         "path": "/logs",         "page_module": "web/src/app/logs/page.tsx",         "expects_api": [], "follow": null },
+{ "name": "workers",      "path": "/workers",      "page_module": "web/src/app/workers/page.tsx",      "expects_api": [], "follow": null }
+```
+
+### And a live instance of `OPERATING_CONSTRAINTS.md` §4.62
+
+The harness that ran this gate reported **exit code 0**. `make` returned `Error 1` and the log has
+no `GATE OK`. The zero is the wrapper's, exactly as §4.62 says, and a session that had read the
+status instead of the log would have reported a green gate over a red one.
