@@ -741,3 +741,40 @@ for a **display name** instead.
 **This is a migration plus a contract reseal**, and it therefore joins the batch already forming:
 `D-46`'s `terminal_detail` and `D-86`'s now-false description of this very field. One reseal,
 one owner, per `R-24`'s note and `R-11`'s cost.
+
+## 3.14 — `R-38` and `R-39`, ruled 2026-09-24
+
+### `R-38` — wave 45 runs entirely on Sonnet and closes today
+
+Wave 44's two cross-judges both terminated on the **Opus weekly limit**, which resets
+2026-09-26 23:00. Their work had already reached the tree, so wave 44 closed intact — but wave
+45 in the same shape (two streams and three judges on Opus) cannot run before then.
+
+**The owner chose speed over model quality, deliberately and with the cost stated.** The cost is
+specific and worth writing down rather than implying: wave 44's cross-judges found **five false
+greens inside the integrator's own repairs**, including a credential guard that still admitted a
+fallback written on the next line, and a capability guard that caught one wording rather than the
+claim. **Judging is exactly where model quality shows, because a judge that finds nothing is
+indistinguishable from a judge with nothing to find.**
+
+**So the structure does not relax.** Streams, a judge closing each sub-stage, and two judges
+cross-judging before the final testing — all of it stands; only the model changes. Every judge
+brief says what to measure and how, rather than asking for an opinion, and the falsifications are
+fixed in advance so a judge that skips one is visible.
+
+### `R-39` — a screen may explain why it is empty, in the language of the subject
+
+`D-91`: three prepared screens tell a reviewer *why* they are empty — *«не отдаёт ни одна
+операция договора»* — while the comparison screen refuses to and carries a test enforcing the
+refusal. Two streams drew `R-18`'s line in different places inside one wave, and both argued it.
+
+**Ruled: a screen may say what the system cannot do yet, in the words of the subject.** An expert
+is better served by a reason than by *«раздел недоступен»*.
+
+**The prohibition that stays** is the one `D-58` closed by deletion and `R-18` is actually about:
+**no operation ids, no field names, no transport.** *«Эта проверка пока не делается»* is for a
+reviewer; *«операция `listRuns` не отдаёт X»* is for an author and belongs in a comment.
+
+**Consequence for wave 45, which is why this was asked now:** `W45-POS` builds a vertical that
+**cannot be shown to work until `D-70` clears**, so whatever it puts on screen will be saying why
+for some time. It may now say it plainly.
