@@ -1,6 +1,6 @@
 # Current state
 
-> **Updated 2026-09-24 by the integrator, at `3e75c91`** (wave 43). `AGENTS.md` §1.1 makes this
+> **Updated 2026-09-24 by the integrator, at `c3413ee`** (wave 43, after its stage-B audit). `AGENTS.md` §1.1 makes this
 > file the first thing every agent reads, and **this line moving is now part of closing a wave**,
 > for the reason the rest of this block records.
 >
@@ -22,14 +22,21 @@
 
 ## Where the programme is, 2026-09-23
 
-**`origin/main` = `origin/dev` = `origin/planning/prototype-roadmap` = `3e75c91`, tagged
-`alpha-w43` — a gated tip, not a certification.** All three refs are equal, and that sentence is
+**`origin/main` = `origin/dev` = `origin/planning/prototype-roadmap` = `c3413ee`, tagged
+`alpha-w43.1` — a gated tip, not a certification.**
+
+**Wave 43 produced two tags and the second is the honest one.** `alpha-w43` (`c455848`) is what
+the two build stages and the stage-A judge produced. **The stage-B judge then drove the deployed
+stand and found that the wave had put a horizontal scrollbar on every screen in the product**
+below 839 px — repaired at `c3413ee`, which is this tip. A tag is a record; moving it would have
+erased the fact that a green gate and two judged stages shipped a product-wide regression that
+only a browser could see (`D-93`). All three refs are equal, and that sentence is
 part of the state: for waves 39 and 40 they were not, and a peer session wrote a pre-flight
 review for the owner measured on the stale one (`D-77`).
 
 `make gate` → **`GATE OK`**: battery **2442 passed / 5 skipped / 4 warnings / 169 subtests**,
 foundation **35**, frontend **1085 in 75 files**. Read from the `GATE OK` line of
-`/root/w43-integrator-gate.log`, at this commit with a clean tree. Wave 42: 2442 / 35 / 1032.
+`/root/w43-integrator-gate2.log`, at this commit with a clean tree. Wave 42: 2442 / 35 / 1032.
 
 **Fourteen addresses**, five of them added by wave 43: a stage comparison at
 `/projects/{project_uid}/versions/{version_uid}/comparison`, and prepared sections at `/blocks`,
