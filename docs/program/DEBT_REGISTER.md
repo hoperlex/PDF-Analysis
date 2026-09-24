@@ -22,6 +22,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-82 | three English `LoadingState` strings no instrument in the tree can render | a repair nothing can verify is not a repair |
 | D-83 | eleven journey sentences are verified by nothing inside the gate | only `refusals.mjs` against a live stand |
 | D-87 | a full-tree mutation copy still cannot redden a migration — §10.1 names only half the trap | one fixture exists; the class is wider |
+| **D-89** | a shared hotspot with no owner: the journey manifest, and I wrote both grants | the rule is in the row |
+| **D-88** | `D-69`'s repair reached the **members** and not the **screens**: an all-English new screen is green | the subject is a list, not the tree |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | **D-70** | the stand's API **will not start** since wave 41: the stub URL has no host and `D-72` now refuses it | **owner: a real credential, or a hostname** |
@@ -2117,6 +2119,62 @@ already-migrated database, and only this one now has an instrument that can see 
 cases that cannot redden say so in their own docstrings and name the file that can.
 
 Check: `grep -rn migrated_engine tests/integration/db/` and read why the fixture exists.
+
+### D-88 — wave 41 made the coverage of contract members derived and left the set of screens a list
+
+**Measured by `W43-PREP` 2026-09-24 and verified by the integrator. This is the measurement
+wave 43 was designed to take, and it came back negative.**
+
+`D-69`'s repair made `rendered-language.guard.test.ts` derive **which contract members must be
+rendered** from the contract. It did not touch **which screens are rendered**:
+`web/tests/guards/rendered-language.guard.test.ts:795` is a hand-written
+`const SCREENS = [...]` of page components, and `web/tests/unit/styles/screens.ts` is a
+hand-written import list.
+
+**So a new screen is invisible to both instruments until somebody remembers to add it.**
+Measured rather than argued: a new screen titled **`Blocks overview`** — a fully English title on
+a reachable address — left the language guard at **19 passed, green**, three waves after `D-53`
+closed on the claim that one English word reaching a reviewer is a red gate, and two waves after
+`D-69` was reported closed for three of seven instances.
+
+**The one instrument that did catch all four new screens is not a frontend instrument at all.**
+`tests/e2e/test_pc01_journey_conformance.py` derives its subject with `rglob("page.tsx")` and
+named every one of them unprompted — *"4 screen(s) exist that the PC-01 journey does not walk"*.
+
+**That contrast is the row.** Two guards that read a literal saw nothing; one guard that reads
+the tree saw everything. `D-69`'s five recorded instances are all the first kind, and the repair
+closed the half that was easy to derive.
+
+**And the stream reported it instead of quietly seeding its own screens**, which is the only
+reason the measurement exists — the brief asked for the honest answer and got it, and
+`W43-JUDGE-A` was dispatched to take the same measurement independently.
+
+Check: `grep -n 'const SCREENS' web/tests/guards/rendered-language.guard.test.ts` — a literal;
+then `grep -n rglob tests/e2e/test_pc01_journey_conformance.py` — the tree.
+
+### D-89 — a shared hotspot with no owner, and the integrator wrote both grants
+
+**The dispatch defect of wave 43, recorded because `AGENTS.md` §3 exists to prevent exactly it.**
+
+`tests/e2e/pc01/journey/manifest.json` must list every screen the application offers, and **both**
+stage-A streams add screens. It is in **neither** stream's `allowed_paths`, so both branches fail
+the journey guard and so would the merged tree — and if either had "helpfully" edited it, two
+lanes would have been editing one JSON in parallel.
+
+`W43-PREP` reported it rather than repairing it, which was right and is what the brief asked for.
+
+**The integrator owns it and amends it once at merge**, and told the live sibling lane so
+(`OPERATING_CONSTRAINTS.md` §4.5: an ownership is information other lanes need, exactly as a
+refusal is).
+
+**The rule this earns, because the register already has one about ports and this is its sibling:**
+*a wave that adds a screen, a route, an error code or a migration must name the file that
+enumerates them, and give it an owner, in the same commit that dispatches the streams.*
+`PORT_REGISTRY.md` exists because a lane's ports are a shared resource nobody held; a manifest
+of screens is the same shape one layer up.
+
+Check: `grep -n allowed_paths -A 12 docs/program/dispatch/W43-PREP.md` against
+`grep -rn manifest.json tests/e2e/test_pc01_journey_conformance.py`.
 
 ### D-74 — a parent-existence check costs a full parent read
 
