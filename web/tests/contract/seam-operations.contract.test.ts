@@ -3,7 +3,7 @@
  *
  * The drift guard next door proves the client matches the document. This one proves the
  * document still says what `docs/program/P02_SEAMS.md` section 7 says it says — the
- * eighteen operations at their frozen methods and paths, the field sets a review screen depends on,
+ * nineteen operations at their frozen methods and paths, the field sets a review screen depends on,
  * and the safety rules that must survive any future edit to the contract.
  *
  * A P02 change that breaks the seam fails here, before any UI task is blamed for it.
@@ -64,6 +64,12 @@ const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> = [
   // password stops being accepted. It answers `IssueTokenResponse`, because it revokes the
   // caller's own credential in the act of succeeding and has to hand back the replacement.
   ['changePassword', 'POST', '/auth/password'],
+  // W45-BLOCKS, 2026-09-25: the block index for one version. Keyed by version_uid, not
+  // run_id -- page_geometry_extraction carries no model and no provider reference, so its
+  // output is a deterministic property of the version. status distinguishes "not_produced"
+  // (absent -- no run has produced it yet) from "produced" with blocks:[] (a version that
+  // genuinely has none); the same bytes for blocks, different bytes for status.
+  ['getVersionBlocks', 'GET', '/versions/{version_uid}/blocks'],
 ];
 
 const document = JSON.parse(readText(CONTRACT_PATH)) as {
@@ -79,7 +85,7 @@ const schema = (name: string) => {
   return found as { required?: string[]; properties?: Record<string, unknown> };
 };
 
-describe('the eighteen seam operations', () => {
+describe('the nineteen seam operations', () => {
   it('are exactly the operations the client exposes', () => {
     expect([...OPERATION_IDS].sort()).toEqual(SEAM_OPERATIONS.map(([id]) => id).sort());
   });
