@@ -80,7 +80,56 @@ sees the fact instead of inferring it from an absent field.
 No new error code: the only refusal this operation adds is `not_found`, already in the
 22-code catalog.
 
-(Reseal bytes, counts, and the four-document commit are recorded below as they land.)
+**Landed as two commits**, `a49d047` (the Python implementation: `BlockPort`,
+`BlockAdapter`, the router, the two view types, the two Pydantic models, the composition
+wiring, the two composition guards this reseal's new parented `GET` requires updating)
+and `830fd76` (the reseal itself: the four documents in one commit, following
+`W42-SEAL`'s discipline). Surface: **16 paths / 19 operations / 53 schemas**, up from
+15/18/51. No error code added. `FRONTEND_LOCK.json`'s six digests were recomputed with
+`sha256sum` against this tree, not carried from the drift check's own report.
+
+**Guard shown failing, then reverted.** `BlockAdapter.get_block_index`'s not-produced
+branch was mutated to report `status=STATUS_PRODUCED` instead of `STATUS_NOT_PRODUCED`
+(everything else held). `pytest tests/integration/composition/test_version_blocks_wire_shape.py
+tests/integration/runs/test_w45_blocks_version_block_index.py`:
+
+```
+FAILED test_a_version_with_no_run_answers_not_produced_not_an_empty_blocks_array
+AssertionError: {'version_uid': 'ver_01M3BPG7Y787CQK3Z3R3R4BXM0', 'status': 'produced',
+'produced_by_run_id': None, 'text_layer_sha256': None, ...}
+assert 'produced' == 'not_produced'
+1 failed, 4 passed
+```
+
+Reverted; `5 passed` again. `git diff --stat` on the file after revert shows only the
+legitimate additions.
+
+**Forbidden-hotspot residue, reported rather than repaired.** `tests/contract/api_v1/
+test_openapi_conformance.py` (forbidden; `W45-READY` owns `tests/contract/api_v1/**`)
+carries its own hand-written literals that this reseal makes stale:
+
+- `FROZEN_OPERATION_COUNT = 18` (line 89) → 19
+- `FROZEN_SCHEMA_COUNT = 51` (line 90) → 53
+- `FROZEN_OPERATIONS` (tuple starting line 102) needs
+  `("GET", "/versions/{version_uid}/blocks", "getVersionBlocks")`
+- `FROZEN_SCHEMA_NAMES` (frozenset starting line 135) needs `"VersionBlockIndex"` and
+  `"BlockGeometry"`
+- `TestN1ComponentReferenceResolution.test_changed_component_target_is_caught`
+  (line ~588): `assert len(report) == 13` → 14 (`getVersionBlocks` is a fourteenth
+  operation referencing `NotFound` → `ErrorEnvelope`)
+- `TestN7EffectiveSecurity.test_security_moved_from_root_to_operation_is_invisible`
+  self-heals once `FROZEN_OPERATION_COUNT` moves, since it derives from that constant.
+
+Measured by running the suite read-only (never edited): `6 failed, 112 passed` before
+this list; the two forbidden-file items above account for 5 of the 6, the sixth being
+`test_surface_counts_in_prose.py`'s own report of `infra/deploy/**`'s residue, next.
+
+**`infra/deploy/**` residue, also reported rather than repaired** (forbidden;
+`W45-READY` owns `infra/**`). `infra/deploy/README.md` states "eighteen operations"
+three times and `infra/deploy/serve.py` once; all four now understate the surface by
+one. `src/auditmanager/api/**` and `web/src/**` were swept clean by this reseal
+(`test_surface_counts_in_prose.py` passes for every source tree except `infra/deploy`
+after this stream's edits).
 
 ## B2 — the screen
 
