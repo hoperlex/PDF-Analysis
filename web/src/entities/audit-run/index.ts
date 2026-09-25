@@ -50,7 +50,7 @@ export { looksLikeRunId } from './model/address';
 export type { RunFailure, RunFailureKind } from './model/run-failure';
 export { classifyRunFailure } from './model/run-failure';
 
-export { RUN_PAGE_LIMIT, useRunList } from './api/use-run-list';
+export { RUN_PAGE_LIMIT, runListQueryOptions, useRunList } from './api/use-run-list';
 
 export { runStatusQueryOptions } from './api/run-status-query';
 
