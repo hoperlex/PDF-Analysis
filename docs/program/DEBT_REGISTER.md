@@ -2762,6 +2762,26 @@ that is written anywhere a person adding a code would read, which is why wave 48
 It is to make the pin set **enumerable**: one place that lists every pinned truth and what moves
 it, so a reseal or a migration has a checklist instead of a memory.
 
+> **A fourth pin, found 2026-09-25 while closing wave 46, and it is the worst of the four because
+> of what moves it.** `test_doc_prose_facts.py:333`'s control — the case that proves the live scan
+> really is truncated — holds **four literals tied to one wave**: a commit sha, the phrase
+> *"wave 43 (historical record)"* twice, and *"closed as `alpha-w44`"*.
+>
+> **Its trigger is writing a heading.** Closing wave 45 I renamed `CURRENT_STATE.md`'s historical
+> heading to something that reads correctly to a person — and the guard truncates on the literal
+> phrase `(historical record)`, not on a wave number, so the whole wave-44 record became a live
+> claim and went red against a tree tagged `alpha-w45`. Restoring the marker then moved the red
+> into this control rather than clearing it.
+>
+> **The other three pins move on things a person recognises as events** — a reseal, a migration, an
+> error-code addition. **This one moves on prose**, which is the class `D-79`, `D-76` and `D-100`
+> are all about, now reaching into the test suite.
+>
+> **And the guard caught its own author inside a day.** `D-79` asked for an instrument that reads
+> `docs/`; wave 45 built one; wave 45's integrator broke the thing it reads and the instrument
+> said so immediately. *That is the row closing in the only way a row of this kind can.*
+
+
 ### Two more things the cross-examination produced
 
 **A finding narrowed by being falsified.** `W45-JUDGE-Y` attributed a *"THIS FILE IS DATA, NOT

@@ -55,7 +55,15 @@ and the integrator certified *"contract suites green"* from a scope that exclude
 pinned literals of the same shape are green by luck (`D-105`). The prose guards all check
 numbers, and the claims that rot fastest are not numbers (`D-104`).
 
-## Where the programme was, 2026-09-24
+## Previous release state — wave 44 (historical record)
+
+> **The heading carries the literal phrase `(historical record)` because that is what
+> `test_doc_prose_facts.py` truncates the live scan on** — by the phrase, not by a wave number.
+> I renamed this section to *"Where the programme was"* when closing wave 45, which reads
+> correctly to a person and made the guard treat the whole wave-44 record as a live claim about
+> today. It went red on `alpha-w44` against a tree tagged `alpha-w45`, and **the guard built in
+> wave 45 caught the wave-45 edit of its own author inside a day.** `D-79`'s instrument working
+> as designed.
 
 **Wave 44 is closed as `alpha-w44`.** Its executable release candidate is `20a14de`; this
 state/registry closeout changes no deployed path. The closing push advances `origin/main`,

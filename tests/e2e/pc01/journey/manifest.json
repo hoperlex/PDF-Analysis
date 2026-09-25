@@ -406,6 +406,37 @@
       ],
       "expects_api": [],
       "follow": null
+    },
+    {
+      "name": "dashboard",
+      "path": "/dashboard",
+      "page_module": "web/src/app/dashboard/page.tsx",
+      "$comment": [
+        "The dashboard. W46-DASH.",
+        "",
+        "`expects_api` names TWO operations and not four, and the omission is the stream's",
+        "own reasoning rather than an oversight: the run-activity panel also calls",
+        "`listDocuments` and `listRuns`, but only once real project data exists to walk into,",
+        "and whether this manifest's own fixture has any is a question only a live walk can",
+        "answer. Declaring a call that never fires would assert nothing while looking like an",
+        "assertion -- which is what `D-83` was.",
+        "",
+        "Placed at the end with the other identifier-free routes: it takes no path parameter,",
+        "so it captures nothing the follow-chain needs in order."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/projects",
+          "operationId": "listProjects"
+        },
+        {
+          "method": "GET",
+          "path": "/decisions",
+          "operationId": "listDecisions"
+        }
+      ],
+      "follow": null
     }
   ],
   "write": {
