@@ -339,16 +339,41 @@ def test_wave_reports_are_never_scanned() -> None:
 
 
 def test_the_historical_section_is_excluded_from_the_live_scan() -> None:
-    """`CURRENT_STATE.md`'s own record of wave 43 is read by nobody's regex here."""
+    """`CURRENT_STATE.md`'s own historical record is read by nobody's regex here.
+
+    **Structural, not dated.** An earlier version of this control pinned four literals
+    tied to one wave -- a commit short sha, the exact heading text "wave 43 (historical
+    record)", and the live section's own claim "closed as `alpha-w44`" -- and every one
+    of those moves on a trigger nobody thinks of as one: writing a heading. It went red
+    within a day of being written, caught by its own author closing wave 45, and again
+    at `W46-SEAL` closing wave 46 -- the same shape `D-105` lists three of, found here as
+    a fourth. This version derives its expectation from the marker
+    :data:`_HISTORICAL_HEADING` itself finds in the file *as it stands*, so it proves the
+    same mechanism -- a real boundary exists, everything after it is cut, everything
+    before it survives -- without carrying a fact about which wave is currently live.
+    """
     full_text = CURRENT_STATE.read_text(encoding="utf-8")
-    (scanned_text,) = (text for file, text in _scanned_documents() if file == "docs/program/CURRENT_STATE.md")
-    assert len(scanned_text) < len(full_text)
-    # Content that exists ONLY in the historical section:
-    assert "c455848" in full_text and "c455848" not in scanned_text
-    assert "wave 43 (historical record)" in full_text
-    assert "wave 43 (historical record)" not in scanned_text
-    # The live section's own claim survives the truncation:
-    assert "closed as `alpha-w44`" in scanned_text
+    boundary = _HISTORICAL_HEADING.search(full_text)
+    assert boundary, "CURRENT_STATE.md no longer carries its historical-record heading"
+    (scanned_text,) = (
+        text for file, text in _scanned_documents() if file == "docs/program/CURRENT_STATE.md"
+    )
+    # Exactly the live prefix -- not merely "shorter", which a truncation at the wrong
+    # point could also satisfy.
+    assert scanned_text == full_text[: boundary.start()]
+    # A real boundary, not a no-op: content actually follows the marker. A heading at
+    # the very end of the file would make "is a prefix" true vacuously, and this line is
+    # what keeps that from passing silently.
+    assert boundary.end() < len(full_text), (
+        "the historical heading is the last thing in the file; truncation would remove "
+        "nothing here even if _scanned_documents stopped truncating at all"
+    )
+    # The marker's own text -- whatever wave it currently names -- sits inside the part
+    # cut away and nowhere in the part kept. Derived from the match rather than typed in
+    # twice, where the two copies could disagree with each other or with the file.
+    marker_text = boundary.group(0)
+    assert marker_text not in scanned_text
+    assert full_text.count(marker_text) >= 1
 
 
 def test_the_scanned_docs_state_the_migration_head_this_tree_has() -> None:
