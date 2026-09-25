@@ -2808,7 +2808,32 @@ carries `document_count`; runs, findings and verdicts have no aggregate operatio
 dashboard showing counts across projects is **a contract reseal plus new read paths**, in the
 same class as `D-56`'s second half and priced the same way.
 
-### D-65 — the account exists, and nothing around it does
+### D-65 — the account exists, and nothing around it does — **CLOSED 2026-09-23 by `R-26`; this section had no marker for two days**
+
+> **Marked 2026-09-25 after `pdf-analysis-d6` found it. The defect was not the row — it was
+> where the closure lived.**
+>
+> `R-26` ruled all four guards into the alpha and waves 39 and 40 built them: **password change**
+> at `POST /auth/password`, **revocation** carried by the same write through `token_epoch`, the
+> **rate limit** and the **lockout** (`0008_sign_in_throttle`). The closure was recorded **~1 100
+> lines away**, inside a retrospective about a peer's `DEPLOY-READINESS.md` having been wrong
+> about exactly these four — **and this section, which still ends *"Needs the owner: which of
+> these belong in the alpha"* and whose table still lists two of them as absent, carried no
+> marker at all.**
+>
+> **So the row that burned one reader by being stale now sits ready to burn the next in the
+> opposite direction**: a session briefing wave 46 and landing here would re-raise four settled
+> questions and cost a poll the owner has already answered.
+>
+> **The register's own rule was followed and did not help.** *A row is closed in the same commit
+> as its fix* — it was. The rule that was missing: **a closure is recorded where the row is
+> read**, not only where the wave that closed it was written about. A summary table that omits a
+> row and a section that still reads open are the same document disagreeing with itself.
+>
+> **What is still live in this row's table is one item and only one:** the **durable session
+> register**. The BFF holds sessions in the Node process's memory, so a web-container restart
+> signs every reviewer out — and that happens on **every deploy**, not on a rare crash.
+
 
 **Opened 2026-09-22 with wave 34, deliberately and by the session that built it.** The owner
 ruled the default `admin`/`password` pair explicitly and said user management is the first work
