@@ -53,11 +53,12 @@ def test_the_document_declares_eighteen_and_the_router_implements_eighteen(
     `listVersions` and `listRuns`; **fifteen until `W34-CONTRACT`**, which added
     `issueToken`, the credential exchange; **sixteen until `W38-KB`**, which added
     `listDecisions` under `R-24`; **seventeen until `W39-REVOKE`**, which added
-    `changePassword` under `R-26`. The number moved because an owner ruling moved it;
-    nothing else may move it.
+    `changePassword` under `R-26`; **eighteen until `W42-SEAL`**, which added no path
+    or operation; **nineteen until `W45-BLOCKS`**, which added `getVersionBlocks`. The
+    number moved because an owner ruling or a reseal moved it; nothing else may move it.
     """
-    assert len(declared_operations(openapi_document)) == 18
-    assert len(router.routes) == 18
+    assert len(declared_operations(openapi_document)) == 19
+    assert len(router.routes) == 19
 
 
 def test_every_declared_operation_is_reachable(
@@ -167,16 +168,18 @@ def test_the_document_declares_no_operation_outside_the_declared_capabilities(
     assert list(openapi_document["components"]["securitySchemes"]) == ["bearerAuth"], (
         "the authorization seam is one bearer scheme declared once, per R-3"
     )
-    assert len(paths) == 15 and sum(
+    assert len(paths) == 16 and sum(
         1
         for item in openapi_document["paths"].values()
         for method in item
         if method in {"get", "put", "post", "delete", "options", "head", "patch"}
-    ) == 18, (
+    ) == 19, (
         "10 paths / 12 operations before the `R-5` reseal, 12 / 15 after it, 13 / 16 "
         "after `W34-CONTRACT` added the credential exchange, 14 / 17 after `W38-KB` added "
         "the decision journal under `R-24`, 15 / 18 after `W39-REVOKE` added the password "
-        "change under `R-26`. The three operations `R-5` added are named in "
+        "change under `R-26`, unchanged after `W42-SEAL` (no path or operation added), "
+        "16 / 19 after `W45-BLOCKS` added `getVersionBlocks` under `/versions/{version_uid}`. "
+        "The three operations `R-5` added are named in "
         "`REQUIRED_OPERATIONS`; the one wave 34 added is `issueToken`, and it is the only "
         "one this surface answers without a credential; the one wave 38 added is "
         "`listDecisions`, and it is the only listing with no parent in its path; the one "

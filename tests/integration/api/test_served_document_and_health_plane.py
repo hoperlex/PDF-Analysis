@@ -30,9 +30,9 @@ OPENAPI = Path(__file__).resolve().parents[3] / "contracts/api/v1/openapi.json"
 #: from the document it is counting cannot tell you the document shrank.
 OPENAPI_VERSION = "3.1.0"
 BASE_PATH = "/api/v1"
-PATH_COUNT = 15
-OPERATION_COUNT = 18
-SCHEMA_COUNT = 51
+PATH_COUNT = 16
+OPERATION_COUNT = 19
+SCHEMA_COUNT = 53
 
 
 class TestTheDocumentedAndTheWiredApplicationAgree:

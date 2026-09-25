@@ -98,6 +98,14 @@ GUARDED = (
     # credentials without holding one. The request below carries no body on purpose --
     # authorization must refuse it before the body model is ever parsed.
     ("changePassword", "POST", "/auth/password"),
+    # `W45-BLOCKS`. The block index for one version, behind the same seam as
+    # `getDocumentVersion` and `streamDocumentVersionContent` -- it hangs off the same
+    # `version_uid` and carries no capability those two do not already have.
+    (
+        "getVersionBlocks",
+        "GET",
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/blocks",
+    ),
 )
 
 #: The catalog's own summary for the code, as a literal. `W13-SEAL` section 8.1 requires
@@ -163,15 +171,15 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Seventeen, not sixteen.
+    """One request per guarded operation, with no credential. Eighteen, not seventeen.
 
-    The set comparison is what makes this a sweep rather than a list: an eighteenth
+    The set comparison is what makes this a sweep rather than a list: a nineteenth
     operation is either written into ``GUARDED`` and swept, or named in
     :data:`~auditmanager.api.security.UNAUTHENTICATED_OPERATIONS` and reported by
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 17
+    assert len(GUARDED) == 18
     assert UNAUTHENTICATED_OPERATIONS == {"issueToken"}
     assert {operation for operation, _, _ in GUARDED} | UNAUTHENTICATED_OPERATIONS == (
         router.operation_ids

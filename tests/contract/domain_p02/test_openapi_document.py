@@ -61,6 +61,10 @@ REQUIRED_OPERATIONS = {
     # capability, and it is listed for the same reason -- this set is the whole surface, not
     # the product part of it.
     "changePassword",
+    # `W45-BLOCKS`. The block index for one version, keyed by version_uid rather than by
+    # run_id because page_geometry_extraction carries no model and no provider reference,
+    # so its output is deterministic across every run of a version that reaches it.
+    "getVersionBlocks",
 }
 
 #: The operations a caller reaches while holding no credential. Exactly one, and it is
