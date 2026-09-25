@@ -106,6 +106,7 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
             content=content,
             source_filename=filename,
             display_title=checked.display_title,
+            section=body.section.value if body.section is not None else None,
             idempotency_key=idempotency_key,
         )
         return json_response(201, encode_json(document_version_body(outcome.version)))

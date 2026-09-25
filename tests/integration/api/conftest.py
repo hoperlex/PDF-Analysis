@@ -369,6 +369,7 @@ class IngestDocumentAdapter:
             page_count=record.page_count,
             published_at=record.published_at,
             media_type=record.media_type,
+            section=record.section,
             input_manifest=tuple(
                 ManifestEntryView(
                     role=entry.role,
@@ -388,6 +389,7 @@ class IngestDocumentAdapter:
         source_filename: str,
         display_title: str | None,
         idempotency_key: str,
+        section: str | None = None,
     ) -> _Uploaded:
         outcome = self._ingest.upload_single_pdf(
             project_uid=ProjectUid(project_uid),
@@ -395,6 +397,7 @@ class IngestDocumentAdapter:
             source_filename=source_filename,
             display_title=display_title or source_filename,
             idempotency_key=idempotency_key,
+            section=section,
         )
         return _Uploaded(version=self._view(outcome.version), replayed=outcome.replayed)
 

@@ -97,8 +97,8 @@ _LIST_PROJECTS = text(
     "ORDER BY p.created_at DESC, p.project_uid DESC"
 )
 _INSERT_DOCUMENT = text(
-    "INSERT INTO document (document_uid, project_uid, display_title) "
-    "VALUES (:document_uid, :project_uid, :display_title)"
+    "INSERT INTO document (document_uid, project_uid, display_title, section) "
+    "VALUES (:document_uid, :project_uid, :display_title, :section)"
 )
 _SELECT_DOCUMENT = text(
     "SELECT document_uid, project_uid FROM document WHERE document_uid = :document_uid"
@@ -127,7 +127,7 @@ _POINT_DOCUMENT_AT_VERSION = text(
 )
 _SELECT_VERSION = text(
     "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
-    "       d.display_title, v.media_type, v.byte_size,"
+    "       d.display_title, d.section, v.media_type, v.byte_size,"
     "       v.sha256, v.page_count, v.published_at "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
     "WHERE v.version_uid = :version_uid"
@@ -150,7 +150,7 @@ _SELECT_MANIFEST = text(
 #: order is total and stable across pages.
 _LIST_DOCUMENTS = text(
     "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
-    "       d.display_title, v.media_type, v.byte_size,"
+    "       d.display_title, d.section, v.media_type, v.byte_size,"
     "       v.sha256, v.page_count, v.published_at "
     "FROM document d JOIN document_version v ON v.version_uid = d.current_version_uid "
     "WHERE d.project_uid = :project_uid "
@@ -165,7 +165,7 @@ _LIST_DOCUMENTS = text(
 #: does not make it one.
 _LIST_VERSIONS = text(
     "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
-    "       d.display_title, v.media_type, v.byte_size,"
+    "       d.display_title, d.section, v.media_type, v.byte_size,"
     "       v.sha256, v.page_count, v.published_at "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
     "WHERE v.document_uid = :document_uid "
@@ -222,9 +222,10 @@ def _version_record(
     """One ``document_version`` row, in the column order every SELECT here uses.
 
     Written once. ``get_version``, ``list_documents`` and ``list_versions`` project the
-    same ten columns in the same order, and three hand-unpacked copies of that tuple would
-    be three places for one of them to shift a column silently -- which is a fault the
-    reader cannot see, because every value here is a string or an int.
+    same eleven columns in the same order, and three hand-unpacked copies of that tuple
+    would be three places for one of them to shift a column silently -- which is a fault
+    the reader cannot see, because every value here is a string, an int or (``section``)
+    possibly ``None``.
     """
     (
         version_uid,
@@ -232,6 +233,7 @@ def _version_record(
         project_uid,
         version_ordinal,
         display_title,
+        section,
         media_type,
         byte_size,
         sha256,
@@ -244,6 +246,7 @@ def _version_record(
         project_uid=ProjectUid(project_uid),
         version_ordinal=int(version_ordinal),
         display_title=display_title,
+        section=section,
         media_type=media_type,
         byte_size=int(byte_size),
         sha256=sha256,
@@ -289,9 +292,20 @@ class DocumentRepository:
     # -- documents -----------------------------------------------------------
 
     def create_document(
-        self, session: Session, project_uid: ProjectUid, display_title: str
+        self,
+        session: Session,
+        project_uid: ProjectUid,
+        display_title: str,
+        section: str | None = None,
     ) -> DocumentUid:
-        """Create a document inside a project. ``current_version_uid`` starts unset."""
+        """Create a document inside a project. ``current_version_uid`` starts unset.
+
+        ``section`` is one of ``0011_document_section``'s fourteen codes, or ``None`` for
+        a document nobody has classified yet -- the CHECK constraint is the same
+        vocabulary the frozen ``ProjectSection`` enum declares, and this method does not
+        re-validate it: an unrecognised value is refused by the database, not silently
+        accepted here and disagreed with there.
+        """
         cleaned = _require_text(
             display_title, field="display_title", maximum=MAX_DISPLAY_TITLE
         )
@@ -302,6 +316,7 @@ class DocumentRepository:
                 "document_uid": str(document_uid),
                 "project_uid": str(project_uid),
                 "display_title": cleaned,
+                "section": section,
             },
         )
         return document_uid

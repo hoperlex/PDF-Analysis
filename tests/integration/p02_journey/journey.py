@@ -351,7 +351,7 @@ def seed_version_with_contract_manifest(session: Session, blob_store: S3BlobStor
     documents = DocumentRepository()
     project = documents.create_project(session, f"B-III {label}")
     document_uid = documents.create_document(
-        session, project_uid=project.project_uid, display_title="СП-7-АР"
+        session, project_uid=project.project_uid, display_title="СП-7-АР", section="AR"
     )
     version_uid = documents.publish_version(
         session,

@@ -121,6 +121,7 @@ def _version_view(record: Any) -> DocumentVersionView:
         published_at=record.published_at,
         media_type=record.media_type,
         display_title=record.display_title,
+        section=record.section,
         input_manifest=tuple(
             ManifestEntryView(
                 role=e.role,
@@ -147,6 +148,7 @@ class DocumentAdapter:
         source_filename: str | None = None,
         display_title: str | None = None,
         idempotency_key: str = "",
+        section: str | None = None,
     ) -> Any:
         """The port declares ``source_filename``; this method called it ``filename``.
 
@@ -164,6 +166,7 @@ class DocumentAdapter:
             source_filename=name,
             display_title=display_title or name,
             idempotency_key=IdempotencyKey(idempotency_key),
+            section=section,
         )
         return _Uploaded(
             _version_view(outcome.version), bool(getattr(outcome, "replayed", False))

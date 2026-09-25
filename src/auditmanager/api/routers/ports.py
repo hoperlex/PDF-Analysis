@@ -115,8 +115,15 @@ class DocumentPort(Protocol):
         source_filename: str,
         display_title: str | None,
         idempotency_key: str,
+        section: str | None = None,
     ) -> UploadedDocument:
-        """Publish one PDF as one immutable version, or explain why not."""
+        """Publish one PDF as one immutable version, or explain why not.
+
+        ``section`` is one of `R-40`'s fourteen project-section codes, or ``None`` when
+        the caller does not supply one -- optional here for the same reason
+        ``display_title`` is: the frozen ``UploadDocumentRequest.section`` is not
+        required, and this port does not invent a value the caller never gave it.
+        """
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
         """One published version and its input manifest."""

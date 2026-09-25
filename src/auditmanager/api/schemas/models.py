@@ -337,6 +337,33 @@ class DecisionEventType(str, enum.Enum):
     REVOKE = "revoke"
 
 
+class ProjectSection(str, enum.Enum):
+    """Legacy's fourteen project sections (`D-56`, `R-40`).
+
+    ``backend/app/pipeline/stages/prepare/task_builder.py:1362`` names these fourteen;
+    ``db/migrations/versions/20260925_0011_document_section.py`` restates them in the
+    ``document.section`` CHECK, and ``tests/contract/domain_p02/test_project_section_catalog.py``
+    is what keeps the two from disagreeing. A document with no section is not a fifteenth
+    member of this enum -- it is ``UploadDocumentRequest.section`` or
+    ``DocumentVersion.section`` absent, which is a different, equally real fact.
+    """
+
+    AR = "AR"
+    AI = "AI"
+    KM = "KM"
+    KJ = "KJ"
+    OV = "OV"
+    EOM = "EOM"
+    VK = "VK"
+    PT = "PT"
+    PB = "PB"
+    SS = "SS"
+    ITP = "ITP"
+    GP = "GP"
+    TX = "TX"
+    POS = "POS"
+
+
 # --- the shared envelopes ----------------------------------------------------------
 
 
@@ -395,6 +422,11 @@ class UploadDocumentRequest(_Object):
     display_title: Annotated[str, Field(min_length=1, max_length=400)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    #: `R-40`. Optional, like ``display_title`` beside it and for the same reason: a
+    #: caller that does not yet know which of the fourteen sections a document belongs
+    #: in gets a document with none, not a refused upload. See
+    #: ``db/migrations/versions/20260925_0011_document_section.py``.
+    section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class InputManifestEntry(_Object):
@@ -412,6 +444,9 @@ class DocumentVersion(_Object):
     display_title: Annotated[str, Field(min_length=1, max_length=400)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    #: `R-40`. See ``UploadDocumentRequest.section``: optional for the same reason, and
+    #: never defaulted to one of the fourteen when a document was uploaded with none.
+    section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     source_filename: str | None = Field(default=None, json_schema_extra=optional_property)
     media_type: Literal["application/pdf"]
     byte_size: Annotated[int, Field(ge=0)]

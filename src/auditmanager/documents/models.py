@@ -166,6 +166,12 @@ class DocumentVersionRecord:
     #: resolves a version by it, and `source_filename` stays withheld because a filename is
     #: named in foundation invariant 3 and a display title is not.
     display_title: str
+    #: `R-40`. One of legacy's fourteen project sections (`D-56`), or ``None`` when the
+    #: document has not been classified. Lives on the document, like ``display_title`` --
+    #: it is a fact about what the document *is*, not about which published revision of
+    #: its bytes this record describes -- and is set once, at upload, never rewritten.
+    #: ``None`` is a real answer and is never defaulted to one of the fourteen codes.
+    section: str | None
     media_type: str
     byte_size: int
     sha256: str
