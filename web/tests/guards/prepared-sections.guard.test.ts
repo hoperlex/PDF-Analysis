@@ -1,5 +1,12 @@
 /**
- * The four sections `R-23`'s addendum ruled prepared, held to the four rules it set.
+ * The three sections `R-23`'s addendum ruled prepared, held to the four rules it set.
+ *
+ * `blocks` was the fourth. `W45-BLOCKS` built it a real operation and a real screen, so
+ * it graduated out of this file rather than being held to a placeholder's rules it no
+ * longer follows -- `web/tests/guards/screen-set.guard.test.ts` and the language guard
+ * and contrast census reach it now by walking the route tree, the way they reach every
+ * other real screen, and this file is no longer the thing that would catch a regression
+ * on `/blocks`.
  *
  * `OWNER_RULINGS_2026-09-17.md` §3.11 says preparation is four things and no more: a
  * place in the navigation, a `RoutePlaceholder` carrying a real `promise`, the data shape
@@ -25,7 +32,7 @@
  *
  * ## What this file deliberately does NOT do
  *
- * It does not add these four screens to `rendered-language.guard.test.ts`'s `SCREENS` or
+ * It does not add these three screens to `rendered-language.guard.test.ts`'s `SCREENS` or
  * to `tests/unit/styles/screens.ts`. Wave 43 is the first wave to add a screen since wave
  * 41 repaired the language guard's coverage and wave 42 widened the contrast census, and
  * `W43-PLAN.md` puts the question *"do the instruments reach the new screens"* to the
@@ -43,12 +50,10 @@ import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 
 import { AppFrame } from '@/_app';
-import { BlocksPage } from '@/_pages/blocks';
 import { LogsPage } from '@/_pages/logs';
 import { OptimisationPage } from '@/_pages/optimisation';
 import { WorkersPage } from '@/_pages/workers';
 import { RoutePlaceholder } from '@/shared/ui';
-import BlocksRoute from '@/app/blocks/page';
 import LogsRoute from '@/app/logs/page';
 import OptimisationRoute from '@/app/optimisation/page';
 import WorkersRoute from '@/app/workers/page';
@@ -92,7 +97,6 @@ export function visibleText(markup: string): string[] {
 // ------------------------------------------------------------------------- the subjects
 
 const SECTIONS = [
-  { name: 'blocks', route: '/blocks', title: 'Блоки', screen: BlocksPage, routeFile: BlocksRoute },
   {
     name: 'optimisation',
     route: '/optimisation',
@@ -116,7 +120,7 @@ const SECTIONS = [
  * Read by rendering rather than by importing a constant or matching the source, because
  * `OPERATING_CONSTRAINTS.md` §12 is about a query that shares an assumption with its
  * subject: a test that imported the default would keep passing if the default and all
- * four promises were changed to the same new string.
+ * all three promises were changed to the same new string.
  */
 const GENERIC = longest(
   visibleText(render(createElement(RoutePlaceholder, { screen: 'x', route: '/x' }))),
@@ -159,7 +163,7 @@ describe('R-23: no invented number reaches a reviewer from a prepared section', 
 // ------------------------------------------------- 2. a promise, and one nobody shares
 
 describe('R-23: each section promises something of its own, and none of them is the default', () => {
-  it('can fail: four screens sharing the component default', () => {
+  it('can fail: three screens sharing the component default', () => {
     const generic = 'Раздел появится в одной из следующих версий.';
     expect(unpromised([generic, generic], generic)).toEqual([generic, generic]);
     expect(unpromised(['Своё обещание', generic], generic)).toEqual([generic]);
@@ -167,7 +171,7 @@ describe('R-23: each section promises something of its own, and none of them is 
     expect(longest(['Блоки', 'Раздел пока недоступен', generic])).toBe(generic);
   });
 
-  it('none of the four falls back to the generic sentence', () => {
+  it('none of the three falls back to the generic sentence', () => {
     expect(GENERIC.length, 'the component rendered no default sentence to compare against')
       .toBeGreaterThan(80);
     for (const { name, screen } of SECTIONS) {
@@ -176,7 +180,7 @@ describe('R-23: each section promises something of its own, and none of them is 
     }
   });
 
-  it('the four promises are pairwise distinct', () => {
+  it('the three promises are pairwise distinct', () => {
     // Longest visible string on each screen: on a RoutePlaceholder that is the promise.
     const promises = SECTIONS.map(({ screen }) =>
       longest(visibleText(render(createElement(screen)))),
@@ -220,7 +224,7 @@ describe('R-18: the workers stub does not say a thing is coming that nobody deci
     expect(text.some((s) => s.includes('в альфе'))).toBe(true);
   });
 
-  it('the other three still carry them, so the exemption is one screen and not a hole', () => {
+  it('the other two still carry them, so the exemption is one screen and not a hole', () => {
     // The ratchet's other direction. If this ever fails, either a section was newly
     // deferred -- in which case say so here -- or the component's default moved.
     for (const { name, screen } of SECTIONS.filter((s) => s.name !== 'workers')) {
@@ -244,7 +248,7 @@ describe('R-23: each prepared section has a place in the navigation', () => {
     expect(navTargets('<a href="/projects">П</a>')).not.toContain('/blocks');
   });
 
-  it('the frame links to all four addresses', () => {
+  it('the frame links to all three addresses', () => {
     const targets = navTargets(render(createElement(AppFrame, { children: null })));
     // Non-vacuous in both factors: the two links that predate this wave must still be
     // there, otherwise "contains /blocks" could pass on a frame that lost everything else.
@@ -261,7 +265,7 @@ describe('R-23: each prepared section has a place in the navigation', () => {
     }
   });
 
-  it('the four screens are four different screens', () => {
+  it('the three screens are three different screens', () => {
     const titles = SECTIONS.map(({ screen }) => visibleText(render(createElement(screen)))[0]);
     expect(new Set(titles).size).toBe(SECTIONS.length);
   });

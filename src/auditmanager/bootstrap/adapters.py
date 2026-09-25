@@ -1,10 +1,11 @@
-"""The six port adapters: frozen API shapes on one side, real modules on the other.
+"""The port adapters: frozen API shapes on one side, real modules on the other.
 
-`B6` wrote `build_router` to take six protocols and construct none of them, so this is the
-only place that knows both the wire shape and the module that answers it. Each adapter is
-thin on purpose - it opens a session, calls one module, maps the result into the view the
-frozen schema declares, and does nothing else. A rule that lives here rather than in a
-module is a rule the module's own tests cannot reach.
+`B6` wrote `build_router` to take six protocols and construct none of them. Two more were
+added later with a default rather than a seventh and eighth required argument --
+`credentials` at wave 39, `blocks` at `W45-BLOCKS` -- so this file now carries eight
+adapter classes. Each adapter is thin on purpose - it opens a session, calls one module,
+maps the result into the view the frozen schema declares, and does nothing else. A rule
+that lives here rather than in a module is a rule the module's own tests cannot reach.
 
 Every adapter takes its session factory rather than building one, so the whole application
 shares one engine and the composition root remains the only thing that reads configuration.
@@ -12,11 +13,12 @@ shares one engine and the composition root remains the only thing that reads con
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.api.schemas.blocks import VersionBlockIndexView
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
 from auditmanager.api.schemas.findings import (
@@ -511,6 +513,100 @@ def _finding_view(row: Any, evidence: Sequence[Any], verdict: Any) -> FindingVie
             ),
         ),
     )
+
+
+class BlockAdapter(_SessionHolder):
+    """``getVersionBlocks``. `W45-BLOCKS`.
+
+    Reads through ``RunRepository`` rather than through ``auditmanager.analysis`` --
+    there is no analysis-side reader for a published artifact, only a writer
+    (``publish_artifact`` in ``analysis/ports/artifacts.py``), and this needed the other
+    direction. ``stage_result.artifacts`` already carries every ``ArtifactRef`` a stage
+    published, so the blob is resolved from that JSON rather than from a second index.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(session_factory)
+        self._blob_store = blob_store
+
+    def get_block_index(self, *, version_uid: str) -> VersionBlockIndexView:
+        from auditmanager.analysis.ports.artifacts import ROLE_BLOCK_INDEX
+        from auditmanager.api.schemas.blocks import (
+            STATUS_NOT_PRODUCED,
+            STATUS_PRODUCED,
+            BlockGeometryView,
+        )
+        from auditmanager.documents.repository import DocumentRepository
+        from auditmanager.runs import RunRepository
+        from auditmanager.shared.identity import VersionUid
+
+        def work(session: Session) -> VersionBlockIndexView:
+            # Proves the parent exists before anything else is read, the same rule
+            # `RunAdapter.list_runs` follows for the same reason `D-67` states: an
+            # unknown version must answer `404`, never the empty-but-present shape below.
+            DocumentRepository().get_version(session, VersionUid.parse(version_uid))
+
+            repository = RunRepository()
+            for run in repository.list_for_version(session, version_uid):
+                stage = next(
+                    (
+                        s
+                        for s in repository.stage_results(session, str(run.run_id))
+                        if s.stage_id == "page_geometry_extraction"
+                    ),
+                    None,
+                )
+                if stage is None or stage.status != "succeeded":
+                    continue
+                artifact = next(
+                    (a for a in stage.artifacts if a.get("role") == ROLE_BLOCK_INDEX),
+                    None,
+                )
+                if artifact is None:
+                    continue
+                document = self._read_artifact(artifact)
+                return VersionBlockIndexView(
+                    version_uid=version_uid,
+                    status=STATUS_PRODUCED,
+                    produced_by_run_id=str(run.run_id),
+                    text_layer_sha256=document.get("text_layer_sha256"),
+                    block_count=len(document.get("blocks", ())),
+                    blocks=tuple(
+                        BlockGeometryView(
+                            block_id=b["block_id"],
+                            page_number=b["page_number"],
+                            block_ordinal=b["block_ordinal"],
+                            bbox=b["bbox"],
+                            bbox_unit=b["bbox_unit"],
+                            bbox_origin=b["bbox_origin"],
+                            char_start=b["char_start"],
+                            char_end=b["char_end"],
+                        )
+                        for b in document.get("blocks", ())
+                    ),
+                )
+            # No run of this version ever reached page_geometry_extraction
+            # successfully -- absent, never rendered as the same bytes a version with
+            # genuinely zero blocks would answer.
+            return VersionBlockIndexView(
+                version_uid=version_uid,
+                status=STATUS_NOT_PRODUCED,
+                produced_by_run_id=None,
+                text_layer_sha256=None,
+                block_count=0,
+                blocks=(),
+            )
+
+        return self._read(work)
+
+    def _read_artifact(self, artifact: Mapping[str, Any]) -> dict[str, Any]:
+        import json
+
+        from auditmanager.storage.models import parse_blob_id
+
+        blob_id = parse_blob_id(artifact["blob_id"])
+        payload = self._blob_store.read(blob_id, verify=True)
+        return json.loads(payload.decode("utf-8"))
 
 
 class FindingAdapter(_SessionHolder):

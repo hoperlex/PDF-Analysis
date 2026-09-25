@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 013e22ae46ee528d7a4b5fd2b9f24a22d3cb8754152a28e41977d93029f9ef9d
+ *   sha256 00b16114e176238636fa0d62c475ad15483c008625ed1b3c5af3f882d6717ab1
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,13 +17,14 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '013e22ae46ee528d7a4b5fd2b9f24a22d3cb8754152a28e41977d93029f9ef9d';
+export const CONTRACT_DIGEST = '00b16114e176238636fa0d62c475ad15483c008625ed1b3c5af3f882d6717ab1';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
   'AnalysisProfileId',
   'AppendDecisionRequest',
   'AppendDecisionResponse',
+  'BlockGeometry',
   'ChangePasswordRequest',
   'CorrelationId',
   'CostBasis',
@@ -71,6 +72,7 @@ export const SCHEMA_NAMES = [
   'StartRunRequest',
   'UploadDocumentRequest',
   'Verdict',
+  'VersionBlockIndex',
   'VersionUid',
 ] as const;
 
@@ -90,6 +92,26 @@ export type AppendDecisionRequest = {
 export type AppendDecisionResponse = {
   current_verdict: Verdict;
   event: DecisionEvent;
+};
+
+/** One derived block, one extracted text line. `block_id` is an anchor inside this artifact -- it matches `Evidence.block_id`'s pattern -- and is never a contract identifier. */
+export type BlockGeometry = {
+  /** Points, top-left origin, y increasing downward -- see `bbox_unit` and `bbox_origin` beside it. */
+  bbox: {
+    x0: number;
+    x1: number;
+    y0: number;
+    y1: number;
+  };
+  bbox_origin: "top_left";
+  bbox_unit: "pt";
+  block_id: string;
+  /** Position of this block within its page, starting at 0. */
+  block_ordinal: number;
+  char_end: number;
+  /** Document-global offset into the version's prepared text layer, counted in Unicode code points -- the same sequence `Evidence.char_start` indexes. */
+  char_start: number;
+  page_number: number;
 };
 
 export type ChangePasswordRequest = {
@@ -533,6 +555,20 @@ export const VERDICT_VALUES = [
 
 /** Verdict - the closed value set above. */
 export type Verdict = (typeof VERDICT_VALUES)[number];
+
+/** The page-by-page block markup derived for one version. Carries no crops: `page_geometry_extraction` also publishes a page-crop manifest, and this pipeline renders no visual detection, so that manifest is unconditionally empty and is a separate artifact this operation does not expose. */
+export type VersionBlockIndex = {
+  /** `len(blocks)`, carried rather than left for a caller to recompute. */
+  block_count: number;
+  blocks: Array<BlockGeometry>;
+  /** The run whose `page_geometry_extraction` result this is. Null exactly when `status` is `not_produced`. */
+  produced_by_run_id: RunId | null;
+  /** `produced`: a run reached `page_geometry_extraction` and this is its output, `blocks` may still be empty for a version that genuinely has none. `not_produced`: no run of this version has published this artifact yet -- absent, not empty -- and `blocks` is `[]` for that reason instead. */
+  status: "produced" | "not_produced";
+  /** Binds this block index to the exact prepared text layer its spans index. Null exactly when `status` is `not_produced`. */
+  text_layer_sha256: Sha256 | null;
+  version_uid: VersionUid;
+};
 
 export type VersionUid = string;
 

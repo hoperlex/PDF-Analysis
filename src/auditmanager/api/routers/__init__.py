@@ -1,4 +1,4 @@
-"""The eighteen operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The nineteen operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the seven router modules. It takes its
 dependencies as arguments and constructs none of them: choosing what sits behind each port
@@ -24,6 +24,7 @@ from typing import Final
 from fastapi import APIRouter
 
 from auditmanager.api.routers.auth import build_auth_routes
+from auditmanager.api.routers.blocks import build_block_routes
 from auditmanager.api.routers.correlation import (
     CORRELATION_HEADER,
     CorrelationMiddleware,
@@ -53,6 +54,7 @@ from auditmanager.api.routers.idempotency import (
 )
 from auditmanager.api.routers.multipart import MAX_BODY, BodyCapMiddleware
 from auditmanager.api.routers.ports import (
+    BlockPort,
     CredentialPort,
     CsvExportPort,
     DecisionPort,
@@ -98,6 +100,7 @@ __all__ = [
     "IDEMPOTENCY_HEADER",
     "MAX_BODY",
     "METHOD_NOT_ALLOWED_CODE",
+    "BlockPort",
     "BodyCapMiddleware",
     "CorrelationMiddleware",
     "CredentialPort",
@@ -147,28 +150,30 @@ def build_router(
     decisions: DecisionPort,
     exports: CsvExportPort,
     credentials: CredentialPort | None = None,
+    blocks: BlockPort | None = None,
 ) -> Router:
-    """Assemble the eighteen operations.
+    """Assemble the nineteen operations.
 
-    Keyword-only, because seven same-shaped dependencies passed positionally is a wiring
+    Keyword-only, because eight same-shaped dependencies passed positionally is a wiring
     defect waiting to happen and the type checker cannot see it.
 
-    ``credentials`` has a default and the other six do not, for one reason that is not
-    taste: ``api/app.py`` -- another session's file -- calls this with exactly the six it
-    has called it with since `B6`, and ``create_documentation_app`` builds the served
-    document with nothing behind any port at all. A seventh *required* argument would have
-    made the credential exchange a change to that file. The exchange is therefore
-    **declared** in every router and **answerable** only in one that was handed a port,
-    which is the same bargain ``create_documentation_app`` already makes with the other six:
-    the document is a function of the declarations, and serving a request is not.
-    ``test_the_wired_application_can_answer_the_exchange`` is what says the composition root
-    really hands one over.
+    ``credentials`` and ``blocks`` have a default and the other six do not, for one reason
+    that is not taste: ``api/app.py`` -- another session's file -- calls this with exactly
+    the six it has called it with since `B6`, and ``create_documentation_app`` builds the
+    served document with nothing behind any port at all. A seventh or eighth *required*
+    argument would have made either addition a change to that file. Both are therefore
+    **declared** in every router and **answerable** only in an application that was handed
+    a port, which is the same bargain ``create_documentation_app`` already makes with the
+    other six: the document is a function of the declarations, and serving a request is
+    not. ``test_the_wired_application_can_answer_the_exchange`` is what says the
+    composition root really hands the credential port over; `W45-BLOCKS`'s integration
+    suite is the equivalent for ``blocks``.
 
-    **Since wave 39 the returned router also carries that port**, because the authorization
-    seam reads an account's credential generation on every request it guards and is assembled
-    in ``api/app.py``, which is handed the router and an environment and nothing else. See
-    :class:`Router`. Nothing about the six changes, and an application built with no
-    credential port refuses every guarded request rather than serving one.
+    **Since wave 39 the returned router also carries the credential port**, because the
+    authorization seam reads an account's credential generation on every request it guards
+    and is assembled in ``api/app.py``, which is handed the router and an environment and
+    nothing else. See :class:`Router`. Nothing about the six changes, and an application
+    built with no credential port refuses every guarded request rather than serving one.
     """
     router = Router(credentials=credentials)
     # One router, registered onto directly, rather than six included into a seventh.
@@ -179,6 +184,7 @@ def build_router(
     # all. A table nobody can enumerate is a table nobody can check.
     build_project_routes(router, projects)
     build_document_routes(router, documents)
+    build_block_routes(router, blocks)  # type: ignore[arg-type]
     build_run_routes(router, runs)
     # `D-67`. Two collections address a parent that another port owns: `listRunFindings`
     # hangs off a run and `listDecisionHistory` off a finding. Each builder is handed the

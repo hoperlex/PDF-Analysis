@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from auditmanager.api.routers import Router, build_router
 from auditmanager.api.security import TokenSigner, derive_signing_key
 from auditmanager.bootstrap.adapters import (
+    BlockAdapter,
     CredentialAdapter,
     CsvExportAdapter,
     DecisionAdapter,
@@ -149,6 +150,9 @@ def build_application(
         credentials=CredentialAdapter(
             sessions, users=UserAccessRepository(), signer=signer
         ),
+        # `W45-BLOCKS`. Reads the same store and session factory as everything else here;
+        # nothing new is opened for it.
+        blocks=BlockAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,

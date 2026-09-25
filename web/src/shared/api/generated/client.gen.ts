@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 013e22ae46ee528d7a4b5fd2b9f24a22d3cb8754152a28e41977d93029f9ef9d
+ *   sha256 00b16114e176238636fa0d62c475ad15483c008625ed1b3c5af3f882d6717ab1
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -32,6 +32,8 @@ import type {
   GetFindingResult,
   GetRunStatusInput,
   GetRunStatusResult,
+  GetVersionBlocksInput,
+  GetVersionBlocksResult,
   IssueTokenInput,
   IssueTokenResult,
   ListDecisionHistoryInput,
@@ -139,6 +141,18 @@ export function getRunStatus(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetRunStatusResult>> {
   return request<GetRunStatusResult>(OPERATIONS.getRunStatus, input, options);
+}
+
+/**
+ * Read the page-by-page block index derived for one published version.
+ *
+ * `GET /versions/{version_uid}/blocks`.
+ */
+export function getVersionBlocks(
+  input: GetVersionBlocksInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetVersionBlocksResult>> {
+  return request<GetVersionBlocksResult>(OPERATIONS.getVersionBlocks, input, options);
 }
 
 /**
@@ -285,6 +299,7 @@ export const apiClient = {
   getDocumentVersion,
   getFinding,
   getRunStatus,
+  getVersionBlocks,
   issueToken,
   listDecisionHistory,
   listDecisions,

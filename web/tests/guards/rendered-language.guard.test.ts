@@ -1911,6 +1911,72 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       'the `paged` cache state and it is unchanged: the NEXT-page control is reached, the ' +
       'return to the first page is not.',
   },
+  // `W45-BLOCKS`. `blocks-page.tsx` picks a version in three client-side steps — a
+  // project, then one of its documents, then the block index for that document's
+  // version — and each step mounts a component that calls its own query only after a
+  // `useState` set by the PREVIOUS step's button click. The harness renders one static
+  // pass with one seeded cache; it cannot click through project -> document -> blocks
+  // to make the second and third steps' components exist at all, so none of their
+  // branches can be selected by seeding a cache differently. The first step (the
+  // project list itself) needs no click and IS reached by this matrix, which is why it
+  // carries no entry here. The words below are judged by `no branch label carries
+  // English, reachable or not` rather than by this matrix, same as every entry above.
+  {
+    label: 'Список документов не удалось прочитать.',
+    why:
+      "`DocumentChooser`, mounted only after a project is chosen by clicking a project " +
+      'row in `VersionChooser` — a `useState` the harness cannot set, the same mechanism ' +
+      'as every entry above it. `useDocumentList` is never even called in a pass that has ' +
+      'not clicked a project, so there is no query to seed an error into.',
+  },
+  {
+    label: 'Загрузка: документы проекта…',
+    why:
+      "`DocumentChooser`'s pending read, reached only once a project is chosen. Same " +
+      'mechanism as the entry above it: the component does not exist, and its query does ' +
+      'not exist, until a click this harness cannot fire has happened.',
+  },
+  {
+    label: 'В этом проекте нет опубликованных документов.',
+    why:
+      "`DocumentChooser`'s empty answer, reached only once a project is chosen and that " +
+      'project turns out to have published nothing. Same mechanism: the component that ' +
+      'would render it is never mounted by a single static pass.',
+  },
+  {
+    label: 'Разметку блоков не удалось прочитать.',
+    why:
+      "`BlockMarkup`, mounted only after a version is chosen by clicking a document row " +
+      'in `DocumentChooser` — a second `useState` set by a second click this harness ' +
+      'cannot fire. `useVersionBlocks` is never called until then, so there is no query ' +
+      'this pass could seed an error into.',
+  },
+  {
+    label: 'Загрузка: разметку блоков…',
+    why:
+      "`BlockMarkup`'s pending read. Same mechanism as the entry above it: the component " +
+      'and its query both come into existence only after the second click.',
+  },
+  {
+    label: 'Разметка блоков для этой версии ещё не построена.',
+    why:
+      "`BlockMarkup`'s `NotApplicableState` branch, for `status: \"not_produced\"` -- " +
+      'absent, not empty, which is the whole point of `getVersionBlocks` carrying the ' +
+      'field at all. Reached only past both clicks and only for a version whose most ' +
+      'recent successful run never reached `page_geometry_extraction`; the integration ' +
+      'suite (`tests/integration/composition/test_version_blocks_wire_shape.py`) is the ' +
+      'instrument that actually drives this branch, over a real HTTP response.',
+  },
+  {
+    label: 'Блоков не обнаружено.',
+    why:
+      "`BlockMarkup`'s `EmptyState` branch, for `status: \"produced\"` with zero blocks -- " +
+      'the OTHER answer that shares `blocks: []` with the branch above it and must read ' +
+      'differently on screen, which is the property this pair exists to prove. Reached ' +
+      'only past both clicks; the corpus fixture this product ships never exercises a ' +
+      'zero-block produced version, so even a browser drive does not reach this one today ' +
+      '-- reported in docs/program/W45-BLOCKS.md rather than manufactured here.',
+  },
 ];
 
 describe('every branch the widgets have is rendered by some state in this matrix', () => {
