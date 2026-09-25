@@ -282,7 +282,7 @@ def _is_registered(file: str, matched_text: str, registry: frozenset[tuple[str, 
 
 
 def test_true_migration_head_is_a_real_single_head() -> None:
-    assert _true_migration_head() == "0010_run_terminal_detail"
+    assert _true_migration_head() == "0011_document_section"
 
 
 def test_true_surface_triple_matches_the_frozen_contract() -> None:
@@ -303,9 +303,17 @@ def test_true_surface_triple_matches_the_frozen_contract() -> None:
     So: **this literal is a reseal document.** It moves with `openapi.json`, the generated
     client, the mirror and `web/FRONTEND_LOCK.json`, and a reseal that leaves it behind is
     an incomplete reseal.
+
+    **`W46-SEAL` moved it to 17/20/61** (`R-40`'s `section` field and `ProjectSection`
+    enum, `R-44`'s `getDashboardSummary` and its seven response schemas -- eight schemas
+    in total). Also: this brief named this pin's location as
+    `tests/contract/api_v1/test_doc_prose_facts.py:290`; it is no longer there, because
+    the docstring above grew when `D-102` was written up. Reported in
+    `docs/program/W46-SEAL.md` section 4 as a false premise found and corrected, not
+    silently followed.
     """
     triple = _true_surface_triple()
-    assert triple == SurfaceTriple(paths=16, operations=19, schemas=53)
+    assert triple == SurfaceTriple(paths=17, operations=20, schemas=61)
 
 
 def test_true_tagged_tip_is_read_from_git_and_is_plausible() -> None:
