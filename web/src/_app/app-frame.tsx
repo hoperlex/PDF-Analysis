@@ -103,6 +103,15 @@ export function AppFrame({ children }: AppFrameProps) {
         <Link className="am-app__nav" href="/workers">
           Исполнители
         </Link>
+        {/*
+         * `R-44`/`R-45`. Wave 46 in full, no wait for `R-1`'s deploy: the dashboard is
+         * the fourth link this wave adds to a bar that already wraps (`D-93`, above), so
+         * the wrap rule this comment sits beside is what keeps a seventh link from
+         * reopening the wave-43 regression rather than a new rule here.
+         */}
+        <Link className="am-app__nav" href="/dashboard">
+          Дашборд
+        </Link>
         <Link className="am-app__signin" href="/login">
           Вход
         </Link>

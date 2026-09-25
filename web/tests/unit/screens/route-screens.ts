@@ -90,6 +90,7 @@ import type { ReactElement } from 'react';
 import { BlocksPage } from '@/_pages/blocks';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import RootPage from '@/app/page';
+import { DashboardPage } from '@/_pages/dashboard';
 import { DocumentDetailPage } from '@/_pages/document-detail';
 import { KnowledgeBasePage } from '@/_pages/knowledge-base';
 import { LogsPage } from '@/_pages/logs';
@@ -241,6 +242,12 @@ export const SEEDS: readonly Seed[] = [
     address: '/blocks',
     name: 'blocks',
     make: () => createElement(BlocksPage, {}),
+    discipline: {},
+  },
+  {
+    address: '/dashboard',
+    name: 'dashboard',
+    make: () => createElement(DashboardPage, {}),
     discipline: {},
   },
   {

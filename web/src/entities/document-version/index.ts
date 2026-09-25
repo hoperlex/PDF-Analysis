@@ -19,7 +19,11 @@ export { classifyUploadFailure } from './model/upload-failure';
 export { looksLikeDocumentUid, looksLikeVersionUid } from './model/address';
 
 export { useDocumentVersion } from './api/use-document-version';
-export { DOCUMENT_PAGE_LIMIT, useDocumentList } from './api/use-document-list';
+export {
+  DOCUMENT_PAGE_LIMIT,
+  documentListQueryOptions,
+  useDocumentList,
+} from './api/use-document-list';
 export { VERSION_PAGE_LIMIT, useVersionList } from './api/use-version-list';
 
 export type { VersionRowProps } from './ui/version-row';

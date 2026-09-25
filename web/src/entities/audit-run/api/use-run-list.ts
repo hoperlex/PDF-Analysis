@@ -23,15 +23,27 @@ import { listRuns, queryKeys } from '@/shared/api';
 /** Page size. */
 export const RUN_PAGE_LIMIT = 50;
 
-export function useRunList(versionUid: VersionUid, cursor?: string) {
-  return useQuery<RunStatusPage>({
+/**
+ * Options for one version's runs, ready for `useQuery` or `useQueries`.
+ *
+ * Pulled out for the same reason `documentListQueryOptions` was: `widgets/dashboard`'s
+ * run-activity panel fans out over every version a project walk turns up, with
+ * `useQueries` rather than a fixed number of hook calls, and fills the exact key
+ * `useRunList` would.
+ */
+export function runListQueryOptions(versionUid: VersionUid, cursor?: string) {
+  return {
     queryKey: queryKeys.runs.list(versionUid, cursor, RUN_PAGE_LIMIT),
-    queryFn: async () => {
+    queryFn: async (): Promise<RunStatusPage> => {
       const response = await listRuns({
         path: { version_uid: versionUid },
         query: { ...(cursor === undefined ? {} : { cursor }), limit: RUN_PAGE_LIMIT },
       });
       return response.data;
     },
-  });
+  };
+}
+
+export function useRunList(versionUid: VersionUid, cursor?: string) {
+  return useQuery<RunStatusPage>(runListQueryOptions(versionUid, cursor));
 }
