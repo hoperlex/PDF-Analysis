@@ -23,7 +23,7 @@ down`. This is the deployed stack.
 
 | Path | What it is |
 |---|---|
-| `Dockerfile.api` | the eighteen operations under uvicorn, plus `T-3`'s health plane |
+| `Dockerfile.api` | the nineteen operations under uvicorn, plus `T-3`'s health plane |
 | `Dockerfile.web` | `npm run build`, then `next start` |
 | `serve.py` | the entry point: **one built application, two ports** |
 | `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, api, web, one proxy |
@@ -100,7 +100,7 @@ are reachable only on the compose network.
 ## `AUDITMANAGER_API_TOKEN` — read this before the first deployment
 
 The authorization seam of `T-6` is **fail-closed**. An application with no token
-configured answers `authentication_required` to every one of the eighteen operations, while
+configured answers `authentication_required` to every one of the nineteen operations, while
 `/healthz` and `/readyz` stay green because `T-3` puts them outside the authorized
 surface. From a browser that looks like a broken product rather than an unconfigured one.
 
@@ -147,7 +147,7 @@ rather than configure anything. `bootstrap/settings.py` records the same reasoni
 Two ports on the API container, from **one built application**:
 
 ```
-:8000   the eighteen operations, mounted by the proxy at /api/v1
+:8000   the nineteen operations, mounted by the proxy at /api/v1
 :8001   /healthz and /readyz — no credential, no product meaning, no contract
 ```
 

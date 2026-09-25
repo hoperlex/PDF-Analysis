@@ -1827,9 +1827,16 @@ the norms corpus that no `git status` shows.
 > **Corrected 2026-09-25 by `W45-READY`, which measured the thing this row named rather than the
 > thing this row measured.** **6.1 GB is `du` over the directory. It is not the transferred build
 > context**, because BuildKit sends only what the Dockerfile's `COPY` instructions reach — and
-> `Dockerfile.api` has **nine `COPY` lines, every one naming specific paths**, so its context is
-> **16.30 kB with a `.dockerignore` and 16.30 kB without one.** The size defect belongs to
+> `Dockerfile.api` has **nine `COPY` lines, every one naming specific paths**, so **its context
+> is the same with a `.dockerignore` and without one.** The size defect belongs to
 > `Dockerfile.web`'s `COPY web/ ./` alone: **563.89 MB → 26.57 kB**.
+>
+> **And the number in that sentence was wrong when first written, which is the third measurement
+> in one row.** It said *16.30 kB either way*; `W45-JUDGE-A` re-took it against a **genuinely
+> cold BuildKit cache** and got **2.38 MB either way**. The 16.30 kB was a warm-cache artifact.
+> **The claim survived and the figure did not** — so the claim is what this row now states, with
+> the figure named as what it is. *A number measured on a warm cache is a number about the
+> cache.*
 >
 > `OPERATING_CONSTRAINTS.md` §12, and this shape is the one I keep repeating: **a true
 > measurement of something adjacent to the subject.** `du` really does say 6.0 G; that number is

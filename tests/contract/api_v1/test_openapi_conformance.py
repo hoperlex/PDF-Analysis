@@ -86,8 +86,8 @@ surface = conformance.surface
 
 #: `ALPHA_ROADMAP.md` §3 `T-1` and the measurement in the `W13-CONF` brief.
 FROZEN_OPENAPI_VERSION = "3.1.0"
-FROZEN_OPERATION_COUNT = 18
-FROZEN_SCHEMA_COUNT = 51
+FROZEN_OPERATION_COUNT = 19
+FROZEN_SCHEMA_COUNT = 53
 FROZEN_SERVER_URL = "/api/v1"
 
 #: The eighteen operations, written out. Deliberately not derived from the document: an
@@ -118,6 +118,7 @@ FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("POST", "/auth/token", "issueToken"),
     ("GET", "/decisions", "listDecisions"),
     ("POST", "/auth/password", "changePassword"),
+    ("GET", "/versions/{version_uid}/blocks", "getVersionBlocks"),
 )
 
 #: The fifty-one `components.schemas` keys, written out. Forty-three until the `R-5`
@@ -164,6 +165,8 @@ FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
         "InputManifestEntry",
         "IssueTokenRequest",
         "IssueTokenResponse",
+    "VersionBlockIndex",
+    "BlockGeometry",
         "ChangePasswordRequest",
         "ModelCallId",
         "ObservationProvenance",
@@ -585,7 +588,7 @@ class TestN1ComponentReferenceResolution:
         # Every operation that referenced it, not just one. Ten before the `R-5`
         # reseal; thirteen after it, because each of the three new listings declares
         # its own `404` -- an unknown parent is `not_found` and never an empty page.
-        assert len(report) == 13, report
+        assert len(report) == 14, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]
