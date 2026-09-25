@@ -786,6 +786,30 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
 }
 
 /**
+ * Projects and documents load; the version they point at has never been run.
+ *
+ * `W46-DASH`. Every other state seeds `KEYS.runs` with one item — `loadedClient` puts one
+ * there and every state built from it inherits it. The dashboard's run-activity panel has
+ * a branch that needs the *other* combination: at least one project exists (so it is not
+ * the "no projects at all" `EmptyState`) and the walk it drove genuinely found zero runs
+ * (so it is not `LoadingState` either). No existing state produces that pair, which is
+ * exactly the shape this file exists to catch rather than wave through — a branch with no
+ * state that reaches it is a branch no assertion here can see.
+ *
+ * Takes the `loaded` builder rather than calling `loadedClient` itself, for `pagedClient`'s
+ * own reason: the review screen's three finding queries hold the transport envelope and
+ * every other screen holds the bare model, so calling the wrong one throws inside
+ * `review-page.tsx` reading `.data.items` off a bare model — which the first version of
+ * this function did.
+ */
+function runsEmptyClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
+  const client = loaded();
+  const page = { next_cursor: null } as { next_cursor: null };
+  client.setQueryData(KEYS.runs, { items: [], page });
+  return client;
+}
+
+/**
  * A reading with named optional fields REMOVED rather than set to `undefined`.
  *
  * `tsconfig.json` sets `exactOptionalPropertyTypes`, under which an omitted property and a
@@ -919,7 +943,7 @@ function failedClient(): Client {
  * The three `*-bad-address` entries that used to be here are **gone from this list and
  * derived instead**: `malformedVariants()` produces one per (screen, dynamic segment) pair
  * from the directory layout, so eleven refusal branches are now read by this guard where
- * three were before. They are appended once rather than rendered in all sixteen cache
+ * three were before. They are appended once rather than rendered in all seventeen cache
  * states, because the refusal returns before any query is read.
  */
 const DERIVED_SCREENS: readonly { readonly name: string; readonly make: () => ReactElement }[] =
@@ -1063,6 +1087,13 @@ export const CACHE_STATES: readonly {
   { state: 'refused', run: null },
   { state: 'empty', run: null },
   /*
+   * `W46-DASH`, 2026-09-25. Everything else loads; the version in scope has zero runs.
+   * See `runsEmptyClient` for why `empty` (which also empties `KEYS.projects`) does not
+   * already cover this — a screen that reads a listing rather than a route param renders
+   * differently when a project exists and its runs do not than when nothing does.
+   */
+  { state: 'runs-empty', run: null },
+  /*
    * A state in which every listing has a NEXT page, added 2026-09-22 by `W38-KB`.
    *
    * Eight English words were on these screens -- `Next page` and `First page` in four list
@@ -1133,11 +1164,13 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
             ? failedClient()
             : state === 'empty'
               ? emptyClient()
-              : state === 'paged'
-                ? pagedClient(loaded)
-                : state === 'two-runs'
-                  ? twoRunClient(loaded)
-                  : loaded(overrides ?? {});
+              : state === 'runs-empty'
+                ? runsEmptyClient(loaded)
+                : state === 'paged'
+                  ? pagedClient(loaded)
+                  : state === 'two-runs'
+                    ? twoRunClient(loaded)
+                    : loaded(overrides ?? {});
       out.push({ where: `${screen.name} (${state})`, markup: renderScreen(client, screen.make()) });
     }
   }
@@ -1174,7 +1207,7 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
    *
    * Appended once rather than multiplied by `CACHE_STATES`: a screen that refuses its own
    * address returns before it reads a cache, and a screen that does not refuse renders the
-   * same markup the well-formed pass already covers in all sixteen states.
+   * same markup the well-formed pass already covers in all seventeen states.
    */
   for (const variant of malformedVariants(IDENTITIES)) {
     out.push({ where: variant.name, markup: renderScreen(newClient(), variant.make()) });
