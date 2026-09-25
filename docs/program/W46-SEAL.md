@@ -192,7 +192,24 @@ tree before starting rather than trusting the ruling's own citation, per `OPERAT
 §12: `D-46`'s closure really is in `git log` at `W42-SEAL`'s commit, and
 `grep -rn "audit_event" src/` really does return zero writers (only test fixtures).
 
-### 4.4 A pre-existing defect this reseal exposed but did not cause
+### 4.4 A fifth pin, found by the integrator inside this stream's own grant
+
+While this stream was running, the integrator reported (and I did not independently
+find first): `tests/contract/api_v1/test_doc_prose_facts.py::test_the_historical_section_is_excluded_from_the_live_scan`
+pinned four literals tied to one wave — a commit short sha, the heading text "wave 43
+(historical record)", and the live section's claim "closed as `alpha-w44`" — and it went
+red the day it was written, when `CURRENT_STATE.md`'s heading was renamed closing wave
+45. `tests/contract/api_v1/**` is this stream's grant, so the repair was mine to make
+rather than the integrator reaching across. Rewritten to derive its expectation from the
+marker `_HISTORICAL_HEADING` finds in the file as it stands, rather than typing in what
+it currently says — see commit history for the exact diff and the mutation that shows it
+still fails when it should. This is a fifth pin location beyond the four named in 4.1,
+found only because it broke *between* wave closes rather than *at* one, which is the
+detail that makes it worth recording separately: `D-105`'s "moves on its own trigger"
+turns out to include "editing a heading for clarity", not only "resealing the contract"
+or "closing a migration".
+
+### 4.5 A pre-existing defect this reseal exposed but did not cause
 
 `docs/program/CURRENT_STATE.md` still says the tagged tip "closed as `alpha-w44`"; the
 real tagged tip, read from `git`, is `alpha-w45`. This is unrelated to `R-40`/`R-44` —
