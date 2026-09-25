@@ -850,3 +850,38 @@ not that the coordinates differ but that the system lies.
 plus the tests asserting the current caption. **Not taken when it was offered:** wave 45's
 `W45-BLOCKS` holds `web/src/**` while it runs, and two sessions writing that tree in parallel is
 the collision `D-89` already cost this programme once.
+
+### `R-44` — the dashboard is all four panels, in wave 46, without waiting for the deploy
+
+**Ruled 2026-09-25 by direct poll, given to `pdf-analysis-d6` with the options priced from the
+tree.** The owner selected **every** candidate — per-section breakdown, findings by verdict, run
+activity and spend, documents per project — and on timing chose wave 46 **explicitly against
+waiting for `R-1`**. His reasoning: the reseal opens under `R-40` either way, and **doing it once
+is cheaper than doing it twice.**
+
+**So `D-63` is not a minimal panel**, and the row that called it a deferred nice-to-have is now
+two waves out of date in the other direction.
+
+**One correction to `D-63`'s own text, measured before briefing.** It says *"runs, findings and
+verdicts have no aggregate operation at all"* — true when written and **it predates `listDecisions`**,
+so read literally it overstates the cost. **Only one of the four panels actually needs `R-40`:**
+
+| panel | source today |
+|---|---|
+| documents per project | `listProjects` → `Project.document_count` **exists** |
+| findings by verdict | `listDecisions` (`R-24`) with `category` and `verdict` parameters **exists** |
+| run activity and spend | `listRuns` (`R-5`); `RunStatus` carries `cost_micros`, `cost_basis`, `model_call_count` **exists** |
+| **per-section breakdown** | **nothing — this is the panel `R-40`'s field is for** |
+
+*(All four verified against `contracts/api/v1/openapi.json` before this was written.)*
+
+**The integrator's decision on shape, since `R-29` puts the reseal here, and it follows the
+drafting session's recommendation against the cheaper path:** the reseal carries **one aggregate
+read serving all four panels**, not three client-side page-walks over the existing listings.
+
+**The argument that decides it is `R-24`'s own.** `R-24` was ruled **for** a listing operation and
+**against** a client-side walk, deliberately and against the recommendation the owner was given
+at the time. **Founding the dashboard on walks over the very operation that exists to prevent
+walks would be an odd inheritance** — and three page-walks built now are three page-walks a later
+aggregate read deletes. The reseal is open regardless; the marginal cost of doing it right is the
+smallest it will ever be.
