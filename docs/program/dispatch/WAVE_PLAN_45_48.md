@@ -22,38 +22,57 @@ certifications.
 **So these waves are chosen to be the work that is not waiting on either**, and to make the
 host wave short when it comes rather than to substitute for it.
 
-## W45 — the blocks screen made real, and the readiness that shortens the host wave
+## W45 — the day the key arrives, and the one product advance that does not need it
 
-> **This section replaced a plan for a second section vertical (ПОС), written and committed
-> an hour earlier and withdrawn before any stream saw it.** Two facts in the tree forbid it and
-> I had not read either: `PROTOTYPE_PROFILE.md` §7.2 lists *"disciplines other than the single
-> AR validation profile"* under **Deferred**, and `analysis/text/profile.py`'s own docstring says
-> *"a second profile is a scope change"*. `R-25` also sequenced the thirteen sections **after the
-> first deploy**, which is `R-1` and the owner's. **Building ПОС now would have reordered the
-> owner's sequencing and taken a deferred scope decision on their behalf** — `D-96`'s exact
-> shape, caught by the check it asks for, one step before four sessions were dispatched on it.
+> **Redesigned 2026-09-25, and this is the second withdrawal in this section.** The first
+> version planned a second section vertical (ПОС) and was withdrawn an hour later because
+> `PROTOTYPE_PROFILE.md` §7.2 defers a second discipline and `R-25` sequenced the thirteen
+> sections **after the first deploy**. The second version kept `W45-BLOCKS` on a premise that
+> was still unchecked: *where the geometry goes*. It goes to the **blob store** as two
+> artifacts, and one of them — `ROLE_PAGE_CROPS` — is published **empty** (`crops=[]`). That
+> does not kill the stream; it changes what the screen can honestly show, and finding it before
+> dispatch rather than after is the whole of `D-96`'s discipline.
 
-| stream | subject |
+### The situation this wave is shaped by, stated once
+
+**Nothing that demonstrates the product can be done without the owner.** The stand runs in
+`recorded` mode (`R-30`) because `D-70`'s stub has no host; a real document has no recording, so
+**the alpha cannot be driven end-to-end on a real PDF at all** until a provider key exists. The
+host (`R-1`) is the other half, and together they hold `PA-01` criteria 1 and 2, unestablishable
+through **four** certifications.
+
+**So the wave is not chosen by what is most valuable in the abstract — it is chosen by what is
+still possible.** Two streams, and they are honestly different in kind rather than pretending to
+one theme:
+
+| stream | why it is in this wave |
 |---|---|
-| `W45-BLOCKS` | the `/blocks` screen stops being a stub, **using data the pipeline already produces** |
-| `W45-READY` | `D-80`'s `.dockerignore` **verified by a real build**, `D-79`'s repair so the gate reads `docs/`, and a deploy rehearsal from a clean clone |
+| `W45-READY` | **it shortens the blocked path.** Every hour here is an hour the host wave does not spend, and the host wave is the only thing that moves a certification criterion |
+| `W45-BLOCKS` | **it advances the product without the blocked resource.** `page_geometry_extraction` carries no adapter, no model and no provider reference, so it produces its artifacts in `recorded` mode exactly as in `live` |
 
-**Why blocks is buildable today when almost nothing else is.** `W43-PREP`'s data-shape note —
-the deliverable a stream would have skipped — found that *"there is no geometry to draw"* was
-false: `analysis/stages/page_geometry_extraction.py:226` writes a real `bbox {x0,y0,x1,y1}` in
-points, top-left origin, **one per text line**, with its unit and origin beside it. What is
-missing is **an operation that returns it**.
+### `W45-READY` — the deploy stops being a hope
 
-**And that stage needs no provider.** It is one of the four in `PC01_STAGES` and carries no
-adapter, no model and no provider reference, so it runs in `recorded` mode exactly as in `live`.
-**`D-70` does not block this**, which is what makes it the right work while the key is missing.
+1. **`D-80`** — a `.dockerignore`, **verified by a real build and not by inspection.** The build
+   context is **6.1 GB**, of which 5.3 GB is `.local/`, and `Dockerfile.web` runs `npm ci` and
+   then `COPY web/ ./` over it, so the image's dependency tree is the build host's rather than
+   the lockfile's. `PA-01` criterion 1 is *deploy from a clean clone*, where none of those
+   directories exist — **the certification passes in the one condition where the defect cannot
+   appear.**
+2. **`D-79`** — the gate reads `docs/`. Every count the gate checks is a count in code; the
+   surface, the migration head and the tagged tip in prose are unchecked, and this file's own
+   orientation document went stale twice.
+3. **A clean-clone rehearsal, timed.** Not to establish criterion 1 — this host has run
+   `deploy.sh` — but to turn the host wave into a checklist with measured steps.
 
-It is a reseal — an operation, its client, the mirror and `FRONTEND_LOCK.json` — and under
-`R-29` the shape is the integrator's to pick. `R-23` ruled the screen wanted and said each is
-wired *"as its vertical lands"*; a deterministic read is that vertical landing.
+### `W45-BLOCKS` — the block markup a reviewer can open
 
-**`W45-READY` is the wave's leverage.** Every hour it spends is an hour the host wave does not,
-and the host wave is the only thing that moves a `PA-01` criterion.
+`R-23` asked for *«постраничная разметка документа, векторный граф блока»*. **The first half
+exists in the data and the second does not**, and the stream says which is which on screen
+rather than implying both.
+
+A reseal: one operation returning the block index for a version, its client, the mirror and
+`FRONTEND_LOCK.json`. Under `R-29` the shape is the integrator's. **`R-39` now permits the screen
+to say, in the words of the subject, what it cannot yet show.**
 
 ## W46 — the logs read operation, or the debt wave
 
