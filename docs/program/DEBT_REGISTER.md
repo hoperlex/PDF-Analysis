@@ -14,7 +14,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-56** | project sections: **ruled `R-40`** — the field AND the aggregation, in one reseal | brief as one wave, one reseal owner |
 | **D-63** | a dashboard — **the reason it was deferred has lapsed** (`R-40` authorises the reseal) | re-read, do not carry forward |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
-| D-76 | a manual-test document names a head three versions stale | **closed 2026-09-23**, corrected in place |
+| **D-76** | **reopened**: the same document went stale again, underneath the note recording that it had | the guard that catches it exists now |
 | **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |
 | D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
 | **D-79** | `CURRENT_STATE.md` — the file `AGENTS.md` makes every agent read first — went stale twice, and said the system was open when it is closed | the gate does not read `docs/` |
@@ -1652,7 +1652,7 @@ account (*a default changed*), or restricting `/api/v1/auth/token` at the proxy 
 surface narrowed*). **The stream did neither and said why**, which is the behaviour `R-29` is
 for. The alpha ships without it.
 
-### D-76 — a manual-test document names a migration head three versions stale
+### D-76 — a manual-test document names a migration head three versions stale — **REOPENED, third instance**
 
 **Found by `W40-LIMIT`, outside its grant.** `docs/manual-tests/PC-01_prototype.md:39` names
 `0005_truncated_call_status`. The head is `0008_sign_in_throttle`.
@@ -1664,6 +1664,26 @@ row: a finding recorded in an artifact nobody edits does not repair anything, an
 second time this programme has watched prose rot after being measured (`D-23`).
 
 Check: `grep -n 000 docs/manual-tests/PC-01_prototype.md` against `ls db/migrations/versions/`.
+
+> **Reopened 2026-09-25, and the third instance is the one that matters.** `W45-READY` found it
+> while building `D-79`'s guard, from outside its own grant.
+>
+> `docs/manual-tests/PC-01_prototype.md:39` says **`0008_sign_in_throttle`**. The head is
+> **`0010_run_terminal_detail`** — `0009_reviewer_display_name` and `0010` both landed in wave 42.
+> Two bare operation counts in the same document are stale with it.
+>
+> **Line 41 is the correction note the integrator wrote on 2026-09-23**, recording that line 39
+> had said `0005` and had been corrected. **The document went stale again directly underneath
+> it** — the identical shape as `D-79`, where `CURRENT_STATE.md` rotted beneath the note
+> recording that it had rotted. **Twice now, in two different documents, a repair note has been
+> the last true sentence above a false one.**
+>
+> **What is different this time is that the instrument exists.**
+> `tests/contract/api_v1/test_doc_prose_facts.py` catches exactly this, found it on the real
+> document rather than on a synthetic string, and registered it as a **named outstanding claim**
+> because the path was outside that stream's grant. **The row closes when the document is
+> corrected AND that exemption is removed in the same commit** — an exemption left behind is how
+> a guard goes back to proving nothing.
 
 ### D-77 — `origin/dev` sat 41 commits behind `origin/main`, and a peer measured the programme on it
 
@@ -1803,6 +1823,22 @@ that called this a build-context size problem. It is not only that.**
 `context: ../..` — the repository root (`infra/deploy/compose.server.yml:112,127,174`). So every
 build ships the whole working tree to the daemon: **6.1 GB here, of which 5.3 GB is `.local/`**,
 the norms corpus that no `git status` shows.
+
+> **Corrected 2026-09-25 by `W45-READY`, which measured the thing this row named rather than the
+> thing this row measured.** **6.1 GB is `du` over the directory. It is not the transferred build
+> context**, because BuildKit sends only what the Dockerfile's `COPY` instructions reach — and
+> `Dockerfile.api` has **nine `COPY` lines, every one naming specific paths**, so its context is
+> **16.30 kB with a `.dockerignore` and 16.30 kB without one.** The size defect belongs to
+> `Dockerfile.web`'s `COPY web/ ./` alone: **563.89 MB → 26.57 kB**.
+>
+> `OPERATING_CONSTRAINTS.md` §12, and this shape is the one I keep repeating: **a true
+> measurement of something adjacent to the subject.** `du` really does say 6.0 G; that number is
+> simply not what a build transfers.
+>
+> **The other half of the row was reproduced for real rather than argued.** A marker was planted
+> in the host's `web/node_modules` — something `npm ci` never produces — and after
+> `docker compose build` on the real deploy path, **the marker was inside the image.** With the
+> `.dockerignore` it is gone. That is the defect stated as behaviour instead of as inference.
 
 **Size is the visible half. This is the other one** — `infra/deploy/Dockerfile.web:23–26`:
 
