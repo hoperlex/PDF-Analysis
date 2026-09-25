@@ -885,3 +885,61 @@ at the time. **Founding the dashboard on walks over the very operation that exis
 walks would be an odd inheritance** — and three page-walks built now are three page-walks a later
 aggregate read deletes. The reseal is open regardless; the marginal cost of doing it right is the
 smallest it will ever be.
+
+## 3.16 — `R-45` … `R-48`, ruled 2026-09-25 on the path to GO
+
+The owner supplied a ten-step *minimal path to GO* and asked for a wave from it, for what could
+be excluded, and for the forks to be settled by poll. `docs/program/dispatch/GO_PATH.md` marks
+all ten against the tree: **three were already done, four cannot be waved at all** — they need a
+machine, a domain, a certificate and an API key — **and three are buildable now.**
+
+### `R-45` — wave 46 is the dashboard; the GO path is wave 47
+
+`R-44` had already placed the dashboard in wave 46 and the GO list arrived pointing at the same
+wave. **The owner kept `R-44` and moved GO to 47.** Defensible on its own terms: four of the ten
+GO steps end at the owner regardless, so a GO wave run now would stop at him on the same four —
+whereas the dashboard's reseal is open under `R-40` and pays for itself once.
+
+### `R-46` — the publication-readiness command reports; it does not block
+
+Steps 4–8 are a checklist somebody has to remember. One command answers *"is this deployment safe
+to publish?"* — default credential, TLS, plain HTTP, provider mode, cost ceiling, backup.
+
+**Ruled: it records the corpus of problems it finds and raises them as register rows requiring the
+owner's decision, considered in wave 47.** It does **not** refuse a deploy.
+
+**The precedent behind that is two days old and expensive.** `D-72`'s repair was correct and
+fail-closed, and it took the owner's stand down for a day, because a configuration that had always
+been wrong stopped being survivable the moment the code got strict. **A readiness check that
+refuses is the same shape**, and the owner has now chosen the other side of it deliberately.
+
+### `R-47` — the durable session register enters the GO wave
+
+`D-65`'s one remaining live item. The BFF holds sessions in the Node process's memory, so **a
+web-container restart signs every reviewer out — on every deploy, not on a rare crash.** With
+three to five pilot experts that is a support incident per deployment, and deployments during a
+pilot are certain.
+
+### `R-48` — the password policy, settled in detail by a second poll
+
+The owner took the general shape first and then said the specifics were mine to ask, not to
+assume. Asked, and answered:
+
+| | ruled |
+|---|---|
+| minimum length | **8** — NIST SP 800-63B's floor; the lockout already makes guessing impractical, so length is defending against a leaked hash rather than against a guesser |
+| blocklist | **contextual only** — the account's login, the product name, the current password. **Nothing stored, nothing to license, nothing to go stale** |
+| the seeded account | **sign-in works and leads straight to the change screen.** No other screen opens until the password is changed, so the default cannot be left in place by forgetting |
+| expiry | **none.** Periodic rotation drives people to predictable iterations; revocation already exists and acts immediately |
+
+**One consequence the integrator owes out loud, because the combination permits it.** With a
+contextual-only list and an 8-character floor, the literal string `password` **is itself a legal
+password** — it is exactly 8 characters, it is not the login, and it is not the product name.
+It is refused at the one moment that matters, the forced first change, because it is then the
+*current* password. **Afterwards nothing refuses it.**
+
+**Recommended, and easy to decline:** add the **shipped default credential value** to the
+contextual list. That is still context about this deployment rather than a stored corpus — the
+system already knows it, `access-check DEFAULT CREDENTIAL` is built on knowing it — so it costs
+no file, no dependency and no licence. **Not done unless the owner says so;** recorded here so
+the next reader does not discover the gap and assume nobody looked.
