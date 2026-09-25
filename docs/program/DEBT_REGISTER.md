@@ -24,6 +24,10 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-89** | a shared hotspot with no owner: the journey manifest, and I wrote both grants | the rule is in the row |
 | **D-91** | two streams drew `R-18`'s line in different places in one wave | **owner**: where does it fall |
 | D-96 | three register rows in three waves sent a stream to a file that does not carry what the row says | the check command is the row |
+| **D-98** | the surface guard's `SURFACE_NOUNS` misses *declarations*, *models*, *copies*, *places* — two live stale sentences sit inside files it **does** scan | a synonym set is a literal |
+| **D-99** | the same guard reads only `.py/.md/.ts/.tsx`, so **eight** stale sentences in `.yml`, `.conf`, `.sh`, `.example` and Dockerfiles are invisible | off by four, and older than this wave |
+| **D-100** | `docs/program/P02_SEAMS.md` is outside every scanner, and has now recorded the same defect about itself **twice** | the note is doing the instrument's job |
+| D-101 | `R-48`'s policy makes the literal string `password` a legal password after the first change | one line, and the owner has been asked |
 | **D-97** | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | consolidate against one provider/state contract |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -2537,6 +2541,56 @@ verify could have discovered that.
 
 Check: `find web/src/app -name page.tsx | wc -l` against any prose in `docs/` claiming a count of
 addresses.
+
+### D-98, D-99, D-100 — the surface guard is three blind spots, and `W45-JUDGE-A` found all three past its brief
+
+**The `D-23` guard reads prose against the surface it describes. It has three holes and each is a
+different kind.**
+
+**`D-98` — a synonym set is a literal.** `SURFACE_NOUNS` tracks *operation*, *schema*, *path*,
+*code* and *handler*. It does not track *declarations*, *models*, *copies* or *places* — so
+`src/auditmanager/api/app.py:157` (*"eighteen declarations and the 51 models"*) and
+`src/auditmanager/api/routers/declarations.py:3` (*"fifteen copies… fifteen places"*) are stale,
+**inside files the guard does scan**, and it looks straight at them. This is `D-88`'s shape one
+level in: the *subject* was derived and the *vocabulary* stayed a list.
+
+**`D-99` — the file-extension filter.** The guard reads `.py`, `.md`, `.ts` and `.tsx`. **Eight**
+stale sentences live in `infra/deploy` in Dockerfiles, `.yml`, `.conf`, `.example` and `.sh`.
+They **predate this wave and are off by four**, not by the one wave 45 added — so they have been
+wrong since the reseal of wave 34 and nothing has ever read them.
+
+**`D-100` — the file nobody scans.** `docs/program/P02_SEAMS.md` is in none of the guard's three
+trees. Its paragraph said *"Eighteen operations, sealed"* while its table listed nineteen — and
+**line 601 of that same file already recorded the identical defect happening once before**
+(*"Fifteen operations, sealed"* against a table of seventeen). **It has now written the same note
+about itself twice.** *A note is what a programme writes instead of an instrument, and this file
+has been asked to do the instrument's job two waves running.*
+
+**All three are one repair and it is the same one every time:** derive the subject from the tree
+instead of from a list — the files, the extensions and the nouns. `tests/e2e/test_pc01_journey_conformance.py`
+has been doing it with `rglob` since before any of these rows existed.
+
+Check: `grep -n SURFACE_NOUNS tests/contract/api_v1/test_surface_counts_in_prose.py`, and the
+extension filter beside it.
+
+### D-101 — `R-48`'s policy makes `password` a legal password, after the one moment it is refused
+
+**Named by the integrator when the ruling was recorded, not discovered later.**
+
+`R-48` sets a floor of **8 characters** and a **contextual-only** blocklist — the login, the
+product name, the current password. The literal string `password` is **exactly 8 characters**, is
+not the login and is not the product name.
+
+**It is refused at the forced first change**, because it is then the *current* password. **After
+that nothing refuses it**, including setting it back.
+
+**The repair is one line and is not taken:** add the **shipped default credential value** to the
+contextual list. That is still context about this deployment rather than a stored corpus — the
+system already knows it, and `access-check DEFAULT CREDENTIAL` is built on knowing it — so it
+costs no file, no dependency and no licence. **The owner has been asked and has not answered;
+this row exists so the gap is not rediscovered as a finding.**
+
+Check: read `R-48` in `OWNER_RULINGS_2026-09-17.md` §3.16 against `access/check.py:65`.
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 

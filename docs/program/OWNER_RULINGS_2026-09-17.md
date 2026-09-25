@@ -943,3 +943,19 @@ contextual list. That is still context about this deployment rather than a store
 system already knows it, `access-check DEFAULT CREDENTIAL` is built on knowing it — so it costs
 no file, no dependency and no licence. **Not done unless the owner says so;** recorded here so
 the next reader does not discover the gap and assume nobody looked.
+
+### `R-49` — wave 48 is correction, debt closure and a code audit
+
+Ruled 2026-09-25 while wave 45 was closing. **Cadence and content agree for once:** 45 built, 46
+is the dashboard, 47 is GO — and four of GO's ten steps end at the owner, so 48 arrives at
+exactly the point where a wave that can only wait would otherwise be scheduled.
+
+**What it carries, named now so it is not invented at the end:** `D-98`, `D-99` and `D-100` —
+the surface guard's three blind spots, which are one repair — plus `D-76`'s third instance,
+`D-87`, `D-89`'s rule, `D-96`'s discipline, `D-97`'s six renderer copies, `D-74`, and whatever
+46 and 47 leave.
+
+**And a code audit, which this programme has never run as its own subject.** Every audit so far
+has been a judge inside a wave, auditing that wave's work. `W48` reads the tree as a whole —
+which is how `D-99`'s eight sentences stayed wrong since wave 34 without anybody's brief ever
+pointing at them.
