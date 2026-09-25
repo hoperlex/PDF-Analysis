@@ -1,0 +1,57 @@
+# `D-80`. Both `infra/deploy/Dockerfile.api` and `Dockerfile.web` build with
+# `context: ../..` (`infra/deploy/compose.server.yml`), so without this file every build
+# ships the WHOLE repository working tree to the docker daemon, including directories
+# no COPY instruction ever names.
+#
+# Two distinct costs, both measured on a real build rather than assumed:
+#
+# 1. SIZE. The build context is transferred before either Dockerfile is even read, so
+#    everything below is sent and hashed whether or not any COPY reaches it. Measured
+#    at `1664f90` in a working tree with `.local/`, `.venv/` and `web/node_modules/`
+#    populated: 563.89 MB transferred to build the web image alone, dominated by
+#    `web/node_modules` (576 MB on disk) and this session's own `.local/` (219 MB of
+#    uv/pip cache from `make bootstrap` -- a *different* `.local/` than the 5.3 GB norms
+#    corpus the row was originally measured against in the main checkout, and both are
+#    swept in by the same unbounded context for the same reason).
+#
+# 2. CORRECTNESS. `Dockerfile.web` runs `npm ci` against the lockfile and THEN
+#    `COPY web/ ./`, which OVERLAYS the build host's `web/node_modules` on top of the
+#    clean install -- `COPY` merges, it does not replace. Proved on this host: a marker
+#    file planted only in the host's `web/node_modules` (never produced by `npm ci`)
+#    was present in `/web/node_modules/` of the image built without this file, and
+#    absent once this file excluded `**/node_modules` from the context. Without this
+#    exclusion, `package-lock.json`, `pinned-versions.guard.test.ts` and
+#    `web/FRONTEND_LOCK.json` describe a tree the image need not actually contain.
+#
+# Correction to the row as measured: under this host's BuildKit (docker 29.8, the
+# default builder), the API build was never 6+ GB on its own -- its COPY instructions
+# name specific paths (`src/`, `db/`, `contracts/`, `fixtures/recorded/`, ...) and
+# BuildKit only requests what a COPY names, so its context stayed a few kB either way
+# (measured: 16.30 kB, identical with and without this file). The size defect is
+# `Dockerfile.web`'s alone, because `COPY web/ ./` names a whole subtree rather than
+# individual paths. This file is still correct for both images -- it is what makes the
+# node_modules overlay impossible for `web` and is cheap insurance for `api` -- the
+# correction is about which build the SIZE half of this row actually costs.
+#
+# A clean clone has none of the directories below, which is exactly why `PA-01`
+# criterion 1 (deploy from a clean clone) cannot see this defect -- `D-80`.
+#
+# Verified by a real build of both images after this file was added, not by inspection:
+# a `.dockerignore` line that excludes something a `COPY` instruction names by path
+# would fail the build outright, and changing what `COPY web/ ./` sees is this file's
+# whole purpose.
+
+.git
+.local
+.venv
+**/node_modules
+web/.next
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.log
+.env
+.env.*
+!.env.example
