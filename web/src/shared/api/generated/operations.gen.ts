@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 013e22ae46ee528d7a4b5fd2b9f24a22d3cb8754152a28e41977d93029f9ef9d
+ *   sha256 00b16114e176238636fa0d62c475ad15483c008625ed1b3c5af3f882d6717ab1
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -42,6 +42,7 @@ import type {
   StartRunRequest,
   UploadDocumentRequest,
   Verdict,
+  VersionBlockIndex,
   VersionUid,
 } from './types.gen';
 
@@ -54,6 +55,7 @@ export const OPERATION_IDS = [
   'getDocumentVersion',
   'getFinding',
   'getRunStatus',
+  'getVersionBlocks',
   'issueToken',
   'listDecisionHistory',
   'listDecisions',
@@ -242,6 +244,33 @@ export type GetRunStatusInput = {
 
 /** Success body of `getRunStatus` (`application/json`, HTTP 200). */
 export type GetRunStatusResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// getVersionBlocks - GET /versions/{version_uid}/blocks
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the page-by-page block index derived for one published version.
+ *
+ * Keyed by `version_uid`, not by `run_id`. `page_geometry_extraction` carries no model and no provider reference, so its output is a deterministic re-derivation of the source bytes and the published text layer -- identical across every run of this version that reaches the stage successfully. Addressing it by run would ask a caller to already hold a run identity to read a fact about the document.
+ *
+ * An unknown `version_uid` is `404`. A version that exists but whose most recent successful run never reached `page_geometry_extraction` -- or has no run at all -- answers `200` with `status: "not_produced"` and `blocks: []`; that is a different fact from a version whose geometry was produced and genuinely has no blocks, which answers `200` with `status: "produced"` and `blocks: []`. The two are the same bytes for `blocks` and different bytes for `status`, and a caller reads `status` to tell them apart -- never the length of `blocks`.
+ *
+ * This operation does not carry crops. `page_geometry_extraction` also publishes a page-crop manifest, but this pipeline renders no visual detection and that manifest is unconditionally empty (`crop_policy: "none"`, `crops: []`); it is a separate artifact and is not exposed on this operation at all, rather than being shipped here as a field that is always `[]`.
+ */
+export type GetVersionBlocksInput = {
+  /** Path parameters, substituted into `/versions/{version_uid}/blocks`. */
+  path: {
+    version_uid: VersionUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getVersionBlocks` (`application/json`, HTTP 200). */
+export type GetVersionBlocksResult = VersionBlockIndex;
 
 // ------------------------------------------------------------------------------------
 // issueToken - POST /auth/token
@@ -682,6 +711,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['runs'],
+  },
+  getVersionBlocks: {
+    operationId: 'getVersionBlocks',
+    method: 'GET',
+    path: '/versions/{version_uid}/blocks',
+    pathParams: ['version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['documents'],
   },
   issueToken: {
     operationId: 'issueToken',
