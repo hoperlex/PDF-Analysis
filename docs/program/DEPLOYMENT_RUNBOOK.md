@@ -63,7 +63,7 @@ ssh -L 31500:127.0.0.1:31500 <host>        # then open http://127.0.0.1:31500 lo
 
 **Why the default is loopback, measured rather than assumed.** The compose file used to
 publish with no interface at all, which binds `0.0.0.0`. On this host the stand answered
-**`200`** on its **public** address, at `/bff/v1` — which serves all eighteen operations,
+**`200`** on its **public** address, at `/bff/v1` — which serves all nineteen operations,
 **writes included**, with no credential, because the browser deliberately holds no secret and
 the BFF route adds it server-side. The origin is unauthenticated *by design*; nothing but the
 network was keeping anyone out.
@@ -170,7 +170,7 @@ Two of its values are not free choices:
   token is corrected in `infra/deploy/README.md`.
 
   The seam is **fail-closed**: a container started without it exits non-zero rather than
-  serving `authentication_required` to all eighteen operations, which from a browser looks
+  serving `authentication_required` to all nineteen operations, which from a browser looks
   like a broken product rather than an unconfigured one;
 
 * **the passwords.** `deploy.sh` compares what you wrote against the example file's own

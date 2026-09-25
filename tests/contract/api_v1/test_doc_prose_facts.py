@@ -286,8 +286,26 @@ def test_true_migration_head_is_a_real_single_head() -> None:
 
 
 def test_true_surface_triple_matches_the_frozen_contract() -> None:
+    """A PINNED literal, deliberately, and every reseal must move it.
+
+    Deriving this from the contract would make it a tautology: `_true_surface_triple()`
+    already parses that document, so comparing its answer to the same document would
+    check nothing (`OPERATING_CONSTRAINTS.md` §12 — a query that shares an assumption
+    with its subject is not a measurement). The pin is what makes this an independent
+    second opinion about the parse.
+
+    **The cost is that it goes stale exactly once per reseal, and it did.** `W45-BLOCKS`
+    moved the surface to 16/19/53 and this literal stayed at 15/18/51, so the guard built
+    to catch stale counts was itself the stale count -- red on the merged tip, and the
+    integrator reported "contract suites green" from a scope that did not include this
+    file. `D-102`.
+
+    So: **this literal is a reseal document.** It moves with `openapi.json`, the generated
+    client, the mirror and `web/FRONTEND_LOCK.json`, and a reseal that leaves it behind is
+    an incomplete reseal.
+    """
     triple = _true_surface_triple()
-    assert triple == SurfaceTriple(paths=15, operations=18, schemas=51)
+    assert triple == SurfaceTriple(paths=16, operations=19, schemas=53)
 
 
 def test_true_tagged_tip_is_read_from_git_and_is_plausible() -> None:

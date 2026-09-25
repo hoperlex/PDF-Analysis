@@ -67,7 +67,7 @@ printed *“the deployed stack IS this tree (20a14de)”*. Logs:
 `/root/w44-deploy.log`, `/root/w44-verify-candidate.log`.
 
 **Wave 44 changes no contract, migration, dependency, lockfile, composition root or global
-style.** The contract remains **15 paths / 18 operations / 51 schemas**, the error catalog
+style.** The contract is **16 paths / 19 operations / 53 schemas**, the error catalog
 remains **22 codes**, and the migration head remains **0010**. `D-82`, `D-88`, `D-90`,
 `D-92`, `D-93`, `D-94` and `D-95` close. `D-83` remains honestly open because the
 stack-free gate renders 0 of the twelve browser refusal sentences; the restored live drive is
@@ -144,7 +144,7 @@ credential ever issued to an account at once with no list and no restart — and
 because changing a password revokes the credential that made the request. Wave 40 added the rate
 limit and the lockout, migration `0008_sign_in_throttle`. That is `R-26` complete.
 
-**The contract surface is 15 paths / 18 operations / 51 schemas.** Progression: 12/15/46 →
+**The contract surface is 16 paths / 19 operations / 53 schemas.** Progression: 12/15/46 →
 13/16/48 (wave 34) → 14/17/50 (wave 38, the knowledge base's `listDecisions`) → 15/18/51
 (wave 39, `changePassword`). **A reseal is four documents in one change** — `contracts/api/v1/openapi.json`,
 the generated client, the mirror, and `web/FRONTEND_LOCK.json` — the coupling `D-18` named.

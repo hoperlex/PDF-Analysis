@@ -28,6 +28,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-99** | the same guard reads only `.py/.md/.ts/.tsx`, so **eight** stale sentences in `.yml`, `.conf`, `.sh`, `.example` and Dockerfiles are invisible | off by four, and older than this wave |
 | **D-100** | `docs/program/P02_SEAMS.md` is outside every scanner, and has now recorded the same defect about itself **twice** | the note is doing the instrument's job |
 | D-101 | `R-48`'s policy makes the literal string `password` a legal password after the first change | one line, and the owner has been asked |
+| **D-102** | the guard built to catch stale counts **was** the stale count, and I reported green from a scope that excluded it | the pin is a reseal document |
 | **D-97** | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | consolidate against one provider/state contract |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -2591,6 +2592,45 @@ costs no file, no dependency and no licence. **The owner has been asked and has 
 this row exists so the gap is not rediscovered as a finding.**
 
 Check: read `R-48` in `OWNER_RULINGS_2026-09-17.md` §3.16 against `access/check.py:65`.
+
+### D-102 — the guard built to catch stale counts was itself the stale count, and the integrator certified green from a scope that excluded it
+
+**Found by `W45-JUDGE-X` on the merged tip, gate-blocking. Both halves are the integrator's.**
+
+`W45-READY` built `tests/contract/api_v1/test_doc_prose_facts.py` to catch prose that drifts from
+the tree. **Every assertion in it derives from the live contract except one** — its own
+self-check pinned `SurfaceTriple(paths=15, operations=18, schemas=51)` as truth. `W45-BLOCKS`
+moved the surface to **16/19/53** in the same wave, and the pin stayed. Two tests red on
+`a8dd290`, and on `a10c7f8` before it.
+
+**And `a10c7f8`'s commit message says "Contract suites green: 238 passed."** I ran three named
+paths — `test_openapi_conformance.py`, `tests/contract/domain_p02/` and
+`test_surface_counts_in_prose.py` — and **did not include the file the wave had just built**,
+which was the one most likely to break. `OPERATING_CONSTRAINTS.md` §12: *a true measurement of a
+scope that is not the subject.* The judge could not reproduce 238 under any scope it tried,
+because every scope containing that file already failed.
+
+**The pin is not the defect and must not be "fixed" by deriving it.** Deriving it from the
+contract makes it a tautology — `_true_surface_triple()` already parses that document, so
+comparing its answer to the same document checks nothing. **The pin is the independent second
+opinion about the parse, and that is worth keeping.**
+
+**What the pin actually is, and is now documented as being: a reseal document.** It moves with
+`openapi.json`, the generated client, the mirror and `web/FRONTEND_LOCK.json`. `D-18` names four;
+**there are five**, and a reseal that leaves this one behind is an incomplete reseal.
+
+**Three further stale locations the same sweep found**, none of them in the eight the residue
+named, because none is in a tree any guard scans: `tests/integration/api/test_operation_surface.py`
+(module docstring **and the test's own name**, while the function body had been updated —
+`tests/` is unscanned entirely) and `docs/program/DEPLOYMENT_RUNBOOK.md` twice. **That document
+has form**: `OPERATING_CONSTRAINTS.md` §4.7 names it as the site of this programme's one
+*security-shaped* stale-prose incident, the bearer-token-against-signing-key confusion.
+
+**The residue list has now been too short three times in one day** — the stream's first sweep,
+mine at merge, and this. Each time it was written from the paths somebody named rather than from
+a sweep of the tree.
+
+Check: `.venv/bin/python -m pytest tests/contract/api_v1/test_doc_prose_facts.py -q` at `a10c7f8`.
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 

@@ -1,4 +1,4 @@
-"""The surface is exactly the eighteen operations the frozen document declares.
+"""The surface is exactly the nineteen operations the frozen document declares.
 
 Asserted **against the document**, never against a list written out here. A list in a
 test is a second declaration that can drift from the first, and the whole reason
@@ -41,7 +41,7 @@ def test_the_router_declares_exactly_the_frozen_operations(
     )
 
 
-def test_the_document_declares_eighteen_and_the_router_implements_eighteen(
+def test_the_document_declares_nineteen_and_the_router_implements_nineteen(
     router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     """The count is checked separately from the set.
@@ -53,7 +53,7 @@ def test_the_document_declares_eighteen_and_the_router_implements_eighteen(
     `listVersions` and `listRuns`; **fifteen until `W34-CONTRACT`**, which added
     `issueToken`, the credential exchange; **sixteen until `W38-KB`**, which added
     `listDecisions` under `R-24`; **seventeen until `W39-REVOKE`**, which added
-    `changePassword` under `R-26`; **eighteen until `W42-SEAL`**, which added no path
+    `changePassword` under `R-26`; eighteen until `W42-SEAL`, which added no path
     or operation; **nineteen until `W45-BLOCKS`**, which added `getVersionBlocks`. The
     number moved because an owner ruling or a reseal moved it; nothing else may move it.
     """
