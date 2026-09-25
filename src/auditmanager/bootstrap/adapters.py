@@ -1,11 +1,12 @@
 """The port adapters: frozen API shapes on one side, real modules on the other.
 
-`B6` wrote `build_router` to take six protocols and construct none of them. Two more were
-added later with a default rather than a seventh and eighth required argument --
-`credentials` at wave 39, `blocks` at `W45-BLOCKS` -- so this file now carries eight
-adapter classes. Each adapter is thin on purpose - it opens a session, calls one module,
-maps the result into the view the frozen schema declares, and does nothing else. A rule
-that lives here rather than in a module is a rule the module's own tests cannot reach.
+`B6` wrote `build_router` to take six protocols and construct none of them. Three more
+were added later with a default rather than a seventh, eighth and ninth required
+argument -- `credentials` at wave 39, `blocks` at `W45-BLOCKS`, `dashboard` at `W46-SEAL`
+-- so this file now carries nine adapter classes. Each adapter is thin on purpose - it
+opens a session, calls one module, maps the result into the view the frozen schema
+declares, and does nothing else. A rule that lives here rather than in a module is a rule
+the module's own tests cannot reach.
 
 Every adapter takes its session factory rather than building one, so the whole application
 shares one engine and the composition root remains the only thing that reads configuration.
@@ -19,6 +20,14 @@ from typing import Any
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.schemas.blocks import VersionBlockIndexView
+from auditmanager.api.schemas.dashboard import (
+    DashboardSummaryView,
+    ProjectDocumentCountView,
+    RunActivitySpendView,
+    RunStateCountView,
+    SectionDocumentCountView,
+    VerdictCountView,
+)
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
 from auditmanager.api.schemas.findings import (
@@ -807,6 +816,45 @@ class CsvExportAdapter(_SessionHolder):
         from auditmanager.exports import export_run_csv
 
         return self._read(lambda s: export_run_csv(s, run_id).content)
+
+
+class DashboardAdapter(_SessionHolder):
+    """``getDashboardSummary``. `R-44`. Reads the same session factory as everything
+    else here; nothing new is opened for it."""
+
+    def get_summary(self) -> DashboardSummaryView:
+        from auditmanager.dashboard import DashboardRepository
+
+        record = self._read(lambda s: DashboardRepository().summary(s))
+        return DashboardSummaryView(
+            documents_by_project=tuple(
+                ProjectDocumentCountView(
+                    project_uid=row.project_uid,
+                    name=row.name,
+                    document_count=row.document_count,
+                )
+                for row in record.documents_by_project
+            ),
+            findings_by_verdict=tuple(
+                VerdictCountView(verdict=row.verdict, count=row.count)
+                for row in record.findings_by_verdict
+            ),
+            run_activity=tuple(
+                RunStateCountView(state=row.state, count=row.count)
+                for row in record.run_activity
+            ),
+            run_spend=RunActivitySpendView(
+                model_call_count=record.run_spend.model_call_count,
+                cost_micros=record.run_spend.cost_micros,
+                cost_basis=record.run_spend.basis,
+            ),
+            section_breakdown=tuple(
+                SectionDocumentCountView(
+                    section=row.section, document_count=row.document_count
+                )
+                for row in record.section_breakdown
+            ),
+        )
 
 
 class CredentialAdapter(_SessionHolder):

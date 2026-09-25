@@ -1,9 +1,9 @@
-"""The nineteen operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The twenty operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the seven router modules. It takes its
-dependencies as arguments and constructs none of them: choosing what sits behind each port
-is the composition root's job (``api/composition.py``), and a factory that reached for a
-concrete implementation would have taken that decision away from it.
+:func:`build_router` assembles one ``APIRouter`` from the nine router modules. It takes
+its dependencies as arguments and constructs none of them: choosing what sits behind each
+port is the composition root's job (``api/composition.py``), and a factory that reached for
+a concrete implementation would have taken that decision away from it.
 
 ``tests/contract/api_v1/test_openapi_conformance.py`` asserts the generated document's
 ``(operationId, method, path)`` set against the frozen document itself, so a thirteenth
@@ -32,6 +32,7 @@ from auditmanager.api.routers.correlation import (
     new_correlation_id,
     resolve_correlation_id,
 )
+from auditmanager.api.routers.dashboard import build_dashboard_routes
 from auditmanager.api.routers.decisions import build_decision_routes
 from auditmanager.api.routers.declarations import declare_correlation_id
 from auditmanager.api.routers.documents import build_document_routes
@@ -57,6 +58,7 @@ from auditmanager.api.routers.ports import (
     BlockPort,
     CredentialPort,
     CsvExportPort,
+    DashboardPort,
     DecisionPort,
     DocumentPort,
     FindingPort,
@@ -105,6 +107,7 @@ __all__ = [
     "CorrelationMiddleware",
     "CredentialPort",
     "CsvExportPort",
+    "DashboardPort",
     "DecisionPort",
     "DocumentPort",
     "FailureEnvelopeMiddleware",
@@ -151,23 +154,26 @@ def build_router(
     exports: CsvExportPort,
     credentials: CredentialPort | None = None,
     blocks: BlockPort | None = None,
+    dashboard: DashboardPort | None = None,
 ) -> Router:
-    """Assemble the nineteen operations.
+    """Assemble the twenty operations, from the nine router modules -- ``dashboard`` is
+    the ninth.
 
     Keyword-only, because eight same-shaped dependencies passed positionally is a wiring
     defect waiting to happen and the type checker cannot see it.
 
-    ``credentials`` and ``blocks`` have a default and the other six do not, for one reason
-    that is not taste: ``api/app.py`` -- another session's file -- calls this with exactly
-    the six it has called it with since `B6`, and ``create_documentation_app`` builds the
-    served document with nothing behind any port at all. A seventh or eighth *required*
-    argument would have made either addition a change to that file. Both are therefore
-    **declared** in every router and **answerable** only in an application that was handed
-    a port, which is the same bargain ``create_documentation_app`` already makes with the
-    other six: the document is a function of the declarations, and serving a request is
-    not. ``test_the_wired_application_can_answer_the_exchange`` is what says the
-    composition root really hands the credential port over; `W45-BLOCKS`'s integration
-    suite is the equivalent for ``blocks``.
+    ``credentials``, ``blocks`` and ``dashboard`` have a default and the other six do not,
+    for one reason that is not taste: ``api/app.py`` -- another session's file -- calls
+    this with exactly the six it has called it with since `B6`, and
+    ``create_documentation_app`` builds the served document with nothing behind any port
+    at all. A seventh, eighth or ninth *required* argument would have made any of the
+    three additions a change to that file. All three are therefore **declared** in every
+    router and **answerable** only in an application that was handed a port, which is the
+    same bargain ``create_documentation_app`` already makes with the other six: the
+    document is a function of the declarations, and serving a request is not.
+    ``test_the_wired_application_can_answer_the_exchange`` is what says the composition
+    root really hands the credential port over; `W45-BLOCKS`'s integration suite is the
+    equivalent for ``blocks``, and this wave's is the equivalent for ``dashboard``.
 
     **Since wave 39 the returned router also carries the credential port**, because the
     authorization seam reads an account's credential generation on every request it guards
@@ -196,6 +202,7 @@ def build_router(
     build_decision_routes(router, decisions, findings)
     build_export_routes(router, exports)
     build_auth_routes(router, credentials)  # type: ignore[arg-type]
+    build_dashboard_routes(router, dashboard)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

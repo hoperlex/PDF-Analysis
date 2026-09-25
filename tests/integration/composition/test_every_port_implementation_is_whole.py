@@ -47,6 +47,7 @@ PORT_FOR_ARGUMENT = {
     "exports": "CsvExportPort",
     "credentials": "CredentialPort",
     "blocks": "BlockPort",
+    "dashboard": "DashboardPort",
 }
 
 

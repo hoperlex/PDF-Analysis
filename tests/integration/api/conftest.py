@@ -851,8 +851,14 @@ def shipped_router(
     ``auditmanager.bootstrap.adapters`` classes here, constructed on this fixture's
     savepoint-joined session factory so the suite's rollback isolation still holds.
     The remaining three keep the seam adapters; no query parameter is declared on them.
+
+    ``DashboardPort`` (`W46-SEAL`) joins the real three for the same reason: it has no
+    query parameter to drop either, but it has no seam shape at all -- there was never a
+    fixture-only implementation of it to fall back on -- so this is the only fixture able
+    to exercise ``getDashboardSummary`` against real SQL.
     """
     from auditmanager.bootstrap.adapters import (
+        DashboardAdapter,
         DecisionAdapter,
         FindingAdapter,
         ProjectAdapter,
@@ -866,6 +872,10 @@ def shipped_router(
         decisions=DecisionAdapter(session_factory),
         exports=SeamExportAdapter(session),
         credentials=SuiteCredentialAdapter(),
+        # `W46-SEAL`, `R-44`. The real shipped adapter, like `findings` and
+        # `decisions` above: `getDashboardSummary` has no test-only seam shape to
+        # compare against, so this is the only fixture that can exercise it.
+        dashboard=DashboardAdapter(session_factory),
     ))
 
 

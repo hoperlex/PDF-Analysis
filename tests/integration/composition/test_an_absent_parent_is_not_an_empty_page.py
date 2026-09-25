@@ -55,13 +55,30 @@ _CATALOG = Path(__file__).resolve().parents[3] / "contracts/domain/v1/identifier
 #: never minted it.
 _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 
-#: The ``GET`` operations of the frozen surface: eleven addressing a parent identity, two
+#: The ``GET`` operations of the frozen surface: eleven addressing a parent identity, three
 #: addressing none. A literal so that an operation added later cannot join the surface
 #: without somebody deciding which half of the rule it belongs to. `W45-BLOCKS`'s
-#: ``getVersionBlocks`` is the eleventh: it addresses ``version_uid`` and answers
-#: ``404 not_found`` for one that names nothing, the same as every other addressed `GET`.
+#: ``getVersionBlocks`` is the eleventh addressed one: it addresses ``version_uid`` and
+#: answers ``404 not_found`` for one that names nothing, the same as every other addressed
+#: `GET`. `W46-SEAL`'s ``getDashboardSummary`` is the third unaddressed one, and it is
+#: **not** a third collection: see :data:`AGGREGATE_OPERATIONS` below for why this module's
+#: rule -- "no parent identity means a page" -- does not extend to it.
 EXPECTED_ADDRESSED = 11
-EXPECTED_UNADDRESSED = 2
+EXPECTED_UNADDRESSED = 3
+
+#: Unaddressed `GET` operations that are not collections and are exempt from
+#: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
+#:
+#: `D-67`'s rule is about a *collection*: a path with no parent identity answers `200`
+#: with the page it has, because there is no identity to be missing. `getDashboardSummary`
+#: has no parent identity for the same structural reason `listProjects` and
+#: `listDecisions` do not -- it addresses nothing -- but it is not a listing of anything
+#: and was deliberately built not to page (`R-44`; see `DashboardPort` and
+#: `docs/program/W46-SEAL.md` section 3): a caller cannot supply `cursor` or `limit` and
+#: the frozen `DashboardSummary` declares no `items` and no `page`. Extending this
+#: module's collection rule to it would assert a shape the contract does not declare,
+#: which is the reverse of what this file exists to catch.
+AGGREGATE_OPERATIONS = frozenset({"getDashboardSummary"})
 
 
 def _prefixes() -> dict[str, str]:
@@ -183,10 +200,44 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
     anything, so ``404`` would be an answer to a question nobody asked. The frozen document
     declares no ``404`` on either. The page itself may hold anything -- this lane's database
     is long-lived and shared -- so what is asserted is the status and the shape.
+
+    ``getDashboardSummary`` is unaddressed too and is excluded here by name -- see
+    :data:`AGGREGATE_OPERATIONS` -- and checked by
+    :func:`test_the_one_unaddressed_aggregate_answers_its_own_fixed_shape` instead, so
+    "excluded from this page check" is not the same claim as "unchecked".
     """
     for operation_id, template in _unaddressed(_get_routes(app)):
+        if operation_id in AGGREGATE_OPERATIONS:
+            continue
         status, body = _get(app, template)
         assert status == 200, f"{operation_id} answered {status}: {body}"
         assert isinstance(body, dict) and isinstance(body.get("items"), list), (
             f"{operation_id} answered 200 without a page: {body}"
         )
+
+
+def test_the_one_unaddressed_aggregate_answers_its_own_fixed_shape(app: Composed) -> None:
+    """``getDashboardSummary``, the operation :data:`AGGREGATE_OPERATIONS` excuses above.
+
+    Not a page -- no ``items``, no ``page`` -- and not empty either: `R-44`'s four panels,
+    every one of them present. This is the other half of the rule the excuse above states:
+    exempt from *paging*, not exempt from *shape*.
+    """
+    unaddressed = _unaddressed(_get_routes(app))
+    aggregates = [(op, path) for op, path in unaddressed if op in AGGREGATE_OPERATIONS]
+    assert aggregates, "no unaddressed operation is registered in AGGREGATE_OPERATIONS"
+    for operation_id, template in aggregates:
+        status, body = _get(app, template)
+        assert status == 200, f"{operation_id} answered {status}: {body}"
+        assert isinstance(body, dict), f"{operation_id} answered a non-object body: {body}"
+        assert "items" not in body and "page" not in body, (
+            f"{operation_id} answered a page shape; it is registered as an aggregate, "
+            "not a collection"
+        )
+        for panel in (
+            "documents_by_project",
+            "findings_by_verdict",
+            "run_activity",
+            "section_breakdown",
+        ):
+            assert panel in body, f"{operation_id} answered with no {panel!r} panel: {body}"
