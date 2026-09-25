@@ -1,7 +1,14 @@
 # Current state
 
-> **Updated 2026-09-24 by the integrator for wave 44.** The gated and deployed release
-> candidate is `20a14de`; `alpha-w44` tags the docs-only closeout immediately after it.
+> **Updated 2026-09-25 by the integrator for wave 45.** The gated release candidate is
+> `29ea0c9`, tagged `alpha-w45`.
+>
+> **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
+> true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
+> guard this programme has checks a **number**, and this claim has none, so nothing here could
+> ever catch it going stale. **Run `infra/deploy/verify-deployed.sh`** — it answers *is the
+> deployed stack this tree* against whatever is running now. *A sentence that names a command
+> cannot rot.*
 > `AGENTS.md` §1.1 makes this file the first thing every agent reads, and **this line moving is
 > part of closing a wave**, for the reason the rest of this block records.
 >
@@ -21,7 +28,34 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Where the programme is, 2026-09-24
+## Where the programme is, 2026-09-25
+
+**Wave 45 is closed as `alpha-w45` at `29ea0c9`.** `make gate` → **`GATE OK`**: battery
+**2493 passed / 5 skipped / 4 warnings / 169 subtests**, foundation **35**, frontend
+**1110 in 78 files**. Read from the `GATE OK` line of `/root/w45-final-gate.log`.
+
+**The contract surface moved for the first time since wave 39: 15/18/51 → 16 paths / 19
+operations / 53 schemas.** One operation, `getVersionBlocks`; two schemas, `VersionBlockIndex`
+and `BlockGeometry`; **no new error code — the catalog stays at 22 and frozen.** Migration head
+is unchanged at `0010_run_terminal_detail`.
+
+**`/blocks` stopped being a stub.** It shows page-by-page block markup from an artifact the
+deterministic geometry stage already produced, so **`D-70` does not block it** — and three
+answers stay distinguishable *on the screen*, not merely on the wire: an unknown version is a
+404, a version with no successful geometry stage renders `NotApplicableState`, and a version that
+genuinely produced nothing renders `EmptyState`. Both of the last two answer `blocks: []`.
+
+**And the deploy stopped being a hope.** A `.dockerignore` proven by a real build — a marker
+planted in the host's `node_modules` was inside the image without it and gone with it — plus a
+guard that reads `docs/` for the first time, and a clean-clone rehearsal with measured timings.
+
+**Eleven debt rows opened, `D-95`–`D-105`, and the wave's own instruments produced most of
+them.** The guard built this wave to catch stale counts **was itself a stale count** (`D-102`),
+and the integrator certified *"contract suites green"* from a scope that excluded it. Three more
+pinned literals of the same shape are green by luck (`D-105`). The prose guards all check
+numbers, and the claims that rot fastest are not numbers (`D-104`).
+
+## Where the programme was, 2026-09-24
 
 **Wave 44 is closed as `alpha-w44`.** Its executable release candidate is `20a14de`; this
 state/registry closeout changes no deployed path. The closing push advances `origin/main`,
