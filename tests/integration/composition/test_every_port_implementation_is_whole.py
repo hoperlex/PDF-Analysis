@@ -46,6 +46,7 @@ PORT_FOR_ARGUMENT = {
     "decisions": "DecisionPort",
     "exports": "CsvExportPort",
     "credentials": "CredentialPort",
+    "blocks": "BlockPort",
 }
 
 

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from typing import Protocol, Sequence, runtime_checkable
 
+from auditmanager.api.schemas.blocks import VersionBlockIndexView
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView
 from auditmanager.api.schemas.findings import FindingDetailView, FindingView
@@ -40,6 +41,7 @@ from auditmanager.api.security import IssuedCredential
 
 __all__ = [
     "AppendedDecision",
+    "BlockPort",
     "CredentialPort",
     "CsvExportPort",
     "DecisionPort",
@@ -154,6 +156,37 @@ class DocumentPort(Protocol):
         contract forbids in a response and would outlive the request that authorised
         it. A ranged request is served by slicing what this returns, so the object key
         stays inside ``auditmanager.storage``'s adapter where ``A3`` put it.
+        """
+
+
+@runtime_checkable
+class BlockPort(Protocol):
+    """``getVersionBlocks``. `W45-BLOCKS`.
+
+    A separate protocol rather than a sixth ``DocumentPort`` method, so that no existing
+    implementation of ``DocumentPort`` -- the shipped one or any of the three test-only
+    wirings -- is made incomplete by an operation none of them answer yet. ``build_router``
+    takes it as ``blocks: BlockPort | None = None``, the same optional-with-a-default shape
+    ``credentials`` already has, for the same reason: a caller that never passes it does not
+    have to change.
+    """
+
+    def get_block_index(self, *, version_uid: str) -> VersionBlockIndexView:
+        """The page-by-page block index for one version, or its not-yet-produced status.
+
+        **Keyed by the version, not by a run.** The stage that derives this geometry
+        carries no model and no provider reference, so its output is a deterministic
+        property of the version -- identical across every run that reaches it -- and this
+        reads the most recently produced one rather than asking a caller to already hold a
+        ``run_id``.
+
+        **An unknown version is ``not_found``.** A version that exists but has no run whose
+        ``page_geometry_extraction`` stage succeeded answers with
+        ``status="not_produced"`` and ``blocks=()`` -- *absent*, never silently rendered
+        the same as a version whose geometry was produced and genuinely has none
+        (``status="produced"``, ``blocks=()``). An implementation that returned the empty
+        tuple for both without varying ``status`` would have destroyed exactly the
+        distinction this method exists to carry.
         """
 
 

@@ -46,6 +46,7 @@ __all__ = [
     "AnalysisProfileId",
     "AppendDecisionRequest",
     "AppendDecisionResponse",
+    "BlockGeometry",
     "CorrelationId",
     "CostBasis",
     "CreateProjectRequest",
@@ -90,6 +91,7 @@ __all__ = [
     "StartRunRequest",
     "UploadDocumentRequest",
     "Verdict",
+    "VersionBlockIndex",
     "VersionUid",
     "optional_property",
 ]
@@ -134,6 +136,22 @@ _DETAILS_SCHEMA: dict[str, Any] = {
     "additionalProperties": {
         "type": ["string", "number", "integer", "boolean", "null"],
         "maxLength": 256,
+    },
+}
+
+#: ``#/components/schemas/BlockGeometry.properties.bbox``, verbatim. A plain nested
+#: ``BaseModel`` would make FastAPI mint a fourth top-level ``components.schemas`` entry
+#: (``Bbox``) that the frozen contract does not declare, the same drift ``_DETAILS_SCHEMA``
+#: exists to avoid one property up. The bbox is inline in the contract and stays inline here.
+_BBOX_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["x0", "y0", "x1", "y1"],
+    "properties": {
+        "x0": {"type": "number"},
+        "y0": {"type": "number"},
+        "x1": {"type": "number"},
+        "y1": {"type": "number"},
     },
 }
 
@@ -407,6 +425,29 @@ class DocumentVersionPage(_Object):
     items: list[DocumentVersion]
     page: PageInfo
 
+
+class BlockGeometry(_Object):
+    block_id: Annotated[str, Field(pattern=r"^b_[0-9]{6}$")]
+    page_number: Annotated[int, Field(ge=1)]
+    block_ordinal: Annotated[int, Field(ge=0)]
+    bbox: Annotated[dict[str, float], WithJsonSchema(_BBOX_SCHEMA)]
+    bbox_unit: Literal["pt"]
+    bbox_origin: Literal["top_left"]
+    char_start: Annotated[int, Field(ge=0)]
+    char_end: Annotated[int, Field(ge=1)]
+
+
+class VersionBlockIndex(_Object):
+    version_uid: VersionUid
+    status: Literal["produced", "not_produced"]
+    #: Required and nullable, not optional: the contract's ``VersionBlockIndex`` carries
+    #: both fields on every answer, null exactly when ``status`` is ``not_produced``. A
+    #: plain ``X | None`` with no default -- unlike ``Evidence.block_id`` above -- is what
+    #: makes Pydantic require the key in the emitted document rather than merely permit it.
+    produced_by_run_id: RunId | None
+    text_layer_sha256: Sha256 | None
+    block_count: Annotated[int, Field(ge=0)]
+    blocks: list[BlockGeometry]
 
 
 # --- runs --------------------------------------------------------------------------

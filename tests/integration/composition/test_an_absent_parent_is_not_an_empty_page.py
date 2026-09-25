@@ -55,10 +55,12 @@ _CATALOG = Path(__file__).resolve().parents[3] / "contracts/domain/v1/identifier
 #: never minted it.
 _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 
-#: The ``GET`` operations of the frozen surface: ten addressing a parent identity, two
+#: The ``GET`` operations of the frozen surface: eleven addressing a parent identity, two
 #: addressing none. A literal so that an operation added later cannot join the surface
-#: without somebody deciding which half of the rule it belongs to.
-EXPECTED_ADDRESSED = 10
+#: without somebody deciding which half of the rule it belongs to. `W45-BLOCKS`'s
+#: ``getVersionBlocks`` is the eleventh: it addresses ``version_uid`` and answers
+#: ``404 not_found`` for one that names nothing, the same as every other addressed `GET`.
+EXPECTED_ADDRESSED = 11
 EXPECTED_UNADDRESSED = 2
 
 

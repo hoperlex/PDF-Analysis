@@ -19,11 +19,11 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **eighteen operations across fifteen paths**, which is what the
- * frozen document declares after the wave-38 reseal that added `listDecisions`. This file
- * said fifteen and twelve once and sixteen and thirteen after that, each true until the
- * next reseal, and it is the fifth stale count in this programme, so it is no longer
- * corrected by hand:
+ * Those figures are **nineteen operations across sixteen paths**, which is what the
+ * frozen document declares after the `W45-BLOCKS` reseal that added `getVersionBlocks`.
+ * This file said fifteen and twelve once and sixteen and thirteen after that, each true
+ * until the next reseal, and it is the fifth stale count in this programme, so it is no
+ * longer corrected by hand:
  * `tests/contract/api_v1/test_surface_counts_in_prose.py` reads this tree and takes both
  * numbers out of `openapi.json` rather than writing either down, so a reseal moves the
  * expectation by itself. That guard separately refuses to let this paragraph vanish --
