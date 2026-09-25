@@ -17,7 +17,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-76** | **reopened**: the same document went stale again, underneath the note recording that it had | the guard that catches it exists now |
 | **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |
 | D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
-| **D-79** | `CURRENT_STATE.md` — the file `AGENTS.md` makes every agent read first — went stale twice, and said the system was open when it is closed | the gate does not read `docs/` |
+| D-79 | the gate now reads `docs/` — `test_doc_prose_facts.py`, built in wave 45 | **and it was red on arrival**: see `D-102` |
 | **D-80** | no `.dockerignore`: the web image's `node_modules` is the build host's, not the lockfile's — and criterion 1 is blind to it by construction | one file, verified by a build |
 | **D-83** | twelve refusal sentences cannot be rendered by the stack-free gate | live drive restored: 6 fixtures / 0 findings; boundary remains explicit |
 | D-87 | a full-tree mutation copy still cannot redden a migration — §10.1 names only half the trap | one fixture exists; the class is wider |
@@ -29,6 +29,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-100** | `docs/program/P02_SEAMS.md` is outside every scanner, and has now recorded the same defect about itself **twice** | the note is doing the instrument's job |
 | D-101 | `R-48`'s policy makes the literal string `password` a legal password after the first change | one line, and the owner has been asked |
 | **D-102** | the guard built to catch stale counts **was** the stale count, and I reported green from a scope that excluded it | the pin is a reseal document |
+| **D-103** | `deploy.sh`'s placeholder-secret guard reads four names and the same secrets are embedded again in three derived values | ~93 s and a full build wasted, on deploy day |
 | **D-97** | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | consolidate against one provider/state contract |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -2631,6 +2632,37 @@ mine at merge, and this. Each time it was written from the paths somebody named 
 a sweep of the tree.
 
 Check: `.venv/bin/python -m pytest tests/contract/api_v1/test_doc_prose_facts.py -q` at `a10c7f8`.
+
+### D-103 — the placeholder-secret guard reads four names, and the same secrets are written three more times
+
+**Found by `W45-JUDGE-Y` by *following* `W45-READY`'s rehearsal checklist rather than reading it.
+That is how it was found and it is the more important half.**
+
+`deploy.sh` refuses a deploy whose secrets are still the example values. It checks **four named
+variables** — `POSTGRES_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`,
+`AUDITMANAGER_API_TOKEN`. But `infra/deploy/env/alpha.env.example` **embeds the same secrets a
+second time** inside `DATABASE_URL`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` — independent
+string literals the guard never reads (`grep` returns zero hits for them).
+
+**So rotating exactly the four the checklist names and the guard's own error message instructs
+passes the pre-flight refusal**, builds both images, brings up five containers, and **fails
+~93 seconds later** with an Alembic/psycopg password-authentication trace that names none of
+this.
+
+**It is not a security hole — it fails closed — and it is squarely a GO-path defect**, which is
+what makes it belong to `R-45`'s wave 47 rather than to a prose row. The `.env` **coherence
+check** already exists for the lane file (`FF-01` §3: `DATABASE_URL` must carry the same user,
+password, port and database as the `POSTGRES_*` names); the deploy file has no equivalent.
+**The repair is to apply the check that already exists to the file that lacks it.**
+
+**And the method generalises further than the finding.** `W45-READY` wrote that checklist from a
+rehearsal it performed, and still did not hit this, because its rehearsal rotated the values a
+different way. **A checklist is a draft until somebody who did not write it walks it** — which is
+the argument for the cross-judging order this wave used, stated as a measurement rather than as
+a principle.
+
+Check: rotate only the four named variables in a copy of `alpha.env.example` and run
+`infra/deploy/deploy.sh` against a throwaway instance.
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 
