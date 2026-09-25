@@ -3228,6 +3228,38 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:31500/api/v1/projects 
 
 ### D-50 — a character offset with no coordinate system any second extractor can resolve
 
+> **Ruled `R-43` on 2026-09-25, and the wording drafted by `pdf-analysis-d6` is better than the
+> ruling's literal text — because it found the objection already written in the file.**
+>
+> `web/src/entities/finding-observation/model/quotation.ts:75` argued against removal **before
+> anybody proposed it**: *"Dropping the range instead would take a fact off the screen that the
+> viewer needs: `anchorMatchesQuotation` renders an alert when the declared span disagrees with
+> the string beside it, and **an alert about numbers the reviewer cannot see is not
+> actionable**."* Verified: the alert is `evidence-viewer.tsx:70`. **So "delete the caption" is
+> an incomplete repair** — the alert would start referring to numbers that are no longer on
+> screen.
+>
+> **The draft's answer is that the numbers appear exactly when they are relevant**, which serves
+> `R-43`'s reasoning rather than its sentence:
+>
+> 1. **When anchor and quotation agree, there is no caption at all** — not even the page.
+>    Measured: the list sits under `<h3>Цитаты на странице {page}</h3>` (`evidence-viewer.tsx:161`)
+>    and is filtered to that same page, so once the range is gone the caption repeats the heading
+>    and nothing else. The whole `<p className="am-quotation__anchor">` goes.
+> 2. **When they disagree, the alert carries the numbers and says why they are there** — as
+>    evidence of the discrepancy, not as a pointer into the document.
+> 3. **`anchorLabel` is not deleted but repurposed** into the discrepancy-detail builder, and its
+>    unit tests are re-aimed rather than thrown away.
+>
+> **This is why the offer to take the edit was declined and the wording asked for instead.**
+> `entities/` was inside `W45-BLOCKS`'s live grant, and the hard part of this row was never the
+> edit. *A ruling's reasoning can be served better than its sentence, and a session close to the
+> file is who notices.*
+>
+> Full draft: `.local/handoff/D-50-WORDING.md` — **invisible to git**, which is why its argument
+> is copied here rather than referenced.
+
+
 **Found by `W30-CERT3` as `W30CERT3-2`. Opened 2026-09-21. Criterion 5 is unaffected** — the
 quotation is exact, occurs once, and is on the page named, confirmed with an extractor the
 application does not use.
