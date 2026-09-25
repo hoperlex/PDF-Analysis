@@ -1,0 +1,40 @@
+/*
+ * Layout for the four-panel dashboard. Colour is deliberately absent, same discipline as
+ * `widgets/project-sections/ui/project-sections.module.css`: every panel's content already
+ * renders through `am-state` (border and surface both come from there), so a border or a
+ * background declared again in this collocated module would be a second, unreached
+ * declaration of a colour the census already measures on the class that actually carries
+ * it. This file places panels; it does not repaint them.
+ *
+ * `R-33`/`R-18`'s width case, `D-93`: a dashboard is the widest thing this product has, so
+ * this is the one screen that needs its own responsive rule rather than relying on the
+ * page shell's prose width. Four panels sit in a grid that never exceeds one column below
+ * 780px, and every length is a global token.
+ */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--am-gap-lg);
+  align-items: start;
+}
+
+@media (max-width: 780px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.panel {
+  min-width: 0;
+}
+
+.panel > h2 {
+  margin-top: 0;
+}
+
+/* Tables inside a narrow panel must not force the grid column wider than 780px allows. */
+.panel table {
+  width: 100%;
+  table-layout: fixed;
+}
