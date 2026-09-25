@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 00b16114e176238636fa0d62c475ad15483c008625ed1b3c5af3f882d6717ab1
+ *   sha256 20980cb33377f823e73f569c1d4aca7b5b9f636c15f413c5875c06fdabc76f59
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -21,6 +21,7 @@ import type {
   CorrelationId,
   CreateProjectRequest,
   Cursor,
+  DashboardSummary,
   DecisionEventPage,
   DecisionRecordPage,
   DocumentUid,
@@ -52,6 +53,7 @@ export const OPERATION_IDS = [
   'changePassword',
   'createProject',
   'exportRunCsv',
+  'getDashboardSummary',
   'getDocumentVersion',
   'getFinding',
   'getRunStatus',
@@ -183,6 +185,25 @@ export type ExportRunCsvInput = {
 
 /** Success body of `exportRunCsv` (`text/csv`, HTTP 200). */
 export type ExportRunCsvResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// getDashboardSummary - GET /dashboard
+// ------------------------------------------------------------------------------------
+
+/**
+ * One aggregate read across the whole deployment: all four dashboard panels.
+ *
+ * Documents per project, findings by verdict, run activity and spend, and the per-section breakdown -- computed server-side over the whole deployment, never walked client-side (`R-44`). Takes no parameter: it is not a filtered query over the data three narrower operations already answer (`listProjects`, `listDecisions`, `listRuns`), it is the fixed shape of the deployment right now. Absent is not empty throughout: every `Verdict` and `RunState` is present even at zero, every one of the fourteen frozen sections is present even with no documents, and the unclassified documents are their own row.
+ */
+export type GetDashboardSummaryInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getDashboardSummary` (`application/json`, HTTP 200). */
+export type GetDashboardSummaryResult = DashboardSummary;
 
 // ------------------------------------------------------------------------------------
 // getDocumentVersion - GET /versions/{version_uid}
@@ -669,6 +690,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['export'],
+  },
+  getDashboardSummary: {
+    operationId: 'getDashboardSummary',
+    method: 'GET',
+    path: '/dashboard',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['dashboard'],
   },
   getDocumentVersion: {
     operationId: 'getDocumentVersion',

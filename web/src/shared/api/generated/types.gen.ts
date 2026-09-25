@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 00b16114e176238636fa0d62c475ad15483c008625ed1b3c5af3f882d6717ab1
+ *   sha256 20980cb33377f823e73f569c1d4aca7b5b9f636c15f413c5875c06fdabc76f59
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '00b16114e176238636fa0d62c475ad15483c008625ed1b3c5af3f882d6717ab1';
+export const CONTRACT_DIGEST = '20980cb33377f823e73f569c1d4aca7b5b9f636c15f413c5875c06fdabc76f59';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -30,6 +30,7 @@ export const SCHEMA_NAMES = [
   'CostBasis',
   'CreateProjectRequest',
   'Cursor',
+  'DashboardSummary',
   'DecisionEvent',
   'DecisionEventPage',
   'DecisionEventType',
@@ -57,14 +58,20 @@ export const SCHEMA_NAMES = [
   'ObservationProvenance',
   'PageInfo',
   'Project',
+  'ProjectDocumentCount',
   'ProjectPage',
+  'ProjectSection',
   'ProjectUid',
   'PromptBundleId',
   'ProviderMode',
+  'RunActivity',
+  'RunActivitySpend',
   'RunId',
   'RunState',
+  'RunStateCount',
   'RunStatus',
   'RunStatusPage',
+  'SectionDocumentCount',
   'Sha256',
   'StageId',
   'StageState',
@@ -72,6 +79,7 @@ export const SCHEMA_NAMES = [
   'StartRunRequest',
   'UploadDocumentRequest',
   'Verdict',
+  'VerdictCount',
   'VersionBlockIndex',
   'VersionUid',
 ] as const;
@@ -143,6 +151,14 @@ export type CreateProjectRequest = {
 
 /** Opaque pagination token. It encodes the sort key of the last item on the page and nothing else; it is never a database row number or sequence value. */
 export type Cursor = string;
+
+/** `getDashboardSummary`'s whole answer. All four panels, one read, no filter. */
+export type DashboardSummary = {
+  documents_by_project: Array<ProjectDocumentCount>;
+  findings_by_verdict: Array<VerdictCount>;
+  run_activity: RunActivity;
+  section_breakdown: Array<SectionDocumentCount>;
+};
 
 /** One appended event. Never updated and never removed. */
 export type DecisionEvent = {
@@ -221,6 +237,8 @@ export type DocumentVersion = {
   page_count: number;
   project_uid: ProjectUid;
   published_at: string;
+  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  section?: ProjectSection;
   sha256: Sha256;
   /** The uploaded file name, for display. Never an identity. */
   source_filename?: string | null;
@@ -408,10 +426,38 @@ export type Project = {
   project_uid: ProjectUid;
 };
 
+/** One row of the "documents per project" panel: the same fact `Project.document_count` already publishes, gathered for every project in one read. */
+export type ProjectDocumentCount = {
+  document_count: number;
+  name: string;
+  project_uid: ProjectUid;
+};
+
 export type ProjectPage = {
   items: Array<Project>;
   page: PageInfo;
 };
+
+/** Legacy's fourteen project sections (`D-56`, `R-40`). A document with no section is not a fifteenth member of this enum -- it is `UploadDocumentRequest.section` or `DocumentVersion.section` absent, which is a different, equally real fact. */
+export const PROJECT_SECTION_VALUES = [
+  'AR',
+  'AI',
+  'KM',
+  'KJ',
+  'OV',
+  'EOM',
+  'VK',
+  'PT',
+  'PB',
+  'SS',
+  'ITP',
+  'GP',
+  'TX',
+  'POS',
+] as const;
+
+/** ProjectSection - the closed value set above. */
+export type ProjectSection = (typeof PROJECT_SECTION_VALUES)[number];
 
 /** Opaque project identity. */
 export type ProjectUid = string;
@@ -433,6 +479,18 @@ export const PROVIDER_MODE_VALUES = [
 /** ProviderMode - the closed value set above. */
 export type ProviderMode = (typeof PROVIDER_MODE_VALUES)[number];
 
+export type RunActivity = {
+  by_state: Array<RunStateCount>;
+  spend: RunActivitySpend;
+};
+
+/** What every run, across every project, has spent at the provider so far. `cost_basis` is `measured` only when every contributing `model_call` row reported a measured cost. */
+export type RunActivitySpend = {
+  cost_basis: CostBasis;
+  cost_micros: number;
+  model_call_count: number;
+};
+
 export type RunId = string;
 
 /** The contract pattern for `RunId`. Anchored; use with `new RegExp()`. */
@@ -452,6 +510,12 @@ export const RUN_STATE_VALUES = [
 
 /** RunState - the closed value set above. */
 export type RunState = (typeof RUN_STATE_VALUES)[number];
+
+/** How many runs, across every project, currently sit in one state. Every member of `RunState` is present, for the same reason `VerdictCount` states. */
+export type RunStateCount = {
+  count: number;
+  state: RunState;
+};
 
 export type RunStatus = {
   analysis_profile_id?: AnalysisProfileId;
@@ -487,6 +551,13 @@ export type RunStatus = {
 export type RunStatusPage = {
   items: Array<RunStatus>;
   page: PageInfo;
+};
+
+/** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a fifteenth section. Every one of the fourteen frozen codes is present even at `document_count: 0`. */
+export type SectionDocumentCount = {
+  document_count: number;
+  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  section?: ProjectSection;
 };
 
 /** A verification value, never an identity. */
@@ -543,6 +614,8 @@ export type UploadDocumentRequest = {
   display_title?: string;
   /** One unencrypted PDF, at most 25 MiB and at most 30 pages, every page carrying extractable embedded text. */
   file: Blob;
+  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  section?: ProjectSection;
 };
 
 /** The current projected verdict. `pending` when the ledger holds no verdict-bearing event, and after a revocation. `needs_manual_review` is declared for the closed union and has no PC-01 producer. */
@@ -555,6 +628,12 @@ export const VERDICT_VALUES = [
 
 /** Verdict - the closed value set above. */
 export type Verdict = (typeof VERDICT_VALUES)[number];
+
+/** How many findings, across every project, currently stand at one verdict. Every member of `Verdict` is present -- a verdict nobody has recorded is `count: 0`, not an absent row. */
+export type VerdictCount = {
+  count: number;
+  verdict: Verdict;
+};
 
 /** The page-by-page block markup derived for one version. Carries no crops: `page_geometry_extraction` also publishes a page-crop manifest, and this pipeline renders no visual detection, so that manifest is unconditionally empty and is a separate artifact this operation does not expose. */
 export type VersionBlockIndex = {

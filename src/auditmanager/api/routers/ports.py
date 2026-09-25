@@ -32,6 +32,7 @@ from __future__ import annotations
 from typing import Protocol, Sequence, runtime_checkable
 
 from auditmanager.api.schemas.blocks import VersionBlockIndexView
+from auditmanager.api.schemas.dashboard import DashboardSummaryView
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView
 from auditmanager.api.schemas.findings import FindingDetailView, FindingView
@@ -44,6 +45,7 @@ __all__ = [
     "BlockPort",
     "CredentialPort",
     "CsvExportPort",
+    "DashboardPort",
     "DecisionPort",
     "DocumentPort",
     "FindingPort",
@@ -115,8 +117,15 @@ class DocumentPort(Protocol):
         source_filename: str,
         display_title: str | None,
         idempotency_key: str,
+        section: str | None = None,
     ) -> UploadedDocument:
-        """Publish one PDF as one immutable version, or explain why not."""
+        """Publish one PDF as one immutable version, or explain why not.
+
+        ``section`` is one of `R-40`'s fourteen project-section codes, or ``None`` when
+        the caller does not supply one -- optional here for the same reason
+        ``display_title`` is: the frozen ``UploadDocumentRequest.section`` is not
+        required, and this port does not invent a value the caller never gave it.
+        """
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
         """One published version and its input manifest."""
@@ -187,6 +196,31 @@ class BlockPort(Protocol):
         (``status="produced"``, ``blocks=()``). An implementation that returned the empty
         tuple for both without varying ``status`` would have destroyed exactly the
         distinction this method exists to carry.
+        """
+
+
+class DashboardPort(Protocol):
+    """``getDashboardSummary``. `R-44`.
+
+    A separate protocol rather than a method on any existing port, for the same reason
+    ``BlockPort`` is: no shipped or test-only wiring of another port is made incomplete
+    by an operation it never answered. ``build_router`` takes it as
+    ``dashboard: DashboardPort | None = None``, the same optional-with-a-default shape
+    ``blocks`` already has.
+
+    **One method and no parameter.** This is deliberate and is the whole of what this
+    port refuses to become: not a project-scoped read, not a date range, not a category
+    filter. See ``docs/program/W46-SEAL.md`` section 3.
+    """
+
+    def get_summary(self) -> DashboardSummaryView:
+        """The whole deployment's operational shape, right now: all four panels.
+
+        **Absent is not empty.** Every member of ``Verdict`` and ``RunState`` appears in
+        its panel even at a count of zero, every one of the fourteen frozen project
+        sections appears in ``section_breakdown`` even with no documents, and the
+        documents nobody has classified yet are their own row rather than a rounding
+        error folded into one of the fourteen.
         """
 
 

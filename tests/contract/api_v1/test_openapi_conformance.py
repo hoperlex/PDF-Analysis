@@ -86,19 +86,29 @@ surface = conformance.surface
 
 #: `ALPHA_ROADMAP.md` §3 `T-1` and the measurement in the `W13-CONF` brief.
 FROZEN_OPENAPI_VERSION = "3.1.0"
-FROZEN_OPERATION_COUNT = 19
-FROZEN_SCHEMA_COUNT = 53
+FROZEN_OPERATION_COUNT = 20
+FROZEN_SCHEMA_COUNT = 61
 FROZEN_SERVER_URL = "/api/v1"
 
-#: The eighteen operations, written out. Deliberately not derived from the document: an
+#: The twenty operations, written out. Deliberately not derived from the document: an
 #: operation that disappears from the contract has to fail *here*, not silently reduce the
 #: size of the thing both sides are compared through.
 #:
 #: Twelve until the `R-5` reseal of 2026-09-18 added the three listings, fifteen until
 #: `W34-CONTRACT` added the credential exchange on 2026-09-22, sixteen until `W38-KB`
-#: added the decision journal under `R-24` the same day, and seventeen until `W39-REVOKE`
+#: added the decision journal under `R-24` the same day, seventeen until `W39-REVOKE`
 #: added the password change under `R-26` on 2026-09-23 -- the operation that makes a
-#: credential retractable.
+#: credential retractable -- nineteen until `W45-BLOCKS` added `getVersionBlocks` on
+#: 2026-09-25, and twenty until `W46-SEAL` added `getDashboardSummary` under `R-44` the
+#: same day.
+#:
+#: **This tuple, `FROZEN_OPERATION_COUNT` and `FROZEN_SCHEMA_COUNT`/`FROZEN_SCHEMA_NAMES`
+#: below are a pin this file's own header calls out as "not derived from the document",
+#: and a reseal has to move all four by hand.** Found stale at `W46-SEAL`, against
+#: `FROZEN_OPERATION_COUNT = 19` and `FROZEN_SCHEMA_COUNT = 53` while the live contract
+#: already declared 20 and 61: the same `D-102` shape -- a guard built to catch a moved
+#: surface was itself carrying the pre-reseal numbers -- in a fifth location neither
+#: `D-102` nor `D-105` names. Reported in `docs/program/W46-SEAL.md` section 4.
 FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("POST", "/projects", "createProject"),
     ("GET", "/projects", "listProjects"),
@@ -119,6 +129,7 @@ FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("GET", "/decisions", "listDecisions"),
     ("POST", "/auth/password", "changePassword"),
     ("GET", "/versions/{version_uid}/blocks", "getVersionBlocks"),
+    ("GET", "/dashboard", "getDashboardSummary"),
 )
 
 #: The fifty-one `components.schemas` keys, written out. Forty-three until the `R-5`
@@ -188,6 +199,15 @@ FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
         "UploadDocumentRequest",
         "Verdict",
         "VersionUid",
+        # `W46-SEAL`, `R-40` and `R-44`.
+        "ProjectSection",
+        "ProjectDocumentCount",
+        "VerdictCount",
+        "RunStateCount",
+        "RunActivitySpend",
+        "RunActivity",
+        "SectionDocumentCount",
+        "DashboardSummary",
     }
 )
 
@@ -229,14 +249,14 @@ class TestTheFrozenDocument:
     def test_declares_openapi_3_1_0(self, contract: dict[str, Any]) -> None:
         assert contract["openapi"] == FROZEN_OPENAPI_VERSION
 
-    def test_declares_exactly_eighteen_operations(self, contract: dict[str, Any]) -> None:
+    def test_declares_exactly_twenty_operations(self, contract: dict[str, Any]) -> None:
         index = conformance.operation_index(contract)
         assert len(index) == FROZEN_OPERATION_COUNT
         assert index == {
             (method, path): operation_id for method, path, operation_id in FROZEN_OPERATIONS
         }
 
-    def test_declares_exactly_the_fifty_one_schemas(self, contract: dict[str, Any]) -> None:
+    def test_declares_exactly_the_sixty_one_schemas(self, contract: dict[str, Any]) -> None:
         names = set(contract["components"]["schemas"])
         assert len(names) == FROZEN_SCHEMA_COUNT
         assert names == set(FROZEN_SCHEMA_NAMES), {

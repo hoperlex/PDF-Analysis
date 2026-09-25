@@ -50,6 +50,9 @@ class DocumentVersionView:
     published_at: datetime
     input_manifest: tuple[ManifestEntryView, ...] = ()
     display_title: str | None = None
+    #: `R-40`. One of legacy's fourteen project sections, or ``None`` when the document
+    #: has not been classified -- see ``documents.models.DocumentVersionRecord.section``.
+    section: str | None = None
     media_type: str = "application/pdf"
 
 
@@ -85,4 +88,6 @@ def document_version_body(view: DocumentVersionView) -> dict[str, Any]:
     }
     if view.display_title is not None:
         body["display_title"] = view.display_title
+    if view.section is not None:
+        body["section"] = view.section
     return body

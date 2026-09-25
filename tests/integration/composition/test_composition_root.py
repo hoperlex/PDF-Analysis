@@ -88,13 +88,14 @@ class TestItRefusesToStartRatherThanFailLater:
 class TestWhatItActuallyWires:
     def test_it_builds_all_the_frozen_operations(self) -> None:
         app = build_application(environ=_base_env())
-        assert len(app.router.routes) == 19, (
-            "the router does not carry the nineteen operations the frozen document "
+        assert len(app.router.routes) == 20, (
+            "the router does not carry the twenty operations the frozen document "
             "declares -- fifteen until `W34-CONTRACT` added the credential exchange, "
             "sixteen until `W38-KB` added the decision journal under `R-24`, seventeen "
             "until `W39-REVOKE` added the password change under `R-26`, eighteen until "
             "`W42-SEAL` (no path or operation added), nineteen once `W45-BLOCKS` added "
-            "`getVersionBlocks`"
+            "`getVersionBlocks`, twenty once `W46-SEAL` added `getDashboardSummary` "
+            "under `R-44`"
         )
 
     def test_the_wired_mode_is_the_configured_one(self) -> None:
@@ -161,7 +162,7 @@ class TestTheProxyIsATransportNotAProvenanceMode:
             "PROXY_LLM_TOKEN": "t",
         }
         app = build_application(environ=env)
-        assert len(app.router.routes) == 19
+        assert len(app.router.routes) == 20
         assert app.settings.provider_mode == "proxy"
 
 

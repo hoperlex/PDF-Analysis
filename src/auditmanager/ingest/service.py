@@ -278,6 +278,7 @@ class IngestService:
         display_title: str,
         idempotency_key: IdempotencyKey,
         document_uid: DocumentUid | None = None,
+        section: str | None = None,
     ) -> UploadOutcome:
         """Publish one PDF as one immutable version, or explain why not.
 
@@ -285,6 +286,12 @@ class IngestService:
         sees. It is a separate argument from ``source_filename`` on purpose: the file
         name is retained for the record but never travels back out, so a title the
         caller chose is the only presentation value a consumer receives.
+
+        ``section`` (`R-40`) is set only when this call **creates** a document, i.e.
+        when ``document_uid`` is ``None``: a section classifies the document, not the
+        version being published, so a second upload against an existing document does
+        not get a second chance to (mis)state it. It is never defaulted -- ``None`` means
+        the caller did not supply one, and the document is created with none.
         """
         # Step 0. The envelope, before any service is touched. A refusal here has
         # created nothing anywhere, including no command record, because nothing has
@@ -358,6 +365,7 @@ class IngestService:
                     document_uid=document_uid,
                     display_title=display_title,
                     source_filename=source_filename,
+                    section=section,
                 )
                 self._commands.succeed(
                     session,
@@ -395,12 +403,13 @@ class IngestService:
         document_uid: DocumentUid | None,
         display_title: str,
         source_filename: str,
+        section: str | None = None,
     ) -> VersionUid:
         self._blobs.mark_available(session, verified.blob_id)
         target = document_uid
         if target is None:
             target = self._documents.create_document(
-                session, project_uid, display_title
+                session, project_uid, display_title, section
             )
         entry = ManifestEntry(
             role=MANIFEST_ROLE_SOURCE_DOCUMENT,

@@ -337,6 +337,33 @@ class DecisionEventType(str, enum.Enum):
     REVOKE = "revoke"
 
 
+class ProjectSection(str, enum.Enum):
+    """Legacy's fourteen project sections (`D-56`, `R-40`).
+
+    ``backend/app/pipeline/stages/prepare/task_builder.py:1362`` names these fourteen;
+    ``db/migrations/versions/20260925_0011_document_section.py`` restates them in the
+    ``document.section`` CHECK, and ``tests/contract/domain_p02/test_project_section_catalog.py``
+    is what keeps the two from disagreeing. A document with no section is not a fifteenth
+    member of this enum -- it is ``UploadDocumentRequest.section`` or
+    ``DocumentVersion.section`` absent, which is a different, equally real fact.
+    """
+
+    AR = "AR"
+    AI = "AI"
+    KM = "KM"
+    KJ = "KJ"
+    OV = "OV"
+    EOM = "EOM"
+    VK = "VK"
+    PT = "PT"
+    PB = "PB"
+    SS = "SS"
+    ITP = "ITP"
+    GP = "GP"
+    TX = "TX"
+    POS = "POS"
+
+
 # --- the shared envelopes ----------------------------------------------------------
 
 
@@ -395,6 +422,11 @@ class UploadDocumentRequest(_Object):
     display_title: Annotated[str, Field(min_length=1, max_length=400)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    #: `R-40`. Optional, like ``display_title`` beside it and for the same reason: a
+    #: caller that does not yet know which of the fourteen sections a document belongs
+    #: in gets a document with none, not a refused upload. See
+    #: ``db/migrations/versions/20260925_0011_document_section.py``.
+    section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class InputManifestEntry(_Object):
@@ -412,6 +444,9 @@ class DocumentVersion(_Object):
     display_title: Annotated[str, Field(min_length=1, max_length=400)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    #: `R-40`. See ``UploadDocumentRequest.section``: optional for the same reason, and
+    #: never defaulted to one of the fourteen when a document was uploaded with none.
+    section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     source_filename: str | None = Field(default=None, json_schema_extra=optional_property)
     media_type: Literal["application/pdf"]
     byte_size: Annotated[int, Field(ge=0)]
@@ -654,3 +689,81 @@ class DecisionRecord(_Object):
 class DecisionRecordPage(_Object):
     items: list[DecisionRecord]
     page: PageInfo
+
+
+# --- dashboard -----------------------------------------------------------------------
+#
+# `R-44`. One aggregate read across the whole deployment; see ``getDashboardSummary`` in
+# ``api/routers/dashboard.py`` for what it answers and ``docs/program/W46-SEAL.md``
+# section 3 for the argument.
+
+
+class ProjectDocumentCount(_Object):
+    """One row of the "documents per project" panel. Same fact ``Project.document_count``
+    already publishes, gathered here for every project in one read."""
+
+    project_uid: ProjectUid
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_count: Annotated[int, Field(ge=0)]
+
+
+class VerdictCount(_Object):
+    """How many findings, across every project, currently stand at one verdict.
+
+    Every member of ``Verdict`` is present. A verdict nobody has recorded is ``count: 0``,
+    not an absent row -- absent is not empty.
+    """
+
+    verdict: Verdict
+    count: Annotated[int, Field(ge=0)]
+
+
+class RunStateCount(_Object):
+    """How many runs, across every project, currently sit in one state.
+
+    Every member of ``RunState`` is present, for the same reason ``VerdictCount`` states.
+    """
+
+    state: RunState
+    count: Annotated[int, Field(ge=0)]
+
+
+class RunActivitySpend(_Object):
+    """What every run, across every project, has spent at the provider so far.
+
+    The same conservative rule ``RunStatus``'s own ``cost_basis`` applies to one run,
+    computed here over every ``model_call`` row that exists: ``measured`` only when every
+    contributing row reported a measured cost.
+    """
+
+    model_call_count: Annotated[int, Field(ge=0)]
+    cost_micros: Annotated[int, Field(ge=0)]
+    cost_basis: CostBasis
+
+
+class RunActivity(_Object):
+    by_state: list[RunStateCount]
+    spend: RunActivitySpend
+
+
+class SectionDocumentCount(_Object):
+    """How many published documents carry one project section (`R-40`, `D-56`).
+
+    ``section`` is optional, exactly as ``DocumentVersion.section`` is, and its absence on
+    one row of this list means the same thing it means there: this row is the
+    unclassified bucket, not a fifteenth section. Every one of the fourteen frozen codes
+    is present even at ``document_count: 0`` -- "a section with no documents" is the
+    dispatch brief's own example of absent not being empty.
+    """
+
+    document_count: Annotated[int, Field(ge=0)]
+    section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class DashboardSummary(_Object):
+    """``getDashboardSummary``'s whole answer. All four panels, one read, no filter."""
+
+    documents_by_project: list[ProjectDocumentCount]
+    findings_by_verdict: list[VerdictCount]
+    run_activity: RunActivity
+    section_breakdown: list[SectionDocumentCount]

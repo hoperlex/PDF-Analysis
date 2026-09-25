@@ -290,7 +290,7 @@ def seed_version(session: Session, blob_store: S3BlobStore) -> SeededVersion:
     documents = DocumentRepository()
     project = documents.create_project(session, "Синтетический проект")
     document_uid = documents.create_document(
-        session, project_uid=project.project_uid, display_title="СП-7-АР"
+        session, project_uid=project.project_uid, display_title="СП-7-АР", section="AR"
     )
     version_uid = documents.publish_version(
         session,

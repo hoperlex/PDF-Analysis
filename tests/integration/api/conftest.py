@@ -369,6 +369,7 @@ class IngestDocumentAdapter:
             page_count=record.page_count,
             published_at=record.published_at,
             media_type=record.media_type,
+            section=record.section,
             input_manifest=tuple(
                 ManifestEntryView(
                     role=entry.role,
@@ -388,6 +389,7 @@ class IngestDocumentAdapter:
         source_filename: str,
         display_title: str | None,
         idempotency_key: str,
+        section: str | None = None,
     ) -> _Uploaded:
         outcome = self._ingest.upload_single_pdf(
             project_uid=ProjectUid(project_uid),
@@ -395,6 +397,7 @@ class IngestDocumentAdapter:
             source_filename=source_filename,
             display_title=display_title or source_filename,
             idempotency_key=idempotency_key,
+            section=section,
         )
         return _Uploaded(version=self._view(outcome.version), replayed=outcome.replayed)
 
@@ -848,8 +851,14 @@ def shipped_router(
     ``auditmanager.bootstrap.adapters`` classes here, constructed on this fixture's
     savepoint-joined session factory so the suite's rollback isolation still holds.
     The remaining three keep the seam adapters; no query parameter is declared on them.
+
+    ``DashboardPort`` (`W46-SEAL`) joins the real three for the same reason: it has no
+    query parameter to drop either, but it has no seam shape at all -- there was never a
+    fixture-only implementation of it to fall back on -- so this is the only fixture able
+    to exercise ``getDashboardSummary`` against real SQL.
     """
     from auditmanager.bootstrap.adapters import (
+        DashboardAdapter,
         DecisionAdapter,
         FindingAdapter,
         ProjectAdapter,
@@ -863,6 +872,10 @@ def shipped_router(
         decisions=DecisionAdapter(session_factory),
         exports=SeamExportAdapter(session),
         credentials=SuiteCredentialAdapter(),
+        # `W46-SEAL`, `R-44`. The real shipped adapter, like `findings` and
+        # `decisions` above: `getDashboardSummary` has no test-only seam shape to
+        # compare against, so this is the only fixture that can exercise it.
+        dashboard=DashboardAdapter(session_factory),
     ))
 
 

@@ -25,6 +25,7 @@ from auditmanager.bootstrap.adapters import (
     BlockAdapter,
     CredentialAdapter,
     CsvExportAdapter,
+    DashboardAdapter,
     DecisionAdapter,
     DocumentAdapter,
     FindingAdapter,
@@ -153,6 +154,8 @@ def build_application(
         # `W45-BLOCKS`. Reads the same store and session factory as everything else here;
         # nothing new is opened for it.
         blocks=BlockAdapter(sessions, blob_store=store),
+        # `W46-SEAL`, `R-44`. Reads the same session factory too.
+        dashboard=DashboardAdapter(sessions),
     )
     return Application(
         router=router,
