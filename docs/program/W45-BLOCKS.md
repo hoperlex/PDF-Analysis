@@ -133,4 +133,51 @@ after this stream's edits).
 
 ## B2 — the screen
 
-(Written once B1 is committed.)
+`web/src/_pages/blocks/ui/blocks-page.tsx` is no longer a `RoutePlaceholder`. `/blocks`
+carries no route parameter, so "a version a reviewer chooses" is a three-step, in-page
+picker built from existing entities: a project (`useProjectList`), one of its documents
+(`useDocumentList` — `listDocuments` already answers one `DocumentVersion`, the current
+version, per document, so no third "all versions" step is needed), then
+`getVersionBlocks` for that version's `version_uid`.
+
+**What the screen shows.** Once a version is chosen: its blocks, grouped by page number,
+each with its `block_id`, `bbox` (`x0`/`y0`/`x1`/`y1`, unit and origin) and character
+span, exactly as the operation answered them.
+
+**What it does not show, and how a reviewer tells which case they are in.** The product's
+own five-state vocabulary (`shared/ui/states.tsx`) already draws the absent/empty line —
+`NotApplicableState`'s own doc comment says *"distinct from empty, which means the answer
+is genuinely nothing"* — so this screen did not need to invent wording for it:
+
+- `status: "not_produced"` → `NotApplicableState`, title *"Разметка блоков для этой
+  версии ещё не построена."*
+- `status: "produced"` with zero blocks → `EmptyState`, title *"Блоков не обнаружено."*
+
+Both cases answer `blocks: []`; the state a reviewer sees, and its title, differ. Once,
+near the top of the screen, in the subject's own words and naming no operation, no field
+and no transport (`R-39`): *"Векторный граф блока здесь пока не строится."*
+
+**No invented numbers.** Every figure on the screen — page number, per-page block count,
+each coordinate, each character offset — is read straight off the response; nothing is
+computed, estimated or shown before data has arrived.
+
+**Consequence for two existing guards, both fixed inside this stream's grant:**
+
+- `prepared-sections.guard.test.ts` held `blocks` to the placeholder rules
+  (`R-23`'s addendum, §3.11) alongside `optimisation`/`logs`/`workers`. `blocks`
+  graduated; the file now holds three sections, and every "four" that meant *section
+  count* became "three" — the "four rules" `R-23`'s addendum itself sets is untouched,
+  since that count did not change.
+- `rendered-language.guard.test.ts`'s widget-branch matrix could not reach seven of this
+  screen's branches in one static render pass: the picker's second and third steps
+  (document list, then block index) mount only after a client click sets `useState`,
+  which the harness cannot fire — the same limitation already excuses the pager's
+  "В начало" and the upload pre-check panel. Each of the seven is named individually in
+  `UNREACHABLE_IN_ONE_PASS` with its own reason, not silenced by widening a selector.
+  One of the seven — `EmptyState`'s "Блоков не обнаружено." for a genuinely zero-block
+  **produced** version — is not reached by any instrument today, including a browser:
+  the corpus fixture this product ships never produces that state. Reported here rather
+  than manufactured with a synthetic fixture.
+
+Frontend battery: `npm --prefix web test` → **1110 passed, 78 files, 0 failed**.
+`npm --prefix web run typecheck` and `npm --prefix web run lint` both clean.
