@@ -52,7 +52,11 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56330`, `59930/59931` | `gate-w45a` — `W45-POS` | 2026-09-24 | wave 45 merges |
 | `56340`, `59940/59941` | `gate-w45b` — `W45-READY` | 2026-09-24 | wave 45 merges |
 | `56350`, `59950/59951` | `gate-w45j` — judge A, then cross-judge X | 2026-09-24 | wave 45 closes |
-| `56360`, `59960/59961` | `gate-w45k` — cross-judge Y | 2026-09-24 | wave 45 closes |
+| `56330–56360`, `59930–59961` | wave 45 | 2026-09-25 | **released** — merged, tagged `alpha-w45` |
+| `56370`, `59970/59971` | `gate-w46a` — `W46-SEAL` | 2026-09-25 | wave 46 merges |
+| `56380`, `59980/59981` | `gate-w46b` — `W46-DASH` | 2026-09-25 | wave 46 merges |
+| `56390`, `59990/59991` | `gate-w46j` — judge A, then cross-judge X | 2026-09-25 | wave 46 closes |
+| `56400`, `60000/60001` | `gate-w46k` — cross-judge Y | 2026-09-25 | wave 46 closes |
 | `56290–56320`, `59890–59921` | wave 44 | 2026-09-24 | **released** — streams and two cross-judges merged; containers, volumes and worktrees removed |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
 
