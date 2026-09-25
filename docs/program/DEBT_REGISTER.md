@@ -30,6 +30,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-101 | `R-48`'s policy makes the literal string `password` a legal password after the first change | one line, and the owner has been asked |
 | **D-102** | the guard built to catch stale counts **was** the stale count, and I reported green from a scope that excluded it | the pin is a reseal document |
 | **D-103** | `deploy.sh`'s placeholder-secret guard reads four names and the same secrets are embedded again in three derived values | ~93 s and a full build wasted, on deploy day |
+| **D-104** | every prose guard this programme has checks **numbers**; `CURRENT_STATE.md` asserts a deployed SHA and a date as present-tense fact | not a number, so nothing checks it |
 | **D-97** | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | consolidate against one provider/state contract |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -2663,6 +2664,65 @@ a principle.
 
 Check: rotate only the four named variables in a copy of `alpha.env.example` and run
 `infra/deploy/deploy.sh` against a throwaway instance.
+
+**Second confirmed instance of the same shape, found in cross-examination.**
+`OPERATING_CONSTRAINTS.md` §10 already recorded it once: the wave 3–10 mutation-copy recipe was
+incomplete until somebody actually ran it. **`DEPLOYMENT_RUNBOOK.md` and `W45-READY`'s own R3
+checklist-as-written are named as unwalked candidates for the same defect** — not accused, named,
+because the only way to know is to walk them.
+
+### D-104 — every prose guard here checks a number, and the claims that rot fastest are not numbers
+
+**The answer to the question put to both cross-judges: *what did counting hide from both of you?***
+Found by `W45-JUDGE-Y`.
+
+`test_doc_prose_facts.py` checks **the migration head, the contract surface triple and the tagged
+tip**. `test_surface_counts_in_prose.py` checks **counts**. Every instrument this programme has
+for prose is a number-checker.
+
+**`CURRENT_STATE.md`'s live section asserts, in the present tense, that the stand is deployed
+from a particular candidate SHA on a particular date.** That is a claim about the world with no
+number in it, so **no guard here was ever built to check it** — and it goes stale the moment the
+integrator performs the redeploy this very wave has planned.
+
+**This is `D-79` and `D-76` one category out.** Those were numbers that rotted and now have an
+instrument. This is the class that has none, and it is the larger class: *what is deployed*,
+*what was verified*, *when* — the sentences a reader most relies on and the ones that decay
+fastest, because they describe a running system rather than a frozen document.
+
+**The cheap half of the repair is a rewrite, not a guard:** a sentence that names the command a
+reader can run — `infra/deploy/verify-deployed.sh` already answers *"is the deployed stack this
+tree"* — cannot go stale, because it asserts nothing about today. **The expensive half is the
+general one and belongs to wave 48's audit.**
+
+Check: `grep -n '20a14de\|Redeployed from' docs/program/CURRENT_STATE.md`.
+
+### The cross-examination itself, recorded because the method is the finding
+
+**Wave 45 is the first wave where two judges examined each other's work, and it produced three
+things neither had alone.**
+
+1. **A sharper statement of the integrator's error.** `W45-JUDGE-X` could not reproduce the
+   claimed *238 passed* under four scopes. `W45-JUDGE-Y` added a fifth — **the scope that
+   actually feeds `make gate`'s `run_battery`** — giving 2 failed / 2344 passed. So the claim is
+   not *unreproducible at four arbitrary scopes*; it is **false at the scope that matters**.
+2. **A §12 finding against a judge's own method.** `W45-JUDGE-X`'s residue sweep used
+   `grep -rnE "(fifteen|sixteen|seventeen|eighteen) (operations|paths|schemas)"` — **the same
+   three nouns and the same one-space adjacency as the guard whose blind spots it was sent to
+   check past.** It is structurally incapable of finding a stale count using a fourth noun or an
+   intervening word, which is precisely `D-98`'s and `D-99`'s shape. Its *"nothing else surfaced"*
+   is true and **weaker than it reads**.
+3. **A measurement one judge could not take.** `W45-JUDGE-X` proved the reseal's four documents
+   internally consistent from a worktree. `W45-JUDGE-Y`, holding a deployed instance, **compared
+   the live wire response against the declared schemas field for field.** One proved the files
+   agree with each other; the other proved the contract agrees with what the application serves.
+
+**And one finding was deflated rather than amplified**, which is the part that makes this an
+examination rather than a chorus: `W45-JUDGE-X` argued that `DEPLOYMENT_RUNBOOK.md`'s staleness
+mattered extra because §4.7 names that document as the site of a **security-shaped** prose
+incident. `W45-JUDGE-Y` walked the runbook's operative steps, found that **none of them branch
+on an operation count**, and called the argument pattern-matching on a coincidence. *It had
+standing to say so because it had walked them.*
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 
