@@ -31,6 +31,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-102** | the guard built to catch stale counts **was** the stale count, and I reported green from a scope that excluded it | the pin is a reseal document |
 | **D-103** | `deploy.sh`'s placeholder-secret guard reads four names and the same secrets are embedded again in three derived values | ~93 s and a full build wasted, on deploy day |
 | **D-104** | every prose guard this programme has checks **numbers**; `CURRENT_STATE.md` asserts a deployed SHA and a date as present-tense fact | not a number, so nothing checks it |
+| **D-105** | the pin was **not** the only one: three sibling hard-coded literals sit beside derived comparisons, green by luck | the reseal set is five documents and three pins |
 | **D-97** | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | consolidate against one provider/state contract |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -2723,6 +2724,59 @@ mattered extra because §4.7 names that document as the site of a **security-sha
 incident. `W45-JUDGE-Y` walked the runbook's operative steps, found that **none of them branch
 on an operation count**, and called the argument pattern-matching on a coincidence. *It had
 standing to say so because it had walked them.*
+
+**And the deepest thing either judge said came from examining themselves.** `W45-JUDGE-X`, asked
+whether the pin was the only literal of its kind, answered **no** — and then named why their
+agreement on it was weak evidence: *"both of us checked the pin assumption only at the one site
+the integrator's own commit trail had made salient; neither swept the guard family for siblings
+until this cross-exam. We were both following the same breadcrumb trail, not searching
+independently."*
+
+**That is the failure mode cross-judging is supposed to defeat, found inside the cross-judging.**
+Two independent judges converging is only evidence when they had independent starting points, and
+here they did not: **I gave them both the same trail.**
+
+### D-105 — the pin was not the only one; there are three more, green by luck
+
+**`W45-JUDGE-X`'s answer to the one question I asked it beyond its brief.**
+
+Three sibling self-checks sit **beside a genuine derived comparison in the same module**, in
+exactly the shape `D-102` describes:
+
+| | |
+|---|---|
+| `tests/contract/domain_p02/test_contract_vocabulary.py:23` | `assert len(migration_module.ERROR_CODES) == 22` |
+| `tests/contract/domain_p02/test_openapi_document.py:493` | `assert len(declared) == len(set(declared)) == 22` |
+| `tests/contract/api_v1/test_doc_prose_facts.py:285` | `assert _true_migration_head() == "0010_run_terminal_detail"` |
+
+**All three are currently correct** — the catalog really is 22 codes and the head really is
+`0010` — and both facts were verified rather than assumed. **They are green by luck of what this
+wave happened to touch.** Two of them live **one directory away** from the file my residue sweep
+actually opened.
+
+**So the obligation `D-102` states is bigger than `D-102` says.** A reseal moves five documents
+**and a pin**; a migration moves **a pin**; an error-code addition moves **two pins**. None of
+that is written anywhere a person adding a code would read, which is why wave 48's audit gets it.
+
+**The repair is not to derive them** — that makes each a tautology, for the reason `D-102` gives.
+It is to make the pin set **enumerable**: one place that lists every pinned truth and what moves
+it, so a reseal or a migration has a checklist instead of a memory.
+
+### Two more things the cross-examination produced
+
+**A finding narrowed by being falsified.** `W45-JUDGE-Y` attributed a *"THIS FILE IS DATA, NOT
+CODE"* warning to `alpha.env.example`. That text is in the **root `.env.example`** — a different
+file, a different mechanism, warning about a different risk. **The narrowing makes `D-103`
+worse**: the file an operator actually copies carries **no warning about the duplicate-secret
+risk at all.**
+
+**And `§12` against the other judge, in the same shape as my own error.** `W45-JUDGE-Y`'s
+*"whole canonical battery"* run added `--ignore=tests/e2e`, which appears in neither
+`OPERATING_CONSTRAINTS.md`'s canonical command nor the Makefile's `run_battery()`. **A chosen
+scope presented as canonical without checking the literal command** — which is exactly what my
+*"238 passed"* was. `W45-JUDGE-X` disclosed its own near-miss of the same family in the same
+breath: it piped a pytest run through `tail -15`, which silently ate the exit status. **Both
+judges caught the integrator's scope error and both then made one.**
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 
