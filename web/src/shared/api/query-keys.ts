@@ -92,6 +92,15 @@ export const queryKeys = {
     /** One page of `listVersions` for one document. */
     list: (documentUid: DocumentUid, cursor?: string, limit?: number) =>
       ['versions', 'list', documentUid, { cursor, limit }] as const,
+    /**
+     * `getVersionBlocks`. `W45-BLOCKS`.
+     *
+     * Under `versions` and not under a fifth root namespace, for the same reason
+     * `content` is: the block index is a property of the version, not of any run of it
+     * -- `page_geometry_extraction` carries no model and no provider reference, so its
+     * output is deterministic and identical across every run that reaches it.
+     */
+    blocks: (versionUid: VersionUid) => ['versions', 'blocks', versionUid] as const,
   },
   runs: {
     all: () => ['runs'] as const,
