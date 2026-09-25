@@ -11,8 +11,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
-| **D-56** | project sections: navigation is free, per-section verdicts are a reseal | **owner** — and brief the two halves apart |
-| D-63 | a dashboard | **deferred by the owner**; a reseal when it comes |
+| **D-56** | project sections: **ruled `R-40`** — the field AND the aggregation, in one reseal | brief as one wave, one reseal owner |
+| **D-63** | a dashboard — **the reason it was deferred has lapsed** (`R-40` authorises the reseal) | re-read, do not carry forward |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | D-76 | a manual-test document names a head three versions stale | **closed 2026-09-23**, corrected in place |
 | **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |

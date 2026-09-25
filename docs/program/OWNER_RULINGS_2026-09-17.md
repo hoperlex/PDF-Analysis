@@ -778,3 +778,75 @@ reviewer; *«операция `listRuns` не отдаёт X»* is for an author
 **Consequence for wave 45, which is why this was asked now:** `W45-POS` builds a vertical that
 **cannot be shown to work until `D-70` clears**, so whatever it puts on screen will be saying why
 for some time. It may now say it plainly.
+
+## 3.15 — `R-40` … `R-43`, ruled 2026-09-25 by direct poll
+
+**Given to `pdf-analysis-d6` and drafted at `.local/handoff/R-30-DRAFT.md`; landed here by the
+integrator.** The draft numbered them `R-30.1`–`R-30.4`; **`R-30` is taken** — it is the ruling
+that put the stand in `recorded` mode two days earlier, which is why the alpha is drivable at all
+without a provider key. Renumbered on landing.
+
+### `R-40` — the section field is created together with its aggregation
+
+**Ruled against the recommendation the owner was given.** The drafting session recommended the
+cheaper half — the field now, the counters later, so data accumulates from day one without
+paying for read paths. **The owner took both, deliberately.** Recorded as recommended-and-declined
+rather than as chosen, because the next person to price this wave will want to know the cheap
+option existed.
+
+So the reseal carries **the field and the read operations**, which is more than `D-56`'s row
+supposed. One reseal owner for the whole wave, as in wave 34.
+
+**And the consequence worth more than the ruling: this unblocks `D-63`.** The dashboard was not
+deferred by preference — it was deferred because cross-project counts needed a reseal nobody had
+authorised. **That reseal is now authorised, so the row's stated reason has lapsed.** `D-63` is
+to be re-read, not carried forward as deferred. *A row whose reason has lapsed and which is still
+listed as blocked is the same defect as a row whose reason was never checked.*
+
+**Two corrections to the draft's batching, both measured:**
+
+- **`D-46` is already closed** and must not be batched. `W42-SEAL` closed it 2026-09-23 under
+  `R-29`: `RunStatus` gained an optional `terminal_detail`, restricted to the reported code's own
+  `safe_detail_keys` and declared inline exactly as `ErrorEnvelope.details` is. No component
+  schema, no error code; the catalog stays at twenty-two and frozen. So the batch is **three**
+  things, not four.
+- **The log-read operation's own premise needs checking before it is briefed.** `W43-PREP`
+  measured it: **`audit_event` is never written by `src/`** — its only writers in this repository
+  are tests. What exists is `stage_result`, `model_call`, `contract_state_transition` and
+  `command_record`. *"Add a read operation" is a decision about what is safe to publish before it
+  is a schema.*
+
+### `R-41` — the pilot ends by the owner's explicit instruction
+
+**No date and no observable event** — not "the last expert filed their report", not a deadline.
+The wipe runs only when the owner says so.
+
+**The caveat was put to the owner and accepted:** there is no automatic end, so *"the pilot is
+over"* remains a sentence **only he can make true**.
+
+### `R-42` — the owner performs the wipe personally
+
+He runs the command on the server himself and decides the fate of the dump the mechanism takes
+before deleting.
+
+**With `R-41` this is coherent and that is the point: one person declares, the same person acts.**
+No ambiguity about who or when survives. **The runbook records it as his decision to do it
+himself, not as a role** — this programme has no role vocabulary and `T-6` forbids inventing one
+here, so writing it as a role would invent the thing the decision avoided.
+
+### `R-43` — the character range leaves the screen and stays in the data
+
+The review screen keeps **the quotation and the page number** — what an expert checks by eye and
+what `PA-01` criterion 5 tests, so **the criterion is untouched**. The offsets remain anchors
+inside the system and keep working at the binding seam.
+
+**The reason is `D-50`'s measurement.** *"Characters 707–746 of the whole document"* is true only
+in the coordinate system of the extractor that produced it, that system is named nowhere a reader
+can see, and a second extractor disagrees by a drift that grows at every page boundary. **The
+number invites a check that fails for the wrong reason** — and an expert who tries it concludes
+not that the coordinates differ but that the system lies.
+
+**Scope:** one sentence in `anchorLabel`, `web/src/entities/finding-observation/model/quotation.ts`,
+plus the tests asserting the current caption. **Not taken when it was offered:** wave 45's
+`W45-BLOCKS` holds `web/src/**` while it runs, and two sessions writing that tree in parallel is
+the collision `D-89` already cost this programme once.
