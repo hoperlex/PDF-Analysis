@@ -115,4 +115,24 @@ X-9, and the cross-examination of Y), `docs/program/reviews/W46-JUDGE-Y.md`
   too, same falsehood). `npx vitest run tests/unit/screens/project-sections.test.ts
   tests/unit/projects/project-sections.test.ts tests/unit/widgets/dashboard.test.ts` → 40
   passed. `npm run typecheck` clean throughout.
+- **C3.** `use-create-project.ts`'s `onSuccess` now also invalidates
+  `queryKeys.dashboard.summary()`, alongside `projects.all()`. New guard
+  `tests/guards/dashboard-invalidation.guard.test.ts` discovers every
+  `features/*/model/use-*.ts` hook calling `useMutation(`, refuses to run unless that set
+  equals its own `EXPECTED_INVALIDATION` map exactly (so an unmapped future hook fails
+  loudly), and checks each mapped hook by reading whether its source names
+  `queryKeys.dashboard.summary()` directly or delegates to an imported `*CacheKeys` helper
+  (`decisionCacheKeys`, followed through the `entities/expert-decision` barrel to its
+  `model/cache.ts` definition) that itself does. `query-keys.ts:165`'s comment now names
+  `createProject` among the four mutations it already listed.
+  `npx vitest run tests/guards/dashboard-invalidation.guard.test.ts` → 7 passed.
+  Shown failing with the new invalidation line removed from `use-create-project.ts`, then
+  restored:
+  ```
+  × src/features/create-project/model/use-create-project.ts invalidates the dashboard summary
+    → …expected invalidatesDashboard() to be true, got false: expected false to be true
+  Tests  1 failed | 6 passed (7)
+  ```
+  `npm run typecheck` clean; `git diff --stat` after restoring shows only the intended
+  addition.
 

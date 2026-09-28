@@ -163,15 +163,18 @@ export const queryKeys = {
    * argues `findings.journal` does not need one.
    *
    * Every mutation that changes a number this key answers for invalidates it, from its
-   * own feature or entity rather than from here: `uploadDocument`
-   * (`features/upload-document`, `documents_by_project` and `section_breakdown`),
-   * `startRun` (`features/start-run`, a new row in `run_activity.by_state` the moment the
-   * command is accepted) and the run-status poll's terminal reading
-   * (`entities/audit-run/api/use-run-status.ts`, `run_activity.spend` and the state
-   * distribution, which only settle once a run reaches a terminal state), and an appended
-   * decision (`entities/expert-decision/model/cache.ts`'s `decisionCacheKeys`,
+   * own feature or entity rather than from here: `createProject`
+   * (`features/create-project`, a new row in `documents_by_project`, and for the first
+   * project, whether `hasProjects` is true at all — `X-6`/`Y6-a`, `W46-CLIENT`),
+   * `uploadDocument` (`features/upload-document`, `documents_by_project` and
+   * `section_breakdown`), `startRun` (`features/start-run`, a new row in
+   * `run_activity.by_state` the moment the command is accepted) and the run-status poll's
+   * terminal reading (`entities/audit-run/api/use-run-status.ts`, `run_activity.spend` and
+   * the state distribution, which only settle once a run reaches a terminal state), and an
+   * appended decision (`entities/expert-decision/model/cache.ts`'s `decisionCacheKeys`,
    * `findings_by_verdict`). Forgetting one is how this screen shows last month's numbers
-   * after this month's upload.
+   * after this month's upload — `web/tests/guards/dashboard-invalidation.guard.test.ts`
+   * maps every mutation hook under `features/**` against this promise.
    */
   dashboard: {
     summary: () => ['dashboard', 'summary'] as const,
