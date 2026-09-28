@@ -437,10 +437,6 @@ the journey, the widths and the palettes read as they did on `d5c9be5`, and `F-1
 (the data state's `spend` is `{2, 68800, "estimated"}`; the empty deployment carries no `spend`
 key).
 
-## Z3 — did the stage break what the wave had?
-
-*(pending)*
-
 ## Z4 — off the trail
 
 The trail: the gate, both judges' reproductions for the nine repaired items, the journey, the
