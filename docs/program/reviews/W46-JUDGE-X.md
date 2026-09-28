@@ -657,8 +657,10 @@ system on a different code path.
 **Y6, "re-measure; do not re-read".** For `W46-SPEND`'s guard claims, Y re-measured with the
 stream's own instrument: *"46 passed"*, *"21 passed"*, *"3 passed"*, *"367 passed"*, each marked
 **true**. That confirms the claims as written, and Y's question was only whether they were false.
-But a guard's green run by the guard is the stream's evidence repeated. X4 shows that two of those
-three files stay green under mutations they were written to catch the class of. The claim *"the
+But a guard's green run by the guard is the stream's evidence repeated. X4 shows all three
+files green under one invented mutation each. Two of those mutations (`F-2`'s cookie, `F-5c`'s
+late boundary) are the very class the guard was written for; the third (`F-5a`'s invented zeros)
+is the neighbouring property, *present-is-counted*. The claim *"the
 guard passes"* was true; the assumption the rerun shared, *"a passing guard is a guard"*, is the
 one that did not hold.
 
