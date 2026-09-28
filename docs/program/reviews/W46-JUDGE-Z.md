@@ -223,7 +223,68 @@ the close of wave 46 moves this file's live section into a `## Previous release 
 46 (historical record)` block, and a sentence left above a prematurely written heading is
 exactly how a stale claim would be hidden. **Low–medium**, finding Z-2.
 
-*(X-1, X-2, X-3/Y5-a, X-6/Y6-a and Y2-a follow.)*
+### X-1 — the served document against the frozen one — **repaired under both judges' mutations**
+
+Each judge's own mutation, each judge's own scope, in `/root/w46z-clone` with the lane's `.env`
+loaded; nothing else ran on the lane.
+
+| mutation (`src/auditmanager/api/schemas/models.py` only) | scope | `d5c9be5` (the judge) | `d56ae05` |
+|---|---|---|---|
+| **X's**: `RunActivity.spend` required again (`spend: RunActivitySpend`, no default) | `run_battery`'s exact command, whole canonical battery | 2504 passed, 5 skipped | **1 failed, 2515 passed, 5 skipped** (22:51:45Z–23:00:13Z) |
+| **Y's**: `AppendDecisionRequest.comment` `max_length=4000` → `400` | `tests/integration/api tests/integration/composition tests/contract tests/e2e`, `run_battery`'s ignores | 1119 passed, 6 skipped, 0 failed | **1 failed, 1131 passed, 5 skipped** (23:00:31Z–23:03:55Z) |
+
+The one failure is the same node both times,
+`test_openapi_conformance_live.py::test_the_served_document_conforms_to_the_frozen_contract`,
+naming the exact location: *"schemas.RunActivity.required: the contract has 1 entries and the
+generated document has 2 entries - contract ["by_state"] - generated ["by_state", "spend"]"*,
+and *"schemas.AppendDecisionRequest.properties.comment.anyOf[0].maxLength: the contract has
+4000, the generated document has 400"*. The file passes unmutated (1 passed). The scope's
+node count moved 1125 → 1137, the twelve `W46-GUARD` nodes of Z1; the one fewer skip than Y
+saw is environmental and not a node this stage touched. **Repaired.**
+
+What it still assumes, stated so it is not mine to forget: the test compares
+`create_documentation_app().openapi()`, and that this is what `serve.py`'s process serves rests
+on `test_the_documented_and_the_wired_app_agree`, which Y showed compares against the router
+fixture rather than the process. Y measured the two equal over HTTP at `d5c9be5`; nothing in the
+gate does that at `d56ae05`. And the engine drops `description` (`N4`), so the served document
+may disagree with the frozen one in any sentence — including X-11's new one, which the Pydantic
+model does not carry (no file under `src/` changed in this stage) — without a red.
+
+### X-2 — the fresh-deployment guard asserts counts — **repaired under every judge's mutation; a swap between equal counts passes**
+
+`tests/integration/composition/test_dashboard_summary_over_a_fresh_deployment.py`, baseline
+**4 passed** (the three old tests plus `test_a_deployment_with_known_data_reports_the_exact_counts`).
+Mutations of `src/auditmanager/dashboard/repository.py`:
+
+| mutation | whose | `d5c9be5` | `d56ae05` |
+|---|---|---|---|
+| `_filled` returns `(member, 0)`; the unclassified row `0` — no count ever read | X | 3 passed | **1 failed**: `{'AR': 0, …} assert 0 == 1` |
+| `basis="measured"` unconditionally | X | 3 passed | **1 failed**: `'measured'` ≠ `'estimated'` |
+| `_RUNS_BY_STATE` counts every run as `published` | Y | 3 passed | **1 failed**: `{'created': 0, …} == {'created': 1, …}` |
+| `_DOCUMENTS_BY_SECTION` counts every published document as `KM` | Y | 3 passed | **1 failed**: `{'AR': 0, …, 'KM': 3, …}` |
+| `model_call_count=calls + 1` | Y | 1 failed | **2 failed** |
+| X's two together, over X's 612-test scope (`tests/integration/api tests/integration/composition tests/contract/domain_p02/test_project_section_catalog.py`) | X | 612 passed | **1 failed, 612 passed** (baseline 613 passed) |
+
+**Repaired.** The stream's fixture seeds two projects, three published documents, a run in
+each of the eight states, four findings and two calls with different bases, and asserts every
+number; the seeded rows are the ones the assertions read, which answers Y's narrowing too.
+
+**The same limit as the render guard, on the server side.** The known-data fixture gives equal
+counts to rows the query could confuse: `AR` 1, `KM` 1 and unclassified 1; `pending` 1 and
+`rejected` 1; seven of the eight run states 1. Three swaps, each a `CASE` in the query's
+`SELECT` with `GROUP BY 1`:
+
+| mutation | the guard |
+|---|---|
+| `_DOCUMENTS_BY_SECTION` reports `AR` documents under `KM` and `KM` under `AR` | **4 passed** |
+| `_FINDINGS_BY_VERDICT` reports `pending` as `rejected` and back | **4 passed** |
+| `_RUNS_BY_STATE` reports `queued` as `running` and back | **4 passed** |
+
+Each is a wrong number on any deployment where the two rows differ (the section swap is driven
+live in Z3 below, where it does). This is X's own stated condition for a keyed check —
+distinct counts — unmet on the server side as on the client side. Finding Z-3.
+
+*(X-3/Y5-a, X-6/Y6-a and Y2-a follow; they need the product running.)*
 
 ## Z3 — did the stage break what the wave had?
 
