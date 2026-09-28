@@ -64,6 +64,11 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56370`, `59970/59971` | `gate-w46a` — `W46-GUARD`, sub-stage C | 2026-09-29 | wave 46 merges |
 | `56380`, `59980/59981`; API `56381`, Next `56383` | `gate-w46b` — `W46-CLIENT`, sub-stage C | 2026-09-29 | wave 46 merges |
 | `56390`, `59990/59991`; API `56391`, Next `56393` | `gate-w46j` — `W46-JUDGE-Z`, sub-stage C | 2026-09-29 | wave 46 closes |
+| `56370–56400`, `59970–60001` | wave 46 | 2026-09-29 | **released** — tagged `alpha-w46` (local); containers, volumes and networks removed; `w46seal`/`w46dash` moved to wave 47 |
+| `56410`, `60010/60011`; API `56411` | `gate-w47a` — `W47-GATE` | 2026-09-29 | wave 47 merges |
+| `56420`, `60020/60021`; API `56421`, Next `56423` | `gate-w47b` — `W47-PASS` | 2026-09-29 | wave 47 merges |
+| `56430`, `60030/60031`; API `56431`, Next `56433` | `gate-w47j` — judge A, then cross-judge X | 2026-09-29 | wave 47 closes |
+| `56440`, `60040/60041`; API `56441`, Next `56443` | `gate-w47k` — cross-judge Y | 2026-09-29 | wave 47 closes |
 | `56290–56320`, `59890–59921` | wave 44 | 2026-09-24 | **released** — streams and two cross-judges merged; containers, volumes and worktrees removed |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
 
