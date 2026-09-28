@@ -743,7 +743,12 @@ class RunActivitySpend(_Object):
 
 class RunActivity(_Object):
     by_state: list[RunStateCount]
-    spend: RunActivitySpend
+    #: Optional, not nullable -- absent on a deployment with no ``model_call`` row at
+    #: all. ``RunRepository.cost()`` answers ``None`` for the identical state on one run
+    #: and says why in its own docstring; this aggregate now keeps that branch rather
+    #: than reporting a zero labelled ``measured`` over an empty table (`F-1`,
+    #: ``docs/program/reviews/W46-JUDGE-A.md`` section 3).
+    spend: RunActivitySpend = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class SectionDocumentCount(_Object):

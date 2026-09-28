@@ -169,10 +169,22 @@ class DashboardRepository:
 
         spend_row: Any = session.execute(_SPEND).one()
         calls, cost_micros, unmeasured = tuple(spend_row)
-        spend = RunActivitySpendRecord(
-            model_call_count=int(calls),
-            cost_micros=int(cost_micros),
-            basis="measured" if int(unmeasured) == 0 else "estimated",
+        calls = int(calls)
+        # `F-1` (`docs/program/reviews/W46-JUDGE-A.md` section 3): the branch the lift
+        # from `runs.repository.RunCost` dropped. `RunCost.calls == 0` answers `None`,
+        # never `RunCost(0, 0, "measured")` -- those are different facts, and reporting
+        # the first as the second is the same invented measurement `D-3` forbids. This
+        # aggregate now keeps the branch it claims to lift: no `model_call` row anywhere
+        # in the deployment means there is nothing to report, not a zero labelled
+        # `measured` over a `FILTER` that is trivially satisfied by an empty table.
+        spend = (
+            None
+            if calls == 0
+            else RunActivitySpendRecord(
+                model_call_count=calls,
+                cost_micros=int(cost_micros),
+                basis="measured" if int(unmeasured) == 0 else "estimated",
+            )
         )
 
         section_rows: dict[str | None, int] = {
