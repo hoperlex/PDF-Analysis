@@ -7,7 +7,7 @@
 
 Brief: `docs/program/dispatch/W46-JUDGES-XY.md`, section `W46-JUDGE-Y`. This judge repairs
 nothing and owns this file only. Opened before the first measurement and committed after each
-section; a section marked *pending* has not been measured yet.
+section. Every section is now final.
 
 ## 0. Provisioning
 
@@ -438,7 +438,7 @@ the integrator needs named (§5). Both are the behaviour the programme's constra
 | `dashboard: api=1` and `blocks: api=1`, zero undeclared calls, `e2e:pc01 OK` | W4 | section 3: two live runs of my own, both `OK`, raw exchanges one each | **true** |
 | the `_rsc` requests are Next's link prefetches, not a second data fetch | W4 | section 1: they reach the API zero times (uvicorn log) | **true** — and stronger than the stream could say, since it read only the browser side |
 | `/dashboard` makes zero requests to `/bff/v1/projects`; `/projects` makes exactly one | W5 | section 1 (dashboard, four states) and run 1's raw exchanges (`projects` → one) | **true** |
-| the double `GET /projects` judge A saw *"was the old three-walk architecture's own redundancy"* — `documents-panel`'s `useProjectList` and the walk's own `useProjectList` | W5 | **not re-measured** (section 9). At `2ffca8c` both call `useProjectList()` with no cursor, i.e. the same key `queryKeys.projects.list(undefined, 50)` (`git show 2ffca8c:web/src/widgets/dashboard/api/use-run-activity-walk.ts` line 59, `…/entities/project/api/use-project-list.ts` line 20), and one `QueryClient` deduplicates a key's concurrent fetch. So the stated cause does not by itself produce two requests | **unproven**: the effect (zero now) is measured; the cause is asserted |
+| the double `GET /projects` judge A saw *"was the old three-walk architecture's own redundancy"* — `documents-panel`'s `useProjectList` and the walk's own `useProjectList` | W5 | **not re-measured** (*What I could not answer*). At `2ffca8c` both call `useProjectList()` with no cursor, i.e. the same key `queryKeys.projects.list(undefined, 50)` (`git show 2ffca8c:web/src/widgets/dashboard/api/use-run-activity-walk.ts` line 59, `…/entities/project/api/use-project-list.ts` line 20), and one `QueryClient` deduplicates a key's concurrent fetch. So the stated cause does not by itself produce two requests | **unproven**: the effect (zero now) is measured; the cause is asserted |
 | the `it(` table: five files touched, only `dashboard.test.ts` moved (10 → 7) | Frontend baseline | `grep -c '^\s*it('` at `fbea618` and `c26340f`: the five counts are exactly as stated; but `git diff --name-only fbea618 c26340f -- web/tests` lists **four** files — `tests/contract/narrow-sets.contract.test.ts` was not touched | counts **true**; *"touched five test files"* **false by one**. Very low |
 | `fbea618`'s frontend is **1121 passed, 79 files** (reconstructed, not measured) | Frontend baseline | `npx vitest run` at `fbea618`: **79 files, 1121 passed** | **true** — the reconstruction is now a measurement |
 | after W1–W3: **1118 passed, 79 files** | Frontend baseline | at `d5c9be5`: **79 files, 1118 passed** | **true** |
@@ -467,7 +467,7 @@ project, flips `hasProjects`, which decides both empty states. With the app's `s
 The screen says *no projects* seconds after the product created one, and makes no request to find
 out; a reload shows the truth. This is **a regression of the wiring**: before it, the documents
 panel read `useProjectList`, whose key sits under the `projects.all()` prefix that same mutation
-invalidates. (Stated from the code at `2ffca8c`, not driven there — section 9.) It is also exactly
+invalidates. (Stated from the code at `2ffca8c`, not driven there — *What I could not answer*.) It is also exactly
 the first-day path: an empty deployment, a first project, back to the dashboard. The sentence at
 `query-keys.ts:165` names four mutations and asserts that the list is complete; the rest of the
 comment ends *"Forgetting one is how this screen shows last month's numbers after this month's
@@ -507,12 +507,54 @@ and what came back — including the places that returned nothing:
 
 ## Findings, most severe first
 
-*pending*
+| # | finding | reproduce | cost |
+|---|---|---|---|
+| **Y5-a** (medium) | **The screen cannot tell "the server said zero" from "the server said nothing."** `section-breakdown.ts:37-40`, `verdict-breakdown.ts:15-24` and `run-activity-panel.tsx:76,79` fill any row the response omits with `0` and call it *"its true zero"*. With judge A's `F-5a` mutation on the server, the API sends `section_breakdown: []`, `findings_by_verdict: []`, `by_state: []`, and the screen renders nineteen zeros, *Без раздела: 0* included — panel text identical to the honest server's. The server is guarded (`W46-SPEND`'s `F-5a` test); the browser can no longer see the property that guard protects | section 5: mutated `dashboard/repository.py` in a clone, API served from it, `/dashboard` from my Next, compare to the unmutated s0/s2 readings | an error state for an omitted member (the shape `dashboard-failure.ts` already has) and one render case with an omitted row |
+| **Y2-a** (medium) | **"The only analysed section" is false for a document stored as `KM`.** The server accepts `section=KM` and analyses it with the same profile (published, three findings); the dashboard says *«АР — единственный анализируемый раздел: 0»* beside *КМ: 1*, and the project screen's КМ tab says *«Анализ этого раздела ещё не делается»*. The source (`section.ts:28-31`) says the restriction lives in the prompt; the screens call it *правило приёма*. Wave 46 created it; reachable through the API only | section 2: upload `section=KM`, `POST /runs`, render `/dashboard` and the КМ tab | two sentences, or an intake decision for the owner beside `D-107` |
+| **Y6-a** (medium-low) | **Creating a project leaves the dashboard stale.** `use-create-project.ts:31-34` does not invalidate `queryKeys.dashboard.summary()`; with `staleTime: 30_000`, a client-side return to `/dashboard` after creating the first project still says *«Проектов пока нет.»* and makes no request. The sentence at `query-keys.ts:165` (*"Every mutation that changes a number this key answers for invalidates it"*) is false. A regression of the wiring: the old panel's key sat under the invalidated `projects.all()` prefix | section 6, Y6-a: five steps in one page | one line, plus a test mapping mutations to the numbers they move |
+| **Y5 M5/M6** (medium-low) | **The render guard proves no number is invented, not that any number is in its place.** It is set membership over the fixture; per-row values of the verdict, run-state and section panels are asserted by nothing, and the one per-section check (`dashboard.test.ts:207-208`) is `toContain('4')` anywhere on the page. Every section showing its neighbour's count, and *принято*/*отклонено* swapped, both pass the **whole** frontend suite (79 / 1118) and `tsc` | section 5, M5 and M6 in a clone | one keyed assertion per row; the markup already carries the keys |
+| **Y6-b** (low) | `W46-WIRE.md` records no gate of its own, though its plan and its brief ask for one. The only record of its red gate (*2 failed / 2498 passed*) is the merge commit; `/root/w46b-gate.log` now holds a later, terminated run | section 6 | a paragraph |
+| **Y2-b** (low) | The verdict caption explains «ожидает решения», a label that appears nowhere; the row it qualifies reads «не решено» | `grep -rn 'ожидает решения' web/src` → one hit | one word |
+| **Y2 addendum** (low) | The dashboard's failure state still says *операция*, *адаптер*, *транспорт исполнителя* (shared catalog, `catalog-message.ts:113`); the subtitle's *одного общего чтения* is transport vocabulary. `D-109`, the owner's line | section 2 | owner's call |
+| low | The run panel hides the seven computed zeros the API sends (carried from `2ffca8c`) · `documents_by_project` is unbounded: 63 rows, 6906 px, where the old panel showed 50 and said so · a 200-character project name overflows `/dashboard` and `/projects` (**pre-existing, product-wide**) · `W46-SPEND` §6's prose sums 3 + 1 to explain +5 (numbers right) · its 22-code pin line is `:577` now, not `:497` · `W46-WIRE` says five test files touched, git says four · `W46-WIRE`'s cause for judge A's double `/projects` is asserted, not measured | sections 1, 6, 7 | — |
+
+**Confirmed, and said plainly.** `F-1` is repaired on the wire and on the screen. Every number
+on `/dashboard` equals `GET /dashboard` in four states plus a decisions state. The dashboard makes
+one request, seen from both ends. The live journey is `OK` twice with zero undeclared calls and can
+still go red. No overflow, clipping or sub-4.5:1 text at 780/781/360/1024 in either palette. The
+rewritten section sentences are true as written. Every numeric claim in `W46-SPEND.md` I re-ran
+held, and `W46-WIRE`'s reconstructed `1121` is now a measurement.
 
 ## What I could not answer, and why
 
-*pending*
+- **Why judge A saw `GET /projects` twice at `2ffca8c`**, and so whether `W46-WIRE`'s explanation is
+  right. It needs a second `next build` at `2ffca8c`. My attempt in the clone hit `timeout 600`
+  (exit 124) with the host at load average ~300 and swap at 14.6 / 16 GB, while `dmesg` recorded
+  three OOM kills of processes that were not mine (none of my browsers was running during the
+  build). I stopped rather than try again, and **I cannot exclude that my build added to that
+  pressure**. For the same reason, Y6-a's *"regression"* is argued from the code at `2ffca8c`, not
+  driven there.
+- **Whether `W46-WIRE` ran `make gate` on `c26340f` with the result the merge commit gives.** The
+  log that would show it has been overwritten by a later run that was terminated.
+- **Three branches no state I could build reaches:** a `needs_manual_review` finding (no PC-01
+  producer), a run in a non-terminal state (recorded runs published in 1.5 s), and the spend
+  sentence *«Ни один прогон ещё не обращался к провайдеру…»* with runs present (the recorded
+  provider always makes a call). The render test covers the last one; nothing live does.
+- **Live provider mode** was not used: it spends money against the ceiling.
+- **The owner's stand at `127.0.0.1:31500`** was not touched, read-only or otherwise. Nothing here
+  speaks about what is deployed.
 
 ## Evidence discipline
 
-*pending*
+Branch `agent/w46-judge-y`, based on `d5c9be5`; `git diff --name-only d5c9be5..HEAD` lists this
+file only (checked before the final commit). Every mutation ran in the disposable clone
+`/root/w46k-probe`, was measured after an unmutated baseline, and was reverted; the clone was
+removed at the end. Nothing was repaired. `make up` created the `gate-w46k-*` containers, which did
+not exist before; no other container was touched and nothing host-wide was pruned. The API and Next
+were stopped by PID after each was checked to be mine (`readlink /proc/<pid>/cwd` = `/root/w46k` or
+`/root/w46k/web`); nothing was killed by name or pattern. The judge databases (`audit_w46k_judge`,
+`_s0`–`_s4`, `_j1`, `_j2`, `_st`) are left in `gate-w46k-postgres-1` so the cross-examination can
+serve any state again unchanged; the gate's own `audit_w46k` was migrated to head by `make migrate` during provisioning and
+named as the fresh-deployment fixture's `DATABASE_URL`, whose test creates, uses and drops its own
+database. The scratch drivers live in my
+session scratch directory, which does not survive a restart; everything load-bearing is quoted here.
