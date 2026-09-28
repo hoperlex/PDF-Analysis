@@ -532,9 +532,17 @@ and after each section. Nothing was repaired.
   2345212, 2355953, 2372020 from `/root/w46z-clone`) and my Next (PID 2285946, `next start`
   from `/root/w46j/web`), each started by my own script and confirmed by `readlink
   /proc/<pid>/cwd` before it was stopped **by that PID**. Nothing was signalled by name or
-  pattern. The `web/.next` build output I created (git-ignored) was removed. My judge databases
-  `audit_w46z_judge` and `audit_w46z_empty` were dropped; the lane's own `audit_w46j` was never
-  written by a probe (the X-1/X-2 runs' fixtures create and drop their own databases, and the
-  lane held only `audit_w46j` and the system databases afterwards).
-- **Containers**: `make up` started `gate-w46j-*`, which were stopped when I arrived; no other
-  container was touched. No push, tag or merge.
+  pattern. No browser outlived its probe (`withColdBrowser` kills its own child by PID; none
+  was left running). The `web/.next` build output I created (git-ignored) was removed. My judge
+  databases `audit_w46z_judge` and `audit_w46z_empty` were dropped; the lane's own `audit_w46j`
+  was used only as the gate uses it, as the test database of the gate and of the three clone
+  runs (X-1 ×2, X-2's scope), whose fresh-deployment fixture creates and drops its own
+  databases; afterwards the lane held `audit_w46j` and the system databases only. The PDFs my
+  API accepted (five: four in the judge database, one from the journey; the `section=ZZ` upload was refused) remain as objects in the lane's
+  bucket `audit-w46j`, referenced by nothing now.
+- **Containers**: `make up` started `gate-w46j-*`, which were stopped when I arrived; at the end I
+  stopped the three by name with `docker stop`, leaving them as I found them. No other container
+  was touched. No push, tag or merge.
+- **Logs kept**: `/root/w46z-gate.log` (Z1), `/root/w46z-x1.log` and `/root/w46z-y1.log` (X-1's
+  two scope runs). The scratch drivers lived in my session's scratch directory and are not
+  evidence by themselves; every load-bearing reading is quoted here.
