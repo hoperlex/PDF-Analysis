@@ -633,4 +633,95 @@ behaviour mirrors `RunStatus`; the client does not say so. And the lock's note, 
 itself"* reason (`W46-SEAL`, `W45-BLOCKS`, `W42-SEAL`) and five do not (`W18-SEAL`, `W25-SEAL`,
 `W34-CONTRACT`, `W38-KB`, `W39-REVOKE`). **Upheld as X states it.**
 
-*Remaining findings pending.*
+### X-1 — nothing in the gate compares the served document with the frozen one — **upheld, and strengthened: a drift that refuses valid input passes too**
+
+X's drift (`RunActivity.spend` made required in the model only) changes nothing on the wire,
+because the dashboard's serializer omits the key whatever the model says. So X showed that a
+**document-only** drift passes the battery. I asked whether a drift that **changes behaviour**
+does, and measured the document the production entry actually serves rather than the
+documentation app.
+
+- **The served document, over HTTP.** `infra/deploy/serve.py` serves `/openapi.json` behind the
+  bearer (`R-31`; unauthenticated → `401`). Fetched from my API and compared with the programme's
+  own engine (`surface`/`differences` from `tests/contract/api_v1/openapi_conformance.py`):
+  **0 differences** at `d5c9be5`. So X's in-process proxy, `create_documentation_app().openapi()`,
+  agrees with what the process serves today.
+- **A behavioural drift.** In the clone at `d5c9be5`, `AppendDecisionRequest.comment`
+  `max_length=4000` → `400` in `api/schemas/models.py` only. The same HTTP comparison:
+  **1 difference**, *"schemas.AppendDecisionRequest.properties.comment.anyOf[0].maxLength: the
+  contract has 4000, the generated document has 400"*. Then a real decision on a finding, through
+  the served API, with comments of 400 / 401 / 1000 characters: mutated **201 / 422 / 422**
+  (*"The comment property of the request body is not of the declared form."*); unmutated, on a
+  copy of the same database, **201 / 201 / 201**. The contract and the generated client call a
+  1000-character comment valid; the served application refuses it.
+- **What notices.** `tests/integration/api tests/integration/composition tests/contract tests/e2e`
+  with `run_battery`'s three ignores, lane `.env` loaded, mutation applied: **1119 passed, 6
+  skipped, 0 failed, 0 errors** (6 min 43 s). Every suite that touches the API surface is green
+  over an application that refuses reviewer comments the contract allows. No baseline is needed
+  for that reading: an unmutated run can only fail more, not less.
+- **Where X is already right about the exception.** `test_schema_bounds.py:121-128` pins the
+  project name's 200 / 201 boundary through the operation, so the same drift on `CreateProjectRequest.name`
+  would redden. That file exists because a judge once raised the bound to 100000 with *"all 816
+  tests green"* (its own header). One field was repaired by hand; the check that covers every
+  field was never written.
+
+I started the whole canonical battery with the comment drift as well and **stopped it myself**
+at 58% (PID 1177284, `cwd /root/w46k-probe`, confirmed mine): the host reached load 82 with swap at
+13 / 15 GB, and the partial log already showed `F` and `E` marks I could not attribute without a
+baseline in the same clone. **That run is not a result** and nothing here reads it as one.
+
+### X-4 — `F-5c`'s control is blinded by a boundary after the first claim — **upheld, and broadened: no code fence is needed**
+
+X blinded the scan with a shell comment inside a fenced block. I tried an ordinary Markdown heading.
+Clone at `d5c9be5`, `docs/program/CURRENT_STATE.md`, inserted after the live section's
+*"… stays at 22."* line, `test_doc_prose_facts.py` baseline **21 passed**:
+
+| inserted | result |
+|---|---|
+| *"The migration head is \`0010_run_terminal_detail\`."* (control) | **1 failed** — `test_the_scanned_docs_state_the_migration_head_this_tree_has` |
+| `### What the historical record below keeps`, then the same stale sentence | **21 passed** |
+| the stale sentence, then that heading | **1 failed** (a claim above the boundary is still read) |
+| the heading alone | **21 passed** |
+
+So the code fence in X's reproduction is incidental: **any line starting with `#` that mentions
+the historical record, placed after the first claim, blinds everything below it.** Today the
+regex's first match is the right one (`CURRENT_STATE.md:48`, *"Previous release state — wave 45
+(historical record)"*; three matches in all, none earlier), and `ALPHA_ROADMAP.md` has none and
+is not truncated. The risk is the next live section, as X says.
+
+### X-7 — `F-2`'s derivation ignores `in: cookie` — **upheld; the rule reads spellings, not HTTP**
+
+X added one inline cookie. I ran `_takes_caller_input` itself, in-process, against every
+parameter location on a copy of the frozen document, with `getDashboardSummary` given one
+required parameter each time:
+
+```text
+path 'x' -> True   query 'x' -> True   header 'X-Scope' -> True   cookie 'am_scope' -> False
+header 'x-correlation-id' -> True      header 'X-Correlation-Id' -> False
+a $ref to a component cookie parameter -> False
+locations the frozen contract uses: header 25, query 18, path 11 (no cookie)
+```
+
+`cookie` is missed inline and through a `$ref` (the rule resolves references correctly, so this is
+the location list, not the resolution). And one thing X did not see: the correlation exemption
+compares the header's **spelling** (`resolved["name"] != "X-Correlation-Id"`), while HTTP header
+names are case-insensitive, so the same header spelled `x-correlation-id` counts as caller input.
+That errs toward demanding a client fault, so it is harmless today; it is §12's *"both spellings"*
+in miniature. Low, as X rates it.
+
+### X-9 — four comments say the client types `spend` as required "today" — **upheld by the compiler; not repaired by `ce25e14`**
+
+X grepped the comments. I asked the compiler what is true: a probe file declaring
+`const noSpend: RunActivity = { by_state: [] }` against each commit's own `types.gen.ts`,
+`tsc --strict --exactOptionalPropertyTypes`:
+
+```text
+2ffca8c: exit 2 -- TS2741: Property 'spend' is missing in type '{ by_state: never[]; }'
+d5c9be5: exit 0
+```
+
+The comments were true on the stream's base and are false on the merged tree. `git grep` at
+`ce25e14` still finds all four (`run-activity-panel.tsx:8`, `:64`,
+`rendered-language.guard.test.ts:644`, `dashboard.test.ts:61`).
+
+*Remaining findings pending: X-2, X-3, X-6, X-10, then §12.*
