@@ -211,10 +211,68 @@ Four new tests, no real contract file mutated (deep copies of the session-scoped
 **Run.** `tests/contract/domain_p02/test_openapi_document.py`: `50 passed` (46 + 4
 new). `tests/contract` scope: `376 passed, 49 subtests passed` (372 after G3, +4).
 
-## 6. G5 — the reseal
+## 6. Four strengthenings from `W46-JUDGE-Y`'s cross-examination of `X`
+
+The coordinator relayed four items from `agent/w46-judge-y` at `df78a89` (final
+section, cross-examining `X-1`, `X-2`, `X-4`, `X-7`). Read directly
+(`git show agent/w46-judge-y:docs/program/reviews/W46-JUDGE-Y.md`) before acting, per
+discipline. All four measured true; none disagreed with the brief.
+
+- **G1 / X-1.** Y measured that X's drift (`RunActivity.spend` required again) changes
+  nothing on the *wire* -- the serializer omits the key regardless -- so X's
+  reproduction is a document-only drift. Y mutated `AppendDecisionRequest.comment`'s
+  `max_length` `4000` -> `400` instead: the served API then refuses a 401-character
+  comment the contract and generated client call valid, and `tests/integration/api
+  tests/integration/composition tests/contract tests/e2e` still ran green (1119
+  passed). Added to `test_openapi_conformance_live.py`'s docstring as a second
+  reproduction and shown failing in-tree, reverted: red -- `schemas.
+  AppendDecisionRequest.properties.comment.anyOf[0].maxLength: the contract has 4000,
+  the generated document has 400`. Re-run: `1 passed`.
+- **G2 / X-2.** Y found a wrong *non-zero* spend count already caught
+  (`model_call_count=calls+1` reddens), but wrong run-state and section counts were
+  not covered by any test that both seeds a run and reads its state -- an accurate
+  narrowing of X-2's *"cannot fail on a count"*, since the third pre-existing test
+  seeds a document and a run and only asserts `spend`. My `test_a_deployment_with_
+  known_data_reports_the_exact_counts` (added in step 3) already asserts exact numbers
+  for both dimensions; shown explicitly against Y's own two reproductions, in-tree,
+  reverted after each: `_DOCUMENTS_BY_SECTION` relabelled to report every document as
+  `'KM'` -- red, `{'AR': 0, ..., 'KM': 3, ...}` (Y's own *"КМ: 3, Без раздела: 0"*
+  shape); `_RUNS_BY_STATE` relabelled to report every run as `'published'` -- red,
+  `{'published': 9, 'created': 0, ...}`. Re-run: `4 passed`.
+- **G3 / X-4.** Y measured that X's code fence is incidental: an ordinary, non-fenced
+  `### What the historical record below keeps`, placed after the first claim, gave `21
+  passed` with a stale migration head, under the pre-repair guard. My shape check
+  (step 4) already closes this class generically (it does not depend on fencing), and
+  `test_a_too_early_heading_after_the_first_claim_is_still_caught` already covers the
+  same shape with wording of my own -- added `test_judge_ys_own_heading_after_the_
+  first_claim_is_still_caught`, reproducing Y's exact heading text literally, so
+  nothing about the repair depends on a paraphrase happening to be caught too. Red
+  before the repair existed (this is what step 4 fixed); with the repair,
+  `_historical_boundary` raises *"does not look like this file's genuine heading"* on
+  Y's exact text, same as my own. `tests/contract/api_v1/test_doc_prose_facts.py`:
+  `26 passed` (25 + 1 new).
+- **G4 / X-7.** Y measured that the correlation-header exemption compared the header's
+  *spelling* (`resolved["name"] != "X-Correlation-Id"`), not the HTTP header -- RFC
+  9110 section 5.1, header field names are case-insensitive -- so `x-correlation-id`
+  or `X-CORRELATION-ID` was counted as caller input it is not (harmless today: nothing
+  in the document spells it any other way). Changed the comparison to
+  `resolved["name"].lower() != "x-correlation-id"`. Added `test_the_correlation_
+  header_exemption_is_case_insensitive`: a differently-cased correlation header alone
+  is not caller input; the same header plus a genuinely new one still is (the
+  exemption is for one header, not for every header once any capitalisation of it is
+  present). Shown failing under the pre-repair comparison (reverted just that one line
+  in-tree, ran the new test, reverted back): red -- `assert True is False`.
+  `tests/contract/domain_p02/test_openapi_document.py`: `51 passed` (50 + 1 new).
+
+**Run, all four together.** `tests/contract` scope: `378 passed, 49 subtests passed`
+(376 after G4, +2 -- the two brand-new permanent tests; the G1 and G2 strengthenings
+are additional demonstrations on already-existing tests, not new test functions).
+`git status --porcelain` on every mutated source file, after each revert: empty.
+
+## 7. G5 — the reseal
 
 *(filled as the work proceeds)*
 
-## 7. Final gate
+## 8. Final gate
 
 *(filled at the end)*

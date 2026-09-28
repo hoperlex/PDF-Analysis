@@ -316,8 +316,19 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
     query parameter of the same shape -- the caller controls the bytes either way -- so
     an operation that gains one is still caller input, with no ``X-Correlation-Id``-style
     exemption: nothing in this document declares a cookie today
-    (``test_no_operation_takes_a_cookie_parameter_yet`` pins that), so there is no
+    (``test_no_operation_declares_a_cookie_parameter_today`` pins that), so there is no
     existing cookie whose presence this exemption would need to preserve.
+
+    `W46-JUDGE-Y`'s cross-examination of `X-7` (``docs/program/reviews/W46-JUDGE-Y.md``):
+    the correlation exemption compared the header's **spelling**
+    (``resolved["name"] != "X-Correlation-Id"``), and HTTP header names are
+    case-insensitive -- ``X-Correlation-Id``, ``x-correlation-id`` and
+    ``X-CORRELATION-ID`` name the same header on the wire (RFC 9110 section 5.1). A
+    header declared with any other capitalisation of that name was, before this line,
+    counted as caller input it is not, which errs toward *demanding* a client-fault
+    response an operation does not need -- harmless today (nothing in this document
+    spells it any other way), but the same premise `OPERATING_CONSTRAINTS.md` section
+    12 names for a case that does not yet exist to expose it.
 
     ``operation`` is one of ``_operations()``'s values, which carries ``_path`` but not
     the path item's own shared ``parameters`` -- OpenAPI declares a parameter once on the
@@ -335,7 +346,7 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
         )
         if resolved["in"] in ("path", "query", "cookie"):
             return True
-        if resolved["in"] == "header" and resolved["name"] != "X-Correlation-Id":
+        if resolved["in"] == "header" and resolved["name"].lower() != "x-correlation-id":
             return True
     return "requestBody" in operation
 
@@ -544,6 +555,34 @@ def test_a_cookie_parameter_declared_on_the_path_item_also_counts(
     assert _takes_caller_input(mutated, operations["getDashboardSummary"]) is True
     with pytest.raises(AssertionError, match="takes caller input and declares no client-fault"):
         _assert_client_fault_rule(mutated, "getDashboardSummary", operations["getDashboardSummary"])
+
+
+def test_the_correlation_header_exemption_is_case_insensitive(openapi_document: dict) -> None:
+    """`W46-JUDGE-Y`'s cross-examination of `X-7`: the exemption compared the header's
+    spelling, not the HTTP header (RFC 9110 section 5.1 -- field names are
+    case-insensitive). ``x-correlation-id``, differently capitalised from the
+    contract's own ``X-Correlation-Id``, is still the same header on the wire and must
+    still be exempt.
+
+    Both directions, on `getDashboardSummary` (input-less today): a differently-cased
+    correlation header alone must not count as caller input, and adding one alongside
+    a genuinely new header must still count -- the exemption is for *one* header, not
+    for every header once any capitalisation of the correlation header is present.
+    """
+    only_recased = copy.deepcopy(openapi_document)
+    path_item = only_recased["paths"]["/dashboard"]
+    path_item["get"]["parameters"] = [{"in": "header", "name": "x-correlation-id"}]
+    operations = _operations(only_recased)
+    assert _takes_caller_input(only_recased, operations["getDashboardSummary"]) is False
+
+    with_a_real_header_too = copy.deepcopy(openapi_document)
+    path_item = with_a_real_header_too["paths"]["/dashboard"]
+    path_item["get"]["parameters"] = [
+        {"in": "header", "name": "X-CORRELATION-ID"},
+        {"in": "header", "name": "X-Scope", "required": True, "schema": {"type": "string"}},
+    ]
+    operations = _operations(with_a_real_header_too)
+    assert _takes_caller_input(with_a_real_header_too, operations["getDashboardSummary"]) is True
 
 
 # ---------------------------------------------------------------------------

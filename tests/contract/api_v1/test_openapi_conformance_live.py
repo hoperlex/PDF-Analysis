@@ -28,6 +28,17 @@ runs the same way `test_openapi_conformance.py` does, with nothing behind any of
 ports, and `test_the_documented_and_the_wired_app_agree`
 (`tests/integration/api/test_served_document_and_health_plane.py`) is what already proves
 that document is the one being served.
+
+`W46-JUDGE-Y`'s cross-examination of `W46-JUDGE-X` (`docs/program/reviews/W46-JUDGE-Y.md`,
+`X-1`) measured one step further: X's drift (`RunActivity.spend` required again) changes
+nothing on the wire, because the dashboard's serializer omits the key whatever the model
+says, so X's reproduction shows a *document-only* drift passes the battery. Y asked whether
+a drift that changes *behaviour* does, and mutated `AppendDecisionRequest.comment`'s
+`max_length` from `4000` to `400` in the model only: the served API then refuses a
+401-character reviewer comment the frozen contract and the generated client both call
+valid (`422`, where the unmutated server answers `201`), and `tests/integration/api
+tests/integration/composition tests/contract tests/e2e` still ran green (1119 passed, 0
+failed). This file's test below is shown failing under both mutations.
 """
 
 from __future__ import annotations

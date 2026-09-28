@@ -767,6 +767,36 @@ def test_a_too_early_heading_after_the_first_claim_is_still_caught() -> None:
         _historical_boundary(mutated)
 
 
+def test_judge_ys_own_heading_after_the_first_claim_is_still_caught() -> None:
+    """`W46-JUDGE-Y`'s cross-examination of `X-4` (`docs/program/reviews/W46-JUDGE-Y.md`,
+    section "X-4 -- upheld, and broadened: no code fence is needed"): Y tried an
+    ordinary Markdown heading where X used a fenced shell comment, and measured the
+    code fence to be incidental -- *"any line starting with `#` that mentions the
+    historical record, placed after the first claim, blinds everything below it."* Y's
+    own table, reproduced literally here (the previous test already covers the same
+    shape with wording of my own; this one is Y's exact heading, quoted, so nothing
+    about the repair depends on a paraphrase happening to be caught too):
+
+    - *"The migration head is `0010_run_terminal_detail`."* alone -- red (the control,
+      covered by `test_a_stale_migration_head_claim_is_caught`'s premise elsewhere).
+    - `### What the historical record below keeps`, then the same stale sentence --
+      **`21 passed`** before this repair (Y's own measurement).
+    - the stale sentence, then that heading -- a claim above the boundary is still
+      read, so this direction already failed correctly.
+    """
+    false_heading = "### What the historical record below keeps\n\n"
+    stale_head_sentence = "The migration head is `0010_run_terminal_detail`.\n\n"
+    mutated = (
+        _SYNTHETIC_LIVE_PREFIX
+        + false_heading
+        + stale_head_sentence
+        + _SYNTHETIC_GENUINE_HEADING
+        + _SYNTHETIC_HISTORICAL_TAIL
+    )
+    with pytest.raises(AssertionError, match="does not look like this file's genuine heading"):
+        _historical_boundary(mutated)
+
+
 def test_the_known_historical_triple_is_registered_and_not_flagged() -> None:
     file, phrase = next(iter(KNOWN_HISTORICAL_TRIPLES))
     assert _is_registered(file, phrase, KNOWN_HISTORICAL_TRIPLES)
