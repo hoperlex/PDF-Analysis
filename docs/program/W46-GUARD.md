@@ -120,7 +120,38 @@ tests:
 
 ## 5. G4 — a cookie is input
 
-*(filled as the work proceeds)*
+`_takes_caller_input` (`tests/contract/domain_p02/test_openapi_document.py`) counted
+`path`, `query` and a `header` other than `X-Correlation-Id` -- three of OpenAPI 3.1's
+four parameter locations. Added `"cookie"` to the `("path", "query")` branch, no
+exception by name (unlike `header`'s `X-Correlation-Id`, since nothing in the frozen
+document declares a cookie today).
+
+Four new tests, no real contract file mutated (deep copies of the session-scoped
+`openapi_document` fixture only, per this file's own convention of driving the real
+`_takes_caller_input`/rule logic rather than a hand-written approximation of it):
+
+- `test_no_operation_declares_a_cookie_parameter_today` — the pin `X-7`'s reasoning
+  needs: walked independently of `_takes_caller_input` (own `$ref` resolution over both
+  path-item and operation parameter lists), so it does not share the blind spot it
+  exists to catch a regression in.
+- `test_a_required_cookie_parameter_makes_getdashboardsummary_take_input` — **X's
+  mutation**: the exact parameter object X quoted, added to `getDashboardSummary`'s own
+  `parameters`. `_takes_caller_input` now reports `True`; the real two-sided rule
+  (factored out as `_assert_client_fault_rule`, shared with the production test rather
+  than re-approximated), run against the mutation, raises exactly X's quoted message
+  (*"takes caller input and declares no client-fault response"*).
+- `test_a_required_cookie_parameter_with_its_client_fault_response_is_accepted` — X's
+  *"honest repair"* direction: the same cookie plus a `422`. The same rule now raises
+  nothing -- before this repair X measured it wrongly refused.
+- `test_a_cookie_parameter_declared_on_the_path_item_also_counts` — **my own
+  mutation**: the cookie placed on the *path item's* shared `parameters` instead of the
+  operation's own (this document already declares `X-Correlation-Id` and every
+  `{..._uid}` that way, and `_takes_caller_input` merges both lists) -- X's
+  reproduction only exercises the operation-level list. Same result: `True`, and the
+  rule raises the same message.
+
+**Run.** `tests/contract/domain_p02/test_openapi_document.py`: `50 passed` (46 + 4
+new). `tests/contract` scope: `376 passed, 49 subtests passed` (372 after G3, +4).
 
 ## 6. G5 — the reseal
 
