@@ -9,9 +9,11 @@
  * reads a Latin code: `R-18` puts the alpha in Russian, and `АР` is what a designer writes
  * on a title block while `AR` is what a Python dictionary is keyed by.
  *
- * The registry deliberately carries no counts. There is no section field in the contract
- * to count over — `D-56`'s second half — so nothing here can be totalled per section, and
- * a test that expected a total would be asking for a number the server never sent.
+ * The registry itself still carries no counts. `getDashboardSummary` now counts published
+ * documents per section, server-side — `D-56`'s second half is answered, but by a
+ * different read (`widgets/dashboard`'s sections panel), not by this registry. A count
+ * invented here, from a list this module does not read, would be a number this module
+ * never asked the server for.
  */
 
 import { describe, expect, it } from 'vitest';

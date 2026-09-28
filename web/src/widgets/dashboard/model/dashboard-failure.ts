@@ -27,7 +27,9 @@ export type DashboardFailureKind =
   | 'server_error'
   | 'unrecognized'
   | 'transport'
-  | 'unknown';
+  | 'unknown'
+  /** A panel's own closed vocabulary did not arrive whole. See `incompleteBreakdownFailure`. */
+  | 'incomplete';
 
 export interface DashboardFailure {
   readonly kind: DashboardFailureKind;
@@ -105,6 +107,26 @@ export function classifyDashboardFailure(error: unknown): DashboardFailure {
         ? error.message
         : 'Клиент получил ответ, форму которого он не смог разобрать как отказ.',
     correlationId: error instanceof ApiFailure ? error.correlationId : null,
+    retryable: false,
+    errorCode: null,
+  };
+}
+
+/**
+ * A panel's own closed set of rows did not arrive whole — one missing, one repeated, or
+ * one the panel does not recognise (`section-breakdown.ts`, `verdict-breakdown.ts`,
+ * `run-state-breakdown.ts`). Not a thrown error: `getDashboardSummary` succeeded, so this
+ * is never a branch of `classifyDashboardFailure` above. It is built directly, in the
+ * shape, by the panel that found the gap — one way for the whole widget to say "this
+ * cannot be shown", not two.
+ */
+export function incompleteBreakdownFailure(title: string): DashboardFailure {
+  return {
+    kind: 'incomplete',
+    title,
+    detail:
+      'Часть значений, которые эта разбивка обязана показывать, отсутствует или не опознана — частичный счёт не показывается.',
+    correlationId: null,
     retryable: false,
     errorCode: null,
   };

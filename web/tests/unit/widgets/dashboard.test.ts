@@ -36,7 +36,13 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import type { DashboardSummary, RunActivity, RunStateCount } from '@/shared/api';
+import type {
+  DashboardSummary,
+  RunActivity,
+  RunStateCount,
+  SectionDocumentCount,
+  VerdictCount,
+} from '@/shared/api';
 import { RUN_STATE_VALUES, queryKeys } from '@/shared/api';
 import { formatCostMicros } from '@/entities/audit-run';
 import { PROJECT_SECTIONS } from '@/entities/project';
@@ -57,9 +63,9 @@ const ZERO_BY_STATE: readonly RunStateCount[] = RUN_STATE_VALUES.map((state) => 
  * `run_activity` with `spend` REMOVED rather than typed away — the same move
  * `rendered-language.guard.test.ts`'s own `runActivityWithoutSpend` makes, for the same
  * reason `without()` there removes `RunStatus` fields: `exactOptionalPropertyTypes` makes
- * an explicit `spend: undefined` a different type from an absent key, and today's
- * generated client still types `spend` required, so the only way to seed the shape
- * `W46-SPEND`'s reseal produces is to build the object without the key and cast.
+ * an explicit `spend: undefined` a different type from an absent key, and the absent key
+ * is the shape `W46-SPEND`'s reseal actually produces when nothing has called a provider,
+ * so the fixture is built without the key at all.
  */
 function runActivityWithoutSpend(byState: readonly RunStateCount[]): RunActivity {
   return { by_state: byState } as unknown as RunActivity;
@@ -101,6 +107,67 @@ const SUMMARY_NO_SPEND: DashboardSummary = {
   run_activity: runActivityWithoutSpend(SUMMARY.run_activity.by_state),
 };
 
+// ============================================================================
+// C1 — an omitted or unrecognised row is a fault, never a zero. Fixtures below
+// mutate the DATA a response could arrive with; the code under test is unmutated.
+// ============================================================================
+
+/** `SUMMARY.section_breakdown` with one frozen code's row deleted outright. */
+const SUMMARY_SECTION_MISSING: DashboardSummary = {
+  ...SUMMARY,
+  section_breakdown: SUMMARY.section_breakdown.filter((row) => row.section !== 'KM'),
+};
+
+/** `SUMMARY.section_breakdown` with one row's section outside the fourteen frozen codes. */
+const SUMMARY_SECTION_UNKNOWN: DashboardSummary = {
+  ...SUMMARY,
+  section_breakdown: [
+    ...SUMMARY.section_breakdown.filter((row) => row.section !== 'GP'),
+    { section: 'ZZ', document_count: 5 } as unknown as SectionDocumentCount,
+  ],
+};
+
+/** `SUMMARY.findings_by_verdict` with one of the four members deleted outright. */
+const SUMMARY_VERDICT_MISSING: DashboardSummary = {
+  ...SUMMARY,
+  findings_by_verdict: SUMMARY.findings_by_verdict.filter((row) => row.verdict !== 'rejected'),
+};
+
+/** `SUMMARY.findings_by_verdict` with a verdict outside the closed set — `X2-a`'s own case. */
+const SUMMARY_VERDICT_UNKNOWN: DashboardSummary = {
+  ...SUMMARY,
+  findings_by_verdict: [
+    ...SUMMARY.findings_by_verdict.filter((row) => row.verdict !== 'needs_manual_review'),
+    { verdict: 'escalated', count: 9 } as unknown as VerdictCount,
+  ],
+};
+
+/**
+ * `SUMMARY.run_activity` with only one of the eight `RunState` rows present — the shape
+ * the coordinator's narrowing named: the old code hid the other seven behind `?? 0` and a
+ * `> 0` filter rather than showing a fault, indistinguishable on screen from "the rest are
+ * genuinely zero".
+ */
+const SUMMARY_RUN_STATE_PARTIAL: DashboardSummary = {
+  ...SUMMARY,
+  run_activity: {
+    by_state: SUMMARY.run_activity.by_state.filter((row) => row.state === 'published'),
+    ...(SUMMARY.run_activity.spend !== undefined ? { spend: SUMMARY.run_activity.spend } : {}),
+  },
+};
+
+/** `SUMMARY.run_activity` with a state outside `RunState` — `X2-a`'s own case, run-side. */
+const SUMMARY_RUN_STATE_UNKNOWN: DashboardSummary = {
+  ...SUMMARY,
+  run_activity: {
+    by_state: [
+      ...SUMMARY.run_activity.by_state.filter((row) => row.state !== 'cancelled'),
+      { state: 'escalated', count: 5 } as unknown as RunStateCount,
+    ],
+    ...(SUMMARY.run_activity.spend !== undefined ? { spend: SUMMARY.run_activity.spend } : {}),
+  },
+};
+
 function render(summary: DashboardSummary): string {
   const client = newClient();
   client.setQueryData(queryKeys.dashboard.summary(), summary);
@@ -115,6 +182,38 @@ function visible(markup: string): string {
 /** Every whole or decimal digit token in a rendered screen's visible text. */
 function renderedNumberTokens(markup: string): string[] {
   return [...visible(markup).matchAll(/\d+(?:\.\d+)?/g)].map((match) => match[0]);
+}
+
+/**
+ * The markup of one `<section aria-labelledby="…">` — sections never nest in this widget,
+ * so matching up to the next `</section>` is exact even though the panel inside carries
+ * its own nested `<div>`s (`ErrorState`'s wrapper among them).
+ */
+function sectionMarkup(markup: string, headingId: string): string {
+  const match = markup.match(
+    new RegExp(`<section[^>]*aria-labelledby="${headingId}"[^>]*>([\\s\\S]*?)</section>`),
+  );
+  if (match === null) throw new Error(`no <section aria-labelledby="${headingId}"> in the markup`);
+  return match[1]!;
+}
+
+/**
+ * The number keyed to one row, read from `<${tag} data-${attr}="${value}">…</${tag}>`
+ * rather than from anywhere on the page — `toContain('4')` is satisfied by any panel's
+ * `4`; this is not (`Y5 M5/M6`, `docs/program/reviews/W46-JUDGE-Y.md` §5). `li` and `tr`
+ * are siblings in every panel here, never nested, so the non-greedy match to the next
+ * closing tag of the same name stops at this row's own close.
+ */
+function rowNumber(markup: string, tag: 'li' | 'tr', attr: string, value: string): number {
+  const match = markup.match(
+    new RegExp(`<${tag}[^>]*data-${attr}="${value}"[^>]*>([\\s\\S]*?)</${tag}>`),
+  );
+  if (match === null) throw new Error(`no <${tag} data-${attr}="${value}"> row in the markup`);
+  const numberMatch = match[1]!.match(/<(?:strong|td)>(\d+)<\/(?:strong|td)>/);
+  if (numberMatch === null) {
+    throw new Error(`row data-${attr}="${value}" carries no number: ${match[1]}`);
+  }
+  return Number(numberMatch[1]);
 }
 
 /**
@@ -214,6 +313,103 @@ describe('every number the dashboard renders is the fixture, and nothing else is
       expect(markup, `missing data-section="${section.code}"`).toContain(
         `data-section="${section.code}"`,
       );
+    }
+  });
+});
+
+/**
+ * `C1` (`X-3`, `Y5-a`, `X2-a`): a response that omits a member of a closed vocabulary, or
+ * carries one the vocabulary does not have, is broken — the panel says so and renders no
+ * numbers, rather than filling the gap with a zero nobody computed. Each case here mutates
+ * the FIXTURE data a response could arrive with; `section-breakdown.ts`,
+ * `verdict-breakdown.ts` and `run-state-breakdown.ts` are unmutated.
+ *
+ * Before this guard existed, every one of these six fixtures rendered a full table of
+ * zeros and true counts mixed together, indistinguishable from an honest answer — that
+ * was run by hand against the pre-repair panels and confirmed red for exactly this reason,
+ * then reverted; see `docs/program/W46-CLIENT.md`.
+ */
+describe('an omitted or unrecognised row is a fault, never a zero', () => {
+  it('sections panel: a missing frozen code shows the fault, not fourteen numbers', () => {
+    const panel = sectionMarkup(render(SUMMARY_SECTION_MISSING), 'dashboard-sections-heading');
+    expect(panel).toContain('data-panel-fault="incomplete"');
+    expect(renderedNumberTokens(panel)).toEqual([]);
+  });
+
+  it('sections panel: a code outside the fourteen shows the fault, not a silently dropped row', () => {
+    const panel = sectionMarkup(render(SUMMARY_SECTION_UNKNOWN), 'dashboard-sections-heading');
+    expect(panel).toContain('data-panel-fault="incomplete"');
+    expect(renderedNumberTokens(panel)).toEqual([]);
+  });
+
+  it('verdicts panel: a missing verdict shows the fault, not four numbers with a gap', () => {
+    const panel = sectionMarkup(render(SUMMARY_VERDICT_MISSING), 'dashboard-verdicts-heading');
+    expect(panel).toContain('data-panel-fault="incomplete"');
+    expect(renderedNumberTokens(panel)).toEqual([]);
+  });
+
+  it('verdicts panel: a verdict outside the closed set shows the fault, not a silently dropped row', () => {
+    const panel = sectionMarkup(render(SUMMARY_VERDICT_UNKNOWN), 'dashboard-verdicts-heading');
+    expect(panel).toContain('data-panel-fault="incomplete"');
+    expect(renderedNumberTokens(panel)).toEqual([]);
+  });
+
+  it('run-state panel: a partial by_state shows the fault, not the states it happened to carry', () => {
+    // The coordinator's narrowing: the pre-repair panel hid the seven missing states
+    // behind `?? 0` fed into a `> 0` filter and rendered `published: 2` alone, with no
+    // sign that seven members were never said at all.
+    const panel = sectionMarkup(render(SUMMARY_RUN_STATE_PARTIAL), 'dashboard-runs-heading');
+    expect(panel).toContain('data-panel-fault="incomplete"');
+    expect(renderedNumberTokens(panel)).toEqual([]);
+  });
+
+  it('run-state panel: a state outside RunState shows the fault, not a silently dropped row', () => {
+    const panel = sectionMarkup(render(SUMMARY_RUN_STATE_UNKNOWN), 'dashboard-runs-heading');
+    expect(panel).toContain('data-panel-fault="incomplete"');
+    expect(renderedNumberTokens(panel)).toEqual([]);
+  });
+});
+
+/**
+ * `C2` (`Y5 M5/M6`): the render guard above proves no number is invented; it does not by
+ * itself prove any number is in its own row. `toContain('4')` anywhere on the page is
+ * satisfied by any panel's `4` — these cases key each assertion to the row's own
+ * `data-section`/`data-verdict`/`data-run-state` attribute instead.
+ *
+ * Two of Y's mutations, plus one of mine, were run by hand against these cases and
+ * confirmed red, then reverted — recorded with their output in
+ * `docs/program/W46-CLIENT.md`:
+ *
+ *   1. Y's M5 — `sections-panel.tsx` reading `PROJECT_SECTIONS[(i + 1) % length]`'s code
+ *      for row `i`'s count (every section shows its neighbour's).
+ *   2. Y's M6 — `verdicts-panel.tsx` rendering `accepted`'s cell from `rejected`'s count
+ *      and back.
+ *   3. Mine — `run-activity-panel.tsx` rendering `published`'s cell from `failed`'s count
+ *      and back.
+ */
+describe('every row is keyed to its own data attribute, not to membership on the page', () => {
+  it('every section row carries its own section’s count, never a neighbour’s', () => {
+    const markup = render(SUMMARY);
+    for (const row of SUMMARY.section_breakdown) {
+      if (row.section === undefined) continue;
+      expect(rowNumber(markup, 'li', 'section', row.section), row.section).toBe(
+        row.document_count,
+      );
+    }
+  });
+
+  it('every verdict row carries its own verdict’s count, never a swapped one', () => {
+    const markup = render(SUMMARY);
+    for (const row of SUMMARY.findings_by_verdict) {
+      expect(rowNumber(markup, 'tr', 'verdict', row.verdict), row.verdict).toBe(row.count);
+    }
+  });
+
+  it('every rendered run-state row carries its own state’s count, never a swapped one', () => {
+    const markup = render(SUMMARY);
+    for (const row of SUMMARY.run_activity.by_state) {
+      if (row.count === 0) continue; // filtered off the table; not this case's subject
+      expect(rowNumber(markup, 'tr', 'run-state', row.state), row.state).toBe(row.count);
     }
   });
 });

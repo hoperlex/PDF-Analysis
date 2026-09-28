@@ -641,12 +641,11 @@ const ZERO_BY_STATE: readonly RunStateCount[] = RUN_STATE_VALUES.map((state) => 
  * `run_activity` with `spend` REMOVED, not merely unset — `W46-WIRE`.
  *
  * After `W46-SPEND`'s reseal `run_activity.spend` is optional and absent exactly when the
- * deployment has made no provider call; today's generated client still types it required.
- * The only way to seed that future shape against today's contract is the same move
- * `without()` below makes for `RunStatus`: build the object without the key at all, then
- * assert the shape rather than let the compiler infer it — `exactOptionalPropertyTypes`
- * makes an explicit `spend: undefined` a different type from an absent key, and the whole
- * point here is the absent key.
+ * deployment has made no provider call. Seeding that shape is the same move `without()`
+ * below makes for `RunStatus`: build the object without the key at all, then assert the
+ * shape rather than let the compiler infer it — `exactOptionalPropertyTypes` makes an
+ * explicit `spend: undefined` a different type from an absent key, and the whole point
+ * here is the absent key.
  */
 function runActivityWithoutSpend(byState: readonly RunStateCount[] = ZERO_BY_STATE): RunActivity {
   return { by_state: byState } as unknown as RunActivity;

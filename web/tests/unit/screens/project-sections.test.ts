@@ -3,12 +3,19 @@
  *
  * `D-56` asks the interface to carry legacy's fourteen sections while the analysis reads
  * one — `R-18`'s stub rule applied to structure. Structure is cheap to render and easy to
- * render dishonestly, and the dishonest version is specific: **a document's section is
- * checked nowhere in this system.** The upload envelope checks the media type, the byte
- * size, the page count and the text layer; the `AR` restriction lives in the analysis
- * prompt and in fixture names. So the screen may state a *rule of intake* and may never
- * state a *property of a file*, and the list under the open section is the project's whole
- * document list rather than a list filtered by anything.
+ * render dishonestly, and the dishonest version is specific.
+ *
+ * **`W46-CLIENT`, `Y2-a`.** The screen used to call the restriction a *rule of intake* —
+ * *"documents of section АР are what is accepted today"* — which reads as the server
+ * refusing anything else. It measurably does not: a document the server stores under
+ * another section is analysed by the same profile
+ * (`docs/program/reviews/W46-JUDGE-Y.md` §2). The restriction lives in the analysis
+ * prompt, not in intake, and predates this wave (`entities/project/model/section.ts`).
+ * What the screen may state instead is a *rule about the analysis* — it is built for the
+ * text of АР documents and is applied to whatever is uploaded, whichever section it is
+ * stored under — and it may never state a *property of a file*: "this document belongs to
+ * АР" is a claim no code here makes, and the list under the open section is the project's
+ * whole document list rather than a list filtered by anything.
  *
  * These cases assert that distinction as text on the screen, because it is the only place
  * it exists: no type, no schema and no query can carry it.
@@ -111,10 +118,15 @@ describe('a fresh tab opens on the section the analysis is built for', () => {
   });
 });
 
-describe('the screen states a rule of intake and never a property of a file', () => {
-  it('says what is accepted today', () => {
+describe('the screen states a rule about the analysis and never a rule of intake', () => {
+  it('says the analysis is built for one section’s text, not that intake refuses the rest', () => {
+    // `W46-CLIENT`, `Y2-a`: a document the server stores under another section is
+    // analysed by the same profile, so the old pin -- "Сейчас принимаются документы
+    // раздела АР" -- read as an intake rule the server does not enforce. What the screen
+    // says now is a fact about the analysis alone.
     const markup = screen();
-    expect(markup).toContain('Сейчас принимаются документы раздела АР');
+    expect(markup).toContain('Анализ построен для текста раздела АР');
+    expect(markup).toContain('применяется к любому загруженному документу');
   });
 
   it('says that a document’s section is stored and checked when an upload names one, and the product’s form does not offer that field', () => {
@@ -130,18 +142,23 @@ describe('the screen states a rule of intake and never a property of a file', ()
     expect(markup).toContain('ни один список здесь не отобран по разделу');
   });
 
-  it('never claims a document belongs to a section', () => {
+  it('never claims a document belongs to a section, and never says intake refuses another one', () => {
     const markup = screen();
     // The claim this screen must not make, in the forms it would take. Each is a sentence
-    // the software cannot confirm: nothing in this repository reads a document's section.
+    // the software cannot confirm: nothing in this repository reads a document's section
+    // to decide whether to accept or to analyse it.
     for (const claim of [
       'относится к разделу',
       'документы раздела АР:</',
       'раздел документа: ',
       'определён раздел',
       'документ раздела АР —',
+      'правило приёма',
+      'принимаются документы раздела',
     ]) {
-      expect(markup, `the screen asserts membership: ${claim}`).not.toContain(claim);
+      expect(markup, `the screen asserts membership or an intake rule: ${claim}`).not.toContain(
+        claim,
+      );
     }
   });
 });
@@ -162,8 +179,10 @@ describe('a section without analysis says so, and offers nothing it cannot do', 
     expect(markup).not.toContain('data-section-panel=');
   });
 
-  it('points at the section that is accepted, so the stub is not a dead end', () => {
-    expect(sections('POS')).toContain('сейчас принимаются документы раздела АР');
+  it('points at the section the analysis is built for, so the stub is not a dead end', () => {
+    const markup = sections('POS');
+    expect(markup).toContain('Отдельного анализа для этого раздела нет');
+    expect(markup).toContain('анализ построен только для текста раздела АР');
   });
 
   it('carries the screen’s own route on the stub, for whoever reads the DOM', () => {
