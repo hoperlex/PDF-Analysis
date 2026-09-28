@@ -45,5 +45,26 @@ verdict. Confirmed via the integrator (session restarted after the same event) b
 re-running: kill only by confirmed-own PID, never by pattern, on a host every project
 shares.
 
-Second attempt, below, after confirming no other `make gate` under `/root/w46*` was
-running and the host had calmed (load ~3, ~2 GB available).
+Second attempt, after confirming no other `make gate` under `/root/w46*` was running
+(`readlink -f /proc/<pid>/cwd` on every `make gate`/`pytest` PID) and the host had
+calmed (load ~3, ~3.5 Gi available, swap 5.4/15 Gi). Ran to completion, no OOM:
+
+```
+1 failed, 2499 passed, 5 skipped, 4 warnings, 169 subtests passed in 755.26s (0:12:35)
+FAILED tests/contract/domain_p02/test_openapi_document.py::test_every_operation_can_report_not_found_or_validation
+GATE: the canonical battery failed with pytest exit status 1.
+```
+
+**No `GATE OK` line** (`grep -n "GATE OK" /root/w46a-gate.log` → nothing). `run_battery`
+failing aborts the recipe before `run_frontend`/`check_whitespace` run — this log says
+nothing about the frontend battery or whitespace, only about the backend one, which is
+this stream's to fix.
+
+**One red, by node id**, exactly the brief's premise (`F-2`, gate red #5) and nothing
+else:
+
+- `tests/contract/domain_p02/test_openapi_document.py::test_every_operation_can_report_not_found_or_validation`
+  — `AssertionError: getDashboardSummary declares no client-fault response`.
+
+Reported to the integrator (`SendMessage`, `to: "main"`) with this exact line and list
+before starting `S1`.
