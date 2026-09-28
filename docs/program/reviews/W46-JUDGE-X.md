@@ -236,7 +236,41 @@ disagreement at the tip — `RunActivity.spend` made required again **in the Pyd
 (the engine then reports exactly one difference, `schemas.RunActivity.required`) — and ran the
 whole canonical battery on the clone:
 
-*pending — the result is written here when the run ends.*
+```text
+cd /root/w46x-clone     # d5c9be5 + that one-line mutation of api/schemas/models.py; lane .env loaded
+.venv/bin/python -m pytest -c pyproject.toml --rootdir=. -q tests --ignore=tests/checkpoint \
+  --ignore=tests/contract/test_cp00_candidate.py --ignore=tests/contract/test_cp00_final_state.py \
+  --ignore=tests/contract/test_validate_bootstrap.py          # run_battery's command
+2504 passed, 5 skipped, 4 warnings, 169 subtests passed in 512.21s     (12:31:45Z–12:40:37Z)
+```
+
+**Identical to X1's unmutated battery.** The frontend suite and the foundation read files the
+mutation does not touch, so `make gate` would print `GATE OK` over an application whose served
+document disagrees with its frozen contract. Reverted; the clone's `git status` was clean.
+
+**Why it is this way, from the record.** `W13-CONF` built the engine before the application
+existed and handed the last step over in writing (`docs/program/reviews/W13-CONF.md` §11):
+*"The wiring is one file and is deliberately not written. When `W13-API` lands, the remaining
+step is a new `tests/contract/api_v1/test_openapi_conformance_live.py` holding
+`differences(surface(json.loads(CONTRACT_PATH.read_text())), surface(app.openapi()))` and
+asserting it empty."* `git log --all -- tests/contract/api_v1/test_openapi_conformance_live.py`
+is empty: **that file was never written, on any branch.** `W13_CLOSURE.md` reports *"0
+differences between the frozen document and `app.openapi()`"* once, at wave 13; since then
+the programme has described the gate as existing (`test_served_document_and_health_plane.py:3`,
+*"the served document is the one the gate compares"*) while the gate has had nothing to compare
+it with.
+
+**Cost.** The product's own client is generated from the frozen document, so the screens do
+not read the served one. But FastAPI **validates requests** from the same Pydantic models it
+generates the served document from: a request model that drifts from the contract (a field made
+required that the contract calls optional, a bound tightened) refuses requests the contract and
+the generated client consider valid. Integration tests catch that only for the fields they
+happen to send; this comparison is the one check that sees every field. The lock's
+`commit_note` records nine reseals since wave 13 (`W18-SEAL` to `W46-SPEND`), and every one
+went through a gate that could not have seen this. **Medium**, and the cheapest repair in this report: `W13-CONF` already wrote it
+down, a single test over an engine that is already guarded by 86 planted-difference tests. It
+is not `W46-SPEND`'s: `f50e656` → `069f656` is exactly how a reseal is meant to proceed; the
+stream simply inherited a gate that could not have noticed a mistake in between.
 
 ## X4 — the three guards `W46-SPEND` claims, mutated by me — **each catches what it was shown; each misses one I invented**
 
@@ -444,7 +478,7 @@ Where I went that none of it points, and what came back:
 
 | where | why the trail does not lead there | what came back |
 |---|---|---|
-| **the served document against the frozen one** (`create_documentation_app().openapi()` through the programme's own conformance engine, at `f50e656`, `069f656`, `d5c9be5`, then a Pydantic-only drift run through the whole battery) | X3 asks whether the five documents moved together; nothing asks whether the application still **conforms** to them — the whole meaning of *contract-first* | See X3's last paragraph: the engine sees the drift at `f50e656`; *pending: whether any test in the battery does* |
+| **the served document against the frozen one** (`create_documentation_app().openapi()` through the programme's own conformance engine, at `f50e656`, `069f656`, `d5c9be5`, then a Pydantic-only drift run through the whole battery) | X3 asks whether the five documents moved together; nothing asks whether the application still **conforms** to them — the whole meaning of *contract-first* | **Nothing in the gate compares them.** The engine sees the drift at `f50e656` (1 difference); the whole canonical battery with the same drift re-created at the tip: **2504 passed**, identical to X1. The live test `W13-CONF` handed over as *"one file … deliberately not written"* was never written on any branch (X3) |
 | **a real `/dashboard` body validated against the frozen schema** (Draft 2020-12, the suite's own checker) | X2 asks whether layers turn absence into zeros, not whether the wire is what the contract says | **Valid in all four states**; invalid against the pre-reseal contract. And `test_schema_conformance.py` has **no `DashboardSummary` case**, so nothing in the battery does this for the new operation (X2) |
 | **the dashboard's own client-side merges** (`verdict-breakdown.ts`, `section-breakdown.ts`) | X2 names record, view, serializer and generated type; the screen's model is one layer further | **X2-a**: rows the server did not send render as `0`; unknown members vanish |
 | **who invalidates `['dashboard','summary']`** (`grep -rn 'queryKeys.dashboard' web/src`) | the brief never mentions the cache | **`createProject` does not.** `d4f7b0e` says *"invalidate the dashboard summary at every mutation that changes it"* and wires upload, start-run, a run's terminal reading and decisions. X2 measured that creating a project changes the answer (`documents_by_project` `[]` → one row; the run panel's *«Проектов пока нет»* depends on it). `useCreateProject` invalidates `['projects']` only, which does not reach `['dashboard', …]` (`query-keys.ts:51`, a separate namespace), and the app's queries are `staleTime: 30_000` with `refetchOnWindowFocus: false` (`_app/query-client.ts:34-35`). So for 30 s after a dashboard read, a new project is missing from it. **Low**; static reproduction — I did not drive it in a browser |
