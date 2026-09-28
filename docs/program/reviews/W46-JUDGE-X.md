@@ -7,8 +7,8 @@ at `2ffca8c`, then `W46-SPEND` merged at `9a295aa`, `W46-WIRE` at `1c38c52`, and
 integrator's join repair `d5c9be5`).
 
 Brief: `docs/program/dispatch/W46-JUDGES-XY.md`, section `W46-JUDGE-X`. Opened before the first
-measurement and committed section by section; a section marked *pending* has not been measured
-yet.
+measurement and committed section by section; every section is now final. The
+cross-examination against `W46-JUDGE-Y` is appended later, as its own section.
 
 ## X1 — the whole gate on the merged tip — **`GATE OK`**
 
@@ -267,8 +267,8 @@ required that the contract calls optional, a bound tightened) refuses requests t
 the generated client consider valid. Integration tests catch that only for the fields they
 happen to send; this comparison is the one check that sees every field. The lock's
 `commit_note` records nine reseals since wave 13 (`W18-SEAL` to `W46-SPEND`), and every one
-went through a gate that could not have seen this. **Medium**, and the cheapest repair in this report: `W13-CONF` already wrote it
-down, a single test over an engine that is already guarded by 86 planted-difference tests. It
+went through a gate that could not have seen this. **Medium**, and the cheapest repair in this
+report: `W13-CONF` already wrote it down, a single test over an engine that is already guarded by 86 planted-difference tests. It
 is not `W46-SPEND`'s: `f50e656` → `069f656` is exactly how a reseal is meant to proceed; the
 stream simply inherited a gate that could not have noticed a mistake in between.
 
@@ -302,8 +302,9 @@ cookie is still classified input-less: the rule accepts it with no client fault 
 with one — wrong in both directions, for exactly the case the derivation exists for (*"so an
 operation that later gains a parameter is pulled back under the rule without anyone
 remembering to"*). The literal pin does not help, because it is computed with the same
-function. **Low** today (the surface declares no cookie parameter, and the BFF's `am_session`
-cookie never reaches the API), and a one-word repair. The stream's two directions are real, and
+function. **Low** today (the contract declares no `in: cookie` parameter anywhere, counted; and the
+BFF drops `cookie` before forwarding, `web/src/shared/api/credentialed-forward.ts:41-44`), and a
+one-word repair. The stream's two directions are real, and
 it reported honestly that its first version missed path-item parameters.
 
 ### `F-5c` — the historical-section control (`test_doc_prose_facts.py`)
@@ -538,3 +539,20 @@ comments it names.
 - **Anything about the deployed stand** (`127.0.0.1:31500`). Not touched, read or otherwise;
   `infra/deploy/verify-deployed.sh` inspects a running container, and no container outside
   `gate-w46j*` is mine to touch.
+
+## Evidence discipline
+
+Branch `agent/w46-judge-x`, based on `d5c9be5`; its diff against `d5c9be5` is this file only
+(checked before the final commit). This file was committed before the first measurement and
+after every section. Nothing was repaired. Every mutation ran outside the worktree — in
+`git archive` trees and a `git clone` at `d5c9be5`, each scope baselined unmutated; in the
+clone each mutation was reverted with `git checkout --` and `git status --porcelain` read as
+`0`, and in the archive tree the two `D-107` files were restored from copies and `diff`ed
+against `git show d5c9be5:<path>` — and every tree was removed at the end (`/root/w46x-tree-*`, `/root/w46x-clone`; a `make mutation-copy` at
+`/root/w46x-mut` was built and removed unused). `audit_w46j_judge`, `audit_w46j_judge2` and my
+own `audit_w46x_judge` were dropped; the lane's postgres holds `audit_w46j` and the system
+databases only. My API (PID 2588443, confirmed a descendant of this session and running from
+`/root/w46j`) was stopped by that PID; no Next server was started; ports 56391–56393 are free.
+No process was signalled by pattern. No container outside `gate-w46j*` was touched, the owner's
+stand was not contacted, and nothing was tagged, pushed or merged. The gate log is kept at
+`/root/w46x-gate.log`.
