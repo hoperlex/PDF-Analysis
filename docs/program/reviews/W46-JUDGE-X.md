@@ -487,7 +487,34 @@ Where I went that none of it points, and what came back:
 
 ## Findings, most severe first
 
-*pending*
+**The merged tip gates: `GATE OK`** (X1), and nothing was lost at the merge (X6). `F-1` is
+repaired in every layer and the wire validates against the frozen schema (X2). None of the
+findings below is a live defect in what a reviewer sees today; the first three are guards the
+programme believes it has and does not.
+
+| # | severity | finding | reproduce |
+|---|---|---|---|
+| **X-1** | medium | **No test in `make gate` compares the served document with the frozen contract.** The *contract-first* conformance check was specified (`ALPHA_ROADMAP.md:306`), built as an engine with 86 planted-difference tests, and handed over as *"one file … deliberately not written"* (`W13-CONF.md` §11). That file was never written on any branch. A Pydantic-only drift passes the whole battery. | In a clone at `d5c9be5`: make `RunActivity.spend` required again in `src/auditmanager/api/schemas/models.py` only; `differences(surface(frozen), surface(create_documentation_app().openapi()))` → 1 difference; `run_battery`'s command → **2504 passed, 5 skipped** (X3) |
+| **X-2** | medium | **`F-5a`'s guard proves absent-is-not-empty and nothing about present-is-counted.** Every count invented as `0`, and `cost_basis` forced to `measured`, both pass the new file and the whole 612-test scope. | `mutate_f5a` in X4: `_filled` → `(member, 0)`; `basis="measured"` → new file 3 passed, 612-scope 612 passed |
+| **X-3** | low–medium | **The dashboard's client fills rows the server did not send with `0`, and drops members it does not know** — `F-1`'s collapse one layer up, by design (*"reads as its true zero"*). Invisible to `W46-WIRE`'s render test, whose fixture always sends every row. | Render `Dashboard` from a summary with `findings_by_verdict: []`, `section_breakdown: []` → 19 zeros beside *"Документов: 7"*; a verdict `escalated: 9` and section `ZZ: 5` → neither appears (X2-a) |
+| **X-4** | low–medium | **`F-5c`'s control is blinded by a boundary after the first claim**, and a shell comment in a code fence counts as the historical heading. The test's own comment says a too-early heading *"truncates all of them together"*; it does not. | Add to `CURRENT_STATE.md` after the surface-triple paragraph a fenced block with `# the historical record below …` and then *"The migration head is \`0010_run_terminal_detail\`."* → `test_doc_prose_facts.py` 21 passed; without the fence, red (X4) |
+| **X-5** | low–medium | **`D-107`'s check command cannot print anything but `0`** for the two direct ways the product would gain a section field. | Add `section: 'KM'` to the upload command's body (`.ts`, outside `--include=*.tsx`), or a `<select className=… name="section">` (removed by `grep -v className`) → the row's command prints `0` both times (X5) |
+| **X-6** | low | **`createProject` does not invalidate the dashboard summary**, although creating a project changes it; with `staleTime: 30_000`, a new project is missing from `/dashboard` for up to 30 s. `d4f7b0e` says *"every mutation that changes it"*. | `grep -rn 'queryKeys.dashboard' web/src` (four sites, none in `features/create-project`); `query-keys.ts:51`; `_app/query-client.ts:34-35`; X2's `documents_by_project` `[]` → one row after `createProject` (off the trail) |
+| **X-7** | low | **`F-2`'s derivation ignores `in: cookie`**, so a required cookie parameter leaves an operation "input-less": accepted with no client fault, refused with one. | Add `{"in":"cookie","name":"am_scope","required":true,…}` to `getDashboardSummary` → 46 passed, contract scope 367 passed; add a `422` too → red (X4) |
+| **X-8** | low | **Three of the integrator's sentences are false:** `route.ts:22-23` dates 20/17 to the `W45-BLOCKS` reseal (it was `W46-SEAL`'s); `P02_SEAMS.md:601` dates `W46-SEAL` to 2026-09-28 (it was 2026-09-25); `ALPHA_ROADMAP.md:34-37` says *"Corrected a fourth time"* and then *"wrong three times in three days"*. Plus: the seam test block is still *"the nineteen seam operations"* over twenty rows, and the README's no-token sentence counts the open exchange among the refused (19 of 20 answer `401`). | Counts at `830fd76`/`alpha-w45`/`d7ac848`; `git show -s --format=%ci d7ac848`; `git show 8ad692f^:docs/program/ALPHA_ROADMAP.md`; `grep -n nineteen web/tests/contract/seam-operations.contract.test.ts`; the in-process probe (X5) |
+| **X-9** | low | **Four comments still say the generated client types `spend` as required "today"**; the merge made it optional (`types.gen.ts:484`). | `grep -rn "still typed\|still types\|required (today)\|today's generated" web/src web/tests` (X2-b) |
+| **X-10** | low | **`D-109`'s check reads one line of a debt that has 24**: `--include=*.tsx` misses the `.ts` model files that produce on-screen failure text, and the pattern is case-sensitive. | `grep -rniE 'контракт\|операци\|договор' web/src --include=*.ts --include=*.tsx \| grep -v shared/api/generated \| wc -l` → 24 (X5) |
+| **X-11** | low | **The reseal wrote nothing into the contract about what an absent `spend` means**; `RunStatus` does (*"Absent when the run made no provider call at all"*), so *"mirrors RunStatus"* holds for behaviour only. And the note's *"the reason every reseal note below gives"* is given by three of eight. | `jq '.components.schemas.RunActivity' contracts/api/v1/openapi.json` (no description); the note split by `Resealed` (X3) |
+
+**Where the streams and the integrator did the right thing, checked rather than repeated.**
+`W46-SPEND`'s reseal is one commit, its digests recompute, its client regenerates
+byte-identical, and it corrected the `commit_note` sentence in place. It carried absence through
+every layer without a default anywhere, and its two quoted mutations reproduce exactly. It
+reported the `TAGGED_TIP_CLAIM` premise gap instead of editing a file it did not own. `W46-WIRE`'s
+three renamed tests assert the new truth rather than dropping the old assertion (X6), and its
+reconstructed `1121` was right where the integrator's derived `1120` was not (X1). The two
+merges are clean auto-merges with no hidden content (X6). `d5c9be5` changed exactly the two
+comments it names.
 
 ## What I could not answer, and why
 
