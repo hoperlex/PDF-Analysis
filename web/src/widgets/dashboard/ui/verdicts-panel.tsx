@@ -1,134 +1,64 @@
-'use client';
-
 /**
  * Panel 2 — findings by verdict.
  *
- * `D1`: `listDecisions` exists today, with `category` and `verdict` filters `R-24` put on
- * the contract precisely so a client never has to walk every run's findings by hand. This
- * panel reuses `useDecisionJournal` unfiltered — the exact query and cache key
- * `/knowledge-base` already fills — rather than opening a second source over the same
- * ledger.
+ * `W46-WIRE`, `F-3b`. Presentational: `Dashboard` reads `getDashboardSummary` once and
+ * hands this panel its `findings_by_verdict` rows.
  *
- * **What "by verdict" can and cannot mean from this operation**, `R-25`/`R-23`'s addendum
- * read together: `listDecisions` is the ledger of *recorded* events. A finding nobody has
- * ever judged carries no event and never appears in it, at any page size — so `pending`
- * here means "commented on, or reverted, and still undecided", never "untouched". This
- * panel says so rather than letting a reader assume the two are the same absence.
+ * **The panel's meaning changed, and the caption says so.** The walk this panel used to
+ * read (`useDecisionJournal`) is the ledger of *recorded* events: a finding nobody has
+ * ever judged carries no event and never appeared there, at any page size, so its old
+ * caption said `pending` meant "commented on or reverted, still undecided" and explicitly
+ * excluded a finding nobody had opened. The aggregate counts differently — a finding with
+ * no decision at all is what `Verdict`'s own `pending` member means, and the server counts
+ * it as `pending` (`docs/program/reviews/W46-JUDGE-A.md` §5, and the integrator's ruling
+ * quoted in `docs/program/dispatch/W46-WIRE.md`'s brief: *a computed zero is a fact*). So
+ * `pending` here is wider than it used to be, and the caption is rewritten rather than
+ * carried over unchanged.
  *
- * `tallyVerdicts` also dedupes by `finding_uid`: a finding with two decision events is two
- * rows on the wire and one finding on this screen, `widgets/knowledge-base`'s own header
- * names the reason.
+ * **All four rows, always**, including `needs_manual_review` — which today has no PC-01
+ * producer, so it always reads zero, and a computed zero is shown rather than dropped: the
+ * non-negotiable both the brief and `R-23`'s addendum state.
  *
- * **Scope.** One page of the journal (`JOURNAL_PAGE_LIMIT` events), same as
- * `/knowledge-base`'s own first screenful. A `next_cursor` on that page means the count
- * below is a page total, said as one.
+ * **The per-category table is gone.** `DashboardSummary.findings_by_verdict` carries only
+ * a verdict and a count — no category — because the aggregate does not compute one. The
+ * old panel's category breakdown came from walking `listDecisions` and reading
+ * `DecisionRecord.category` off each event; that source is not part of this one read, and
+ * "reads `getDashboardSummary` and nothing else" rules out reaching back for it. This is a
+ * visible change to the screen, not an oversight: category counts stay available on
+ * `widgets/finding-list` and `/knowledge-base`, which already carry `data-category`.
  */
 
-import Link from 'next/link';
+import { VERDICT_LABELS } from '@/entities/expert-decision';
+import type { VerdictCount } from '@/shared/api';
+import { VERDICT_VALUES } from '@/shared/api';
 
-import type { ErrorStateProps } from '@/shared/ui';
-import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
-import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
-import type { FindingCategory, Verdict } from '@/shared/api';
-import { VERDICT_LABELS, useDecisionJournal } from '@/entities/expert-decision';
+import { summarizeVerdictBreakdown } from '../model/verdict-breakdown';
 
-import { tallyVerdicts } from '../model/verdict-tally';
-
-/**
- * Category headings, local to this panel.
- *
- * `widgets/knowledge-base` already exports `CATEGORY_LABELS`, and this is not a second
- * opinion about the wording — it cannot be imported: the FSD boundary this codebase lints
- * on (`web/eslint.config.mjs`) forbids one `widgets/*` slice importing another, on purpose,
- * so two dashboard panels never quietly depend on each other's internals. Two contract
- * values, restated once each, is the cost of that boundary and cheaper than the coupling.
- */
-const CATEGORY_LABELS: Readonly<Record<FindingCategory, string>> = {
-  internal_contradiction: 'Внутреннее противоречие',
-  explicit_placeholder: 'Явный пропуск',
-};
-
-/** Verdicts worth a row even at zero. `needs_manual_review` has no PC-01 producer yet. */
-const VERDICT_ROWS: readonly Verdict[] = ['accepted', 'rejected', 'pending', 'needs_manual_review'];
-
-function journalFailure(error: unknown, retry: () => void): ErrorStateProps {
-  if (error instanceof ApiError) {
-    return {
-      title: 'Находки по вердикту не удалось прочитать.',
-      detail: catalogMessage(error.errorCode),
-      correlationId: error.correlationId,
-      ...(error.retryable ? { onRetry: retry, retryLabel: 'Повторить' } : {}),
-    };
-  }
-  if (error instanceof ApiFailure) {
-    return {
-      title: 'Находки по вердикту не удалось прочитать.',
-      detail: 'Сервер не ответил. Проверьте соединение и повторите запрос.',
-      correlationId: error.correlationId,
-      onRetry: retry,
-      retryLabel: 'Повторить',
-    };
-  }
-  return { title: 'Находки по вердикту не удалось прочитать.', onRetry: retry, retryLabel: 'Повторить' };
+export interface VerdictsPanelProps {
+  readonly rows: readonly VerdictCount[];
 }
 
-export function VerdictsPanel() {
-  const journal = useDecisionJournal();
-
-  if (journal.isPending) return <LoadingState what="находки по вердикту" />;
-
-  if (journal.isError) {
-    return <ErrorState {...journalFailure(journal.error, () => void journal.refetch())} />;
-  }
-
-  const page = journal.data;
-
-  if (page.items.length === 0) {
-    return (
-      <EmptyState
-        title="Решений пока нет."
-        detail="Как только проверяющий примет или отклонит первую находку, она появится здесь."
-      />
-    );
-  }
-
-  const tally = tallyVerdicts(page.items);
-  const truncated = page.page.next_cursor !== null;
+export function VerdictsPanel({ rows }: VerdictsPanelProps) {
+  const byVerdict = summarizeVerdictBreakdown(rows);
+  const total = VERDICT_VALUES.reduce((sum, verdict) => sum + byVerdict[verdict], 0);
 
   return (
     <div data-panel="findings-by-verdict">
       <p>
-        Находок с решением: <strong>{tally.findingCount}</strong>.
+        Находок: <strong>{total}</strong>.
       </p>
       <p className="am-state__correlation">
-        Только находки, по которым хотя бы раз высказались: находка, которую ещё никто не
-        открывал, в этом счёте не участвует — операция читает журнал решений, а не список
-        всех находок.
+        Каждая находка системы считана по своему текущему вердикту, включая ту, которую ещё
+        никто не открывал, — «ожидает решения» здесь не то же самое, что «по ней есть
+        отложенное решение».
       </p>
-      {truncated ? (
-        <p className="am-state__correlation">
-          Показана первая страница журнала решений. Полный список — в{' '}
-          <Link href="/knowledge-base">базе знаний</Link>.
-        </p>
-      ) : null}
       <table>
         <caption>По вердикту</caption>
         <tbody>
-          {VERDICT_ROWS.map((verdict) => (
+          {VERDICT_VALUES.map((verdict) => (
             <tr key={verdict} data-verdict={verdict}>
               <th scope="row">{VERDICT_LABELS[verdict]}</th>
-              <td>{tally.byVerdict[verdict]}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <table>
-        <caption>По категории</caption>
-        <tbody>
-          {(Object.keys(CATEGORY_LABELS) as FindingCategory[]).map((category) => (
-            <tr key={category} data-category={category}>
-              <th scope="row">{CATEGORY_LABELS[category]}</th>
-              <td>{tally.byCategory[category]}</td>
+              <td>{byVerdict[verdict]}</td>
             </tr>
           ))}
         </tbody>

@@ -1,61 +1,44 @@
-'use client';
-
 /**
  * Panel 3 — run activity and spend.
  *
- * `D1`: `listRuns` and `RunStatus`'s cost fields exist today; there is no global runs
- * listing, so this panel walks `useRunActivityWalk` — one page of projects, one page of
- * each project's documents, one page of each of those versions' runs — rather than
- * inventing a second aggregate operation. See that hook's own header for the bound and
- * why it is disclosed rather than hidden.
+ * `W46-WIRE`, `F-3b`. Presentational: `Dashboard` reads `getDashboardSummary` once and
+ * hands this panel its `run_activity` and whether any project exists at all.
  *
- * **No invented numbers, the money case specifically.** `entities/audit-run`'s `runCost`
- * already treats "made no provider call" and "spent exactly zero" as different facts, and
- * `summarizeRunActivity` sums only the runs that reported a cost — a run with no call is
- * counted in `runsWithAbsentCost`, never folded into the sum as `0`.
+ * **`spend` is coded to the shape after `W46-SPEND`'s reseal, against today's client.**
+ * The generated `RunActivity.spend` is still typed required today; after the reseal it is
+ * optional, absent exactly when the deployment has made no provider call at all — the same
+ * distinction `RunStatus.cost_micros` already draws for one run, lifted to the whole
+ * deployment (`docs/program/reviews/W46-JUDGE-A.md` §3, finding F-1). Reading it into a
+ * local value typed `RunActivitySpend | undefined` typechecks against both clients: a
+ * required field is assignable to an optional one, and an optional field reads the same
+ * way once it is. **Absent renders as an honest sentence that no provider call has been
+ * made — never `0` labelled measured.**
+ *
+ * **No walk, so no scan bound to disclose.** The old panel read a bounded client-side
+ * fan-out (`useRunActivityWalk`, deleted) and its sentence talked about *"прогонов
+ * осмотрено"* over the page it had followed. The aggregate counts the whole deployment
+ * server-side, so that sentence would now be false; this one just states the total.
+ *
+ * **Which of "no projects" and "no runs yet" this is** cannot come from `run_activity`
+ * alone — it carries no per-project dimension by design (same report, §3: *"consistent
+ * with its own argument; not held against it"*). `hasProjects`, computed from the other
+ * half of the same one read (`documents_by_project.length > 0`), is what tells the two
+ * apart.
  */
 
-import { COST_BASIS_LABELS, EmptyState, ErrorState, LoadingState, STATE_LABELS } from '@/shared/ui';
-import { classifyListingFailure } from '@/shared/lib';
+import { COST_BASIS_LABELS, EmptyState, STATE_LABELS } from '@/shared/ui';
 import { formatCostMicros, costBasisCaption } from '@/entities/audit-run';
-import type { RunState } from '@/shared/api';
+import type { RunActivity, RunActivitySpend } from '@/shared/api';
+import { RUN_STATE_VALUES } from '@/shared/api';
 
-import { useRunActivityWalk } from '../api/use-run-activity-walk';
-import { summarizeRunActivity } from '../model/run-activity';
+export interface RunActivityPanelProps {
+  readonly activity: RunActivity;
+  /** From `documents_by_project.length > 0` — the same one read, its other half. */
+  readonly hasProjects: boolean;
+}
 
-/** Every state worth a row, in the contract's own declared order. */
-const STATE_ROWS: readonly RunState[] = [
-  'created',
-  'queued',
-  'running',
-  'validating',
-  'published',
-  'partial',
-  'failed',
-  'cancelled',
-];
-
-export function RunActivityPanel() {
-  const walk = useRunActivityWalk();
-
-  if (walk.isPending) return <LoadingState what="прогоны и расход" />;
-
-  if (walk.isError) {
-    const failure = classifyListingFailure(walk.error, {
-      collection: 'прогоны и расход',
-      parent: 'project',
-    });
-    return (
-      <ErrorState
-        title={failure.title}
-        detail={<span data-list-failure={failure.kind}>{failure.detail}</span>}
-        correlationId={failure.correlationId}
-        {...(failure.retryable ? { onRetry: () => walk.refetch(), retryLabel: 'Повторить' } : {})}
-      />
-    );
-  }
-
-  if (walk.scannedProjectCount === 0) {
+export function RunActivityPanel({ activity, hasProjects }: RunActivityPanelProps) {
+  if (!hasProjects) {
     return (
       <EmptyState
         title="Проектов пока нет."
@@ -64,73 +47,54 @@ export function RunActivityPanel() {
     );
   }
 
-  if (walk.runs.length === 0) {
+  const byState = new Map(activity.by_state.map((row) => [row.state, row.count]));
+  const totalRuns = activity.by_state.reduce((sum, row) => sum + row.count, 0);
+
+  if (totalRuns === 0) {
     return (
       <EmptyState
         title="Прогонов пока нет."
-        detail="Среди осмотренных проектов и версий ни один прогон ещё не запускался."
+        detail="Среди проектов системы ни один прогон ещё не запускался."
       />
     );
   }
 
-  const summary = summarizeRunActivity(walk.runs);
-  const scopeNote =
-    walk.moreProjects || walk.moreDocuments || walk.moreRuns
-      ? 'Осмотрен не весь охват: у проектов, документов или версий были дальнейшие ' +
-        'страницы, которые этот просчёт не прошёл. Число ниже — по тому, что осмотрено, ' +
-        'а не по всей системе.'
-      : null;
+  // `run_activity.spend` after `W46-SPEND`'s reseal: absent, not `0`, when nothing has
+  // called a provider. Typed `| undefined` explicitly so this typechecks whether the
+  // generated field is required (today) or optional (after the reseal).
+  const spend: RunActivitySpend | undefined = activity.spend;
 
   return (
     <div data-panel="run-activity-and-spend">
       <p>
-        Прогонов: <strong>{summary.runCount}</strong> · проектов осмотрено:{' '}
-        {walk.scannedProjectCount} · версий осмотрено: {walk.scannedVersionCount}.
+        Прогонов: <strong>{totalRuns}</strong>.
       </p>
-      {scopeNote !== null ? <p className="am-state__correlation">{scopeNote}</p> : null}
 
       <table>
         <caption>По состоянию</caption>
         <tbody>
-          {STATE_ROWS.filter((state) => summary.byState[state] > 0).map((state) => (
+          {RUN_STATE_VALUES.filter((state) => (byState.get(state) ?? 0) > 0).map((state) => (
             <tr key={state} data-run-state={state}>
               <th scope="row">{STATE_LABELS[state]}</th>
-              <td>{summary.byState[state]}</td>
+              <td>{byState.get(state) ?? 0}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
       <p>
-        {summary.runsWithReportedCost > 0 ? (
+        {spend !== undefined ? (
           <>
-            Расход по прогонам, сообщившим стоимость ({summary.runsWithReportedCost} из{' '}
-            {summary.runCount}): <strong>{formatCostMicros(summary.reportedCostMicros)}</strong> ·
-            вызовов модели: {summary.modelCallCount}
-            {summary.costBasis !== null ? (
-              <>
-                {' '}
-                ·{' '}
-                <span data-cost-basis={summary.costBasis}>
-                  {COST_BASIS_LABELS[summary.costBasis]}
-                </span>
-              </>
-            ) : null}
-            .
+            Расход по всем прогонам: <strong>{formatCostMicros(spend.cost_micros)}</strong> ·
+            вызовов модели: {spend.model_call_count} ·{' '}
+            <span data-cost-basis={spend.cost_basis}>{COST_BASIS_LABELS[spend.cost_basis]}</span>.
           </>
         ) : (
-          'Ни один осмотренный прогон не сообщил стоимости.'
+          'Ни один прогон ещё не обращался к провайдеру — оценивать расход пока нечего.'
         )}
       </p>
-      {summary.costBasis !== null ? (
-        <p className="am-state__correlation">{costBasisCaption(summary.costBasis)}</p>
-      ) : null}
-      {summary.runsWithAbsentCost > 0 ? (
-        <p className="am-state__correlation">
-          {summary.runsWithAbsentCost} из {summary.runCount} прогонов не делали ни одного
-          обращения к провайдеру — это другой факт, чем нулевой расход, и в сумму выше не
-          входит.
-        </p>
+      {spend !== undefined ? (
+        <p className="am-state__correlation">{costBasisCaption(spend.cost_basis)}</p>
       ) : null}
     </div>
   );
