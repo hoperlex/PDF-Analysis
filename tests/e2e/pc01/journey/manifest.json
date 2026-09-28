@@ -358,11 +358,22 @@
       "$comment": [
         "Блоки -- front-end preparation under R-23's addendum. W43-PREP.",
         "",
-        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
-        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this",
-        "entry gains operations and the assertion starts carrying weight."
+        "`W46-WIRE`, `F-4`: `expects_api` was EMPTY, claimed as the screen calling nothing at",
+        "all -- a `RoutePlaceholder`. That stopped being true at `c4165b9` (`W45-BLOCKS`):",
+        "the screen grew a real version chooser, and its first step, `VersionChooser`, calls",
+        "`useProjectList` unconditionally on mount, before any click. The row stayed EMPTY",
+        "through every wave since, so this red predates this wave and was found only by",
+        "driving the journey live rather than reading this row (`docs/program/reviews/",
+        "W46-JUDGE-A.md` F-4). Declared now: the one call every cold load of this screen",
+        "makes, regardless of what a reviewer chooses next."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/projects",
+          "operationId": "listProjects"
+        }
+      ],
       "follow": null
     },
     {
@@ -412,14 +423,18 @@
       "path": "/dashboard",
       "page_module": "web/src/app/dashboard/page.tsx",
       "$comment": [
-        "The dashboard. W46-DASH.",
+        "The dashboard. W46-DASH wired the aggregate read in with no consumer; W46-WIRE",
+        "(`R-44`, `F-3b`, `F-4`) is what makes this row true.",
         "",
-        "`expects_api` names TWO operations and not four, and the omission is the stream's",
-        "own reasoning rather than an oversight: the run-activity panel also calls",
-        "`listDocuments` and `listRuns`, but only once real project data exists to walk into,",
-        "and whether this manifest's own fixture has any is a question only a live walk can",
-        "answer. Declaring a call that never fires would assert nothing while looking like an",
-        "assertion -- which is what `D-83` was.",
+        "The row it replaces named TWO of the three client-side walks the dashboard used to",
+        "make (`listProjects`, `listDecisions`) and reasoned that the third",
+        "(`listDocuments`/`listRuns`, the run-activity walk) fired only once real project",
+        "data existed, so declaring it 'would assert nothing while looking like an",
+        "assertion' (`D-83`). All three walks are gone: `Dashboard` now holds one query,",
+        "`useDashboardSummary`, and every one of the four panels reads its result and",
+        "nothing else. One call, always, regardless of what the deployment holds -- the",
+        "reasoning the old comment made about conditional calls does not apply to a read",
+        "that takes no parameter and walks nothing.",
         "",
         "Placed at the end with the other identifier-free routes: it takes no path parameter,",
         "so it captures nothing the follow-chain needs in order."
@@ -427,13 +442,8 @@
       "expects_api": [
         {
           "method": "GET",
-          "path": "/projects",
-          "operationId": "listProjects"
-        },
-        {
-          "method": "GET",
-          "path": "/decisions",
-          "operationId": "listDecisions"
+          "path": "/dashboard",
+          "operationId": "getDashboardSummary"
         }
       ],
       "follow": null
