@@ -128,3 +128,47 @@ npm --prefix web run test:guards -- frontend-lock  -> 15 files, 149 passed (incl
   typecheck guard and frontend-lock.guard.test.ts's own 8 assertions)
 npm --prefix web run test:contract                  -> 7 files, 104 passed
 ```
+
+## 3. `S2` — `F-2`, gate red #5 repaired as a test
+
+`a6e3015`. `tests/contract/domain_p02/test_openapi_document.py`'s
+`test_every_operation_can_report_not_found_or_validation` replaced by
+`test_every_operation_that_takes_input_can_report_a_client_fault` plus
+`test_the_input_less_operation_set_is_exactly_the_pinned_one`. `_takes_caller_input`
+derives input from the document: a path parameter, a query parameter, a header other
+than `X-Correlation-Id`, or a request body. **Measured before committing, not
+assumed:** the first version checked only `operation.get("parameters", [])` and called
+`getDocumentVersion` input-less, because its `version_uid` path parameter is declared
+once on the *path item* (shared with every method of that path), not repeated on the
+operation — the same thing `test_every_operation_declares_its_path_parameters` already
+merges two lists to see. Fixed before it ever reached a commit.
+
+Two-sided (an input-less operation must declare **none** of `404`/`409`/`422`), and the
+input-less set is pinned as `INPUT_LESS_OPERATIONS = {"getDashboardSummary"}`, checked
+in its own test rather than folded into the rule, per the brief. `500` stays required,
+unchanged.
+
+**Both directions shown failing**, on an in-memory deep copy of the real
+`contracts/api/v1/openapi.json`, nothing committed to disk:
+
+```
+=== direction 1: 422 added to getDashboardSummary (no input) ===
+AssertionError: getDashboardSummary takes no caller input but declares ['422'] --
+a response no request can produce
+
+=== direction 2: client-fault codes removed from an input-taking operation ===
+mutating: issueToken
+AssertionError: issueToken takes caller input and declares no client-fault response
+```
+
+Verification: `tests/contract/domain_p02/test_openapi_document.py` → `46 passed` (was
+`1 failed`). The full canonical-ignore contract scope —
+`tests/contract --ignore=tests/contract/test_cp00_candidate.py
+--ignore=tests/contract/test_cp00_final_state.py
+--ignore=tests/contract/test_validate_bootstrap.py`, the exact ignores `run_battery`
+uses — → `367 passed`. **A trap avoided and reported, not fallen into:** an earlier,
+unscoped `pytest tests/contract/` (no ignores) reported `66 failed, 126 errors` — noise
+from sweeping in `test_cp00_candidate.py` and friends, which `run_battery` excludes by
+name and which fail for reasons unrelated to this stream (CP-00 ratification mechanics,
+`PROTOTYPE_PROFILE.md` section 6.3). Not read as a result, exactly the trap the brief
+names in its own words.
