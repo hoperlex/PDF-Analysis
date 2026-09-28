@@ -490,7 +490,20 @@ correction was then confirmed above by measurement.
 
 ## 7. Off the trail
 
-*pending*
+The trail I was handed: four states of `/dashboard`, the captions, the live journey, four widths,
+`F-5b`'s three mutations plus one, and the two stream reports. Where I went that none of it points,
+and what came back — including the places that returned nothing:
+
+| where | why the trail does not lead there | returned |
+|---|---|---|
+| **`POST /runs` on a document the server stores as `KM`** | the brief's premise is that the intake rule is unchanged; the trail asks whether the sentences are true, not whether the server does what they describe | **Y2-a**: accepted, analysed with the same profile, published with three findings, while two screens say that section is not analysed |
+| **`createProject`, the one mutation the stream did not list** | every trail state is a *cold* load, which cannot see a cache; the stream enumerated four invalidations and the trail checks those | **Y6-a**: the dashboard says *«Проектов пока нет.»* seconds after the product created one, and asks nobody |
+| **the seam between server and screen**: judge A's `F-5a` server mutation served to the unchanged client | `F-5a` is guarded on the server, `F-5b` by fixtures that always send every row; nothing looks at the join between them | **Y5-a**: nineteen zeros on screen that the server did not send; panel text identical to the honest server's |
+| **the dashboard with its API stopped** | every trail state has a working API | the failure state is honest about *what* (`dependency_unavailable`, a retry button, a correlation id, the BFF answering `503` rather than crashing — correct), makes three requests (the query's retries), and says *операция* (Y2 addendum) |
+| **a project name at the contract's limit** (200 characters, one word) | the journey names its projects with short strings; the brief's widths use ordinary data | a 3691 px sideways scroll on `/dashboard` at 360 and 1024 px, in both palettes; **pre-existing and product-wide** — `/projects` does the same, and the pre-wave panel rendered the same row. Not this wave's |
+| **63 projects** | the brief's states hold at most two | `documents_by_project` has no bound: 63 rows, a 6906 px page at 1024 px. The panel it replaced showed the first page of 50 and said so (*«Показана первая страница проектов…»*, `git show 2ffca8c:web/src/widgets/dashboard/ui/documents-panel.tsx`). A consequence of `R-44`'s unpaginated read, not a false number; eight RSC prefetches (viewport-limited), zero extra API calls. Low, recorded for scale |
+| **contrast, computed** | judge A could not take it, and no brief item asks | nothing wrong: 62 text elements per reading, none under 4.5:1, lowest 5.45 (light) and 5.05 (dark), both the verdict caption. **Said so, because a place that returned nothing is still a place** |
+| **five malformed sections on upload**, beyond judge A's three | the trail reads sections; it does not write them | nothing wrong: `km` and `" KM"` are refused like `""`, `ar`, `ZZ`, and nothing is written |
 
 ## Findings, most severe first
 
