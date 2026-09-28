@@ -443,16 +443,98 @@ key).
 
 ## Z4 — off the trail
 
-*(pending)*
+The trail: the gate, both judges' reproductions for the nine repaired items, the journey, the
+dashboard's widths and palettes, and the reseal. Where I went that none of it points, and what
+came back, including the places that returned nothing:
+
+| where | why the trail does not lead there | what came back |
+|---|---|---|
+| **`run_activity.spend.cost_basis` carrying a value the client does not know**, served live (`basis="guessed"` in the clone's repository, my unchanged Next, the data state, both palettes) | the stage closed the unknown-member hole for the three vocabularies the judges named; `cost_basis` is a closed vocabulary too (`measured`/`estimated`), in the same panel, and nobody named it | **Z-1.** The wire carries `"cost_basis": "guessed"`; the screen renders *«Расход по всем прогонам: 0.068800 · вызовов модели: 2 · .»* — the basis label is blank, the caption paragraph under it is gone, `data-panel-fault` absent, no console error. A spend figure with its basis silently removed is `F-1`'s own subject, rendered by X-3's own mechanism (`COST_BASIS_LABELS[spend.cost_basis]` and `costBasisCaption(...)`, `web/src/widgets/dashboard/ui/run-activity-panel.tsx:106-113`, with no closed-set check). `stage-comparison.tsx:169` already renders `—` for an unknown basis; this panel does not |
+| **a swap between two rows the fixture holds equal**, on both sides of the wire | the judges' mutations were invented zeros, one label for everything, a neighbour shift and a swap of two distinct rows; X named the equal-row limit, nobody tried it | **Z-3.** Server: `AR`↔`KM`, `pending`↔`rejected`, `queued`↔`running` each pass the fresh-deployment guard 4/4. Client: `АР`↔`ГП` passes `dashboard.test.ts` 16/16 and the whole suite 80/1134; `queued`↔`running` 16/16. Served live over the data state, the `AR`↔`KM` swap puts *АР: 1, КМ: 2* on the screen where the truth is 2 and 1, with no fault and in both palettes |
+| **a historical heading of the genuine shape, placed after the first claim** | both judges' mutations used a marker of the wrong shape | **Z-2.** 26 passed on the real `CURRENT_STATE.md` with a stale head below it (Z2, X-4) |
+| **the dashboard-invalidation guard itself, mutated** | the brief asks whether the dashboard refreshes, not whether the guard meant to keep it refreshing can fail | **Z-5.** `use-create-project.ts`'s new invalidation **commented out** rather than deleted: the guard **7/7**, the whole frontend suite **80/1134**, `tsc` exit 0 — the guard matches the text `queryKeys.dashboard.summary()` anywhere in the file, comments included (`web/tests/guards/dashboard-invalidation.guard.test.ts:112`). The stream's own mutation (the line deleted) is red, as quoted. The converse: one comment line mentioning `queryKeys.dashboard.summary()` appended to `use-export-run.ts` turns its `false` row **red** (*"expected invalidatesDashboard() to be false, got true"*), although the header says a `false` entry is *"not asserted as an absence — a hook is free to gain one later"* (`:47`); the assertion is `toBe(expected)` (`:138-139`) |
+| **an upload naming a malformed section, beside the rewritten АР-tab sentence** | Y2-a's item names a stored `KM` document; the sentence is about upload | **Z-4.** `section=ZZ` → `422`, `details.field: "section"`; the screen says *«При загрузке проверяется конверт файла, а не раздел.»* (Z2, Y2-a) |
+| **the document `serve.py` serves over HTTP**, compared with the frozen one through `openapi_conformance.py` | the new test compares `create_documentation_app()`; its equivalence to the process rests on a test in the subject (Y) | **Nothing wrong.** Unauthenticated `401`; with the bearer, **0 differences**. The served `RunActivity.spend` is a bare `$ref` without the new description, because the Pydantic model was not given it and the engine drops `description` (`N4`); a client generated from the frozen document reads the sentence, a client reading `/openapi.json` does not. Recorded, not a finding |
+| **`D-110`'s check command**, new in the dispatch commit `dbba753` | register rows are not on the trail; X-5 was about `D-107`'s | **It can fail, but not in the package's own idiom.** `grep -rnE '\.section\b\|\["section"\]\|section=' src/auditmanager/analysis src/auditmanager/runs --include=*.py \| wc -l` prints `0`; a line reading `document.section` → `1`, a SQL string with `d.section` → `1`; but `row.get("section")` → **`0`** and `getattr(row, "section")` → **`0`**, and those two packages read fields with `.get("…")` **71 times** (`grep -rnE '\.get\("[a-z_]+"'`). X-5's shape, smaller. Low, the integrator's (Z-8) |
+| **the two stream reports against their briefs' gate clause** | Y6-b was about `W46-WIRE` | **Z-6.** Neither report records its final gate. `W46-CLIENT`'s brief (C5, `docs/program/dispatch/W46-CLIENT.md:66`) says *"Record your own gate in your report. `W46-WIRE.md` recorded none"*; `W46-CLIENT.md` records its first, red gate (*"1 failed, 2503 passed"*) and ends *"Re-running the full `make gate` next."* `W46-GUARD.md` §8 still reads *"Final gate — (filled at the end)"*. Both logs exist and end in `GATE OK` (`/root/w46c-gate.log:230`, `/root/w46g-gate.log:229`), and the merge messages carry the numbers, so the evidence exists — in the place Y6-b said it should not be the only one |
+| **the streams' quoted mutation outputs** | the brief says to re-take the judges' reproductions, not the streams' quotes | **Z-7.** `W46-CLIENT.md`'s M5 quote (`AR: expected 0 to be 3`) is not what M5 produces on any committed version of the fixture (Z2); its M6 and run-state quotes reproduce exactly, and all of `W46-GUARD.md`'s quoted failures I re-ran (X's spend, Y's comment, X's two and Y's two `repository.py` mutations, Y's heading) reproduce as quoted |
+| **the run panel over a body whose `documents_by_project` is empty but whose `by_state` is not** | an inconsistency no judge constructed | **Nothing wrong in practice.** The panel decides *«Проектов пока нет»* from `documents_by_project` before reading `by_state` (`run-activity-panel.tsx:50-59`), so an empty deployment served A's mutation (`by_state: []`) showed no number and no fault. A server that listed runs without projects would be ignored rather than refused; every project is a row there even at `document_count: 0` (X's measurement, and mine: the staleness project), so this needs a server that contradicts itself |
 
 ## Findings, most severe first
 
-*(pending)*
+**The merged tip gates `GATE OK`** (Z1). Every judge reproduction the stage claims to repair now
+fails where it passed, under the judge's own mutation and, where the judge used one, the judge's
+own scope (Z2): X-1 under both X's and Y's drift; X-2 under X's two and Y's three; X-3/Y5-a
+through the full stack; Y5 M5/M6; X-4 under the fence and under Y's plain heading; X-6/Y6-a in one
+live page; X-7 for the cookie and for the case of the correlation header; X-11's sentence present
+with every generated type unchanged. Nothing the wave had is lost (Z3). **None of the findings
+below reverses a repair**; four of them are the repaired hole's next member.
+
+| # | severity | finding | reproduce |
+|---|---|---|---|
+| **Z-4** | low–medium | **The rewritten АР-tab paragraph says the section is not checked at upload, and the server refuses an upload on its section.** `web/src/widgets/project-sections/ui/project-sections.tsx:111-112`: *«При загрузке проверяется конверт файла, а не раздел.»* — contradicted by the next sentence (`:112-113`, *«Раздел документа сервер тоже хранит и проверяет, когда его называют»*) and by the server. Y2-a's class (a sentence about intake the server contradicts), introduced by its repair; on every project screen today; pinned by no test | `POST /projects/{uid}/documents` with `section=ZZ` → `422 validation_failed`, `details.field: "section"`; then render `/projects/{uid}` (АР tab). `git grep -n 'конверт' -- web/tests tests/e2e` → nothing |
+| **Z-3** | low–medium | **Both count guards the stage built fix equal counts where a swap would hide.** X's stated condition for a keyed check — distinct counts — is unmet on both sides: the server fixture holds `AR`/`KM`/unclassified at 1, `pending`/`rejected` at 1 and seven run states at 1; the render fixture holds twelve sections and six run states at 0. A mislabelled row is a wrong number on any deployment where the rows differ | Server: `_DOCUMENTS_BY_SECTION` `SELECT CASE d.section WHEN 'AR' THEN 'KM' WHEN 'KM' THEN 'AR' ELSE d.section END, count(*) … GROUP BY 1` → `test_dashboard_summary_over_a_fresh_deployment.py` 4 passed (likewise `pending`↔`rejected`, `queued`↔`running`). Client: `sections-panel.tsx` reading `summary.byCode[code === 'AR' ? 'GP' : code === 'GP' ? 'AR' : code]` → `dashboard.test.ts` 16 passed, whole suite 80/1134, `tsc` 0. Live, the server swap shows *АР: 1, КМ: 2* over a truth of 2 and 1 |
+| **Z-1** | low–medium | **An unknown `cost_basis` vanishes from the spend line**, X-3's mechanism in the field `F-1` was about: `run-activity-panel.tsx:106-113` indexes `COST_BASIS_LABELS` and calls `costBasisCaption` with no closed-set check, so the figure is shown and its basis is not, with no fault. Reachable exactly as X-3 was (a server regression or version skew) | Serve `dashboard/repository.py` with `basis="guessed"` behind an unchanged Next → wire `"cost_basis": "guessed"`, screen *«Расход по всем прогонам: 0.068800 · вызовов модели: 2 · .»*, no caption, no `data-panel-fault`, light and dark |
+| **Z-2** | low–medium | **`F-5c`'s positional hole survives a heading of the genuine shape**, and the stream's comment says it does not. `test_doc_prose_facts.py:486-492`: *"Non-vacuity is what would still catch the one case that has the right shape and the wrong position"* — it catches it only before every claim, the same sentence X-4 found false in the previous version of this comment | After `CURRENT_STATE.md`'s *"…stays at 22.\*\*"* line insert `## Previous release state — wave 46 (historical record)` and then *"The migration head is \`0010_run_terminal_detail\`."* → `test_doc_prose_facts.py` **26 passed**; without the heading, 1 failed |
+| **Z-5** | low | **The dashboard-invalidation guard reads comments as code.** A commented-out invalidation satisfies it, and a comment naming the key reddens a hook mapped `false`, although the header says `false` is *"not asserted as an absence"* (`dashboard-invalidation.guard.test.ts:47` against `:138-139`) | Comment out `use-create-project.ts:42` → guard 7/7, suite 80/1134, `tsc` 0. Append `// … queryKeys.dashboard.summary() …` to `use-export-run.ts` → *"expected invalidatesDashboard() to be false, got true"* |
+| **Z-6** | low | **Neither stream report records its final gate**, though `W46-CLIENT`'s brief requires it in words (*"Record your own gate in your report"*, `dispatch/W46-CLIENT.md:66`, citing Y6-b) and `W46-GUARD.md` §8 is still the placeholder *"(filled at the end)"* | `grep -n 'GATE OK' docs/program/W46-CLIENT.md docs/program/W46-GUARD.md` → nothing; the logs (`/root/w46c-gate.log:230`, `/root/w46g-gate.log:229`) and the merge messages `d56ae05`, `08f0e7f` carry it |
+| **Z-7** | low | **`W46-CLIENT.md` quotes M5's failure as `AR: expected 0 to be 3`**; M5 on the committed fixture fails `AI: expected 4 to be +0`, and no section in any committed version of the fixture holds 3 | Apply Y's M5 to `sections-panel.tsx`; `npx vitest run tests/unit/widgets/dashboard.test.ts` |
+| **Z-8** | low | **`D-110`'s check command is blind to the package's own read idiom**: `row.get("section")` and `getattr(row, "section")` print `0`; `.get("…")` is how `analysis/` and `runs/` read fields, 71 times. The integrator's row (`dbba753`) | Append `_SKIP = lambda row: row.get("section") not in (None, "AR")` to `src/auditmanager/runs/carrier.py` in a copy; the row's command still prints `0` |
+| **Z-9** | very low | Two small inexactnesses: the lock's `commit_note` says `069f656` made `spend` absent-when-no-calls *"in behaviour"* (that was `f50e656`; `069f656` resealed the documents); and two of `W46-GUARD`'s proof-tests (`…makes_getdashboardsummary_take_input`, `…declared_on_the_path_item_also_counts`) mutate the live document and will go red for a reason not theirs the day `getDashboardSummary` legitimately gains a cookie with a `422` | `git show -s --format=%s 069f656 f50e656`; X's "honest repair" mutation → 4 failed, two of them those tests (Z2, X-7) |
+
+**Where the streams did the right thing, checked rather than repeated.** `W46-GUARD` wrote exactly
+the call `W13-CONF` §11 handed over, took Y's stronger drift into the test's own docstring, and
+showed each of its guards failing under the judges' mutations and one of its own; every failure
+it quoted reproduced as quoted. Its reseal is one commit, its digests recompute, its client
+regenerates byte-identical, and it kept every generated type's shape, which the compiler — not
+a diff — confirms. It proved the historical boundary on synthetic prose rather than editing a
+file it did not own. `W46-CLIENT` closed the unknown-member hole by construction (a closed set,
+once each) rather than by listing the judges' cases, which is why A's mutation plus an unknown
+verdict, never in its fixtures, shows the fault through the whole stack. Its invalidation works
+in a live page. Its renamed tests assert the new sentences instead of dropping the old
+assertions, and it found and repaired its own gate's false positive and wrote it down.
 
 ## What I could not answer, and why
 
-*(pending)*
+- **Whether the product goes stale again under Z-5's comment mutation, in a browser.** It would
+  need a second `next build` from a mutated tree on a shared host; I showed the guard and the
+  whole suite green under it, and Y showed at `d5c9be5` what the product does without the line.
+  I did not spend the build.
+- **Contrast in the new fault state.** The fault reuses the shared `ErrorState`; I measured its
+  width (no overflow) but not its text contrast. Y's computed contrast covered the data state on
+  `d5c9be5`, and this stage changed no colour.
+- **Why Y's scope showed 6 skipped and mine 5.** The node count moved by exactly the twelve new
+  `W46-GUARD` nodes; the one skip is environmental and I did not attribute it by name.
+- **Whether `cost_basis` (Z-1) can arrive unknown other than by a server regression or version
+  skew.** The same reachability X-3 had; I did not look further.
+- **Three branches no state I built reaches**, as for Y: a `needs_manual_review` finding (no
+  PC-01 producer), a non-terminal run on the dashboard (recorded runs publish in 1.5 s), and runs
+  present with no provider call.
+- **Live provider mode** was not used: it spends against the ceiling.
+- **The owner's stand at `127.0.0.1:31500`** was not touched, read-only or otherwise.
 
 ## Evidence discipline
 
-*(pending)*
+Branch `agent/w46-judge-z`, based on `d56ae05`; `git diff --name-only d56ae05..HEAD` lists this
+file only (checked before the final commit). The file was committed before the first measurement
+and after each section. Nothing was repaired.
+
+- **The gate** ran once, literally, on a clean tree (`8f7aae5`), with nothing else on the lane.
+  Its log is kept at `/root/w46z-gate.log`.
+- **Every mutation ran outside the worktree**: in the disposable clones `/root/w46z-clone` and
+  `/root/w46z-clone2` (at `d56ae05`) or in the `git archive` trees `/root/w46z-tree-d5c9be5` and
+  `/root/w46z-tree-d56ae05`. Each was applied by a script that refuses a missing anchor,
+  baselined unmutated, reverted with `git checkout --` or restored from `git show d56ae05:<path>`,
+  and checked with `git status --porcelain` → `0` or `cmp` → identical. The two X-1 battery runs
+  ran in the first clone one after the other, never beside another test run on this lane. All four
+  trees were removed at the end.
+- **The product**: my API (`serve.py`, PIDs 2280794, 2391227 from `/root/w46j`; 2339077,
+  2345212, 2355953, 2372020 from `/root/w46z-clone`) and my Next (PID 2285946, `next start`
+  from `/root/w46j/web`), each started by my own script and confirmed by `readlink
+  /proc/<pid>/cwd` before it was stopped **by that PID**. Nothing was signalled by name or
+  pattern. The `web/.next` build output I created (git-ignored) was removed. My judge databases
+  `audit_w46z_judge` and `audit_w46z_empty` were dropped; the lane's own `audit_w46j` was never
+  written by a probe (the X-1/X-2 runs' fixtures create and drop their own databases, and the
+  lane held only `audit_w46j` and the system databases afterwards).
+- **Containers**: `make up` started `gate-w46j-*`, which were stopped when I arrived; no other
+  container was touched. No push, tag or merge.
