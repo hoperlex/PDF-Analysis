@@ -124,10 +124,20 @@ repaired on the wire: over zero `model_call` rows, `run_activity` carries `by_st
   finding is counted by its current verdict *"включая ту, которую ещё никто не открывал"* —
   **true**. (`revoke` → `422`, *"PC-01 emits no revocation"*, so the enum's *after a revocation*
   branch is unreachable and was not driven.)
-- ***контракт* and *операция* are gone from the dashboard.** The rendered `main` text in s0–s3
-  contains neither (case-folded substring test on `контракт` and `операци`), and
-  `grep -rni 'контракт\|операци' web/src/widgets/dashboard web/src/_pages/dashboard web/src/app/dashboard`
-  → nothing, the failure texts in `dashboard-failure.ts` included.
+- ***контракт* and *операция* are gone from every state of the dashboard that has data — not from
+  its failure state.** The rendered `main` text in s0–s3 contains neither (case-folded substring
+  test on `контракт` and `операци`), and `grep -rni 'контракт\|операци' web/src/widgets/dashboard
+  web/src/_pages/dashboard web/src/app/dashboard` → nothing. But the failure state takes its detail
+  from the shared catalog. With my API stopped after sign-in, a cold `/dashboard` rendered
+  (`data-list-failure="dependency_unavailable"`, three `GET /bff/v1/dashboard 503` — the query's
+  retries): *«Зависимость, нужная сводке, недоступна. Требуемый адаптер — хранилище метаданных,
+  хранилище объектов, провайдер модели или транспорт исполнителя — временно недоступен. …
+  **Операция** ничего не создала, и её можно повторить.»* (`web/src/shared/api/catalog-message.ts:113`).
+  The 403 detail it would show is `authorization.ts:49` (*«…эта операция над этим ресурсом им не
+  разрешена»*), and the transport-failure detail is `transport.ts:185/192` (*«…по контракту»*).
+  *Адаптер* and *транспорт исполнителя* are `R-39`'s author vocabulary too. Low, and the shared
+  catalog is outside `W46-WIRE`'s dashboard files; but the brief asked about the dashboard, and the
+  dashboard renders these words. `D-109` is the owner's line.
 - **The project screen's rewritten sentences are true as written**: *«Раздел документа хранится
   и проверяется на сервере, когда его называют при загрузке; форма загрузки этого продукта
   раздел не предлагает…»*, rendered on `/projects/{uid}` over the project that holds the `KM`
