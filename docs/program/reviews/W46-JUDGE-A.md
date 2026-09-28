@@ -403,6 +403,116 @@ The `blocks` red is **pre-existing and not this wave's**: `useProjectList` enter
 in `docs/program` is `W43-JUDGE-B`. Found only because I ran the instrument rather than reading
 the row — see section 6.
 
-## 5. Can the per-section panel be made to show an invented number? — *in progress*
+## 5. Can the per-section panel be made to show an invented number?
+
+**Through data: no, and for a reason that is not a guard.** `SectionsPanel` takes no props and
+calls no hook; it renders `PROJECT_SECTIONS` and a caption. With a `KM` document stored
+(`GET /versions/ver_01M3KC7S853F2DZED8WC7K5KM0` → `"section": "KM"`) and nine findings in the
+database, the panel rendered fourteen names and no number in both palettes at 780. **Nothing a
+deployment holds can put a digit on it.** The dashboard's promise holds on `130200d`.
+
+**Through code: yes, and nothing notices.** In the disposable clone at `130200d`:
+
+```text
+- {section.code === ANALYSED_SECTION_CODE ? ' — единственный анализируемый раздел' : ''}
++ {section.code === ANALYSED_SECTION_CODE ? ' — единственный анализируемый раздел' : ''}{': 0'}
+
+npm test (web/, the whole suite)
+unmutated: Test Files 1 failed | 78 passed (79)   Tests 2 failed | 1118 passed (1120)
+mutated:   Test Files 1 failed | 78 passed (79)   Tests 2 failed | 1118 passed (1120)
+           (the same two seam-operations reds, section 1 #8–#9; nothing new)
+```
+
+Fourteen invented zeros — the exact thing `R-23`'s addendum names — pass the frontend battery,
+the language guard and the contrast census. `dashboard.test.ts` guards the three **aggregators**
+(and I credit it: each of its cases names its mutation, and the absent-versus-zero ones are the
+right cases); **no case renders the section panel and asserts the absence of a number.** The
+dispatch's deliverable 3 asks for every new guard shown failing; this property has no guard to
+show. Reverted.
+
+### F-3 — on the merged tree the panel's reason is false, and so is the project screen's
+
+The caption, rendered today on `/dashboard`:
+
+> *«Раздел документа нигде в системе не хранится и не проверяется, поэтому находки нельзя
+> посчитать по разделам.»*
+
+**Both halves became false at `57e519b`**, the merge that landed `W46-SEAL`: the section **is
+stored** (`document.section`, migration `0011`; the `KM` upload above round-trips) and **is
+checked** (the column's `CHECK` constraint, and the API refuses `section=""`, `ar` and `ZZ` with
+`422 validation_failed {"constraint":"enum","field":"section"}`, driven in section 3). When
+`W46-DASH` wrote it, in a worktree without the reseal, it was true — the stream's report says so,
+honestly, in D1. **The merge made it false and nothing reddened**, because no instrument reads
+screen prose against the schema.
+
+**The same sentence stands on a screen this wave never touched.** `/projects/{uid}`, rendered at
+780 over the very project holding the `KM` document:
+
+> *«Разделы — это навигация. Раздел документа нигде не хранится и не проверяется…»* and
+> *«…принадлежность документа разделу не проверяется и нигде не сохраняется.»*
+> (`web/src/widgets/project-sections/ui/project-sections.tsx:93` and `:105-107`)
+
+and **a test pins it**: `web/tests/unit/screens/project-sections.test.ts:119-124`,
+*"says that a document's section is stored nowhere and checked nowhere"*, asserts
+`'не проверяется'` and `'нигде не сохраняется'`. That test now freezes a false statement in
+place — the shape the programme calls *characterization can freeze a defect*. The module header
+of `web/src/entities/project/model/section.ts` makes the same claim in prose (*"the contract has
+no section field anywhere"*) and is where a future reader will look first.
+
+This is the `OPERATING_CONSTRAINTS.md` §4.7 shape without the security edge: **a backend change
+altered what a thing *is*, and the sentences telling a reviewer what it is were in another
+stream's tree.** It took the merge to create the contradiction and nobody read across it.
+
+### F-3b — the aggregate read is merged and nothing calls it
+
+```text
+grep -rn 'getDashboardSummary\|DashboardSummary' web/src --include=*.ts --include=*.tsx \
+  | grep -v 'shared/api/generated' | wc -l          -> 0
+```
+
+`R-44`'s decision was **one aggregate read serving all four panels instead of three client-side
+walks**. On `130200d` the aggregate exists with **no consumer**, and the three walks it was ruled
+to prevent are the live path — including the run-activity walk, which under-counts past one page
+at three levels and says so. `W46-DASH` could not have consumed it: the generated client was
+`W46-SEAL`'s hotspot and arrived only at merge, and the stream reported exactly that. **The gap is
+at the join, not in either stream.** The merge commit says the per-section panel *"never leaves
+that state, because only AR is analysed"* — but *analysed* and *counted* are different things:
+`section_breakdown` counts **documents**, server-side, per section, and a `KM: 1` there is a
+computed number, not an invented one. `docs/program/dispatch/W47-PLAN.md` contains no line about
+the dashboard, `R-44` or `getDashboardSummary`, so nothing currently schedules the wiring.
+
+**Two cautions for whoever wires it**, both measured:
+
+- **F-1 first.** Wired as sealed, the spend line would move from the walk's honest *«Ни один
+  осмотренный прогон не сообщил стоимости.»* to *0 · измерено* on a deployment that has never run.
+- **The product cannot set a section.** The upload form on `/projects/{uid}` offers a PDF and a
+  display title, nothing else (rendered at 780), so every document uploaded through the product
+  is unclassified. A wired panel that drops the unclassified row would show fourteen true zeros
+  that read as *"no documents"* — correct numbers, false picture. The aggregate always sends that
+  row; the screen must show it.
+
+### A judgement call on `R-39`, stated as one
+
+`R-39` permits a reason *in the words of the subject* and keeps the ban on *operation ids, field
+names, transport*. The dashboard's subtitle says *«Три читают то, что уже отдаёт контракт; …
+операции, которая считала бы находки по разделу, в этом контракте пока нет»*, and the verdict
+panel's caption says *«…операция читает журнал решений, а не список всех находок»*. No id and no
+field name — but *контракт* and *операция* are the author's vocabulary, which is what `D-91`'s
+*«не отдаёт ни одна операция договора»* was and what `R-39` moved away from. **Low; the owner's
+line, not mine.** Noted because a reviewer reading the dashboard is told about contracts.
+
+### The verdict panel with a real decision
+
+Not part of the question, but it is the one live state the merge commit did not describe: after
+one `accept` recorded through the API (`201`), the panel renders *«Находок с решением: 1»*,
+*принято 1 · отклонено 0 · не решено 0 · нужен ручной разбор 0*, in both palettes. Every number
+is computed from the ledger. The **`нужен ручной разбор 0`** row is for a verdict the code itself
+says has **no PC-01 producer** (`verdicts-panel.tsx:51`), while `/knowledge-base` deliberately
+refuses to offer that verdict because *"a filter that can only ever return an empty page teaches a
+reviewer that the knowledge base is empty"* (`knowledge-base-page.tsx:42-46`). Two screens, one
+product, opposite rulings on the same unreachable value. Low. Meanwhile the aggregate, for the
+same database, answers `pending: 8, accepted: 1` — it counts never-judged findings as pending,
+which the panel's caption explicitly excludes. **When the panel is wired to the aggregate its
+meaning changes**, and the caption must change with it.
 
 ## 6. Off the trail — *in progress*
