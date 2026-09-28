@@ -284,7 +284,158 @@ Each is a wrong number on any deployment where the two rows differ (the section 
 live in Z3 below, where it does). This is X's own stated condition for a keyed check —
 distinct counts — unmet on the server side as on the client side. Finding Z-3.
 
-*(X-3/Y5-a, X-6/Y6-a and Y2-a follow; they need the product running.)*
+### The product, as Y drove it
+
+`audit_w46j` untouched; two judge databases created in `gate-w46j-postgres-1`:
+`audit_w46z_judge` and `audit_w46z_empty`, each migrated to `0011_document_section` with the
+seeded `admin` account and nothing else. The API is `infra/deploy/serve.py` on
+`127.0.0.1:56391` (health `56392`), `AUDITMANAGER_PROVIDER_MODE=recorded`, a freshly generated
+token, the lane's `.env` with `DATABASE_URL` pointed at the database being served (*"wired,
+provider_mode=recorded, operations=20"*). Next is `npm --prefix web run build` (exit 0, 6 GB
+available) with `NEXT_PUBLIC_API_BASE_URL=/bff/v1`, then `next start -p 56393 -H 127.0.0.1`
+with `AUDITMANAGER_API_UPSTREAM=http://127.0.0.1:56391` and the same token. Sign-in is the
+repository's own `session.mjs` through the real `/login`; every reading is a cold browser from
+`cdp.mjs` (`withColdBrowser`) with `width.mjs`'s `MEASUREMENT`. A scratch `httpx` driver prints
+raw status and body; a scratch `.mjs` probe imports only those three modules by path. Neither is
+committed; every load-bearing reading is quoted here.
+
+**The data state**, built through the API with an expectation of my own before any read: two
+projects; four documents in one of them (`section=KM`, unclassified, `AR`, `AR`); two runs,
+on the `KM` document and the unclassified one, both published with three findings each; three
+decisions (`accept`, `accept`, `reject`). Expected: sections `AR 2 · KM 1 · unclassified 1`,
+verdicts `pending 3 · accepted 2 · rejected 1 · needs_manual_review 0`, runs `published 2`, spend
+two calls. `GET /dashboard` answered exactly that, and so did the screen. These rows were chosen
+distinct so that a swap between any two of them would show.
+
+### X-3 / Y5-a — an omitted or unknown row, through the full stack — **repaired**
+
+Y's reproduction: A's `F-5a` server mutation (`_filled` drops every member with no rows; the
+unclassified bucket appended only when non-zero), **plus** one unknown verdict row
+`escalated: 9`, applied to `dashboard/repository.py` in the clone and **served from the clone**
+on `56391` (cwd `/root/w46z-clone`); my unchanged Next in front of it; a cold `/dashboard` at
+780 px.
+
+```text
+empty deployment, mutated API:
+  {"documents_by_project": [], "findings_by_verdict": [{"verdict": "escalated", "count": 9}],
+   "run_activity": {"by_state": []}, "section_breakdown": []}
+  documents  no fault  digits []  «Проектов пока нет. …»
+  verdicts   data-panel-fault="incomplete"  digits []  «Разбивка по вердиктам пришла неполной. …»
+  runs       no fault  digits []  «Проектов пока нет. Прогонов показывать нечего, …»
+  sections   data-panel-fault="incomplete"  digits []  «Разбивка по разделам пришла неполной. …»
+
+data state, mutated API:
+  findings_by_verdict pending 3, accepted 2, rejected 1, escalated 9 (needs_manual_review omitted)
+  by_state [published 2] only;  section_breakdown AR 2, KM 1, unclassified 1 only
+  documents  no fault  digits [4, 2, 4, 0]   (not a closed vocabulary; the server's own answer)
+  verdicts   data-panel-fault="incomplete"  digits []
+  runs       data-panel-fault="incomplete"  digits []   (spend is inside this panel and is not shown)
+  sections   data-panel-fault="incomplete"  digits []
+  one request: GET /bff/v1/dashboard 200; no overflow (765/780)
+```
+
+On `d5c9be5` Y's first reading rendered nineteen zeros and panel text identical to the honest
+server's, and X's rendered no 9 and no `ZZ` anywhere. Now every panel whose rows are a closed
+vocabulary refuses the body and shows no number; the run panel's empty-deployment branch shows
+no number either, because it is decided by `documents_by_project` before `by_state` is read.
+**Repaired**, on the screen and not only in the render test.
+
+### X-6 / Y6-a — the dashboard after creating a project — **repaired**
+
+Y's five steps, one browser page, all navigation client-side, on the empty deployment:
+
+```text
+1  0.9s  cold /dashboard           Проектов пока нет. | Проектов пока нет. Прогонов показывать нечего…
+2  1.7s  brand link -> /projects   (client-side)
+3  2.5s  fill #new-project-name, «Создать» -> data-created-project = prj_01M3N4QSN6PM6MVMNR57YKFBFC
+4  4.1s  a[href="/dashboard"]      Документов: 0 на 1 проекте. Judge Z staleness probe документов 0 |
+                                   Прогонов пока нет. Среди проектов системы ни один прогон ещё не запускался.
+   /bff calls in the page session: GET /dashboard 200, GET /projects?limit=50 200,
+                                   POST /projects 201, GET /projects?limit=50 200, GET /dashboard 200
+5  5.0s  reload /dashboard         (the same)
+```
+
+At `d5c9be5` Y read *«Проектов пока нет.»* at step 4 with no second `GET /dashboard`; now, 1.6 s
+after the project exists and well inside the 30-second window, the dashboard refetches and shows
+it. **Repaired.** The guard that is meant to keep it repaired is weaker than it looks
+(Z4, finding Z-5).
+
+### Y2-a — every sentence about the analysed section, against a stored `KM` document with a published run — **repaired except one new sentence, which is false**
+
+State: the `KM` document (`GET /versions/ver_01M3N4RK6XGVRZ9MPH27BXMW5V` → `"section": "KM"`) was
+analysed and published three findings with `analysis_profile_id ap_01M25P3TH08VVTTGJRXYBZZ7RP`,
+the same profile as the unclassified document's run. And `POST /projects/{uid}/documents` with
+`section=ZZ` → **`422 validation_failed`**, *"The section property of the request body is not of
+the declared form."*, `details: {"field": "section", "constraint": "enum"}`.
+
+| screen | sentence, as rendered | true? |
+|---|---|---|
+| `/dashboard`, sections panel | *«Раздел документа сохраняется и проверяется на сервере, когда его называют при загрузке. Форма загрузки в этом продукте раздел не предлагает…»* | **true**; *«единственный анализируемый раздел»* is gone |
+| `/projects/{uid}`, both tabs | *«Разделы — это навигация. Раздел документа хранится и проверяется на сервере, когда его называют при загрузке; … ни один список здесь не отобран по разделу.»* | **true** (the АР tab lists all four documents, the `KM` one among them) |
+| АР tab | *«Анализ построен для текста раздела АР — это единственный профиль анализа, который есть у продукта, и он применяется к любому загруженному документу вне зависимости от того, под каким разделом сервер его хранит.»* | **true**: one profile id for both runs |
+| АР tab | ***«При загрузке проверяется конверт файла, а не раздел.»*** | **false**: the upload above was refused **on the section**, and the very next sentence says *«Раздел документа сервер тоже хранит и проверяет, когда его называют»* |
+| АР tab, the note's title | *«Что сейчас принимается»* over a body that no longer describes intake | stale framing, not a false number; the body under it now says nothing is refused by section |
+| КМ tab | *«Отдельного анализа для этого раздела нет: анализ построен только для текста раздела АР и применяется к любому загруженному документу вне зависимости от того, под каким разделом он сохранён.»* | **true**: the `KM` document was analysed by the АР profile |
+| КМ tab | *«Раздел появится в одной из следующих версий как самостоятельный экран…»* | a promise; not measurable |
+
+**Mostly repaired.** The two sentences Y named are gone or rewritten true. The rewrite
+introduced one false sentence, and it contradicts the sentence after it on the same line of the
+same screen: `web/src/widgets/project-sections/ui/project-sections.tsx:112` (*«При загрузке
+проверяется конверт файла, а не раздел.»*) against `:113` (*«Раздел документа сервер тоже хранит
+и проверяет, когда его называют»*). What the author meant — the section does not decide whether
+a document is accepted for analysis — is true; what the sentence says is not. It is Y2-a's own
+class: a sentence about intake that the server contradicts. `tests/unit/screens/
+project-sections.test.ts` pins neither. **Low–medium**, finding Z-4.
+
+## Z3 — did the stage break what the wave had? — **no**
+
+**The live journey**, against my Next and API over the data state:
+
+```text
+E2E_PC01_LOGIN=admin E2E_PC01_PASSWORD=password \
+  npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:56393 --phase all --out <scratch>
+sign-in: ok at /login -- carrying 'am_session' (HttpOnly=true, SameSite=Strict) into every cold browser
+ok  create-project   api=3 {"project_uid":"prj_01M3N5D9RZA34FHPRXC0ZAD31M"}
+ok  upload-document  api=4 {…"version_uid":"ver_01M3N5E4DFMZB4S5V6S78T6BWB"}
+ok  start-run        api=5 {…"run_id":"run_01M3N5EYTTAHEXPK4K7QP0PRQ0"} terminal=published in 1508ms/150000ms
+ok  root … ok  dashboard 200 api=1 auth=0 console=0 jar=[am_session] w=765/780   (all sixteen `ok`)
+write steps checked: 3/3
+routes checked: 16/16
+e2e:pc01 OK
+```
+
+Exit `0`. Read from the raw exchanges in `journey.json`, not the summary's deduplicated `api=`:
+`dashboard` → exactly `GET /bff/v1/dashboard 200`; `blocks` and `projects` → exactly
+`GET /bff/v1/projects?limit=50 200`; `undeclaredApi` empty on all sixteen routes; top-level
+`failures` empty.
+
+**`/dashboard` at 780 px, both palettes, with data** (the data state above; palette written to
+`am-theme` the way the toggle stores it, in its own cold browser):
+
+| palette | `data-theme`, body | `scrollWidth`/`clientWidth`/`innerWidth` | past the edge | faults | `/bff` calls | console / page errors |
+|---|---|---|---|---|---|---|
+| light | `light`, `rgb(245, 246, 248)` | 765 / 765 / 780 | 0 | none | `GET /dashboard 200` | 0 / 0 |
+| dark | `dark`, `rgb(13, 18, 25)` | 765 / 765 / 780 | 0 | none | `GET /dashboard 200` | 0 / 0 |
+
+Identical to Y's readings on `d5c9be5`. The new fault state (X-3 above) also fits: 780/780 and
+765/780 with no offender.
+
+**The reseal, recomputed by me.** `hashlib.sha256` over this tree, every 64-hex value in
+`web/FRONTEND_LOCK.json`: **8 of 8 match** — `openapi.sha256` = `snapshot_sha256` `78eccd9e…`,
+`client.gen.ts` `f5ab53b9…`, `index.ts` `16841483…`, `operations.gen.ts` `6223d863…`,
+`types.gen.ts` `ec03026a…`, `lockfile_sha256` `98691bc8…` (= `web/package-lock.json`),
+`script_sha256` `787c744d…` (= `web/scripts/generate-api-client.mjs`). `cmp` contract vs mirror:
+byte-identical. `npm --prefix web run api:verify` → *"generate-api-client --check: OK - 20
+operations, contract sha256 78eccd9e01de927556cc1a1f9ad83db2e318872d3951fe3ab54f732eabf5e0b4"*.
+Surface **17 / 20 / 61** from the document, equal to the lock; **22** error codes in `ErrorCode`
+and in `contracts/domain/v1/error-codes.json`; `git diff --name-only d5c9be5 d56ae05 --
+contracts/domain db/migrations` empty; head `0011_document_section`. The worktree was clean
+before and after.
+
+**Nothing the wave had is lost**: the gate is green with 12 + 16 more tests and none removed (Z1),
+the journey, the widths and the palettes read as they did on `d5c9be5`, and `F-1` still holds
+(the data state's `spend` is `{2, 68800, "estimated"}`; the empty deployment carries no `spend`
+key).
 
 ## Z3 — did the stage break what the wave had?
 
