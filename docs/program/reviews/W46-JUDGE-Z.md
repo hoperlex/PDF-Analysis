@@ -192,7 +192,38 @@ output of the mutation it names.
   absent, not a zero labelled measured"*), the commit the previous note named as
   `content_commit`. Very low; the digests, which the note calls the authority, recompute (Z3).
 
-*(X-1, X-2, X-3/Y5-a, X-4, X-6/Y6-a and Y2-a follow.)*
+### X-4 — the historical boundary — **repaired for both judges' mutations; the positional hole survives a heading of the right shape**
+
+On the **real** `docs/program/CURRENT_STATE.md` in a second disposable clone
+(`/root/w46z-clone2`, `.git` and tags present), every insertion placed directly after the live
+section's line ending *"…stays at 22.\*\*"* — where both judges put theirs.
+`test_doc_prose_facts.py` baseline **26 passed**.
+
+| inserted after the first claim | `d5c9be5` (X, Y) | `d56ae05` |
+|---|---|---|
+| control: *"The migration head is \`0010_run_terminal_detail\`."* alone | 1 failed | **1 failed** — `…migration_head_this_tree_has` |
+| **X's**: a fenced `bash` block whose comment reads `# the historical record below is kept verbatim; do not edit it`, then the stale sentence | 21 passed | **1 failed** — the same test: the fence is masked, the boundary falls on the real heading, the stale head is read |
+| **Y's**: `### What the historical record below keeps`, then the stale sentence | 21 passed | **7 failed** — *"the first historical-record marker outside a code fence does not look like this file's genuine heading … '### What the historical record below keeps'"* |
+| **mine**: `## Previous release state — wave 46 (historical record)`, then the stale sentence | — | **26 passed** |
+
+Both judges' mutations are **repaired**. The stream proved its repair on synthetic prose
+(`_SYNTHETIC_LIVE_PREFIX`); on the real file it holds too.
+
+**What survives is X-4's own subject, the position.** The shape check reads a heading's
+*shape* and not its *place*, and the non-vacuity check (*"at least one claim survives"*) still
+cannot see a boundary placed after the first claim. So a heading of the genuine shape, placed
+where both judges placed theirs, blinds the scan to the stale head below it, exactly as the
+unrepaired guard was blinded. The stream's own comment claims the opposite
+(`tests/contract/api_v1/test_doc_prose_facts.py:486-492`): *"Non-vacuity is what would still
+catch the one case that has the right shape and the wrong position: the genuine heading text
+itself, copied verbatim and placed early by hand."* It catches it only when it is placed before
+**every** claim — the same sentence X-4 found false in the previous version of this comment
+(*"a too-early heading truncates all of them together"*). Reachable in the way X-4 described:
+the close of wave 46 moves this file's live section into a `## Previous release state — wave
+46 (historical record)` block, and a sentence left above a prematurely written heading is
+exactly how a stale claim would be hidden. **Low–medium**, finding Z-2.
+
+*(X-1, X-2, X-3/Y5-a, X-6/Y6-a and Y2-a follow.)*
 
 ## Z3 — did the stage break what the wave had?
 
