@@ -3055,6 +3055,7 @@
             }
           },
           "spend": {
+            "description": "Absent when the deployment has made no provider call.",
             "$ref": "#/components/schemas/RunActivitySpend"
           }
         }

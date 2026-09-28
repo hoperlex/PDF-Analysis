@@ -271,7 +271,64 @@ are additional demonstrations on already-existing tests, not new test functions)
 
 ## 7. G5 — the reseal
 
-*(filled as the work proceeds)*
+`RunActivity.spend` ($ref to `RunActivitySpend`) carried no `description` at all.
+`RunStatus.cost_micros` already says in the contract *"Absent when the run made no
+provider call at all, which is a different fact from a cost of zero"*; the reseal that
+made `spend` optional (`W46-SPEND`, `069f656`) gave it the same behaviour without
+writing what the absence means into the contract, so a client author reading the
+generated type had nothing to read (`types.gen.ts:484`, `spend?: RunActivitySpend`, no
+doc comment) -- X-11, confirmed by Y's cross-examination.
+
+**One sentence, as a `description` sibling to the `$ref`** -- the same shape
+`DocumentVersion.section` and `SectionDocumentCount.section` already carry in this
+contract (a description beside a `$ref`, not inside the target schema, because the
+sentence is about *this property's absence*, not about `RunActivitySpend` in general):
+*"Absent when the deployment has made no provider call."* Edited directly in
+`contracts/api/v1/openapi.json`, copied byte-for-byte onto `web/openapi/openapi.json`
+(`cmp`: byte-identical before and after), then `npm --prefix web run api:generate`.
+
+**Shape, checked.** `RunActivity.required` untouched (still `["by_state"]`); `paths` /
+`operations` / `component_schemas` stay `17` / `20` / `61`; the error catalog stays
+`22` (`contracts/domain/v1/error-codes.json` untouched). The regenerated
+`types.gen.ts` gains exactly one line, a JSDoc comment above `spend?:
+RunActivitySpend` -- the property declaration itself is byte-for-byte the same
+(`spend?: RunActivitySpend;` before and after); `client.gen.ts`, `index.ts` and
+`operations.gen.ts` each change exactly one line, the embedded contract-digest
+comment. `npm --prefix web run api:verify` → *"OK - 20 operations"*.
+
+**Digests recomputed with `sha256sum` against this tree**, not copied forward: contract
+= mirror = `78eccd9e01de92…`; `client.gen.ts` `f5ab53b9…`; `index.ts` `16841483…`;
+`operations.gen.ts` `6223d863…`; `types.gen.ts` `ec030263…`. Generator script digest
+unchanged (`787c744d…` -- the script itself was not touched). `lockfile_sha256`
+unchanged (no dependency moved).
+
+**`content_commit` moved to `069f656`** (*"feat(reseal, F-1): run_activity.spend
+optional -- one commit, five documents"*, `W46-SPEND`'s own reseal commit) --
+`dispatch_named_commit` copied alongside it, per the convention `X-11` measured
+(*"the field has simply copied `content_commit` since `W45-BLOCKS`"*). A commit cannot
+name itself; `069f656` is the nearest commit that made *"absent when the deployment
+has made no provider call"* real in behaviour, the same reasoning `W42-SEAL`'s own note
+already uses for a description-only reseal.
+
+**The `commit_note` correction, same commit.** The sentence in the (now second)
+paragraph -- *"which content_commit names for the reason every reseal note below
+gives: a commit cannot name itself"* -- is false as X measured it: three of the eight
+notes below it give that reason (`W46-SEAL`, `W45-BLOCKS`, `W42-SEAL`), five do not
+(`W18-SEAL`, `W25-SEAL`, `W34-CONTRACT`, `W38-KB`, `W39-REVOKE`). Corrected in place to
+name the three.
+
+**Run.** `npm --prefix web run typecheck`: clean. `npm --prefix web run test:guards`:
+`149 passed` (15 files), including `frontend-lock.guard.test.ts`'s own digest
+recomputation. `npm --prefix web run test:contract`: `104 passed`. Backend:
+`test_openapi_conformance_live.py`, `test_doc_prose_facts.py`,
+`test_openapi_conformance.py`, `test_surface_counts_in_prose.py`: `134 passed`.
+`tests/contract` scope, whole: `378 passed, 49 subtests passed` -- unchanged from step
+6, as expected for a description-only reseal (the conformance engine drops
+`description` as annotation under `N4`).
+
+**Files changed by this reseal, all five plus the mirror:**
+`contracts/api/v1/openapi.json`, `web/openapi/openapi.json`, `web/FRONTEND_LOCK.json`,
+`web/src/shared/api/generated/{client.gen.ts,index.ts,operations.gen.ts,types.gen.ts}`.
 
 ## 8. Final gate
 
