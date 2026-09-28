@@ -22,11 +22,19 @@
  * true zeros with the unclassified row hidden would read as *"no documents"* when the
  * product may hold plenty, all of them unclassified — the exact false picture `F-3b`
  * warned the wiring session against.
+ *
+ * **An omitted or unrecognised row is a fault, never a zero.** `summarizeSectionBreakdown`
+ * only returns a summary over the whole closed vocabulary — fourteen codes plus the
+ * unclassified bucket, each once. Anything short of that renders no numbers at all: the
+ * shape `dashboard-failure.ts` already has, not a zero nobody computed
+ * (`docs/program/reviews/W46-JUDGE-Y.md` §5, `Y5-a`).
  */
 
-import { ANALYSED_SECTION_CODE, PROJECT_SECTIONS, projectSectionTitle } from '@/entities/project';
+import { ErrorState } from '@/shared/ui';
+import { PROJECT_SECTIONS, projectSectionTitle } from '@/entities/project';
 import type { SectionDocumentCount } from '@/shared/api';
 
+import { incompleteBreakdownFailure } from '../model/dashboard-failure';
 import { summarizeSectionBreakdown } from '../model/section-breakdown';
 
 export interface SectionsPanelProps {
@@ -34,7 +42,18 @@ export interface SectionsPanelProps {
 }
 
 export function SectionsPanel({ rows }: SectionsPanelProps) {
-  const summary = summarizeSectionBreakdown(rows);
+  const result = summarizeSectionBreakdown(rows);
+
+  if (!result.ok) {
+    const failure = incompleteBreakdownFailure('Разбивка по разделам пришла неполной.');
+    return (
+      <div data-panel="per-section-breakdown" data-panel-fault={failure.kind}>
+        <ErrorState title={failure.title} detail={failure.detail} />
+      </div>
+    );
+  }
+
+  const { summary } = result;
 
   return (
     <div data-panel="per-section-breakdown">
@@ -48,7 +67,6 @@ export function SectionsPanel({ rows }: SectionsPanelProps) {
         {PROJECT_SECTIONS.map((section) => (
           <li key={section.code} data-section={section.code} data-analysed={section.analysed}>
             {projectSectionTitle(section)}
-            {section.code === ANALYSED_SECTION_CODE ? ' — единственный анализируемый раздел' : ''}
             : <strong>{summary.byCode[section.code]}</strong>
           </li>
         ))}

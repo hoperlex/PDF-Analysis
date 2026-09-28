@@ -9,18 +9,22 @@
  * to sections: legacy organises every piece of work by section and carries fourteen,
  * ours analyses one, and the answer is fourteen sections of which thirteen say so.
  *
- * **The one sentence this widget exists to get right.** A document's section is checked
- * nowhere in this system. The upload envelope checks the media type, the size, the page
- * count and the text layer; the `AR` restriction lives in the analysis prompt and in the
- * names of fixtures. So this screen states a **rule of intake** — *documents of section
- * АР are what is accepted today* — and never a property of a file. "This document belongs
- * to АР" is a claim no code here can confirm, and the list below is the project's whole
- * document list, not a list filtered by section. Both facts are on the screen.
+ * **The one sentence this widget exists to get right.** A document's section is stored
+ * and checked on the server when an upload names one — this product's own upload form does
+ * not offer that field, so every document it accepts arrives without one
+ * (`entities/project/model/section.ts`). The `AR` restriction lives in the analysis
+ * prompt, not in intake: the analysis is built for the text of `AR` documents and is
+ * applied to whatever is uploaded, whichever section the server stores it under. So this
+ * screen states a rule about the analysis, never a rule of intake and never a property of
+ * a file — "this document belongs to АР" is a claim no code here makes, and the list below
+ * is the project's whole document list, not one filtered by section. Both facts are on the
+ * screen (`docs/program/reviews/W46-JUDGE-Y.md` §2, `Y2-a`).
  *
- * **What it does not do.** No counts and no totals per section. There is no section field
- * in the contract to count over, and inventing one in the interface would be a number the
- * server never sent — the same class of mistake as rendering an absent `document_count`
- * as `0`. That is the second half of `D-56` and it waits for a contract.
+ * **What it does not do.** No counts and no totals per section here.
+ * `getDashboardSummary` now counts published documents per section, server-side
+ * (`/dashboard`'s own sections panel) — but that is a different read this widget does not
+ * make, and inventing a count here from this widget's own document list would be a number
+ * this screen never asked the server for.
  *
  * **State, not address.** The open section lives in React state, not in the URL. Sections
  * are a structure inside one screen; the route tree, `tests/e2e/pc01/journey/manifest.json`
@@ -102,11 +106,12 @@ export function ProjectSections({ route, initialSection, children }: ProjectSect
             <p className="am-state__title">Что сейчас принимается</p>
             <div className="am-state__detail">
               <p>
-                Сейчас принимаются документы раздела {ANALYSED_ABBR}: анализ рассчитан на текст
-                этого раздела. Это правило приёма, а не свойство файла — при загрузке
-                проверяется конверт. Раздел документа сервер тоже хранит и проверяет, но форма
-                загрузки этого продукта его не предлагает, поэтому документ, отправленный через
-                неё, остаётся без раздела.
+                Анализ построен для текста раздела {ANALYSED_ABBR} — это единственный профиль
+                анализа, который есть у продукта, и он применяется к любому загруженному
+                документу вне зависимости от того, под каким разделом сервер его хранит. При
+                загрузке проверяется конверт файла, а не раздел. Раздел документа сервер тоже
+                хранит и проверяет, когда его называют, но форма загрузки этого продукта его не
+                предлагает, поэтому документ, отправленный через неё, остаётся без раздела.
               </p>
               <p>Ниже — все документы проекта, в порядке, в котором их вернул сервер.</p>
             </div>
@@ -117,7 +122,7 @@ export function ProjectSections({ route, initialSection, children }: ProjectSect
         <RoutePlaceholder
           screen={projectSectionTitle(open)}
           route={route}
-          promise={`Анализ этого раздела ещё не делается: сейчас принимаются документы раздела ${ANALYSED_ABBR}. Раздел появится в одной из следующих версий, и ничего из уже загруженного при этом не теряется.`}
+          promise={`Отдельного анализа для этого раздела нет: анализ построен только для текста раздела ${ANALYSED_ABBR} и применяется к любому загруженному документу вне зависимости от того, под каким разделом он сохранён. Раздел появится в одной из следующих версий как самостоятельный экран, и ничего из уже загруженного при этом не теряется.`}
         />
       )}
     </div>

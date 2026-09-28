@@ -60,3 +60,59 @@ X-9, and the cross-examination of Y), `docs/program/reviews/W46-JUDGE-Y.md`
 
 ## Log
 
+- **C1.** `section-breakdown.ts`, `verdict-breakdown.ts` (rewritten) and
+  `run-state-breakdown.ts` (new) each return `{ ok: false }` over a response that does not
+  carry exactly its closed vocabulary — one member missing, one repeated, or one the
+  vocabulary does not have. `sections-panel.tsx`, `verdicts-panel.tsx` and
+  `run-activity-panel.tsx` render `dashboard-failure.ts`'s new `incompleteBreakdownFailure`
+  shape (`ErrorState`, `data-panel-fault="incomplete"`) instead of any number when that
+  happens; a partial `by_state` (some states present, the rest silently hidden behind
+  `?? 0` / `> 0`) is covered by the same check, per the coordinator's narrowing. Six new
+  cases in `dashboard.test.ts` drive this over mutated fixtures (a missing row and an
+  unrecognised row, for each of the three panels): `npx vitest run
+  tests/unit/widgets/dashboard.test.ts` → 16 passed (was 7).
+- **C2.** `dashboard.test.ts` gained `rowNumber`/`sectionMarkup` helpers and a new
+  `describe('every row is keyed to its own data attribute…')`, asserting each row's value
+  by its own `data-section`/`data-verdict`/`data-run-state`, not by `toContain` anywhere on
+  the page. Mutations run by hand, confirmed red, then reverted (`git diff` empty after
+  each):
+  - **Y's M5** (`sections-panel.tsx`, `summary.byCode[PROJECT_SECTIONS[(i + 1) %
+    PROJECT_SECTIONS.length]!.code]` in place of `summary.byCode[section.code]`, with the
+    `.map` given an index):
+    ```
+    × every row is keyed to its own data attribute, not to membership on the page > every section row carries its own section's count, never a neighbour's
+      AR: expected 0 to be 3
+    ```
+  - **Y's M6** (`verdicts-panel.tsx`, `accepted`'s `<td>` reads `byVerdict.rejected` and
+    back):
+    ```
+    × every row is keyed to its own data attribute, not to membership on the page > every verdict row carries its own verdict's count, never a swapped one
+      accepted: expected 1 to be 2
+    ```
+  - **Mine** (`run-activity-panel.tsx`, the `<td>` reads `breakdown.byState[state ===
+    'published' ? 'failed' : state === 'failed' ? 'published' : state]`):
+    ```
+    × every row is keyed to its own data attribute, not to membership on the page > every rendered run-state row carries its own state's count, never a swapped one
+      published: expected 1 to be 6
+    ```
+  All three: `npx vitest run tests/unit/widgets/dashboard.test.ts` still reports the whole
+  suite `16` collected with exactly the mutated case red, the rest green — the mutation is
+  caught by the new per-row assertion and by nothing else. Reverted with the file's
+  unmutated content; `git status --porcelain` empty afterward.
+- **C4 (partial), Y2-a/Y2-b/X-9.** `sections-panel.tsx` no longer annotates the АР row as
+  *"единственный анализируемый раздел"*; `project-sections.tsx`'s header and its two
+  inline sentences (the analysed branch, the placeholder promise) say the analysis is
+  built for the text of АР documents and is applied to any uploaded document regardless of
+  its stored section, never a rule of intake — matching the coordinator's narrowing that
+  this predates wave 46 (`9bb9385`) and is sentence-only, no behaviour change.
+  `verdicts-panel.tsx`'s caption now says «не решено», the row's own label, in place of
+  «ожидает решения». Four comments claiming the generated client "still types `spend`
+  required today" (`run-activity-panel.tsx` ×2, `dashboard.test.ts`, `rendered-language.
+  guard.test.ts`) are corrected — `types.gen.ts:484` has been `spend?: RunActivitySpend`
+  since the reseal. `tests/unit/screens/project-sections.test.ts` and `tests/unit/projects/
+  project-sections.test.ts` updated to pin the corrected sentences (both files' own stale
+  claims — "checked nowhere in this system", "no section field to count over" — corrected
+  too, same falsehood). `npx vitest run tests/unit/screens/project-sections.test.ts
+  tests/unit/projects/project-sections.test.ts tests/unit/widgets/dashboard.test.ts` → 40
+  passed. `npm run typecheck` clean throughout.
+
