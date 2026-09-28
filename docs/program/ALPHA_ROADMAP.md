@@ -31,8 +31,8 @@ the shortest route that still leaves a commit somebody can certify.
 > about a credential standing in front of every operation. The surface is **13 paths / 16
 > operations / 48 schemas** after wave 34's reseal, and was 12/15/46 before it.
 >
-> **Corrected a third time 2026-09-25.** Wave 45 added `getVersionBlocks`, so it is
-> **16 paths / 19 operations / 53 schemas**. Wave 38 added the knowledge base and wave 39 the
+> **Corrected a fourth time 2026-09-28.** Wave 46 added `getDashboardSummary`, so it is
+> **17 paths / 20 operations / 61 schemas**. Wave 45 added `getVersionBlocks`, which made it 16/19/53. Wave 38 added the knowledge base and wave 39 the
 > password change, which made it 15/18/51. This block has now been wrong
 > three times in three days — and the second time it was wrong **in the very note written to record
 > that it had been wrong**. A surface count in prose is a number with no mechanism behind it;

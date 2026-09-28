@@ -65,6 +65,10 @@ REQUIRED_OPERATIONS = {
     # run_id because page_geometry_extraction carries no model and no provider reference,
     # so its output is deterministic across every run of a version that reaches it.
     "getVersionBlocks",
+    # `W46-SEAL`, `R-44`. One aggregate read serving all four dashboard panels, chosen
+    # over three client-side walks because `R-24` was ruled for a listing operation and
+    # against a walk.
+    "getDashboardSummary",
 }
 
 #: The operations a caller reaches while holding no credential. Exactly one, and it is

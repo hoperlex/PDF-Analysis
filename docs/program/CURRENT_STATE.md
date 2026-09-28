@@ -28,7 +28,24 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Where the programme is, 2026-09-25
+## Where the programme is, 2026-09-28 — wave 46 merged, not yet gated
+
+**Wave 46 is merged locally and is not a gated tip.** Both streams — `W46-SEAL` and `W46-DASH` —
+are in the tree; its closing judge found the merged tree **red** and the integrator is repairing
+it. **Do not read this section as a release.** The last gated, tagged tip is **`alpha-w45`**, and
+`origin/main` is still there.
+
+**The contract surface this tree has is 17 paths / 20 operations / 61 schemas**, moved by one
+reseal that added `getDashboardSummary` — one aggregate read for all four dashboard panels —
+and `R-40`'s `document.section`. **The error catalog was not touched and stays at 22.**
+
+**Why this section exists before the wave closes.** `test_doc_prose_facts.py` reads the live
+section as a claim about the tree, and the tree moved when wave 46 merged. Leaving wave 45's
+closing text as the live section would have stated a surface this tree no longer has — the
+guard caught it, which is `D-79`'s instrument doing its job. A live section that says *merged,
+not gated* is true today; one that says *wave 45 closed* is only true about wave 45.
+
+## Previous release state — wave 45 (historical record)
 
 **Wave 45 is closed as `alpha-w45` at `29ea0c9`.** `make gate` → **`GATE OK`**: battery
 **2493 passed / 5 skipped / 4 warnings / 169 subtests**, foundation **35**, frontend
@@ -109,7 +126,7 @@ printed *“the deployed stack IS this tree (20a14de)”*. Logs:
 `/root/w44-deploy.log`, `/root/w44-verify-candidate.log`.
 
 **Wave 44 changes no contract, migration, dependency, lockfile, composition root or global
-style.** The contract is **16 paths / 19 operations / 53 schemas**, the error catalog
+style.** The contract is **17 paths / 20 operations / 61 schemas**, the error catalog
 remains **22 codes**, and the migration head remains **0010**. `D-82`, `D-88`, `D-90`,
 `D-92`, `D-93`, `D-94` and `D-95` close. `D-83` remains honestly open because the
 stack-free gate renders 0 of the twelve browser refusal sentences; the restored live drive is
@@ -186,7 +203,7 @@ credential ever issued to an account at once with no list and no restart — and
 because changing a password revokes the credential that made the request. Wave 40 added the rate
 limit and the lockout, migration `0008_sign_in_throttle`. That is `R-26` complete.
 
-**The contract surface is 16 paths / 19 operations / 53 schemas.** Progression: 12/15/46 →
+**The contract surface is 17 paths / 20 operations / 61 schemas.** Progression: 12/15/46 →
 13/16/48 (wave 34) → 14/17/50 (wave 38, the knowledge base's `listDecisions`) → 15/18/51
 (wave 39, `changePassword`). **A reseal is four documents in one change** — `contracts/api/v1/openapi.json`,
 the generated client, the mirror, and `web/FRONTEND_LOCK.json` — the coupling `D-18` named.

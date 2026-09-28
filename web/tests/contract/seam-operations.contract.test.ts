@@ -70,6 +70,8 @@ const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> = [
   // (absent -- no run has produced it yet) from "produced" with blocks:[] (a version that
   // genuinely has none); the same bytes for blocks, different bytes for status.
   ['getVersionBlocks', 'GET', '/versions/{version_uid}/blocks'],
+  // `W46-SEAL`, `R-44`: one aggregate read serving all four dashboard panels.
+  ['getDashboardSummary', 'GET', '/dashboard'],
 ];
 
 const document = JSON.parse(readText(CONTRACT_PATH)) as {

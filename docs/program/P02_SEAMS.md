@@ -588,7 +588,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Nineteen operations, sealed. `A5` generates the typed client from this document; `B6`
+Twenty operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -597,7 +597,8 @@ listings below and made published work reachable after a page reload (`DEBT_REGI
 D-16). Sixteen after `W34-CONTRACT` added `issueToken` on 2026-09-22, seventeen after
 `W38-KB` added `listDecisions` under `R-24` the same day, eighteen after `W39-REVOKE`
 added `changePassword` under `R-26` on 2026-09-23, and nineteen after `W45-BLOCKS` added
-`getVersionBlocks` under `R-29` on 2026-09-25.
+`getVersionBlocks` under `R-29` on 2026-09-25, and twenty after `W46-SEAL` added
+`getDashboardSummary` under `R-44` on 2026-09-28.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -634,6 +635,7 @@ could.
 | `listDecisions` | `GET /decisions` |
 | `changePassword` | `POST /auth/password` |
 | `getVersionBlocks` | `GET /versions/{version_uid}/blocks` |
+| `getDashboardSummary` | `GET /dashboard` |
 
 Rules that hold across the whole surface:
 
