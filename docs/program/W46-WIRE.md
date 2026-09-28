@@ -37,3 +37,41 @@ written; entries are appended, not rewritten, once the step they describe is don
   no second measurement overlapped it. The lane's three containers
   (`gate-w46b-postgres-1`, `gate-w46b-s3-1`, `gate-w46b-s3-init-1`) were left healthy by
   that run's `make up` step; nothing here disturbed them.
+
+## Finding against this session (a): pattern-kill at 08:35 UTC
+
+The two `pkill` calls above — `pkill -f "make gate"`, then `pkill -9 -f "pytest -c
+pyproject.toml"` and `pkill -9 -f vitest` — matched by command-line pattern, not by a
+confirmed-own PID. On a host shared by many projects and lanes, that pattern matches every
+session's `make gate`, every lane's `pytest`, every lane's `vitest` — not only this one's.
+The integrator had to warn ten other sessions over it. This was wrong regardless of whether
+it happened to hit only this session's own processes that time: the method itself is the
+defect, not its one observed outcome. The rule going forward, everywhere in this session and
+recorded here so a restart does not lose it: **kill only by PID, and only a PID confirmed to
+be this session's own** — `pstree -p <pid>` shows it descends from this shell, and
+`readlink /proc/<pid>/cwd` reads `/root/w46dash` (or a path under it) before anything is
+sent a signal. Never `pkill`/`killall` by name or pattern again in this worktree.
+
+## Finding against this session (b): the baseline `make gate` is a lost measurement, not a result
+
+The second, disciplined baseline attempt (started after this file was opened and committed,
+pid `1092763`, confirmed by `pstree -p 1092762` and `readlink /proc/1092763/cwd` =
+`/root/w46dash` to be this session's own) ran for roughly 45 minutes and reached about 69%
+of the battery before the kernel OOM-killer took one of its `pytest` worker children. The
+log, `/root/w46b-gate-baseline.log`, ends:
+
+```
+GATE: the canonical battery failed with pytest exit status 137.
+make: *** [Makefile:1026: gate] Error 1
+```
+
+Exit `137` is `128 + SIGKILL`, and the host was at 54 concurrent sessions with swap at
+15/15 GB (fully exhausted) while this ran — reported by the integrator, who was watching the
+same pid from their side. **This is not a battery result and none of its output is treated
+as one.** In particular the two `F` marks and one `E` the log shows around 64–69% progress
+name no test by node id before the kill, so they are not claimed as reds here, expected or
+otherwise, and no pass/fail conclusion is drawn from this run at all. Per the integrator's
+instruction, this session does not re-take a full baseline itself: `W46-SPEND`, in
+`/root/w46seal`, is re-taking one against code identical to this tree at `fbea618`, and its
+red list will be forwarded. This tree's own verification is the single, later `make gate`
+run in the "Verification" section of the dispatch brief, after `W1`–`W5` are done.
