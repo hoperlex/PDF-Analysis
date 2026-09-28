@@ -158,9 +158,55 @@ repair. `d5c9be5` repaired the two sentences a guard could read and none of thes
 
 *pending*
 
-## X5 — the integrator's own changes
+## X5 — the integrator's own changes — **three sentences false, one debt check that cannot fail**
 
-*pending*
+### `8ad692f`'s prose, sentence by sentence, against the tree
+
+| file:line | sentence | true of `d5c9be5`? | measured by |
+|---|---|---|---|
+| `web/src/app/bff/v1/[...path]/route.ts:22-23` | *"Those figures are **twenty operations across seventeen paths**, which is what the frozen document declares after the `W45-BLOCKS` reseal that added `getVersionBlocks`."* | **False.** The numbers were moved and the clause that dates them was not. After `W45-BLOCKS`'s reseal the document declared 16 paths / 19 operations (`830fd76` and `alpha-w45`: 16/19); 17/20 is `W46-SEAL`'s reseal (`d7ac848`: 17/20, the first to contain `getDashboardSummary`). The next line's history (*"said fifteen and twelve once and sixteen and thirteen after that"*) also stops one reseal short. | `git show <c>:contracts/api/v1/openapi.json` counted for `830fd76`, `alpha-w45`, `d7ac848` |
+| `docs/program/P02_SEAMS.md:600-601` | *"…and twenty after `W46-SEAL` added `getDashboardSummary` under `R-44` on 2026-09-28."* | **False date.** `W46-SEAL`'s reseal `d7ac848` is dated 2026-09-25 18:43 and was merged at `57e519b` on 2026-09-25 19:11; the lock's own note says *"Resealed 2026-09-25 by W46-SEAL"*. 2026-09-28 is the date of `8ad692f`, the repair that wrote the sentence. The rest of the paragraph (*"Twenty operations, sealed"*, `:591`) and the table row (`getDashboardSummary` → `GET /dashboard`) are true. | `git show -s --format=%ci d7ac848 57e519b` |
+| `docs/program/ALPHA_ROADMAP.md:34-37` | *"**Corrected a fourth time 2026-09-28.** … This block has now been wrong three times in three days"* | **False now.** The sentence was written for the third correction (`git show 8ad692f^:docs/program/ALPHA_ROADMAP.md`: *"Corrected a third time 2026-09-25 … three times in three days"*); the fourth correction changed the heading and the numbers and kept the tally. Four corrections, 2026-09-22 to 2026-09-28. The triple on `:35`, *17 paths / 20 operations / 61 schemas*, is true and is read by `test_doc_prose_facts.py`. | `git show 8ad692f -- docs/program/ALPHA_ROADMAP.md` |
+| `infra/deploy/README.md:26`, `:150` | *"the twenty operations under uvicorn"*, *":8000 the twenty operations, mounted by the proxy at /api/v1"* | True. The served API logs *"operations=20"*. (`Dockerfile.api:1`, which the `:26` row describes, still says *"the fifteen operations"*: that is `D-99`, registered, in a file extension the guard does not read.) | X2's stack |
+| `infra/deploy/README.md:102-103` | *"An application with no token configured answers `authentication_required` to every one of the twenty operations"* | **Unobservable as written, and off by one where it can be observed.** `create_asgi_app` without `AUDITMANAGER_API_TOKEN` refuses to construct (`ConfigurationError … refuses to start`), as the README's own next paragraph says. The one way to reach the seam without a key — application built with a token, seam assembled from an environ without one — answers **`401` to 19 operations and `200` to `issueToken`**, which is open by design (`security: []`). The sentence counts the open exchange among the refused. It said *"nineteen"* before, with the same imprecision; `8ad692f` moved the number. **Low.** | scratch in-process probe, all 20 operations driven once |
+| `infra/deploy/serve.py:4` | *"`create_asgi_app` (the twenty operations)"* | True (*"operations=20"*). | X2's stack |
+| `web/src/shared/api/authorization.ts:24` | *"The `authorization` category of the catalog, as the twenty operations can return it."* | True as a union: 19 operations declare `401` and `403`, `issueToken` declares `401`. | the contract, tabulated |
+
+Two more of the integrator's own sentences, found while measuring: the describe block *"the
+nineteen seam operations"* that `8ad692f` added the twentieth row to (X6), and
+`CURRENT_STATE.md`'s live section (also `8ad692f`), which still says *"Both streams — `W46-SEAL`
+and `W46-DASH` — are in the tree; its closing judge found the merged tree **red** and the
+integrator is repairing it"*. Its load-bearing claims — merged, not gated, not a release,
+17/20/61, catalog 22 — are true; the sub-stage it describes is over. Low, and the wave's close
+rewrites it anyway.
+
+**Cost.** None of the three false sentences is on a screen or in a guard's path. Each is the
+same defect: **a count was corrected and the words around it were not**, which is `D-104`'s
+thesis (*every prose guard here checks a number*) happening inside the repair of a
+number-guard's red. `route.ts:23` is the costliest, because it is the file the programme calls
+*"the fifth stale count"* and whose paragraph exists to be read.
+
+### `D-106`–`D-109`: each row's check command, run literally
+
+| row | command | the row says it prints | it printed | can it print anything else? |
+|---|---|---|---|---|
+| `D-106` | `curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer …" '<api>/projects?bogus=1&limit=1'` | `200` | **`200`** (my API, `:56391`). Also `GET /dashboard?project_uid=…` byte-identical to plain, `GET /decisions?project_uid=…` `200` | yes: a surface that refuses unknown parameters prints `422` |
+| `D-107` | `grep -rn 'section' web/src/features/upload-document web/src/widgets/upload-panel --include=*.tsx \| grep -v 'className\|<section\|</section' \| wc -l` | `0` | **`0`** | **Not for the two direct implementations.** In the disposable tree: (1) the upload command sending `section: 'KM'` (`use-upload-document.ts` is `.ts`, outside `--include=*.tsx`) → **`0`**; (2) a `<select className="am-input" name="section">` in the form (removed by `grep -v className`) → **`0`**. Both files restored byte-identical to `d5c9be5`. A check that prints `0` whether or not the product can set a section does not measure the debt it names. |
+| `D-108` | `grep -c 'e2e:pc01' Makefile` | `0` | **`0`** | yes: a target invoking `npm --prefix web run e2e:pc01` prints `1` |
+| `D-109` | `grep -rn 'контракт\|операци' web/src --include=*.tsx \| grep -v shared/api/generated` | (nothing stated) | **one line**: `web/src/_pages/logs/ui/logs-page.tsx:31` (*«…операции, которая отдала бы их приложению, в договоре нет…»*) | It under-reads the debt by an order of magnitude. `grep -rniE 'контракт\|операци\|договор' web/src --include=*.ts --include=*.tsx \| grep -v shared/api/generated` → **24 lines**, 23 of them in `.ts` model files that produce on-screen failure text (*«Клиент получил нечто, что не смог разобрать как отказ по контракту.»* ×5, *«…вне контракта этого клиента»* ×6, `catalog-message.ts` ×5, …) and one capitalised (*«Операция ничего не создала…»*), which the case-sensitive pattern misses. The row's own claim — *"`W46-WIRE` removes both words from the dashboard"* — is **true**: no match under `web/src/widgets/dashboard` or `web/src/_pages/dashboard` either way. |
+
+**`D-107` is the one that matters**: the memory rule this programme keeps — *every guard needs a
+test proving it can fail* — applies to a register row's check, because the next person reads
+*"prints 0 today"* as *"the product still cannot set a section"*. Reproduce with the two
+mutations above in any disposable copy.
+
+### `d5c9be5`, the join repair
+
+Two comments in `section-breakdown.ts`: *"fourteen codes"* → *"fourteen section codes"*. Both
+sentences are true of the file (`PROJECT_SECTIONS` seeds fourteen members; the unclassified
+count is kept beside them), and X6 shows the commit changed nothing else. Its message says the
+guard's noun set *"belongs with `D-98`"*; `D-98`'s row names *declarations, models, copies,
+places* and was not amended, so that observation lives only in a commit message. Low.
 
 ## X6 — did the merge lose a test? — **No. Nothing was lost, byte or node.**
 
