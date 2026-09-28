@@ -214,3 +214,61 @@ assert 'spend' not in {..., 'spend': {'model_call_count': 0, 'cost_micros': 0,
 ```
 both `test_a_deployment_with_nothing_in_it_reports_every_bucket_present_at_zero` and
 `test_a_project_with_no_documents_is_a_row_present_at_zero` catch this one.
+
+## 5. `S4` — `F-5c`, the historical-section control's non-vacuity half
+
+`2951f07`. `tests/contract/api_v1/test_doc_prose_facts.py`'s
+`test_the_historical_section_is_excluded_from_the_live_scan` gets one more assertion:
+the scanned (truncated) `CURRENT_STATE.md` text must still yield at least one match
+from this file's own three claim extractors (`_migration_head_claims`,
+`_surface_triple_claims`, `_tagged_tip_claims`) — non-vacuity, the same move
+`test_the_bff_handler_still_makes_a_claim_this_guard_can_read` already makes for the BFF
+handler.
+
+**Where this brief and the measured tree disagree, reported rather than silently
+followed, per the brief's own opening instruction.** The brief and the judge's report
+both name `TAGGED_TIP_CLAIM` specifically. Measured against this tree before writing
+the assertion:
+
+```python
+# lines 1-47 of docs/program/CURRENT_STATE.md, i.e. full_text[:boundary.start()]
+TAGGED_TIP_CLAIM.finditer(scanned) -> []   # zero matches
+```
+
+The live section, dated 2026-09-28, says *"Wave 46 is merged locally and is not a
+gated tip … Do not read this section as a release"* and deliberately never writes
+`closed as \`alpha-wNN\``, because wave 46 has not closed. A literal
+`assert TAGGED_TIP_CLAIM.finditer(scanned)` would have reddened this control against a
+live section that is telling the truth, in `docs/program/CURRENT_STATE.md` — which is
+**not** in this task's `allowed_paths` and is the integrator's (brief's own
+contingency: *"If today's live section makes no claim the regex can read, do not edit
+`CURRENT_STATE.md`. It is the integrator's. Report the sentence the guard needs."*).
+**`CURRENT_STATE.md` is not touched by this stream.**
+
+Repair actually written: the union of all three extractors, not one. The live section
+*does* currently carry a `SURFACE_TRIPLE_CLAIM` (`"17 paths / 20 operations / 61
+schemas"`, line 38), so the assertion passes today, and the judge's mutation truncates
+that claim away exactly as it would a tagged-tip one — the defect class is identical,
+the extractor picked to prove it is not.
+
+**Sentence the guard also needs, for the integrator:** once wave 46 gates, the live
+section's closing idiom — `docs/program/CURRENT_STATE.md`'s own convention one section
+down is *"Wave 45 is closed as \`alpha-w45\`."* — should read **"Wave 46 is closed as
+`alpha-w46`."** once that is written, `TAGGED_TIP_CLAIM` itself is satisfied too and
+nothing here has to change.
+
+**Shown failing under the judge's mutation**, on an in-memory copy of the real file's
+text, nothing written to disk:
+
+```
+boundary (mutated): 2157 '### A note on how the historical record is kept'
+live_claims under mutation: set()
+AssertionError: the live section survives truncation but makes no claim this guard can
+read -- the non-vacuity half of the control (F-5c) is failing
+
+live_claims unmutated (real file, untouched): {'17 paths / 20 operations / 61 schemas'}
+```
+
+Verification: `tests/contract/api_v1/test_doc_prose_facts.py` → `21 passed` (all of
+them, including the new assertion, against the real, un-mutated `CURRENT_STATE.md`).
+The full canonical-ignore contract scope → `367 passed`, same as after `S2`.
