@@ -272,3 +272,26 @@ live_claims unmutated (real file, untouched): {'17 paths / 20 operations / 61 sc
 Verification: `tests/contract/api_v1/test_doc_prose_facts.py` → `21 passed` (all of
 them, including the new assertion, against the real, un-mutated `CURRENT_STATE.md`).
 The full canonical-ignore contract scope → `367 passed`, same as after `S2`.
+
+## 6. Final gate
+
+Confirmed no other `make gate`/`pytest`/`vitest` under `/root/w46*` before starting
+(`readlink -f /proc/<pid>/cwd` on every match). `make gate > /root/w46a-gate.log 2>&1`,
+tree clean at `848f260`, run to completion:
+
+```
+2504 passed, 5 skipped, 4 warnings, 169 subtests passed in 551.89s (0:09:11)
+Test Files  79 passed (79)
+     Tests  1121 passed (1121)
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+**`GATE OK`, taken from the log line, not from an exit code.** Backend battery moved
+from `1 failed, 2499 passed` (this stream's own baseline) to `2504 passed, 5 skipped`
+— five more passing nodes than the baseline's `2499`, matching the three new tests in
+`S3`, the one net-new test in `S2` (`test_every_operation_can_report_not_found_or_validation`
+replaced by two), and `S4` adding no new test (an assertion inside an existing one). The
+frontend battery ran for the first time in this stream's own gate (the two OOM'd
+attempts never reached it; the baseline's one backend red aborted the recipe before it
+too) — `79/79` files, `1121/1121` tests, both green on the first run this stream
+produced.
