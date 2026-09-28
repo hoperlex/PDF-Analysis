@@ -397,7 +397,86 @@ status --porcelain` in the clone → only the symlink.
 
 ## 6. Y6 — the stream reports, re-measured
 
-*pending*
+Every figure below was taken again, not read. Backend figures ran in the disposable clone
+(`/root/w46k-probe`, `.venv` symlinked to this worktree's, the lane's `.env` exported, so the
+fresh-deployment fixture created and dropped its own database in `gate-w46k-postgres-1`).
+
+### `docs/program/W46-SPEND.md`
+
+| claim | where | re-measured | verdict |
+|---|---|---|---|
+| over no `model_call` rows `spend` is absent; one call makes it present with all three fields | §2 | live, section 1: s0–s2 have no `spend` key; s3 `{1, 34400, "estimated"}` | **true** |
+| `069f656` is the reseal in one commit: contract, mirror, four generated files, lock | §2 | `git show --stat 069f656` → exactly those seven files | **true** |
+| only `types.gen.ts` changed in substance; the other three carry the new digest comment only | §2 | `git show 069f656 -- <file>`: `client.gen.ts`, `index.ts`, `operations.gen.ts` each change one line, the `sha256` comment; `types.gen.ts` changes that line, `CONTRACT_DIGEST`, and `spend: RunActivitySpend` → `spend?: RunActivitySpend` | **true** |
+| the mirror is byte-identical to the contract | §2 | `cmp contracts/api/v1/openapi.json web/openapi/openapi.json` → identical | **true** |
+| the lock's digests are recomputed | §2 | all **8** 64-hex values in `web/FRONTEND_LOCK.json` recomputed with `hashlib.sha256` → 8 match; 17 / 20 / 61; `api:verify` → *OK - 20 operations, contract sha256 f688b409…*. *"all six digests"* means the six that moved; the other two (lockfile, generator) are legitimately carried | **true** |
+| the pin table's values | §2 | each cited line read at `848f260`: all values as stated | **true**, one line stale: the 22-code pin is `test_openapi_document.py:497` at `dbbf952`, when the table was written, and **`:577`** from the stream's own S2 (`a6e3015`) onward. Very low |
+| `test_openapi_document.py` → 46 passed; `test_doc_prose_facts.py` → 21 passed | §3, §5 | at `bb985ce`: **46 passed**, **21 passed** | **true** |
+| the fresh-deployment file → 3 passed | §4 | at `bb985ce`, lane `.env` loaded: **3 passed** | **true** |
+| the canonical-ignore contract scope → 367 passed | §3, §5 | at `bb985ce`: **367 passed, 49 subtests passed** | **true** |
+| `+5` passing nodes are *"three new tests in S3, the one net-new test in S2"* | §6 | the figures are consistent (2500 nodes − 1 replaced + 2 + 3 = 2504), but the sentence's own sum is 3 + 1 = **4**: the five new *passing* nodes are S3's three plus **both** of S2's replacements | **the arithmetic in the prose is off by one; the numbers are right.** Very low |
+
+**Where `W46-SPEND` did the right thing, checked:** it reported against itself twice — the OOM-killed
+baseline discarded rather than read (§1), and the brief's `TAGGED_TIP_CLAIM` measured to match
+nothing in today's live section, with the union of three extractors used instead and the sentence
+the integrator needs named (§5). Both are the behaviour the programme's constraints ask for.
+
+### `docs/program/W46-WIRE.md`
+
+| claim | where | re-measured | verdict |
+|---|---|---|---|
+| `dashboard: api=1` and `blocks: api=1`, zero undeclared calls, `e2e:pc01 OK` | W4 | section 3: two live runs of my own, both `OK`, raw exchanges one each | **true** |
+| the `_rsc` requests are Next's link prefetches, not a second data fetch | W4 | section 1: they reach the API zero times (uvicorn log) | **true** — and stronger than the stream could say, since it read only the browser side |
+| `/dashboard` makes zero requests to `/bff/v1/projects`; `/projects` makes exactly one | W5 | section 1 (dashboard, four states) and run 1's raw exchanges (`projects` → one) | **true** |
+| the double `GET /projects` judge A saw *"was the old three-walk architecture's own redundancy"* — `documents-panel`'s `useProjectList` and the walk's own `useProjectList` | W5 | **not re-measured** (section 9). At `2ffca8c` both call `useProjectList()` with no cursor, i.e. the same key `queryKeys.projects.list(undefined, 50)` (`git show 2ffca8c:web/src/widgets/dashboard/api/use-run-activity-walk.ts` line 59, `…/entities/project/api/use-project-list.ts` line 20), and one `QueryClient` deduplicates a key's concurrent fetch. So the stated cause does not by itself produce two requests | **unproven**: the effect (zero now) is measured; the cause is asserted |
+| the `it(` table: five files touched, only `dashboard.test.ts` moved (10 → 7) | Frontend baseline | `grep -c '^\s*it('` at `fbea618` and `c26340f`: the five counts are exactly as stated; but `git diff --name-only fbea618 c26340f -- web/tests` lists **four** files — `tests/contract/narrow-sets.contract.test.ts` was not touched | counts **true**; *"touched five test files"* **false by one**. Very low |
+| `fbea618`'s frontend is **1121 passed, 79 files** (reconstructed, not measured) | Frontend baseline | `npx vitest run` at `fbea618`: **79 files, 1121 passed** | **true** — the reconstruction is now a measurement |
+| after W1–W3: **1118 passed, 79 files** | Frontend baseline | at `d5c9be5`: **79 files, 1118 passed** | **true** |
+| `test_pc01_journey_conformance.py` → 78 passed | commit `4cb8c88` | at `4cb8c88` and at `d5c9be5`: **78 passed** | **true** |
+| the rewritten project-sections pin can still go red | commit `293c368` | the old sentence restored in the clone → `project-sections.test.ts` **1 failed / 12 passed**, the rewritten case | **true** |
+| the render guard is red under three mutations | commit `27e2c55`, test header | section 5, M1–M3 | **true** |
+| *"invalidate the dashboard summary at every mutation that changes it"* | commit `d4f7b0e`; in the tree as `web/src/shared/api/query-keys.ts:165` (*"Every mutation that changes a number this key answers for invalidates it"*) | **false** — see Y6-a | **false** |
+
+**Y6-a — creating a project does not invalidate the dashboard (medium-low).**
+`features/create-project/model/use-create-project.ts:31-34` invalidates `queryKeys.projects.all()`
+only. A new project changes `documents_by_project` (a row, *на N проектах*) and, for the first
+project, flips `hasProjects`, which decides both empty states. With the app's `staleTime: 30_000`
+(`_app/query-client.ts:35`), one browser page, all navigation client-side, on a fresh copy of s0:
+
+```text
+1 cold /dashboard     documents: Проектов пока нет. | runs: Проектов пока нет.
+2 click the brand link -> /projects (client-side)
+3 fill #new-project-name, click «Создать»  -> data-created-project = prj_01M3M1Y4V4Q99K2QGMPZ01G3K0
+4 click a[href="/dashboard"] (client-side, ~2 s after step 1)
+                      documents: Проектов пока нет. | runs: Проектов пока нет.
+  /bff calls in the whole page session: GET /dashboard 200, GET /projects 200,
+                                        POST /projects 201, GET /projects 200
+5 reload /dashboard   documents: Документов: 0 на 1 проекте. | Judge Y staleness probe | документов 0
+```
+
+The screen says *no projects* seconds after the product created one, and makes no request to find
+out; a reload shows the truth. This is **a regression of the wiring**: before it, the documents
+panel read `useProjectList`, whose key sits under the `projects.all()` prefix that same mutation
+invalidates. (Stated from the code at `2ffca8c`, not driven there — section 9.) It is also exactly
+the first-day path: an empty deployment, a first project, back to the dashboard. The sentence at
+`query-keys.ts:165` names four mutations and asserts that the list is complete; the rest of the
+comment ends *"Forgetting one is how this screen shows last month's numbers after this month's
+upload."* **Cost:** one line in `use-create-project.ts`, and a test that lists every mutation hook
+against the numbers each changes. **Reproduce:** the five steps above (scratch `stale.mjs`, which
+uses only `cdp.mjs`'s `goto`/`click`/`fill`/`waitFor` and the manifest's own selectors).
+
+**Y6-b — the stream report records no gate of its own (low).** The brief's *Verification* asks for
+`make gate > /root/w46b-gate.log` and the verdict from its `GATE OK` line; the report's plan (item 6)
+promises it. The report ends at W5 and says nothing about a gate on its own tree. The only record is
+the integrator's merge commit `1c38c52`: *"Stream gate on c26340f: 2 failed / 2498 passed"*, one of
+the two reds on the stream's own comment. And `/root/w46b-gate.log` now holds a different run —
+foundation 35 passed, then the battery to 41% and `make: *** [Makefile:1026: gate] Terminated`,
+mtime 16:56:46 (+0500), **after** the merge commit (16:54:16). So the one red gate this stream
+produced is on record only in a commit message, and the file the brief names cannot confirm it.
+(Read-only, `tail` and `stat` of a log outside my worktree.) **Where the stream did the right
+thing:** it wrote two findings against itself — the machine-wide `pkill` and the OOM-killed
+baseline discarded — and corrected an unmeasured baseline claim before it left the log; the
+correction was then confirmed above by measurement.
 
 ## 7. Off the trail
 
