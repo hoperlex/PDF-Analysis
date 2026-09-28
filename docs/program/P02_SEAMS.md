@@ -598,7 +598,7 @@ D-16). Sixteen after `W34-CONTRACT` added `issueToken` on 2026-09-22, seventeen 
 `W38-KB` added `listDecisions` under `R-24` the same day, eighteen after `W39-REVOKE`
 added `changePassword` under `R-26` on 2026-09-23, and nineteen after `W45-BLOCKS` added
 `getVersionBlocks` under `R-29` on 2026-09-25, and twenty after `W46-SEAL` added
-`getDashboardSummary` under `R-44` on 2026-09-28.
+`getDashboardSummary` under `R-44` on 2026-09-25.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the

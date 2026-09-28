@@ -100,7 +100,8 @@ are reachable only on the compose network.
 ## `AUDITMANAGER_API_TOKEN` — read this before the first deployment
 
 The authorization seam of `T-6` is **fail-closed**. An application with no token
-configured answers `authentication_required` to every one of the twenty operations, while
+configured answers `authentication_required` to every operation but `issueToken` -- nineteen
+of the twenty operations -- while
 `/healthz` and `/readyz` stay green because `T-3` puts them outside the authorized
 surface. From a browser that looks like a broken product rather than an unconfigured one.
 

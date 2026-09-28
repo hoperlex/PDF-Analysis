@@ -20,9 +20,9 @@
  * credential selection below, not a sweep through a handler per operation.
  *
  * Those figures are **twenty operations across seventeen paths**, which is what the
- * frozen document declares after the `W45-BLOCKS` reseal that added `getVersionBlocks`.
- * This file said fifteen and twelve once and sixteen and thirteen after that, each true
- * until the next reseal, and it is the fifth stale count in this programme, so it is no
+ * frozen document declares after the `W46-SEAL` reseal that added `getDashboardSummary`.
+ * This file said fifteen and twelve once, sixteen and thirteen after that, and nineteen and
+ * sixteen after `W45-BLOCKS`, each true until the next reseal, and it is the fifth stale count in this programme, so it is no
  * longer corrected by hand:
  * `tests/contract/api_v1/test_surface_counts_in_prose.py` reads this tree and takes both
  * numbers out of `openapi.json` rather than writing either down, so a reseal moves the

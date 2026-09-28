@@ -34,7 +34,7 @@ the shortest route that still leaves a commit somebody can certify.
 > **Corrected a fourth time 2026-09-28.** Wave 46 added `getDashboardSummary`, so it is
 > **17 paths / 20 operations / 61 schemas**. Wave 45 added `getVersionBlocks`, which made it 16/19/53. Wave 38 added the knowledge base and wave 39 the
 > password change, which made it 15/18/51. This block has now been wrong
-> three times in three days — and the second time it was wrong **in the very note written to record
+> four times in seven days — and the second time it was wrong **in the very note written to record
 > that it had been wrong**. A surface count in prose is a number with no mechanism behind it;
 > `test_surface_counts_in_prose.py` reads `src/auditmanager/api`, `infra/deploy` and
 > `web/src`, and **does not read `docs/`**, which is why this file needs a person every time

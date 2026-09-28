@@ -2829,8 +2829,12 @@ for the whole pilot. `W46-WIRE` makes the screen say so, and does not add the fi
 
 **Needs the owner:** whether the pilot needs a section picker at upload, and in which wave.
 
-**Check:** `grep -rn 'section' web/src/features/upload-document web/src/widgets/upload-panel
---include=*.tsx | grep -v 'className\|<section\|</section' | wc -l` prints `0` today.
+**Check:** `grep -rn -i 'section' web/src/features/upload-document web/src/widgets/upload-panel |
+grep -v -E '<section|</section' | grep -v -E '^[^:]+:[0-9]+:[[:space:]]*(\*|//|/\*)' | wc -l`
+prints `0` today. It reads `.ts` and `.tsx` and skips only comment lines, so a hook sending
+`section` or a `<select name="section">` counts. *Corrected 2026-09-28: the first version read
+`*.tsx` only and dropped any line with `className`, so it printed `0` whatever the form did
+(`W46-JUDGE-X`, X-5).*
 
 ### D-108 — the live journey is not in the gate, and a route was red for a wave without anyone seeing
 
@@ -2856,7 +2860,10 @@ The dashboard's subtitle said *«…то, что уже отдаёт контр�
 author's vocabulary, which is what `D-91` was about. `W46-WIRE` removes both words from the
 dashboard, which satisfies either reading. **Other screens are not swept.**
 
-**Check:** `grep -rn 'контракт\|операци' web/src --include=*.tsx | grep -v shared/api/generated`.
+**Check:** `grep -rniE 'контракт|операци' web/src --include=*.ts --include=*.tsx | grep -v
+shared/api/generated | wc -l` prints `24` on `d5c9be5`, most of them failure messages about
+codes "вне контракта". *Corrected 2026-09-28: the first version read `*.tsx` only and was
+case-sensitive, and it saw 1 line of the 24 (`W46-JUDGE-X`, X-10).*
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 
