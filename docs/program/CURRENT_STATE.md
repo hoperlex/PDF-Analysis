@@ -1,7 +1,7 @@
 # Current state
 
-> **Updated 2026-09-25 by the integrator for wave 45.** The gated release candidate is
-> `29ea0c9`, tagged `alpha-w45`.
+> **Updated 2026-09-29 by the integrator for wave 46.** The gated release candidate is
+> `1196ca7`; the wave is tagged `alpha-w46`, locally only.
 >
 > **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
 > true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
@@ -28,22 +28,49 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Where the programme is, 2026-09-28 — wave 46 merged, not yet gated
+## Where the programme is, 2026-09-29 — wave 46 closed
 
-**Wave 46 is merged locally and is not a gated tip.** Both streams — `W46-SEAL` and `W46-DASH` —
-are in the tree; its closing judge found the merged tree **red** and the integrator is repairing
-it. **Do not read this section as a release.** The last gated, tagged tip is **`alpha-w45`**, and
-`origin/main` is still there.
+**Wave 46 is closed as `alpha-w46`.** The tag is **local**: `origin/main` still ends at
+`alpha-w45`, and `origin/dev` at the wave-47 plan. A push to `dev` was refused by the permission
+classifier on 2026-09-28, and nothing is pushed without the owner.
 
-**The contract surface this tree has is 17 paths / 20 operations / 61 schemas**, moved by one
-reseal that added `getDashboardSummary` — one aggregate read for all four dashboard panels —
-and `R-40`'s `document.section`. **The error catalog was not touched and stays at 22.**
+**The gated candidate is `1196ca7`.** `make gate` → **`GATE OK`**: battery **2516 passed / 5 skipped / 4 warnings / 169 subtests**,
+foundation **35**, frontend **1135 in 80 files**. Read from the `GATE OK` line of
+`/root/w46-final-gate.log`. The tag sits on the commit that writes this section, which changes
+only this file. That commit was verified by the guards that read `docs/` (`test_doc_prose_facts.py`,
+`test_surface_counts_in_prose.py`) and by `git diff --check`, as `alpha-w45` was.
 
-**Why this section exists before the wave closes.** `test_doc_prose_facts.py` reads the live
-section as a claim about the tree, and the tree moved when wave 46 merged. Leaving wave 45's
-closing text as the live section would have stated a surface this tree no longer has — the
-guard caught it, which is `D-79`'s instrument doing its job. A live section that says *merged,
-not gated* is true today; one that says *wave 45 closed* is only true about wave 45.
+**The contract surface is 17 paths / 20 operations / 61 schemas**, the error catalog **22**, and
+the migration head **`0011_document_section`**. Wave 46 resealed three times:
+- `R-40`'s section field and `R-44`'s one aggregate read, `getDashboardSummary`;
+- `run_activity.spend` made absent over no provider calls;
+- a description saying what that absence means.
+
+**What wave 46 delivered.** `R-44`'s dashboard reads all four panels from one read. Every number
+it shows equals the API's answer, and a response that omits or invents a member is shown as a
+fault, not as a zero. The sentences the section field made false are rewritten, and the live
+journey is green with zero undeclared calls. Along the way the wave built three guards this
+programme had assumed it had:
+- the served OpenAPI document compared with the frozen one, which `W13-CONF` left unwritten;
+- exact counts on the aggregate;
+- a map of every mutation to the dashboard it refreshes.
+
+**How it was judged:**
+- one judge at each sub-stage close: `W46-JUDGE-A` for A, and `W46-JUDGE-Z` for C, where every
+  reproduction from both cross-judges now fails;
+- two cross-judges, X and Y, each ruling on the other before the final gate. Neither falsified a
+  single finding of the other.
+
+The reports are in `docs/program/reviews/W46-JUDGE-{A,X,Y,Z}.md`.
+
+**Open, and in the register rather than in this wave:**
+- `D-106`, `D-107`, `D-109` and `D-110` need the owner. They cover unknown query parameters, a
+  section at upload, on-screen vocabulary, and what a non-АР section should do.
+- `D-108` and `D-111` to `D-117` are wave 48's. They cover the live journey outside the gate,
+  an unbounded panel, overflow from unbroken strings, and the next link of four guard holes.
+
+**Wave 47 (GO) is next**, from this tag. Its briefs, `W47-GATE.md` and `W47-PASS.md`, have been
+in `docs/program/dispatch/` since `0803e27`.
 
 ## Previous release state — wave 45 (historical record)
 

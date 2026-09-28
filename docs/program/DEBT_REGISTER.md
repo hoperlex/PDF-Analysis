@@ -11,8 +11,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 
 | | Row | Needs |
 |---|---|---|
-| **D-56** | project sections: **ruled `R-40`** — the field AND the aggregation, in one reseal | brief as one wave, one reseal owner |
-| **D-63** | a dashboard — **the reason it was deferred has lapsed** (`R-40` authorises the reseal) | re-read, do not carry forward |
+| ~~D-56~~ | project sections: the field and the aggregation | **closed by wave 46** (`W46-SEAL`, `alpha-w46`) |
+| ~~D-63~~ | a dashboard | **closed by wave 46**: four panels on one read (`W46-WIRE`, `W46-CLIENT`, `alpha-w46`) |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | **D-76** | **reopened**: the same document went stale again, underneath the note recording that it had | the guard that catches it exists now |
 | **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |
