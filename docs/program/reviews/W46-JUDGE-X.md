@@ -154,9 +154,90 @@ repair. `d5c9be5` repaired the two sentences a guard could read and none of thes
 
 *pending*
 
-## X4 — the three guards `W46-SPEND` claims, mutated by me
+## X4 — the three guards `W46-SPEND` claims, mutated by me — **each catches what it was shown; each misses one I invented**
 
-*pending*
+**The instrument.** A disposable `git clone` of this worktree at `d5c9be5`
+(`/root/w46x-clone`, tags fetched so `test_doc_prose_facts.py` can read `alpha-w45` from git,
+the worktree's `.venv` and `web/node_modules` linked and excluded, the lane's `.env` loaded the
+way `load_env` loads it). I tried `make mutation-copy MUT=/root/w46x-mut FULL=1` first — it
+built cleanly (*"MUTATION-COPY OK"*) — and set it aside because the copy has no `.git`, so the
+tagged-tip tests would redden for reasons unrelated to any mutation. Every mutation below is a
+scratch script applied to the clone and reverted with `git checkout --`; `git status
+--porcelain` in the clone printed `0` after each. Every scope was baselined unmutated first.
+
+### `F-2` — the restated rule (`test_openapi_document.py`)
+
+Baseline: **46 passed**; the whole canonical contract scope (`tests/contract` with
+`run_battery`'s three ignores) **367 passed**.
+
+| mutation of `contracts/api/v1/openapi.json` | result |
+|---|---|
+| direction 1 — `422` added to `getDashboardSummary` (the stream's) | **red**: *"getDashboardSummary takes no caller input but declares ['422'] -- a response no request can produce"* |
+| direction 2 — `404`/`409`/`422` stripped from `listDecisions` (the stream used `issueToken`; I took another operation) | **red**: *"listDecisions takes caller input and declares no client-fault response"* |
+| **invented** — a required **cookie** parameter added to `getDashboardSummary` (`{"in": "cookie", "name": "am_scope", "required": true, "schema": {"type": "string", "minLength": 1}}`), no client-fault response | **46 passed**, and the whole contract scope **367 passed**. `test_the_input_less_operation_set_is_exactly_the_pinned_one` still calls it input-less. |
+| **invented, the honest repair of the above** — the same cookie **plus** a `422` | **red**: *"takes no caller input but declares ['422']"* — the rule refuses the correct declaration |
+
+`_takes_caller_input` (`test_openapi_document.py:297-330`) counts `path`, `query`, a header
+other than `X-Correlation-Id`, and a body. **OpenAPI 3.1 has a fourth parameter location,
+`cookie`**, and the docstring's own list omits it. So an operation that gains a malformable
+cookie is still classified input-less: the rule accepts it with no client fault and refuses it
+with one — wrong in both directions, for exactly the case the derivation exists for (*"so an
+operation that later gains a parameter is pulled back under the rule without anyone
+remembering to"*). The literal pin does not help, because it is computed with the same
+function. **Low** today (the surface declares no cookie parameter, and the BFF's `am_session`
+cookie never reaches the API), and a one-word repair. The stream's two directions are real, and
+it reported honestly that its first version missed path-item parameters.
+
+### `F-5c` — the historical-section control (`test_doc_prose_facts.py`)
+
+Baseline: **21 passed**.
+
+| mutation of `docs/program/CURRENT_STATE.md` | result |
+|---|---|
+| `W46-JUDGE-A`'s — `### A note on how the historical record is kept` directly under the live heading | **red**: *"the live section survives truncation but makes no claim this guard can read -- the non-vacuity half of the control (F-5c) is failing"* |
+| control for mine — a stale sentence, *"The migration head is \`0010_run_terminal_detail\`."*, after the live section's surface-triple paragraph | **red**: `test_the_scanned_docs_state_the_migration_head_this_tree_has` — *"'migration head is \`0010_run' names head 0010, tree has 0011_document_section"* |
+| **invented** — the same stale sentence, preceded by a fenced shell block whose comment reads `# the historical record below is kept verbatim; do not edit it` | **21 passed**. The stale head is hidden. |
+
+Two things fail together. `_HISTORICAL_HEADING` is `^#+.*historical record.*$` under
+`MULTILINE`, so **any line that begins with `#` matches — a shell comment in a code fence is a
+"heading"**. And non-vacuity is *"at least one claim survives"*: a boundary placed **after**
+the first claim leaves one claim standing and blinds the scan to everything below it. The
+stream's comment in the test says the opposite — *"a too-early heading truncates all of them
+together, not just one, so this stays exactly as strong a guard"* (`test_doc_prose_facts.py`,
+in the `F-5c` block) — which holds only when the premature boundary precedes every claim.
+**Low–medium**: the section that closes wave 46 will carry several claims (tagged tip, surface,
+head) and very likely a command block; a shell comment mentioning the record is a natural thing
+to write there. The stream did report the premise gap (`TAGGED_TIP_CLAIM` has no match in
+today's live section) instead of editing a file it did not own, which was right.
+
+### `F-5a` — the fresh-deployment guard (`test_dashboard_summary_over_a_fresh_deployment.py`)
+
+Baseline: the new file **3 passed**; `W46-JUDGE-A`'s scope plus the new file
+(`tests/integration/api tests/integration/composition
+tests/contract/domain_p02/test_project_section_catalog.py`) **612 passed** (= 609 + 3).
+
+| mutation of `src/auditmanager/dashboard/repository.py` | the new file | the 612-scope |
+|---|---|---|
+| `W46-JUDGE-A`'s — `_filled` drops zero members; the unclassified row only when non-zero | **red** (*"assert 0 == (14 + 1)"*) | — |
+| the stream's — the `calls == 0 → None` branch removed | **red**, two tests (*"spend must be absent, not a zero labelled measured (F-1)"*) | — |
+| **invented** — `_filled` returns `(member, 0)` for every member and the unclassified row is `0`: every verdict, state and section count is **never read from the database** | **3 passed** | **612 passed** (combined with the next) |
+| **invented** — `basis="measured"` unconditionally | **3 passed** | **612 passed** (combined) |
+
+**The guard proves absent-is-not-empty and nothing about present-is-counted.** Its three states
+are all zeros except `spend`, and its one `model_call` row is `measured`, so a repository that
+invents a zero for every panel, or labels estimated spend as measured, is indistinguishable
+from the real one to every test that exists. Against the real code the numbers are right — X2
+drove `pending: 3`, `published: 1`, `<none>: 1` and `estimated` — so this is a missing guard,
+not a live defect. It is `R-23`'s addendum (*a zero that nothing computed is an invented number
+too*) aimed at the only test that observes a row, and the second invented mutation is `F-1`'s
+own subject (a basis the data did not earn). **Medium**: the dashboard is a page of counts, and
+the only guard on its counts cannot fail on a count. Repair: one state with a `KM` document, a
+finding and an `estimated` call, asserting the non-zero numbers.
+
+**What the stream did right, checked:** both of its quoted failures reproduce exactly as quoted;
+the fresh database is really created, migrated and dropped (the lane's postgres held no
+`w46_spend_fresh_*` database afterwards); and the guard drives the shipped `DashboardAdapter`
+through the real ASGI app rather than a stand-in.
 
 ## X5 — the integrator's own changes — **three sentences false, one debt check that cannot fail**
 
