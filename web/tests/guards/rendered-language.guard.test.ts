@@ -60,6 +60,7 @@ import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.
 
 import { ApiError, queryKeys } from '@/shared/api';
 import type {
+  DashboardSummary,
   DecisionEvent,
   DecisionRecord,
   DocumentVersion,
@@ -68,14 +69,17 @@ import type {
   Finding,
   FindingDetail,
   Project,
+  RunActivity,
+  RunStateCount,
   RunStatus,
   StageId,
   StageStatus,
 } from '@/shared/api';
+import { RUN_STATE_VALUES } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
-import { PROJECT_PAGE_LIMIT } from '@/entities/project';
+import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
 import { AppFrame } from '@/_app';
 import { SignInPage } from '@/_pages/sign-in';
 import { ChangePasswordPage } from '@/_pages/change-password';
@@ -627,6 +631,57 @@ function apiError(status: number, code: ErrorCode): ApiError {
   return new ApiError(status, envelope, '0f0e9d8c-7b6a-4948-b726-150413021100');
 }
 
+/** Every `RunState`, at zero. The base every `run_activity.by_state` fixture starts from. */
+const ZERO_BY_STATE: readonly RunStateCount[] = RUN_STATE_VALUES.map((state) => ({
+  state,
+  count: 0,
+}));
+
+/**
+ * `run_activity` with `spend` REMOVED, not merely unset — `W46-WIRE`.
+ *
+ * After `W46-SPEND`'s reseal `run_activity.spend` is optional and absent exactly when the
+ * deployment has made no provider call; today's generated client still types it required.
+ * The only way to seed that future shape against today's contract is the same move
+ * `without()` below makes for `RunStatus`: build the object without the key at all, then
+ * assert the shape rather than let the compiler infer it — `exactOptionalPropertyTypes`
+ * makes an explicit `spend: undefined` a different type from an absent key, and the whole
+ * point here is the absent key.
+ */
+function runActivityWithoutSpend(byState: readonly RunStateCount[] = ZERO_BY_STATE): RunActivity {
+  return { by_state: byState } as unknown as RunActivity;
+}
+
+/**
+ * `getDashboardSummary`'s whole answer, `W46-WIRE`. One project holding documents, all
+ * four verdicts represented, one published run with an estimated cost, and one document
+ * recorded against `KM` beside the always-present unclassified row — rich enough that the
+ * `loaded` state alone reaches most of the four panels' non-empty branches at once.
+ */
+function dashboardSummary(over: Partial<DashboardSummary> = {}): DashboardSummary {
+  return {
+    documents_by_project: [{ project_uid: PROJECT_UID, name: 'Проект', document_count: 2 }],
+    findings_by_verdict: [
+      { verdict: 'pending', count: 3 },
+      { verdict: 'accepted', count: 1 },
+      { verdict: 'rejected', count: 1 },
+      { verdict: 'needs_manual_review', count: 0 },
+    ],
+    run_activity: {
+      by_state: ZERO_BY_STATE.map((row) => (row.state === 'published' ? { ...row, count: 1 } : row)),
+      spend: { model_call_count: 1, cost_micros: 34400, cost_basis: 'estimated' },
+    },
+    section_breakdown: [
+      ...PROJECT_SECTIONS.map((section) => ({
+        section: section.code,
+        document_count: section.code === 'KM' ? 1 : 0,
+      })),
+      { document_count: 1 },
+    ],
+    ...over,
+  };
+}
+
 const KEYS = {
   projects: queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT),
   project: queryKeys.projects.detail(PROJECT_UID),
@@ -640,6 +695,7 @@ const KEYS = {
   finding: queryKeys.findings.detail(FINDING_UID),
   decisions: queryKeys.findings.decisions(FINDING_UID),
   journal: queryKeys.findings.journal({ limit: JOURNAL_PAGE_LIMIT }),
+  dashboardSummary: queryKeys.dashboard.summary(),
 } as const;
 
 /**
@@ -704,6 +760,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
     ],
     page,
   });
+  client.setQueryData(KEYS.dashboardSummary, dashboardSummary());
   return client;
 }
 
@@ -759,6 +816,23 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.findings, { data: { items: [], page } });
   client.setQueryData(KEYS.decisions, { data: { items: [], page } });
   client.setQueryData(KEYS.journal, { items: [], page });
+  client.setQueryData(
+    KEYS.dashboardSummary,
+    dashboardSummary({
+      documents_by_project: [],
+      findings_by_verdict: [
+        { verdict: 'pending', count: 0 },
+        { verdict: 'accepted', count: 0 },
+        { verdict: 'rejected', count: 0 },
+        { verdict: 'needs_manual_review', count: 0 },
+      ],
+      run_activity: runActivityWithoutSpend(),
+      section_breakdown: PROJECT_SECTIONS.map((section) => ({
+        section: section.code,
+        document_count: 0,
+      })),
+    }),
+  );
   return client;
 }
 
@@ -788,13 +862,21 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
 /**
  * Projects and documents load; the version they point at has never been run.
  *
- * `W46-DASH`. Every other state seeds `KEYS.runs` with one item — `loadedClient` puts one
- * there and every state built from it inherits it. The dashboard's run-activity panel has
- * a branch that needs the *other* combination: at least one project exists (so it is not
- * the "no projects at all" `EmptyState`) and the walk it drove genuinely found zero runs
- * (so it is not `LoadingState` either). No existing state produces that pair, which is
- * exactly the shape this file exists to catch rather than wave through — a branch with no
- * state that reaches it is a branch no assertion here can see.
+ * `W46-DASH`, updated at `W46-WIRE` for the dashboard's move onto one read. Every other
+ * state seeds `KEYS.runs` with one item — `loadedClient` puts one there and every state
+ * built from it inherits it. The dashboard's run-activity panel has a branch that needs
+ * the *other* combination: at least one project exists (so it is not the "no projects at
+ * all" `EmptyState`) and the deployment-wide read genuinely carries zero runs (so it is
+ * not `LoadingState` either). No existing state produces that pair, which is exactly the
+ * shape this file exists to catch rather than wave through — a branch with no state that
+ * reaches it is a branch no assertion here can see.
+ *
+ * Before `W46-WIRE` this distinction lived in `KEYS.runs`, which the deleted client-side
+ * walk read directly. The dashboard now reads one aggregate instead, so the same pair —
+ * projects present, runs absent — is built by overriding `KEYS.dashboardSummary`'s
+ * `run_activity` on top of whatever `loaded()` already seeded there, keeping its
+ * `documents_by_project` (non-empty) intact. `KEYS.runs` is still emptied too, for the run
+ * screen and the comparison screen, which this state also renders.
  *
  * Takes the `loaded` builder rather than calling `loadedClient` itself, for `pagedClient`'s
  * own reason: the review screen's three finding queries hold the transport envelope and
@@ -806,6 +888,10 @@ function runsEmptyClient(loaded: (over?: Partial<RunStatus>) => Client): Client 
   const client = loaded();
   const page = { next_cursor: null } as { next_cursor: null };
   client.setQueryData(KEYS.runs, { items: [], page });
+  client.setQueryData(
+    KEYS.dashboardSummary,
+    dashboardSummary({ run_activity: runActivityWithoutSpend() }),
+  );
   return client;
 }
 

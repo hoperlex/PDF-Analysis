@@ -9,27 +9,34 @@
  * order. The Russian names are this application's own, because legacy carries the codes
  * and not their expansions.
  *
- * **What a section is here, and what it is emphatically not.** It is *navigation*, and
- * the structure `R-18`'s stub rule asks an alpha to carry. It is not a property of a
- * document and it is not a filter:
+ * **What a section is here, updated at `W46-WIRE` (`F-3`).** A reseal landed after this
+ * module was first written and made two of its claims false: `document.section` is now a
+ * real, stored, checked field (a document's version carries an optional `section`, and the
+ * upload refuses a malformed one with a `422`), and the dashboard now counts published
+ * documents per section, server-side (`getDashboardSummary`'s `section_breakdown`,
+ * `widgets/dashboard`). Neither claim below survives as it was written:
  *
- *   - the contract has no section field anywhere — `Project` is `project_uid`, `name`,
- *     `created_at`, `document_count`, and `UploadDocumentRequest` is `file` and
- *     `display_title` (`D-56` verified this against `contracts/api/v1/openapi.json`);
- *   - nothing in the pipeline checks a document's section. The `AR` restriction lives in
- *     the analysis prompt (`src/auditmanager/analysis/text/prompt.py`) and in fixture
- *     names, while the upload envelope checks the media type, the byte size, the page
- *     count and the text layer — and none of those is a section.
+ *   - it is **not true** any more that "the contract has no section field anywhere" —
+ *     it does, and it round-trips;
+ *   - it is **not true** any more that "nothing checks a document's section" — the
+ *     `422 validation_failed` on an unrecognised or blank value is exactly a check.
  *
- * So `analysed` below means **"this is the section the analysis is built for"**, which is
- * a rule about what is worth submitting. It never means "this document belongs to that
- * section": no code in this repository can establish that, and a screen that said so
- * would be asserting something the software cannot confirm. Every sentence rendered from
- * this module is written to that distinction.
+ * **What is still true, and is the reason a section still reads as navigation here.** This
+ * product's own upload form (`widgets/upload-panel`, `features/upload-document`) offers a
+ * file and a display title and nothing else — no screen in this product lets a reviewer
+ * name a section for a document, so every document this product has ever accepted is
+ * unclassified at the storage layer that now exists to record one. `analysed` below still
+ * means **"this is the section the analysis is built for"**, a rule about intake and not a
+ * claim about membership: the `AR` restriction lives in the analysis prompt
+ * (`src/auditmanager/analysis/text/prompt.py`) and in fixture names, not in what a document
+ * is uploaded carrying. A screen built from this module still never claims a document
+ * belongs to a section — that claim would now be checkable in principle, and is simply not
+ * one this product's own flow ever makes true.
  *
- * Counting anything per section — a verdict total, a document total — is the other half
- * of `D-56` and is deliberately absent: it needs a contract field, a reseal and a
- * migration, and none of them belongs to a frontend wave.
+ * Counting per section is no longer absent: `getDashboardSummary` counts published
+ * documents, per section, including the unclassified bucket every product upload falls
+ * into today. A section *picker* on the upload form — the only way a reviewer could change
+ * that bucket — is a feature and remains out of scope (`D-107`).
  */
 
 /** A section code, exactly as the legacy application spells it. Never shown to a user. */

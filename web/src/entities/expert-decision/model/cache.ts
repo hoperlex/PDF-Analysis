@@ -11,6 +11,12 @@
  * it. A reviewer who accepts a finding and then opens the knowledge base without seeing
  * their own decision has no way to tell a stale cache from a lost write.
  *
+ * `W46-WIRE` adds the fifth: the dashboard's one read counts findings by verdict over the
+ * whole deployment, including a finding nobody has judged as `pending` — an accept or a
+ * reject moves a finding out of that count the moment the server accepts it, so the
+ * summary is invalidated alongside the journal it is built from the same rule the journal
+ * itself already gets.
+ *
  * It lives here, next to the ledger, so that both `record-verdict` and `append-comment`
  * invalidate the same set — two features each maintaining their own list is the same
  * divergence one list away.
@@ -39,5 +45,7 @@ export function decisionCacheKeys(
      * filtered page of the journal rather than only the unfiltered one.
      */
     queryKeys.findings.journal(),
+    // The dashboard's one read. See this function's own header.
+    queryKeys.dashboard.summary(),
   ];
 }

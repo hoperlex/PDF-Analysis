@@ -10,6 +10,12 @@
  * On success the published version is written into the version cache under the frozen
  * key, and the project detail is invalidated so the document count is re-read rather
  * than incremented locally — a count the browser maintains is a second source of truth.
+ *
+ * `W46-WIRE`: the dashboard's one read is invalidated too. An upload changes two of its
+ * four panels the moment the server accepts it — `documents_by_project` (this project now
+ * has one more) and `section_breakdown` (the upload names a section or it does not, and
+ * either way a row's count moves) — and there is no cheaper way to keep that screen honest
+ * than asking the server again.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -45,6 +51,7 @@ export function useUploadDocument() {
         queryKey: queryKeys.projects.detail(version.project_uid),
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });
     },
   });
 }

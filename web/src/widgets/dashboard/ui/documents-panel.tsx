@@ -1,50 +1,24 @@
-'use client';
-
 /**
  * Panel 1 — documents per project.
  *
- * `D1`: `Project.document_count` exists today, so this panel is a straight read of
- * `listProjects` — the same query `widgets/project-list` already makes, under the same
- * cache key, so it inherits that screen's loading/error/empty/paged coverage rather than
- * inventing a second one. Real numbers only: `document_count` is optional in the
- * contract, and an absent count is rendered as absent (`projectDocumentCountLabel`'s
- * `—`), never folded into the sum as zero.
- *
- * **Scope, said plainly rather than implied.** This reads one page of `listProjects`
- * (`PROJECT_PAGE_LIMIT` projects). It is a page total, not a deployment total, and the
- * caption says so the moment the page carries a `next_cursor` — the full list is one
- * click away on `/projects`, and this panel does not re-implement its pager.
+ * `W46-WIRE`, `F-3b`. Presentational only: `Dashboard` reads `getDashboardSummary` once
+ * and hands this panel its `documents_by_project` rows. Every count here is server-side
+ * and deployment-wide — `ProjectDocumentCount.document_count` is not optional the way
+ * `Project.document_count` is, so there is no "server did not say" branch left to draw:
+ * every row this operation sends carries a real number.
  */
 
 import Link from 'next/link';
 
-import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
-import { ProjectRow, classifyProjectListFailure, useProjectList } from '@/entities/project';
+import { EmptyState } from '@/shared/ui';
+import type { ProjectDocumentCount } from '@/shared/api';
 
-import { summarizeDocumentTotals } from '../model/document-totals';
+export interface DocumentsPanelProps {
+  readonly rows: readonly ProjectDocumentCount[];
+}
 
-export function DocumentsPanel() {
-  const projects = useProjectList();
-
-  if (projects.isPending) return <LoadingState what="документы по проектам" />;
-
-  if (projects.isError) {
-    const failure = classifyProjectListFailure(projects.error);
-    return (
-      <ErrorState
-        title={failure.title}
-        detail={<span data-list-failure={failure.kind}>{failure.detail}</span>}
-        correlationId={failure.correlationId}
-        {...(failure.retryable
-          ? { onRetry: () => void projects.refetch(), retryLabel: 'Повторить' }
-          : {})}
-      />
-    );
-  }
-
-  const page = projects.data;
-
-  if (page.items.length === 0) {
+export function DocumentsPanel({ rows }: DocumentsPanelProps) {
+  if (rows.length === 0) {
     return (
       <EmptyState
         title="Проектов пока нет."
@@ -53,30 +27,24 @@ export function DocumentsPanel() {
     );
   }
 
-  const summary = summarizeDocumentTotals(page.items);
-  const truncated = page.page.next_cursor !== null;
+  const total = rows.reduce((sum, row) => sum + row.document_count, 0);
 
   return (
     <div data-panel="documents-per-project">
       <p>
-        Документов: <strong data-known-total={summary.knownTotal}>{summary.knownTotal}</strong> на{' '}
-        {summary.knownProjectCount === page.items.length
-          ? `${page.items.length} проектах`
-          : `${summary.knownProjectCount} из ${page.items.length} проектов`}
-        {summary.unknownProjectCount > 0
-          ? `; по ${summary.unknownProjectCount} проектам сервер число документов не сообщил`
-          : ''}
-        .
+        Документов: <strong>{total}</strong> на {rows.length}{' '}
+        {rows.length === 1 ? 'проекте' : 'проектах'}.
       </p>
-      {truncated ? (
-        <p className="am-state__correlation">
-          Показана первая страница проектов. Полный список — на{' '}
-          <Link href="/projects">странице проектов</Link>.
-        </p>
-      ) : null}
       <ul className="am-rows">
-        {page.items.map((project) => (
-          <ProjectRow key={project.project_uid} project={project} />
+        {rows.map((row) => (
+          <li key={row.project_uid} className="am-state" data-project={row.project_uid}>
+            <p className="am-state__title">
+              <Link href={`/projects/${row.project_uid}`}>{row.name}</Link>
+            </p>
+            <div className="am-state__detail">
+              <p>документов {row.document_count}</p>
+            </div>
+          </li>
         ))}
       </ul>
     </div>

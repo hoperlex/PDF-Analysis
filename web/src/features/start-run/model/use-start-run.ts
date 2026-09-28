@@ -13,6 +13,12 @@
  * The 202 body is a full `RunStatus`, so it seeds `queryKeys.runs.detail(run_id)`: the
  * run screen opens on the run's real first state instead of on a loading state for a
  * reading it was already handed.
+ *
+ * `W46-WIRE`: the dashboard's one read is invalidated too — a new run moves
+ * `run_activity.by_state` the moment the command is accepted, before anything about its
+ * cost is known. The other half of that panel, `run_activity.spend`, only settles once
+ * the run reaches a terminal state; that invalidation is `useRunStatus`'s, at its own
+ * terminal reading, not here.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -36,6 +42,7 @@ export function useStartRun() {
     },
     onSuccess: (run) => {
       queryClient.setQueryData(queryKeys.runs.detail(run.run_id), run);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });
     },
   });
 }

@@ -291,11 +291,15 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.runs.findings(runId, filters?)` | `['runs','findings',id,filters]` | `B8` |
 | `queryKeys.findings.detail(findingUid)` | `['findings','detail',uid]` | `B8` |
 | `queryKeys.findings.decisions(findingUid)` | `['findings','decisions',uid]` | `B8` |
+| `queryKeys.dashboard.summary()` | `['dashboard','summary']` | `W46-WIRE` |
 
-`projects`, `versions`, `runs`, `findings` are the only legal first segments. Invalidation
-targets a prefix: appending a decision invalidates `queryKeys.findings.decisions(uid)` and
-`queryKeys.findings.detail(uid)`, and — because the verdict projection appears in the
-finding list — `queryKeys.runs.findings(runId)`.
+`projects`, `versions`, `runs`, `findings`, `dashboard` are the only legal first segments.
+Invalidation targets a prefix: appending a decision invalidates
+`queryKeys.findings.decisions(uid)` and `queryKeys.findings.detail(uid)`, and — because the
+verdict projection appears in the finding list — `queryKeys.runs.findings(runId)` and
+`queryKeys.dashboard.summary()`. `queryKeys.dashboard.summary()` is also invalidated by
+`uploadDocument` and by `startRun`/a run reaching a terminal state — it is one read over the
+whole deployment, so more of the seam writes to it than to any other key here.
 
 There is **no global domain store.** The query client in `_app` is the only cache. PC-01's
 state lives on the server; a second copy of it in the browser is a second source of truth

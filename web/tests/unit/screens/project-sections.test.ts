@@ -117,10 +117,16 @@ describe('the screen states a rule of intake and never a property of a file', ()
     expect(markup).toContain('Сейчас принимаются документы раздела АР');
   });
 
-  it('says that a document’s section is stored nowhere and checked nowhere', () => {
+  it('says that a document’s section is stored and checked when an upload names one, and the product’s form does not offer that field', () => {
+    // `F-3`, `W46-WIRE`: `W46-SEAL`'s reseal made the sentence this case used to pin
+    // false -- the section IS stored (`document.section`, migration `0011`) and IS
+    // checked (the upload refuses a malformed one with `422`). What stayed true is that
+    // this product's own upload form offers a file and a title and nothing else, so no
+    // document reaches this deployment through the product with a section attached, and
+    // the document list below is still not filtered by section.
     const markup = screen();
-    expect(markup).toContain('не проверяется');
-    expect(markup).toContain('нигде не сохраняется');
+    expect(markup).toContain('хранится и проверяется на сервере');
+    expect(markup).toContain('форма загрузки этого продукта раздел не предлагает');
     expect(markup).toContain('ни один список здесь не отобран по разделу');
   });
 
