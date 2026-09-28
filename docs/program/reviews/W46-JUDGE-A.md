@@ -288,7 +288,120 @@ The only other test files that mention the operation at all
 that check registration. **The property the operation was built for has no guard that can fail.**
 Reverted; the clone's `git status` was clean afterwards.
 
-## 4. `/dashboard` at 780 px, both palettes; the `SEEDS` and cache-state edits — *in progress*
+## 4. `/dashboard` at 780 px, both palettes; the `SEEDS` and cache-state edits
+
+**The instrument.** `npm --prefix web run build` (exit 0), `next start` on `127.0.0.1:56393`
+forwarding to the API of section 3, signed in through the real `/login` screen with the
+repository's own `session.mjs`, each reading in a **cold** browser from `cdp.mjs`
+(`withColdBrowser`), the palette chosen by writing `am-theme` into `localStorage` the way the
+toggle does, the width read with the repository's own `width.mjs` `MEASUREMENT`. A second stack
+(`audit_w46j_judge2`, API `:56394`, web `:56396`) holds the *no projects* and *projects but no
+runs* states, so the absent branches were driven on real responses, not on seeded caches.
+Screenshots and `results.json` are in my session scratch directory, which does not survive a
+restart; everything load-bearing is quoted here.
+
+### Width — the property holds; the literal "`scrollWidth === 780`" does not reproduce, and need not
+
+| palette | viewport | `data-theme`, body background | `scrollWidth` / `clientWidth` / `innerWidth` | boxes past the right edge | console / page errors |
+|---|---|---|---|---|---|
+| light | **780** | `light`, `rgb(245, 246, 248)` | 765 / 765 / 780 | 0 | 0 / 0 |
+| dark | **780** | `dark`, `rgb(13, 18, 25)` | 765 / 765 / 780 | 0 | 0 / 0 |
+| light, dark | 781 (one past the breakpoint: two columns) | as above | 766 / 766 / 781 | 0 | 0 / 0 |
+| light, dark | 1024 | as above | 1024 / 1024 / 1024 | 0 | 0 / 0 |
+| light, dark | 360 | as above | 345 / 345 / 360 | 0 | 0 / 0 |
+| light, dark | 780, **no projects** (stack 2) | as above | **780** / 780 / 780 | 0 | 0 / 0 |
+
+**No horizontal overflow at any width, in either palette, on real data.** The merge commit's
+figure `scrollWidth === 780` reproduces only on a page **shorter than the viewport**: with real
+data the page scrolls vertically, the classic scrollbar takes 15 px, and `scrollWidth` is 765.
+The committed instrument asserts `scrollWidth <= innerWidth`, which is the right property; the
+literal was a property of how much data the page had, not of the layout. Worth knowing before
+anybody writes `=== 780` into a guard.
+
+At 780 the navigation wraps onto a second line in both palettes and pushes nothing past the edge:
+`D-93`'s wrap holds with the seventh link.
+
+### Which panels are driven against real data — re-taken
+
+| panel | what the browser actually requested (`/bff/v1/…`, all `200`) | rendered |
+|---|---|---|
+| documents per project | `GET /projects?limit=50` | real: *Документов: 2 на 2 проектах*, a project at *документов 0* |
+| findings by verdict | `GET /decisions?limit=50` | *Решений пока нет.* — true: six findings, no decision recorded |
+| run activity and spend | `GET /projects` → `GET /projects/{uid}/documents` ×2 → `GET /versions/{uid}/runs` ×2 | real: *Прогонов: 1 … 0.034400 … оценено* |
+| per-section breakdown | **nothing** | structure only (section 5) |
+
+**Three of four, confirmed.** Two details that disagree with what was written down:
+`GET /projects?limit=50` is issued **twice** in a cold load (the stream's proposed manifest
+comment said React Query would deduplicate it), and **`getDashboardSummary` is requested by
+nothing** — see F-3 in section 5.
+
+**The absent branches, on real responses.** Stack 2, empty: documents *«Проектов пока нет.»*,
+verdicts *«Решений пока нет.»*, runs *«Проектов пока нет. Прогонов показывать нечего…»*. Then one
+project with one never-run document: runs *«Прогонов пока нет. Среди осмотренных проектов и
+версий ни один прогон ещё не запускался.»* — **the branch `runs-empty` was added for, reached by a
+real client.** Absent (no project) and empty (a project, no runs) render differently on the
+screen. **Correct.**
+
+In that same state `GET /dashboard` answers `"spend": {"model_call_count": 0, "cost_micros": 0,
+"cost_basis": "measured"}` — the screen says *no runs yet* while the aggregate that is meant to
+replace it says *measured, zero*. F-1, seen from the other side.
+
+### The two instrument edits, ruled one by one
+
+`UNREACHABLE_IN_ONE_PASS` holds **13 entries at `alpha-w45` and 13 at `130200d`** — the stream
+excused nothing. `SEEDS` gained one entry; `CACHE_STATES` gained one. Each was tested by
+removing it in the disposable clone at `130200d`:
+
+1. **`SEEDS` `/dashboard` — correct: an instrument demanded it.** Removed →
+   `screen-set.guard.test.ts` red, twice:
+   `expected [ '/dashboard' ] to deeply equal []` (*"web/src/app serves these addresses and
+   `SEEDS` … answers for none of them"*) and `expected 14 to be 15`. It is a `make`, not an
+   `optOut`, with `discipline: {}` like every other parameterless route (`/blocks`,
+   `/knowledge-base`). This is the "new screen arrives" path the file's header describes, and
+   the only one available: the guard names the address until it is seeded. **Not an edit to make
+   something pass.**
+2. **`CACHE_STATES` `runs-empty` — correct: the matrix found a real hole.** Removed →
+   `rendered-language.guard.test.ts` red, naming exactly one unreached branch:
+   `"Прогонов пока нет."  (web/src/widgets/dashboard/ui/run-activity-panel.tsx)`. That branch is
+   reachable by a real client — driven above on stack 2 — so the file's own rule (*seed a state
+   that reaches it, or excuse it with a reason*) points at seeding, and the stream seeded. The
+   edit is **additive**: every derived screen is rendered in one more state, so coverage widened
+   rather than narrowed. The stream reported it as a finding rather than folding it in
+   (`W46-DASH.md` §D4), which is what `D4` asked for.
+
+**Both instruments reach the dashboard**: the contrast census and the language guard are among
+the 78 of 79 frontend files that pass on `130200d`; the one failing file is
+`seam-operations.contract.test.ts` (section 1, #8–#9).
+
+### F-4 — the journey row applied for `/dashboard` is red under the journey's own default phase
+
+The integrator applied the row with `expects_api` naming `listProjects` and `listDecisions` only,
+and a comment reasoning that the walk's `listDocuments`/`listRuns` fire *"only once real project
+data exists"*, so declaring them *"would assert nothing while looking like an assertion"*.
+
+**The journey's own write half creates that data before its read half runs.** Against my stack:
+
+```text
+E2E_PC01_LOGIN=admin E2E_PC01_PASSWORD=password \
+  npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:56393 --phase all --out <dir>
+write steps checked: 3/3        routes checked: 16/16        exit 1
+  - dashboard: made 6 API call(s) no route in the manifest declares:
+      GET /bff/v1/projects/prj_…/documents (×3) | GET /bff/v1/versions/ver_…/runs (×3)
+  - blocks: made 1 API call(s) no route in the manifest declares: GET /bff/v1/projects
+```
+
+So under `--phase all` — the default — the dashboard route **cannot** pass. And the manifest
+already has the mechanism for a call that fires conditionally: **`optional_api`**, matched by
+shape with identifiers collapsed to `{id}` (`journey.mjs:390-395`), written for the review
+screen's calls that depend on data. The row wants `listDocuments` and `listRuns` there. Nothing
+in `make gate` runs the live journey (`test_pc01_journey_conformance.py` compares the manifest to
+the route tree statically), so this was invisible to every green in this wave.
+
+The `blocks` red is **pre-existing and not this wave's**: `useProjectList` entered
+`blocks-page.tsx` in `c4165b9` (`W45-BLOCKS`), and the manifest's `blocks` row has declared
+`expects_api: []` since then, at `alpha-w45` too. The last recorded live journey run I can find
+in `docs/program` is `W43-JUDGE-B`. Found only because I ran the instrument rather than reading
+the row — see section 6.
 
 ## 5. Can the per-section panel be made to show an invented number? — *in progress*
 
