@@ -565,4 +565,105 @@ heading; its findings table is byte-identical to `9281d6a`'s. Every finding is r
 `d5c9be5`, the tip both judges judged. The host restarted between my report and this section, so
 my scratch directory is gone and every instrument below was rebuilt after the restart.
 
-*Pending: filled in group by group and committed after each.*
+**The instruments, all taken after the restart and none of them Y's.** Two `git archive` trees,
+`/root/w46x-xexam-tip` (`d5c9be5`) and `/root/w46x-xexam-old` (`2ffca8c`), each with the
+worktree's `web/node_modules` linked, holding scratch vitest files that render through the
+repository's own `renderWith` harness or drive the app's own `createQueryClient()`. Source
+mutations were applied with `sed` to copies and restored from `.orig`, then `diff`ed against
+`git show d5c9be5:<path>` (identical). Both trees were removed at the end. The host was at load
+~20 with 2 GB free and no `make gate` running under `/root/w46*`, so I ran single test files,
+never a suite.
+
+### Y's findings, one by one
+
+| Y's finding | ruling | the measurement Y did not take |
+|---|---|---|
+| **Y5-a** the client renders *"the server said nothing"* as zero | **upheld; narrowed for the run panel** | Rendered at the tip: with `by_state: [{published: 2}]` the run panel shows *«Прогонов: 2 … опубликован 2»* and **no** zero row, because `byState.get(state) ?? 0` feeds a `> 0` filter. That panel **hides** an omitted state; it does not print a zero for it. Its one fabrication is the empty array, which renders *«Прогонов пока нет. Среди проектов системы ни один прогон ещё не запускался.»*, a claim about runs made from silence (Y names this too). The verdict and section panels do print the zeros, as Y says. The second face, which Y did not drive: **unknown members vanish** (X2-a: verdict `escalated: 9` and section `ZZ: 5` render nowhere, *«Находок: 0»*). |
+| **Y2-a** *"the only analysed section"* is false for a document stored as `KM` | **narrowed: upheld as a contradiction on today's screens, but wave 46 did not create the underlying fact** | (1) **The run path never reads a section.** Searching attribute spellings, not the word (`\.section\b`, `section=`, `document.section`, `ProjectSection`, `PROJECT_SECTIONS`) across `src/auditmanager/runs`, `src/auditmanager/analysis` and `api/routers/runs.py` finds nothing. There is one profile, `analysis/text/profile.py:35` `DISCIPLINE: Final[str] = "AR"`, whose only consumer is its own content hash (`:62`, `:75`). Every document has been analysed as `АР` since that profile existed, whatever it depicts. (2) **The sentences are older than the wave.** `git log -S` puts *«Анализ этого раздела ещё не делается»* and *«правило приёма»* at `9bb9385` (2026-09-22). At `alpha-w45` the АР tab also said *«принадлежность документа разделу не проверяется и нигде не сохраняется»*: the "rule" was declared unenforced, and nothing could contradict it. (3) **What wave 46 added**, three things: a stored `section` that *can* contradict the rule; a new sentence, W46-DASH's *«— единственный анализируемый раздел»* (`2dbe6a6`, 2026-09-25), printed on the same panel as the `KM` count; and `W46-WIRE`'s rewrite, which removed the *«не проверяется»* admission and now says *«Раздел документа сервер тоже хранит и проверяет»*. That is true of the form of the value, but it reads as if a checked section had consequences, and it has none. |
+| **Y6-a** `createProject` leaves the dashboard stale | **upheld, and Y's "regression" is now measured, not argued** | With the app's `createQueryClient()` (not the test harness, whose client has no `staleTime`): at the tip, `invalidateQueries(projects.all())` leaves `dashboard.summary` `isInvalidated = false` and not stale under `staleTime = 30000`, while `projects.list(undefined, 50)` becomes `isInvalidated = true`. At `2ffca8c`, `projects.list(undefined, 50)` — the old documents panel's key (`useProjectList()`, `PROJECT_PAGE_LIMIT = 50`) — is invalidated by the same call, and `queryKeys` has no `dashboard` namespace. So the pre-wave panel refreshed after `createProject`, and the wired one does not. |
+| **Y5 M5/M6** the render guard does not check that a number sits in its place | **upheld, and Y's named repair is shown sufficient** | Reproduced both: `dashboard.test.ts` **7/7** under M5 (each section shows its neighbour) and under M6 (`принято`/`отклонено` swapped). Then the repair Y costed — one assertion per row, keyed by the `data-verdict` / `data-run-state` / `data-section` attributes the markup already carries — written as a scratch test over the same kind of fixture: **green unmutated**; **red** under M4 (`KM: 0 != 4`, `PB: 0 != 2`, `unclassified: 8 != 11`), M5 (`AI 4 != 0`, `KM 0 != 4`, `PT 2 != 0`, `PB 0 != 2`) and M6 (`accepted 1 != 2`, `rejected 2 != 1`). One limit, which Y's cost line also implies: a swap between two rows that hold the same number is invisible to any keyed check, so the fixture must give the rows distinct counts. |
+| **Y6-b** `W46-WIRE.md` records no gate of its own | **upheld** | `grep -nE 'GATE OK\|GATE:\|make gate\|passed' docs/program/W46-WIRE.md`: line 76 promises *"the single, later `make gate`"*, and the only gate figures in the file are the OOM-killed baseline (`:64`) and the one forwarded from `W46-SPEND` (`:85-86`). None of the stream's own commits `fbea618..c26340f` reports a final gate either (`git log --format=%B … \| grep -i gate`). The single record is `1c38c52`'s message, line 12. |
+| **Y2-b** the caption explains «ожидает решения», a label nobody shows | **upheld** | Case-insensitive, across `web/src`, `contracts` and `src` (Y searched `web/src`, case-sensitive): **one** occurrence, `verdicts-panel.tsx:52`. The contract's `Verdict` description does not use the phrase, and the row's label is `pending: 'не решено'` (`verdict-badge.tsx:54`). The term has no source anywhere in the tree. |
+| **Y2 addendum** the failure state says *операция*; *одного общего чтения* | **upheld; and the register row cannot see it** | `D-109`'s own check command prints only `logs-page.tsx:31`. The sentence Y rendered, *«Операция ничего не создала…»* (`catalog-message.ts:113`), escapes that check twice: it is in a `.ts` file, and it is capitalised. So the dashboard's one remaining *операция* is invisible to the row that tracks it (my X-10). On *одного общего чтения* I have no measurement that moves the owner's line, so no ruling. |
+| low · the run panel hides seven computed zeros | **upheld** | Rendered from a full fixture: **2 of the 8** `RunState` rows sent (`published`, `failed`); the verdict panel beside it renders **4 of 4**. |
+| low · `documents_by_project` is unbounded | **upheld** | `DashboardSummary.documents_by_project` has no `maxItems` in the contract, and the `_LIST_PROJECTS` SQL the aggregate reuses has no `LIMIT`. The bound is absent at both ends, not only on screen. |
+| low · a 200-character project name overflows (pre-existing) | **upheld as pre-existing** | `git grep -nE 'overflow-wrap\|word-break\|word-wrap' <c> -- web/src`: **two** rules at both `alpha-w45` and `d5c9be5`, both on inline `code` and a mono chip (`globals.css:478`, `:1200`), none on a project row. Unchanged by the wave. |
+| low · `W46-SPEND` §6 sums 3 + 1 to explain +5 | **upheld** | Derived independently in X1 from node ids: 2500 − 1 + 2 + 3 = 2504 nodes, so five *new passing* nodes are S3's three plus **both** of S2's. |
+| low · the 22-code pin is `:577`, not `:497` | **upheld** | `grep -n` at `d5c9be5`: `test_openapi_document.py:577` `assert len(declared) == len(set(declared)) == 22`. |
+| low · `W46-WIRE` says five test files, git says four | **upheld** | `git diff --name-only fbea618 c26340f -- web/tests` → four. X6's node-id algebra adds a finer figure: test ids changed in **three** of them; `rendered-language.guard.test.ts` was edited with no id added or removed. |
+| low · `W46-WIRE`'s cause for the double `/projects` is asserted | **upheld, and the premise Y reasoned from now measured** | At `2ffca8c`, two `QueryObserver`s on `projects.list(undefined, 50)` in one app client: **1 fetch** when concurrent, and **1 fetch** when the second subscribes after the first resolved (inside `staleTime`). The stated cause, two `useProjectList()` calls, cannot produce two requests from one client. The double `W46-JUDGE-A` saw came from somewhere else, and nobody has measured where. |
+
+### The three overlaps: one defect or two?
+
+- **X-3 and Y5-a: one defect, two faces, measured from opposite ends.** Both are the client merges
+  in `verdict-breakdown.ts` and `section-breakdown.ts` defaulting an unsent member. **Y's
+  measurement is the stronger one for reachability**: it served `W46-JUDGE-A`'s server mutation
+  through the real Next and showed panel text identical to the honest server's, in two states.
+  Mine is a render-level reproduction, and it adds the face Y did not drive: **members the client
+  does not know are dropped** (the version-skew case). Taken together, and with the run-panel
+  narrowing above, it is one repair: an omitted or unknown member is the server's fault and
+  belongs in the error state. On severity Y says medium and I say low–medium; the difference is
+  whether *"not reachable against today's server"* discounts it, and I keep my reading.
+- **X-6 and Y6-a: one defect.** **Y's measurement is stronger for the symptom**: five steps in
+  one live page, stale about 2 s after creation, with no request made. Mine was static. The
+  measurement above adds the mechanism at both commits, which turns Y's *"regression, argued
+  from the code at `2ffca8c`"* into a measured one.
+- **X-2 and Y5 M5/M6: two defects, one shape, one on each side of the wire.** X-2 is the server
+  guard (`test_dashboard_summary_over_a_fresh_deployment.py`): it asserts only zeros, so a
+  repository that never reads a count passes. M5/M6 is the render guard (`dashboard.test.ts`):
+  it asserts set membership, so a number in the wrong row passes. Neither of us measured the
+  other side. **Together they mean that no instrument in the tree checks that any dashboard
+  number is the right number in the right place.** A server inventing every count as zero and a
+  client swapping two rows would both pass their own guards and the whole battery (X4: 612/612;
+  Y: 79/1118). The repairs are separate, and each is small: a non-zero state in the fresh-
+  deployment test; keyed row assertions in the render test (shown sufficient above).
+
+### Y2-a: wave 46's contradiction, or older? And the least wrong repair
+
+**Older in substance, made visible by wave 46.** The server has analysed every document with its
+single `AR` profile since that profile existed, and it has never read what a document depicts. The
+intake "rule" was always a request to the user, and at `alpha-w45` the screen said so honestly
+(*«не проверяется»*). Wave 46 changed three things: the system can now **record** a section that
+contradicts the rule, the dashboard **prints** *«единственный анализируемый раздел»* next to that
+record, and the rewritten АР-tab sentence **dropped the admission** that nothing is checked.
+
+**The least wrong repair is the sentences, not the behaviour.** They should describe the prompt,
+not intake: the analysis is built for АР and runs on any uploaded document; a section named at
+upload is stored, validated and counted, and it neither selects nor refuses an analysis. That
+changes no contract and no behaviour, and it makes all three screens true today. Refusing
+`startRun` when a document names a non-АР section is the more dangerous repair, for three reasons:
+
+- It must still admit `NULL`. Every product upload is `NULL`, because the form cannot set a
+  section (`D-107`). So the rule would refuse only the callers who classified honestly.
+- It changes what a sealed operation refuses. That is the owner's decision, and it sits beside
+  `D-107`.
+- It would turn a descriptive field into an authorization input, with no instrument behind it.
+  That is the owner's call too.
+
+### Where Y's method shares an assumption with its subject (§12)
+
+**Y1, "every number on `/dashboard` against the API's own answer".** The screen is a rendering of
+`GET /dashboard`, so an expectation taken from `GET /dashboard` is built from the subject's own
+output. The column `API → screen` can show a faithful rendering, but it cannot show a wrong
+number. Against X-2's mutation (the repository never reads a count) Y1's table would still read
+*all equal*: `pending 0 → Находок: 0`, `published 0 → …`, in every state. **Where Y escaped it,
+Y escaped it well.** The `psql` row counts (projects, documents, runs, `model_call`, `KM|1`/
+`NULL|1`), and the decisions state, where Y derived `pending 4, accepted 1, rejected 1` from its
+own writes before reading the API, are independent expectations. Those rows would have caught
+X-2's mutation. The four-state table's verdict, findings and run-state cells had no such
+expectation. Its s3 check, *pending 3*, rests on `published_finding_count`, which is the same
+system on a different code path.
+
+**Y6, "re-measure; do not re-read".** For `W46-SPEND`'s guard claims, Y re-measured with the
+stream's own instrument: *"46 passed"*, *"21 passed"*, *"3 passed"*, *"367 passed"*, each marked
+**true**. That confirms the claims as written, and Y's question was only whether they were false.
+But a guard's green run by the guard is the stream's evidence repeated. X4 shows that two of those
+three files stay green under mutations they were written to catch the class of. The claim *"the
+guard passes"* was true; the assumption the rerun shared, *"a passing guard is a guard"*, is the
+one that did not hold.
+
+**And the same test turned on my own method.** X2's validation of real bodies against the frozen
+schema shares the reseal's assumption: the schema is the one `W46-SPEND` resealed. That is why I
+also validated against the pre-reseal contract, where the absent-`spend` bodies fail. X2's counts
+of verdicts and states came from the API alone, with no independent expectation, so they share
+Y1's gap. They were taken to trace absence, not to certify the counts.
