@@ -568,4 +568,69 @@ is a separate reading of `git show ce25e14`. The host restarted between my repor
 section: my scratch directory is gone and the lane's containers had exited, so every instrument
 below was rebuilt and every figure below was taken after the restart.
 
-*Pending: filled in finding by finding and committed after each group.*
+*Findings are filled in as measured; a heading without a verdict has not been judged yet.*
+
+### X-8 — three false sentences in `8ad692f` — **upheld, all three; `ce25e14` repairs all three**
+
+X counted three commits and read `8ad692f^`. I took each sentence's whole history instead.
+
+- **`route.ts:22-23`** (*"twenty operations across seventeen paths … after the `W45-BLOCKS`
+  reseal"*). Paths / operations / schemas at **every** commit that touched the contract, back to
+  `5bb5691`: `830fd76` (`W45-BLOCKS`) **16 / 19 / 53**, and the first commit with 17 / 20 is
+  `d7ac848` (`W46-SEAL`), which is also the only commit where `git log -S'getDashboardSummary'
+  -- contracts/api/v1/openapi.json` finds the operation arriving. **Upheld.** The history clause
+  (*"fifteen and twelve once and sixteen and thirteen after that"*) matches `6398bcc` (12 / 15) and
+  `5178379` (13 / 16) and skips 14 / 17, 15 / 18 and 16 / 19; `ce25e14` names the reseal
+  correctly and adds *"nineteen and sixteen after `W45-BLOCKS`"*, which is `830fd76`'s count.
+  **Repaired.**
+- **`P02_SEAMS.md:601`** (*"… `W46-SEAL` added `getDashboardSummary` … on 2026-09-28"*). `git log
+  -S'getDashboardSummary' --format='%ad %cd'` on the contract: author **and** committer date
+  `2026-09-25 18:43`, one commit, `d7ac848`, so no rebase or cherry-pick moved it to the 28th.
+  **Upheld.** `ce25e14` writes 2026-09-25. **Repaired.**
+- **`ALPHA_ROADMAP.md:34-37`** (*"Corrected a fourth time … wrong three times in three days"*).
+  The block through every commit that changed it: `aaf91ad` 09-22 (first correction, 13 / 16 / 48),
+  `9cfb81b` 09-23 *"Corrected again … wrong twice in two days"*, `c42ab6e` 09-25 *"Corrected a
+  third time … three times in three days"*, `8ad692f` 09-28 *"Corrected a fourth time … three
+  times in three days"*. **Upheld**, and one step further than X: the tally was already
+  generous at `c42ab6e` (09-22 → 09-25 is four calendar days). `ce25e14` says *"four times in
+  seven days"*: 09-22 → 09-28 inclusive is seven. **Repaired, and now true.**
+
+X's two extras hold as well: `ce25e14` renames the block to *"the twenty seam operations"* and
+rewrites the README's no-token sentence as *"every operation but `issueToken` -- nineteen of
+the twenty"*, which is what X's in-process probe measured.
+
+### X-5 — `D-107`'s check cannot print anything but `0` — **narrowed**
+
+X's two constructions are real misses. I ran the old command in a `git archive` copy of the two
+directories against X's two and three of mine, restoring each file and `cmp`-ing it against
+`git show d5c9be5:<path>` afterwards:
+
+| construction | old command (`d5c9be5`) | `ce25e14`'s command |
+|---|---|---|
+| unmutated | 0 | 0 |
+| X (1): `section: 'KM'` in the upload hook's body (`.ts`) | **0** | 1 |
+| X (2): `<select className="am-input" name="section">` on one line | **0** | 1 |
+| the same `<select>` written the way `upload-document-form.tsx` writes every control — one attribute per line | **1** | 1 |
+| a `section` state variable in the form component | **1** | 1 |
+| a picker component whose name and props avoid the word | 0 | 0 |
+
+So the old check was blind to the hook and to a one-line control, but **not** to the same control
+in the form file's own style (`<input` then `id=`, `name=` on lines of their own — lines 86-91), and
+not to a `section` identifier in the `.tsx`. *"Cannot print anything but `0` for the two direct
+ways"* is true of the two constructions X chose; the house style the form is actually written in
+would have been caught. The finding stands as *a weak check*, not as *a check that cannot fail*.
+`ce25e14`'s command catches every construction above except the last, and that one would still
+have to put `section` into the hook's body, which the new command reads. **Repaired.**
+
+### X-11 — the contract says nothing about an absent `spend` — **upheld**
+
+X read the contract with `jq`. I read what a client author reads, the generated type:
+`types.gen.ts:520-524` gives `RunStatus.cost_micros` a doc comment ending *"Absent when the run
+made no provider call at all, which is a different fact from a cost of zero."*;
+`types.gen.ts:482-484` gives `RunActivity.spend?: RunActivitySpend` **no comment at all**. The
+behaviour mirrors `RunStatus`; the client does not say so. And the lock's note, split on
+`Resealed`: nine segments; of the eight below `W46-SPEND`'s, three give the *"a commit cannot name
+itself"* reason (`W46-SEAL`, `W45-BLOCKS`, `W42-SEAL`) and five do not (`W18-SEAL`, `W25-SEAL`,
+`W34-CONTRACT`, `W38-KB`, `W39-REVOKE`). **Upheld as X states it.**
+
+*Remaining findings pending.*
