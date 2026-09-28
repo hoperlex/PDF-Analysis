@@ -2910,7 +2910,10 @@ prints `None` today.
 
 **Found by `W46-JUDGE-Y`, 2026-09-28, pre-existing and product-wide.** A 200-character project
 name, which the contract allows (`maxLength: 200`), overflows `/dashboard` and `/projects` at
-780 px. It is older than wave 46.
+780 px. It is older than wave 46. **The class is wider than names** (`W46-JUDGE-Y`'s
+cross-examination): a 400-character comment without spaces made `/knowledge-base`
+`scrollWidth 3701`. `W46-JUDGE-X` measured the cause. The tree has two `overflow-wrap` rules, and
+neither is on a project row. Any unbroken user string can overflow.
 
 **Check:** create a project with a 200-character name and measure `document.documentElement.scrollWidth`
 at 780 px on both screens.
