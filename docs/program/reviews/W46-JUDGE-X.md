@@ -438,7 +438,18 @@ grep -n 'nineteen' web/tests/contract/seam-operations.contract.test.ts   # -> li
 
 ## Off the trail
 
-*pending*
+The trail I was handed: the gate, `F-1`'s layers, the reseal's documents and digests, the
+three named guards, the integrator's named prose and four debt rows, and a merge-loss check.
+Where I went that none of it points, and what came back:
+
+| where | why the trail does not lead there | what came back |
+|---|---|---|
+| **the served document against the frozen one** (`create_documentation_app().openapi()` through the programme's own conformance engine, at `f50e656`, `069f656`, `d5c9be5`, then a Pydantic-only drift run through the whole battery) | X3 asks whether the five documents moved together; nothing asks whether the application still **conforms** to them — the whole meaning of *contract-first* | See X3's last paragraph: the engine sees the drift at `f50e656`; *pending: whether any test in the battery does* |
+| **a real `/dashboard` body validated against the frozen schema** (Draft 2020-12, the suite's own checker) | X2 asks whether layers turn absence into zeros, not whether the wire is what the contract says | **Valid in all four states**; invalid against the pre-reseal contract. And `test_schema_conformance.py` has **no `DashboardSummary` case**, so nothing in the battery does this for the new operation (X2) |
+| **the dashboard's own client-side merges** (`verdict-breakdown.ts`, `section-breakdown.ts`) | X2 names record, view, serializer and generated type; the screen's model is one layer further | **X2-a**: rows the server did not send render as `0`; unknown members vanish |
+| **who invalidates `['dashboard','summary']`** (`grep -rn 'queryKeys.dashboard' web/src`) | the brief never mentions the cache | **`createProject` does not.** `d4f7b0e` says *"invalidate the dashboard summary at every mutation that changes it"* and wires upload, start-run, a run's terminal reading and decisions. X2 measured that creating a project changes the answer (`documents_by_project` `[]` → one row; the run panel's *«Проектов пока нет»* depends on it). `useCreateProject` invalidates `['projects']` only, which does not reach `['dashboard', …]` (`query-keys.ts:51`, a separate namespace), and the app's queries are `staleTime: 30_000` with `refetchOnWindowFocus: false` (`_app/query-client.ts:34-35`). So for 30 s after a dashboard read, a new project is missing from it. **Low**; static reproduction — I did not drive it in a browser |
+| **`infra/deploy/**` beyond the two files `8ad692f` edited** | X5 names `README.md` and `serve.py` | **Nothing new.** `Dockerfile.api:1`, `deploy.sh:215,837`, `alpha.env.example:56,117`, `compose.server.yml:217`, `nginx.conf:7,78` still say *fifteen*/*twelve* — `D-99`'s registered eight, in extensions the guard does not read. The README's `:26` row now says *twenty* about a Dockerfile whose first line says *fifteen*; `D-99` covers it |
+| **the lane's databases after the fresh-deployment guard ran** (my own runs of it, four times, plus the gate) | the stream's report says the fixture creates, migrates and drops | **Nothing left behind**: `pg_database` in `gate-w46j-postgres-1` held only `audit_w46j`, my `audit_w46x_judge`, and the three system databases |
 
 ## Findings, most severe first
 
