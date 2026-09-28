@@ -556,3 +556,13 @@ databases only. My API (PID 2588443, confirmed a descendant of this session and 
 No process was signalled by pattern. No container outside `gate-w46j*` was touched, the owner's
 stand was not contacted, and nothing was tagged, pushed or merged. The gate log is kept at
 `/root/w46x-gate.log`.
+
+## Cross-examination of `W46-JUDGE-Y` (`agent/w46-judge-y` at `9281d6a`)
+
+Read from git (`git show agent/w46-judge-y:docs/program/reviews/W46-JUDGE-Y.md`), never from
+`/root/w46k`. The branch has since moved to `b316ce7`, which adds only Y's own cross-examination
+heading; its findings table is byte-identical to `9281d6a`'s. Every finding is ruled against
+`d5c9be5`, the tip both judges judged. The host restarted between my report and this section, so
+my scratch directory is gone and every instrument below was rebuilt after the restart.
+
+*Pending: filled in group by group and committed after each.*
