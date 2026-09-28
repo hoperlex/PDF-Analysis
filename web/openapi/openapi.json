@@ -3045,8 +3045,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "by_state",
-          "spend"
+          "by_state"
         ],
         "properties": {
           "by_state": {
