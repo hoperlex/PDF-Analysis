@@ -109,8 +109,6 @@ Two things that are not digests:
 
 ## 3. `getDashboardSummary`, driven — *in progress*
 
-## 3. `getDashboardSummary`, driven — *in progress*
-
 ## 4. `/dashboard` at 780 px, both palettes; the `SEEDS` and cache-state edits — *in progress*
 
 ## 5. Can the per-section panel be made to show an invented number? — *in progress*
