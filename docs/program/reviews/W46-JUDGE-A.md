@@ -4,7 +4,7 @@
 anything) · **lane:** `gate-w46j` (PostgreSQL `127.0.0.1:56390`, S3 `59990`/`59991`) ·
 **worktree:** `/root/w46j` · **branch:** `agent/w46-judge` · **tree judged:** `130200d`.
 
-This file is committed as it is written. A section marked *in progress* is not a conclusion.
+This file was committed as it was written, section by section; every section is now final.
 
 ## 0. Provisioning
 
@@ -515,4 +515,109 @@ same database, answers `pending: 8, accepted: 1` — it counts never-judged find
 which the panel's caption explicitly excludes. **When the panel is wired to the aggregate its
 meaning changes**, and the caption must change with it.
 
-## 6. Off the trail — *in progress*
+## 6. Off the trail
+
+The trail I was handed: the reseal commit `d7ac848`, the two pin families, `D-102`/`D-105`, the
+`SEEDS` and cache-state edits, *"three of four panels"*, *"`scrollWidth === 780`"*, and two pieces
+of praise — for `W46-SEAL`'s pin moves and for its structural repair of the historical-section
+control. Where I went that none of it points, and what each place returned:
+
+| where | why the trail does not point there | returned |
+|---|---|---|
+| **the live journey**, `npm --prefix web run e2e:pc01 -- --phase all` | the trail says the manifest row was *applied*; nothing in `make gate` runs the journey, and the last recorded run I can find is `W43-JUDGE-B` | **F-4**, and a **pre-existing `blocks` red since `W45-BLOCKS`** nobody has seen |
+| **`/projects/{uid}`**, a screen this wave never edited | no commit in the wave touches it | **F-3**: its section sentence became false at the merge, and a test pins it |
+| **`runs/repository.py`**, the per-run cost rule | the trail is about the aggregate; the rule it claims to lift lives one context over | **F-1**: the rule's `calls == 0 → None` branch was dropped in the lift |
+| **the praised repair `ff686b1`**, tested rather than read | the brief tells me to credit it | **F-5** below |
+| widths **781** (one past the breakpoint), **360**, **1024** | only 780 is on the trail | **nothing** — no overflow, no clipped panel, both palettes. Said so, because a place that returned nothing is still a place |
+| the **upload refusal** of a malformed section | the trail is about reading sections, not writing them | **nothing wrong**: `""`, `ar`, `ZZ` all `422`, no silent unclassified fallback |
+
+### F-5 — the structural control is structural, and it lost the half that proved non-vacuity
+
+`ff686b1` rewrote `test_the_historical_section_is_excluded_from_the_live_scan` to derive its
+boundary from whatever `_HISTORICAL_HEADING` (`^#+.*historical record.*$`, case-insensitive)
+finds, instead of four dated literals. **The direction is right and I credit it** — the dated
+pins moved on writing a heading, twice.
+
+But the old control carried one more assertion, under the comment *"The live section's own claim
+survives the truncation"*. The rewrite replaced it with `scanned_text == full_text[:boundary.start()]`,
+which **any** prefix satisfies. So a heading that matches too early truncates the live section
+and the control agrees. In the clone at `130200d`, one line added directly under
+`## Where the programme is, 2026-09-25`:
+
+```text
++### A note on how the historical record is kept
+
+tests/contract/api_v1/test_doc_prose_facts.py -rA
+  PASSED test_the_historical_section_is_excluded_from_the_live_scan
+  PASSED test_the_scanned_docs_state_the_migration_head_this_tree_has
+  PASSED test_the_scanned_docs_state_the_tagged_tip_this_tree_has
+  FAILED test_the_scanned_docs_state_the_contract_surface_this_tree_has
+         — reports ALPHA_ROADMAP.md only
+
+unmutated, same file: the same test FAILS naming CURRENT_STATE.md AND ALPHA_ROADMAP.md
+```
+
+**One innocent heading removed `CURRENT_STATE.md`'s stale `16 / 19 / 53` from the guard's sight**,
+and every other test in the file stayed green. It is `D-105`'s fourth pin — *moves on writing a
+heading* — turned inside out: the pin is gone, and a heading can now blind the scan instead of
+reddening it. The repair is structural too: assert that the scanned `CURRENT_STATE.md` still
+yields at least one `TAGGED_TIP_CLAIM` match — *the live section makes a claim this guard can
+read* — the same move `test_the_bff_handler_still_makes_a_claim_this_guard_can_read` already
+makes for the BFF handler. Reverted; clone clean.
+
+### Where the streams did the right thing — checked, not repeated
+
+- **`W46-SEAL` moved the pins in the reseal commit.** `git show --stat d7ac848` carries
+  `openapi.json`, the mirror, the four generated files, `FRONTEND_LOCK.json`,
+  `test_doc_prose_facts.py`, `test_openapi_conformance.py`, `test_operation_surface.py` and
+  `test_served_document_and_health_plane.py` — one commit. The lock's digests are recomputed and
+  the client regenerates byte-identical (section 2). **Confirmed.** What it missed is the third
+  pin file one directory over (section 1, #3–#4), which a battery run would have shown.
+- **`W46-SEAL`'s two arguments hold on the wire.** The section field is nullable, CHECK-bound, and
+  refused when malformed; the aggregate cannot be steered by any input I tried. Both are argued
+  in its report and both survived being driven.
+- **`W46-DASH` refused to report a gate it had not seen finish.** Its report quotes *"There is no
+  `GATE OK` line in `/root/w46b-gate.log`, and this document does not claim one"*, names both
+  reds and whose each is. On a wave where a harness reported `exit code 0` over a failed gate for
+  the sixth time (section 1), that is the behaviour the constraints exist to produce.
+- **`W46-DASH`'s instrument edits were findings, not escapes** (section 4), and its money line —
+  *no provider call* kept apart from *zero spend* — is right, and is better than the aggregate
+  it is meant to be replaced by (F-1).
+- **`W46-DASH` said which panel it could not drive and why**, before merge, in D1. The panel's
+  caption being true in its worktree and false on the merged tree is the join's problem (F-3).
+
+## Findings, most severe first
+
+| # | finding | reproduce |
+|---|---|---|
+| **G** | **The merged tree does not gate.** No `GATE OK`; battery 7 failed / 2493 passed; frontend 2 failed / 1118 passed. **Five of nine reds were in nobody's report**; three sit in `W46-SEAL`'s own grant and were red on its own tip, so the canonical battery its report cites was not run from that tree | `make gate > log 2>&1; grep -c 'GATE OK' log` → `0` (section 1) |
+| **F-1** | `getDashboardSummary` answers `cost_basis: "measured", cost_micros: 0` on a deployment with **no** provider calls — an invented measurement; the sealed schema cannot say *absent*. **Needs a reseal**, and is the real reason for one | fresh DB, `GET /dashboard` → `run_activity.spend` (section 3) |
+| **F-3** | On the merged tree the section panel's caption and the project screen's sentence *"раздел … нигде не хранится и не проверяется"* are **false**; a test pins the project screen's copy | upload with `section=KM`, then render `/dashboard` and `/projects/{uid}`; `project-sections.test.ts:119-124` (section 5) |
+| **F-3b** | `getDashboardSummary` has **no consumer**; the walks `R-44` ruled against are the live path, and nothing in `W47-PLAN.md` schedules the wiring | `grep -rn 'getDashboardSummary' web/src \| grep -v generated` → nothing (section 5) |
+| **F-4** | The applied journey row for `/dashboard` is **red under the journey's default phase**; `optional_api` exists for exactly this. Plus a **pre-existing `blocks` red** since `W45-BLOCKS` | `npm --prefix web run e2e:pc01 -- --origin <stack> --phase all` (section 4) |
+| **F-5** | Absent-is-not-empty in the aggregate has **no guard that can fail** (mutation survives 609/609); an invented zero on the section panel has **none either** (mutation survives the whole frontend suite); and the structural historical-section control **lost its non-vacuity half** (a premature heading hides `CURRENT_STATE.md` from the scan) | sections 3, 5, 6 |
+| **F-2** | Gate red #5 is **a rule that shared an assumption with its subject**; the operation is right, the rule should become *"every operation that takes caller input"*, derived from the document, two-sided. **A test change, no reseal.** The operation also ignores, rather than refuses, scope it was asked for — surface-wide, low | section 3 |
+| low | `FRONTEND_LOCK.json`'s `commit_note` says the pin files moved *before* the reseal commit; they moved in it · `scrollWidth === 780` is a page-height artefact, 765 with data · `/projects` is requested twice on a cold load · `нужен ручной разбор 0` on the dashboard vs. hidden on `/knowledge-base` · *контракт/операция* on screen (`R-39`, owner's call) | sections 2, 4, 5 |
+
+## What I could not answer, and why
+
+- **Whether `W46-SEAL` ran `make gate` at all.** Its report defers the result to a hand-back that
+  never arrived, and its worktree and log (`/root/w46a-gate.log`) are outside what I was allowed
+  to enter. What I can say is narrower and certain: three reds in its own grant reproduce at its
+  own tip, so no complete battery from that tree was green.
+- **The stream's and integrator's exact 780 readings.** The `42 runs / 40 projects` stand they
+  drove is not mine and its evidence is not in the tree. I re-took the property on my own data;
+  I did not reproduce their numbers.
+- **Contrast at the pixel level in the browser.** I relied on the committed contrast census
+  (green on `130200d`) and on screenshots read by eye; I did not re-measure any ratio.
+- **The deployed stand at `127.0.0.1:31500`** was not touched, read-only or otherwise; nothing
+  here says anything about what is deployed.
+
+## Evidence discipline
+
+Branch `agent/w46-judge`, based on `130200d`; its diff against `130200d` is this file only
+(checked before the final commit). Every mutation ran in a disposable clone at `130200d`
+(`/root/w46j-probe`), baselined unmutated first, reverted after, removed at the end. The two
+judge databases (`audit_w46j_judge`, `audit_w46j_judge2`) live in `gate-w46j-postgres-1` only.
+No container outside `gate-w46j*` was touched, no host-wide prune was run, and nothing was
+repaired.
