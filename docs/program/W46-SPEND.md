@@ -68,3 +68,63 @@ else:
 
 Reported to the integrator (`SendMessage`, `to: "main"`) with this exact line and list
 before starting `S1`.
+
+## 2. `S1` — `F-1`, the reseal
+
+Two commits. `f50e656` — the Python implementation:
+`src/auditmanager/dashboard/repository.py` (`_SPEND`'s `calls == 0 -> None` branch,
+mirroring `runs.repository.RunCost.cost()`), `dashboard/models.py`
+(`DashboardSummaryRecord.run_spend: RunActivitySpendRecord | None`),
+`api/schemas/dashboard.py` (`DashboardSummaryView.run_spend` optional,
+`dashboard_summary_body`'s `spend` key conditional), `bootstrap/adapters.py`
+(`DashboardAdapter.get_summary` carries `None` through), `api/schemas/models.py`
+(`RunActivity.spend` moved to `Field(default=None,
+json_schema_extra=optional_property)`, the same "optional but not nullable" spelling
+`RunStatus.cost_basis` already uses). `069f656` — the reseal itself, one commit, five
+documents: `contracts/api/v1/openapi.json` (`RunActivity.required` drops `"spend"`),
+`web/openapi/openapi.json` (regenerated, byte-identical to the contract — verified),
+the four generated client files (`npm --prefix web run api:generate`; only
+`types.gen.ts` changed in substance, `spend: RunActivitySpend` →
+`spend?: RunActivitySpend`; the other three only carry the new digest comment), and
+`web/FRONTEND_LOCK.json` with all six digests recomputed by `sha256sum` against this
+tree (cross-checked against the file's own recorded values — equal) and its
+`commit_note` corrected in place (see below).
+
+**Every pin checked, none of them moved** — the surface stays 17 / 20 / 61 and the
+error catalog stays 22, so no `D-102`/`D-105` pin has a reason to move:
+
+| pin | file | value found | moved? |
+|---|---|---|---|
+| surface triple | `tests/contract/api_v1/test_doc_prose_facts.py:316` | `17/20/61` | no |
+| migration head | `tests/contract/api_v1/test_doc_prose_facts.py:285` | `0011_document_section` | no |
+| `FROZEN_OPERATION_COUNT`/`FROZEN_SCHEMA_COUNT` | `tests/contract/api_v1/test_openapi_conformance.py:89-90` | `20`/`61` | no |
+| `PATH_COUNT`/`OPERATION_COUNT`/`SCHEMA_COUNT` | `tests/integration/api/test_served_document_and_health_plane.py:33-35` | `17`/`20`/`61` | no |
+| path/operation counts | `tests/integration/api/test_operation_surface.py:61-62,172-177` | `17`/`20` | no |
+| error catalog | `tests/contract/domain_p02/test_contract_vocabulary.py:23`, `test_openapi_document.py:497` | `22` | no |
+
+**`commit_note` correction.** The judge (section 2, section 6's findings table) found it
+false: it said the two extra pin files
+(`test_openapi_conformance.py`, `test_served_document_and_health_plane.py`) moved
+*before* the reseal commit `d7ac848`, when `git show --stat d7ac848` carries both
+alongside the five documents, in the same commit. Corrected in place, not narrated
+beside the false sentence.
+
+**Verification beyond the (still-pending) full gate**, run targeted while no other
+lane's gate was active:
+
+```
+.venv/bin/python -m pytest tests/contract/domain_p02/test_openapi_document.py \
+  tests/contract/api_v1/test_openapi_conformance.py \
+  tests/integration/api/test_operation_surface.py \
+  tests/integration/composition/test_every_port_implementation_is_whole.py
+  -> 1 failed (the known F-2 red, untouched by S1), 147 passed
+
+.venv/bin/python -m pytest tests/integration/api/test_served_document_and_health_plane.py \
+  tests/contract/api_v1/test_doc_prose_facts.py \
+  tests/contract/domain_p02/test_project_section_catalog.py
+  -> 36 passed
+
+npm --prefix web run test:guards -- frontend-lock  -> 15 files, 149 passed (incl. the
+  typecheck guard and frontend-lock.guard.test.ts's own 8 assertions)
+npm --prefix web run test:contract                  -> 7 files, 104 passed
+```
