@@ -36,6 +36,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-107** | the product cannot set a document's section; the API can | **owner**: whether and when the upload form offers one |
 | **D-108** | the live journey is not in `make gate`; the `blocks` route was red for a whole wave unseen | wave 48's audit |
 | D-109 | *контракт* and *операция* on screen: `R-39` bans ids, fields and transport, and is silent on these | **owner**: where the line falls |
+| **D-110** | the analysis is built for АР, yet a document stored as `KM` is analysed by the same profile; nothing looks at the section | **owner**: refuse at intake, skip at run start, or a profile per section |
+| D-111 | `documents_by_project` is unbounded: 63 rows, 6906 px on one screen | a cap or paging is a contract question |
+| D-112 | a 200-character project name overflows `/dashboard` and `/projects` | pre-existing, product-wide |
 | **D-97** | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | consolidate against one provider/state contract |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -2864,6 +2867,49 @@ dashboard, which satisfies either reading. **Other screens are not swept.**
 shared/api/generated | wc -l` prints `24` on `d5c9be5`, most of them failure messages about
 codes "вне контракта". *Corrected 2026-09-28: the first version read `*.tsx` only and was
 case-sensitive, and it saw 1 line of the 24 (`W46-JUDGE-X`, X-10).*
+
+### D-110 — the analysis is built for АР, and it analyses whatever section a document carries
+
+**Found by `W46-JUDGE-Y` (Y2-a), 2026-09-28.** Since `R-40`, a document can be stored as `KM`
+(through the API; the product's form offers no section, `D-107`). Y uploaded one with
+`section=KM` and started a run. It published three findings, **analysed by the same АР-built
+profile**. Nothing at intake or at run start reads the section. The restriction lives in the
+prompt (`src/auditmanager/analysis/text/prompt.py`), as `web/src/entities/project/model/section.ts`
+says, not in any rule the system enforces. Before wave 46 no document could carry another
+section, so wave 46 created the gap. `W46-CLIENT` makes the screens say what is true: the
+analysis is built for АР text, and a document stored under another section is analysed by the
+same profile.
+
+**Needs the owner:** should intake refuse a non-АР section, should a run skip it, or should a
+profile per section exist? `R-25`'s order puts ПОС, ТХ and ПБ first.
+
+**Check:** `grep -rnE '\.section\b|\["section"\]|section=' src/auditmanager/analysis
+src/auditmanager/runs --include=*.py | wc -l` prints `0` today: no line in analysis or run start
+reads a document's section. A plain `grep section` counts 77 lines, and every one of them is
+prose about `P02_SEAMS.md` sections, so it could not fail.
+
+### D-111 — the documents panel is unbounded
+
+**Found by `W46-JUDGE-Y`, 2026-09-28.** `getDashboardSummary.documents_by_project` returns
+every project. On Y's stand that was 63 rows, and `/dashboard` grew to 6906 px. The walk it
+replaced showed 50 and said so. A pilot with a few projects will not see it. **A cap or paging
+is a contract change**, so it waits for a reseal that has another reason to happen.
+
+**Check:** `python3 -c "import json;d=json.load(open('contracts/api/v1/openapi.json'));print(d['components']['schemas']['DashboardSummary']['properties']['documents_by_project'].get('maxItems'))"`
+prints `None` today.
+
+### D-112 — a long project name overflows two screens
+
+**Found by `W46-JUDGE-Y`, 2026-09-28, pre-existing and product-wide.** A 200-character project
+name, which the contract allows (`maxLength: 200`), overflows `/dashboard` and `/projects` at
+780 px. It is older than wave 46.
+
+**Check:** create a project with a 200-character name and measure `document.documentElement.scrollWidth`
+at 780 px on both screens.
+
+> **`D-109` addendum, `W46-JUDGE-Y`, 2026-09-28.** The dashboard's failure state still says
+> *операция*, *адаптер* and *транспорт исполнителя*. It comes from the shared catalog
+> (`catalog-message.ts:113`), so every screen that fails through it says the same. The owner's line, as before.
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 
