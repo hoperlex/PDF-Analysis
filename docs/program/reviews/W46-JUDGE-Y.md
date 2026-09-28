@@ -739,12 +739,12 @@ in the clone (baseline **3 passed**):
 So *"cannot fail on a count"* is too strong: the third test asserts `spend == {1, 34400,
 "measured"}` exactly, and a wrong spend count is caught. What X's framing misses is the sharper
 half. X writes that the guard's *"three states are all zeros except `spend`"*. They are not:
-`_seed_one_model_call` (test file, lines 199-256) inserts **a document, a version and an
+`_seed_one_model_call` (test file, lines 199-268) inserts **a document, a version and an
 `audit_run`** into the database the third test reads, and the test then asserts `spend` only. The
 guard holds a non-zero document and a non-zero run and never reads the rows that count them.
 
-**Through every layer, live.** The last two mutations together, plus one extra verdict row
-(`escalated: 9`), served from the clone to my unchanged Next on a copy of the decisions state
+**Through every layer, live.** The section miscount (every published document counted as `KM`),
+plus one extra verdict row (`escalated: 9`), served from the clone to my unchanged Next on a copy of the decisions state
 (`audit_w46k_x2`). `GET /dashboard` carried `escalated: 9` and `KM: 2`; the screen showed *КМ: 2*,
 *Без раздела: 0*, *Находок: 6*, no 9 anywhere. Then the live journey against the same stack:
 **the `dashboard` route `ok`** (its envelope's body text: *КМ: 3*, *Без раздела: 0*, *Находок: 9*
