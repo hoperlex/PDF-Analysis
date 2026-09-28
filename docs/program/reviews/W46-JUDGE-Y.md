@@ -558,3 +558,14 @@ serve any state again unchanged; the gate's own `audit_w46k` was migrated to hea
 named as the fresh-deployment fixture's `DATABASE_URL`, whose test creates, uses and drops its own
 database. The scratch drivers live in my
 session scratch directory, which does not survive a restart; everything load-bearing is quoted here.
+
+## Cross-examination of `W46-JUDGE-X` (`agent/w46-judge-x` at `2a7b00b`)
+
+Read from git (`git show agent/w46-judge-x:docs/program/reviews/W46-JUDGE-X.md`), never from
+`/root/w46j`. Every finding is judged as X stated it against `d5c9be5`. The integrator's `ce25e14`
+(on `audit-auth`, after both reports) repairs X-5, X-8 and X-10; where I say whether it does, that
+is a separate reading of `git show ce25e14`. The host restarted between my report and this
+section: my scratch directory is gone and the lane's containers had exited, so every instrument
+below was rebuilt and every figure below was taken after the restart.
+
+*Pending: filled in finding by finding and committed after each group.*
