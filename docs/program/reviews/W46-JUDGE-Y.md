@@ -101,9 +101,100 @@ repaired on the wire: over zero `model_call` rows, `run_activity` carries `by_st
   them reaches the API**: the log above has no request between the landing and the dashboard's
   read. The cold-load double `GET /projects?limit=50` judge A measured on `130200d` is gone.
 
-## 2. Y2 — the sentences
+## 2. Y2 — the sentences — **true where the wave rewrote them; false one step past the form**
 
-*pending*
+**What was checked, and held.**
+
+- **Stored when supplied.** `POST /projects/{uid}/documents` with `section=KM` → `201`,
+  `getDocumentVersion` → `"section": "KM"`, `psql` → `KM|1`, `NULL|1`.
+- **Checked when supplied.** `section` = `""`, `ar`, `ZZ`, `km`, `" KM"` → five times `422
+  validation_failed`, *"The section property of the request body is not of the declared
+  form."*; `psql` afterwards still `KM|1`, `NULL|1` — nothing written, no silent
+  unclassified fallback.
+- **The product's form cannot supply one.** `features/upload-document/model/use-upload-document.ts:43`
+  sends `body: { file, ...(title === '' ? {} : { display_title: title }) }`; the rendered form on
+  `/projects/{uid}` offers *PDF* and *Отображаемое название* and nothing else.
+- **The unclassified row is always shown**: *Без раздела* is present in s0 (`0`), s1 (`0`), s2
+  (`1`), s3 (`1`) and the decisions state below (`1`).
+- **The verdict caption matches what the aggregate counts.** On a copy with six findings from
+  two runs, I recorded `accept` on one, `comment` on a second and `reject` on a third (`201`
+  each). `GET /dashboard` → `pending 4, accepted 1, rejected 1, needs_manual_review 0`: the
+  three never-opened findings of the second run plus the commented one. The screen: *Находок: 6*,
+  *не решено 4 · принято 1 · отклонено 1 · нужен ручной разбор 0*. The caption says every
+  finding is counted by its current verdict *"включая ту, которую ещё никто не открывал"* —
+  **true**. (`revoke` → `422`, *"PC-01 emits no revocation"*, so the enum's *after a revocation*
+  branch is unreachable and was not driven.)
+- ***контракт* and *операция* are gone from the dashboard.** The rendered `main` text in s0–s3
+  contains neither (case-folded substring test on `контракт` and `операци`), and
+  `grep -rni 'контракт\|операци' web/src/widgets/dashboard web/src/_pages/dashboard web/src/app/dashboard`
+  → nothing, the failure texts in `dashboard-failure.ts` included.
+- **The project screen's rewritten sentences are true as written**: *«Раздел документа хранится
+  и проверяется на сервере, когда его называют при загрузке; форма загрузки этого продукта
+  раздел не предлагает…»*, rendered on `/projects/{uid}` over the project that holds the `KM`
+  document.
+
+### Y2-a — "the only analysed section" is false for a document the server stores as `KM` (medium)
+
+The screens say three things about analysis and sections:
+
+- `/dashboard`, sections panel: *«Архитектурные решения (АР) — единственный анализируемый
+  раздел: 0»* (`sections-panel.tsx:51`);
+- `/projects/{uid}`, the АР tab: *«Сейчас принимаются документы раздела АР … Это правило
+  приёма, а не свойство файла»* (`project-sections.tsx:105-108`);
+- `/projects/{uid}`, the КМ tab: *«Анализ этого раздела ещё не делается: сейчас принимаются
+  документы раздела АР.»* (`project-sections.tsx:120`).
+
+Measured: **the server accepts a document stored as `KM` and analyses it.**
+
+```text
+POST /projects/prj_01M3KY9CW2V709Z8RP4NKB5NXR/documents  section=KM   -> 201 ver_01M3KY9DVFFMTTF78QRGCHP5NF
+POST /runs {"version_uid": "ver_01M3KY9DVFFMTTF78QRGCHP5NF"}            -> 202
+GET /runs/run_01M3KYXQZAQABYCGW8D54EM0G0  -> state published, published_finding_count 3,
+                                             analysis_profile_id ap_01M25P3TH08VVTTGJRXYBZZ7RP (the same
+                                             profile the unclassified document's run used)
+GET /versions/ver_01M3KY9DVFFMTTF78QRGCHP5NF -> "section": "KM"
+```
+
+After that, on one screen: *АР — единственный анализируемый раздел: 0*, *КМ: 1*, *Находок: 6*,
+of which three came from the `KM` document and none from an `АР` one. On `/projects/{uid}`, the
+КМ tab says the section is not analysed yet while the document the server stores as `KM` sits in
+the АР tab's list with a published run. No intake refuses `section=KM`; nothing starts a run
+conditionally on the section.
+
+**Nothing in the tree hides this — the source says it and the screen does not.** The module
+header `W46-WIRE` rewrote, `web/src/entities/project/model/section.ts:28-31`, is exact: *"the
+`AR` restriction lives in the analysis prompt (`src/auditmanager/analysis/text/prompt.py`) and in
+fixture names, not in what a document is uploaded carrying."* So the restriction is a property
+of the prompt, not a rule of intake, and the screen still calls it *правило приёма*. The integrator's
+brief premise *"The intake rule, only АР is analysed, is unchanged"* is true of the form path
+only. **Wave 46 created the contradiction**: before `W46-SEAL` no document could carry `KM`.
+
+Reachable only through the API, because the form offers no section — which is the path
+`W46-WIRE` itself used in W5 to reach *КМ: 1*. **Reproduce:** the four lines above against a
+fresh copy, then render `/dashboard` and click `button[data-section="KM"]` on `/projects/{uid}`.
+**Cost:** a sentence on each of two screens (*what the analysis is built for*, not *what is
+accepted*), or an intake decision that belongs to the owner beside `D-107`.
+
+### Y2-b — the verdict caption explains a label the screen does not show (low)
+
+The caption: *«…— «ожидает решения» здесь не то же самое, что «по ней есть отложенное
+решение».»* (`verdicts-panel.tsx:50-53`). The row it is about is labelled **«не решено»**
+(`VERDICT_LABELS.pending`, `web/src/entities/expert-decision/ui/verdict-badge.tsx:54`).
+
+```text
+grep -rn 'ожидает решения' web/src --include=*.ts --include=*.tsx   -> verdicts-panel.tsx:52 only
+```
+
+The quoted term appears nowhere else in the product, so a reviewer cannot connect the caption's
+distinction to the row it qualifies. The *meaning* the caption states is right (above); the
+*name* it uses for the row is not the row's name. **Cost:** one word.
+
+### A judgement call, stated as one
+
+The rewritten subtitle is *«Четыре панели одного общего чтения по всей системе: …»*. *контракт*
+and *операция* are gone, but *одного общего чтения* — "one common read" — still tells the reviewer
+how the screen fetches, which is `R-39`'s *transport*, in the author's vocabulary. Low; `D-109` is
+the owner's line.
 
 ## 3. Y3 — the journey, live
 
