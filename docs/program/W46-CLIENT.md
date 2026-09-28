@@ -198,4 +198,22 @@ X-9, and the cross-examination of Y), `docs/program/reviews/W46-JUDGE-Y.md`
   `next-server` worker `1357990` the wrapper's exit left behind, each confirmed mine by
   `readlink /proc/<pid>/cwd` before the kill); `ss -ltnp` empty for `56381`–`56383`
   afterward. No process signalled by pattern.
+- **Repair, found by the first `make gate`.** `tests/contract/api_v1/
+  test_surface_counts_in_prose.py::test_the_api_prose_states_the_surface_this_document_
+  declares` — battery **1 failed, 2503 passed** — reddened on three bare `'fourteen
+  codes'` phrases my own prose introduced (`section-breakdown.ts` ×2, `sections-panel.tsx`
+  ×1): the guard reads *any* `<number> codes` in `web/src` as a claim about the 22-entry
+  error catalog, unless a word sits between the number and the noun (the same reason
+  `d5c9be5` had already rewritten the file's pre-existing two instances to `'fourteen
+  section codes'`). My new sentences reintroduced the bare form. Fixed the same way:
+  `fourteen codes` → `fourteen section codes` in all three. `.venv/bin/python -m pytest
+  tests/contract/api_v1/test_surface_counts_in_prose.py -q` → 21 passed.
+  `npx vitest run tests/unit/widgets/dashboard.test.ts tests/unit/screens/
+  project-sections.test.ts tests/unit/projects/project-sections.test.ts tests/guards/
+  dashboard-invalidation.guard.test.ts tests/guards/rendered-language.guard.test.ts` → 66
+  passed. `npm run typecheck` clean. Re-scanned every file this stream touched
+  (`git diff --name-only dbba753..HEAD`) with the guard's own pattern in a standalone
+  script: the only remaining `'fourteen codes'` hits are in `web/tests/unit/projects/
+  project-sections.test.ts`, pre-existing and outside the guard's scanned trees
+  (`web/tests` is not read). Re-running the full `make gate` next.
 

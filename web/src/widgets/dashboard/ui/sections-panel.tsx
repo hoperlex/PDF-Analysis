@@ -24,8 +24,8 @@
  * warned the wiring session against.
  *
  * **An omitted or unrecognised row is a fault, never a zero.** `summarizeSectionBreakdown`
- * only returns a summary over the whole closed vocabulary — fourteen codes plus the
- * unclassified bucket, each once. Anything short of that renders no numbers at all: the
+ * only returns a summary over the whole closed vocabulary — fourteen section codes plus
+ * the unclassified bucket, each once. Anything short of that renders no numbers at all: the
  * shape `dashboard-failure.ts` already has, not a zero nobody computed
  * (`docs/program/reviews/W46-JUDGE-Y.md` §5, `Y5-a`).
  */

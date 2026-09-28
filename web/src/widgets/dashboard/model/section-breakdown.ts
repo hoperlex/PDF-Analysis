@@ -7,15 +7,15 @@
  * even at `document_count: 0`").
  *
  * **This module no longer fills a gap it did not compute.** It used to seed all fourteen
- * codes at zero and overwrite from the wire, calling the result "its true zero" — but a
+ * section codes at zero and overwrite from the wire, calling the result "its true zero" — but a
  * row the response omits is the server not saying, not the server saying zero, and
  * defaulting it is exactly the invented number `R-23`'s addendum names and the silent
  * fallback `AGENTS.md` §4 forbids (`docs/program/reviews/W46-JUDGE-Y.md` §5, `Y5-a`;
  * `docs/program/reviews/W46-JUDGE-X.md` §`X2-a`). It also used to drop, with no signal, a
  * row whose section the fourteen frozen codes do not recognise.
  *
- * So this function checks the closed vocabulary instead of filling it: fourteen codes,
- * once each, plus the unclassified bucket, once — anything short of exactly that (a
+ * So this function checks the closed vocabulary instead of filling it: fourteen section
+ * codes, once each, plus the unclassified bucket, once — anything short of exactly that (a
  * missing member, a repeated one, or one this module does not recognise) is reported as
  * `{ ok: false }`, and it is the caller's job to show that as a fault rather than as a
  * number. Only a response that carries the whole vocabulary, no more and no less, is
