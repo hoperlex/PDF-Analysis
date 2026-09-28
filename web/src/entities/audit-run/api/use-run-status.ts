@@ -17,6 +17,15 @@
  *
  * The loop stops on any terminal state, on unmount, and on a non-retryable failure. A
  * retryable failure is absorbed by the loop itself and never surfaces here as an error.
+ *
+ * `W46-WIRE`: the terminal reading also invalidates `queryKeys.dashboard.summary()`. The
+ * dashboard's `run_activity.spend` and its state distribution only reach their real,
+ * settled values once a run finishes — inventing them from an in-progress reading would be
+ * the same class of guess a running cost figure already refuses on the run screen itself
+ * (`entities/audit-run`'s own `runCost`) — so this is the one place that invalidation
+ * belongs: once per run, at the one reading after which the numbers stop moving. Every
+ * earlier reading of the same run leaves the summary alone; `startRun`'s own success
+ * handler already invalidated it once, for the run's first, non-terminal state.
  */
 
 import { useQueryClient } from '@tanstack/react-query';
@@ -82,6 +91,9 @@ export function useRunStatus(runId: RunId): RunStatusPolling {
           if (!live) return;
           setStatus(reading);
           queryClient.setQueryData(queryKeys.runs.detail(runId), reading);
+          if (isTerminalRunState(reading.state)) {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });
+          }
         },
       },
     )
