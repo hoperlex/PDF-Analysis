@@ -16,6 +16,7 @@ of every schema object under the governance interpreter.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from typing import Any
@@ -295,8 +296,9 @@ def test_every_write_declares_the_idempotency_conflict_response(
 
 
 def _takes_caller_input(document: dict, operation: dict) -> bool:
-    """A path parameter, a query parameter, a header other than ``X-Correlation-Id``, or
-    a request body -- derived from the document itself, never from a name list.
+    """A path parameter, a query parameter, a cookie parameter, a header other than
+    ``X-Correlation-Id``, or a request body -- derived from the document itself, never
+    from a name list.
 
     `F-2b` (``docs/program/reviews/W46-JUDGE-A.md`` section 3): before this wave "every
     operation can report a client fault" and "every operation takes caller input" were
@@ -306,6 +308,27 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
     subject). ``getDashboardSummary`` is the first operation without input, and deriving
     the answer from the document is what keeps the next one from silently falling under
     the old assumption again.
+
+    `X-7` (``docs/program/reviews/W46-JUDGE-X.md``): OpenAPI 3.1 has a fourth parameter
+    location, ``cookie`` (``path``, ``query``, ``header``, ``cookie`` -- the
+    specification's own enum for ``in``), and this derivation counted only three of the
+    four. A required, malformable cookie parameter is exactly as much caller input as a
+    query parameter of the same shape -- the caller controls the bytes either way -- so
+    an operation that gains one is still caller input, with no ``X-Correlation-Id``-style
+    exemption: nothing in this document declares a cookie today
+    (``test_no_operation_declares_a_cookie_parameter_today`` pins that), so there is no
+    existing cookie whose presence this exemption would need to preserve.
+
+    `W46-JUDGE-Y`'s cross-examination of `X-7` (``docs/program/reviews/W46-JUDGE-Y.md``):
+    the correlation exemption compared the header's **spelling**
+    (``resolved["name"] != "X-Correlation-Id"``), and HTTP header names are
+    case-insensitive -- ``X-Correlation-Id``, ``x-correlation-id`` and
+    ``X-CORRELATION-ID`` name the same header on the wire (RFC 9110 section 5.1). A
+    header declared with any other capitalisation of that name was, before this line,
+    counted as caller input it is not, which errs toward *demanding* a client-fault
+    response an operation does not need -- harmless today (nothing in this document
+    spells it any other way), but the same premise `OPERATING_CONSTRAINTS.md` section
+    12 names for a case that does not yet exist to expose it.
 
     ``operation`` is one of ``_operations()``'s values, which carries ``_path`` but not
     the path item's own shared ``parameters`` -- OpenAPI declares a parameter once on the
@@ -321,9 +344,9 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
         resolved = (
             _resolve(document, parameter["$ref"]) if "$ref" in parameter else parameter
         )
-        if resolved["in"] in ("path", "query"):
+        if resolved["in"] in ("path", "query", "cookie"):
             return True
-        if resolved["in"] == "header" and resolved["name"] != "X-Correlation-Id":
+        if resolved["in"] == "header" and resolved["name"].lower() != "x-correlation-id":
             return True
     return "requestBody" in operation
 
@@ -353,16 +376,25 @@ def test_every_operation_that_takes_input_can_report_a_client_fault(
     rule this replaces.
     """
     for name, operation in _operations(openapi_document).items():
-        codes = set(operation["responses"])
-        assert "500" in codes, f"{name} cannot report an internal fault"
-        client_fault = codes & {"404", "409", "422"}
-        if _takes_caller_input(openapi_document, operation):
-            assert client_fault, f"{name} takes caller input and declares no client-fault response"
-        else:
-            assert not client_fault, (
-                f"{name} takes no caller input but declares {sorted(client_fault)} -- "
-                "a response no request can produce"
-            )
+        _assert_client_fault_rule(openapi_document, name, operation)
+
+
+def _assert_client_fault_rule(document: dict, name: str, operation: dict) -> None:
+    """One operation's half of `test_every_operation_that_takes_input_can_report_a_
+    client_fault`, pulled out so a mutation test can run the exact same rule the real
+    guard runs, rather than a hand-written approximation of it that could itself drift
+    from the guard it is meant to prove is repaired.
+    """
+    codes = set(operation["responses"])
+    assert "500" in codes, f"{name} cannot report an internal fault"
+    client_fault = codes & {"404", "409", "422"}
+    if _takes_caller_input(document, operation):
+        assert client_fault, f"{name} takes caller input and declares no client-fault response"
+    else:
+        assert not client_fault, (
+            f"{name} takes no caller input but declares {sorted(client_fault)} -- "
+            "a response no request can produce"
+        )
 
 
 def test_the_input_less_operation_set_is_exactly_the_pinned_one(openapi_document: dict) -> None:
@@ -379,6 +411,178 @@ def test_the_input_less_operation_set_is_exactly_the_pinned_one(openapi_document
         if not _takes_caller_input(openapi_document, operation)
     }
     assert input_less == INPUT_LESS_OPERATIONS
+
+
+def test_no_operation_declares_a_cookie_parameter_today(openapi_document: dict) -> None:
+    """`X-7`: the premise the ``cookie`` exemption's absence of an exemption relies on.
+
+    ``header`` carries a named exception (``X-Correlation-Id``) because this document
+    already declares that header on every operation and it is not caller input.
+    ``cookie`` carries no such exception because nothing in the document declares one
+    today -- checked here, independently of `_takes_caller_input`, by walking every
+    path item's and every operation's own ``parameters`` and resolving every ``$ref``,
+    so this pin cannot share `_takes_caller_input`'s own blind spot with the thing it
+    is meant to catch a regression in (`OPERATING_CONSTRAINTS.md` section 12). The day
+    this document declares a real cookie parameter, this test is the one that goes red
+    and forces a decision about whether it is exempt, rather than the exemption being
+    invented silently in `_takes_caller_input` to keep this test passing.
+    """
+    found: list[str] = []
+    for path, item in openapi_document["paths"].items():
+        for parameter in item.get("parameters", []):
+            resolved = (
+                _resolve(openapi_document, parameter["$ref"])
+                if "$ref" in parameter
+                else parameter
+            )
+            if resolved["in"] == "cookie":
+                found.append(f"{path} (path item): {resolved['name']}")
+        for method, operation in item.items():
+            if method not in HTTP_METHODS:
+                continue
+            for parameter in operation.get("parameters", []):
+                resolved = (
+                    _resolve(openapi_document, parameter["$ref"])
+                    if "$ref" in parameter
+                    else parameter
+                )
+                if resolved["in"] == "cookie":
+                    found.append(f"{operation['operationId']}: {resolved['name']}")
+    assert found == [], f"a cookie parameter now exists and needs a decision: {found}"
+
+
+def test_a_required_cookie_parameter_makes_getdashboardsummary_take_input(
+    openapi_document: dict,
+) -> None:
+    """`X-7`'s own mutation: a required cookie parameter added to `getDashboardSummary`,
+    the one operation this document declares as input-less.
+
+    Before this repair, `_takes_caller_input` counted ``path``, ``query`` and a
+    ``header`` other than ``X-Correlation-Id`` -- three of OpenAPI 3.1's four parameter
+    locations -- so a required, malformable cookie left the operation classified
+    input-less. That is wrong in both directions X measured: the two-sided rule then
+    required **no** client-fault response for an operation a malformed cookie could
+    genuinely fail (silence where a `422` belongs), and once one was added honestly,
+    the same blind spot called it a response *no request can produce* and rejected the
+    correct declaration.
+
+    This is the repair shown working: a deep copy of the real document (never the
+    shared session fixture -- mutating that would poison every other test in this
+    session), the exact parameter object X quoted, `_takes_caller_input` now reports
+    the operation takes input.
+    """
+    mutated = copy.deepcopy(openapi_document)
+    operation = mutated["paths"]["/dashboard"]["get"]
+    operation.setdefault("parameters", []).append(
+        {
+            "in": "cookie",
+            "name": "am_scope",
+            "required": True,
+            "schema": {"type": "string", "minLength": 1},
+        }
+    )
+
+    operations = _operations(mutated)
+    assert _takes_caller_input(mutated, operations["getDashboardSummary"]) is True
+
+    # The real two-sided rule, run against the mutated document: now that the cookie
+    # counts, a `getDashboardSummary` that still declares no client-fault response is
+    # the defect X's first direction names -- caller input with no way to report it
+    # malformed -- and the rule itself, unchanged, is what catches it.
+    with pytest.raises(AssertionError, match="takes caller input and declares no client-fault"):
+        _assert_client_fault_rule(mutated, "getDashboardSummary", operations["getDashboardSummary"])
+
+
+def test_a_required_cookie_parameter_with_its_client_fault_response_is_accepted(
+    openapi_document: dict,
+) -> None:
+    """`X-7`'s *"honest repair"* direction: the same cookie, plus the `422` a malformed
+    one would need. Before this repair this was refused -- *"takes no caller input but
+    declares ['422']"* -- which is the blind spot rejecting the one response a caller
+    input parameter is allowed to add. With the cookie counted, this is now the
+    ordinary case every other input-taking operation is already in.
+    """
+    mutated = copy.deepcopy(openapi_document)
+    operation = mutated["paths"]["/dashboard"]["get"]
+    operation.setdefault("parameters", []).append(
+        {
+            "in": "cookie",
+            "name": "am_scope",
+            "required": True,
+            "schema": {"type": "string", "minLength": 1},
+        }
+    )
+    operation["responses"]["422"] = {
+        "description": "validation_failed",
+        "content": {
+            "application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}
+        },
+    }
+
+    operations = _operations(mutated)
+    assert _takes_caller_input(mutated, operations["getDashboardSummary"]) is True
+    # The real rule, run against the honestly-repaired mutation: no exception.
+    _assert_client_fault_rule(mutated, "getDashboardSummary", operations["getDashboardSummary"])
+
+
+def test_a_cookie_parameter_declared_on_the_path_item_also_counts(
+    openapi_document: dict,
+) -> None:
+    """A mutation of my own, not X's: X's reproduction adds the cookie to the
+    *operation's own* ``parameters``. This document also declares parameters at the
+    *path-item* level, merged in beside the operation's own
+    (`_takes_caller_input`'s own docstring: ``X-Correlation-Id`` and every
+    ``{..._uid}`` are declared that way, and skipping that list once already made
+    `getDocumentVersion` look input-less by accident). A cookie parameter placed there
+    instead of on the operation must count exactly the same way, and nothing in X's own
+    reproduction exercises that merge for the ``cookie`` branch specifically.
+    """
+    mutated = copy.deepcopy(openapi_document)
+    path_item = mutated["paths"]["/dashboard"]
+    path_item.setdefault("parameters", []).append(
+        {
+            "in": "cookie",
+            "name": "am_scope",
+            "required": True,
+            "schema": {"type": "string", "minLength": 1},
+        }
+    )
+    assert path_item["get"]["parameters"] == [{"$ref": "#/components/parameters/CorrelationId"}], (
+        "the mutation must land on the path item, not the operation's own parameters"
+    )
+
+    operations = _operations(mutated)
+    assert _takes_caller_input(mutated, operations["getDashboardSummary"]) is True
+    with pytest.raises(AssertionError, match="takes caller input and declares no client-fault"):
+        _assert_client_fault_rule(mutated, "getDashboardSummary", operations["getDashboardSummary"])
+
+
+def test_the_correlation_header_exemption_is_case_insensitive(openapi_document: dict) -> None:
+    """`W46-JUDGE-Y`'s cross-examination of `X-7`: the exemption compared the header's
+    spelling, not the HTTP header (RFC 9110 section 5.1 -- field names are
+    case-insensitive). ``x-correlation-id``, differently capitalised from the
+    contract's own ``X-Correlation-Id``, is still the same header on the wire and must
+    still be exempt.
+
+    Both directions, on `getDashboardSummary` (input-less today): a differently-cased
+    correlation header alone must not count as caller input, and adding one alongside
+    a genuinely new header must still count -- the exemption is for *one* header, not
+    for every header once any capitalisation of the correlation header is present.
+    """
+    only_recased = copy.deepcopy(openapi_document)
+    path_item = only_recased["paths"]["/dashboard"]
+    path_item["get"]["parameters"] = [{"in": "header", "name": "x-correlation-id"}]
+    operations = _operations(only_recased)
+    assert _takes_caller_input(only_recased, operations["getDashboardSummary"]) is False
+
+    with_a_real_header_too = copy.deepcopy(openapi_document)
+    path_item = with_a_real_header_too["paths"]["/dashboard"]
+    path_item["get"]["parameters"] = [
+        {"in": "header", "name": "X-CORRELATION-ID"},
+        {"in": "header", "name": "X-Scope", "required": True, "schema": {"type": "string"}},
+    ]
+    operations = _operations(with_a_real_header_too)
+    assert _takes_caller_input(with_a_real_header_too, operations["getDashboardSummary"]) is True
 
 
 # ---------------------------------------------------------------------------

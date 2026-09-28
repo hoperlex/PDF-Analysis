@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 f688b409a080b3f6664d6e0dc6e0881f9b14638f57b8d4f240a037ea8775bf54
+ *   sha256 78eccd9e01de927556cc1a1f9ad83db2e318872d3951fe3ab54f732eabf5e0b4
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'f688b409a080b3f6664d6e0dc6e0881f9b14638f57b8d4f240a037ea8775bf54';
+export const CONTRACT_DIGEST = '78eccd9e01de927556cc1a1f9ad83db2e318872d3951fe3ab54f732eabf5e0b4';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -481,6 +481,7 @@ export type ProviderMode = (typeof PROVIDER_MODE_VALUES)[number];
 
 export type RunActivity = {
   by_state: Array<RunStateCount>;
+  /** Absent when the deployment has made no provider call. */
   spend?: RunActivitySpend;
 };
 
