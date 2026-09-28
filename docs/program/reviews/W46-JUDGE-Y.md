@@ -716,7 +716,7 @@ X grepped the comments. I asked the compiler what is true: a probe file declarin
 `tsc --strict --exactOptionalPropertyTypes`:
 
 ```text
-2ffca8c: exit 2 -- TS2741: Property 'spend' is missing in type '{ by_state: never[]; }'
+2ffca8c: exit 2 -- probe.ts(2,14): error TS2741: Property 'spend' …  (the missing-property error)
 d5c9be5: exit 0
 ```
 
