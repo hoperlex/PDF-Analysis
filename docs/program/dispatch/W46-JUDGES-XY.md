@@ -96,3 +96,8 @@ where a stream did the right thing, especially where it reported a weakness in i
 Open the report before the first measurement and commit it. **Commit after each section.** A
 session restart kills you, and only committed work survives it. When you finish, stop your API
 and Next, and remove any disposable clone. Do not tag, push or merge.
+
+**Kill only by PID, and only processes confirmed to be your own descendants.** Check with
+`pstree -p` and `readlink /proc/<pid>/cwd`. This host runs other projects' sessions and other
+lanes' gates. On 2026-09-28 a stream in this wave ran `pkill -9 -f vitest` machine-wide, and
+the integrator had to warn ten sessions.
