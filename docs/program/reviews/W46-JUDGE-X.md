@@ -150,9 +150,93 @@ reproduces them. Comments, not screen text, so **low**; recorded because it is `
 a merge made a sentence false and nothing reddened — inside the join this stage exists to
 repair. `d5c9be5` repaired the two sentences a guard could read and none of these four.
 
-## X3 — the reseal: five documents or four?
+## X3 — the reseal: five documents or four? — **four kinds in one commit, and the fifth legitimately empty; but nothing checks the sixth**
 
-*pending*
+### One commit
+
+`git show --stat 069f656` carries `contracts/api/v1/openapi.json`, `web/openapi/openapi.json`,
+the four files under `web/src/shared/api/generated/` and `web/FRONTEND_LOCK.json` — the
+contract, the mirror, the client, the lock. **The fifth element, *every moved pin*, is empty,
+and legitimately so**: the contract diff is one word (`"spend"` leaves `RunActivity.required`,
+3 lines), no path, operation, schema or error code moves, and the gate is green with every
+`D-102`/`D-105` pin where `W46-SPEND.md` §2's table says it is (surface `17/20/61` at
+`test_doc_prose_facts.py:316`, `FROZEN_*` counts, `PATH_COUNT`/`OPERATION_COUNT`/`SCHEMA_COUNT`,
+the catalog `22`). `git merge-tree` shows the merge `9a295aa` carried the commit unchanged (X6).
+
+### The digests, recomputed by me
+
+`hashlib.sha256` over the merged tree, every 64-hex value in the lock: **8 of 8 match**
+(`lockfile_sha256` `98691bc8…`, `openapi.sha256` = `snapshot_sha256` `f688b409…`,
+`script_sha256` `787c744d…`, `client.gen.ts` `6f1ca0d5…`, `index.ts` `986aaa02…`,
+`operations.gen.ts` `58341631…`, `types.gen.ts` `df105211…`). `cmp` contract vs mirror:
+byte-identical. `npm --prefix web run api:verify` → *"generate-api-client --check: OK - 20
+operations, contract sha256 f688b409a080b3f6664d6e0dc6e0881f9b14638f57b8d4f240a037ea8775bf54"*,
+so the committed client is a fresh generation, not a hand edit hashed afterwards; the worktree
+was clean before and after.
+
+**Surface:** 17 paths / 20 operations / 61 schemas from the document, equal to the lock's
+`paths`/`operations`/`component_schemas`. **Error codes:** 22 in `ErrorCode`'s enum and 22 in
+`contracts/domain/v1/error-codes.json` `codes`; `git diff --stat 2ffca8c d5c9be5 --
+contracts/domain` is empty. **Head:** `0011_document_section`, the last revision in
+`db/migrations/versions/`, and the one `alembic upgrade head` reached on my fresh database.
+
+### Is the lock's `commit_note` true now? — **The sentence the judge found false is now true; three small ones are not**
+
+- **The corrected sentence is true.** It now says the two further pin files moved *in*
+  `d7ac848`, and `git show --stat d7ac848` lists `test_openapi_conformance.py` and
+  `test_served_document_and_health_plane.py` beside the five documents. Corrected in place,
+  as asked.
+- **`W46-SPEND`'s own paragraph is true where it can be measured:** one word off one property
+  of one schema; 17/20/61 and 22; the implementation one commit earlier (`f50e656` is
+  `069f656`'s parent on the stream's first-parent line); the spelling
+  `Field(default=None, json_schema_extra=optional_property)` is the module's for every optional
+  property; the digests are as recomputed above; contract = mirror.
+- **Not true: *"for the reason every reseal note below gives: a commit cannot name itself"*.**
+  Of the eight notes below it, five (`W18-SEAL`, `W25-SEAL`, `W34-CONTRACT`, `W38-KB`,
+  `W39-REVOKE`) do not contain that reason. Low.
+- **Stretched: *"This mirrors RunStatus"*.** `RunStatus.cost_micros` says in the contract
+  *"Absent when the run made no provider call at all, which is a different fact from a cost of
+  zero."* `RunActivity.spend` has **no description at all**, and `RunActivitySpend`'s says only
+  *"`cost_basis` is `measured` only when every contributing `model_call` row reported a measured
+  cost"*. The reseal moved `required` and wrote nothing into the contract about what absence
+  means, so the generated type (`spend?: RunActivitySpend`, no doc comment) cannot tell a
+  client author either. The behaviour mirrors `RunStatus`; the contract does not. Low, and it
+  would cost a second reseal to fix, so it is the owner's call whether it waits.
+- **`dispatch_named_commit: "f50e656"`** — per `W25-SEAL.md:112` the field records the commit a
+  dispatch named when it differs from the content commit. `W46-SPEND`'s dispatch named only its
+  base, `2ffca8c`. The field has simply copied `content_commit` since `W45-BLOCKS` (`830fd76`,
+  `d7ac848`, `069f656`), so this is a convention that drifted, not this stream's error.
+
+### The sixth document nobody lists: the model the served document is generated from
+
+`D-102`'s discipline lists the five documents a reseal moves. It does not list
+`src/auditmanager/api/schemas/models.py`, from which FastAPI generates the document the
+application **serves**. That moved one commit earlier, in `f50e656`. I measured the served
+document against the frozen one with the programme's own engine
+(`tests/contract/api_v1/openapi_conformance.py`, `differences(surface(frozen), surface(served))`,
+`served = create_documentation_app().openapi()`):
+
+```text
+f50e656   1 semantic difference: schemas.RunActivity.required: contract ["by_state", "spend"],
+          generated ["by_state"]
+069f656   0 differences
+d5c9be5   0 differences
+```
+
+So the tree at `f50e656` served a document that disagreed with its frozen contract — expected,
+mid-reseal. The question is **what would have noticed**. `tests/contract/api_v1/
+test_openapi_conformance.py` at `f50e656`: **86 passed**. That file tests the comparison
+*engine* against planted differences and a miniature app (its Part 5 header: *"Until
+[stage 2] lands there is no `app.openapi()` for the twelve operations to compare"*); `grep -rn
+'differences(' tests` finds no call on the real application anywhere. `ALPHA_ROADMAP.md:306`
+specifies the gate as *"`app.openapi()` against the frozen document"* and
+`test_served_document_and_health_plane.py:3-9` says *"the served document is the one the gate
+compares"*. To learn whether any test in the canonical battery compares them, I re-created the
+disagreement at the tip — `RunActivity.spend` made required again **in the Pydantic model only**
+(the engine then reports exactly one difference, `schemas.RunActivity.required`) — and ran the
+whole canonical battery on the clone:
+
+*pending — the result is written here when the run ends.*
 
 ## X4 — the three guards `W46-SPEND` claims, mutated by me — **each catches what it was shown; each misses one I invented**
 
