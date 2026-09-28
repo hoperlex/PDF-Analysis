@@ -28,7 +28,22 @@ step at a time, and committed after each step so a session restart loses nothing
 
 ## 1. Baseline
 
-Pending — first `make gate` run, taken at this branch's tip `fbea618`, which is `2ffca8c`
-plus docs-only commits (`git diff --name-only 2ffca8c..fbea618` touches only
-`docs/program/DEBT_REGISTER.md` and `docs/program/dispatch/**`), so this baseline stands
-for `2ffca8c` as the brief asks.
+Taken at this branch's tip `fbea618`, which is `2ffca8c` plus docs-only commits
+(`git diff --name-only 2ffca8c..fbea618` touches only `docs/program/DEBT_REGISTER.md`
+and `docs/program/dispatch/**`), so this baseline stands for `2ffca8c` as the brief asks.
+
+**First attempt, lost — not a result.** `make gate > /root/w46a-gate.log 2>&1`, tree
+clean at `63dbd60`. The battery reached 64% (past foundation, past the known red at
+~14%, past a second failing node at ~61%) when the host ran out of memory system-wide:
+`dmesg` — `Out of memory: Killed process 1125603 (python)`, `total-vm:1196752kB`. Swap
+was 15/15 GB across roughly 54 concurrent sessions on the shared host, `W46-WIRE`'s own
+baseline in `/root/w46dash` died the identical way at the identical time. The log's own
+tail: `GATE: the canonical battery failed with pytest exit status 137.` **137 is
+`SIGKILL`, not a test failure, and no `GATE OK` line exists in this log** — a killed
+process is not a measurement and this attempt is discarded rather than read for a
+verdict. Confirmed via the integrator (session restarted after the same event) before
+re-running: kill only by confirmed-own PID, never by pattern, on a host every project
+shares.
+
+Second attempt, below, after confirming no other `make gate` under `/root/w46*` was
+running and the host had calmed (load ~3, ~2 GB available).
