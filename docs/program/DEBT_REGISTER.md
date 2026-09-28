@@ -2875,10 +2875,18 @@ case-sensitive, and it saw 1 line of the 24 (`W46-JUDGE-X`, X-10).*
 `section=KM` and started a run. It published three findings, **analysed by the same АР-built
 profile**. Nothing at intake or at run start reads the section. The restriction lives in the
 prompt (`src/auditmanager/analysis/text/prompt.py`), as `web/src/entities/project/model/section.ts`
-says, not in any rule the system enforces. Before wave 46 no document could carry another
-section, so wave 46 created the gap. `W46-CLIENT` makes the screens say what is true: the
-analysis is built for АР text, and a document stored under another section is analysed by the
-same profile.
+says, not in any rule the system enforces. **`W46-JUDGE-X` narrowed the date:** the analysis
+has never read the section (one profile, `DISCIPLINE = "AR"`, `profile.py:35`), and the screens'
+*правило приёма* sentences came in `9bb9385` on 2026-09-22. Wave 46 did not create the
+contradiction; it exposed it. Once a section is stored, it can disagree with the "rule".
+`W46-CLIENT` makes the screens say what is true: the analysis is built for АР text and is applied
+to any uploaded document, and a stated section is stored and counted but neither selects nor
+refuses the analysis.
+
+**X argues against the obvious repair.** Refusing `startRun` for a non-АР section has three
+problems. It must still admit unclassified documents, which through the form are all of them
+(`D-107`), so it punishes only a caller who states a section honestly. It changes a sealed
+operation's refusals. And it turns a descriptive field into an authorization input.
 
 **Needs the owner:** should intake refuse a non-АР section, should a run skip it, or should a
 profile per section exist? `R-25`'s order puts ПОС, ТХ and ПБ first.
