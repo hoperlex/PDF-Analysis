@@ -68,7 +68,7 @@ repaired on the wire: over zero `model_call` rows, `run_activity` carries `by_st
 
 - **The run panel drops seven computed zeros.** The API sends all eight `RunState` rows
   (`RunStateCount`: *"Every member of `RunState` is present"*); in s3 the screen shows one row,
-  *опубликован 1*, because `run-activity-panel.tsx:69` filters `(byState.get(state) ?? 0) > 0`.
+  *опубликован 1*, because `run-activity-panel.tsx:76` filters `(byState.get(state) ?? 0) > 0`.
   The verdict panel's own header calls showing a computed zero *"the non-negotiable both the
   brief and `R-23`'s addendum state"*; the run panel, one column over, does the opposite. Not a
   false number — a hidden true one. The pre-wave panel filtered the same way
@@ -314,9 +314,86 @@ pre-wave documents panel rendered the same `ProjectRow` (`git show
 2ffca8c:web/src/widgets/dashboard/ui/documents-panel.tsx`, line 79). The journey never sees it
 because its write half names projects with short names. Recorded in section 7.
 
-## 5. Y5 — `F-5b` mutated
+## 5. Y5 — `F-5b` mutated — **the stream's three hold; two of mine survive everything; and the screen invents the zeros the server stopped sending**
 
-*pending*
+**The instrument.** A disposable clone at `d5c9be5` (`git clone /root/w46k /root/w46k-probe`,
+`git checkout d5c9be5`, `web/node_modules` symlinked to this worktree's), baselined unmutated:
+`npx vitest run tests/unit/widgets/dashboard.test.ts` → **7 passed**; the whole frontend suite →
+**79 files, 1118 passed**. `W46-JUDGE-X`'s gate had finished (`/root/w46x-gate.status` →
+`exit=0`) and no `make gate` under `/root/w46*` was running. Each mutation was applied by an
+exact-string replacement, measured, and reverted with `git checkout -- web/src`; `git status
+--porcelain` showed only the untracked symlink after each.
+
+| # | mutation | render test (7) | caught by |
+|---|---|---|---|
+| M1 | `W46-WIRE` #1: `' (42)'` appended to the verdict total | **2 failed** | *nothing invented* (`rendered numbers not in the fixture: 42`) and *never renders absent spend…* (its own invented-number half) |
+| M2 | `W46-WIRE` #2: the unclassified `<li>` deleted | **1 failed** | *always shows the unclassified section row* |
+| M3 | `W46-WIRE` #3: the absent-spend branch replaced by `spend?.cost_micros ?? 0` / `spend?.cost_basis ?? 'measured'` | **1 failed** | *never renders absent spend…*: the screen read *«Расход по всем прогонам: 0.000000 · вызовов модели: 0 · измерено»* |
+| M4 | **mine — the right field of the wrong panel**: `dashboard.tsx` `<SectionsPanel rows={data.documents_by_project} />`. It **typechecks** (`npx tsc --noEmit` exit 0: `ProjectDocumentCount` is structurally a `SectionDocumentCount` with no `section`) | **1 failed** | only `'Без раздела: 11'` (`dashboard.test.ts:201`). The screen showed *КМ: 0* where the fixture says 4, and *Без раздела: 8* (the documents-per-project total) |
+| M5 | **mine — the right field of the wrong row**: `sections-panel.tsx` renders `summary.byCode[PROJECT_SECTIONS[(i + 1) % PROJECT_SECTIONS.length]!.code]`, so every section shows its neighbour's count (the fixture's `KM 4` lands on АИ, `PB 2` on ПТ) | **7 passed** | **nothing**: whole suite **79 / 1118 passed**, `tsc` exit 0 |
+| M6 | **mine — two rows swapped inside a panel**: `verdicts-panel.tsx` renders `accepted`'s cell from `rejected` and back (*принято 1 · отклонено 2* over a fixture of 2 and 1) | **7 passed** | **nothing**: whole suite **79 / 1118 passed**, `tsc` exit 0 |
+
+**`W46-WIRE`'s three are real**: each is red under its own mutation, and M1 is red twice. The
+stream quoted all three in its commit (`27e2c55`) and in the test file's header, which is what
+`AGENTS.md` §5 asks for.
+
+**Why M4–M6 get through.** The *nothing invented* case is a **set-membership** test: every digit
+on screen must be *some* number in the fixture. A number moved from one row or panel to another is
+still in the set. The per-row values of three panels are asserted by nothing: the verdict rows
+(4, 2, 1, 0), the run-state rows (6, 1) and the fourteen section rows. The one per-section
+assertion, `dashboard.test.ts:207-208`, is `toContain('data-section="KM"')` plus
+`toContain('4')` **anywhere in the page** — satisfied by the verdict panel's *не решено 4* even
+when the КМ row reads 0 (M4, measured above). **The guard proves that no number is invented; it
+does not prove that any number is in its place.** Cost: one assertion per row, keyed by
+`data-verdict`/`data-run-state`/`data-section`, which the markup already carries.
+
+### Y5-a — the screen cannot tell "the server said zero" from "the server said nothing" (medium)
+
+Both client-side merges fill a row the response omits with `0`:
+`section-breakdown.ts:37-40` seeds all fourteen codes at `0` and `unclassifiedCount = 0`;
+`verdict-breakdown.ts:15-24` seeds all four verdicts at `0`; `run-activity-panel.tsx:76,79` read
+`byState.get(state) ?? 0` and `:51` sums whatever rows arrived. Their headers call the result *"its true zero"*
+(`section-breakdown.ts:10`, `verdict-breakdown.ts:8`) and say the merge is *"the same way the
+backend's own repository does"*. **It is not the same fact.** The repository fills zeros over a
+`GROUP BY` — a group with no rows *is* a computed zero. The client fills zeros over a response
+whose schema says every member **is present** (`VerdictCount`, `RunStateCount`,
+`SectionDocumentCount`); an omitted member there is the server not saying, and rendering it as `0`
+is the silent fallback `AGENTS.md` §4 forbids and the invented zero `R-23`'s addendum names.
+
+**Driven end to end.** Judge A's `F-5a` mutation (`_filled` drops members with no rows; the
+unclassified bucket appended only when non-zero) applied to `dashboard/repository.py` in the clone,
+the API served **from the clone** on `56401` (cwd `/root/w46k-probe`, `PYTHONPATH` the clone's
+`src`), my unchanged Next in front of it:
+
+```text
+copy s0, mutated API:  {"documents_by_project": [], "findings_by_verdict": [],
+                        "run_activity": {"by_state": []}, "section_breakdown": []}
+screen:                Находок: 0 · не решено 0 · принято 0 · отклонено 0 · нужен ручной разбор 0
+                       … fourteen sections at 0 … Без раздела: 0
+panel text identical to the unmutated API's s0 screen: True
+
+copy s2, mutated API:  findings_by_verdict [], by_state [],
+                       section_breakdown [{"section":"KM","document_count":1},{"document_count":1}]
+panel text identical to the unmutated API's s2 screen: True
+```
+
+**Nineteen zeros on the s0 screen that the server did not send**, including *Без раздела: 0*, the
+row `W46-WIRE`'s own brief made non-negotiable. And on s2 with `by_state: []`, the run panel would
+say *«Прогонов пока нет.»* — a claim about runs from a response that said nothing about them.
+
+**Why it matters today, and why it is not an emergency.** The server is honest *now* and
+`W46-SPEND`'s `F-5a` guard keeps it so — I credit that: the one mutation above is exactly what
+`test_dashboard_summary_over_a_fresh_deployment.py` turns red. But **the client makes that
+property invisible from the browser**, so a server regression past that guard (a new member added
+to the enum on one side, a code path that returns early) would ship as a correct-looking screen,
+and no browser-level instrument — render test, language guard, live journey — could see it. The
+render test's fixtures always send every row, so none of them exercises the branch. **Cost:** the
+two merges should report an omitted member as the server's fault (an error state, as
+`dashboard-failure.ts` already does for an unparseable answer) instead of a zero, plus one render
+case with an omitted row.
+
+**Reverted**: the clone's `git checkout -- src`, the lane API restarted from `/root/w46k`; `git
+status --porcelain` in the clone → only the symlink.
 
 ## 6. Y6 — the stream reports, re-measured
 
