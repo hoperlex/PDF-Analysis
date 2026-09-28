@@ -843,10 +843,17 @@ class DashboardAdapter(_SessionHolder):
                 RunStateCountView(state=row.state, count=row.count)
                 for row in record.run_activity
             ),
-            run_spend=RunActivitySpendView(
-                model_call_count=record.run_spend.model_call_count,
-                cost_micros=record.run_spend.cost_micros,
-                cost_basis=record.run_spend.basis,
+            # `F-1`. `record.run_spend` is `None` on a deployment with no `model_call`
+            # row at all, and that absence is carried through rather than defaulted --
+            # see `DashboardSummaryRecord.run_spend` and `RunActivitySpendView`.
+            run_spend=(
+                None
+                if record.run_spend is None
+                else RunActivitySpendView(
+                    model_call_count=record.run_spend.model_call_count,
+                    cost_micros=record.run_spend.cost_micros,
+                    cost_basis=record.run_spend.basis,
+                )
             ),
             section_breakdown=tuple(
                 SectionDocumentCountView(

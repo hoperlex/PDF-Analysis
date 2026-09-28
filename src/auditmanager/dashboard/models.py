@@ -73,6 +73,11 @@ class RunActivitySpendRecord:
     contributing row reported a measured cost, and ``"estimated"`` the moment one does
     not. Read from ``model_call`` directly and never from ``stage_result.metrics``, for
     the `D-15` reason ``runs.repository._COST_SUMMARY`` already gives.
+
+    A record of this type is only ever built when at least one ``model_call`` row
+    exists -- see ``DashboardRepository.summary``, which now carries the
+    ``calls == 0 -> None`` branch ``runs.repository.RunCost`` states and this type's
+    lift of it had dropped (`F-1`, ``docs/program/reviews/W46-JUDGE-A.md`` section 3).
     """
 
     model_call_count: int
@@ -96,10 +101,18 @@ class SectionDocumentCountRecord:
 
 @dataclass(frozen=True, slots=True)
 class DashboardSummaryRecord:
-    """The whole of what ``getDashboardSummary`` answers. See the module docstring."""
+    """The whole of what ``getDashboardSummary`` answers. See the module docstring.
+
+    ``run_spend`` is ``None`` on a deployment with no ``model_call`` rows at all --
+    "no provider call has ever been made" and "calls were made and cost exactly zero,
+    measured" are different facts, and collapsing the first into the second is the
+    invented measurement `F-1` names. ``None`` here is carried to ``None`` in
+    ``RunActivitySpendView`` and then to an absent ``spend`` key at the wire; no layer
+    between this record and the response body may turn it back into zeros.
+    """
 
     documents_by_project: tuple[ProjectDocumentCountRecord, ...]
     findings_by_verdict: tuple[VerdictCountRecord, ...]
     run_activity: tuple[RunStateCountRecord, ...]
-    run_spend: RunActivitySpendRecord
+    run_spend: RunActivitySpendRecord | None
     section_breakdown: tuple[SectionDocumentCountRecord, ...]
