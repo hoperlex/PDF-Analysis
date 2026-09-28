@@ -196,9 +196,81 @@ and *операция* are gone, but *одного общего чтения* �
 how the screen fetches, which is `R-39`'s *transport*, in the author's vocabulary. Low; `D-109` is
 the owner's line.
 
-## 3. Y3 — the journey, live
+## 3. Y3 — the journey, live — **`e2e:pc01 OK` twice, zero undeclared calls, and it can still go red**
 
-*pending*
+Run twice against my own Next and API, each time on its own copy so the write half starts from
+a known state. The literal command, from `/root/w46k`:
+
+```
+E2E_PC01_LOGIN=admin E2E_PC01_PASSWORD=password \
+  npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:56403 --phase all --out <dir>
+```
+
+**Run 1 — a fresh copy of s0 (`audit_w46k_j1`, nothing in it).** Summary, quoted in full:
+
+```
+sign-in: ok at /login -- carrying 'am_session' (HttpOnly=true, SameSite=Strict) into every cold browser
+
+write half: 3 step(s), fixture fixtures/synthetic/ar/ar_baseline.pdf
+
+ok  create-project   api=3 {"project_uid":"prj_01M3KZ790V9V8RRT4VN65SPXFV"}
+ok  upload-document  api=4 {"project_uid":"prj_01M3KZ790V9V8RRT4VN65SPXFV","version_uid":"ver_01M3KZ84YHXKWX2C98NTAPET3T"}
+ok  start-run        api=5 {"project_uid":"prj_01M3KZ790V9V8RRT4VN65SPXFV","run_id":"run_01M3KZ8ZQMMQBTE74WDTAPX57S"} terminal=published in 1514ms/150000ms
+
+ok  root           200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  projects       200  api=1 auth=0 console=0 jar=[am_session] w=780/780 {"project_uid":"prj_01M3KZ790V9V8RRT4VN65SPXFV"}
+ok  project        200  api=1 auth=0 console=0 jar=[am_session] w=765/780 {"document_uid":"doc_01M3KZ84YFPX19NAJ9K155W2TY"}
+ok  document       200  api=1 auth=0 console=0 jar=[am_session] w=780/780 {"version_uid":"ver_01M3KZ84YHXKWX2C98NTAPET3T"}
+ok  version        200  api=2 auth=0 console=0 jar=[am_session] w=765/780 {"run_id":"run_01M3KZ8ZQMMQBTE74WDTAPX57S"}
+ok  comparison     200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  run            200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  review         200  api=5 auth=0 console=0 jar=[am_session] w=765/780
+ok  sign-in        200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  knowledge-base 200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  change-password 200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  blocks         200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  optimisation   200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  logs           200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  workers        200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  dashboard      200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+
+write steps checked: 3/3
+routes checked: 16/16
+e2e:pc01 OK
+```
+
+**Run 2 — a copy of the decisions state (`audit_w46k_j2`: two projects, two runs, three
+decisions, one `KM` document), exit 0.** Every line `ok`, `write steps checked: 3/3`,
+`routes checked: 16/16`, `e2e:pc01 OK`; the same `api=` count on every route as run 1.
+
+**Zero undeclared calls on every route, `blocks` included — read from the raw exchanges, not
+the summary.** `journey.mjs:364` builds `observedApi` as `[...new Set(observed)]`, so the
+summary's `api=1` cannot tell one request from two. Counting every `/bff/` exchange in
+`journey.json` for run 1: `dashboard` → exactly one, `GET /bff/v1/dashboard 200`; `blocks` →
+exactly one, `GET /bff/v1/projects 200`; every route's `undeclaredApi` is `[]` and `failures`
+is `[]`.
+
+**`optional_api`: `W46-WIRE` did not use it.** `grep -c optional_api tests/e2e/pc01/journey/manifest.json`
+→ `1` (the `review` row, older than this wave), and `git diff 2ffca8c d5c9be5 --
+tests/e2e/pc01/journey/manifest.json | grep optional_api` → nothing. Both rewritten rows use
+`expects_api`, and both calls are unconditional on this tree: the dashboard read in every state
+of section 1, and `blocks`' `listProjects` with no project at all — a cold `/blocks` on s0 makes exactly
+`GET /bff/v1/projects?limit=50 200` and renders *«Проектов пока нет.»*, so `expects_api` is the
+right key for it.
+
+**The instrument can still fail on these two rows.** A scratch copy of the manifest with
+`dashboard.expects_api = []` and `blocks.expects_api = []` (the pre-wave `blocks` row), passed
+with `--manifest`, `--phase read`, against run 2's copy:
+
+```
+RED blocks         200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+RED dashboard      200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+e2e:pc01 FAILED -- 2 finding(s):
+  - blocks: made 1 API call(s) no route in the manifest declares: GET /bff/v1/projects
+  - dashboard: made 1 API call(s) no route in the manifest declares: GET /bff/v1/dashboard
+```
+
+exit 1. The committed manifest was not touched (`git status --porcelain` empty after).
 
 ## 4. Y4 — widths and palettes
 
