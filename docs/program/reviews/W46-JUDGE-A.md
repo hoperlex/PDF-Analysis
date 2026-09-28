@@ -71,7 +71,43 @@ canonical battery (not a chosen scope)", and its §8 lists only named suites and
 `make gate` result to "the final report handed to the integrator" — the one that never
 arrived. **A battery run from that tree would have printed #3–#5.**
 
-## 2. `web/FRONTEND_LOCK.json` — recomputed or carried? — *in progress*
+## 2. `web/FRONTEND_LOCK.json` — recomputed or carried? — **Recomputed.**
+
+Every 64-hex value in the file, recomputed with `hashlib.sha256` over the merged tree:
+
+| field | file | result |
+|---|---|---|
+| `toolchain.lockfile_sha256` | `web/package-lock.json` | match `98691bc8…` |
+| `openapi.sha256` | `contracts/api/v1/openapi.json` | match `20980cb3…` |
+| `openapi.snapshot_sha256` | `web/openapi/openapi.json` | match `20980cb3…` |
+| `generator.script_sha256` | `web/scripts/generate-api-client.mjs` | match `787c744d…` |
+| `generated.files.client.gen.ts` | generated | match `f9bcfd18…` |
+| `generated.files.index.ts` | generated | match `b2596c2e…` |
+| `generated.files.operations.gen.ts` | generated | match `63e88502…` |
+| `generated.files.types.gen.ts` | generated | match `a7dc6f23…` |
+
+`openapi.paths/operations/component_schemas` = 17/20/61 = the document. The two unchanged
+digests are **legitimately carried**: `git diff --stat alpha-w45 130200d -- web/package-lock.json
+web/scripts/generate-api-client.mjs web/package.json` is empty. A matching digest only proves the
+lock agrees with the files, so I also asked whether **the files agree with the generator**:
+`npm --prefix web run api:verify` → `generate-api-client --check: OK - 20 operations, contract
+sha256 20980cb3…` — the committed client is byte-identical to a fresh generation, and the
+mirror to the contract. Not a hand-edited client with its hash taken afterwards.
+
+Two things that are not digests:
+
+- `openapi.content_commit` is `d55012a`, whose `openapi.json` hashes to `00b16114…` (the
+  **pre**-reseal contract). That is a documented convention — the `commit_note` says a commit
+  cannot name itself and "THE AUTHORITY IS THE DIGEST" — and it has held since `alpha-w42`
+  (`667a49c`, `a49d047` behave the same way). `frontend-lock.guard.test.ts:103` checks only
+  that it is hex. Not a finding; recorded so nobody mistakes it for one.
+- **The `commit_note` states something false about git.** It says the two further pin files
+  "moved in this reseal's own git history, **before** this commit". `git show --stat d7ac848`
+  shows `test_openapi_conformance.py` and `test_served_document_and_health_plane.py` **in**
+  that commit, which is what `W46-SEAL.md` §1 also says. Low severity; a lock file is read by
+  the next resealer.
+
+## 3. `getDashboardSummary`, driven — *in progress*
 
 ## 3. `getDashboardSummary`, driven — *in progress*
 
