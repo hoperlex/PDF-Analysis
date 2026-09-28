@@ -380,9 +380,9 @@ the declared form."*, `details: {"field": "section", "constraint": "enum"}`.
 
 **Mostly repaired.** The two sentences Y named are gone or rewritten true. The rewrite
 introduced one false sentence, and it contradicts the sentence after it on the same line of the
-same screen: `web/src/widgets/project-sections/ui/project-sections.tsx:112` (*«При загрузке
-проверяется конверт файла, а не раздел.»*) against `:113` (*«Раздел документа сервер тоже хранит
-и проверяет, когда его называют»*). What the author meant — the section does not decide whether
+same screen: `web/src/widgets/project-sections/ui/project-sections.tsx:111-112` (*«При загрузке
+проверяется конверт файла, а не раздел.»*) against `:112-113` (*«Раздел документа сервер тоже
+хранит и проверяет, когда его называют»*). What the author meant — the section does not decide whether
 a document is accepted for analysis — is true; what the sentence says is not. It is Y2-a's own
 class: a sentence about intake that the server contradicts. `tests/unit/screens/
 project-sections.test.ts` pins neither. **Low–medium**, finding Z-4.
