@@ -272,9 +272,47 @@ e2e:pc01 FAILED -- 2 finding(s):
 
 exit 1. The committed manifest was not touched (`git status --porcelain` empty after).
 
-## 4. Y4 — widths and palettes
+## 4. Y4 — widths and palettes — **no overflow, no clipping, no text under 4.5:1, on the brief's data**
 
-*pending*
+The decisions state (`audit_w46k_s4`: two projects, two published runs, six findings, three
+decisions, one `KM` and one unclassified document), every width in both palettes, each in its own
+cold browser with the palette written to `am-theme` the way the toggle stores it. Beyond
+`width.mjs`'s `MEASUREMENT`, the probe counted every element inside the dashboard whose content
+is wider than its box under `overflow-x: hidden|clip|auto|scroll` (*clipped*), and computed the
+WCAG contrast ratio of every element that owns a text node against its nearest opaque background
+(62 text elements) — the pixel-level check judge A could not take.
+
+| palette | viewport | `data-theme`, body background | `scrollWidth`/`clientWidth`/`innerWidth` | past the edge | clipped | grid | text < 4.5:1 | lowest ratio | errors | `/dashboard` calls |
+|---|---|---|---|---|---|---|---|---|---|---|
+| light | **780** | `light`, `rgb(245, 246, 248)` | 765 / 765 / 780 | 0 | 0 | 1 × 667 px | 0 | 5.45 | 0 / 0 | 1 |
+| light | **781** | same | 766 / 766 / 781 | 0 | 0 | 2 × 322 px | 0 | 5.45 | 0 / 0 | 1 |
+| light | **360** | same | 345 / 345 / 360 | 0 | 0 | 1 × 247 px | 0 | 5.45 | 0 / 0 | 1 |
+| light | **1024** | same | 1009 / 1009 / 1024 | 0 | 0 | 2 × 443.5 px | 0 | 5.45 | 0 / 0 | 1 |
+| dark | **780** | `dark`, `rgb(13, 18, 25)` | 765 / 765 / 780 | 0 | 0 | 1 × 667 px | 0 | 5.05 | 0 / 0 | 1 |
+| dark | **781** | same | 766 / 766 / 781 | 0 | 0 | 2 × 322 px | 0 | 5.05 | 0 / 0 | 1 |
+| dark | **360** | same | 345 / 345 / 360 | 0 | 0 | 1 × 247 px | 0 | 5.05 | 0 / 0 | 1 |
+| dark | **1024** | same | 1009 / 1009 / 1024 | 0 | 0 | 2 × 443.5 px | 0 | 5.05 | 0 / 0 | 1 |
+
+The lowest ratio in both palettes is the verdict panel's caption (`am-state__correlation`). The
+breakpoint sits exactly where it should: one column at 780, two at 781. Screenshots at 781 light
+and 360 dark were read by eye: every panel whole, the sections list wrapping inside its panel, the
+navigation wrapping onto extra lines at 360 without pushing anything past the edge. The earlier
+780 readings in s0–s3 (section 1) agree: 765 / 765 / 780, 0 offenders, in every state.
+
+**One thing the brief's data does not contain, measured because the contract allows it.**
+`ProjectDocumentCount.name` is `maxLength: 200` with no word-break requirement. One project named
+`Проект` + 194 × `Ж` (201 from `POST /projects`), then the same probe:
+
+```
+/dashboard  360 light   scrollWidth 3691  innerWidth 360   1 element past the edge: <a> right=3691
+/dashboard 1024 dark    scrollWidth 3691  innerWidth 1024  same <a>
+/projects   360 light   scrollWidth 3691  innerWidth 360   same shape: the project row's <a>
+```
+
+**Pre-existing and product-wide, not this wave's**: `/projects` overflows identically, and the
+pre-wave documents panel rendered the same `ProjectRow` (`git show
+2ffca8c:web/src/widgets/dashboard/ui/documents-panel.tsx`, line 79). The journey never sees it
+because its write half names projects with short names. Recorded in section 7.
 
 ## 5. Y5 — `F-5b` mutated
 
