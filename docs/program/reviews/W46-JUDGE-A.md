@@ -60,7 +60,7 @@ git diff --check                  -> exit 0
 | 8 | `web/tests/contract/seam-operations.contract.test.ts` › *are exactly the operations the client exposes* | `SEAM_OPERATIONS` has no `getDashboardSummary` | `web/tests` — predicted by `W46-SEAL` §7 |
 | 9 | same file › *includes both authorization codes…* | `expected … to have a length of 19 but got 20` | same file; `W46-SEAL` §7 named the file but said both reds were in the first `describe` — one is in `the error catalog` |
 
-**Four of the nine (#3–#7 less #6's owner) were in nobody's report.** #3–#5 sit in
+**Five of the nine (#3–#7) were in nobody's report.** #3–#5 sit in
 `W46-SEAL`'s own `allowed_paths` and in **the very file `D-105` names as a pin site**
 (`test_openapi_document.py:493`, the error-code count, one assertion over from #3). They
 reproduce at `W46-SEAL`'s own tip by construction —
