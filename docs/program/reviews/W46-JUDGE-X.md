@@ -457,4 +457,23 @@ Where I went that none of it points, and what came back:
 
 ## What I could not answer, and why
 
-*pending*
+- **The stale dashboard after `createProject`, in a browser.** Reproduced statically (the
+  invalidation sites, the key namespaces, `staleTime: 30_000`, and X2's measured change in the
+  answer); I started no Next server, because the screen and the journey are `W46-JUDGE-Y`'s,
+  and one measurement per lane kept me to the API.
+- **Each invented `F-5a` mutation alone across the 612-scope.** I ran the two together once
+  (612 passed) and each alone against the new file (3 passed each). They change disjoint
+  fields — counts and `cost_basis` — so neither can mask a test that would catch the other; I
+  did not spend two more five-minute runs to show that separately.
+- **The cookie mutation (`F-2`) beyond the contract scope.** 367/367 in `tests/contract`; I did
+  not run the whole battery with it. Whether an integration test would see a cookie parameter
+  on the frozen document depends on the served-vs-frozen question in X3, which I did run in
+  full for a different drift.
+- **Whether `W46-SPEND`'s *"five more passing nodes"* arithmetic in its §6 is exactly right in
+  words.** The numbers agree with mine (X1: 2500 → 2504 nodes, 2499 → 2504 passing); its
+  sentence attributes the five to *"three … one net-new … and S4 adding no new test"*, which
+  sums to four unless the red-turned-replaced node is counted, which the sentence does not say.
+  A stream report's wording is `W46-JUDGE-Y`'s subject (Y6), so I leave it there.
+- **Anything about the deployed stand** (`127.0.0.1:31500`). Not touched, read or otherwise;
+  `infra/deploy/verify-deployed.sh` inspects a running container, and no container outside
+  `gate-w46j*` is mine to touch.
