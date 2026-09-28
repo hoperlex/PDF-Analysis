@@ -70,7 +70,53 @@ subtests passed` — one more than X4's baseline of `367`, which is this new fil
 
 ## 4. G3 — the historical-section control
 
-*(filled as the work proceeds)*
+`_HISTORICAL_HEADING` (`^#+.*historical record.*$`) is a bare line match with no notion
+of Markdown structure, so (X-4) a shell comment inside a fenced code block matches it as
+readily as a real heading, and the existing non-vacuity check ("at least one claim
+survives") only catches a false boundary placed *before every* claim, not one placed
+*after the first* claim and before the rest — X's own mutation plants its fenced false
+heading after the surface-triple paragraph and before a stale migration-head sentence,
+so the surface-triple claim survives (non-vacuity passes) while the stale sentence is
+silently cut away and never checked by `test_the_scanned_docs_state_the_migration_head_
+this_tree_has`.
+
+Added `_mask_fenced_code_blocks` (blanks the interior of every ``` / ~~~ fenced block,
+length- and newline-preserving, so offsets still index the original text) and
+`_GENUINE_HISTORICAL_HEADING_SHAPE` (this file's own convention: `## Previous release
+state -- wave N (historical record)`, loose on wording between the fixed anchors,
+strict on shape). `_historical_boundary(full_text)` finds `_HISTORICAL_HEADING`'s first
+match in the *masked* text and asserts it also has the genuine shape, refusing to use it
+as a boundary at all otherwise — closing both holes X named without weakening the
+existing non-vacuity check, which stays as a second line of defence. Both call sites
+(`_scanned_documents`, `test_the_historical_section_is_excluded_from_the_live_scan`) now
+go through it.
+
+**No real document is mutated** — `CURRENT_STATE.md` is a forbidden hotspot, and this
+suite's own convention (its header, and `test_surface_counts_in_prose.py`'s
+red/green parametrization) is to prove a guard can fail on synthetic prose. Four new
+tests:
+
+- `test_the_genuine_heading_is_still_found_as_the_boundary` — control, honest synthetic
+  document, boundary lands exactly at the real heading.
+- `test_a_historical_heading_inside_a_code_fence_is_not_a_boundary` — **X's mutation**,
+  reproduced: a fenced shell comment plus a stale migration-head sentence between the
+  live claim and the genuine heading. The fence is masked away, the boundary is the
+  genuine heading, and the previously-hidden stale sentence is now inside the scanned
+  prefix.
+- `test_a_too_early_heading_outside_a_fence_is_still_caught` — **judge A's mutation**
+  (`F-5`), reproduced: `### A note on how the historical record is kept`, directly under
+  the live heading. Not fenced, but rejected by the shape check (`AssertionError`,
+  *"does not look like this file's genuine heading"*).
+- `test_a_too_early_heading_after_the_first_claim_is_still_caught` — **my own
+  mutation**: X's second hole, reproduced *without* a fence at all — a real, unfenced,
+  level-two heading (`## Note: keeping the historical record separate`) placed after the
+  surface-triple claim and before a stale head sentence. Proves the positional hole is
+  closed on its own, not merely as a side effect of fence-masking (X's own reproduction
+  combines both defects in one mutation, so fixing only fencing would already make that
+  specific case pass again without proving this one is closed). Rejected the same way.
+
+**Run.** `tests/contract/api_v1/test_doc_prose_facts.py`: `25 passed` (21 + 4 new).
+`tests/contract` scope: `372 passed, 49 subtests passed` (368 after G1, +4).
 
 ## 5. G4 — a cookie is input
 

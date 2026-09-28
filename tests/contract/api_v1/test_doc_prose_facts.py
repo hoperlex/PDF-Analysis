@@ -76,7 +76,82 @@ MANUAL_TESTS_DIR = REPO_ROOT / "docs" / "manual-tests"
 #: The exact heading `CURRENT_STATE.md` uses to mark its own history. Matched by the
 #: literal phrase the file's own prose uses ("historical record"), not by a wave number,
 #: so the boundary moves with the file rather than needing an edit every close-out.
+#:
+#: Deliberately loose (any `#+` line, any level): `test_a_too_early_heading_outside_a_
+#: fence_is_still_caught` below depends on a heading this loose still being *found* as
+#: the (wrong) candidate boundary, so :func:`_historical_boundary`'s shape check has
+#: something to catch it with. Tightening this pattern itself would make that mutation
+#: invisible rather than caught (see that test's docstring).
 _HISTORICAL_HEADING = re.compile(r"^#+.*historical record.*$", re.IGNORECASE | re.MULTILINE)
+
+#: A fenced code block, ``` or ~~~, of three or more of the same character, closed by a
+#: line starting with at least that many of the same character. `F-5c`'s first hole
+#: (`X-4`): `_HISTORICAL_HEADING` is a bare line match with no notion of Markdown
+#: structure, so a shell comment inside a fence -- `# the historical record below is
+#: kept verbatim; do not edit it` -- is indistinguishable from a real heading to it.
+_FENCED_CODE_BLOCK = re.compile(
+    r"^([ \t]*)(`{3,}|~{3,})[^\n]*\n.*?^\1\2[ \t]*$", re.MULTILINE | re.DOTALL
+)
+
+#: What a *genuine* historical-record section heading looks like in this file, every
+#: time it has been written so far: ``## Previous release state -- wave <N> (historical
+#: record)``. `F-5c`'s second hole (`X-4`): a boundary chosen by `_HISTORICAL_HEADING`
+#: alone can be *any* line that merely mentions the phrase, in a code fence or as a
+#: subsection heading placed early on purpose -- and the old non-vacuity check ("at
+#: least one claim survives") only catches this when the false boundary precedes every
+#: claim, not when it falls after the first one and hides the rest. This is the shape
+#: check that closes it: whichever line `_HISTORICAL_HEADING` finds first must also look
+#: like this file's own convention for the real heading, or the guard refuses to use it
+#: as a boundary at all -- deliberately loose on wording (`.*` between the fixed anchors)
+#: so a phrasing change does not itself require an edit here, and deliberately strict on
+#: shape (level two, "Previous release state", a wave number, "(historical record)" at
+#: the end) so a heading that merely contains the marker phrase cannot pass as this one.
+_GENUINE_HISTORICAL_HEADING_SHAPE = re.compile(
+    r"^##\s+Previous release state\b.*\bwave\s+\d+.*\(historical record\)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _mask_fenced_code_blocks(text: str) -> str:
+    """Every character inside a fenced code block, replaced with a non-heading filler.
+
+    Length- and newline-preserving, so every offset :func:`_historical_boundary` reports
+    is still a valid index into the *original*, unmasked text -- the same text
+    :func:`_scanned_documents` slices.
+    """
+
+    def _mask(match: "re.Match[str]") -> str:
+        return re.sub(r"[^\n]", "x", match.group(0))
+
+    return _FENCED_CODE_BLOCK.sub(_mask, text)
+
+
+def _historical_boundary(full_text: str) -> "re.Match[str]":
+    """The one real historical-record heading this file's own convention writes.
+
+    Two independent checks, for the two independent ways `F-5c` was found blind
+    (`X-4`): the candidate is found outside every fenced code block
+    (:func:`_mask_fenced_code_blocks`), and the candidate that is found must have the
+    shape a genuine heading of this file always has
+    (:data:`_GENUINE_HISTORICAL_HEADING_SHAPE`) -- not merely contain the marker
+    phrase. Either check alone leaves the other hole open: fence-masking alone still
+    lets a bare, early, non-fenced heading like judge A's through; the shape check
+    alone, applied to an unmasked search, would just skip a fenced false match and land
+    on the real heading anyway, silently -- which hides that the input was malformed
+    rather than failing on it.
+    """
+    masked = _mask_fenced_code_blocks(full_text)
+    boundary = _HISTORICAL_HEADING.search(masked)
+    assert boundary, "no historical-record heading found outside a code fence"
+    candidate = boundary.group(0).strip()
+    assert _GENUINE_HISTORICAL_HEADING_SHAPE.match(candidate), (
+        "the first historical-record marker outside a code fence does not look like "
+        "this file's genuine heading (`## Previous release state -- wave N "
+        f"(historical record)`): {candidate!r} -- a line that merely mentions the "
+        "phrase must not silently become the live/historical boundary (F-5c's second "
+        "hole, X-4)"
+    )
+    return boundary
 
 _METHODS = frozenset({"get", "put", "post", "delete", "options", "head", "patch", "trace"})
 
@@ -231,8 +306,7 @@ def _scanned_documents() -> list[tuple[str, str]]:
     for path in named:
         text = path.read_text(encoding="utf-8")
         if path == CURRENT_STATE:
-            boundary = _HISTORICAL_HEADING.search(text)
-            assert boundary, "CURRENT_STATE.md no longer carries its historical-record heading"
+            boundary = _historical_boundary(text)
             text = text[: boundary.start()]
         out.append((str(path.relative_to(REPO_ROOT)), text))
     return out
@@ -348,13 +422,12 @@ def test_the_historical_section_is_excluded_from_the_live_scan() -> None:
     within a day of being written, caught by its own author closing wave 45, and again
     at `W46-SEAL` closing wave 46 -- the same shape `D-105` lists three of, found here as
     a fourth. This version derives its expectation from the marker
-    :data:`_HISTORICAL_HEADING` itself finds in the file *as it stands*, so it proves the
-    same mechanism -- a real boundary exists, everything after it is cut, everything
+    :func:`_historical_boundary` itself finds in the file *as it stands*, so it proves
+    the same mechanism -- a real boundary exists, everything after it is cut, everything
     before it survives -- without carrying a fact about which wave is currently live.
     """
     full_text = CURRENT_STATE.read_text(encoding="utf-8")
-    boundary = _HISTORICAL_HEADING.search(full_text)
-    assert boundary, "CURRENT_STATE.md no longer carries its historical-record heading"
+    boundary = _historical_boundary(full_text)
     (scanned_text,) = (
         text for file, text in _scanned_documents() if file == "docs/program/CURRENT_STATE.md"
     )
@@ -385,6 +458,23 @@ def test_the_historical_section_is_excluded_from_the_live_scan() -> None:
     # `test_the_bff_handler_still_makes_a_claim_this_guard_can_read` already makes for
     # the BFF route handler.
     #
+    # **`X-4` (`docs/program/reviews/W46-JUDGE-X.md`, `F-5c`): non-vacuity alone is not
+    # enough.** "At least one claim survives" holds for a boundary placed anywhere
+    # before the *last* claim, not only one placed before *every* claim -- a mutation
+    # that plants its false heading after the surface-triple paragraph but before a
+    # stale migration-head sentence leaves the union non-empty (the surface triple
+    # survives) while the stale head is silently cut away and never checked. `X-4` also
+    # found the false heading did not even need to be a real heading: `_HISTORICAL_
+    # HEADING` is a bare line match, so a shell comment inside a fenced code block
+    # matches it too. `_historical_boundary` closes both: the candidate is searched for
+    # outside every fenced code block, and whichever line is found first must have the
+    # shape this file's genuine heading always has (`_GENUINE_HISTORICAL_HEADING_
+    # SHAPE`) or the guard refuses to treat it as a boundary at all, rather than silently
+    # using it or silently skipping past it. See `test_a_historical_heading_inside_a_
+    # code_fence_is_not_a_boundary`, `test_a_too_early_heading_outside_a_fence_is_still_
+    # caught` and `test_the_genuine_heading_is_still_found_as_the_boundary` below for all
+    # three shown on synthetic prose.
+    #
     # **Not narrowed to `TAGGED_TIP_CLAIM` alone**, though that is the literal the report
     # names. Measured against this tree rather than assumed: the live section, dated
     # 2026-09-28, says wave 46 is "merged, not yet gated" and deliberately makes no
@@ -393,9 +483,13 @@ def test_the_historical_section_is_excluded_from_the_live_scan() -> None:
     # section that is telling the truth, in a file this task's `allowed_paths` does not
     # cover (`docs/program/CURRENT_STATE.md` is the integrator's -- see
     # `docs/program/W46-SPEND.md`). The union of all three extractors this file already
-    # derives from the tree -- migration head, surface triple, tagged tip -- catches the
-    # identical defect: a too-early heading truncates all of them together, not just
-    # one, so this stays exactly as strong a guard without going red over an honest gap.
+    # derives from the tree -- migration head, surface triple, tagged tip -- stays as a
+    # second, independent line of defence: the shape check above refuses judge A's
+    # heading (it does not say "Previous release state") and X's fenced one (masked
+    # away before the search even runs), but neither check reads the heading's
+    # *position* relative to the claims -- only its shape. Non-vacuity is what would
+    # still catch the one case that has the right shape *and* the wrong position: the
+    # genuine heading text itself, copied verbatim and placed early by hand.
     live_claims = (
         {m.group(0) for m in _migration_head_claims(scanned_text)}
         | {m.group(0) for m in _surface_triple_claims(scanned_text)}
@@ -554,6 +648,123 @@ def test_a_wrapped_surface_triple_claim_inside_a_blockquote_is_still_one_claim()
     assert not list(SURFACE_TRIPLE_CLAIM.finditer(wrapped)), "the raw text should not match"
     claims = list(_surface_triple_claims(wrapped))
     assert claims and claims[0].group("operations") == "16"
+
+
+#: A minimal but structurally faithful `CURRENT_STATE.md`: an H1 title, a live
+#: `## Where the programme is` section carrying one claim, then the genuine historical
+#: heading, then one historical claim. Every `_historical_boundary` mutation test below
+#: builds on this rather than the real file, per this section's own header -- no real
+#: document is mutated to prove the guard can fail.
+_SYNTHETIC_LIVE_PREFIX = (
+    "# Current state\n\n"
+    "## Where the programme is, 2026-09-28 -- wave 46 merged, not yet gated\n\n"
+    "The contract surface this tree has is 17 paths / 20 operations / 61 schemas.\n\n"
+)
+_SYNTHETIC_GENUINE_HEADING = "## Previous release state -- wave 45 (historical record)\n\n"
+_SYNTHETIC_HISTORICAL_TAIL = "Migration head is unchanged at `0010_run_terminal_detail`.\n"
+_SYNTHETIC_HONEST_DOCUMENT = (
+    _SYNTHETIC_LIVE_PREFIX + _SYNTHETIC_GENUINE_HEADING + _SYNTHETIC_HISTORICAL_TAIL
+)
+
+
+def test_the_genuine_heading_is_still_found_as_the_boundary() -> None:
+    """The control: an honest document, boundary exactly where the real heading starts."""
+    boundary = _historical_boundary(_SYNTHETIC_HONEST_DOCUMENT)
+    assert boundary.start() == len(_SYNTHETIC_LIVE_PREFIX)
+    assert _SYNTHETIC_HONEST_DOCUMENT[: boundary.start()] == _SYNTHETIC_LIVE_PREFIX
+
+
+def test_a_historical_heading_inside_a_code_fence_is_not_a_boundary() -> None:
+    """`X-4`'s own mutation, on synthetic prose: a shell comment in a fenced code block,
+    reading `# the historical record below is kept verbatim; do not edit it`, followed
+    by a stale migration-head sentence, both placed between the live claim and the
+    genuine heading.
+
+    Before this repair, `_HISTORICAL_HEADING.search()` matched the commented line
+    inside the fence -- a bare `^#+.*historical record.*$` has no notion of Markdown
+    structure -- and truncated there, hiding the stale sentence from every test that
+    would otherwise have caught it (`test_the_scanned_docs_state_the_migration_head_
+    this_tree_has` on the real file). Masking fenced code blocks before searching
+    restores the genuine heading as the boundary, and the stale sentence is back inside
+    the scanned prefix where a head-checking test can see it.
+    """
+    fenced_false_heading = (
+        "```bash\n"
+        "# the historical record below is kept verbatim; do not edit it\n"
+        "```\n\n"
+    )
+    stale_head_sentence = "The migration head is `0010_run_terminal_detail`.\n\n"
+    mutated = (
+        _SYNTHETIC_LIVE_PREFIX
+        + fenced_false_heading
+        + stale_head_sentence
+        + _SYNTHETIC_GENUINE_HEADING
+        + _SYNTHETIC_HISTORICAL_TAIL
+    )
+
+    boundary = _historical_boundary(mutated)
+
+    # The boundary is the genuine heading, not the fenced comment: the fenced comment
+    # sits well before it and is not where the scan is cut.
+    expected_start = len(_SYNTHETIC_LIVE_PREFIX + fenced_false_heading + stale_head_sentence)
+    assert boundary.start() == expected_start
+    assert boundary.group(0).strip() == _SYNTHETIC_GENUINE_HEADING.strip()
+    # The point of the fix: the stale sentence the fence used to hide is now inside the
+    # scanned prefix, where a real head-checking test would see it.
+    assert stale_head_sentence.strip() in mutated[: boundary.start()]
+
+
+def test_a_too_early_heading_outside_a_fence_is_still_caught() -> None:
+    """Judge A's mutation (`F-5`, `docs/program/reviews/W46-JUDGE-A.md` section 6): a
+    real, non-fenced `### A note on how the historical record is kept` heading, placed
+    directly under the live heading before any of its content.
+
+    Not fenced, so masking alone would not stop `_HISTORICAL_HEADING` from matching it
+    -- and it is the first match in the file, so it is still the boundary
+    `_HISTORICAL_HEADING` finds first. What refuses it is the shape check: this line
+    does not read "Previous release state -- wave N (historical record)", so
+    `_historical_boundary` raises rather than silently truncating the live section down
+    to nothing.
+    """
+    mutated = (
+        "# Current state\n\n"
+        "## Where the programme is, 2026-09-28 -- wave 46 merged, not yet gated\n\n"
+        "### A note on how the historical record is kept\n\n"
+        "The contract surface this tree has is 17 paths / 20 operations / 61 schemas.\n\n"
+        + _SYNTHETIC_GENUINE_HEADING
+        + _SYNTHETIC_HISTORICAL_TAIL
+    )
+    with pytest.raises(AssertionError, match="does not look like this file's genuine heading"):
+        _historical_boundary(mutated)
+
+
+def test_a_too_early_heading_after_the_first_claim_is_still_caught() -> None:
+    """A mutation of my own, not X's or judge A's: `F-5c`'s second hole (`X-4`)
+    reproduced *without* a code fence at all.
+
+    X's own reproduction combines two defects in one mutation (a false match that is
+    both fenced *and* placed after the first live claim), so fixing fence-blindness
+    alone would already make that specific mutation pass again -- without proving the
+    positional hole (a boundary placed after the first claim, hiding every claim behind
+    it) is closed on its own. This mutation isolates it: a real, unfenced, level-two
+    heading -- `## Note: keeping the historical record separate` -- placed after the
+    live surface-triple claim but before a stale migration-head sentence and the
+    genuine heading. It has the right *level* (two `#`) but not this file's genuine
+    *shape* ("Previous release state -- wave N"), so the shape check refuses it exactly
+    as it refuses judge A's, and the stale sentence stays where a head-checking test can
+    reach it rather than being silently cut away.
+    """
+    false_heading = "## Note: keeping the historical record separate\n\n"
+    stale_head_sentence = "The migration head is `0010_run_terminal_detail`.\n\n"
+    mutated = (
+        _SYNTHETIC_LIVE_PREFIX
+        + false_heading
+        + stale_head_sentence
+        + _SYNTHETIC_GENUINE_HEADING
+        + _SYNTHETIC_HISTORICAL_TAIL
+    )
+    with pytest.raises(AssertionError, match="does not look like this file's genuine heading"):
+        _historical_boundary(mutated)
 
 
 def test_the_known_historical_triple_is_registered_and_not_flagged() -> None:
