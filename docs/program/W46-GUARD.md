@@ -66,7 +66,65 @@ subtests passed` — one more than X4's baseline of `367`, which is this new fil
 
 ## 3. G2 — `F-5a` exact-count guard
 
-*(filled as the work proceeds)*
+`test_dashboard_summary_over_a_fresh_deployment.py`'s three tests, and the 612-scope
+around them, all pass under X's two mutations of `_filled` -- every count forced to
+`(member, 0)` (never reading the database) and `cost_basis` forced to `"measured"`
+unconditionally -- because every state those tests drive is all zeros except one
+`spend` call that genuinely is `measured`.
+
+Added `test_a_deployment_with_known_data_reports_the_exact_counts` to the same file,
+plus four seeding helpers (`_seed_published_document`, `_walk_run_to`, `_seed_run`,
+`_seed_finding`, `_seed_model_call`). Every count is known before the read:
+
+- **documents per project, per section:** two projects, documents with published
+  current versions (`current_version_uid` set -- the one column
+  `DocumentRepository._LIST_PROJECTS` and `_DOCUMENTS_BY_SECTION` both join through),
+  classified `AR`, `KM`, and one left unclassified.
+- **runs per state:** one run in each of the eight frozen states, including
+  `cancelled` (declared directly from `created`) and `partial` (declared only from
+  `validating`, with a non-empty `degradation_set`) -- neither of which
+  `PublishedRun._walk_to` in `tests/integration/api/conftest.py` reaches, so
+  `_walk_run_to` extends it rather than importing it (out of reach across directories
+  under `--import-mode=importlib`, same as `fresh_database_url`'s own reasoning next
+  to it).
+- **findings per verdict:** one `pending`, two `accepted`, one `rejected`, inserted
+  directly into `finding`/`finding_observation`/`expert_decision_event` (the same
+  "a fixture is allowed to know the schema its own suite exists to protect" already
+  used for `model_call`). `needs_manual_review` is asserted at exactly `0`, not
+  seeded: `20260910_0002_pc01_schema.py`'s own comment says *"declared with no PC-01
+  producer"*, and `ck_expert_decision_event_type_verdict_agree` enforces it
+  structurally -- no `INSERT` into `expert_decision_event` can produce that verdict,
+  under any of the four declared event types.
+- **spend with one estimated call:** two `model_call` rows on one run, one `measured`
+  and one `estimated`, so the aggregate basis is a real decision (`estimated`) rather
+  than a copy of a single row.
+
+**Run.** New test alone: `4 passed` (3 existing + 1 new) in the file.
+
+**X's first mutation** (`_filled` returns `(member, 0)` for every member, in-tree,
+reverted after): red -- `assert by_section["AR"] == 1` (`AR: 0`).
+
+**X's second mutation** (`basis="measured"` unconditionally, in-tree, reverted after):
+red -- `cost_basis` `'measured'` vs expected `'estimated'`.
+
+**My own mutation** (`_DOCUMENTS_BY_SECTION` relabelled to report every document under
+`'AR'` regardless of its real section, dropping the `GROUP BY`): red -- `AR: 3` vs
+expected `1`. A different bug class from X's two (mislabelling rather than
+zero-invention), not caught by either of X's mutations, caught by this guard's
+per-section exactness.
+
+All three reverted; `git status --porcelain -- src/auditmanager/dashboard/
+repository.py` empty after each, and byte-identical to the pre-mutation file
+(`diff` empty). Re-run after each revert: `4 passed`.
+
+**Provisioning note.** `gate-w46a`'s own containers (`postgres`, `s3`, `s3-init`) were
+not running at the start of this task (only `gate-w46k-*`, judge Y's lane, was up) --
+started with `make up` in this worktree, then `PYTHONPATH=src .venv/bin/python -m
+alembic --config db/migrations/alembic.ini upgrade head` to bring `audit_w46a` to
+head (the gate database this suite's other fixtures and `make gate` itself use). No
+container outside `gate-w46a*` was touched. `pg_database` in `gate-w46a-postgres-1`
+holds no leftover `w46_spend_fresh_*` database after this section's runs
+(`fresh_database_url`'s own `finally` drops it every time, mutation or not).
 
 ## 4. G3 — the historical-section control
 

@@ -42,7 +42,10 @@ from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.identity import (
     AnalysisProfileId,
+    DecisionId,
     DocumentUid,
+    FindingObservationId,
+    FindingUid,
     ModelCallId,
     PromptBundleId,
     RunId,
@@ -334,4 +337,334 @@ def test_spend_appears_once_one_model_call_exists(
         "model_call_count": 1,
         "cost_micros": 34_400,
         "cost_basis": "measured",
+    }
+
+
+# ---------------------------------------------------------------------------
+# `G2` / `X-2`: known data, exact counts -- absent-is-not-empty proves nothing about
+# present-is-counted. `X` mutated `_filled` to return `(member, 0)` for every member
+# (never reading the database) and `cost_basis` to `"measured"` unconditionally; both
+# passed this file's three tests above and the whole 612-scope around it, because every
+# state here is all zeros except `spend`, and `spend`'s one call is genuinely
+# `measured`. What follows seeds every count in advance and asserts the exact number.
+# ---------------------------------------------------------------------------
+
+
+def _seed_published_document(
+    engine: Engine, project_uid: str, tag: str, section: str | None
+) -> None:
+    """A document with a published current version, classified under ``section`` (or
+    unclassified when ``None``) -- the shape ``documents_by_project`` and
+    ``section_breakdown`` both count, via ``DocumentRepository._LIST_PROJECTS``'s join
+    (``dashboard/repository.py``'s own docstring: "the same join `_LIST_PROJECTS`
+    counts through"). Unlike ``_seed_one_model_call``'s document, this one sets
+    ``current_version_uid`` -- the one column that makes a document counted at all.
+    """
+    document_uid = str(DocumentUid.new())
+    version_uid = str(VersionUid.new())
+    digest = _sha256_hex(f"{tag}-version")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO document (document_uid, project_uid, display_title, section) "
+                "VALUES (:d, :p, :t, :sec)"
+            ),
+            {"d": document_uid, "p": project_uid, "t": f"W46-GUARD {tag}", "sec": section},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO document_version (version_uid, document_uid, version_ordinal, "
+                "media_type, byte_size, sha256, page_count) "
+                "VALUES (:v, :d, 1, 'application/pdf', 1024, :s, 1)"
+            ),
+            {"v": version_uid, "d": document_uid, "s": digest},
+        )
+        connection.execute(
+            text("UPDATE document SET current_version_uid = :v WHERE document_uid = :d"),
+            {"v": version_uid, "d": document_uid},
+        )
+
+
+def _walk_run_to(engine: Engine, run_id: str, target: str) -> None:
+    """Move a run along declared edges only, from ``created`` to any of the eight
+    frozen states.
+
+    Extends ``tests/integration/api/conftest.py``'s ``PublishedRun._walk_to`` (not
+    imported from it -- out of reach from this directory under
+    ``--import-mode=importlib``, same reasoning ``fresh_database_url`` above already
+    gives for not sharing ``tests/integration/db/conftest.py``'s fixtures) with the two
+    states it has no caller that needs: ``cancelled`` (declared directly from
+    ``created``, the shortest edge, per ``db/migrations/versions/20260910_0002_
+    pc01_schema.py``'s ``contract_state_transition`` seed) and ``partial`` (declared
+    only from ``validating``, and only with a non-empty ``degradation_set`` --
+    ``ck_audit_run_partial_records_degradation``).
+    """
+    path = {
+        "created": (),
+        "queued": ("queued",),
+        "running": ("queued", "running"),
+        "validating": ("queued", "running", "validating"),
+        "published": ("queued", "running", "validating", "published"),
+        "partial": ("queued", "running", "validating", "partial"),
+        "failed": ("queued", "running", "validating", "failed"),
+        "cancelled": ("cancelled",),
+    }[target]
+    with engine.begin() as connection:
+        for step in path:
+            terminal = step in {"published", "partial", "failed", "cancelled"}
+            connection.execute(
+                text(
+                    "UPDATE audit_run SET state = :s, "
+                    "terminal_at = CASE WHEN :t THEN now() ELSE NULL END, "
+                    "terminal_reason = CASE WHEN :s = 'failed' THEN 'analysis_failed' "
+                    "ELSE NULL END, "
+                    "degradation_set = CASE WHEN :s = 'partial' "
+                    "THEN '[\"block_analysis\"]'::jsonb "
+                    "WHEN :s = 'published' THEN '[]'::jsonb "
+                    "ELSE degradation_set END "
+                    "WHERE run_id = :r"
+                ),
+                {"s": step, "t": terminal, "r": run_id},
+            )
+
+
+def _seed_run(engine: Engine, project_uid: str, tag: str, target_state: str) -> tuple[str, str]:
+    """One run, with its own throwaway document and version, walked from ``created`` to
+    ``target_state``. Returns ``(run_id, version_uid)``.
+
+    The document is deliberately never published (``current_version_uid`` stays
+    ``NULL``) so it does not count toward ``documents_by_project`` or
+    ``section_breakdown`` -- run-state seeding and document/section seeding stay
+    orthogonal, the same way ``_seed_one_model_call``'s document already does not
+    count.
+    """
+    document_uid = str(DocumentUid.new())
+    version_uid = str(VersionUid.new())
+    run_id = str(RunId.new())
+    analysis_profile_id = str(AnalysisProfileId.new())
+    prompt_bundle_id = str(PromptBundleId.new())
+    digest = _sha256_hex(f"{tag}-version")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO document (document_uid, project_uid, display_title) "
+                "VALUES (:d, :p, :t)"
+            ),
+            {"d": document_uid, "p": project_uid, "t": f"W46-GUARD {tag}"},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO document_version (version_uid, document_uid, version_ordinal, "
+                "media_type, byte_size, sha256, page_count) "
+                "VALUES (:v, :d, 1, 'application/pdf', 1024, :s, 1)"
+            ),
+            {"v": version_uid, "d": document_uid, "s": digest},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO audit_run (run_id, project_uid, version_uid, state, "
+                "analysis_profile_id, prompt_bundle_id, provider_mode, frozen_input_digest) "
+                "VALUES (:r, :p, :v, 'created', :ap, :pb, 'recorded', :s)"
+            ),
+            {
+                "r": run_id,
+                "p": project_uid,
+                "v": version_uid,
+                "ap": analysis_profile_id,
+                "pb": prompt_bundle_id,
+                "s": digest,
+            },
+        )
+    _walk_run_to(engine, run_id, target_state)
+    return run_id, version_uid
+
+
+def _seed_finding(
+    engine: Engine,
+    project_uid: str,
+    version_uid: str,
+    run_id: str,
+    tag: str,
+    verdict: str,
+) -> None:
+    """One finding at a known verdict: ``pending``, ``accepted`` or ``rejected``.
+
+    ``pending`` needs only the ``finding`` row -- the projection's own default,
+    ``COALESCE(v.verdict, 'pending')`` (``20260910_0002_pc01_schema.py``'s
+    ``finding_current_verdict`` view). ``accepted``/``rejected`` need one
+    ``expert_decision_event`` too, which itself needs a ``finding_observation`` row
+    first: ``expert_decision_event.finding_observation_id`` is ``NOT NULL``.
+
+    ``needs_manual_review`` is not offered here, on purpose. The migration that
+    declares the verdict enum says so in its own comment: *"`needs_manual_review` is
+    declared with no PC-01 producer."* ``ck_expert_decision_event_type_verdict_agree``
+    enforces it structurally -- of the four declared event types (``accept``,
+    ``reject``, ``comment``, ``revoke``), none may carry that verdict, so no ``INSERT``
+    into this table can ever produce it, not even a test's own. The exact-count test
+    below asserts that count is ``0`` for this reason, not because nothing tried.
+    """
+    assert verdict in ("pending", "accepted", "rejected"), verdict
+    finding_uid = str(FindingUid.new())
+    finding_observation_id = str(FindingObservationId.new())
+    analysis_profile_id = str(AnalysisProfileId.new())
+    prompt_bundle_id = str(PromptBundleId.new())
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO finding (finding_uid, project_uid, version_uid, "
+                "allocated_by_run_id, category) "
+                "VALUES (:f, :p, :v, :r, 'internal_contradiction')"
+            ),
+            {"f": finding_uid, "p": project_uid, "v": version_uid, "r": run_id},
+        )
+        if verdict == "pending":
+            return
+        connection.execute(
+            text(
+                "INSERT INTO finding_observation (finding_observation_id, run_id, "
+                "finding_uid, stage_id, category, finding_text, recommendation_text, "
+                "grounded, analysis_profile_id, prompt_bundle_id, provider_mode) "
+                "VALUES (:o, :r, :f, 'text_analysis', 'internal_contradiction', "
+                "'W46-GUARD seeded finding text.', "
+                "'W46-GUARD seeded recommendation text.', "
+                "true, :ap, :pb, 'recorded')"
+            ),
+            {
+                "o": finding_observation_id,
+                "r": run_id,
+                "f": finding_uid,
+                "ap": analysis_profile_id,
+                "pb": prompt_bundle_id,
+            },
+        )
+        event_type = {"accepted": "accept", "rejected": "reject"}[verdict]
+        connection.execute(
+            text(
+                "INSERT INTO expert_decision_event (decision_id, finding_uid, "
+                "finding_observation_id, event_type, verdict, author_label) "
+                "VALUES (:dec, :f, :o, :et, :verd, :author)"
+            ),
+            {
+                "dec": str(DecisionId.new()),
+                "f": finding_uid,
+                "o": finding_observation_id,
+                "et": event_type,
+                "verd": verdict,
+                "author": "W46-GUARD suite",
+            },
+        )
+
+
+def _seed_model_call(
+    engine: Engine, run_id: str, tag: str, cost_micros: int, cost_basis: str
+) -> None:
+    """One provider call at a known cost and a known basis, attached to ``run_id``.
+
+    Unlike ``_seed_one_model_call`` (which always creates its own project, document,
+    version and run), this attaches to a run the caller already has -- two calls on
+    the same run is exactly the shape that makes ``cost_basis`` a real aggregate
+    decision rather than a copy of the one row that exists.
+    """
+    model_call_id = str(ModelCallId.new())
+    request_sha = _sha256_hex(f"{tag}-request")
+    response_sha = _sha256_hex(f"{tag}-response")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO model_call (model_call_id, run_id, stage_id, provider, "
+                "model_identity, provider_mode, request_sha256, response_sha256, "
+                "cost_micros, cost_basis, status) "
+                "VALUES (:mc, :r, 'text_analysis', 'anthropic', "
+                "'claude-w46-guard-suite', 'recorded', :req, :resp, :cost, :basis, "
+                "'succeeded')"
+            ),
+            {
+                "mc": model_call_id,
+                "r": run_id,
+                "req": request_sha,
+                "resp": response_sha,
+                "cost": cost_micros,
+                "basis": cost_basis,
+            },
+        )
+
+
+def test_a_deployment_with_known_data_reports_the_exact_counts(
+    app: TestClient, token: str, engine: Engine
+) -> None:
+    """`X-2` (`docs/program/reviews/W46-JUDGE-X.md`): the fresh-deployment guard above
+    proves absent-is-not-empty and nothing about present-is-counted. Two of X's
+    mutations of `_filled` -- every count forced to `(member, 0)`, never reading the
+    database, and `cost_basis` forced to `"measured"` unconditionally -- both pass the
+    three tests above and the whole 612-test scope around them, because every state
+    those tests drive is all zeros except one `spend` call that genuinely is
+    `measured`.
+
+    Every count below is known before the read: two projects with a known document
+    each, classified under two known sections plus one unclassified; one run in each
+    of the eight frozen states; four findings across three reachable verdicts (see
+    `_seed_finding` for why `needs_manual_review` is asserted at exactly `0` rather
+    than seeded); and two provider calls, one measured and one estimated, so the
+    aggregate basis is a real decision (`estimated`, `F-1`'s own rule) rather than a
+    copy of a single row. `_filled`-returns-zero and `cost_basis`-always-`"measured"`
+    both fail every assertion below.
+    """
+    project_a = _create_project(app, token, "counts-a")
+    project_b = _create_project(app, token, "counts-b")
+    _seed_published_document(engine, project_a, "counts-a-1", "AR")
+    _seed_published_document(engine, project_a, "counts-a-2", "KM")
+    _seed_published_document(engine, project_b, "counts-b-1", None)
+
+    for state in RUN_STATES:
+        _seed_run(engine, project_a, f"state-{state}", state)
+
+    finding_project = _create_project(app, token, "counts-findings")
+    finding_run_id, finding_version_uid = _seed_run(
+        engine, finding_project, "findings-run", "published"
+    )
+    _seed_finding(engine, finding_project, finding_version_uid, finding_run_id, "f1", "pending")
+    _seed_finding(engine, finding_project, finding_version_uid, finding_run_id, "f2", "accepted")
+    _seed_finding(engine, finding_project, finding_version_uid, finding_run_id, "f3", "accepted")
+    _seed_finding(engine, finding_project, finding_version_uid, finding_run_id, "f4", "rejected")
+
+    _seed_model_call(engine, finding_run_id, "spend-measured", 12_000, "measured")
+    _seed_model_call(engine, finding_run_id, "spend-estimated", 30_000, "estimated")
+
+    body = _dashboard(app, token)
+
+    projects_by_uid = {row["project_uid"]: row for row in body["documents_by_project"]}
+    assert projects_by_uid[project_a]["document_count"] == 2, projects_by_uid
+    assert projects_by_uid[project_b]["document_count"] == 1, projects_by_uid
+
+    sections = body["section_breakdown"]
+    assert len(sections) == len(PROJECT_SECTIONS) + 1, sections
+    by_section = {row.get("section"): row["document_count"] for row in sections}
+    assert by_section["AR"] == 1, by_section
+    assert by_section["KM"] == 1, by_section
+    assert by_section[None] == 1, by_section
+    for code in PROJECT_SECTIONS:
+        if code in ("AR", "KM"):
+            continue
+        assert by_section[code] == 0, (code, by_section)
+
+    by_verdict = {row["verdict"]: row["count"] for row in body["findings_by_verdict"]}
+    assert by_verdict == {
+        "pending": 1,
+        "accepted": 2,
+        "rejected": 1,
+        "needs_manual_review": 0,
+    }, by_verdict
+
+    # One run per state, plus one more `published` run to allocate the findings from --
+    # `_seed_run(..., "published")` below is a second published run, not a reuse of the
+    # one the state loop already made.
+    expected_by_state = dict.fromkeys(RUN_STATES, 1)
+    expected_by_state["published"] = 2
+    by_state = {row["state"]: row["count"] for row in body["run_activity"]["by_state"]}
+    assert by_state == expected_by_state, by_state
+
+    assert body["run_activity"]["spend"] == {
+        "model_call_count": 2,
+        "cost_micros": 42_000,
+        "cost_basis": "estimated",
     }
