@@ -107,7 +107,186 @@ Two things that are not digests:
   that commit, which is what `W46-SEAL.md` §1 also says. Low severity; a lock file is read by
   the next resealer.
 
-## 3. `getDashboardSummary`, driven — *in progress*
+## 3. `getDashboardSummary`, driven
+
+**The instrument.** A fresh database in my lane's own container
+(`CREATE DATABASE audit_w46j_judge`, `alembic upgrade head` → `0011_document_section`), the API
+from `infra/deploy/serve.py` on `127.0.0.1:56391` in `recorded` mode, and a driver that signs in
+as the seeded `admin` and prints raw status and body (a scratch script, not committed; every
+call below is an ordinary `GET /dashboard` with a bearer). The gate's own database was not
+used: it holds hundreds of rows no step here created, and "absent" cannot be observed on it.
+
+### What it answers, state by state
+
+| state of the deployment | `documents_by_project` | `section_breakdown` | `findings_by_verdict` | `run_activity.spend` |
+|---|---|---|---|---|
+| **no projects at all** | `[]` | 14 × `0` + unclassified `0` | 4 × `0` | `{"model_call_count":0,"cost_micros":0,"cost_basis":"measured"}` |
+| **one project, no documents, no runs** | `[{…,"document_count":0}]` | 14 × `0` + unclassified `0` | 4 × `0` | `{0, 0, "measured"}` |
+| + a project holding one `KM` and one unclassified document | `[{…,2},{…,0}]` | `KM: 1`, unclassified `1`, 13 × `0` | 4 × `0` | `{0, 0, "measured"}` |
+| + one published run (recorded) | unchanged | unchanged | `pending: 3` | `{1, 34400, "estimated"}` |
+| + a second published run | unchanged | unchanged | `pending: 6` | `{2, 68800, "estimated"}` |
+
+Without a credential: `401 authentication_required`. The upload refuses `section=""`, `ar` and
+`ZZ` with `422 validation_failed {"constraint":"enum","field":"section"}` — **no silent
+"unclassified" fallback for a malformed section, which is the right answer.** The section counts
+are what was stored (`SELECT section, count(*) FROM document` → `KM|1`, `NULL|1`), and
+`getDocumentVersion` returns `"section": "KM"` for the one and omits the key for the other.
+
+**Absent, empty, not-yet-produced — which of the three the operation can tell apart.**
+
+- *A section with no documents* is `{"document_count":0,"section":"PB"}`: present, not omitted.
+  **Correct.**
+- *A deployment with no projects* versus *a project with no runs*: distinguishable only through
+  `documents_by_project` (`[]` versus one row). `run_activity` has no per-project dimension, by
+  design, so "this project has no runs" is not a question this operation answers. Consistent
+  with its own argument; not held against it.
+- *Not yet produced* — "no provider call has ever been made, so there is no cost" — is **not**
+  distinguishable from "calls were made and cost exactly zero, measured". That is F-1.
+
+### F-1 — the spend panel reports a measurement that never happened (needs a reseal)
+
+With **zero** `model_call` rows in the whole deployment the operation answers
+`"cost_basis": "measured", "cost_micros": 0`. The repository computes
+`basis="measured" if int(unmeasured) == 0 else "estimated"` (`dashboard/repository.py`), and
+`unmeasured` is trivially `0` over an empty table. The sealed schema cannot say anything else:
+`RunActivitySpend.required = ["model_call_count", "cost_micros", "cost_basis"]`, and
+`DashboardSummary.run_activity.spend` is required.
+
+**This is the collapse the per-run rule forbids in writing.** `RunRepository.cost()`
+(`src/auditmanager/runs/repository.py:408-416`): *"`None` and `RunCost(0, 0, "measured")` are
+different facts and are kept different all the way to the wire … Reporting the first as `0`
+would be the same class of invention as `D-3`'s defaulted provenance."* The aggregate's own
+docstring claims *"the same conservative rule `runs.repository.RunCost` applies to one run,
+lifted to every `model_call` row"* — it lifts the basis rule and drops the `calls == 0 → None`
+branch that precedes it.
+
+And the client-side walk this operation exists to replace **gets it right**:
+`summarizeRunActivity` sets `costBasis` to `null` *"when no run in scope reported a cost at all —
+there is nothing to grade"*, and the panel then says *«Ни один осмотренный прогон не сообщил
+стоимости.»* **Wiring the aggregate in as `R-44` intends would regress the screen** from an honest
+absence onto a zero labelled *измерено*.
+
+`R-23`'s addendum: *a zero that nothing computed is an invented number too.* This one is a zero
+**labelled as measured**. It only occurs on a deployment that has never run anything — which is
+precisely the pilot's first day. **The repair is a contract change** — `spend` optional (absent
+when `model_call_count` would be `0`), mirroring `RunStatus`, whose cost fields are absent for a
+run that made no call — and therefore a reseal. **This is the real reason to reseal once more,
+if the integrator is choosing one.**
+
+Reproduce: fresh DB migrated to head, sign in, `GET /dashboard`, read `run_activity.spend`.
+
+### F-2 — what it refuses, and the rule that refuses it
+
+#### F-2a — it refuses scope by ignoring it, not by refusing it
+
+It declares no parameter, and the application ignores undeclared query parameters:
+
+```text
+GET /dashboard?project_uid=prj_01ARZ3NDEKTSV4RRFFQ69G5FAV   200  byte-identical to plain
+GET /dashboard?cursor=abc&limit=1                            200  byte-identical to plain
+GET /dashboard?section=KM                                    200  byte-identical to plain
+GET /dashboard?verdict=accepted                              200  byte-identical to plain
+POST | PUT | DELETE | PATCH /dashboard                       404  not_found
+GET /dashboard/KM                                            404  not_found
+GET /dashboard  with  X-Correlation-Id: !!!not a valid id!!! 200  (id replaced, not refused)
+```
+
+**It does not become a second authority**: no input changes the answer, and I found no way to
+steer it. `W46-SEAL`'s argument holds on the wire, and I say so plainly — the operation was built
+to refuse the generic-query shape and it does. The residue: a caller that asks for one project's
+dashboard gets the whole deployment's, `200`, with no signal that the scope was dropped — the
+mildest form of `AGENTS.md` §4's *silent fallback*. **It is surface-wide, not new**:
+`GET /projects?bogus=1&limit=1` and `GET /decisions?project_uid=…` also answer `200`. Low
+severity, recorded so that nobody reads "takes no parameter" as "refuses a scoped request".
+
+#### F-2b — gate red #5: is the rule right, or the operation?
+
+`tests/contract/domain_p02/test_openapi_document.py::test_every_operation_can_report_not_found_or_validation`:
+
+```python
+codes = set(operation["responses"])
+assert codes & {"404", "422", "409"}, f"{name} declares no client-fault response"
+assert "500" in codes, f"{name} cannot report an internal fault"
+```
+
+**My ruling: the rule is wrong for this operation, and the operation is right.** The reasoning,
+measured rather than argued:
+
+1. **The rule encoded an incidental fact as a law.** It arrived in `9924d32` (2026-09-10, *"pin
+   the seams to the frozen contracts"*) with no statement of intent. Tabulating all twenty
+   operations from `openapi.json` — caller input meaning a path parameter, a query parameter, a
+   header other than `X-Correlation-Id`, or a request body:
+
+   | caller input | operations | declares 404/409/422 |
+   |---|---|---|
+   | yes | 19 (every one before this wave) | 19 of 19 |
+   | **none** | **`getDashboardSummary` only** | 0 of 1 |
+
+   So until this wave *"every operation can report a client fault"* and *"every operation takes
+   caller input"* were the same set, and the test could not tell which one it was guarding. It
+   is `OPERATING_CONSTRAINTS.md` §12's shape: **a rule that shared an assumption with its
+   subject.** The first operation without input is the first time the difference is visible.
+
+2. **Declaring a client fault here would make the contract lie.** No `404`: it addresses no
+   identity. No `409`: it writes nothing. No `422`: it has no input to be malformed — measured
+   above, not assumed; even the one header it accepts is replaced rather than refused. A `422`
+   added to satisfy the rule would be a declared response **no request can produce**, and the
+   generated client would carry a branch nothing can reach. That is the "make a guard pass"
+   repair the integrator asked me to name if it is one: **it is.**
+
+3. **The one honest way to give it a real `422`** is to make it refuse undeclared query
+   parameters — which would also close F-2a. I do **not** recommend it for this operation alone:
+   all nineteen others ignore unknown parameters, so a single refusing operation makes the surface
+   inconsistent. Whether the surface should refuse unknown parameters is a surface-wide contract
+   decision (twenty operations, every client), and it belongs to the owner, not to this red.
+
+**Recommended repair — a test change, no reseal for #5:**
+
+- Restate the rule as *"every operation that takes caller input can report a client fault"*,
+  with **input derived from the document** (path, query, non-correlation header, body) rather
+  than from a name list — so an operation that later gains a parameter is pulled back under the
+  rule without anyone remembering to.
+- Make the exemption **two-sided**: an operation with no caller input must declare **none** of
+  `404/409/422`. That keeps the exemption from becoming a hiding place — a `422` added to
+  `getDashboardSummary` later, with nothing that can produce it, would redden.
+- Keep the non-vacuity pin as a literal, the programme's accepted pattern: *the input-less set is
+  exactly `{"getDashboardSummary"}`* — so a second input-less operation is a decision someone
+  makes, not a drift. **That literal is a pin in `D-105`'s family and moves on a reseal**; it
+  should be written into whatever list makes that family enumerable.
+- `500` stays required for every operation, unchanged.
+
+**If the integrator is resealing anyway, the reason is F-1, not #5.** The two can travel
+together; #5's repair does not need the reseal and should not be dressed as one.
+
+### What is not guarded — a mutation that survives
+
+`W46-SEAL.md` §3 says absent-is-not-empty is *"enforced in every panel and shown failing twice"*.
+The two guards it shows failing are the section **vocabulary** (three spellings agree) and the
+**page-shape** exemption (no `items`/`page`, four top-level keys present). **Neither observes a
+row.**
+
+In a disposable clone at `130200d` (`/root/w46j-probe`, same `.venv`, same lane), baselined
+**609 passed** unmutated, I changed `dashboard/repository.py` so that `_filled` drops every
+member whose count is zero and the unclassified bucket is appended only when non-zero — absent
+rendered as *missing*, the exact defect the operation's description promises it does not have:
+
+```text
+-    return [(member, counted.get(member, 0)) for member in vocabulary]
++    return [(member, counted[member]) for member in vocabulary if member in counted]
+     … and the unclassified append wrapped in `if section_rows.get(None, 0):`
+
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -c pyproject.toml --rootdir=. -q \
+  -p no:cacheprovider tests/integration/api tests/integration/composition \
+  tests/contract/domain_p02/test_project_section_catalog.py
+unmutated: 609 passed          mutated: 609 passed
+```
+
+The only other test files that mention the operation at all
+(`grep -rlE 'dashboard|Dashboard|section_breakdown|findings_by_verdict|run_activity|documents_by_project' tests --include=*.py`
+→ nine files) are `test_doc_prose_facts.py` and `test_openapi_conformance.py`, which read
+`openapi.json` and cannot see a response row, plus the composition/authorization/surface files
+that check registration. **The property the operation was built for has no guard that can fail.**
+Reverted; the clone's `git status` was clean afterwards.
 
 ## 4. `/dashboard` at 780 px, both palettes; the `SEEDS` and cache-state edits — *in progress*
 
