@@ -37,7 +37,32 @@ too.
 
 ## 2. G1 — the served-document conformance test
 
-*(filled as the work proceeds)*
+Wrote `tests/contract/api_v1/test_openapi_conformance_live.py`, exactly the call
+`W13-CONF.md` §11 specified: `differences(surface(json.loads(CONTRACT_PATH.read_text())),
+surface(create_documentation_app().openapi()))`, asserted empty. Loads the engine the same
+way `test_openapi_conformance.py` does (`importlib`, anchored on `__file__`, under
+`--import-mode=importlib`). `create_documentation_app()` rather than the wired app: it needs
+no database, object store or credential, and `test_the_documented_and_the_wired_app_agree`
+(`tests/integration/api/test_served_document_and_health_plane.py`) is what already proves
+that document is the one served.
+
+**Run on this tree first, per the brief.** `1 passed` — no difference between the served
+document and the frozen contract on `dbba753`. Nothing to stop and report.
+
+**X's mutation** (`RunActivity.spend` made required again, `src/auditmanager/api/schemas/
+models.py` only): red —
+`schemas.RunActivity.required: the contract has 1 entries and the generated document has 2
+entries - contract ["by_state"] - generated ["by_state", "spend"]`. Reverted
+(`git status --porcelain` on the file: empty), re-run: `1 passed`.
+
+**My own mutation** (a field `stale: bool` added to `ProjectDocumentCount`, model only — a
+different shape of drift, a wholly new required property rather than an existing one
+changing required-ness): red —
+`schemas.ProjectDocumentCount.properties.stale: present only in the generated document` and
+the paired `required` count difference. Reverted, re-run: `1 passed`.
+
+**Scope check.** `tests/contract` with `run_battery`'s three ignores: `368 passed, 49
+subtests passed` — one more than X4's baseline of `367`, which is this new file's one test.
 
 ## 3. G2 — `F-5a` exact-count guard
 
