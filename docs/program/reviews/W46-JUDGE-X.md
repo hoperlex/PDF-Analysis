@@ -283,8 +283,8 @@ Baseline: **21 passed**.
 | **invented** — the same stale sentence, preceded by a fenced shell block whose comment reads `# the historical record below is kept verbatim; do not edit it` | **21 passed**. The stale head is hidden. |
 
 Two things fail together. `_HISTORICAL_HEADING` is `^#+.*historical record.*$` under
-`MULTILINE`, so **any line that begins with `#` matches — a shell comment in a code fence is a
-"heading"**. And non-vacuity is *"at least one claim survives"*: a boundary placed **after**
+`MULTILINE`, so **any line that begins with `#` and mentions the historical record matches — a
+shell comment in a code fence is a "heading"**. And non-vacuity is *"at least one claim survives"*: a boundary placed **after**
 the first claim leaves one claim standing and blinds the scan to everything below it. The
 stream's comment in the test says the opposite — *"a too-early heading truncates all of them
 together, not just one, so this stays exactly as strong a guard"* (`test_doc_prose_facts.py`,
