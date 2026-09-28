@@ -32,6 +32,10 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-103** | `deploy.sh`'s placeholder-secret guard reads four names and the same secrets are embedded again in three derived values | ~93 s and a full build wasted, on deploy day |
 | **D-104** | every prose guard this programme has checks **numbers**; `CURRENT_STATE.md` asserts a deployed SHA and a date as present-tense fact | not a number, so nothing checks it |
 | **D-105** | the pin was **not** the only one: three sibling hard-coded literals sit beside derived comparisons, green by luck | the reseal set is five documents and three pins |
+| **D-106** | the whole surface **ignores** undeclared query parameters: a scoped request gets an unscoped `200` with no signal | **owner**: refuse surface-wide, or keep |
+| **D-107** | the product cannot set a document's section; the API can | **owner**: whether and when the upload form offers one |
+| **D-108** | the live journey is not in `make gate`; the `blocks` route was red for a whole wave unseen | wave 48's audit |
+| D-109 | *контракт* and *операция* on screen: `R-39` bans ids, fields and transport, and is silent on these | **owner**: where the line falls |
 | **D-97** | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | consolidate against one provider/state contract |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -2797,6 +2801,62 @@ scope presented as canonical without checking the literal command** — which is
 *"238 passed"* was. `W45-JUDGE-X` disclosed its own near-miss of the same family in the same
 breath: it piped a pytest run through `tail -15`, which silently ate the exit status. **Both
 judges caught the integrator's scope error and both then made one.**
+
+### D-106 — the surface ignores what it was not asked to accept
+
+**Found by `W46-JUDGE-A` (`F-2a`), 2026-09-28.** `GET /dashboard?project_uid=…` answers `200`,
+byte-identical to plain `GET /dashboard`. So do `?cursor=abc&limit=1`, `?section=KM` and
+`?verdict=accepted`. **It is not new and not the dashboard's:** `GET /projects?bogus=1&limit=1`
+and `GET /decisions?project_uid=…` also answer `200`. A caller that asks for one project's
+figures gets the deployment's figures, with nothing to say the scope was dropped. This is the
+mildest form of `AGENTS.md` §4's *silent fallback*.
+
+**Why it is not repaired in wave 46.** Making one operation refuse unknown parameters leaves the
+surface inconsistent, and making all twenty refuse them changes every client. That is a contract
+decision, so it is the owner's.
+
+**Check:** sign in, then `curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer …"
+'<api>/projects?bogus=1&limit=1'`. It prints `200` today.
+
+### D-107 — the product cannot set a document's section; only the API can
+
+**Found by `W46-JUDGE-A` (`F-3b`), 2026-09-28.** `R-40` put a section on the document, and wave
+46 stores it (migration `0011`, `CHECK`-bound), refuses a malformed one with `422`, and counts
+documents per section in `getDashboardSummary`. **The upload form on `/projects/{uid}` offers a
+PDF and a display title and nothing else.** So every document uploaded through the product is
+unclassified, and the per-section panel will show fourteen true zeros plus one unclassified count
+for the whole pilot. `W46-WIRE` makes the screen say so, and does not add the field.
+
+**Needs the owner:** whether the pilot needs a section picker at upload, and in which wave.
+
+**Check:** `grep -rn 'section' web/src/features/upload-document web/src/widgets/upload-panel
+--include=*.tsx | grep -v 'className\|<section\|</section' | wc -l` prints `0` today.
+
+### D-108 — the live journey is not in the gate, and a route was red for a wave without anyone seeing
+
+**Found by `W46-JUDGE-A` (`F-4`), 2026-09-28.** `make gate` checks the journey manifest
+**statically**: `tests/e2e/test_pc01_journey_conformance.py` compares rows to the route tree and
+required sentences to `web/src`. **Which API calls a screen makes (`expects_api`) is checked only
+by driving the journey live**, with `npm --prefix web run e2e:pc01`, and no Makefile target does
+that. The last recorded live run before this wave is `W43-JUDGE-B`. `blocks` has been red under
+that run since `c4165b9` (`W45-BLOCKS`), and the tag `alpha-w45` went out over it.
+
+**Why wave 48:** putting a live stack inside the gate changes the gate's cost and its failure
+modes. That is audit work, not a repair. Until then, every wave that touches a screen **drives
+the journey by hand and quotes the summary**. `W46-WIRE` does that.
+
+**Check:** `grep -c 'e2e:pc01' Makefile` prints `0`.
+
+### D-109 — *контракт* and *операция* on screen
+
+**Found by `W46-JUDGE-A`, 2026-09-28, and marked by it as the owner's line.** `R-39` allows a
+reason given in the words of the subject, and it bans operation ids, field names and transport.
+The dashboard's subtitle said *«…то, что уже отдаёт контракт…»*, and the verdict panel said
+*«…операция читает журнал решений…»*. There is no id and no field name here, but it is still the
+author's vocabulary, which is what `D-91` was about. `W46-WIRE` removes both words from the
+dashboard, which satisfies either reading. **Other screens are not swept.**
+
+**Check:** `grep -rn 'контракт\|операци' web/src --include=*.tsx | grep -v shared/api/generated`.
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 

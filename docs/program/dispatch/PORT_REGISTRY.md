@@ -57,6 +57,10 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56380`, `59980/59981` | `gate-w46b` — `W46-DASH` | 2026-09-25 | wave 46 merges |
 | `56390`, `59990/59991` | `gate-w46j` — judge A, then cross-judge X | 2026-09-25 | wave 46 closes |
 | `56400`, `60000/60001` | `gate-w46k` — cross-judge Y | 2026-09-25 | wave 46 closes |
+| `56370`, `59970/59971`; API `56371` | `gate-w46a` — `W46-SPEND`, sub-stage B | 2026-09-28 | wave 46 merges |
+| `56380`, `59980/59981`; API `56381`, Next `56383` | `gate-w46b` — `W46-WIRE`, sub-stage B | 2026-09-28 | wave 46 merges |
+| `56390`, `59990/59991` | `gate-w46j` — `W46-JUDGE-X` (judge A's databases `audit_w46j_judge`, `audit_w46j_judge2` still in it) | 2026-09-28 | wave 46 closes |
+| `56400`, `60000/60001` | `gate-w46k` — `W46-JUDGE-Y` | 2026-09-28 | wave 46 closes |
 | `56290–56320`, `59890–59921` | wave 44 | 2026-09-24 | **released** — streams and two cross-judges merged; containers, volumes and worktrees removed |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
 
