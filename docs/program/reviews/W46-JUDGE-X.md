@@ -70,9 +70,68 @@ predicted before the run from the commits alone:
 
 *pending*
 
-## X6 — did the merge lose a test?
+## X6 — did the merge lose a test? — **No. Nothing was lost, byte or node.**
 
-*pending*
+**The instrument.** Five trees extracted with `git archive` into `/root/w46x-tree-{a130,base,
+spend,wire,tip}` (`130200d`, `fbea618` = the streams' common base, `bb985ce` = `W46-SPEND`'s
+tip = `9a295aa^2`, `c26340f` = `W46-WIRE`'s tip = `1c38c52^2`, `d5c9be5`), each with the
+worktree's `.venv` and `web/node_modules` linked in. Removed at the end.
+
+### Bytes
+
+- **Every file each stream changed, stream tip against merged tip**
+  (`git rev-parse <tip>:<path>` vs `git rev-parse d5c9be5:<path>`): `W46-SPEND` 16 of 16
+  identical; `W46-WIRE` 30 of 31 identical. The one difference is
+  `web/src/widgets/dashboard/model/section-breakdown.ts`, which is `d5c9be5`'s own two-comment
+  edit (*"fourteen codes"* → *"fourteen section codes"*) — the whole of that commit.
+- **Every file in the merged tree (1354), traced to its origin**: for each path, the tip's blob
+  must equal the stream's blob where exactly one stream changed it, and the base's where none
+  did. Three paths are not a stream's: `docs/program/dispatch/PORT_REGISTRY.md` and
+  `docs/program/dispatch/W46-JUDGES-XY.md` (the dispatch commits `36e5dcf`, `f2f1aa2`) and
+  `section-breakdown.ts` (`d5c9be5`). No path was changed by both streams.
+- **No evil merge.** `git merge-tree --write-tree <m>^1 <m>^2` reproduces the recorded tree of
+  both merges exactly: `9a295aa` → `656d09f8…` = recorded; `1c38c52` → `4438382b…` = recorded.
+
+### Node ids
+
+`pytest --collect-only` with the canonical ignores in each tree (the foundation suite refuses
+`--collect-only` by design, `tests/integration/foundation/conftest.py:581`; that directory is
+byte-identical from `130200d` to `d5c9be5`, so its 35 nodes cannot differ), and
+`vitest list --json` for the frontend. With `B` the base, `S`/`W` the stream tips and `T` the
+merged tip, the check is `T == (B − (B−S) − (B−W)) ∪ (S−B) ∪ (W−B)`:
+
+| suite | `130200d` | `fbea618` | `W46-SPEND` | `W46-WIRE` | `d5c9be5` | `T == expected` |
+|---|---|---|---|---|---|---|
+| pytest (without foundation) | 2470 | 2470 | 2474 | 2470 | 2474 | **true**, nothing missing, nothing unexpected |
+| vitest | 1120 | 1121 | 1121 | 1118 | 1118 | **true**, nothing missing, nothing unexpected |
+
+- **pytest.** `W46-SPEND` removed `test_every_operation_can_report_not_found_or_validation` and
+  added the five named in X1. `W46-WIRE` changed no node.
+- **vitest.** `130200d → fbea618` added one: `the nineteen seam operations > getDashboardSummary
+  is GET /dashboard` (`8ad692f`). `W46-WIRE` removed 13 and added 10, and **three of those
+  pairs are renames, which a count would have hidden**:
+  `declares exactly the four roots` → `…five roots`; `invalidates the history, the detail, the
+  run finding list and the journal` → `…and the dashboard`; and
+  `says that a document's section is stored nowhere and checked nowhere` →
+  `says that a document's section is stored and checked when an upload names one, and the
+  product's form does not offer that field`. Each rename is the stream's stated intent (the
+  fifth query-key namespace; `F-3`'s false sentence rewritten), and the renamed test asserts the
+  new behaviour rather than dropping the old assertion. The other ten removals are the three
+  deleted aggregators' cases in `dashboard.test.ts`, replaced by seven render cases (`F-5b`).
+
+### One thing the set algebra surfaced — the integrator's own
+
+**`web/tests/contract/seam-operations.contract.test.ts:90` names its block
+`'the nineteen seam operations'`, and the file header (`:6`) says *"the nineteen operations at
+their frozen methods and paths"*.** `8ad692f` added the twentieth row to `SEAM_OPERATIONS`
+inside that block and left both. `vitest list` now prints a test called
+`the nineteen seam operations > getDashboardSummary is GET /dashboard`. The surface-prose guard
+reads `web/src`, not `web/tests`, so nothing reddens. Low; it is the same sentence-kind the
+wave repaired six of elsewhere.
+
+```
+grep -n 'nineteen' web/tests/contract/seam-operations.contract.test.ts   # -> lines 6 and 90
+```
 
 ## Off the trail
 
