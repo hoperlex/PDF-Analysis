@@ -172,3 +172,45 @@ from sweeping in `test_cp00_candidate.py` and friends, which `run_battery` exclu
 name and which fail for reasons unrelated to this stream (CP-00 ratification mechanics,
 `PROTOTYPE_PROFILE.md` section 6.3). Not read as a result, exactly the trap the brief
 names in its own words.
+
+## 4. `S3` — `F-5a`, a real response row
+
+`fbd54a4`. New file,
+`tests/integration/composition/test_dashboard_summary_over_a_fresh_deployment.py`. Its
+own `CREATE DATABASE`/migrate/`DROP DATABASE` fixture (the same shape
+`tests/integration/db/conftest.py`'s `empty_database`/`migrated_database` uses, not
+imported from it — that conftest is unreachable from this directory under
+`--import-mode=importlib` with no shared parent conftest), because
+`getDashboardSummary` sums the **whole deployment** with no filter and "absent" is not
+observable against the lane's own gate database, which carries whatever every other
+suite in this run has committed to it. Drives the real, shipped `DashboardAdapter`
+through a real ASGI app — there is no fixture-only stand-in for this port to fall back
+on, the same reason `tests/integration/api/conftest.py`'s `shipped_router` gives.
+
+Three states, three tests: nothing in the deployment (all fourteen sections +
+unclassified present at `0`, all four verdicts at `0`, all eight run states at `0`,
+`spend` absent), a real project with no documents (a row present at `0`, `spend` still
+absent), one real `model_call` row (`spend` present with all three fields). `3 passed`.
+
+**Both mutations shown failing, both reverted, tree clean afterwards** (`git diff
+--stat src/auditmanager/dashboard/repository.py` → empty each time):
+
+Judge's own mutation (report, section 3 — drop zero-count members from `_filled`,
+append the unclassified bucket only when non-zero):
+
+```
+AssertionError: []
+assert 0 == (14 + 1)
+ +  where 0 = len([])
+```
+
+A mutation that restores zeros for absent spend (undoes this stream's own `S1`):
+
+```
+AssertionError: no model_call row exists anywhere in this deployment; spend must be
+absent, not a zero labelled measured (F-1)
+assert 'spend' not in {..., 'spend': {'model_call_count': 0, 'cost_micros': 0,
+'cost_basis': 'measured'}}
+```
+both `test_a_deployment_with_nothing_in_it_reports_every_bucket_present_at_zero` and
+`test_a_project_with_no_documents_is_a_row_present_at_zero` catch this one.
