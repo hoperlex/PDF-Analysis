@@ -22,7 +22,7 @@ import { PROJECT_SECTIONS } from '@/entities/project';
 
 export interface SectionBreakdownSummary {
   readonly byCode: Readonly<Record<ProjectSectionCode, number>>;
-  /** Documents with no section at all. Never merged into any of the fourteen codes. */
+  /** Documents with no section at all. Never merged into any of the fourteen section codes. */
   readonly unclassifiedCount: number;
 }
 
@@ -31,7 +31,7 @@ export function summarizeSectionBreakdown(
 ): SectionBreakdownSummary {
   // A `Map`, not a `Record`, while accumulating: `noUncheckedIndexedAccess` makes every
   // `Record` read `T | undefined`, and a running total needs a definite starting value.
-  // `PROJECT_SECTIONS` seeds every one of the fourteen codes at zero up front, which is
+  // `PROJECT_SECTIONS` seeds every one of the fourteen section codes at zero up front, which is
   // the merge this module's own header describes — a code the wire never mentions still
   // reads as its true zero, never as `undefined`.
   const counts = new Map<ProjectSectionCode, number>(
