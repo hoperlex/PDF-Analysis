@@ -54,9 +54,101 @@ predicted before the run from the commits alone:
 - **the two frontend reds of `130200d`** (`seam-operations`, #8–#9) were repaired by
   `8ad692f`'s row; the second one cleared because its 19 was derived from the list.
 
-## X2 — `F-1` re-driven
+## X2 — `F-1` re-driven — **repaired on the wire; one layer still invents zeros, for rows**
 
-*pending*
+**The instrument.** `audit_w46j_judge` and `audit_w46j_judge2` dropped; `CREATE DATABASE
+audit_w46x_judge` in `gate-w46j-postgres-1`; `alembic upgrade head` → `0011_document_section`,
+`model_call` 0 rows, `project` 0 rows, one account (`admin`). The API from
+`infra/deploy/serve.py` on `127.0.0.1:56391`, `recorded` mode, a fresh token
+(*"wired, provider_mode=recorded, operations=20"*), PID 2588443, confirmed a descendant of this
+session with `pstree -sp` and `readlink /proc/2588443/cwd` = `/root/w46j`. A scratch driver
+(not committed) signs in as `admin` through `POST /auth/token` and prints raw status and body.
+
+| state | `run_activity` keys | `spend` | bytes `spend` in the body? |
+|---|---|---|---|
+| fresh deployment, nothing in it | `['by_state']` | **absent** | **no** |
+| + one project, no documents (`document_count: 0` row present) | `['by_state']` | absent | no |
+| + one unclassified document (`<none>: 1`) | `['by_state']` | absent | no |
+| + one run, `published` in 2.1 s | `['by_state', 'spend']` | `{"model_call_count": 1, "cost_micros": 34400, "cost_basis": "estimated"}` | yes |
+
+`getRunStatus` for that run answers `model_call_count 1, cost_micros 34400, cost_basis
+estimated` — the aggregate and the per-run reading agree to the micro. `findings_by_verdict`
+moved to `pending: 3`. Without a credential `GET /dashboard` is `401`.
+
+**Absent, not `null`, not zero — and valid.** I validated the four real bodies against the
+frozen `DashboardSummary` with the suite's own Draft 2020-12 checker
+(`.venv/bootstrap/bin/python tests/contract/api_v1/schema_validation_check.py`): **all four
+valid**, and two controls built from the first body are invalid as they must be
+(`spend: null` → *"None is not of type 'object'"*; `spend` without `cost_basis` → *"'cost_basis'
+is a required property"*). Against the **pre-reseal** contract (`git show
+2ffca8c:contracts/api/v1/openapi.json`) the three bodies without `spend` are **invalid**
+(*"'spend' is a required property"*) and the fourth is valid: the reseal was load-bearing,
+not cosmetic. **Nothing in the battery does this for `/dashboard`**:
+`tests/integration/api/test_schema_conformance.py` validates real bodies for five other
+schemas and has no `DashboardSummary` case, so the wire-to-contract agreement for this
+operation was, until this measurement, asserted rather than observed.
+
+**Layer by layer, for `spend`:** record (`DashboardSummaryRecord.run_spend: … | None`, `None`
+exactly when `calls == 0`, `dashboard/repository.py`) → view (`DashboardSummaryView.run_spend:
+… | None`) → adapter (`None` carried, `bootstrap/adapters.py`) → serializer
+(`_run_activity_body` omits the key; the router returns `json_response(… dashboard_summary_body
+…)`, not a Pydantic re-serialisation that could emit `null`) → generated type
+(`types.gen.ts:484` `spend?: RunActivitySpend`, no default) → screen
+(`run-activity-panel.tsx:86-95` renders *«Ни один прогон ещё не обращался к провайдеру…»* when
+`undefined`). `grep -rn 'spend' web/src` finds no other reader. **No layer turns absent `spend`
+back into zeros.** `F-1` is repaired, and `W46-SPEND` did the right thing in every layer.
+
+### X2-a — the same collapse, one layer up: the dashboard fills rows the server did not send
+
+`summarizeVerdictBreakdown` (`web/src/widgets/dashboard/model/verdict-breakdown.ts:15-26`) and
+`summarizeSectionBreakdown` (`section-breakdown.ts:29-50`) seed every member at `0` and then
+overwrite from the wire, and both headers say so as a virtue: *"a row a future response
+happens to omit reads as its true zero"*. It is not a true zero. The server's `_filled`
+defaults an absent `GROUP BY` group to `0`, which **is** computed (the database counted the
+whole table); the client defaulting an absent **wire row** to `0` is a number nobody computed —
+`R-23`'s addendum, and `AGENTS.md` §4's silent fallback. Both also drop a member they do not
+know (`if (known !== undefined)`, `if (row.verdict in byVerdict)`) without a signal.
+
+Reproduced in the disposable tree `/root/w46x-tree-tip` (never in the worktree), a scratch
+vitest file rendering `Dashboard` from a hand-built summary through the repository's own
+`renderWith` harness:
+
+```text
+findings_by_verdict: [], section_breakdown: [], documents_by_project: one project, 7 documents
+  -> "Документов: 7 на 1 проекте" … "Находок: 0" … "не решено 0 принято 0 отклонено 0
+     нужен ручной разбор 0" … fourteen sections ": 0" … "Без раздела: 0"
+     — 19 zeros the body did not contain, beside a total of 7 they cannot add up to, under a
+     caption that says the unclassified row comes «не из пропуска в подсчёте».
+a verdict 'escalated' (count 9) and a section 'ZZ' (count 5), 5 documents
+  -> "Находок: 0", every section 0, "Без раздела: 0"; no 9 and no ZZ anywhere on the screen.
+```
+
+**Cost, stated plainly.** Not reachable against today's server: `F-5a`'s new guard keeps the
+server from dropping rows (X4), and every body I drove carried all fourteen sections, the
+unclassified row and all four verdicts. It is reachable by a server regression that guard does
+not cover, or by version skew between the API and web images after a reseal that adds a member.
+What makes it a finding rather than a style point: it is `F-1`'s exact shape — absence rendered
+as a measured zero — **designed in on purpose**, and it is invisible to `W46-WIRE`'s render
+test, whose promise is *"nothing on screen is a number the fixture did not send"* but whose one
+fixture always sends every row. The honest client either renders a missing row as absent or
+refuses the body; which one is a small decision, and it is not mine. **Low–medium.**
+
+### X2-b — four sentences the merge made false about the generated type
+
+The streams coded against each other's future, correctly, and wrote that down. After the merge,
+`types.gen.ts:484` says `spend?: RunActivitySpend`, and these still say it is required *today*:
+
+```text
+web/src/widgets/dashboard/ui/run-activity-panel.tsx:8   "…RunActivity.spend is still typed required today…"
+web/src/widgets/dashboard/ui/run-activity-panel.tsx:64  "…whether the generated field is required (today) or optional…"
+web/tests/unit/widgets/dashboard.test.ts:61             "…generated client still types `spend` required…"
+web/tests/guards/rendered-language.guard.test.ts:644    "…today's generated client still types it required."
+```
+
+`grep -rn "still typed\|still types\|required (today)\|today's generated" web/src web/tests`
+reproduces them. Comments, not screen text, so **low**; recorded because it is `F-3`'s shape —
+a merge made a sentence false and nothing reddened — inside the join this stage exists to
+repair. `d5c9be5` repaired the two sentences a guard could read and none of these four.
 
 ## X3 — the reseal: five documents or four?
 
