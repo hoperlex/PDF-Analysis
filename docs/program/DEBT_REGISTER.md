@@ -39,6 +39,11 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-110** | the analysis is built for АР, yet a document stored as `KM` is analysed by the same profile; nothing looks at the section | **owner**: refuse at intake, skip at run start, or a profile per section |
 | D-111 | `documents_by_project` is unbounded: 63 rows, 6906 px on one screen | a cap or paging is a contract question |
 | D-112 | a 200-character project name overflows `/dashboard` and `/projects` | pre-existing, product-wide |
+| **D-113** | an unknown `cost_basis` vanishes from the spend line; no fault is raised (`F-1`'s field, X-3's mechanism) | wave 48 |
+| **D-114** | both count guards seed equal values where a row swap is invisible: AR↔KM passes on the server and in the browser | wave 48 |
+| D-115 | a correctly shaped historical heading placed early still hides the claims after it | wave 48 |
+| D-116 | the dashboard-invalidation guard reads comments as code | wave 48 |
+| D-117 | wave 46's stream reports do not record their own final gates, one mutation quote does not reproduce, and the lock credits the wrong commit | wave 48 |
 | **D-97** | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | consolidate against one provider/state contract |
 | D-74 | an existence check costs a full parent read | a narrow port on four implementations |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
@@ -2891,9 +2896,11 @@ operation's refusals. And it turns a descriptive field into an authorization inp
 **Needs the owner:** should intake refuse a non-АР section, should a run skip it, or should a
 profile per section exist? `R-25`'s order puts ПОС, ТХ and ПБ first.
 
-**Check:** `grep -rnE '\.section\b|\["section"\]|section=' src/auditmanager/analysis
-src/auditmanager/runs --include=*.py | wc -l` prints `0` today: no line in analysis or run start
-reads a document's section. A plain `grep section` counts 77 lines, and every one of them is
+**Check:** `grep -rnE "\.section\b|\[['\"]section['\"]\]|section=|get\(['\"]section['\"]|getattr\([^)]*['\"]section['\"]"
+src/auditmanager/analysis src/auditmanager/runs --include=*.py | wc -l` prints `0` today: no line
+in analysis or run start reads a document's section. (`W46-JUDGE-Z`, Z-8: the first version of
+this command could not see `row.get("section")` or `getattr`, and `.get("…")` reads occur 71
+times in those two packages.) A plain `grep section` counts 77 lines, and every one of them is
 prose about `P02_SEAMS.md` sections, so it could not fail.
 
 ### D-111 — the documents panel is unbounded
@@ -2921,6 +2928,64 @@ at 780 px on both screens.
 > **`D-109` addendum, `W46-JUDGE-Y`, 2026-09-28.** The dashboard's failure state still says
 > *операция*, *адаптер* and *транспорт исполнителя*. It comes from the shared catalog
 > (`catalog-message.ts:113`), so every screen that fails through it says the same. The owner's line, as before.
+
+### D-113 — an unknown `cost_basis` vanishes from the spend line
+
+**Found by `W46-JUDGE-Z` (Z-1), 2026-09-29.** Z made the server send `cost_basis: "guessed"`.
+The screen rendered *«…вызовов модели: 2 · .»*: the label disappeared and no fault was raised
+(`web/src/widgets/dashboard/ui/run-activity-panel.tsx:106-113`). That is X-3's mechanism (an
+unknown member dropped silently), in the one field `F-1` was about. `W46-CLIENT` made the three
+closed-vocabulary breakdowns fault on an unknown member; the spend line's basis was not one of
+the three. It is reachable only if the server breaks its own closed `CostBasis` enum.
+
+**Check:** a render case with `cost_basis: 'guessed'` must show a fault, and today it shows
+`· .`.
+
+### D-114 — the count guards cannot see two rows swapped
+
+**Found by `W46-JUDGE-Z` (Z-3), 2026-09-29.** `W46-GUARD`'s exact-count test and `W46-CLIENT`'s
+keyed per-row test seed **equal** values in rows whose swap would matter. On the server, swapping
+AR↔KM, pending↔rejected and queued↔running passes 4/4. In the browser, АР↔ГП passes 16/16 and the
+whole frontend suite (80/1134). Live, a server with AR↔KM swapped shows *«АР: 1, КМ: 2»* when the
+truth is 2 and 1. X's cross-examination had asked for distinct counts; the repair missed it.
+
+**Check:** seed pairwise-distinct counts, then swap any two rows; one test must redden.
+
+### D-115 — a correctly shaped historical heading, placed early, still blinds the scan
+
+**Found by `W46-JUDGE-Z` (Z-2), 2026-09-29.** `W46-GUARD` requires the boundary to be a real
+heading of the file's own shape, outside code fences. It does not require that heading to come
+after the live section's claims. Inserting `## Previous release state — wave 46 (historical
+record)` after the first claim gives 26 passed with a stale migration head below it. The comment
+at `tests/contract/api_v1/test_doc_prose_facts.py:486-492` says the opposite.
+
+**Check:** the insertion above must redden `test_doc_prose_facts.py`.
+
+### D-116 — the dashboard-invalidation guard reads comments as code
+
+**Found by `W46-JUDGE-Z` (Z-5), 2026-09-29.** With the invalidation line commented out, the guard
+still passes 7/7, the frontend 80/1134 and `tsc` 0. A comment in `use-export-run.ts` turns a
+`false` row red, although the guard's header (`:47`) says `false` is not checked. Grepping source
+text is the weakness. The fix is to read the hook's behaviour, or at least to strip comments.
+
+**Check:** comment out `create-project`'s invalidation line; the guard must fail.
+
+### D-117 — wave 46's stream reports are incomplete as records
+
+**Found by `W46-JUDGE-Z` (Z-6, Z-7, Z-9) and `W46-JUDGE-Y` (Y6-b), 2026-09-28/29.**
+- `W46-WIRE.md`, `W46-CLIENT.md` and `W46-GUARD.md` do not record their own final gate, although
+  the briefs asked for it. `W46-GUARD.md` §8 is still *"(filled at the end)"*. The logs exist and
+  end in `GATE OK`: `/root/w46c-gate.log` and `/root/w46g-gate.log`. The merge commits quote
+  them. `/root/w46b-gate.log` was overwritten.
+- `W46-CLIENT.md` quotes M5's output as *"AR: expected 0 to be 3"*. The real output is *"AI:
+  expected 4 to be +0"*.
+- The lock's `commit_note` credits the spend behaviour to `069f656`. The behaviour came in
+  `f50e656`; `069f656` is its reseal.
+- Two of `W46-GUARD`'s proof tests will redden for the wrong reason the day a cookie parameter
+  with a legitimate `422` enters the contract.
+
+**Why the register and not an edit:** the reports are the streams' records, and rewriting them
+after the fact is the integrator writing history. Wave 48 decides whether to annotate them.
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 

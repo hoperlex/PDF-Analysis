@@ -142,6 +142,14 @@ describe('the screen states a rule about the analysis and never a rule of intake
     expect(markup).toContain('ни один список здесь не отобран по разделу');
   });
 
+  it('never says an upload leaves the section unchecked', () => {
+    // W46-JUDGE-Z (Z-4): an upload naming `section=ZZ` is refused with 422 on `section`, so a
+    // sentence saying intake checks the file's envelope "and not the section" is false.
+    const markup = screen();
+    expect(markup).not.toContain('проверяется конверт файла, а не раздел');
+    expect(markup).not.toContain('раздел не проверяется');
+  });
+
   it('never claims a document belongs to a section, and never says intake refuses another one', () => {
     const markup = screen();
     // The claim this screen must not make, in the forms it would take. Each is a sentence
