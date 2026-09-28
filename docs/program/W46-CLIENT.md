@@ -135,4 +135,67 @@ X-9, and the cross-examination of Y), `docs/program/reviews/W46-JUDGE-Y.md`
   ```
   `npm run typecheck` clean; `git diff --stat` after restoring shows only the intended
   addition.
+- **C5.** Provisioning: `make up`, `make check-services` (all green, bucket
+  `audit-w46b`), `make migrate` (head `0011_document_section`). API:
+  `PYTHONPATH=src .venv/bin/python infra/deploy/serve.py`,
+  `AUDITMANAGER_API_PORT=56381`, `AUDITMANAGER_HEALTH_PORT=56382`,
+  `AUDITMANAGER_BIND_HOST=127.0.0.1`, `AUDITMANAGER_PROVIDER_MODE=recorded`, the lane's own
+  `DATABASE_URL`/`S3_*` from `.env`, a freshly generated `AUDITMANAGER_API_TOKEN` —
+  `operations=20`, PID `1340297`, confirmed this session's own descendant
+  (`readlink /proc/1340297/cwd` → `/root/w46dash`). Next: `npm run build`
+  (`NEXT_PUBLIC_API_BASE_URL=/bff/v1`) then `next start -p 56383 -H 127.0.0.1`,
+  `AUDITMANAGER_API_UPSTREAM=http://127.0.0.1:56381`, the same token — wrapper PID
+  `1357956`, listener `next-server` PID `1357990`, both confirmed as this session's
+  descendants (`readlink /proc/<pid>/cwd` → `/root/w46dash/web`).
+
+  `E2E_PC01_LOGIN=admin E2E_PC01_PASSWORD=password npm --prefix web run e2e:pc01 --
+  --origin http://127.0.0.1:56383 --phase all --out /root/w46dash-journey-out`, quoted in
+  full:
+  ```
+  sign-in: ok at /login -- carrying 'am_session' (HttpOnly=true, SameSite=Strict) into every cold browser
+
+  write half: 3 step(s), fixture fixtures/synthetic/ar/ar_baseline.pdf
+
+  ok  create-project   api=3 {"project_uid":"prj_01M3MZAYD65YPDHAZ3CBVD7688"}
+  ok  upload-document  api=4 {"project_uid":"prj_01M3MZAYD65YPDHAZ3CBVD7688","version_uid":"ver_01M3MZC2B97APAYWDDK0P98TGZ"}
+  ok  start-run        api=6 {"project_uid":"prj_01M3MZAYD65YPDHAZ3CBVD7688","run_id":"run_01M3MZD2A0T87KMP4S281CZ213"} terminal=published in 4667ms/150000ms
+
+  ok  root           200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+  ok  projects       200  api=1 auth=0 console=0 jar=[am_session] w=765/780 {"project_uid":"prj_01M3MZAYD65YPDHAZ3CBVD7688"}
+  ok  project        200  api=1 auth=0 console=0 jar=[am_session] w=765/780 {"document_uid":"doc_01M3MZC2B16SF4H9CSQBGXC1S6"}
+  ok  document       200  api=1 auth=0 console=0 jar=[am_session] w=780/780 {"version_uid":"ver_01M3MZC2B97APAYWDDK0P98TGZ"}
+  ok  version        200  api=2 auth=0 console=0 jar=[am_session] w=765/780 {"run_id":"run_01M3MZD2A0T87KMP4S281CZ213"}
+  ok  comparison     200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+  ok  run            200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+  ok  review         200  api=5 auth=0 console=0 jar=[am_session] w=765/780
+  ok  sign-in        200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+  ok  knowledge-base 200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+  ok  change-password 200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+  ok  blocks         200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+  ok  optimisation   200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+  ok  logs           200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+  ok  workers        200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+  ok  dashboard      200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+
+  envelope: /root/w46dash-journey-out/journey.json
+  write steps checked: 3/3
+  routes checked: 16/16
+  e2e:pc01 OK
+  ```
+
+  Read from the raw exchanges in `journey.json`, not only the summary: `dashboard`'s only
+  `/bff/*` call is `GET /bff/v1/dashboard`, `blocks`'s only one is
+  `GET /bff/v1/projects?limit=50`; both routes' `undeclaredApi` is `[]`, `consoleErrors` and
+  `pageErrors` are `[]`, and the envelope's top-level `failures` is `[]`. The dashboard
+  route's rendered text over the lane's own accumulated data (109 projects, 223 findings,
+  107 runs) carries «не решено» matching the caption (`Y2-b`), no «единственный
+  анализируемый раздел» and no «контракт»/«операци» substring; the `project` route's text
+  carries the rewritten Y2-a sentence verbatim: *"Анализ построен для текста раздела АР —
+  это единственный профиль анализа, который есть у продукта, и он применяется к любому
+  загруженному документу вне зависимости от того, под каким разделом сервер его хранит."*
+
+  API and Next stopped by PID afterward (`1340297`, `1357956`, and the orphaned
+  `next-server` worker `1357990` the wrapper's exit left behind, each confirmed mine by
+  `readlink /proc/<pid>/cwd` before the kill); `ss -ltnp` empty for `56381`–`56383`
+  afterward. No process signalled by pattern.
 
