@@ -173,8 +173,14 @@ const FINDING_UID = 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const VERSION_UID = 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 
 describe('every cache key starts in its own namespace', () => {
-  it('declares exactly the four roots', () => {
-    expect([...QUERY_NAMESPACES]).toEqual(['projects', 'versions', 'runs', 'findings']);
+  it('declares exactly the five roots', () => {
+    expect([...QUERY_NAMESPACES]).toEqual([
+      'projects',
+      'versions',
+      'runs',
+      'findings',
+      'dashboard',
+    ]);
   });
 
   it('puts each builder under the root it belongs to', () => {
@@ -186,6 +192,7 @@ describe('every cache key starts in its own namespace', () => {
     expect(queryKeys.runs.findings(RUN_ID)[0]).toBe('runs');
     expect(queryKeys.findings.detail(FINDING_UID)[0]).toBe('findings');
     expect(queryKeys.findings.decisions(FINDING_UID)[0]).toBe('findings');
+    expect(queryKeys.dashboard.summary()[0]).toBe('dashboard');
   });
 
   it('keeps a finding detail and a run detail apart even for the same identity string', () => {
@@ -204,16 +211,17 @@ describe('every cache key starts in its own namespace', () => {
       queryKeys.runs.findings(RUN_ID),
       queryKeys.findings.detail(FINDING_UID),
       queryKeys.findings.decisions(FINDING_UID),
+      queryKeys.dashboard.summary(),
     ].map((key) => JSON.stringify(key));
     expect(new Set(keys).size).toBe(keys.length);
   });
 });
 
 describe('an appended decision invalidates every entry the seam names', () => {
-  it('invalidates the history, the detail, the run finding list and the journal', () => {
+  it('invalidates the history, the detail, the run finding list, the journal and the dashboard', () => {
     const keys = decisionCacheKeys(FINDING_UID, RUN_ID).map((key) => JSON.stringify(key));
 
-    expect(keys).toHaveLength(4);
+    expect(keys).toHaveLength(5);
     expect(keys).toContain(JSON.stringify(['findings', 'decisions', FINDING_UID]));
     expect(keys).toContain(JSON.stringify(['findings', 'detail', FINDING_UID]));
     // The third is the one that gets forgotten: the verdict projection is in the list row
@@ -224,6 +232,9 @@ describe('an appended decision invalidates every entry the seam names', () => {
     // then opens the knowledge base without seeing their own decision has no way to tell
     // a stale cache from a lost write.
     expect(keys).toContain(JSON.stringify(['findings', 'journal', {}]));
+    // The fifth, `W46-WIRE`: a decision changes `findings_by_verdict` on the dashboard's
+    // one read, so the summary is invalidated alongside the journal it is summarising.
+    expect(keys).toContain(JSON.stringify(['dashboard', 'summary']));
   });
 
   it('builds the run key with default filters, so it matches every filtered list', () => {

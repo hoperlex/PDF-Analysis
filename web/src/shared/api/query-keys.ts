@@ -47,8 +47,8 @@ import type {
   VersionUid,
 } from './generated/types.gen';
 
-/** The four root namespaces. Nothing else is a legal first key segment. */
-export const QUERY_NAMESPACES = ['projects', 'versions', 'runs', 'findings'] as const;
+/** The five root namespaces. Nothing else is a legal first key segment. */
+export const QUERY_NAMESPACES = ['projects', 'versions', 'runs', 'findings', 'dashboard'] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
 
@@ -150,5 +150,30 @@ export const queryKeys = {
      */
     journal: (filters: DecisionJournalFilters = {}) =>
       ['findings', 'journal', filters] as const,
+  },
+  /**
+   * `getDashboardSummary`. `W46-WIRE`.
+   *
+   * Its own root namespace, and not filed under `projects`, `runs` or `findings`: it is
+   * one read that aggregates across all three of those — documents per project, findings
+   * by verdict, run activity and spend, documents per section — computed server-side over
+   * the whole deployment. Nesting it under any one of the three would misstate which of
+   * them it depends on and would still miss the other two, and this key has exactly one
+   * entry today so a fourth root would not amortise the way `journal`'s comment above
+   * argues `findings.journal` does not need one.
+   *
+   * Every mutation that changes a number this key answers for invalidates it, from its
+   * own feature or entity rather than from here: `uploadDocument`
+   * (`features/upload-document`, `documents_by_project` and `section_breakdown`),
+   * `startRun` (`features/start-run`, a new row in `run_activity.by_state` the moment the
+   * command is accepted) and the run-status poll's terminal reading
+   * (`entities/audit-run/api/use-run-status.ts`, `run_activity.spend` and the state
+   * distribution, which only settle once a run reaches a terminal state), and an appended
+   * decision (`entities/expert-decision/model/cache.ts`'s `decisionCacheKeys`,
+   * `findings_by_verdict`). Forgetting one is how this screen shows last month's numbers
+   * after this month's upload.
+   */
+  dashboard: {
+    summary: () => ['dashboard', 'summary'] as const,
   },
 } as const;
