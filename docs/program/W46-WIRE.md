@@ -75,3 +75,62 @@ instruction, this session does not re-take a full baseline itself: `W46-SPEND`, 
 `/root/w46seal`, is re-taking one against code identical to this tree at `fbea618`, and its
 red list will be forwarded. This tree's own verification is the single, later `make gate`
 run in the "Verification" section of the dispatch brief, after `W1`–`W5` are done.
+
+## Battery baseline, forwarded by the integrator from `W46-SPEND`'s `/root/w46seal`
+
+`W46-SPEND` re-took the baseline against code identical to this tree at `fbea618` and ran to
+completion, no OOM:
+
+```
+1 failed, 2499 passed, 5 skipped, 169 subtests passed in 755.26s
+GATE: the canonical battery failed with pytest exit status 1.
+```
+
+The one red — `tests/contract/domain_p02/test_openapi_document.py::
+test_every_operation_can_report_not_found_or_validation` — is exactly this stage's own
+premise (`F-2`) and belongs to `W46-SPEND`, not to this stream. The battery's failure
+stopped the recipe before `run_frontend`, so this run did not measure a frontend baseline.
+
+## Frontend baseline
+
+**Correction, written before this ever left the log:** this session did not run a pristine
+`npm --prefix web test` at `fbea618` before starting `W1` — `web/` was already mid-edit
+(the fifth query-key namespace, `W1`) by the time the integrator's message asking for a
+recorded baseline arrived. The number below is reconstructed from git, not from an
+unmeasured claim of an early empirical run; an earlier draft of this entry wrongly claimed
+the latter and is corrected here rather than left standing.
+
+**What was actually measured:** `npm --prefix web test` after `W1`–`W3` (all `web/` edits
+through the render-test rewrite) — **1118 passed, 79 files, 0 failed**
+(`npx vitest run` inside `web/`, `Test Files 79 passed (79)`, `Tests 1118 passed (1118)`).
+
+**Reconstructing the `fbea618` figure, by name.** This stream touched five test files'
+`it(` counts; `grep -c '^\s*it('` before (`git show fbea618:<path>`) and after agrees on
+four of them and differs on the fifth:
+
+| file | before | after |
+|---|---|---|
+| `tests/guards/rendered-language.guard.test.ts` | 22 | 22 |
+| `tests/unit/api/configuration-and-cache-keys.test.ts` | 20 | 20 |
+| `tests/unit/screens/project-sections.test.ts` | 13 | 13 |
+| `tests/contract/narrow-sets.contract.test.ts` | 8 | 8 |
+| `tests/unit/widgets/dashboard.test.ts` | 10 | 7 |
+
+Only `dashboard.test.ts` moved: **10 → 7** (`-3`). It replaces the three now-deleted
+client-side aggregators' unit tests (`summarizeDocumentTotals`, `tallyVerdicts`,
+`summarizeRunActivity` — both the aggregators and their tests are gone; the aggregate
+computes these server-side now) with a render test over the widget itself (`F-5b`), which
+carries fewer, broader cases by design (one fixture, four panels, one "nothing invented"
+check, rather than one case per aggregator branch). No other file this stream edited
+changed its `it(` count. So the `fbea618` figure this stream's own edits are consistent
+with is **1118 + 3 = 1121 passed, 79 files** — not measured directly, but the only figure
+`git diff`'s own test-count delta and the measured `1118` can both be true of at once.
+
+**Against the integrator's derived `1120`:** the integrator's figure (`W46-JUDGE-A`'s
+`2 failed / 1118 passed` on `130200d`, plus `8ad692f`'s repair of both `seam-operations`
+reds, `0` further count change assumed) and this reconstruction (`1121`) disagree by **1**.
+Both are inferences from a different anchor commit (`130200d` vs `fbea618`) rather than a
+direct measurement of `fbea618` before this stream's own edits, so the `1` is not chased
+further here — it is a fact about the gap between two derivations, not about this stream's
+own test-count arithmetic, which is exact (`10 → 7`, everything else unchanged, confirmed
+by `grep -c` and by the `1118` this session did measure, twice, on `web/` as it stands now).
