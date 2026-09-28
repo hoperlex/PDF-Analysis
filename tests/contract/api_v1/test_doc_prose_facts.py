@@ -374,6 +374,37 @@ def test_the_historical_section_is_excluded_from_the_live_scan() -> None:
     marker_text = boundary.group(0)
     assert marker_text not in scanned_text
     assert full_text.count(marker_text) >= 1
+    # `F-5c` (`docs/program/reviews/W46-JUDGE-A.md` section 6): the half `ff686b1`'s
+    # rewrite lost. `scanned_text == full_text[: boundary.start()]` above is satisfied by
+    # **any** prefix, including the empty one -- a heading placed too early blinds the
+    # scan and every assertion above still passes. Measured: one heading
+    # ("### A note on how the historical record is kept") added directly under the live
+    # section's own, before any of its content, truncates the live section down to
+    # nothing and this control stayed green. The repair is non-vacuity: the live section
+    # must still make a claim this guard's own extractors can read -- the same move
+    # `test_the_bff_handler_still_makes_a_claim_this_guard_can_read` already makes for
+    # the BFF route handler.
+    #
+    # **Not narrowed to `TAGGED_TIP_CLAIM` alone**, though that is the literal the report
+    # names. Measured against this tree rather than assumed: the live section, dated
+    # 2026-09-28, says wave 46 is "merged, not yet gated" and deliberately makes no
+    # `closed as \`alpha-wNN\`` claim -- correctly, since it has not closed yet. Pinning
+    # this assertion to that one extractor would redden this control against a live
+    # section that is telling the truth, in a file this task's `allowed_paths` does not
+    # cover (`docs/program/CURRENT_STATE.md` is the integrator's -- see
+    # `docs/program/W46-SPEND.md`). The union of all three extractors this file already
+    # derives from the tree -- migration head, surface triple, tagged tip -- catches the
+    # identical defect: a too-early heading truncates all of them together, not just
+    # one, so this stays exactly as strong a guard without going red over an honest gap.
+    live_claims = (
+        {m.group(0) for m in _migration_head_claims(scanned_text)}
+        | {m.group(0) for m in _surface_triple_claims(scanned_text)}
+        | {m.group(0) for m in _tagged_tip_claims(scanned_text)}
+    )
+    assert live_claims, (
+        "the live section survives truncation but makes no claim this guard can read -- "
+        "the non-vacuity half of the control (F-5c) is failing"
+    )
 
 
 def test_the_scanned_docs_state_the_migration_head_this_tree_has() -> None:
