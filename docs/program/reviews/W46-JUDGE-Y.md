@@ -724,4 +724,151 @@ The comments were true on the stream's base and are false on the merged tree. `g
 `ce25e14` still finds all four (`run-activity-panel.tsx:8`, `:64`,
 `rendered-language.guard.test.ts:644`, `dashboard.test.ts:61`).
 
-*Remaining findings pending: X-2, X-3, X-6, X-10, then §12.*
+### X-2 — `F-5a`'s guard proves absence and nothing about counting — **narrowed in wording, strengthened in substance**
+
+X's two invented mutations (every count forced to `0`; `basis="measured"` always) survive, and I
+do not dispute them. I took three more against `test_dashboard_summary_over_a_fresh_deployment.py`
+in the clone (baseline **3 passed**):
+
+| mutation of `dashboard/repository.py` | result |
+|---|---|
+| `model_call_count=calls + 1` (a wrong **non-zero** spend count) | **1 failed, 2 passed** |
+| `_RUNS_BY_STATE` counts every run as `published` | **3 passed** |
+| `_DOCUMENTS_BY_SECTION` counts every published document as `KM` | **3 passed** |
+
+So *"cannot fail on a count"* is too strong: the third test asserts `spend == {1, 34400,
+"measured"}` exactly, and a wrong spend count is caught. What X's framing misses is the sharper
+half. X writes that the guard's *"three states are all zeros except `spend`"*. They are not:
+`_seed_one_model_call` (test file, lines 199-256) inserts **a document, a version and an
+`audit_run`** into the database the third test reads, and the test then asserts `spend` only. The
+guard holds a non-zero document and a non-zero run and never reads the rows that count them.
+
+**Through every layer, live.** The last two mutations together, plus one extra verdict row
+(`escalated: 9`), served from the clone to my unchanged Next on a copy of the decisions state
+(`audit_w46k_x2`). `GET /dashboard` carried `escalated: 9` and `KM: 2`; the screen showed *КМ: 2*,
+*Без раздела: 0*, *Находок: 6*, no 9 anywhere. Then the live journey against the same stack:
+**the `dashboard` route `ok`** (its envelope's body text: *КМ: 3*, *Без раздела: 0*, *Находок: 9*
+— after the write half's unclassified upload, a truthful server would say *КМ: 1*, *Без раздела:
+2*). No browser instrument reads a dashboard number: the manifest's `dashboard` row carries
+`expects_api` and nothing else. The journey exited red on one route, `knowledge-base`
+(*scrollWidth 3701 > 780*), and that red is mine, not the mutation's: the database copy holds a
+contract-valid 400-character single-word comment I wrote into `audit_w46k_s4` by mistake while
+probing X-1 (the envelope's longest unbroken token on that route is 400). It is the same
+unbroken-string overflow as the 200-character project name in my section 7 — pre-existing — now
+reached through a second field.
+
+**X-2 against my Y5 M5/M6: two defects of one shape, in two layers.** X-2 is the server's guard:
+it proves a row is present, not that its count is right. M5/M6 is the client's render test: it
+proves no digit is invented, not that a digit sits in its row. Each would catch what the other
+misses in its own layer and neither covers the other's. Composed, as driven above, a miscounting
+server behind a client that misplaces nothing still reaches the screen green at every instrument
+the programme runs.
+
+### X-3 against my Y5-a — **upheld; one defect, and each of us measured a half the other did not**
+
+The same two functions, the same header sentence (*"its true zero"*), the same verdict.
+
+- **What X measured that I did not:** an **unknown** member. A body with `escalated: 9` and a
+  section `ZZ: 5` loses both without a trace. I had only omitted rows.
+- **What I measured that X did not:** the path. X rendered `Dashboard` through `renderWith` with
+  the summary seeded into the query cache, which is the render test's own harness and never runs
+  the query function, the generated client, the BFF or the server. I served the defect from a
+  real server through `serve.py`, the BFF and a cold browser: the omitted rows in Y5-a, and above,
+  under X-2, the unknown `escalated: 9` — which the server emitted and the BFF forwarded without
+  complaint, and the screen dropped (*Находок: 6*).
+
+**Which is stronger:** mine for *reachability* — it shows that nothing between the database and
+the screen refuses either shape, so X's *"version skew"* scenario needs no skew, only one server
+regression past the `F-5a` guard. X's for *scope* — the unknown member is the case a reseal that
+adds an enum member produces, and I had not tried it. Together they close each other's gap. Rated
+medium in my report, low–medium in X's; I keep medium, because the property it erases is the one
+this wave was built to establish.
+
+### X-6 against my Y6-a — **upheld; one defect. X read it, I drove it, and now the bound is measured too**
+
+X's reproduction is static (the invalidation sites, the namespaces, `staleTime: 30_000`). Mine
+(section 6) drove it: one page, a created project, the dashboard still saying *«Проектов пока
+нет.»*. The one thing neither of us had measured was X's bound, *"up to 30 s"*. On a fresh copy of
+s0 (`audit_w46k_x3`), one browser page:
+
+```text
+ 0.0s  cold /dashboard            Проектов пока нет.                 dashboard reads: 1
+ 2.2s  back after project 1       Проектов пока нет.                 dashboard reads: 1
+34.0s  back after project 2       Документов: 0 на 2 проектах. …     dashboard reads: 2
+```
+
+The staleness ends when the 30-second window does, exactly as X derived; the second read fetched
+both projects. So the cost is bounded and self-healing, which is X's *low*. I rated it
+medium-low because the window covers the first-day path (an empty deployment, a first project,
+back to the dashboard within seconds). A matter of weight, not of fact.
+
+### X-10 — `D-109`'s check reads one line of 24 — **upheld, with a rendered instance; `ce25e14` repairs the count**
+
+X counted source lines. The measurement X did not take is the screen: in my section 2 addendum I
+stopped the API behind a signed-in browser and the dashboard's own failure state rendered
+*«…**Операция** ничего не создала, и её можно повторить.»* (`catalog-message.ts:113`, a `.ts` file,
+capitalised) — the dashboard, the exact screen `D-109`'s row says `W46-WIRE` cleaned, showing the
+word the old check could not see. On `d5c9be5`: the old command → **1**; `ce25e14`'s command
+(`-i`, `.ts` and `.tsx`) → **24**, all 24 non-comment lines. One of the 24, `transport.ts:125`
+(*"… — операция записи, ей требуется Idempotency-Key"*), is a thrown programming error rather than
+screen text, so *24 on screen* would overstate it; *24 lines that can produce text* is what the
+repaired row says, and that is accurate.
+
+## Cross-examination: the verdicts
+
+| X | verdict | my measurement that X did not take |
+|---|---|---|
+| X-1 | **upheld, strengthened** | the served document over HTTP (0 diffs; 1 with a drift); a behavioural drift (`comment` 4000 → 400) refuses 401- and 1000-character comments the contract allows, and 1119 API/contract/e2e tests stay green |
+| X-2 | **narrowed in wording, strengthened in substance** | a wrong spend count **is** caught; wrong run-state and section counts are not, although the third test seeds a run and a document; served live, the dashboard route of the journey stays `ok` over a miscounting server |
+| X-3 | **upheld** — one defect with my Y5-a | an unknown verdict through the real server, BFF and browser: emitted, forwarded, dropped |
+| X-4 | **upheld, broadened** | an ordinary Markdown heading blinds the scan; the code fence is incidental |
+| X-5 | **narrowed** | the same `<select>` in the form's own one-attribute-per-line style prints `1` under the old check; so does a `section` identifier. `ce25e14`'s check catches all but a picker named without the word |
+| X-6 | **upheld** — one defect with my Y6-a | the 30-second bound, measured: stale at 2.2 s, fresh at 34 s |
+| X-7 | **upheld** | the rule over every parameter location, inline and by `$ref`; and its correlation exemption compares spellings |
+| X-8 | **upheld, all three**; `ce25e14` repairs all three | each sentence's full history: counts at every contract commit, author and committer dates, the correction tally through every version of the block |
+| X-9 | **upheld**; not repaired by `ce25e14` | the compiler: a `RunActivity` without `spend` is TS2741 at `2ffca8c` and exit 0 at `d5c9be5` |
+| X-10 | **upheld**; `ce25e14` repairs the count | the word rendered on the dashboard's own failure state |
+| X-11 | **upheld** | the generated type: `RunStatus.cost_micros` documents absence, `RunActivity.spend` carries no comment |
+
+**Nothing X found is falsified.** Two findings are narrowed in how they are worded (X-2, X-5); four
+are made stronger or wider by a measurement X did not take (X-1, X-2, X-4, and X-3 by path).
+
+## Cross-examination: where X's method shares an assumption with its subject (§12)
+
+**X-3's reproduction goes through the render test's own harness.** X built a summary by hand and
+rendered `Dashboard` with `renderWith`, the query cache pre-seeded — exactly how `W46-WIRE`'s render
+test runs. That harness never executes the query function, the generated client, the BFF or the
+server, so it assumes, as the render test does, that *the body the panels receive is the body
+somebody wrote*. It could show that the panels mishandle a bad body; it could not show that a bad
+body can arrive, which is why X had to reach for *"version skew"* and rated the finding lower. The
+full-stack run above removes the assumption and the finding holds harder without it.
+
+**X-1's "served document" was the documentation app, and the equivalence that makes it the served
+one is asserted by a test in the subject.** X compared the contract with
+`create_documentation_app().openapi()`; that it is what the process serves rests on
+`test_the_documented_and_the_wired_app_agree`, which compares it with the router fixture, not with
+`serve.py`'s process. Measured over HTTP from `serve.py`, the assumption **holds** today (0
+differences, and 1 under a drift, identical to the in-process reading). I record it because it is
+§12's shape, and because it held only by being checked.
+
+**X-2's zero-state reading took the test's names for its content.** *"Three states, all zeros
+except `spend`"* is what the test names say; the seed function inserts a document and a run. X's
+mutations were chosen to be caught by nothing *in an all-zero world*, and so missed that the guard
+already holds non-zero rows it does not read — the stronger finding.
+
+**And the same shape in my own method, stated so it is not only X's.** My Y1 compared the screen
+with `GET /dashboard` from the same server, so it could never catch the server counting wrong: a
+miscount appears on both sides and the columns agree. X-2 found what my Y1 could not; the live
+miscount above is the measurement that closes it.
+
+## Cross-examination: evidence discipline
+
+Everything above ran in the disposable clone `/root/w46k-probe` at `d5c9be5`, or in a `git archive`
+copy of two directories, each mutation reverted and `cmp`-ed or `git status`-checked afterwards;
+both were removed at the end. The API ran from `/root/w46k` or the clone on `56401`, Next from
+`/root/w46k/web` on `56403`, both stopped by PID after `readlink /proc/<pid>/cwd`. The lane's
+containers had exited in the host restart and were started again with `make up`. **One mistake,
+recorded:** while measuring X-1 I posted a 400-character comment into `audit_w46k_s4` itself
+instead of a copy. A `comment` event moves no dashboard number, but the snapshot is no longer
+byte-for-byte what section 1 describes. New copies made for this section: `audit_w46k_x1`
+(unmutated comments), `_x2` (miscount, journey), `_x3` (the bound). No `next build` was started.
