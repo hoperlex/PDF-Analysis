@@ -294,11 +294,91 @@ def test_every_write_declares_the_idempotency_conflict_response(
         assert "409" in operation["responses"], f"{name} cannot report a key conflict"
 
 
-def test_every_operation_can_report_not_found_or_validation(openapi_document: dict) -> None:
+def _takes_caller_input(document: dict, operation: dict) -> bool:
+    """A path parameter, a query parameter, a header other than ``X-Correlation-Id``, or
+    a request body -- derived from the document itself, never from a name list.
+
+    `F-2b` (``docs/program/reviews/W46-JUDGE-A.md`` section 3): before this wave "every
+    operation can report a client fault" and "every operation takes caller input" were
+    the same set for all nineteen operations, so the old rule -- built on the first
+    premise -- could not tell which one it was actually guarding
+    (``OPERATING_CONSTRAINTS.md`` section 12: a rule that shares an assumption with its
+    subject). ``getDashboardSummary`` is the first operation without input, and deriving
+    the answer from the document is what keeps the next one from silently falling under
+    the old assumption again.
+
+    ``operation`` is one of ``_operations()``'s values, which carries ``_path`` but not
+    the path item's own shared ``parameters`` -- OpenAPI declares a parameter once on the
+    path item when every operation of that path takes it (``X-Correlation-Id`` and every
+    ``{..._uid}`` in this document are declared that way; see
+    ``test_every_operation_declares_its_path_parameters``, which merges the same two
+    lists for the same reason). Skipping the path item here would have called
+    ``getDocumentVersion`` input-less -- measured, not assumed, while writing this.
+    """
+    path_item = document["paths"][operation["_path"]]
+    parameters = list(path_item.get("parameters", [])) + list(operation.get("parameters", []))
+    for parameter in parameters:
+        resolved = (
+            _resolve(document, parameter["$ref"]) if "$ref" in parameter else parameter
+        )
+        if resolved["in"] in ("path", "query"):
+            return True
+        if resolved["in"] == "header" and resolved["name"] != "X-Correlation-Id":
+            return True
+    return "requestBody" in operation
+
+
+#: `F-2` (`D-105`'s pin family, see `docs/program/W46-SPEND.md`): the input-less set,
+#: pinned as a literal so a second input-less operation is a decision someone makes
+#: rather than a drift nobody notices. Moves on a reseal that adds or removes every
+#: parameter, header and body an operation takes.
+INPUT_LESS_OPERATIONS: frozenset[str] = frozenset({"getDashboardSummary"})
+
+
+def test_every_operation_that_takes_input_can_report_a_client_fault(
+    openapi_document: dict,
+) -> None:
+    """Restated from `test_every_operation_can_report_not_found_or_validation`, gate red
+    #5 on `2ffca8c`. `W46-JUDGE-A`'s ruling (section 3, `F-2b`): the rule was wrong and
+    the operation was right, because the rule encoded an incidental fact -- every
+    operation took caller input, so far -- as a law, and adding a client-fault response
+    to `getDashboardSummary` to satisfy it would be a declared response no request can
+    produce: no `404` (it addresses no identity), no `409` (it writes nothing), no `422`
+    (it has no input to be malformed).
+
+    **Two-sided**, so the exemption cannot become a hiding place: an operation with no
+    caller input must declare **none** of `404`/`409`/`422`, so a stray `422` added to
+    `getDashboardSummary` later, with nothing able to produce it, reddens here rather
+    than passing unnoticed. `500` stays required for every operation, unchanged from the
+    rule this replaces.
+    """
     for name, operation in _operations(openapi_document).items():
         codes = set(operation["responses"])
-        assert codes & {"404", "422", "409"}, f"{name} declares no client-fault response"
         assert "500" in codes, f"{name} cannot report an internal fault"
+        client_fault = codes & {"404", "409", "422"}
+        if _takes_caller_input(openapi_document, operation):
+            assert client_fault, f"{name} takes caller input and declares no client-fault response"
+        else:
+            assert not client_fault, (
+                f"{name} takes no caller input but declares {sorted(client_fault)} -- "
+                "a response no request can produce"
+            )
+
+
+def test_the_input_less_operation_set_is_exactly_the_pinned_one(openapi_document: dict) -> None:
+    """The literal pin, checked independently of the rule above: `_takes_caller_input`
+    could be internally consistent (every input-less op declares no client fault, every
+    input-taking op declares one) while the *membership* of the input-less set drifted
+    out from under whoever last read it. This is `D-105`'s fourth-pin shape -- a set
+    that is right today and silently wrong on the next operation -- pinned as a literal
+    so that drift is a decision, not an accident.
+    """
+    input_less = {
+        name
+        for name, operation in _operations(openapi_document).items()
+        if not _takes_caller_input(openapi_document, operation)
+    }
+    assert input_less == INPUT_LESS_OPERATIONS
 
 
 # ---------------------------------------------------------------------------
