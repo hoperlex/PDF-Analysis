@@ -146,7 +146,7 @@ export function AppFrame({ children, session }: AppFrameProps) {
          * was added to fix, one state over.
          *
          * Both halves use the same class, so this adds no rule to the global stylesheet and
-         * no colour to the census: the rule gained the four declarations that make a
+         * no colour to the census: the rule gained the five declarations that make a
          * `<button>` look like the link beside it, and declares nothing new.
          *
          * The sign-out is a POST to the BFF's own door, exactly as the panel's is: the
