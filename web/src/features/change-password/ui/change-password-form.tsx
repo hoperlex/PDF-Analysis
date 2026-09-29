@@ -15,10 +15,18 @@
  * success is a note and not an `ErrorState`, because a block whose heading says a failure
  * happened is the wrong shape for the answer "it worked".
  *
- * `autoComplete` is spelled out on both fields. `current-password` and `new-password` are
- * what tell a password manager which is which; without them a manager offers to save the
- * *old* password as the new one, which would be this screen teaching a reviewer's own tools
- * to undo it.
+ * `autoComplete` is spelled out on all three fields. `current-password` and `new-password`
+ * are what tell a password manager which is which; without them a manager offers to save
+ * the *old* password as the new one, which would be this screen teaching a reviewer's own
+ * tools to undo it. `confirm_new_password` also carries `new-password`: it is the same
+ * secret typed a second time, not a third one.
+ *
+ * `confirm_new_password` is `R-48`'s confirmation, ruled into the UI and not into the
+ * contract: `OWNER_RULINGS_2026-09-17.md` §3.16 says the policy carries "confirmation: a
+ * second entry of the new password in the UI." The match is checked in the BFF handler
+ * (`web/src/app/bff/v1/[...path]/route.ts`'s `postedPasswords`), never in the browser and
+ * never by the API: `ChangePasswordRequest` still carries exactly `current_password` and
+ * `new_password`, so this field never reaches the contract at all.
  */
 
 import { ErrorState } from '@/shared/ui';
@@ -65,8 +73,25 @@ export function ChangePasswordForm({ outcome }: ChangePasswordFormProps) {
           type="password"
           autoComplete="new-password"
           required
+          minLength={8}
           maxLength={1024}
           placeholder="Новый пароль"
+        />
+      </div>
+
+      <div className="am-form__field">
+        <label htmlFor="change-password-confirm">
+          <strong>Повторите новый пароль</strong>
+        </label>
+        <input
+          id="change-password-confirm"
+          name="confirm_new_password"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          maxLength={1024}
+          placeholder="Повторите новый пароль"
         />
       </div>
 

@@ -176,13 +176,16 @@ const OUTCOME_PARAM = 'outcome';
 type Refusal = 'credentials' | 'validation' | 'unconfigured' | 'upstream';
 
 /**
- * The six ways the password change can end, success included.
+ * The seven ways the password change can end, success included.
  *
  * Success is a member of the same set because a redirect has no body, so "it worked" has to
  * survive as an address exactly as a refusal does; one set means one parameter and one
  * translation function that cannot disagree with a second one.
+ *
+ * `mismatch` is `R-48`'s confirmation -- the new password and its repeated entry disagree
+ * -- and is not in `Refusal` because sign-in has no such field to disagree with itself.
  */
-type ChangeOutcome = 'changed' | 'unchanged' | Refusal;
+type ChangeOutcome = 'changed' | 'unchanged' | 'mismatch' | Refusal;
 
 interface RouteContext {
   /** Next 15 hands route params as a promise. */
@@ -420,15 +423,16 @@ async function openTheSession(request: Request): Promise<Response> {
 }
 
 /**
- * Read the two passwords out of a posted form.
+ * Read the three passwords out of a posted form: the current one, the new one, and `R-48`'s
+ * confirmation -- the new one typed a second time.
  *
  * Form-encoded only, exactly as the sign-in exchange is, and for a reason that is stronger
- * here: this form carries two passwords, one of which is about to become live. Accepting a
+ * here: this form carries three passwords, one of which is about to become live. Accepting a
  * JSON body as well would invite the client-side call this design exists to avoid.
  */
 async function postedPasswords(
   request: Request,
-): Promise<{ readonly current: string; readonly next: string } | null> {
+): Promise<{ readonly current: string; readonly next: string; readonly confirm: string } | null> {
   let form: FormData;
   try {
     form = await request.formData();
@@ -437,13 +441,16 @@ async function postedPasswords(
   }
   const current = form.get('current_password');
   const next = form.get('new_password');
-  if (typeof current !== 'string' || typeof next !== 'string') return null;
-  // Neither is trimmed. A password is bytes somebody typed, and stripping a space the
-  // reviewer meant to type would change the password behind their back — which is the one
-  // thing a password field may never do. The login above is trimmed because a login is a
+  const confirm = form.get('confirm_new_password');
+  if (typeof current !== 'string' || typeof next !== 'string' || typeof confirm !== 'string') {
+    return null;
+  }
+  // None of the three is trimmed. A password is bytes somebody typed, and stripping a space
+  // the reviewer meant to type would change the password behind their back — which is the
+  // one thing a password field may never do. The login above is trimmed because a login is a
   // name and a leading space in one is always a copy-paste artifact.
-  if (current.length === 0 || next.length === 0) return null;
-  return { current, next };
+  if (current.length === 0 || next.length === 0 || confirm.length === 0) return null;
+  return { current, next, confirm };
 }
 
 /**
@@ -472,6 +479,13 @@ async function changeThePassword(request: Request): Promise<Response> {
 
   const passwords = await postedPasswords(request);
   if (passwords === null) return reportChange('validation');
+  if (passwords.next !== passwords.confirm) {
+    // R-48's confirmation, checked before anything is sent and before the "must differ"
+    // rule below: two passwords that disagree with each other are a typo to fix, which is
+    // a different fact -- and a different next action -- from "that matches what you
+    // already have".
+    return reportChange('mismatch');
+  }
   if (passwords.current === passwords.next) {
     // Refused here, before anything is sent, and refused independently by the API. The
     // API's rule is the one that counts; this one means no request carrying two passwords
