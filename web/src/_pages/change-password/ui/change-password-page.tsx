@@ -26,9 +26,18 @@ export interface ChangePasswordPageProps {
   readonly login?: string | null | undefined;
   /** How the last attempt ended, if there was one. */
   readonly outcome?: ChangePasswordOutcome | null | undefined;
+  /**
+   * `R-50`. Whether this session is still on the password the deployment was seeded with.
+   *
+   * It changes one thing on this screen: the sentence at the top, which says why the
+   * reviewer is here. A redirect with no explanation is a screen that appears to have
+   * refused something without saying what, and a reviewer who cannot tell a lock from a
+   * fault reports a fault.
+   */
+  readonly mustChange?: boolean | undefined;
 }
 
-export function ChangePasswordPage({ login, outcome }: ChangePasswordPageProps) {
+export function ChangePasswordPage({ login, outcome, mustChange }: ChangePasswordPageProps) {
   const signedIn = typeof login === 'string' && login.length > 0;
 
   return (
@@ -40,6 +49,13 @@ export function ChangePasswordPage({ login, outcome }: ChangePasswordPageProps) 
           : 'Чтобы сменить пароль, нужно сначала войти: требуется подтвердить текущий пароль.'
       }
     >
+      {signedIn && mustChange === true ? (
+        <p className="am-note" data-change-password-required="true">
+          Пока пароль этой учётной записи остаётся тем, с которым система была развёрнута,
+          остальные разделы закрыты: сервер отвечает отказом на любую операцию, кроме входа
+          и смены пароля. Смените пароль здесь — и остальное откроется сразу.
+        </p>
+      ) : null}
       {signedIn ? (
         <ChangePasswordForm outcome={outcome} />
       ) : (

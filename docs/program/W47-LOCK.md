@@ -85,3 +85,40 @@ Guards, all in `tests/integration/api/test_authorization.py`:
 `test_the_same_surface_serves_the_same_credential_once_the_flag_is_off` (anti-vacuity),
 `test_changing_the_password_lifts_the_refusal_on_the_very_next_request`,
 `test_a_revoked_default_credential_is_refused_as_revoked_and_not_as_default`.
+
+## 4. `R-50`, the signpost — the screens
+
+- `app/bff/session/store.ts`: the register row and `SessionSubject` carry
+  `isDefaultCredential`, and `openSession` takes it as a **required** argument. The value is
+  the API's answer, recorded; this tier never decides it.
+- `app/bff/v1/[...path]/route.ts`: `is_default_credential` is validated as a boolean exactly
+  as `token` and `expires_in` are — a body missing it is `upstream`, **not** a `false`. A
+  sign-in on a default credential lands on `/account/password`; every other sign-in lands
+  where it always did.
+- `app/bff/session/screen-lock.ts` (new): `requireAChangedPassword()`. Every `page.tsx` but
+  three awaits it. A layout cannot do this (a server component is not told its address, so it
+  would redirect the change screen to itself) and middleware cannot (its runtime has no
+  access to the register), which is why the call is in the route files.
+- `/account/password` says why the reviewer is there, rather than being a silent redirect.
+
+Guards:
+- `web/tests/guards/default-credential-screens.guard.test.ts` (new, 9 tests). The subject is
+  **derived** from `web/src/app` by `routeAddresses()`; each address either calls the lock or
+  is in `OPEN_TO_A_DEFAULT_CREDENTIAL` with a written reason, and never both. It reads the
+  route's *code*, with comments stripped — the first run reported `/account/password` as both,
+  because its docstring explains that it does not call the lock.
+- `web/tests/unit/session/bff-session.test.ts`: where each sign-in lands, and that the
+  register recorded what the API said; plus two more unusable-answer shapes (the field
+  missing, and the field not a boolean).
+
+## 5. The bar (`app-frame.tsx:116`)
+
+`AppFrame` gains a **required** `session` prop — no default, so every renderer of the frame
+says which state it is rendering, and the defect cannot come back by omission. `app/layout.tsx`
+(the framework adapter, and the only part of the chrome allowed to know there is a request)
+reads the cookie and passes it down; `AppFrame` stays a pure server component every instrument
+can render synchronously. Signed in: the login and a `Выйти` POST to `/bff/v1/session/end`.
+Signed out: the `Вход` link, as before. One global-stylesheet rule gained four declarations
+(`background`, `border`, `padding`, `font-family`, `cursor`) so the `<button>` looks like the
+`<a>`; no new selector and no new colour, so the contrast census has nothing new to reach —
+and it renders both states now anyway.

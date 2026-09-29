@@ -1,24 +1,48 @@
 /**
- * The chrome around every screen: product name, instance label, and the top-level
- * navigation the four PC-01 routes hang off.
+ * The chrome around every screen: product name, instance label, the top-level navigation,
+ * and the one control that says whether anybody is signed in.
  *
  * A server component. It reads the cosmetic instance label from configuration and holds
  * no state, so nothing here forces the whole tree into the client bundle — the one control
  * that needs state, the theme toggle, is its own client component.
+ *
+ * **It is handed the session; it does not read one.** `app/layout.tsx` reads the cookie and
+ * the register and passes the answer down. Two reasons, and the second is the load-bearing
+ * one: a component that reached for `cookies()` would be an async server component, which
+ * every instrument that renders this frame as a *screen* would then have to await — and
+ * more importantly it would put a request-scoped read inside the layer whose job is
+ * composition. The layout is the framework adapter and the only place in `_app` allowed to
+ * know there is a request at all.
  */
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { SESSION_CLOSE_PATH } from '@/features/sign-in';
 import { getInstanceLabel } from '@/shared/config';
 
 import { ThemeToggle } from './theme-toggle';
 
-export interface AppFrameProps {
-  readonly children: ReactNode;
+/** What the frame is told about the open session. Deliberately a login and nothing else. */
+export interface AppFrameSession {
+  readonly login: string;
 }
 
-export function AppFrame({ children }: AppFrameProps) {
+export interface AppFrameProps {
+  readonly children: ReactNode;
+  /**
+   * The open session, or `null` when this browser has none.
+   *
+   * **Required, with no default.** `D-113`: the bar rendered `Вход` on every screen,
+   * including to a reviewer who was signed in and reading the dashboard — measured in a
+   * browser, on a screen whose data only loads with a session. A prop with a default would
+   * have let a caller keep that defect by omission; a required one makes every renderer of
+   * this frame say which of the two states it is rendering.
+   */
+  readonly session: AppFrameSession | null;
+}
+
+export function AppFrame({ children, session }: AppFrameProps) {
   const instance = getInstanceLabel();
   return (
     <div className="am-app">
@@ -112,9 +136,39 @@ export function AppFrame({ children }: AppFrameProps) {
         <Link className="am-app__nav" href="/dashboard">
           Дашборд
         </Link>
-        <Link className="am-app__signin" href="/login">
-          Вход
-        </Link>
+        {/*
+         * `D-113`, and it is the same journey `R-50` is about.
+         *
+         * This was an unconditional `<Link href="/login">Вход</Link>`: a signed-in reviewer
+         * was invited to sign in, on every screen, with no way to sign out anywhere in the
+         * chrome. The way out existed — `/login` renders the sign-out panel when a session
+         * is open — and nothing pointed at it, which is the defect the sign-in link itself
+         * was added to fix, one state over.
+         *
+         * Both halves use the same class, so this adds no rule to the global stylesheet and
+         * no colour to the census: the rule gained the four declarations that make a
+         * `<button>` look like the link beside it, and declares nothing new.
+         *
+         * The sign-out is a POST to the BFF's own door, exactly as the panel's is: the
+         * server deletes the row that holds the credential and clears the cookie in one
+         * answer. A `<Link>` that "signed out" would be a GET that changes state.
+         */}
+        {session === null ? (
+          <Link className="am-app__signin" href="/login">
+            Вход
+          </Link>
+        ) : (
+          <>
+            <span className="am-app__instance" data-session-login={session.login}>
+              {session.login}
+            </span>
+            <form method="post" action={SESSION_CLOSE_PATH}>
+              <button type="submit" className="am-app__signin">
+                Выйти
+              </button>
+            </form>
+          </>
+        )}
         {/*
          * `PC-01` stood here and is gone. It is the programme's own checkpoint code — it
          * told a reviewer nothing and it named the thing `R-18` says the alpha must stop

@@ -50,19 +50,24 @@ describe('a session is an opaque number here and a credential there', () => {
   });
 
   it('hands the credential to the forwarder and to nothing else', () => {
-    const id = openSession(LOGIN, CREDENTIAL, HOUR);
+    const id = openSession(LOGIN, CREDENTIAL, HOUR, false);
     expect(credentialOf(id)).toBe(CREDENTIAL);
 
     const subject = subjectOf(id);
     expect(subject).not.toBeNull();
     // The whole record, as a set of keys: a token added as a convenience field is red here
     // rather than discovered in a payload.
-    expect(Object.keys(subject as object).sort()).toEqual(['expiresAt', 'login', 'openedAt']);
+    expect(Object.keys(subject as object).sort()).toEqual([
+      'expiresAt',
+      'isDefaultCredential',
+      'login',
+      'openedAt',
+    ]);
     expect(JSON.stringify(subject)).not.toContain(CREDENTIAL);
   });
 
   it('treats an unminted, malformed or absent identifier as no session at all', () => {
-    openSession(LOGIN, CREDENTIAL, HOUR);
+    openSession(LOGIN, CREDENTIAL, HOUR, false);
     for (const bogus of [null, '', 'нет', 'a'.repeat(64), '00', `${'0'.repeat(63)}g`]) {
       expect(subjectOf(bogus)).toBeNull();
       expect(credentialOf(bogus)).toBeNull();
@@ -72,7 +77,7 @@ describe('a session is an opaque number here and a credential there', () => {
 
   it('forgets a session the moment it expires, on both readers', () => {
     const opened = 1_000_000;
-    const id = openSession(LOGIN, CREDENTIAL, MIN_LIFETIME_SECONDS, opened);
+    const id = openSession(LOGIN, CREDENTIAL, MIN_LIFETIME_SECONDS, false, opened);
     const alive = opened + (MIN_LIFETIME_SECONDS - 1) * 1000;
     const dead = opened + MIN_LIFETIME_SECONDS * 1000;
 
@@ -84,7 +89,7 @@ describe('a session is an opaque number here and a credential there', () => {
   });
 
   it('ends a session on request, and the identifier then opens nothing', () => {
-    const id = openSession(LOGIN, CREDENTIAL, HOUR);
+    const id = openSession(LOGIN, CREDENTIAL, HOUR, false);
     expect(openSessionCount()).toBe(1);
     expect(closeSession(id)).toBe(true);
     expect(closeSession(id)).toBe(false);
@@ -94,15 +99,15 @@ describe('a session is an opaque number here and a credential there', () => {
 
   it('refuses a lifetime it would have to guess at, rather than defaulting one', () => {
     for (const bad of [0, -1, MIN_LIFETIME_SECONDS - 1, MAX_LIFETIME_SECONDS + 1, Number.NaN, Infinity]) {
-      expect(() => openSession(LOGIN, CREDENTIAL, bad)).toThrow(SessionLifetimeError);
+      expect(() => openSession(LOGIN, CREDENTIAL, bad, false)).toThrow(SessionLifetimeError);
     }
-    expect(() => openSession(LOGIN, '   ', HOUR)).toThrow(SessionLifetimeError);
+    expect(() => openSession(LOGIN, '   ', HOUR, false)).toThrow(SessionLifetimeError);
     expect(openSessionCount()).toBe(0);
   });
 
   it('keeps two reviewers apart', () => {
-    const first = openSession('первый', 'token-a', HOUR);
-    const second = openSession('второй', 'token-b', HOUR);
+    const first = openSession('первый', 'token-a', HOUR, false);
+    const second = openSession('второй', 'token-b', HOUR, false);
     expect(first).not.toBe(second);
     expect(credentialOf(first)).toBe('token-a');
     expect(credentialOf(second)).toBe('token-b');

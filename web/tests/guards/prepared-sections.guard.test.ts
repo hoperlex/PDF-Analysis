@@ -43,7 +43,16 @@
 
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+/*
+ * `R-50`. The three prepared sections' route files read the session cookie before they
+ * render. An empty jar is no session, which the lock passes through: what this guard is
+ * about -- that each address renders its own screen -- is unchanged by it.
+ */
+vi.mock('next/headers', () => ({
+  cookies: async () => ({ get: () => undefined }),
+}));
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
@@ -249,7 +258,7 @@ describe('R-23: each prepared section has a place in the navigation', () => {
   });
 
   it('the frame links to all three addresses', () => {
-    const targets = navTargets(render(createElement(AppFrame, { children: null })));
+    const targets = navTargets(render(createElement(AppFrame, { children: null, session: null })));
     // Non-vacuous in both factors: the two links that predate this wave must still be
     // there, otherwise "contains /blocks" could pass on a frame that lost everything else.
     expect(targets).toContain('/knowledge-base');
@@ -257,9 +266,13 @@ describe('R-23: each prepared section has a place in the navigation', () => {
     for (const { route } of SECTIONS) expect(targets).toContain(route);
   });
 
-  it('each address is served by a route file that renders its own screen and no other', () => {
+  it('each address is served by a route file that renders its own screen and no other', async () => {
     for (const { title, routeFile, screen } of SECTIONS) {
-      const viaRoute = render(createElement(routeFile));
+      // `R-50`. Each of these route files now awaits the default-credential lock before it
+      // renders, so a route is an async function and what it returns is awaited here. The
+      // jar this file mocks is empty -- no session, so the lock returns and the route
+      // decides exactly what it decided before, which is what this case is about.
+      const viaRoute = render(await routeFile());
       expect(viaRoute).toBe(render(createElement(screen)));
       expect(visibleText(viaRoute)).toContain(title);
     }

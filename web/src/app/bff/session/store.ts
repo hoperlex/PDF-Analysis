@@ -63,6 +63,18 @@ export interface SessionSubject {
   readonly login: string;
   readonly openedAt: number;
   readonly expiresAt: number;
+  /**
+   * `R-50`. Whether the account this session belongs to is still on the password the
+   * deployment seeded it with.
+   *
+   * **Read from the API's answer and never decided here.** The exchange returns
+   * `is_default_credential` on `IssueTokenResponse`; this tier records what it was told.
+   * A tier that worked it out for itself — from the login, from the shape of the password
+   * — would be inventing a security state, and the same state is enforced a second time by
+   * the API, which refuses every operation but the exchange and the change while it holds.
+   * So this field decides where a reviewer is *sent*, and never what they are *allowed*.
+   */
+  readonly isDefaultCredential: boolean;
 }
 
 /** The row. `credential` leaves this module only through `credentialOf`. */
@@ -110,6 +122,11 @@ function sweep(now: number): void {
 /**
  * Record an exchanged credential and return the identifier the cookie will carry.
  *
+ * `isDefaultCredential` is the API's own answer, passed in rather than computed: see
+ * {@link SessionSubject.isDefaultCredential}. It is a required argument and not an
+ * optional one with a default, because the value a caller would get by omitting it is the
+ * permissive one — the reviewer walks into the application and meets a wall of refusals.
+ *
  * @throws {SessionLifetimeError} when the lifetime is not a finite number of seconds
  * inside the accepted band.
  */
@@ -117,6 +134,7 @@ export function openSession(
   login: string,
   credential: string,
   lifetimeSeconds: number,
+  isDefaultCredential: boolean,
   now: number = Date.now(),
 ): string {
   if (
@@ -136,6 +154,7 @@ export function openSession(
     credential,
     openedAt: now,
     expiresAt: now + Math.floor(lifetimeSeconds) * 1000,
+    isDefaultCredential,
   });
   return id;
 }
@@ -151,7 +170,12 @@ export function subjectOf(id: string | null, now: number = Date.now()): SessionS
   sweep(now);
   const row = register().get(id);
   if (row === undefined) return null;
-  return { login: row.login, openedAt: row.openedAt, expiresAt: row.expiresAt };
+  return {
+    login: row.login,
+    openedAt: row.openedAt,
+    expiresAt: row.expiresAt,
+    isDefaultCredential: row.isDefaultCredential,
+  };
 }
 
 /**

@@ -1062,7 +1062,18 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
    * It is not an address and never was, which is why it survives the derivation: `AppFrame`
    * is mounted by `app/layout.tsx` around every screen.
    */
-  { name: 'app-frame', make: () => createElement(AppFrame, { children: null }) },
+  { name: 'app-frame', make: () => createElement(AppFrame, { children: null, session: null }) },
+  /*
+   * `D-113`. The frame's OTHER state, for the reason the sign-in screen's two other shapes
+   * are below: the signed-in bar is selected by a prop and not by an address, so the
+   * derivation cannot reach it and an English word in it would redden nothing. `Выйти` and
+   * the reviewer's own login are the two strings it adds.
+   */
+  {
+    name: 'app-frame-with-a-session',
+    make: () =>
+      createElement(AppFrame, { children: null, session: { login: 'проверяющий' } }),
+  },
   /*
    * The sign-in screen's two OTHER shapes. The credentials form itself is derived, because
    * `/login` is an address; these two are not, because a refusal and a signed-in panel are

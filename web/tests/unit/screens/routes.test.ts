@@ -22,7 +22,19 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+/*
+ * `R-50`. Every route under the lock now reads the session cookie before it renders, and
+ * so does the root layout, so this file's subjects need a cookie jar. The jar is EMPTY:
+ * with no session there is nothing to be on a default credential about, the lock returns
+ * without redirecting, and what each route decides -- which screen, which props -- is
+ * exactly what it decided before. The lock's own behaviour is
+ * `tests/guards/default-credential-screens.guard.test.ts`'s subject, not this file's.
+ */
+vi.mock('next/headers', () => ({
+  cookies: async () => ({ get: () => undefined }),
+}));
 
 import { WEB_ROOT } from '../../guards/lib/repo';
 
@@ -60,8 +72,8 @@ const A_DOCUMENT = DOCUMENT_UID.replace(/.$/, 'D');
 const A_VERSION = VERSION_UID.replace(/.$/, 'E');
 
 describe('each route delegates to its screen and to no other', () => {
-  it('/projects renders the projects screen', () => {
-    const element = ProjectsRoute();
+  it('/projects renders the projects screen', async () => {
+    const element = await ProjectsRoute();
     expect(element.type).toBe(ProjectsPage);
   });
 
@@ -331,9 +343,9 @@ describe('the handler is mounted for every method the contract uses', () => {
  * provider.
  */
 describe('the root layout wires the providers outside the frame', () => {
-  it('nests provider, then frame, then the screen', () => {
+  it('nests provider, then frame, then the screen', async () => {
     const marker = 'the screen';
-    const html = RootLayout({ children: marker });
+    const html = await RootLayout({ children: marker });
     expect(html.type).toBe('html');
     expect(html.props.lang).toBe('ru');
 

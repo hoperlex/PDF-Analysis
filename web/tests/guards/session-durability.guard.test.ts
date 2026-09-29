@@ -60,7 +60,7 @@ beforeEach(() => {
 
 describe('the cookie a browser receives carries none of the credential', () => {
   it('the Set-Cookie value contains no substring of the minted credential', () => {
-    const id = openSession(LOGIN, CREDENTIAL, HOUR);
+    const id = openSession(LOGIN, CREDENTIAL, HOUR, false);
     const cookie = sessionCookie(id, HOUR, false);
     expect(cookie).not.toContain(CREDENTIAL);
     // Not just the whole string: no long substring of it either, which would catch a
@@ -74,7 +74,7 @@ describe('the cookie a browser receives carries none of the credential', () => {
   });
 
   it('the cookie does not decode to the credential under base64 or hex', () => {
-    const id = openSession(LOGIN, CREDENTIAL, HOUR);
+    const id = openSession(LOGIN, CREDENTIAL, HOUR, false);
     const cookie = sessionCookie(id, HOUR, false);
     const value = (cookie.split(';')[0] ?? '').split('=')[1] ?? '';
     let base64Decoded = '';
@@ -94,7 +94,7 @@ describe('R-47: the durability gap, characterized rather than left implicit', ()
     // `globalThis` registry, because a real restart starts a new process with nothing in
     // it. This does not simulate a restart's *side effects* (an HTTP round-trip, a new
     // container) -- it simulates the one fact that matters here, that the Map is gone.
-    const id = openSession(LOGIN, CREDENTIAL, HOUR);
+    const id = openSession(LOGIN, CREDENTIAL, HOUR, false);
     expect(subjectOf(id)).not.toBeNull();
     expect(credentialOf(id)).toBe(CREDENTIAL);
 
