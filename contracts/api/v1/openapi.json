@@ -2957,7 +2957,7 @@
           },
           "new_password": {
             "type": "string",
-            "description": "The password the account will hold. The bounds are mechanical, not a policy: this surface declares no minimum length, no complexity rule, no history and no expiry. A value equal to `current_password` is `validation_failed`, because a change that changes nothing would report a password as changed when it was not.",
+            "description": "The password the account will hold. The bounds are mechanical. The deployment enforces a password policy on this operation \u2014 a refusal is `validation_failed` and names the rule in `message` \u2014 and that policy is not declared here, because it is the deployment's and may differ between them. No history and no expiry are enforced. A value equal to `current_password` is `validation_failed`, because a change that changes nothing would report a password as changed when it was not.",
             "minLength": 1,
             "maxLength": 1024
           }
