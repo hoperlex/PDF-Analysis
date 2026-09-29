@@ -259,3 +259,127 @@ accounted by test id.
 One low finding (`F1`, a contract sentence that contradicts the policy the same operation
 enforces), one recorded known gap (`F2`/`D-101`), and the deployed-topology questions in §4
 left open and named rather than guessed.
+
+---
+
+# 7. Cross-examination of `W47-JUDGE-Y` (`310ddef`)
+
+Read at `/root/w47k/docs/program/reviews/W47-JUDGE-Y.md`. Y came from the operator's side and
+drove the full docker topology — the ground I listed in §4 as my first unanswered question.
+Every verdict below carries **a measurement Y did not take**; restating Y's own reproduction
+would not be an answer. Y's report is the better haul, and three of its rows are on ground I
+could not reach. One of them, checked from my end, does not hold.
+
+## 7.1 X1 — a finding neither of us had, which Y8's ground made visible
+
+**`reset.sh --restore` rolls back every piece of credential state this wave added.** The wipe's
+`pg_dump` is a full-database dump (`infra/deploy/reset.sh:398`, no `--exclude-table`) and the
+restore is `pg_restore --clean --if-exists` (`:258`), so `app_user` — with `password_hash`,
+`token_epoch` **and** `is_default_credential` — is replaced wholesale by the dumped rows.
+Three consequences, each driven in lane `gate-w47j` against the built API:
+
+**(a) A restore un-revokes.** `revoke` says *"every credential held by 'admin' is refused from
+now on"*. It is refused until a restore:
+
+```
+GET /projects with credential T                      -> 200     (token_epoch 6)
+pg_dump -t app_user                                            (dump carries epoch 6)
+python -m auditmanager.access.revoke --login admin   -> epoch 7
+GET /projects with T                                 -> 401     revocation works
+pg_restore/psql < the dump                           -> epoch 6 again
+GET /projects with T                                 -> 200     THE REVOKED CREDENTIAL LIVES
+```
+
+**(b) A restore re-animates exactly the credentials Y8 found on the volume.** Same shape: T works
+(200), the wipe empties `app_user` (401 — Y's result), the restore puts the original `user_uid`
+and epoch back, and **the identical token bytes answer 200 again**.
+
+**(c) A restore can reinstate the shipped default credential — this wave's whole subject.**
+
+```
+admin on the seeded default            is_default_credential = t, "password" -> 200
+dump taken here
+the reviewer does R-50's forced change is_default_credential = f, "password" -> 401
+restore that dump                      is_default_credential = t
+POST /auth/token {"admin","password"}  -> 200, is_default_credential=true
+```
+
+(a) and (b) are bounded by `TOKEN_LIFETIME_SECONDS` — a dump older than an hour carries only
+expired credentials. **(c) is not bounded by anything**: a password is not a token, so a restore
+of any pre-change dump puts the deployment back on the credential `R-50` exists to force off,
+silently, through a documented command. `security.py` argues the epoch is trustworthy because
+*"it is a column: the same answer after a restart, after a redeploy, and to every replica at
+once."* True — and a column is also the thing a database restore rolls back. Nothing reconciles
+the register, the epoch or the default flag across a restore.
+
+This is why Y8's sizing is wrong (below): the repair is not one line in §7.
+
+## 7.2 Verdicts on Y's sixteen findings
+
+| # | verdict | the measurement Y did not take |
+|---|---|---|
+| **Y8** | **upheld, and escalated** | Y's 401 is real but holds **only for a wipe that is never restored**, and it holds because the *row is absent*, not because of anything about the credential. Driven above (7.1b/c): `reset.sh --restore` returns the original `user_uid`, `token_epoch` **and** `is_default_credential`, and the same token bytes answer **200**. Y's sizing — *"the repair is one line in §7 … not a change to `reset.sh`"* — does not survive it: §7 already orders `revoke --everyone` after the wipe, and 7.1(a) shows a later restore undoes that too. |
+| **Y-E** | **narrowed — the central claim is falsified** | Y grepped `docs/` and concluded 2567 *"has never been printed by a gate"*. It was. `/root/w47-a-merged-gate.log` (the gate on the merged sub-stage A, 11:24 today): line **125** `2567 passed, 5 skipped, 4 warnings, 169 subtests passed in 650.98s`; lines **230-231** `Test Files 81 passed (81)` / `Tests 1139 passed (1139)`; line **235** `GATE OK`. The pair was measured, by a gate, on the merged tree. **Upheld** is the other half: `W47-LOCK.md:334,336` cites it to `W47-DISPATCH.md`, which carries 2516 / 1135 in 80. The number is sound and *measured*; only its citation is wrong. |
+| **Y4** | **narrowed, sharply** | Y measured one corruption shape and called the window *"live credential material"*. I measured four. Only a fault that destroys the value's **opening quote** produces a quoted window at all, and what it quotes is `"edential":@am2.eyJle` — **9 characters of credential, all of them the public prefix** (`am2.` is the documented format tag; `eyJ` is base64 for `{"`, shared by every credential). A fault **inside** the credential, at its **closing** quote, or just **after** it gives a *positional* message with **no `...` window at all** (`Expected ',' or '}' … at position 189`), and an ordinary printable corruption inside the string **parses fine and logs nothing**. The HMAC tag is never quoted in any shape. Reachability: the container log needs host/docker privilege — strictly more than is needed to `cat` the 0600 file and get all three credentials whole, which is Y8. `compose.server.yml` sets no `logging:` driver and `infra/observability/` holds only a README, so nothing ships it. Real, worth the one-line repair as hygiene; not credential exposure. |
+| **Y-F** | **upheld on the document, narrowed on impact** | The runbook sentence is false — agreed. What the hop does **not** expose: that token is **refused by the very API it is sent to** (my §1.4: `Authorization: Bearer <AUDITMANAGER_API_TOKEN>` → **401** on protected operations, raw and as `X-API-Key` too), because the seam signs with `HMAC(secret, "auditmanager/api/token-signing/v1")` and the configured value is not itself a credential. And it rides **only the exchange forward**: `route.ts:394` passes `getApiToken()`, while the data forwards at `:541` and `:643` pass `token: held` — `credentialOf(sessionId)`, the *reviewer's* credential. What it **does** expose is exactly what Y named: mint-capable key material in a second container's environment. So: not a usable bearer, not one byte browser-reachable, and not on any forward but sign-in. |
+| **Y2** | **upheld, narrowed** | `deploy.sh:751-772` verbatim: the guard probes `/api/v1/openapi.json` and refuses unless the code is **401**, with `200` carrying its own named refusal (*"A 200 here is therefore a REFUSAL"*). So readiness.sh:185 is false. Two things Y did not measure: the sentence's **conclusion survives** its false premise (a proxy `301` is ≠ 401, so it is still refused — the operator is misled about the number, not into a wrong action); and **no test anywhere pins that string** (`grep` over `tests/`, `web/tests/`, `infra/` returns only the source line), so the two-word repair has nothing to update behind it. |
+| **Y3** | **upheld** | Same guard reading. Added: the published port is not 200 on the **root** either — on the built web tier `GET /` answers **307** to `/projects` (measured in my §1.5), so *"the published port answering 200"* is wrong on every path a reader might mean, not only on the guard's. |
+| **Y5** | **upheld** | 14 guards and 8 before the build — confirmed, and with the trap named: the naive `grep -c '# >>> guard:'` answers **15**, because `deploy.sh:89` *documents the marker syntax using the marker string itself*; `grep -cE '^# >>> guard: '` gives 14. Provenance Y asserted but did not trace: `git log -S'derived-secrets-coherent'` → **`e114519` `repair(W47-GATE): D-103`**, this wave, which is the guard that makes both counts stale. |
+| **Y7** | **upheld — latent *and* unpinned** | Callers of `sessionDurability()`, repo-wide: the definition and `session-durability.guard.test.ts`, and nothing else — so latent, as Y says. What Y did not check: **no test asserts durability on a path the process cannot write** (the file asserts `true` for a *writable* configured dir at `:115` and `false` for unset at `:193`). So the wrong answer is **uncovered rather than frozen** — the repair needs a *new* test, not an edited one, which is the cheaper kind of debt. |
+| **Y1** | **upheld** | All three `register` hits in the runbook are `R-46`'s readiness *"register row"* (`:539,:547,:551`) — **none** is `R-51`'s session register; `web-sessions` and `--volumes` occur **zero** times. Added: `:124`'s *"both named volumes"* is **the same count error as Y9**, in a second file — so Y1 and Y9 are one repair at two sites, which Y filed as two findings without connecting them. |
+| **Y9** | **upheld, one word** | Three named volumes — and I checked the part Y did not: **all three** derive from `ALPHA_INSTANCE` (`name: ${ALPHA_INSTANCE:?…}-postgres-data|-s3-data|-web-sessions`). So the mechanism the sentence describes is correct for every volume and only the word *"BOTH"* is wrong. |
+| **Y6** | **upheld** | `alpha.env.example:147` still says *"The browser client presents it as `Authorization: Bearer <token>`."* Added: a repo-wide sweep finds that sentence at **exactly one site** — there is no third copy — so this is a single-line repair and the README/runbook corrections really did land everywhere else. |
+| **Y-C** | **upheld** | `:400/:426/:458` are bare `PYTHONPATH=src python -m …` against a host `:43-46` says has *"no `.venv`"*. Added, because it sizes the repair: `Dockerfile.api:69` is `COPY src/ /app/src/` with the venv on `PATH`, so the working form **already exists** — `docker compose exec api python -m auditmanager.access.revoke --everyone`. The repair is a prefix on three lines, not new code. |
+| **Y-A** | **upheld** | Read verbatim: `:14-18` still says `R-4`'s halves are *"**not settled**"*; `:369` says *"**Answered by `R-41`**: the pilot ends when the owner says so."* One file, two live answers, 355 lines apart. |
+| **Y-B** | **upheld** | Y cited `D-39`'s closure by date; I read the SQL that implements it. `reset.sh:345` totals `sum(n) FILTER (WHERE kind = 'BASE TABLE')` and lists views separately as *"projecting rows already in that number"*. The total therefore **cannot** over-report, and the runbook `:501-505` warning is stale in the code's own terms. |
+| **Y10** | **upheld** | Y compared documents to the contract. I have the **process's own count**: the API printed `operations=20` on startup in my lane (`serve.py`'s wired line), and the contract's paths×methods is 20. The runbook says *"nineteen"* twice. |
+| **Y-D** | **upheld on Y's evidence; not independently reproduced** | I have no deployed stack with an empty bucket, and I say so rather than borrow Y's run. What I could measure: `reset.sh` issues **only** 0, 2 and 3 deliberately — `exit 1` appears nowhere as an intended status — so any exit 1 is necessarily the `set -euo pipefail` abort Y isolated, and `usage()` documenting 2 and 3 is complete for every *intended* exit. That corroborates the shape without confirming the empty-bucket run. |
+
+## 7.3 Where Y's method shares an assumption with its subject (`OPERATING_CONSTRAINTS.md` §12)
+
+**The consequential one is Y8, and it cost a verdict.** Y asked *"is the credential refused after
+the wipe?"* — and a wipe is terminal only if you accept the subject's own framing of what the
+wipe is. `reset.sh` is not a wipe script; it is a **dump, wipe and restore** script, and its
+third mode undoes the property Y's answer rests on. The query inherited the subject's boundary,
+so it could not see the subject being wrong one flag further on. §12's shape exactly: *the query
+and its subject shared an assumption.*
+
+**The cleanest one is Y-E**, and it is §12's own worked example. Y ran `grep -rn '2567' docs/`
+and `grep -c '2567' W47-DISPATCH.md`, then wrote *"2567 occurs **once in the repository**"* —
+which is true — and concluded *"it has never been printed by a gate"* — which is false. The
+assumption shared with the subject is **that this programme's measurements live in the
+repository**. They do not: gate logs are written to `/root/*.log`, outside git, exactly as the
+norms corpus is. Y searched one location and reported the absence as a property of the world.
+§12: *search both spellings, or say which one you searched.*
+
+**A third, milder: Y7 takes its expectation from the subject's own docstring.** The finding is
+that `sessionDurability()` *"reports the configuration, not the register in force"* — and the
+standard it is measured against is the function's own sentence, *"Which of the two registers is
+in force"*. That is §12's *never build an expectation out of the thing under test*: had the
+docstring said "reports how this deployment is configured", the same code would have passed the
+same query. The durable warrant is the one I took instead — **who calls it, and does any test
+hold it to the stronger reading** (nobody, and none).
+
+**And one Y avoided that I nearly walked into**, worth recording because it is the same family:
+counting `deploy.sh`'s guards by their marker string returns 15, not 14, because the file
+documents the marker using the marker. Y got 14 and did not say how; the method matters more
+than the number.
+
+## 7.4 The two places our reports touch
+
+**The `+17` caution is the same observation, on the same file and the same expansion —
+independently.** Y: *"`forms-and-pages.test.ts` also holds one `it.each`, so a grep for `it(`
+**or** `it.each` answers 17 and not 16."* Mine (§5), reached from the gate's side before I read
+Y: strict 15→16, loose 16→17, runtime **20**. Same file, same single `it.each`, same arithmetic.
+So the agreement is real and not two coincidences. Y adds the reason the *delta* is unaffected —
+that `it.each` **was already in the base**. I add the number neither static count shows: the file
+runs **20** cases, so that one `it.each` expands to **4**. Three methods, three numbers
+(16 / 17 / 20), one correct delta.
+
+**The baseline's provenance, corrected in both directions.** Y is right that the figure is not in
+`W47-DISPATCH.md` and that `W47-LOCK.md:334,336` cites it there wrongly — my §5 repeated that
+citation from my brief and inherited the error. Y is wrong that it was never measured: it is
+line **125** of `/root/w47-a-merged-gate.log`, a gate that printed `GATE OK`. **The record should
+carry `/root/w47-a-merged-gate.log` as the source of 2567 / 1139-in-81**, not `W47-DISPATCH.md`
+and not "the arithmetic of two branch gates". My reconciliation in §5 is unaffected: the same
+numbers, now with a provenance.
