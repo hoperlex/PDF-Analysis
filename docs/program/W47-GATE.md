@@ -171,3 +171,79 @@ other numeric references to this file's sections — none found for the old §9)
 (new) and `docs/program/DEPLOYMENT_RUNBOOK.md` — no `contracts/**`, no `db/migrations/**`, no
 `Makefile`, no `src/auditmanager/access/**` (not even `check.py` this time), no
 `src/auditmanager/api/**`, no `web/**`.
+
+## 3. Final gate
+
+Before running: `free -g` — 11 GB total, 5 GB available; `ps`/`pgrep` scan for any `make`
+process whose `cwd` resolves under `/root/w4*` — none found. Ran once, from this worktree,
+at sha `26cd836` (the tip after both steps above), lane `gate-w47a` (PostgreSQL `56410`, S3
+`60010/60011`):
+
+```
+make gate > /root/w47a-gate.log 2>&1
+```
+
+Exited 0. Verdict line:
+
+```
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+Counts, accounted against the dispatch baseline (`GATE OK`, battery 2516 passed / 5
+skipped, foundation 35, frontend 1135 in 80 files, `/root/w46-final-gate.log`, taken on
+`1196ca7`):
+
+| | baseline | this gate | delta |
+|---|---|---|---|
+| foundation | 35 | **35 passed** | 0 |
+| battery | 2516 passed / 5 skipped | **2550 passed / 5 skipped**, 169 subtests | **+34** |
+| frontend | 1135 in 80 files | **1135 in 80 files** | 0 |
+
+**The +34 is accounted for by test id, not merely by count**: `test_deploy_script_
+refusals.py` gained 5 (the `derived-secrets-coherent` guard picked up by the two generic
+parametrized tests, `+2`, plus `TestD103TheThreeDerivedValues`'s three cases, `+3`) and
+`test_readiness_command.py` is new at 29. `5 + 29 = 34`. No other file's count moved:
+`check.py` was not touched, `test_deploy_image_identity.py`'s fixture fix changed no test
+count (23 before, 23 after), frontend is untouched (`web/**` is `W47-PASS`'s).
+
+`git status --short` at the sha this gate ran against: clean. No commit follows this entry.
+
+## 4. Summary against `AGENTS.md` §5
+
+1. **Changed files**: `infra/deploy/deploy.sh`, `infra/deploy/env/alpha.env.example`,
+   `infra/deploy/readiness.sh` (new), `tests/integration/composition/
+   test_deploy_script_refusals.py`, `tests/integration/composition/
+   test_deploy_image_identity.py`, `tests/integration/composition/
+   test_readiness_command.py` (new), `docs/program/DEPLOYMENT_RUNBOOK.md`,
+   `docs/program/W47-GATE.md` (new, this file).
+2. **Checks run and results**: see §§1–3 above — `pytest` on the four touched/new
+   composition test files (154 passed, no regressions) and one final `make gate`
+   (`GATE OK`, counts above).
+3. **New/changed contracts**: none. `contracts/**` was not touched; G3's repair only makes
+   an existing FF-01 §3-style coherence check apply to a second file, and G1/G2's readiness
+   command is additive and consulted by nobody.
+4. **Risks / known limitations**:
+   - `off-host-backup` is, by design, a permanent finding — nothing in this tree can make
+     it read `OK` today, and none was invented to let it. The destination remains the
+     owner's (GO_PATH row 8).
+   - `plain-http` cannot report a genuinely "closed" state even with TLS on, because no
+     redirect mechanism exists anywhere in this tree (`DEPLOYMENT_RUNBOOK.md` §6); it
+     reports the one true thing instead, `ALPHA_BIND_ADDRESS`'s exposure.
+   - `provider-mode`/`cost-ceiling` need this repository's own `.venv` on the host running
+     `readiness.sh`; `default-credential` needs `docker`. Both report `UNKNOWN`, never
+     `OK`, when their tooling is missing — verified by test.
+   - `derived-secrets-coherent`'s `DATABASE_URL` parser is a bash regex covering the
+     unescaped case (`postgresql+psycopg://user:password@host:port/db`); a password
+     containing `@`, `/` or `:` would not parse and is refused rather than silently
+     accepted — the same fail-closed choice `placeholder-secrets` already makes about an
+     unverifiable value.
+5. **Instruction to the integrator**: merge at `26cd836dddf25ccff00b6ac9e25256a64b33480b`.
+   No tag, no push performed by this stream. `infra/deploy/env/*.env` (the owner's stand)
+   was never written, moved or deleted, and no secret it holds was printed anywhere in this
+   file or in any commit message.
+6. **Forbidden hotspots**: not touched by either step — see the per-step notes in §§1–2
+   above. `git diff --stat ce60f80..26cd836` (quoted in full in this branch's history)
+   names only `docs/program/DEPLOYMENT_RUNBOOK.md`, `docs/program/W47-GATE.md`,
+   `infra/deploy/deploy.sh`, `infra/deploy/env/alpha.env.example`,
+   `infra/deploy/readiness.sh`, and three files under
+   `tests/integration/composition/**`.
