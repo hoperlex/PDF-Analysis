@@ -336,7 +336,7 @@ requires 200 on that port and a `301` would turn every successful deploy into a 
 
 ---
 
-## 7. `R-4` — the wipe, and the question that is still the owner's
+## 7. `R-4` — the wipe, and who ends the pilot
 
 > **`R-4`** | real client documents | **Permitted, wiped at the end of the pilot.**
 
@@ -355,31 +355,36 @@ infra/deploy/reset.sh --database <db> --bucket <bucket> --yes-destroy-everything
 
 ### Who runs it
 
-**Whoever holds root on the `R-1` host and wrote `alpha.env`** — because the command must
-be typed with the database and bucket names that file configures, and because the wipe
-destroys real client documents. `R-4` does not name that person, and this runbook does not
-appoint them: it records that **one named person must own it before a real document is
-uploaded**, and that it is the same person who holds the credential.
+**The owner, personally — `R-42`.** He runs the command on the server himself and decides
+the fate of the dump the mechanism takes before deleting.
+
+**Recorded as his decision and not as a role**, which is `R-42`'s own instruction: this
+programme has no role vocabulary, `T-6` forbids inventing one here, and writing it as a role
+would invent the thing the ruling avoided. In practice it is also the person who holds root
+on the `R-1` host and wrote `alpha.env`, because the command must be typed with the database
+and bucket names that file configures.
 
 ### What "the end of the pilot" is, operationally
 
-**This is not answered, and it is not this runbook's to answer.**
-`OWNER_RULINGS_2026-09-17.md` §4 still lists both halves of `R-4` as open: *who uploads a
-real document*, and *what event counts as "the end of the pilot" and therefore triggers the
-wipe*.
+**Answered by `R-41`: the pilot ends when the owner says so, by explicit instruction.**
+No date, no deadline and no observable event — not *"the last expert filed their report"*,
+not the acceptance of a named checkpoint. The wipe runs when he says it runs.
 
-What can be said without answering it, because it follows from the shape of the commitment
-rather than from anyone's preference:
+**This runbook argued the other way and was overruled, which is worth recording rather than
+quietly deleting.** It held that the trigger must be a single observable event, because *"a
+wipe that depends on somebody's judgment of whether the pilot has ended is a wipe that does
+not happen"*. That reasoning was put to the owner and he took the other side, with the
+caveat stated and accepted: there is no automatic end, so *"the pilot is over"* is a
+sentence **only he can make true**. The risk the old text named did not disappear; it became
+his, knowingly.
 
-* **the trigger must be a single observable event** — a date, or a named person saying so
-  in writing, or the acceptance of a named checkpoint. A wipe that depends on somebody's
-  judgment of whether the pilot has "ended" is a wipe that does not happen;
-* **until that event is written down, no real client document should be on the host.** A
-  wipe commitment with no trigger is not a commitment, and `R-4` permits the documents
-  *because* the wipe is promised;
-* it is not the same event as `PA-01`. The roadmap's §6 already runs `reset.sh` once
-  **after** `PA-01` and **before** real documents arrive, to clear the pilot corpus. The
-  `R-4` wipe is the later one, at the end.
+**One consequence, because the old text made it a gate.** It said no real client document
+should be on the host until the trigger was written down. It is written down now, so that
+gate is satisfied and no longer holds documents off the host.
+
+`PA-01` remains a different event. The roadmap's §6 runs `reset.sh` once **after** `PA-01`
+and **before** real documents arrive, to clear the pilot corpus; the `R-4` wipe is the later
+one, at the end.
 
 ### The credentials, which the wipe does **not** touch — `R-26`
 

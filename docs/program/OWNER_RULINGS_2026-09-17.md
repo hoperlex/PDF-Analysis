@@ -643,13 +643,23 @@ need the stand published, or a default changed, that is a new exposure and it co
   pass has not happened. The stand is current, Russian, and reachable over a tunnel, so nothing
   on this side is in the way. **This is the only open row waiting on the owner doing something
   rather than deciding something.**
-- **`R-4`'s two halves** — who uploads a real document, and what event counts as *"the end of the
-  pilot"* and therefore triggers the wipe. **`D-17` now bears on this**: the restore is broken for
-  writing, so the mechanism the wipe depends on is not yet sound.
+- **`R-4`'s remaining half — who uploads a real document.** The other half is settled:
+  ~~what event counts as *"the end of the pilot"*~~ **`R-41` and `R-42`** — the owner declares
+  the end explicitly, with no date and no observable event, and performs the wipe personally.
+  **The `D-17` caveat this line carried is gone too.** It said the restore was broken for
+  writing and so the mechanism the wipe depends on was unsound; `D-17` was closed
+  **2026-09-18** by `W18-OPS`, eleven days before this line stopped saying otherwise.
 - ~~`D-18`~~ **Settled by `R-13`**: reinstate, and pay the frontend reseal.
 - ~~Whether `origin/main` advances.~~ **Settled by `R-7`.** `main` is at `f96c23a`, tagged
   `alpha-w30`, as of 2026-09-21. (This line said `9291db6`/`alpha-w18` for twelve waves while
   `main` advanced three times beneath it — once, to `7535a17`, without a tag at all.)
+- **`R-1` — the VPS, the domain and the certificate.** Nothing in this repository is in the
+  way; `PA-01` criteria 1 and 2 read *cannot be established* on this alone, and four of the
+  ten GO steps end here.
+- **`D-70` — a real provider credential on the stand.** Until it exists the stand runs in
+  `recorded` mode, which replays fixtures and cannot spend money — and cannot prove a live
+  run either.
+
 - **`R-18`'s stub boundary** — the rule *"no stubs on `upload → run → finding → verdict →
   export`"* was proposed by the drafting session and adopted by the integrator. **It has not been
   put to the owner in those words.** If the owner wants a different line, this is the sentence to
