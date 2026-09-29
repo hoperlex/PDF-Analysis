@@ -275,3 +275,34 @@ GET /projects        -> 200
 
 Before this wave both of those would have been a redirect to the sign-in screen, which is
 what `D-65` says every deploy did to every reviewer.
+
+## 11. Known limitations, and what a gate would not show
+
+1. **The screen lock is a call in every route file, checked by a sweep over source text.**
+   The sweep reads the route's code with comments stripped and asserts the call is there; the
+   behaviour of the function it names is driven separately against the register. Neither half
+   composes into "this screen really redirects": a route that called the lock inside a branch
+   that never runs would satisfy both. Driving all thirteen would need the framework's request
+   context around each one, which is what the live journey is for — and the live check above
+   drove five of them plus the change screen.
+2. **A client-side (soft) navigation to a locked screen is not measured here.** Every check
+   above is a full document load, and the journey opens a cold browser per route by design.
+   Next re-renders the target server component for a soft navigation, so the same `redirect()`
+   runs — but that is reasoning, not a measurement, and it is the one path a reviewer uses most.
+3. **The volume is verified as a composition, not on a built image.** There is no deployed
+   stand in this worktree: `compose.server.yml` and `Dockerfile.web` are parsed and asserted,
+   and the register is driven against a real file on a real disk, but no `docker build` +
+   `docker compose up` was run, so the ownership of a freshly-seeded volume is argued from
+   Docker's documented behaviour rather than measured.
+4. **One web replica is assumed.** Two would race the register file — last write wins, and a
+   session opened on one would be dropped by the other's next write. `R-51` rules one container
+   that mounts it, and `compose.server.yml` runs one; nothing enforces that a second could not
+   be added.
+5. **`npm --prefix web run lint` is not part of `make gate`** and reports two
+   `no-irregular-whitespace` errors in `web/tests/guards/dashboard-invalidation.guard.test.ts`,
+   which this stream did not touch (`2fccac8`, wave 46). Reported rather than fixed: it is not
+   this task's file, and a stream that quietly repairs another's lint finding hides that the
+   gate never looks.
+6. **The register announces itself in the server log once per process**, which in the frontend
+   suite means one line per vitest worker. Noise, deliberately: the alternative was a test-only
+   branch, which is the shape this wave exists to refuse.
