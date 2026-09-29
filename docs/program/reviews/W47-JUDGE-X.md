@@ -200,3 +200,62 @@ FRONTEND_LOCK.json.openapi.sha256 == ffcf3c0c59807d735bbc03be4c811f5f590920b36a1
 - **M2, M4, M5, R2 mutations** I did not independently run (see §2.2).
 - **Concurrency**: I did not test two simultaneous sign-ins racing the file-backed register
   (temp-file + rename is used; I read it but did not stress it).
+
+## 5. The gate, run literally, and the counts reconciled by test id
+
+**Method.** `make gate` in `/root/w47j` (lane `gate-w47j`), on my branch at `11b276a` —
+`44937fe` plus my two report commits, which add one documentation file and nothing a test
+reads. Run alone on the host: I checked `free -g` and for any other `make gate`/battery
+process first, and the integrator's earlier battery had finished. Not an exit code — the line:
+
+```
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+| suite | measured here | `W47-DISPATCH.md` baseline I was given | delta |
+|---|---|---|---|
+| battery | **2581 passed / 5 skipped** (169 subtests, 748.92 s) | 2567 passed / 5 skipped | **+14** |
+| foundation | **35 passed** (24.99 s) | 35 | **0** |
+| frontend | **1156 passed in 82 files** (149.12 s) | 1139 in 81 files | **+17 tests, +1 file** |
+
+These are identical to the counts `W47-LOCK.md` §12 records, independently re-measured.
+(My battery wall-clock 748.92 s vs the doc's 519.63 s is host load, not scope.)
+
+**The +14, verified by test id.** All fourteen named in `W47-LOCK.md` §12 exist in the tree
+now and **none of them existed at the wave's base** — checked with
+`git grep -l "def <id>" a53d4a1^ -- tests` (empty for all fourteen) against `grep -rl` now:
+3 in `tests/integration/auth/test_the_exchange_over_real_users.py`, 6 in
+`tests/integration/api/test_authorization.py`, 5 (the whole new file) in
+`tests/integration/composition/test_session_register_volume.py`. 3+6+5 = 14. The skipped
+count is **unchanged at 5**, and `git diff a53d4a1^ 44937fe -- tests web/tests | grep '^+.*skip'`
+adds no `skip`/`xfail` marker (its only hits are prose asserting no such flag exists).
+
+**The +17 and the +1 file, verified per file.** Under the doc's own stated method (`it(`
+counts, excluding `it.each`), base `a53d4a1^` → now:
+
+| file | base | now | delta |
+|---|---|---|---|
+| `web/tests/guards/default-credential-screens.guard.test.ts` (new, the 82nd file) | 0 | 9 | +9 |
+| `web/tests/guards/session-durability.guard.test.ts` | 3 | 8 | +5 |
+| `web/tests/unit/session/bff-session.test.ts` | 16 | 18 | +2 |
+| `web/tests/unit/screens/forms-and-pages.test.ts` | 15 | 16 | +1 |
+
+9+5+2+1 = **17**, and 81+1 = **82**. **A caution on method, not a finding:** a looser count
+(`^\s*it[.(]`, which also catches `it.each`) gives 16→17 for the last file, and the file runs
+**20** tests at runtime because one `it.each` expands. The doc's table is right under the
+method it states; anyone re-checking it with a different regex will disagree with it and be
+wrong. Runtime, static-strict and static-loose are three different numbers here.
+
+## 6. Verdict
+
+The wave does what it claims where I could reach it. A default credential signs in, is told so
+in the same answer, and reaches the exchange and the change and nothing else — at the API on
+all 18 protected operations before resource resolution, and at the screens through a
+server-side lock. Credentials die at once on change and on revoke. The browser never holds the
+API credential. Sessions survive the process. The four guards I mutated myself all fail when
+broken. The reseal is coherent across four documents by digest. `GATE OK` with every count
+accounted by test id.
+
+One low finding (`F1`, a contract sentence that contradicts the policy the same operation
+enforces), one recorded known gap (`F2`/`D-101`), and the deployed-topology questions in §4
+left open and named rather than guessed.
