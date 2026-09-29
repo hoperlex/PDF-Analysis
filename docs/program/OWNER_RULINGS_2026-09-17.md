@@ -959,3 +959,39 @@ the surface guard's three blind spots, which are one repair — plus `D-76`'s th
 has been a judge inside a wave, auditing that wave's work. `W48` reads the tree as a whole —
 which is how `D-99`'s eight sentences stayed wrong since wave 34 without anybody's brief ever
 pointing at them.
+
+## 3.17 — `R-50` and `R-51`, ruled 2026-09-29 by direct poll during wave 47
+
+`W47-PASS` stopped on both halves of GO that touch who can get in, as its brief ordered, and
+returned the options with their cost (`docs/program/W47-PASS.md` §1 and §3). The integrator
+added one fact the stream did not have: **the API is public.** `infra/deploy/proxy/nginx.conf`
+forwards `/api/v1/` straight to `api:8000`, so a rule enforced only on screens is bypassed by
+one direct request. The integrator also added one option: `permission_denied` (403) is already
+declared on every operation except `issueToken`, and its catalog entry already permits the
+detail key `required_capability`. A server-side refusal therefore needs no new error code and no
+new detail key.
+
+### `R-50` — the forced first change is enforced twice: a field for the screen, a refusal on the server
+
+**Both, chosen over either alone.**
+- `IssueTokenResponse` gains `is_default_credential`, so the screens know at sign-in and go
+  straight to the change screen. This is a reseal, the fourth in two waves, taken knowingly.
+- The API refuses every operation except `issueToken` and `changePassword` for a credential still
+  on its default password, with the declared `permission_denied` and a `required_capability`
+  detail. That is the lock; the field is the signpost.
+
+**Why both:** the field alone leaves the public API open to the default password, and the refusal
+alone leaves the screens to discover the state by failing. The owner took the more expensive
+option on purpose.
+
+### `R-51` — the session register lives on a volume only the web container mounts
+
+**A named volume, chosen over giving the web tier a database connection or growing the contract.**
+Sessions survive the container being recreated on every deploy. Only `infra/**` and the register
+change: no reseal, and no new dependency in `web/package-lock.json`.
+
+**What it costs, stated so it is not discovered later:** until each credential expires, the API
+credentials sit on the server's disk, on a volume nothing but the web container mounts. They
+still never reach the browser, and a revoked credential (`token_epoch`) still stops working
+the moment it is revoked, because the API checks the epoch on every request, wherever the
+token was kept.
