@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 78eccd9e01de927556cc1a1f9ad83db2e318872d3951fe3ab54f732eabf5e0b4
+ *   sha256 ffcf3c0c59807d735bbc03be4c811f5f590920b36a133f038edffec49b369359
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '78eccd9e01de927556cc1a1f9ad83db2e318872d3951fe3ab54f732eabf5e0b4';
+export const CONTRACT_DIGEST = 'ffcf3c0c59807d735bbc03be4c811f5f590920b36a133f038edffec49b369359';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -395,6 +395,8 @@ export type IssueTokenRequest = {
 export type IssueTokenResponse = {
   /** How long the credential stays valid, in seconds counted from this response. A lifetime and never a clock reading, so no clock has to agree between the two sides. A caller exchanges again before it elapses; an elapsed credential is `authentication_required` like any other the deployment does not accept. */
   expires_in: number;
+  /** Whether the account this credential was just minted for is still on the password the deployment seeded it with. `true` says the password has never been changed; `false` says it has. It is a fact about the account's password and not a statement about what the subject may do -- what follows from it is declared where refusals are declared: every operation but this one and `changePassword` answers `permission_denied` with `required_capability: password_changed` while it is `true`. Required, not optional, because a caller that could not read it would have to assume a value and the only assumable value is the permissive one. */
+  is_default_credential: boolean;
   /** The credential, presented on the authorized operations as `Authorization: Bearer <token>`. Opaque: this document states no format for it, and a caller that reads anything out of it has taken a dependency this contract does not offer. */
   token: string;
 };

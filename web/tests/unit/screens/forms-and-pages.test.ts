@@ -184,7 +184,7 @@ describe('/projects/{project_uid}/runs/{run_id}', () => {
 
 describe('the application frame', () => {
   it('carries the product name and the one navigation target, and no checkpoint code', () => {
-    const markup = render(createElement(AppFrame, { children: 'the screen' }));
+    const markup = render(createElement(AppFrame, { children: 'the screen', session: null }));
     expect(markup).toContain('AuditManager');
     expect(markup).toContain('href="/projects"');
     expect(markup).toContain('the screen');
@@ -195,8 +195,29 @@ describe('the application frame', () => {
     expect(markup).not.toContain('PC-01');
   });
 
+  it('offers the way in when there is no session, and the way out when there is', () => {
+    // `D-113`, measured in a browser on the dashboard: the bar rendered `Вход` to a
+    // reviewer who was already signed in, on every screen, and offered no way out anywhere
+    // in the chrome. Both states are asserted here, and the two assertions are each
+    // other's anti-vacuity: a bar that showed both, or neither, fails one of them.
+    const anonymous = render(createElement(AppFrame, { children: null, session: null }));
+    expect(anonymous).toContain('>Вход<');
+    expect(anonymous).not.toContain('Выйти');
+
+    const signedIn = render(
+      createElement(AppFrame, { children: null, session: { login: 'проверяющий' } }),
+    );
+    expect(signedIn).not.toContain('>Вход<');
+    expect(signedIn).toContain('Выйти');
+    expect(signedIn).toContain('проверяющий');
+    // A POST to the BFF's own door, and not a link: signing out deletes the row that holds
+    // the credential, and a GET that changes state is a GET a prefetch can fire.
+    expect(signedIn).toContain('method="post"');
+    expect(signedIn).toContain('action="/bff/v1/session/end"');
+  });
+
   it('states what this prototype is not, rather than implying it is more', () => {
-    const markup = render(createElement(AppFrame, { children: null }));
+    const markup = render(createElement(AppFrame, { children: null, session: null }));
     // The intent of this case is unchanged and is the reason it is not deleted: a reviewer
     // must not be left assuming their verdicts are attributed to a named account, or that
     // another reviewer's work is walled off from theirs. `R-18` moved the language, not the

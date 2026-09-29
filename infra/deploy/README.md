@@ -38,6 +38,7 @@ down`. This is the deployed stack.
 | `reload-proxy.sh` | `D-27` — the step after a rebuild that everyone forgets |
 | `object_attrs.py` | the third part of a dump: each object's S3 attributes |
 | `env/alpha.env.example` | the deployment's environment. **Not `.env`** — see below |
+| the `<instance>-web-sessions` volume | `R-51` — the session register, mounted by `web` and by nothing else. See below |
 | `env/provider.env.example` | the model credential, alone, written on the host by the owner |
 
 ## Bring it up
@@ -306,6 +307,49 @@ That is the opposite of what the same command does with `env_file:`; see
 nothing else. There is deliberately **no redirect** from the plain port: `deploy.sh`'s
 `proxy-answers` guard requires 200 there and a `301` would turn a successful deploy into a
 refusal.
+
+## The session register — `R-51`, and what it costs
+
+**A named volume, `<instance>-web-sessions`, mounted by the `web` container and by nothing
+else.** The web tier holds each signed-in reviewer's API credential in its own process and
+hands the browser only an opaque session number (`W15-AUTH`; the credential is never in the
+browser bundle and never in a cookie). Until wave 47 that register was memory and nothing
+else — and `deploy.sh` recreates the `web` container on every run, so **every deploy signed
+every reviewer out.** Not a rare crash: a support incident per deployment.
+
+| | |
+|---|---|
+| volume | `${ALPHA_INSTANCE}-web-sessions`, declared in `compose.server.yml` |
+| mounted at | `/var/lib/auditmanager/sessions`, by `web` only |
+| the file | `register.json`, mode `0600`, in a directory the image creates owned by `node` |
+| configured by | `AUDITMANAGER_SESSION_STORE`, set in `compose.server.yml` — not in `alpha.env`, because it is a path inside the image and not a deployment choice |
+
+**What is on that volume, stated here because it is the cost the owner accepted and not a
+detail:** until each credential expires — one hour, `TOKEN_LIFETIME_SECONDS` — the API
+credentials the web tier holds are in that file, on this host's disk. Two things are
+unchanged by it and both matter:
+
+* **they still never reach the browser.** What the browser holds is still a 32-byte opaque
+  number in an `HttpOnly` cookie, which is a key to a map only this process can read;
+* **a revoked credential still stops working at once.** The API compares `token_epoch` on
+  every request, wherever the token was kept, so `python -m auditmanager.access.revoke` and
+  a password change both take effect on the next request rather than when a file is
+  rewritten.
+
+Two operational consequences to know before you meet them:
+
+* `docker compose down` does **not** remove it, exactly as it does not remove the database
+  or the object store; `down --volumes` does, and doing that signs everybody out. That is
+  the one command that undoes what this volume is for.
+* a `web` container that cannot write the file **still serves**: the sessions are live in
+  its memory either way, and refusing to sign anybody in because of a full disk would take
+  the stand down for a reason no reviewer can act on. It says so in its own log, on every
+  attempt, starting `[session-register] could not write` — if you see that line, the next
+  deploy will sign everyone out and the volume is the thing to look at.
+
+A stand that sets no `AUDITMANAGER_SESSION_STORE` at all keeps the pre-wave-47 behaviour
+and says so once, at the first sign-in: `[session-register] AUDITMANAGER_SESSION_STORE is
+not set`. That is `next dev`, never this compose file.
 
 ## The wipe — `R-4`
 

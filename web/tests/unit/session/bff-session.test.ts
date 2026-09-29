@@ -27,7 +27,12 @@ import {
   signInRefusalUrl,
 } from '@/features/sign-in';
 import { BFF_BASE_PATH } from '@/shared/api/credentialed-forward';
-import { SESSION_COOKIE, forgetEverySession, openSessionCount } from '@/app/bff/session/store';
+import {
+  SESSION_COOKIE,
+  forgetEverySession,
+  openSessionCount,
+  subjectOf,
+} from '@/app/bff/session/store';
 
 const UPSTREAM = 'http://api.test:8000';
 const DEPLOYMENT_TOKEN = 'deployment-credential-a1b2';
@@ -50,11 +55,22 @@ const ORIGINAL = {
   token: process.env.AUDITMANAGER_API_TOKEN,
 };
 
-function mintedAnswer(expiresIn: number = 3600): Response {
-  return new Response(JSON.stringify({ token: MINTED, expires_in: expiresIn }), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  });
+/**
+ * What the API answers a successful exchange with, as the contract declares it.
+ *
+ * All three properties, because all three are required on `IssueTokenResponse` since
+ * `R-50`, and the handler refuses a body missing any of them rather than defaulting it.
+ * `isDefault` is a parameter and not a constant so the two states are both drivable here:
+ * a fixture that could only produce one of them would leave the other to the journey.
+ */
+function mintedAnswer(expiresIn: number = 3600, isDefault = false): Response {
+  return new Response(
+    JSON.stringify({ token: MINTED, expires_in: expiresIn, is_default_credential: isDefault }),
+    {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    },
+  );
 }
 
 beforeEach(() => {
@@ -123,6 +139,35 @@ function cookieFrom(response: Response): string {
   expect(header).not.toBeNull();
   return (header as string).split(';')[0] as string;
 }
+
+describe('R-50: where a sign-in lands, and what the register was told', () => {
+  it('lands a changed password on the application and a seeded one on the change screen', async () => {
+    answer = () => mintedAnswer(3600, false);
+    expect((await signIn()).headers.get('location')).toBe(SIGN_IN_LANDING_PATH);
+
+    forgetEverySession();
+    answer = () => mintedAnswer(3600, true);
+    const forced = await signIn();
+    // Both assertions, because "not the project list" would pass on a redirect to
+    // anywhere -- including back to the sign-in screen, which is what a refusal looks like.
+    expect(forced.headers.get('location')).toBe('/account/password');
+    expect(forced.status).toBe(303);
+    // And it IS a session: the reviewer is signed in and sent somewhere, not turned away.
+    expect(openSessionCount()).toBe(1);
+  });
+
+  it('records what the API said and never what this tier assumed', async () => {
+    answer = () => mintedAnswer(3600, true);
+    const cookie = cookieFrom(await signIn());
+    const id = cookie.split('=')[1] as string;
+    expect(subjectOf(id)?.isDefaultCredential).toBe(true);
+
+    forgetEverySession();
+    answer = () => mintedAnswer(3600, false);
+    const second = cookieFrom(await signIn());
+    expect(subjectOf(second.split('=')[1] as string)?.isDefaultCredential).toBe(false);
+  });
+});
 
 describe('the exchange happens on the server, and the token stops there', () => {
   it('answers a redirect, not a body, and puts an opaque number in an HttpOnly cookie', async () => {
@@ -228,6 +273,17 @@ describe('the sign-in screen is told what happened without being told which half
       () => new Response('not json', { status: 200, headers: { 'content-type': 'application/json' } }),
       () => new Response(JSON.stringify({ expires_in: 3600 }), { status: 200 }),
       () => new Response(JSON.stringify({ token: MINTED }), { status: 200 }),
+      // `R-50`. A body carrying the two older properties and not the required third is an
+      // answer this tier does not understand. It is refused rather than read as `false`,
+      // which is the value that would let a reviewer on the seeded password walk past the
+      // screen the ruling sends them to.
+      () =>
+        new Response(JSON.stringify({ token: MINTED, expires_in: 3600 }), { status: 200 }),
+      () =>
+        new Response(
+          JSON.stringify({ token: MINTED, expires_in: 3600, is_default_credential: 'yes' }),
+          { status: 200 },
+        ),
       () => mintedAnswer(0),
       () => mintedAnswer(99_999_999),
     ];

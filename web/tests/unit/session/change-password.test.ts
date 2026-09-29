@@ -71,11 +71,21 @@ const ORIGINAL = {
   token: process.env.AUDITMANAGER_API_TOKEN,
 };
 
-function jsonAnswer(token: string, expiresIn = 3600): Response {
-  return new Response(JSON.stringify({ token, expires_in: expiresIn }), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  });
+/**
+ * A minted credential, as the contract declares one: all three properties.
+ *
+ * `is_default_credential` defaults to `false` here because that is what the API answers a
+ * *change*: the write that stores the new digest clears the column in the same statement.
+ * It is still a parameter, so the sign-in half of this fixture can produce the other state.
+ */
+function jsonAnswer(token: string, expiresIn = 3600, isDefault = false): Response {
+  return new Response(
+    JSON.stringify({ token, expires_in: expiresIn, is_default_credential: isDefault }),
+    {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    },
+  );
 }
 
 function refusal(status: number): Response {

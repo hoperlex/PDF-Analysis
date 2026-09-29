@@ -49,6 +49,16 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 # Recorded in docs/program/reviews/W14-PKG.md as a measured, deliberate cost.
 COPY --from=build /web /web
 
+# `R-51`. The mount point for the session register's volume, created here and owned by the
+# user the process runs as. Docker seeds a fresh named volume from the image's own directory
+# -- including its ownership -- so a directory that did not exist here, or existed owned by
+# root, would produce a volume this process cannot write to, and the register would report a
+# write failure on every sign-in while appearing to work. `0700`, because what is written
+# there is a credential.
+RUN mkdir -p /var/lib/auditmanager/sessions \
+ && chown node:node /var/lib/auditmanager/sessions \
+ && chmod 700 /var/lib/auditmanager/sessions
+
 USER node
 EXPOSE 3000
 

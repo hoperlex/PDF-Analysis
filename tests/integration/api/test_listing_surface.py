@@ -393,7 +393,7 @@ def counting_router(ingest: Any, session: Session) -> Surface:
             # guarded request -- which is the correct behaviour for an application that
             # cannot tell a live credential from a revoked one, and which this suite has to
             # satisfy like any other caller. The adapter is the driver's own: it answers
-            # `epoch_of` for exactly the subject `TEST_TOKEN` names.
+            # `standing_of` for exactly the subject `TEST_TOKEN` names.
             credentials=SuiteCredentialAdapter(),
         )
     )

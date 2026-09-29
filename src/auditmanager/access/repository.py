@@ -90,6 +90,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from auditmanager.access.models import (
+    CredentialStanding,
     UserRecord,
     UserUid,
     normalize_display_name,
@@ -304,11 +305,19 @@ _REVOKE_EVERY = text(
     """
 )
 
-#: The epoch check the seam runs on every authorized request. A primary-key lookup
-#: projecting one integer, and deliberately nothing else: this runs on every request on the
-#: surface, and a statement that also returned a login would invite a caller to read
-#: identity out of the credential check.
-_SELECT_TOKEN_EPOCH = text("SELECT token_epoch FROM app_user WHERE user_uid = :user_uid")
+#: The check the seam runs on every authorized request. A primary-key lookup projecting
+#: the two columns a refusal can turn on, and deliberately nothing else: this runs on every
+#: request on the surface, and a statement that also returned a login would invite a caller
+#: to read identity out of the credential check.
+#:
+#: **Two columns since `R-50`, in one statement rather than two.** ``is_default_credential``
+#: joins ``token_epoch`` here for the reason :data:`_SELECT_CREDENTIAL` gives one screen up
+#: about the lockout column: a second statement addressed at the same row inside one
+#: decision is a second read that can disagree with the first, and these two values are the
+#: two halves of one decision -- whether this request is served at all.
+_SELECT_CREDENTIAL_STANDING = text(
+    "SELECT token_epoch, is_default_credential FROM app_user WHERE user_uid = :user_uid"
+)
 
 #: What this failure makes the count, computed by the **database** from the row as it
 #: stands at the moment of the write -- never from a number this process read a moment ago.
@@ -799,8 +808,10 @@ class UserRepository:
             )
         return records
 
-    def token_epoch(self, session: Session, user_uid: str) -> int | None:
-        """The generation of credentials this account currently accepts, or ``None``.
+    def credential_standing(
+        self, session: Session, user_uid: str
+    ) -> CredentialStanding | None:
+        """What the seam re-reads about this account on every request, or ``None``.
 
         ``None`` means there is no such account, and the seam treats it as a refusal -- so
         deleting a row revokes that account's credentials for free, which is the answer to
@@ -808,12 +819,20 @@ class UserRepository:
         column it kept working until it expired.
 
         This is the statement that runs on **every** authorized request. It is a primary-key
-        lookup returning one integer, and it is deliberately not cached: a cache would give
+        lookup returning two scalars, and it is deliberately not cached: a cache would give
         revocation a delay, and a revocation that takes effect in a little while is the
-        thing this whole mechanism exists to replace.
+        thing this whole mechanism exists to replace. `R-50` put the second scalar here for
+        the same reason -- a default-credential refusal that took effect a little while
+        after the password changed would refuse the reviewer who has just changed it.
         """
-        row = session.execute(_SELECT_TOKEN_EPOCH, {"user_uid": user_uid}).first()
-        return None if row is None else int(row[0])
+        row = session.execute(
+            _SELECT_CREDENTIAL_STANDING, {"user_uid": user_uid}
+        ).first()
+        if row is None:
+            return None
+        return CredentialStanding(
+            token_epoch=int(row[0]), is_default_credential=bool(row[1])
+        )
 
     def clear_failed_sign_ins(
         self, session: Session, *, login: str | None = None

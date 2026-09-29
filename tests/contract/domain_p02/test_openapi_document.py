@@ -710,7 +710,14 @@ def test_the_unauthenticated_operation_is_the_one_that_hands_out_a_credential(
             openapi_document,
             operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
         )
-        assert set(success["required"]) == {"token", "expires_in"}, name
+        # `R-50`: three, all required. `is_default_credential` is required rather
+        # than optional because a client that could not see it would have to assume
+        # a value, and the assumable one is the permissive one.
+        assert set(success["required"]) == {
+            "token",
+            "expires_in",
+            "is_default_credential",
+        }, name
         # `T-6`: the document describes the exchange and never the credential. A format,
         # an issuer or a flow would be a promise the deployment has to keep for ever.
         assert "bearerFormat" not in openapi_document["components"]["securitySchemes"][

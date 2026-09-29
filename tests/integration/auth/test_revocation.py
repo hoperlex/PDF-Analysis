@@ -349,13 +349,19 @@ def test_an_account_that_is_gone_has_no_epoch(
     """``None``, which the seam reads as a refusal -- so deleting a row revokes for free."""
     repository = UserRepository()
     with session_factory() as session:
-        assert repository.token_epoch(session, str(user.user_uid)) == user.token_epoch
+        standing = repository.credential_standing(session, str(user.user_uid))
+        assert standing is not None
+        assert standing.token_epoch == user.token_epoch
+        # `R-50`: the same statement answers the other half of the seam's decision, and it
+        # is the row's value rather than a default -- this account was created by the
+        # fixture, so it has never been on a seeded password.
+        assert standing.is_default_credential is False
         session.execute(
             text("DELETE FROM app_user WHERE login = :login"), {"login": user.login}
         )
         session.commit()
     with session_factory() as session:
-        assert repository.token_epoch(session, str(user.user_uid)) is None
+        assert repository.credential_standing(session, str(user.user_uid)) is None
 
 
 def test_revocation_is_loud(
@@ -429,7 +435,8 @@ def test_a_credential_minted_under_a_stale_epoch_is_refused(
             login=user.login,
             token_epoch=user.token_epoch + 5,
             display_label=user.display_label,
-        )
+        ),
+        is_default_credential=False,
     ).token
     # Verified by the signer itself -- so the refusal below cannot be a malformed credential.
     assert signer.verify(stale) is not None
@@ -446,7 +453,8 @@ def test_a_credential_naming_no_account_is_refused(client: TestClient) -> None:
             login="w39rev-never-existed",
             token_epoch=1,
             display_label="Never Existed",
-        )
+        ),
+        is_default_credential=False,
     ).token
     assert signer.verify(orphan) is not None
     assert _probe(client, orphan) == 401
@@ -468,7 +476,7 @@ def test_the_change_operation_hands_back_a_credential_that_works(
     response = _change(client, credential, PASSWORD, NEW_PASSWORD)
     assert response.status_code == 200, response.text  # type: ignore[attr-defined]
     body = response.json()  # type: ignore[attr-defined]
-    assert sorted(body) == ["expires_in", "token"], body
+    assert sorted(body) == ["expires_in", "is_default_credential", "token"], body
     replacement = body["token"]
     assert replacement != credential
 

@@ -134,7 +134,7 @@ def test_a_route_the_seam_cannot_identify_refuses_another_deployments_credential
     assert signer is not None
     surface = _a_surface_carrying_an_unidentifiable_route()
     answer = surface.send(
-        "GET", UNIDENTIFIABLE, credential=signer.issue(TEST_SUBJECT).token
+        "GET", UNIDENTIFIABLE, credential=signer.issue(TEST_SUBJECT, is_default_credential=False).token
     )
     assert answer.status == 401, answer.body
     assert answer.json()["error_code"] == AUTHENTICATION_REQUIRED
@@ -209,7 +209,7 @@ def test_the_tag_comparison_goes_through_hmac_compare_digest(
     and requires the presented tag and the recomputed one to be among them.
     """
     signer = _signer()
-    credential = signer.issue(TEST_SUBJECT).token
+    credential = signer.issue(TEST_SUBJECT, is_default_credential=False).token
 
     seen: list[tuple[bytes, bytes]] = []
     real = hmac.compare_digest
@@ -247,7 +247,7 @@ def test_the_seam_branches_on_what_that_comparison_answers(
     bytes itself, which is the one `W37-CERT4`'s mutation wrote.
     """
     signer = _signer()
-    forged = _with_a_forged_tag(signer.issue(TEST_SUBJECT).token)
+    forged = _with_a_forged_tag(signer.issue(TEST_SUBJECT, is_default_credential=False).token)
 
     assert signer.verify(forged) is None, (
         "the control failed: a forged tag was accepted by the real comparison"

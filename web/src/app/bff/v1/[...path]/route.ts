@@ -196,6 +196,13 @@ interface RouteContext {
 interface MintedToken {
   readonly token?: unknown;
   readonly expires_in?: unknown;
+  /**
+   * `R-50`. Required on the contract, so `unknown` here and checked below: a body that
+   * does not carry it is an answer this tier does not understand, and is refused rather
+   * than defaulted. The default would have to be `false` — the permissive value — which
+   * would send a reviewer on the seeded password into the application.
+   */
+  readonly is_default_credential?: unknown;
 }
 
 /**
@@ -406,20 +413,40 @@ async function openTheSession(request: Request): Promise<Response> {
   } catch {
     return refuseSignIn('upstream');
   }
-  if (typeof minted.token !== 'string' || typeof minted.expires_in !== 'number') {
+  if (
+    typeof minted.token !== 'string' ||
+    typeof minted.expires_in !== 'number' ||
+    // `R-50`. Checked exactly as the other two are, and for the stronger reason: a missing
+    // or non-boolean value here is refused rather than read as `false`, because `false` is
+    // the answer that lets a reviewer past the screen the ruling exists to send them to.
+    typeof minted.is_default_credential !== 'boolean'
+  ) {
     return refuseSignIn('upstream');
   }
 
   let id: string;
   try {
-    id = openSession(credentials.login, minted.token, minted.expires_in);
+    id = openSession(
+      credentials.login,
+      minted.token,
+      minted.expires_in,
+      minted.is_default_credential,
+    );
   } catch {
     // A lifetime this tier will not hold is an answer it does not understand, and an
     // answer it does not understand is not a session. Refusing beats inventing a lifetime.
     return refuseSignIn('upstream');
   }
 
-  return seeOther(AFTER_SIGN_IN, sessionCookie(id, minted.expires_in, requestIsSecure(request)));
+  // `R-50`, the signpost half. A reviewer whose account is still on the password this
+  // deployment was seeded with lands on the change screen rather than on the project list:
+  // the API refuses them every other operation, so the project list they would otherwise
+  // land on is a screen that can only fail to load. The refusal is the lock and this is the
+  // sign on it; neither stands in for the other, which is why the owner bought both.
+  return seeOther(
+    minted.is_default_credential ? CHANGE_PASSWORD_SCREEN : AFTER_SIGN_IN,
+    sessionCookie(id, minted.expires_in, requestIsSecure(request)),
+  );
 }
 
 /**
@@ -539,13 +566,26 @@ async function changeThePassword(request: Request): Promise<Response> {
   } catch {
     return reportChange('upstream');
   }
-  if (typeof minted.token !== 'string' || typeof minted.expires_in !== 'number') {
+  if (
+    typeof minted.token !== 'string' ||
+    typeof minted.expires_in !== 'number' ||
+    typeof minted.is_default_credential !== 'boolean'
+  ) {
     return reportChange('upstream');
   }
 
   let replacement: string;
   try {
-    replacement = openSession(subject.login, minted.token, minted.expires_in);
+    replacement = openSession(
+      subject.login,
+      minted.token,
+      minted.expires_in,
+      // The API's answer, not a `false` written here. The change clears the column in the
+      // same write that stores the digest, so this IS `false` -- and recording what came
+      // back rather than what is expected is what would make a deployment where it stopped
+      // being cleared visible instead of invisible.
+      minted.is_default_credential,
+    );
   } catch {
     // A lifetime this tier will not hold is an answer it does not understand. The password
     // HAS changed -- the API committed it -- so the honest report is not `upstream`: the old

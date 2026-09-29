@@ -58,6 +58,15 @@ export const LOGIN_ENV = 'E2E_PC01_LOGIN';
 export const PASSWORD_ENV = 'E2E_PC01_PASSWORD';
 
 /**
+ * `R-50`. Where the application sends an account still on the deployment's seeded password.
+ *
+ * Spelled here rather than imported from `web/src`: this file is a node script outside the
+ * Next build and has no module resolution into it, and the address is a fact about the
+ * application's addresses, which this manifest's own `routes` already state one by one.
+ */
+const CHANGE_PASSWORD_SCREEN = '/account/password';
+
+/**
  * The credential, from the environment, or a hard failure naming what is missing.
  *
  * There is deliberately no default -- not even the seeded `admin`/`password` that
@@ -241,6 +250,22 @@ export async function openSession({ origin, manifest }) {
                 'accepted nor refused.'
               : `. The screen refused with '${record.refusal.value}': ${JSON.stringify(record.refusal.text)}`),
         );
+        // `R-50`. One landing address means something specific, and a run that met it
+        // would otherwise spend a session reading the sentence above as a broken sign-in.
+        // The exchange ACCEPTED the pair; the application then sent this account to the
+        // one screen it may open. Named here, with what to do about it, because it is the
+        // state every fresh deployment starts in.
+        if (record.landedOn === CHANGE_PASSWORD_SCREEN) {
+          failures.push(
+            `session: the sign-in was ACCEPTED and the application sent this account to ` +
+              `${CHANGE_PASSWORD_SCREEN}. That is R-50: an account still on the password ` +
+              'the deployment was seeded with reaches the exchange and the change and ' +
+              'nothing else, so there is no walk to do until its password is changed. ' +
+              'Give the journey an account whose password has been changed -- see ' +
+              "this directory's README. There is no flag that skips the refusal, and a " +
+              'harness that could put itself past it would stop proving it is there.',
+          );
+        }
       } else if (record.refusal !== null) {
         failures.push(
           `session: the browser reached ${spec.lands_on} and the screen ALSO rendered the ` +

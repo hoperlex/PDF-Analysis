@@ -41,7 +41,7 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
 
   it('names the reviewer when the cookie points at a live session', async () => {
     forgetEverySession();
-    jar.value = openSession('проверяющий', MINTED, 3600);
+    jar.value = openSession('проверяющий', MINTED, 3600, false);
     const element = await LoginRoute(query());
     expect(element.props).toEqual({ login: 'проверяющий', refusal: null });
     // The one assertion this route exists to make: no credential reaches the payload.

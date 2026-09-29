@@ -37,7 +37,12 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.app import create_asgi_app
 from auditmanager.api.routers import Router
-from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
+from auditmanager.api.security import (
+    API_TOKEN_VARIABLE,
+    AccountStanding,
+    Subject,
+    build_signer,
+)
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -97,7 +102,7 @@ TEST_SUBJECT = Subject(
 #: expiry at all.
 _SIGNER = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
 assert _SIGNER is not None, "the suite's own secret derives a signing key"
-TEST_TOKEN = _SIGNER.issue(TEST_SUBJECT).token
+TEST_TOKEN = _SIGNER.issue(TEST_SUBJECT, is_default_credential=False).token
 
 #: The one pair the suite's credential port accepts. There is no user table behind this
 #: suite -- it wires the six ports itself -- so the exchange is answered by the adapter
@@ -123,11 +128,15 @@ class SuiteCredentialAdapter:
     real one is driven where rows exist, in ``tests/integration/auth``.
     """
 
-    __slots__ = ("epoch", "password")
+    __slots__ = ("epoch", "password", "is_default_credential")
 
     def __init__(self) -> None:
         self.password = SUITE_PASSWORD
         self.epoch = TEST_EPOCH
+        #: `R-50`. This suite's account has changed its password, like every account a
+        #: deployment is meant to have. A test that wants the other state sets it and puts
+        #: it back, which is how the refusal gets driven against the real seam.
+        self.is_default_credential = False
 
     def _subject(self) -> Subject:
         return Subject(
@@ -140,7 +149,9 @@ class SuiteCredentialAdapter:
     def issue(self, *, login: str, password: str) -> Any:
         if (login, password) != (SUITE_LOGIN, self.password):
             return None
-        return _SIGNER.issue(self._subject())
+        return _SIGNER.issue(
+            self._subject(), is_default_credential=self.is_default_credential
+        )
 
     def change_password(
         self, *, user_uid: str, current_password: str, new_password: str
@@ -157,10 +168,19 @@ class SuiteCredentialAdapter:
         # the real repository holds in one UPDATE and the one a suite must not quietly
         # relax: a credential minted before this line is refused after it.
         self.epoch += 1
-        return _SIGNER.issue(self._subject())
+        # The real repository clears the column in the same UPDATE that stores the digest;
+        # a suite adapter that did not would let a test pass that the deployment fails.
+        self.is_default_credential = False
+        return _SIGNER.issue(self._subject(), is_default_credential=False)
 
-    def epoch_of(self, user_uid: str) -> int | None:
-        return self.epoch if user_uid == TEST_SUBJECT.user_uid else None
+    def standing_of(self, user_uid: str) -> AccountStanding | None:
+        """`R-50`. Two facts, and ``is_default_credential`` is a field rather than a
+        constant so a test in this suite can flip it and watch the seam refuse."""
+        if user_uid != TEST_SUBJECT.user_uid:
+            return None
+        return AccountStanding(
+            token_epoch=self.epoch, is_default_credential=self.is_default_credential
+        )
 
 
 @dataclass(frozen=True, slots=True)

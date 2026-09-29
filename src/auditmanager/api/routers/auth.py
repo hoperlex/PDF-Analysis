@@ -120,16 +120,30 @@ class IssueTokenRequest(_Object):
 
 
 class IssueTokenResponse(_Object):
-    """The credential, and how long it stays valid counted from this response.
+    """The credential, how long it stays valid, and whether the password is still the seeded one.
 
     Answered by ``issueToken`` and by ``changePassword``. One shape, one name: both
     operations hand back a credential this deployment has just minted and the number of
     seconds it stays good for, and a second schema saying the same two things would grow the
     document without telling a caller anything new.
+
+    **The third property is `R-50`'s and it is required, not optional.** A client that could
+    not see the field would have to assume a value for it, and the only assumable value is
+    the permissive one -- which would send a reviewer on their seeded password into the
+    application, where every operation but this one and ``changePassword`` refuses them with
+    `permission_denied`. Required, the client is told at the one moment it can act on:
+    it sends them to the change screen instead of into a wall of refusals.
+
+    **It says nothing about what the subject may do**, which is why it is not the capability
+    vocabulary `T-6` forbids: it is a fact about the account's *password*, the same kind of
+    fact as "this credential expires in 3600 seconds". What follows from it is declared
+    where refusals are declared -- the ``permission_denied`` every guarded operation already
+    carries, with ``required_capability: password_changed`` in its details.
     """
 
     token: Annotated[str, Field(min_length=1)]
     expires_in: Annotated[int, Field(ge=1)]
+    is_default_credential: bool
 
 
 class ChangePasswordRequest(_Object):
@@ -180,7 +194,15 @@ def build_auth_routes(router: APIRouter, credentials: CredentialPort) -> None:
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
         return json_response(
             200,
-            encode_json({"token": issued.token, "expires_in": issued.expires_in}),
+            encode_json(
+                {
+                    "token": issued.token,
+                    "expires_in": issued.expires_in,
+                    # `R-50`. The port's answer, passed through: this router does not
+                    # decide it, cannot compute it, and must not default it.
+                    "is_default_credential": issued.is_default_credential,
+                }
+            ),
         )
 
     @router.post(
@@ -207,7 +229,16 @@ def build_auth_routes(router: APIRouter, credentials: CredentialPort) -> None:
             # reason that makes it right here: a generated client needs a typed shape for
             # `permission_denied` on every authorized operation, and an operation that
             # omitted it would be asserting something about a role model this surface does
-            # not have. Nothing raises it, here or anywhere else.
+            # not have.
+            #
+            # **This sentence used to read "Nothing raises it, here or anywhere else," and
+            # `R-50` made it false.** The seam raises it, on every operation that is not
+            # this one and not the exchange, while the authenticated account is still on the
+            # password the deployment seeded it with
+            # (`auditmanager.api.security.OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES`). It is
+            # still not raised *here*, and that is the point of this operation being in that
+            # register: it is the act the refusal demands, so refusing it would bar the only
+            # way out of the refusal.
             #
             # 409 is absent because nothing here is idempotent: a second identical change
             # is refused by its own current password, not replayed. 404 is absent because
@@ -228,5 +259,16 @@ def build_auth_routes(router: APIRouter, credentials: CredentialPort) -> None:
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
         return json_response(
             200,
-            encode_json({"token": issued.token, "expires_in": issued.expires_in}),
+            encode_json(
+                {
+                    "token": issued.token,
+                    "expires_in": issued.expires_in,
+                    # `R-50`. `false` here by the write's own doing: the UPDATE that stores
+                    # the new digest clears the column in the same statement. The router
+                    # reports what came back rather than writing the constant it expects --
+                    # a constant would still read `false` on the day the write stopped
+                    # clearing it.
+                    "is_default_credential": issued.is_default_credential,
+                }
+            ),
         )

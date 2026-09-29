@@ -14,6 +14,12 @@
  *
  * Dynamic by construction, and declared so rather than inferred: it reads a cookie, and a
  * password screen served from a cache is a password screen showing someone else's session.
+ *
+ * **It does not call `requireAChangedPassword()`, and that is the point of it.** `R-50`
+ * sends a default credential here; a lock on this screen would be a deployment in which
+ * the only way out of the refusal is barred by the refusal. It is one of the three
+ * addresses the sweep in `web/tests/guards/default-credential-screens.guard.test.ts`
+ * names as open, with this reason written beside it there.
  */
 
 import { cookies } from 'next/headers';
@@ -42,6 +48,9 @@ export default async function ChangePasswordRoute({ searchParams }: ChangePasswo
     <ChangePasswordPage
       login={subject === null ? null : subject.login}
       outcome={isChangePasswordOutcome(candidate) ? candidate : null}
+      // `R-50`. The register's answer, which the API gave it at sign-in. This screen is the
+      // one a default credential is sent to, and this prop is what lets it say so.
+      mustChange={subject !== null && subject.isDefaultCredential}
     />
   );
 }

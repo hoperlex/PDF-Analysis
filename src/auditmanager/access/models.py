@@ -40,6 +40,7 @@ __all__ = [
     "MAX_LOGIN_LENGTH",
     "USER_UID_PATTERN",
     "USER_UID_PREFIX",
+    "CredentialStanding",
     "UserRecord",
     "UserUid",
     "is_user_uid",
@@ -193,6 +194,35 @@ def normalize_display_name(raw: str) -> str:
             message="the display name must not contain control characters",
         )
     return candidate
+
+
+@dataclass(frozen=True, slots=True)
+class CredentialStanding:
+    """The two facts the authorization seam re-reads about an account on every request.
+
+    `R-50`. It is a **second, much narrower projection of the same row** as
+    :class:`UserRecord`, and it exists because the statement behind it runs on every
+    authorized request: it reads two columns of one row by primary key and returns nothing
+    a caller could read an identity out of. ``UserRecord`` carries eleven fields including
+    a login, and a per-request statement that returned one would invite exactly that.
+
+    **Two facts and not two statements.** Before `R-50` the seam read ``token_epoch``
+    alone. The alternative to widening this record was a second lookup beside it, and the
+    argument against is the one :data:`~auditmanager.access.repository._SELECT_CREDENTIAL`
+    already makes in this package about the lockout column: a second statement addressed
+    at the same row inside one decision is two reads of one row that can disagree -- and
+    here the disagreement would be between "this credential is still current" and "this
+    account is still on its seeded password", which are the two halves of one refusal.
+
+    Neither field is credential material. ``token_epoch`` is a counter the seam stamps
+    into every credential it mints, and ``is_default_credential`` says whether a password
+    has ever been changed, never what it is.
+    """
+
+    #: The generation of credentials this account accepts right now.
+    token_epoch: int
+    #: Whether this account is still on the password the deployment seeded it with.
+    is_default_credential: bool
 
 
 @dataclass(frozen=True, slots=True)

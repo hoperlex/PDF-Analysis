@@ -202,7 +202,20 @@ export function screens(): Screen[] {
   };
 
   // ------------------------------------------------------------------- the shell
-  add('AppFrame', render(createElement(AppFrame, { children: 'экран' })));
+  add('AppFrame', render(createElement(AppFrame, { children: 'экран', session: null })));
+
+  /*
+   * `D-113`. The bar has two states and the census must see both: the signed-out half is a
+   * link and the signed-in half is the submit control of a form. They carry the same class
+   * -- `.am-app__signin` -- and a census that rendered only the link would be measuring the
+   * rule on an `<a>` while a `<button>` somewhere else wore it.
+   */
+  add(
+    'AppFrame with an open session',
+    render(
+      createElement(AppFrame, { children: 'экран', session: { login: 'проверяющий' } }),
+    ),
+  );
 
   /*
    * The same shell WITH an instance label, which is the whole of `.am-app__instance`.
@@ -222,7 +235,10 @@ export function screens(): Screen[] {
     const before = process.env.NEXT_PUBLIC_INSTANCE_LABEL;
     process.env.NEXT_PUBLIC_INSTANCE_LABEL = 'стенд-w42b';
     try {
-      add('AppFrame with an instance label', render(createElement(AppFrame, { children: 'экран' })));
+      add(
+        'AppFrame with an instance label',
+        render(createElement(AppFrame, { children: 'экран', session: null })),
+      );
     } finally {
       if (before === undefined) delete process.env.NEXT_PUBLIC_INSTANCE_LABEL;
       else process.env.NEXT_PUBLIC_INSTANCE_LABEL = before;

@@ -36,6 +36,7 @@ import pytest
 from auditmanager.api.app import create_asgi_app
 from auditmanager.api.security import (
     API_TOKEN_VARIABLE,
+    OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES,
     SCHEME_NAME,
     UNAUTHENTICATED_OPERATIONS,
     Subject,
@@ -125,14 +126,14 @@ def _another_deployments_credential() -> str:
     """A well-formed credential, minted with a key this deployment does not hold."""
     signer = build_signer({API_TOKEN_VARIABLE: "some-other-deployments-secret"})
     assert signer is not None
-    return signer.issue(TEST_SUBJECT).token
+    return signer.issue(TEST_SUBJECT, is_default_credential=False).token
 
 
 def _an_expired_credential() -> str:
     """One this deployment really minted, an hour and a second ago."""
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None
-    issued = signer.issue(TEST_SUBJECT, now=time.time() - 3601)
+    issued = signer.issue(TEST_SUBJECT, now=time.time() - 3601, is_default_credential=False)
     assert signer.verify(issued.token) is None, (
         "this case is only a case if the credential really has expired"
     )
@@ -149,7 +150,7 @@ def _a_tampered_credential() -> str:
     """
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None
-    version, body, tag = signer.issue(TEST_SUBJECT).token.split(".")
+    version, body, tag = signer.issue(TEST_SUBJECT, is_default_credential=False).token.split(".")
     payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
     assert payload["sub"] == TEST_SUBJECT.user_uid, payload
     payload["sub"] = "usr_01M2545JSD15ETSNNV904X991Z"
@@ -430,7 +431,7 @@ def test_the_exchange_answers_without_a_credential(router: Surface) -> None:
     )
     assert answer.status == 200, answer.body
     body = json.loads(answer.body)
-    assert sorted(body) == ["expires_in", "token"], body
+    assert sorted(body) == ["expires_in", "is_default_credential", "token"], body
     assert isinstance(body["token"], str) and body["token"]
     assert body["expires_in"] == 3600, body
     assert answer.header("X-Correlation-Id"), answer.headers
@@ -737,7 +738,8 @@ def test_a_credential_minted_under_a_stale_epoch_is_refused(router: Surface) -> 
             login=TEST_SUBJECT.login,
             token_epoch=TEST_EPOCH - 1,
             display_label=TEST_SUBJECT.display_label,
-        )
+        ),
+        is_default_credential=False,
     ).token
     # Verified by the signer: so the refusal below cannot be a malformed credential.
     assert signer.verify(stale) is not None
@@ -750,7 +752,7 @@ def test_a_credential_minted_under_a_stale_epoch_is_refused(router: Surface) -> 
 def test_a_credential_naming_an_account_this_deployment_has_not_got_is_refused(
     router: Surface,
 ) -> None:
-    """``epoch_of`` answers ``None``, and ``None`` is a refusal and never a permissive default.
+    """``standing_of`` answers ``None``, and ``None`` is a refusal, never a permissive default.
 
     This is the property that makes deleting a row a revocation: before `W39-REVOKE` a
     credential for a deleted account went on working until its expiry, because nothing on
@@ -764,7 +766,8 @@ def test_a_credential_naming_an_account_this_deployment_has_not_got_is_refused(
             login="nobody",
             token_epoch=1,
             display_label="Nobody At All",
-        )
+        ),
+        is_default_credential=False,
     ).token
     assert signer.verify(orphan) is not None
 
@@ -788,7 +791,7 @@ def test_a_credential_with_no_epoch_at_all_is_refused(router: Surface) -> None:
 
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None
-    version, body, _ = signer.issue(TEST_SUBJECT).token.split(".")
+    version, body, _ = signer.issue(TEST_SUBJECT, is_default_credential=False).token.split(".")
     payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
     assert "ver" in payload, "the fixture must start from a credential that HAS an epoch"
     del payload["ver"]
@@ -836,7 +839,7 @@ def test_changing_the_password_answers_a_credential_and_revokes_the_one_presente
     )
     assert answer.status == 200, answer.body
     body = _json.loads(answer.body)
-    assert sorted(body) == ["expires_in", "token"], body
+    assert sorted(body) == ["expires_in", "is_default_credential", "token"], body
     replacement = body["token"]
     assert replacement != TEST_TOKEN
 
@@ -870,3 +873,175 @@ def test_the_password_change_is_refused_without_a_credential_before_its_body_is_
     )
     assert answer.status == 401, answer.body
     assert _envelope(answer)["error_code"] == AUTHENTICATION_REQUIRED
+
+
+# =======================================================================================
+# `R-50`, the lock: an account still on its seeded password reaches two operations
+# =======================================================================================
+#
+# The field on `IssueTokenResponse` is the signpost and this is the lock. They were ruled
+# in together, over the cheaper option of either alone, for a reason this suite can state
+# exactly: `infra/deploy/proxy/nginx.conf` forwards `/api/v1/` straight to the API
+# container, so a rule enforced only on the screens is bypassed by one direct request --
+# and a rule enforced only here would leave the screens to discover the state by failing.
+
+
+def _on_a_default_credential(router: Surface) -> None:
+    """Put this suite's one account into the state migration ``0006`` leaves ``admin`` in.
+
+    The suite adapter holds the flag as a field precisely so a test can move it: the seam
+    re-reads the account's standing on every request, so flipping it here is what a
+    deployment looks like the moment before anybody has changed the seeded password.
+    """
+    router.router.credentials.is_default_credential = True
+
+
+def test_a_default_credential_reaches_exactly_the_register(router: Surface) -> None:
+    """The sweep. Every operation but the two in the register answers 403.
+
+    A set comparison and not a list of the ones somebody remembered: the refused set is
+    computed from the surface's own ``operation_ids`` minus the register, so an operation
+    added later is refused and swept, or is written into
+    :data:`~auditmanager.api.security.OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES` by somebody
+    deciding that it should be reachable. There is no third place for it to be.
+    """
+    assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES == {"issueToken", "changePassword"}
+    assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES <= router.operation_ids
+    _on_a_default_credential(router)
+
+    expected_to_be_refused = router.operation_ids - OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES
+    refused: set[str] = set()
+    served: list[tuple[str, int]] = []
+    for operation, method, path in GUARDED:
+        if operation in OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES:
+            continue
+        answer = dispatch(router, Request.build(method, path))
+        if answer.status != 403:
+            served.append((operation, answer.status))
+            continue
+        body = _envelope(answer)
+        assert body["error_code"] == "permission_denied", (operation, body)
+        assert body["retryable"] is False, (operation, body)
+        # The detail key the catalog already declares safe for this code, carrying the
+        # value the integrator decided: the ACT, not the credential. A caller refused for
+        # a reason has to be told which one, and this is the one place that says it.
+        assert body["details"] == {"required_capability": "password_changed"}, (
+            operation,
+            body,
+        )
+        refused.add(operation)
+    assert served == [], (
+        "these operations served a credential minted for an account still on the password "
+        f"this deployment seeded it with: {served}"
+    )
+    assert refused == expected_to_be_refused, (
+        "the refused set is not the surface minus the register",
+        sorted(refused),
+        sorted(expected_to_be_refused),
+    )
+
+
+def test_the_password_change_is_the_one_operation_that_still_answers(
+    router: Surface,
+) -> None:
+    """The way out is not barred by the condition it exists to satisfy.
+
+    ``changePassword`` is in the register, so it is reached rather than refused. The body
+    below is empty, so what comes back is the ``422`` a missing body earns -- which is the
+    assertion: the request got past the seam and as far as the body model, and a ``403``
+    here would be a deployment in which nobody can ever stop being refused.
+    """
+    _on_a_default_credential(router)
+    answer = dispatch(router, Request.build("POST", "/auth/password"))
+    assert answer.status == 422, (answer.status, answer.body)
+    assert _envelope(answer)["error_code"] == "validation_failed", answer.body
+
+
+def test_the_exchange_still_answers_and_says_which_state_the_account_is_in(
+    router: Surface,
+) -> None:
+    """``issueToken`` is open, and the credential it hands back carries the diagnosis."""
+    _on_a_default_credential(router)
+    answer = dispatch(
+        router,
+        Request.build(
+            "POST",
+            "/auth/token",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"login": SUITE_LOGIN, "password": SUITE_PASSWORD}).encode(),
+        ),
+        credential=None,
+    )
+    assert answer.status == 200, answer.body
+    body = json.loads(answer.body)
+    assert body["is_default_credential"] is True, body
+
+
+def test_the_same_surface_serves_the_same_credential_once_the_flag_is_off(
+    router: Surface,
+) -> None:
+    """The anti-vacuity of the sweep: the refusal is the flag and not the suite.
+
+    Same router, same credential, same request. The only difference is the state of the
+    account's column, which is the thing the sweep above claims is doing the refusing.
+    """
+    answer = dispatch(router, Request.build("GET", "/projects"))
+    assert answer.status == 200, answer.body
+    _on_a_default_credential(router)
+    assert dispatch(router, Request.build("GET", "/projects")).status == 403
+
+
+def test_changing_the_password_lifts_the_refusal_on_the_very_next_request(
+    router: Surface,
+) -> None:
+    """End to end through the surface: refused, change, served.
+
+    The credential presented after the change is the one ``changePassword`` answered with
+    -- the old one is revoked by the same write -- and the request that follows is served.
+    This is the whole of `R-50` in one test: the lock exists, and the act the refusal names
+    opens it.
+    """
+    _on_a_default_credential(router)
+    assert dispatch(router, Request.build("GET", "/projects")).status == 403
+
+    changed = dispatch(
+        router,
+        Request.build(
+            "POST",
+            "/auth/password",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps(
+                {
+                    "current_password": SUITE_PASSWORD,
+                    "new_password": "w47lock-a-password-nobody-seeded",
+                }
+            ).encode(),
+        ),
+    )
+    assert changed.status == 200, changed.body
+    replacement = json.loads(changed.body)
+    assert replacement["is_default_credential"] is False, replacement
+
+    assert (
+        dispatch(
+            router, Request.build("GET", "/projects"), credential=replacement["token"]
+        ).status
+        == 200
+    )
+
+
+def test_a_revoked_default_credential_is_refused_as_revoked_and_not_as_default(
+    router: Surface,
+) -> None:
+    """Order, asserted rather than claimed in a comment.
+
+    A credential whose epoch no longer matches is refused with ``401`` even when the
+    account is on its seeded password. The other order would let a caller holding a
+    credential this deployment has already stopped accepting learn from a ``403`` that the
+    account behind it is real -- the enumeration oracle the exchange refuses to be.
+    """
+    _on_a_default_credential(router)
+    router.router.credentials.epoch += 1
+    answer = dispatch(router, Request.build("GET", "/projects"))
+    assert answer.status == 401, (answer.status, answer.body)
+    assert _envelope(answer)["error_code"] == AUTHENTICATION_REQUIRED, answer.body

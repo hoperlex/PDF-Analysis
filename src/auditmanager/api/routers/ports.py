@@ -38,7 +38,7 @@ from auditmanager.api.schemas.documents import DocumentVersionView
 from auditmanager.api.schemas.findings import FindingDetailView, FindingView
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.runs import RunStatusView
-from auditmanager.api.security import IssuedCredential
+from auditmanager.api.security import AccountStanding, IssuedCredential
 
 __all__ = [
     "AppendedDecision",
@@ -433,11 +433,11 @@ class CredentialPort(Protocol):
     needs the deployment's signing key and a router that held one would be a router that
     reads configuration -- which is the composition root's job and nobody else's.
 
-    :meth:`epoch_of` is here rather than on a seventh port because it is the same adapter's
+    :meth:`standing_of` is here rather than on a seventh port because it is the same adapter's
     job: the one object in the tree that holds both the user repository and the signer is
     the only one that can answer it, and a second port over the same two halves would be a
     second thing for the composition root to forget to wire. It is also what
-    :class:`auditmanager.api.security.CredentialEpochs` asks for, structurally -- the seam
+    :class:`auditmanager.api.security.AccountStandings` asks for, structurally -- the seam
     declares the single method it needs and this port satisfies it, so the seam does not
     import the router's vocabulary to be handed one value.
     """
@@ -477,10 +477,12 @@ class CredentialPort(Protocol):
         new password is the current one or fails the mechanical bounds.
         """
 
-    def epoch_of(self, user_uid: str) -> int | None:
-        """The generation of credentials this account accepts, or ``None`` for no account.
+    def standing_of(self, user_uid: str) -> AccountStanding | None:
+        """What the seam re-reads about this account, or ``None`` for no account.
 
-        Read by the authorization seam on every request it guards; see
-        :class:`auditmanager.api.security.CredentialEpochs` for why ``None`` refuses rather
-        than admits, and why nothing caches the answer.
+        Two facts, read together: the generation of credentials this account accepts, and
+        whether it is still on the password the deployment seeded it with (`R-50`). Read by
+        the authorization seam on every request it guards; see
+        :class:`auditmanager.api.security.AccountStandings` for why ``None`` refuses rather
+        than admits, why the two travel together, and why nothing caches the answer.
         """

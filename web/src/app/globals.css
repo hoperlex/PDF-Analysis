@@ -700,6 +700,18 @@ input[type='file']::file-selector-button:hover {
   font-size: 13px;
   color: var(--am-accent);
   text-decoration: none;
+  /*
+   * `D-113`. The bar's sign-in half is a link and its sign-out half is the submit control
+   * of a form -- a POST, because signing out deletes the row that holds the credential.
+   * These five declarations are what make a `<button>` carrying this class look like the
+   * `<a>` beside it, and they declare no colour and no new selector: one rule, two
+   * elements, one appearance.
+   */
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .am-app__signin:hover {
@@ -711,6 +723,21 @@ input[type='file']::file-selector-button:hover {
   color: var(--am-ink-muted);
   text-transform: uppercase;
   letter-spacing: var(--am-tracking-caps);
+}
+
+/*
+ * `D-113`. Who is signed in, beside the way out.
+ *
+ * It is not `.am-app__instance`, although it sits in the same place and is the same size:
+ * that rule upper-cases what it renders, which is right for a stand's label and wrong for
+ * a login. A login is an ADDRESS -- the `access` boundary folds it to lower case and
+ * stores the folded value -- so rendering `ADMIN` for a login that is `admin` shows a
+ * reviewer a string their deployment does not hold. It declares no colour and inherits the
+ * bar's, so nothing new is added for the contrast census to have to reach.
+ */
+.am-app__session {
+  margin-left: auto;
+  font-size: var(--am-text-xs);
 }
 
 .am-app__instance {
