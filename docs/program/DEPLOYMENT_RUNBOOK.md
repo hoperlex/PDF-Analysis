@@ -641,10 +641,13 @@ And after a **restore** of one of its dumps, the same discipline with one more s
 the object back byte-identical **and then re-upload**. A `409` there is the `D-17` failure
 exactly.
 
-One thing to know before reading the rehearsal's screen: `--dry-run`'s **per-table figures
-are exact**, and its **total is not** — it counts one view (`finding_current_verdict`)
-whose rows are already counted elsewhere, so the total **over-reports**. It never tells you
-there is less to lose than there is (`D-39`).
+One thing to know before reading the rehearsal's screen: **the total counts base tables
+only.** It once counted a view (`finding_current_verdict`) whose rows are counted elsewhere
+and so over-reported; `D-39` closed that on 2026-09-21, and the query now sums
+`FILTER (WHERE kind = 'BASE TABLE')` and says `base tables` on the line
+(`infra/deploy/reset.sh:429-431`). **This paragraph said the opposite for eight days**, and
+both of wave 47's judges caught it — a runbook that warns about a defect its own tree has
+fixed teaches an operator to distrust a correct number.
 
 ---
 
