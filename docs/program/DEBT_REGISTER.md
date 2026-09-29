@@ -13,6 +13,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 |---|---|---|
 | ~~D-56~~ | project sections: the field and the aggregation | **closed by wave 46** (`W46-SEAL`, `alpha-w46`) |
 | ~~D-63~~ | a dashboard | **closed by wave 46**: four panels on one read (`W46-WIRE`, `W46-CLIENT`, `alpha-w46`) |
+| **D-118** | **`make gate` never lints.** Three eslint errors sit in the tree and no gate looks at them | wire `lint` into the gate, then fix the three |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | **D-76** | **reopened**: the same document went stale again, underneath the note recording that it had | the guard that catches it exists now |
 | **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |
@@ -87,6 +88,44 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-118 — `make gate` never runs the linter, so three errors sit in a green tree
+
+**Opened 2026-09-29 by the integrator, at the close of wave 47.** `W47-LOCK` reported two
+eslint errors as a candidate debt and declined to fix them, which was the right call: a stream
+that quietly repairs another wave's lint finding hides the fact that the gate does not look
+there. **Measured on the merge `44937fe`, there are three, not two, and the third is in the
+file that stream had just written.**
+
+```
+grep -n lint Makefile                       # no hit: the gate has no lint step
+npm --prefix web run lint                   # 3 problems (3 errors, 0 warnings)
+```
+
+| file | error |
+|---|---|
+| `web/src/app/bff/session/store.ts:157` | `no-console` — `console.info` where the rule allows only `warn` and `error` |
+| `web/tests/guards/dashboard-invalidation.guard.test.ts:17,58` | `no-irregular-whitespace`, twice — from wave 46, `2fccac8` |
+
+**The structural half is the debt; the three errors are its symptom.** `web/package.json`
+declares `lint`, `eslint.config.mjs` configures it, and `Makefile` never calls it — so an error
+can enter the tree and every gate afterwards stays green. Wave 46's two survived a full wave and
+a tag that way.
+
+**The third one is worth reading rather than just deleting.** `store.ts` announces the register's
+state once per process: the *unset* case is a `console.warn`, correctly, because sessions then die
+with the container; the *configured* case is a `console.info` stating where API credentials live.
+`no-console` allows only `warn` and `error` (`eslint.config.mjs:94`), so the normal path is the
+one that trips. Escalating a correct configuration to a warning would cry wolf, and deleting the
+line would drop an operator-facing statement about credentials on disk that `R-51` asked to be
+said out loud. **The repair is a decision about that line, not a formatting fix**, which is
+exactly why it is not being made silently at merge time.
+
+**Why this was not caught by a judge.** Wave 47's two judges have deliberately independent entry
+points — the attacker and the operator — and neither points at a tool the gate does not run.
+`W47-LOCK` found it in its own lane and said so. **A check nobody runs is invisible to a review
+that starts from behaviour**, which is the same shape as `D-108` (`make gate` does not drive the
+live journey) and `D-79` (the gate does not read `docs/`).
 
 ### D-1 — PC-01's certification no longer describes the tree — **CLOSED**
 
