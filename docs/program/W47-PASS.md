@@ -313,5 +313,24 @@ browser itself made), `console=0`. Write steps 3/3, routes 16/16, exit `0`.
 
 ## 6. Final gate
 
-Recorded once run: the `GATE OK` line, counts against the `W47-DISPATCH.md` baseline by
-test id, and `git rev-parse HEAD`.
+One `make gate` run, checked first: `free -g` (1 Gi free, 6 used, 5 available; `w47gate`'s
+own `make gate` had just finished — confirmed by `ps aux` before starting) and no other
+`make gate` with a cwd under `/root/w4*` running. `/root/w47b-gate.log`.
+
+```
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+Counts, against `W47-DISPATCH.md`'s baseline (`GATE OK`, 2516 passed / 5 skipped,
+foundation 35, frontend 1135 in 80 files, measured on `1196ca7`):
+
+| | baseline | this gate | delta | accounted for by |
+|---|---|---|---|---|
+| foundation | 35 passed | 35 passed | 0 | — |
+| backend battery | 2516 passed / 5 skipped | 2533 passed / 5 skipped, 169 subtests | +17 | `tests/integration/access/test_password_policy.py` (11, pure) + `tests/integration/db/test_app_user_repository.py::TestChangingAPasswordUnderTheR48Policy` (6, incl. `D-101`) |
+| frontend | 1135 tests / 80 files | 1139 tests / 81 files | +4 tests, +1 file | `web/tests/guards/session-durability.guard.test.ts` (new file, 3 tests) + `web/tests/unit/session/change-password.test.ts` (+1: the `mismatch` outcome) |
+
+No test id from the baseline is missing; every new one is named above. `git rev-parse
+HEAD`: `6965c15de9e06cdece8edadf93b3cad3786b3c23`.
+
+**After this point: no re-runs, no further commits.** This section is the last edit.
