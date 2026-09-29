@@ -316,3 +316,156 @@ The two that remain are **wave 46's** `no-irregular-whitespace` in
 register's own row says a stream that quietly repairs another wave's lint finding hides the fact
 that the gate does not look there. **`lint` is not wired into `make gate`** — `D-118`'s structural
 half is a non-goal here and stays open.
+
+---
+
+## 7. The gate
+
+`make gate` in `/root/w47pass`, lane `gate-w47b`, at `35523b5` with a clean tree, run alone
+(`free -g` checked and no other `make gate` under `/root/w4*`). Not an exit code — the line,
+from `/root/w47fix-gate.log:256`:
+
+```
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+| suite | this gate | baseline (`/root/w47-a2-merge-gate.log`) | delta |
+|---|---|---|---|
+| battery | **2604 passed / 5 skipped** (4 warnings, 169 subtests, 1466.19 s) | 2581 passed / 5 skipped | **+23** |
+| foundation | **35 passed** (27.78 s) | 35 | **0** |
+| frontend | **1162 passed in 82 files** (20.89 s) | 1156 in 82 files | **+6 tests, +0 files** |
+
+Lines `122` (battery), `60` (foundation) and `251-252` (frontend). The battery's 1466 s against
+the baseline's 663 s is host load: another project's suites ran throughout.
+
+**The +23, by test id.** Every one is new here; nothing was deleted and **the skipped count is
+unchanged at 5** — `git diff 9783e73..HEAD -- tests web/tests | grep -E '^\+.*(skip|xfail)'` is
+empty.
+
+`tests/integration/composition/test_reset_script_refusals.py` (**13**):
+`test_every_restored_credential_is_dead_by_the_time_the_restore_returns`,
+`test_it_runs_inside_the_api_image_and_not_on_the_host`,
+`test_it_names_by_login_any_account_back_on_its_default_password`,
+`test_a_revocation_that_could_not_run_is_reported_and_does_not_refuse`,
+`test_a_dump_with_no_accounts_in_it_is_not_reported_as_a_failure`,
+`test_a_clean_restore_says_so_and_raises_no_alarm`,
+`test_the_register_is_cleared_and_before_anything_is_destroyed`,
+`test_a_register_that_cannot_be_cleared_refuses_and_destroys_nothing`,
+`TestTheWipeClearsTheSessionRegister::test_that_guard_is_shown_able_to_fail`,
+`test_a_wipe_on_an_empty_bucket_runs_to_the_end`,
+`test_the_command_that_exits_one_on_empty_is_not_run_on_an_empty_bucket`,
+`test_an_empty_sidecar_is_the_right_length_and_not_a_short_one`,
+`test_an_absent_sidecar_is_still_refused_on_an_empty_bucket`.
+
+`tests/integration/access/test_password_policy.py` (**5**):
+`test_the_shipped_default_is_the_one_the_migration_seeds`,
+`TestTheShippedDefaultEntry::test_the_shipped_default_is_refused`,
+`::test_it_is_refused_in_any_case`, `::test_a_password_that_merely_contains_it_is_not_refused`,
+`::test_the_refusal_is_the_length_one_when_both_would_apply`.
+
+`tests/integration/composition/test_proxy_tls_path.py` (**4**):
+`TestTheRedirectStaysOnThisOrigin::test_the_forwarded_host_carries_the_port`,
+`::test_no_configuration_forwards_the_port_stripped_host`,
+`::test_every_api_location_puts_the_prefix_back_on_the_way_out`,
+`::test_the_web_location_does_not_gain_the_prefix`.
+
+`tests/integration/db/test_app_user_repository.py` (**+2 − 1 = +1**):
+`test_the_d101_gap_is_closed` and `test_the_shipped_default_is_refused_whatever_the_shift_key_did`
+in, `test_the_d101_gap_is_still_open` out — **and that one is a rename, not a deletion**: it is
+the same account, the same two changes and the same body, with the second change's expectation
+turned round, and its docstring carries the old name. 13 + 5 + 4 + 1 = **23**.
+
+**The +6, one file.** `web/tests/guards/session-durability.guard.test.ts`, 8 → 14, all in the new
+`Y7` block: `the control: a configured path it can really write is durable`, `a configured path
+whose directory cannot be created is not durable`, `a session opened there really is lost, which
+is what durable: false means`, `a write that fails although the path looked writable makes it not
+durable`, `a register that starts working is durable again`, `unset is still a configured absence
+and not a broken volume`. No file added, so **82 stays 82**.
+
+## 8. The live journey
+
+`npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:56423 --phase all`, against a stand
+served from this worktree: API `PYTHONPATH=src .venv/bin/python infra/deploy/serve.py`
+(`operations=20`, `127.0.0.1:56421`, health `:56422`, `AUDITMANAGER_PROVIDER_MODE=recorded`), web
+`npx next start -p 56423` on a `npm run build` of this tree, with
+`AUDITMANAGER_SESSION_STORE=/root/w47fix-sessions/register.json` so `R-51`'s register was live
+for the whole run. Log: `/root/w47fix-journey-run2.log`; envelope
+`/root/w47fix-journey-out/journey.json`.
+
+**The credential:** a reviewer account of its own, `w47fixreviewer`, created through the
+repository (`create_user` writes `is_default_credential = false`). Not a bypass — `R-50` refuses
+every operation but the exchange and the change to an account still on the shipped password, an
+account still on it would still be refused, and `tests/integration/api/test_authorization.py`
+proves that refusal. `admin` was left exactly as it was found. The account is needed because
+`W47-LOCK` had already moved `admin` in this lane to a password this session does not hold.
+
+**The first attempt was killed and is not a result.** It reached sign-in, 3/3 write steps and
+5 of 16 routes and then took **SIGTERM** (`Terminated`, exit 143), writing no envelope and
+reporting no finding, with the host at 2 GB available and another project's suites running. The
+run quoted below is the re-run.
+
+```
+sign-in: ok at /login -- carrying 'am_session' (HttpOnly=true, SameSite=Strict) into every cold browser
+
+write half: 3 step(s), fixture fixtures/synthetic/ar/ar_baseline.pdf
+
+ok  create-project   api=3 {"project_uid":"prj_01M3PKXWBTGDEEKPY95V36PC7X"}
+ok  upload-document  api=4 {"project_uid":"prj_01M3PKXWBTGDEEKPY95V36PC7X","version_uid":"ver_01M3PKXZVTKD79NQJBVZZG9FAG"}
+ok  start-run        api=5 {"project_uid":"prj_01M3PKXWBTGDEEKPY95V36PC7X","run_id":"run_01M3PKY2NDKTDGFCPQ2XYG4XPE"} terminal=published in 1515ms/150000ms
+
+ok  root           200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  projects       200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  project        200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  document       200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  version        200  api=2 auth=0 console=0 jar=[am_session] w=765/780
+ok  comparison     200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  run            200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  review         200  api=5 auth=0 console=0 jar=[am_session] w=765/780
+ok  sign-in        200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  knowledge-base 200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  change-password 200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  blocks         200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  optimisation   200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  logs           200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  workers        200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  dashboard      200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+
+envelope: /root/w47fix-journey-out/journey.json
+write steps checked: 3/3
+routes checked: 16/16
+e2e:pc01 OK
+```
+
+**3/3 write steps, 16/16 routes, `auth=0` everywhere, `console=0` everywhere, no route over the
+780 px bound.** `Y7`'s repair is on the sign-in path and the register was written normally
+throughout — `register.json`, mode `600`, 860 bytes after the run.
+
+## 9. What I stopped on, and what a gate would not show
+
+* **`Y-B` and `Y4` are not in the brief's §5 table and I did not touch them.** `Y-B` is a live
+  false sentence — `DEPLOYMENT_RUNBOOK.md:501-505` warns that the rehearsal's total over-reports
+  by counting a view, and both judges agree `D-39` closed that (`reset.sh` totals
+  `sum(n) FILTER (WHERE kind = 'BASE TABLE')`). It is in a document I was editing and it is one
+  paragraph. **The integrator should decide**; I did not take it, because a repair the brief did
+  not name is a repair nobody reviewed.
+* **`D-118`'s other two errors stay.** `web/tests/guards/dashboard-invalidation.guard.test.ts:17,58`,
+  wave 46's, in a file in my `allowed_paths`. The register's own row says a stream that quietly
+  repairs another wave's lint finding hides the fact that the gate does not look there.
+* **The `Y-G` repair's dynamic proof is not in `make gate`,** and cannot be: the gate has no
+  stack and no proxy. What is in the gate is the static half over **both** server bodies; what is
+  outside it is `/root/w47fix-yg-probe.log`, taken against `nginx:1.27-alpine` with the real file.
+  If the application's redirect behaviour changes, the static guard will not notice.
+* **`R-52` and `Y8` were not driven against a deployed stack.** The host has 8.6 GB free against
+  §1's 5.5 GB for one clean-clone deploy, another project was building throughout, and a full
+  `deploy.sh` plus a wipe plus a restore is the most expensive thing in this repository. The
+  evidence is the stub-driven suite, which records every `docker` call and reproduces `mc`'s real
+  empty-bucket behaviour — strong about **what the script does** and silent about **whether the
+  `api` image can run `auditmanager.access.revoke` in a real deployment**. `readiness.sh` already
+  runs `auditmanager.access.check` that exact way on a live stack, which is the nearest thing to
+  a proof this repair has; a judge with a stack should drive `--restore` end to end.
+* **`compose stop web` / `up -d --no-deps web` was verified against a throwaway compose project,
+  not against the alpha stack.** `docker compose stop <svc>` on a service with no container exits
+  **0** — measured, `/root/w47fix-probe`. The wipe now leaves `web` running even on a stack where
+  it was not; that is stated in `reset.sh`'s comment and is the state the script already assumes.
+* **`test_the_d101_gap_is_closed` is a rename**, and a reader grepping the old id finds it only
+  through the docstring. If the integrator would rather the id did not move, say so.
