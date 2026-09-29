@@ -36,6 +36,25 @@ volumes:
     name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-postgres-data
   s3-data:
     name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-s3-data
+  # `R-51`. The session register, and it is mounted by the `web` service and by nothing
+  # else. Before it, `web/src/app/bff/session/store.ts` held every open session in the Node
+  # process's memory, and `deploy.sh` recreates that container on every run -- so every
+  # deploy signed every reviewer out, which is a support incident per deployment rather
+  # than a rare one.
+  #
+  # WHAT IS ON IT, stated here as well as in the runbook because a volume nobody can
+  # describe is a volume nobody can decide about: until each credential expires, the API
+  # credentials the web tier holds are in a file on this volume. They still never reach the
+  # browser -- that property is the whole of `W15-AUTH` and is unchanged -- and a revoked
+  # credential still stops working on its next request, because the API compares
+  # `token_epoch` on every one of them wherever the token was kept.
+  #
+  # The owner ruled this over the two alternatives: a database connection for the web tier
+  # (a `DATABASE_URL` here, a client dependency in `web/package-lock.json`) and a new
+  # contract operation to store sessions through (a reseal). Neither is cheaper and both
+  # are wider.
+  web-sessions:
+    name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-web-sessions
 
 services:
   postgres:
@@ -187,6 +206,18 @@ services:
     environment:
       AUDITMANAGER_API_UPSTREAM: http://api:8000
       AUDITMANAGER_API_TOKEN: ${AUDITMANAGER_API_TOKEN:?AUDITMANAGER_API_TOKEN is unset. The web tier forwards it; without it every operation answers 401.}
+      # `R-51`. The file on the volume below. A literal and not a `${...}` substitution:
+      # it is a path inside this image, fixed by `Dockerfile.web`, and not a deployment
+      # choice -- an operator who could set it could point it outside the volume and get a
+      # register that silently stops surviving deploys. Unset, the register is memory only
+      # and says so in the container's log on the first sign-in; that is the developer's
+      # `next dev` and never this file.
+      AUDITMANAGER_SESSION_STORE: /var/lib/auditmanager/sessions/register.json
+    volumes:
+      # The ONLY service that mounts it. `R-51` says so and this line is where it is true:
+      # the credential this file holds must not be reachable from the API container, the
+      # proxy, or a second web replica this stack does not run.
+      - web-sessions:/var/lib/auditmanager/sessions
     networks: [alpha]
     restart: unless-stopped
     healthcheck:
