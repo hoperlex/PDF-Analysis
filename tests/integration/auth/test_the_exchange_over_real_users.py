@@ -118,7 +118,7 @@ def test_a_real_pair_is_exchanged_for_a_credential_naming_that_user(
     response = _exchange(client, user.login, PASSWORD)
     assert response.status_code == 200, response.text
     body = response.json()
-    assert sorted(body) == ["expires_in", "token"], body
+    assert sorted(body) == ["expires_in", "is_default_credential", "token"], body
     assert body["expires_in"] == 3600
 
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
@@ -282,3 +282,96 @@ def test_the_exchange_needs_no_credential_of_its_own(
     # is open, so a nonsense one cannot turn a valid pair into a refusal.
     assert with_credential.status_code == 200, with_credential.text
     assert json.loads(with_credential.text)["expires_in"] == 3600
+
+
+# =======================================================================================
+# `R-50`, the field: what the exchange tells a client about the password it just accepted
+# =======================================================================================
+
+
+@pytest.fixture
+def seeded_user(
+    app_user_table: object, session_factory: sessionmaker[Session]
+) -> Iterator[UserRecord]:
+    """An account in the state migration ``0006`` leaves ``admin`` in: default credential.
+
+    A *created* row and not the seeded ``admin`` itself, for the reason the ``user``
+    fixture gives: a suite that depended on the seeded account would be a suite that breaks
+    when a deployment changes the password it is supposed to change. What is reproduced is
+    the state, ``is_default_credential = true``, not the row.
+    """
+    login = f"w47lock-{secrets.token_hex(6)}"
+    repository = UserRepository()
+    with session_factory() as session:
+        record = repository.create_user(
+            session, login, PASSWORD, is_default_credential=True
+        )
+        session.commit()
+    assert record.is_default_credential is True, "the fixture must start from a flagged row"
+    try:
+        yield record
+    finally:
+        with session_factory() as session:
+            session.execute(
+                text("DELETE FROM app_user WHERE login = :login"), {"login": login}
+            )
+            session.commit()
+
+
+def test_the_exchange_reports_a_default_credential_as_one(
+    client: TestClient, seeded_user: UserRecord
+) -> None:
+    """`R-50`'s field, read from the row the exchange just authenticated against.
+
+    This is the signpost half of the ruling: the screens learn the state at the moment of
+    signing in, rather than discovering it by meeting the refusal the seam raises for every
+    other operation. The value is ``true`` here because the column is ``true`` -- nothing in
+    the path from the row to this body decides it, which is why the same body reads
+    ``false`` for the ``user`` fixture one test down.
+    """
+    response = _exchange(client, seeded_user.login, PASSWORD)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["is_default_credential"] is True, body
+
+
+def test_the_exchange_reports_a_changed_credential_as_not_default(
+    client: TestClient, user: UserRecord
+) -> None:
+    """The control, and it is what makes the assertion above mean something.
+
+    ``create_user`` defaults the column to ``false``, so this account has never been on a
+    seeded password. A field hard-coded to ``true`` would pass the test above and fail here.
+    """
+    response = _exchange(client, user.login, PASSWORD)
+    assert response.status_code == 200, response.text
+    assert response.json()["is_default_credential"] is False, response.text
+
+
+def test_changing_a_default_password_turns_the_field_off_in_the_same_answer(
+    client: TestClient, seeded_user: UserRecord
+) -> None:
+    """The reviewer is told the state has cleared by the operation that cleared it.
+
+    The account starts flagged, signs in, changes its password, and the credential handed
+    back by ``changePassword`` says ``false``. There is no second request in between: the
+    UPDATE that stores the new digest clears the column, and this body reports the record
+    that UPDATE returned.
+    """
+    opened = _exchange(client, seeded_user.login, PASSWORD)
+    assert opened.status_code == 200, opened.text
+    assert opened.json()["is_default_credential"] is True, opened.text
+
+    changed = client.post(
+        "/auth/password",
+        json={"current_password": PASSWORD, "new_password": "w47lock-not-the-seeded-one"},
+        headers={"Authorization": f"Bearer {opened.json()['token']}"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["is_default_credential"] is False, changed.text
+
+    # And the next exchange agrees, so the answer above was the row and not a constant the
+    # operation writes on its way out.
+    again = _exchange(client, seeded_user.login, "w47lock-not-the-seeded-one")
+    assert again.status_code == 200, again.text
+    assert again.json()["is_default_credential"] is False, again.text

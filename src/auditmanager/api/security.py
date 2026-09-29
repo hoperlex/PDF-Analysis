@@ -268,10 +268,28 @@ class Subject:
 
 @dataclass(frozen=True, slots=True)
 class IssuedCredential:
-    """What the exchange hands back: the opaque credential and its lifetime in seconds."""
+    """What the exchange hands back: the credential, its lifetime, and one fact about it.
+
+    The third field is `R-50`'s and it is a fact about the **account**, not about the
+    credential's bytes: whether the password this credential was minted for is still the
+    one the deployment seeded. It is answered here because ``issueToken`` and
+    ``changePassword`` are the two moments at which a client can be told, and being told is
+    the whole point -- a screen that had to *discover* the state would discover it by
+    meeting a refusal, which is the shape `R-50` was ruled against.
+
+    **It is not in the credential's payload and must not be**, which is why it is a field
+    of this record rather than of :class:`Subject`. The seam reads it from the account's
+    own row on every guarded request (:class:`AccountStanding`), so the payload would be a
+    second and older copy of a value that decides whether a request is refused -- and two
+    sources for one refusal is one more than can be right.
+    """
 
     token: str
     expires_in: int
+    #: `R-50`. **No default**, for :attr:`Subject.token_epoch`'s reason: a caller that could
+    #: omit it would answer the client a state it assumed rather than one it read, and the
+    #: answer it would assume is the permissive one.
+    is_default_credential: bool
 
 
 @runtime_checkable
@@ -341,13 +359,27 @@ class TokenSigner:
     def lifetime_seconds(self) -> int:
         return self._lifetime
 
-    def issue(self, subject: Subject, *, now: float | None = None) -> IssuedCredential:
+    def issue(
+        self,
+        subject: Subject,
+        *,
+        is_default_credential: bool,
+        now: float | None = None,
+    ) -> IssuedCredential:
         """Mint a credential for ``subject``.
 
         ``now`` is a parameter so a test can state the clock instead of sleeping. The
         payload carries the issue and expiry instants as whole seconds of Unix time; the
         *response* carries a lifetime and never a clock reading, because two clocks that
         must agree are two ways to be wrong.
+
+        ``is_default_credential`` is `R-50`'s and it is **required**, with no default, for
+        :attr:`Subject.token_epoch`'s reason: the caller has to have read it from the
+        account's row rather than assumed it, and the value it would assume is the
+        permissive one. It travels on the returned :class:`IssuedCredential` and **not into
+        the payload below**: the seam answers "is this account still on its seeded password"
+        from the row on every guarded request, and a copy in the credential would be an
+        older answer to the same question, sitting on the caller's side of the wire.
         """
         issued_at = int(time.time() if now is None else now)
         expires_at = issued_at + self._lifetime
@@ -386,6 +418,7 @@ class TokenSigner:
         return IssuedCredential(
             token=f"{signed}.{_b64(self._tag(signed))}",
             expires_in=self._lifetime,
+            is_default_credential=is_default_credential,
         )
 
     def verify(self, presented: str, *, now: float | None = None) -> Subject | None:

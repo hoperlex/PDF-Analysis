@@ -137,7 +137,8 @@ def credential_for(account: _Account) -> str:
             login=account.login,
             token_epoch=account.epoch,
             display_label=account.display_label,
-        )
+        ),
+        is_default_credential=False,
     ).token
 
 
@@ -159,7 +160,8 @@ class TwoAccountCredentialAdapter:
                         login=account.login,
                         token_epoch=account.epoch,
                         display_label=account.display_label,
-                    )
+                    ),
+                    is_default_credential=False,
                 )
         return None
 
@@ -517,7 +519,8 @@ class TestFailClosed:
                 login="ghost.reviewer",
                 token_epoch=1,
                 display_label="Ghost Reviewer",
-            )
+            ),
+            is_default_credential=False,
         ).token
         answer = _append(two_reviewer_router, published_run, credential=ghost)
         assert answer.status == 401, (answer.status, answer.body)

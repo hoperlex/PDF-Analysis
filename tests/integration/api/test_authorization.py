@@ -125,14 +125,14 @@ def _another_deployments_credential() -> str:
     """A well-formed credential, minted with a key this deployment does not hold."""
     signer = build_signer({API_TOKEN_VARIABLE: "some-other-deployments-secret"})
     assert signer is not None
-    return signer.issue(TEST_SUBJECT).token
+    return signer.issue(TEST_SUBJECT, is_default_credential=False).token
 
 
 def _an_expired_credential() -> str:
     """One this deployment really minted, an hour and a second ago."""
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None
-    issued = signer.issue(TEST_SUBJECT, now=time.time() - 3601)
+    issued = signer.issue(TEST_SUBJECT, now=time.time() - 3601, is_default_credential=False)
     assert signer.verify(issued.token) is None, (
         "this case is only a case if the credential really has expired"
     )
@@ -149,7 +149,7 @@ def _a_tampered_credential() -> str:
     """
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None
-    version, body, tag = signer.issue(TEST_SUBJECT).token.split(".")
+    version, body, tag = signer.issue(TEST_SUBJECT, is_default_credential=False).token.split(".")
     payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
     assert payload["sub"] == TEST_SUBJECT.user_uid, payload
     payload["sub"] = "usr_01M2545JSD15ETSNNV904X991Z"
@@ -430,7 +430,7 @@ def test_the_exchange_answers_without_a_credential(router: Surface) -> None:
     )
     assert answer.status == 200, answer.body
     body = json.loads(answer.body)
-    assert sorted(body) == ["expires_in", "token"], body
+    assert sorted(body) == ["expires_in", "is_default_credential", "token"], body
     assert isinstance(body["token"], str) and body["token"]
     assert body["expires_in"] == 3600, body
     assert answer.header("X-Correlation-Id"), answer.headers
@@ -737,7 +737,8 @@ def test_a_credential_minted_under_a_stale_epoch_is_refused(router: Surface) -> 
             login=TEST_SUBJECT.login,
             token_epoch=TEST_EPOCH - 1,
             display_label=TEST_SUBJECT.display_label,
-        )
+        ),
+        is_default_credential=False,
     ).token
     # Verified by the signer: so the refusal below cannot be a malformed credential.
     assert signer.verify(stale) is not None
@@ -764,7 +765,8 @@ def test_a_credential_naming_an_account_this_deployment_has_not_got_is_refused(
             login="nobody",
             token_epoch=1,
             display_label="Nobody At All",
-        )
+        ),
+        is_default_credential=False,
     ).token
     assert signer.verify(orphan) is not None
 
@@ -788,7 +790,7 @@ def test_a_credential_with_no_epoch_at_all_is_refused(router: Surface) -> None:
 
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None
-    version, body, _ = signer.issue(TEST_SUBJECT).token.split(".")
+    version, body, _ = signer.issue(TEST_SUBJECT, is_default_credential=False).token.split(".")
     payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
     assert "ver" in payload, "the fixture must start from a credential that HAS an epoch"
     del payload["ver"]
@@ -836,7 +838,7 @@ def test_changing_the_password_answers_a_credential_and_revokes_the_one_presente
     )
     assert answer.status == 200, answer.body
     body = _json.loads(answer.body)
-    assert sorted(body) == ["expires_in", "token"], body
+    assert sorted(body) == ["expires_in", "is_default_credential", "token"], body
     replacement = body["token"]
     assert replacement != TEST_TOKEN
 

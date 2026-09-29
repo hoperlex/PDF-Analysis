@@ -429,7 +429,8 @@ def test_a_credential_minted_under_a_stale_epoch_is_refused(
             login=user.login,
             token_epoch=user.token_epoch + 5,
             display_label=user.display_label,
-        )
+        ),
+        is_default_credential=False,
     ).token
     # Verified by the signer itself -- so the refusal below cannot be a malformed credential.
     assert signer.verify(stale) is not None
@@ -446,7 +447,8 @@ def test_a_credential_naming_no_account_is_refused(client: TestClient) -> None:
             login="w39rev-never-existed",
             token_epoch=1,
             display_label="Never Existed",
-        )
+        ),
+        is_default_credential=False,
     ).token
     assert signer.verify(orphan) is not None
     assert _probe(client, orphan) == 401
@@ -468,7 +470,7 @@ def test_the_change_operation_hands_back_a_credential_that_works(
     response = _change(client, credential, PASSWORD, NEW_PASSWORD)
     assert response.status_code == 200, response.text  # type: ignore[attr-defined]
     body = response.json()  # type: ignore[attr-defined]
-    assert sorted(body) == ["expires_in", "token"], body
+    assert sorted(body) == ["expires_in", "is_default_credential", "token"], body
     replacement = body["token"]
     assert replacement != credential
 

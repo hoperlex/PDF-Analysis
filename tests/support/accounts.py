@@ -138,5 +138,6 @@ def provisioned_credential(deployment_secret: str, login: str) -> str:
             # here would make this helper mint credentials that disagree with the rows it
             # just read, which is the whole defect this module exists to have stopped.
             display_label=record.display_label,
-        )
+        ),
+        is_default_credential=False,
     ).token

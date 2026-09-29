@@ -173,7 +173,8 @@ def token(engine: Engine) -> str:
             login=record.login,
             token_epoch=record.token_epoch,
             display_label=record.display_label,
-        )
+        ),
+        is_default_credential=False,
     ).token
 
 

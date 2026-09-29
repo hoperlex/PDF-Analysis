@@ -951,7 +951,12 @@ class CredentialAdapter(_SessionHolder):
                 # display name, or the login when there is none -- and one fallback in one
                 # place is the whole of why it is not a silent one.
                 display_label=record.display_label,
-            )
+            ),
+            # `R-50`. The row's own answer, read in the same statement that proved the
+            # password, and never a guess about which login the deployment seeded. It goes
+            # to the client, which is what lets a screen send this reviewer to the change
+            # screen at the moment of signing in instead of after a refusal.
+            is_default_credential=record.is_default_credential,
         )
 
     def change_password(
@@ -982,7 +987,11 @@ class CredentialAdapter(_SessionHolder):
                 login=record.login,
                 token_epoch=record.token_epoch,
                 display_label=record.display_label,
-            )
+            ),
+            # `R-50`. Read from the record the UPDATE returned, which is the record *after*
+            # the change -- and the change clears the column in the same statement, so this
+            # is `false` here by the write's own doing and not by this line assuming it.
+            is_default_credential=record.is_default_credential,
         )
 
     def epoch_of(self, user_uid: str) -> int | None:

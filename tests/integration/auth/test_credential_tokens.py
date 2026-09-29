@@ -96,15 +96,15 @@ def _reseal(token: str, payload: dict[str, Any]) -> str:
 
 
 def test_a_minted_credential_names_the_subject_it_was_minted_for(signer: TokenSigner) -> None:
-    issued = signer.issue(SUBJECT)
+    issued = signer.issue(SUBJECT, is_default_credential=False)
     assert signer.verify(issued.token) == SUBJECT
 
 
 def test_the_response_carries_a_lifetime_and_not_a_clock_reading(signer: TokenSigner) -> None:
     """``expires_in`` is a duration, so no clock has to agree between the two sides."""
-    issued = signer.issue(SUBJECT, now=1_000_000)
+    issued = signer.issue(SUBJECT, now=1_000_000, is_default_credential=False)
     assert issued.expires_in == TOKEN_LIFETIME_SECONDS
-    later = signer.issue(SUBJECT, now=2_000_000)
+    later = signer.issue(SUBJECT, now=2_000_000, is_default_credential=False)
     assert later.expires_in == issued.expires_in
     assert later.token != issued.token, "two mintings at different times are two credentials"
 
@@ -132,7 +132,7 @@ def test_the_payload_carries_the_subject_and_nothing_else(signer: TokenSigner) -
     they may do. `T-6`'s ban is on a role, group, permission or capability vocabulary, and
     a name is none of those.
     """
-    payload = _payload(signer.issue(SUBJECT).token)
+    payload = _payload(signer.issue(SUBJECT, is_default_credential=False).token)
     assert sorted(payload) == ["exp", "iat", "login", "name", "sub", "ver"], payload
     assert payload["name"] == SUBJECT.display_label
     assert payload["name"] != SUBJECT.login, (
@@ -151,7 +151,7 @@ def test_the_payload_carries_the_subject_and_nothing_else(signer: TokenSigner) -
 
 def test_the_credential_is_url_safe_and_header_shaped(signer: TokenSigner) -> None:
     """It travels in an HTTP header, so it may contain nothing that has to be escaped."""
-    token = signer.issue(SUBJECT).token
+    token = signer.issue(SUBJECT, is_default_credential=False).token
     assert token.count(".") == 2
     assert all(
         character.isalnum() or character in "-._" for character in token
@@ -165,7 +165,7 @@ def test_the_credential_is_url_safe_and_header_shaped(signer: TokenSigner) -> No
 
 def test_a_credential_is_refused_one_second_after_its_lifetime(signer: TokenSigner) -> None:
     minted_at = 1_700_000_000
-    token = signer.issue(SUBJECT, now=minted_at).token
+    token = signer.issue(SUBJECT, now=minted_at, is_default_credential=False).token
     assert signer.verify(token, now=minted_at) == SUBJECT
     assert signer.verify(token, now=minted_at + TOKEN_LIFETIME_SECONDS - 1) == SUBJECT
     assert signer.verify(token, now=minted_at + TOKEN_LIFETIME_SECONDS) is None
@@ -182,7 +182,7 @@ def test_the_expiry_is_read_from_the_credential_and_not_from_the_signer() -> Non
     """
     minted_at = 1_700_000_000
     short = TokenSigner(derive_signing_key(SECRET), lifetime_seconds=60)
-    token = short.issue(SUBJECT, now=minted_at).token
+    token = short.issue(SUBJECT, now=minted_at, is_default_credential=False).token
 
     long = TokenSigner(derive_signing_key(SECRET), lifetime_seconds=86_400)
     assert long.verify(token, now=minted_at + 59) == SUBJECT
@@ -191,7 +191,7 @@ def test_the_expiry_is_read_from_the_credential_and_not_from_the_signer() -> Non
 
 def test_the_default_clock_is_the_real_one(signer: TokenSigner) -> None:
     """The ``now`` parameter is for tests; with it absent the credential is live now."""
-    issued = signer.issue(SUBJECT)
+    issued = signer.issue(SUBJECT, is_default_credential=False)
     assert signer.verify(issued.token) == SUBJECT
     assert _payload(issued.token)["exp"] > time.time()
 
@@ -204,7 +204,7 @@ def test_the_default_clock_is_the_real_one(signer: TokenSigner) -> None:
 def test_a_credential_minted_with_another_secret_is_refused(signer: TokenSigner) -> None:
     other = build_signer({API_TOKEN_VARIABLE: OTHER_SECRET})
     assert other is not None
-    foreign = other.issue(SUBJECT).token
+    foreign = other.issue(SUBJECT, is_default_credential=False).token
     assert other.verify(foreign) == SUBJECT, "the case is only a case if it is valid there"
     assert signer.verify(foreign) is None
 
@@ -235,7 +235,7 @@ def test_an_edited_payload_is_refused(
     signer: TokenSigner, label: str, edit: dict[str, Any]
 ) -> None:
     """Each edit is one a holder of a real credential would actually try."""
-    token = signer.issue(SUBJECT).token
+    token = signer.issue(SUBJECT, is_default_credential=False).token
     payload = _payload(token) | edit
     edited = _reseal(token, payload)
     assert edited != token, label
@@ -262,7 +262,7 @@ def test_an_edited_payload_is_refused(
 def test_a_credential_that_is_not_one_is_refused(
     signer: TokenSigner, label: str, mutate: Any
 ) -> None:
-    token = signer.issue(SUBJECT).token
+    token = signer.issue(SUBJECT, is_default_credential=False).token
     if label == "the tag replaced by another credential's":
         other_tag = signer.issue(
             Subject(
@@ -270,7 +270,8 @@ def test_a_credential_that_is_not_one_is_refused(
                 login="bob",
                 token_epoch=4,
                 display_label="Bob Barker",
-            )
+            ),
+            is_default_credential=False,
         ).token.split(".")[2]
         version, body, _ = _parts(token)
         presented = f"{version}.{body}.{other_tag}"
@@ -299,7 +300,7 @@ def test_the_payload_is_not_parsed_before_the_tag_is_checked(
 
     monkeypatch.setattr(security.json, "loads", counting)
 
-    version, body, tag = _parts(signer.issue(SUBJECT).token)
+    version, body, tag = _parts(signer.issue(SUBJECT, is_default_credential=False).token)
     forged = f"{version}.{body}.{tag[:-2]}xy"
     assert signer.verify(forged) is None
     assert calls == [], "the payload was parsed although the tag had not verified"

@@ -97,7 +97,7 @@ TEST_SUBJECT = Subject(
 #: expiry at all.
 _SIGNER = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
 assert _SIGNER is not None, "the suite's own secret derives a signing key"
-TEST_TOKEN = _SIGNER.issue(TEST_SUBJECT).token
+TEST_TOKEN = _SIGNER.issue(TEST_SUBJECT, is_default_credential=False).token
 
 #: The one pair the suite's credential port accepts. There is no user table behind this
 #: suite -- it wires the six ports itself -- so the exchange is answered by the adapter
@@ -140,7 +140,7 @@ class SuiteCredentialAdapter:
     def issue(self, *, login: str, password: str) -> Any:
         if (login, password) != (SUITE_LOGIN, self.password):
             return None
-        return _SIGNER.issue(self._subject())
+        return _SIGNER.issue(self._subject(), is_default_credential=False)
 
     def change_password(
         self, *, user_uid: str, current_password: str, new_password: str
@@ -157,7 +157,7 @@ class SuiteCredentialAdapter:
         # the real repository holds in one UPDATE and the one a suite must not quietly
         # relax: a credential minted before this line is refused after it.
         self.epoch += 1
-        return _SIGNER.issue(self._subject())
+        return _SIGNER.issue(self._subject(), is_default_credential=False)
 
     def epoch_of(self, user_uid: str) -> int | None:
         return self.epoch if user_uid == TEST_SUBJECT.user_uid else None
