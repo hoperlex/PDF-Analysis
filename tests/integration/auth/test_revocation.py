@@ -349,13 +349,19 @@ def test_an_account_that_is_gone_has_no_epoch(
     """``None``, which the seam reads as a refusal -- so deleting a row revokes for free."""
     repository = UserRepository()
     with session_factory() as session:
-        assert repository.token_epoch(session, str(user.user_uid)) == user.token_epoch
+        standing = repository.credential_standing(session, str(user.user_uid))
+        assert standing is not None
+        assert standing.token_epoch == user.token_epoch
+        # `R-50`: the same statement answers the other half of the seam's decision, and it
+        # is the row's value rather than a default -- this account was created by the
+        # fixture, so it has never been on a seeded password.
+        assert standing.is_default_credential is False
         session.execute(
             text("DELETE FROM app_user WHERE login = :login"), {"login": user.login}
         )
         session.commit()
     with session_factory() as session:
-        assert repository.token_epoch(session, str(user.user_uid)) is None
+        assert repository.credential_standing(session, str(user.user_uid)) is None
 
 
 def test_revocation_is_loud(

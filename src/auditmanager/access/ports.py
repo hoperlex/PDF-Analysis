@@ -19,7 +19,8 @@ It has no ``list_users`` and no ``delete_user``. Registration is still the next 
 work and this port still does not guess at its shape.
 
 **Wave 39 added three, and they are one mechanism.** ``change_password``,
-``revoke_credentials`` and ``token_epoch`` exist because a credential this deployment has
+``revoke_credentials`` and ``credential_standing`` (``token_epoch`` until `R-50` widened
+what it answers, `W47-LOCK`) exist because a credential this deployment has
 already minted could not be taken back: it is a signed statement with an expiry, so until
 that expiry the only lever was rotating the deployment secret, which signs everybody out
 and needs a redeploy. ``token_epoch`` is the lever -- the generation of credentials an
@@ -28,7 +29,8 @@ own password, and an operator ending the pilot.
 
 The port still has no *session* concept and no token in it anywhere. It does not mint, it
 does not verify, and it cannot read or write a signing key. What it publishes is one
-integer that the seam stamps and compares; the seam's half stays in
+integer that the seam stamps and compares, beside one boolean it reads and never
+stamps; the seam's half stays in
 :mod:`auditmanager.api.security`, and neither module imports the other.
 
 **Wave 40 added a rate limit and a lockout and added nothing here, which is the decision
@@ -49,7 +51,7 @@ from typing import Protocol, runtime_checkable
 
 from sqlalchemy.orm import Session
 
-from auditmanager.access.models import UserRecord
+from auditmanager.access.models import CredentialStanding, UserRecord
 
 __all__ = ["UserRepository"]
 
@@ -137,10 +139,19 @@ class UserRepository(Protocol):
         is the caller's question.
         """
 
-    def token_epoch(self, session: Session, user_uid: str) -> int | None:
-        """The generation of credentials this account accepts, or ``None`` for no account.
+    def credential_standing(
+        self, session: Session, user_uid: str
+    ) -> CredentialStanding | None:
+        """What the seam re-reads about this account, or ``None`` for no account.
 
         This is the read the authorization seam performs on every request it guards, so it
-        must stay a single indexed lookup of a single integer. ``None`` is a refusal and
-        never a permissive default: an account that is gone revokes its own credentials.
+        must stay a single indexed lookup of one row, projecting the two columns a refusal
+        can turn on and nothing else. ``None`` is a refusal and never a permissive default:
+        an account that is gone revokes its own credentials.
+
+        **It answered one integer until `R-50` and now answers two facts.** The second is
+        ``is_default_credential``, and it is here rather than in a lookup of its own for the
+        reason this package already gives about the lockout column: two statements addressed
+        at one row inside one decision can disagree, and these two facts are the two halves
+        of one decision -- whether to serve this request at all.
         """

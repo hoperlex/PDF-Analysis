@@ -48,7 +48,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.routers import build_router
-from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
+from auditmanager.api.security import (
+    API_TOKEN_VARIABLE,
+    AccountStanding,
+    Subject,
+    build_signer,
+)
 from w13_api_driver import DEPLOYMENT_SECRET, Surface
 
 from .conftest import (
@@ -145,8 +150,10 @@ def credential_for(account: _Account) -> str:
 class TwoAccountCredentialAdapter:
     """``CredentialPort`` over two accounts, in memory.
 
-    Deliberately answers ``epoch_of`` for both and for nothing else: an account this
-    deployment does not have is ``None``, which the seam reads as a refusal.
+    Deliberately answers ``standing_of`` for both and for nothing else: an account this
+    deployment does not have is ``None``, which the seam reads as a refusal. Both accounts
+    answer ``is_default_credential=False``, because this module is about *whose* decision a
+    row records and a default credential would refuse every operation it drives (`R-50`).
     """
 
     __slots__ = ()
@@ -170,10 +177,12 @@ class TwoAccountCredentialAdapter:
     ) -> Any:  # pragma: no cover - this module drives no password change
         raise AssertionError("this module does not drive changePassword")
 
-    def epoch_of(self, user_uid: str) -> int | None:
+    def standing_of(self, user_uid: str) -> AccountStanding | None:
         for account in ACCOUNTS:
             if account.user_uid == user_uid:
-                return account.epoch
+                return AccountStanding(
+                    token_epoch=account.epoch, is_default_credential=False
+                )
         return None
 
 
@@ -507,7 +516,7 @@ class TestFailClosed:
     def test_a_credential_for_an_account_this_deployment_has_not_got_records_nothing(
         self, two_reviewer_router: Surface, published_run: PublishedRun, session: Session
     ) -> None:
-        """Genuinely signed, and still refused: ``epoch_of`` answers ``None`` for it.
+        """Genuinely signed, and still refused: ``standing_of`` answers ``None`` for it.
 
         The interesting half of fail-closed. The signature is this deployment's, so the
         credential is not forged; what it names is an account the deployment does not have,

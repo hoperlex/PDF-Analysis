@@ -412,7 +412,7 @@ def _assemble(
             # the dependency refuses every guarded request rather than admitting it, which
             # is the same rule the module already applies to a missing deployment secret.
             build_authorization_dependency(
-                environ, epochs=getattr(router, "credentials", None)
+                environ, standings=getattr(router, "credentials", None)
             ),
         ],
         # A model with a default would otherwise be emitted twice, as `X-Input` and

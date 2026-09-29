@@ -39,7 +39,12 @@ from auditmanager.api.schemas.findings import (
 )
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.runs import RunStatusView, StageStateView
-from auditmanager.api.security import IssuedCredential, Subject, TokenSigner
+from auditmanager.api.security import (
+    AccountStanding,
+    IssuedCredential,
+    Subject,
+    TokenSigner,
+)
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 
@@ -896,11 +901,12 @@ class CredentialAdapter(_SessionHolder):
     **Changing a password writes exactly once**, and revoking is the same write. `W39-REVOKE`
     added the two halves that make a credential retractable: ``change_password`` opens a
     write session for one UPDATE that replaces the digest and raises the account's
-    ``token_epoch``, and ``epoch_of`` is the read the seam performs on every guarded request
-    to find out whether the credential it has just verified is still the generation this
-    account accepts. Neither puts a token in the ``access`` boundary or a password in the
-    seam: one integer crosses, in each direction, and this adapter is still the only object
-    that holds both halves.
+    ``token_epoch``, and ``standing_of`` is the read the seam performs on every guarded
+    request to find out whether the credential it has just verified is still the generation
+    this account accepts -- and, since `R-50`, whether the account is still on the password
+    it was seeded with. Neither puts a token in the ``access`` boundary or a password in the
+    seam: two scalars cross one way and an integer the other, and this adapter is still the
+    only object that holds both halves.
     """
 
     __slots__ = ("_users", "_signer")
@@ -994,10 +1000,25 @@ class CredentialAdapter(_SessionHolder):
             is_default_credential=record.is_default_credential,
         )
 
-    def epoch_of(self, user_uid: str) -> int | None:
-        """The account's current credential generation, for the seam to compare against.
+    def standing_of(self, user_uid: str) -> AccountStanding | None:
+        """The account's standing, for the seam to decide this request against.
 
         A read, so no transaction is committed. ``None`` reaches the seam as a refusal: see
-        :class:`auditmanager.api.security.CredentialEpochs`.
+        :class:`auditmanager.api.security.AccountStandings`.
+
+        **This is where the two vocabularies meet**, and the translation is the point of the
+        method rather than an overhead. The ``access`` boundary answers its own
+        :class:`~auditmanager.access.models.CredentialStanding`; the seam is handed its own
+        :class:`~auditmanager.api.security.AccountStanding`. Neither module imports the
+        other, exactly as for :class:`~auditmanager.api.security.Subject`, and this adapter
+        stays the only object in the tree that holds both halves.
         """
-        return self._read(lambda session: self._users.token_epoch(session, user_uid))
+        standing = self._read(
+            lambda session: self._users.credential_standing(session, user_uid)
+        )
+        if standing is None:
+            return None
+        return AccountStanding(
+            token_epoch=standing.token_epoch,
+            is_default_credential=standing.is_default_credential,
+        )

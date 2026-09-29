@@ -37,12 +37,28 @@ Four things this module does **not** do, each because the contract or `T-6` says
   ``X-Correlation-Id`` beyond what the middleware appends. `W13-SEAL` section 8.1 names this
   trap by name: **401 is ``authentication_required`` in an ``ErrorEnvelope``, and nothing
   else is acceptable.** So ``auto_error=False``, and the refusal is a ``DomainError``;
-* **it does not decide what a subject may do.** It decides *who* the subject is and refuses
-  everyone else. ``permission_denied`` stays in the catalog, reachable and unraised by this
-  application, because the day there are roles it is already the right code. A verified
-  subject is published on ``request.state.subject``, and since wave 39 exactly one operation
-  reads it -- ``changePassword``, which needs to know whose password it is changing and must
-  not be told by the body;
+* **it does not decide what a subject may do**, with one exception the owner ruled in and
+  which is written out below rather than left as a footnote. It decides *who* the subject
+  is and refuses everyone else. A verified subject is published on
+  ``request.state.subject``, and since wave 39 exactly one operation reads it --
+  ``changePassword``, which needs to know whose password it is changing and must not be
+  told by the body.
+
+  The exception is `R-50`, and it arrived in wave 47: **a credential minted for an account
+  still on the password the deployment seeded it with reaches only the exchange and the
+  change.** Everything else answers ``permission_denied`` with
+  ``required_capability: password_changed``. This sentence used to say that
+  ``permission_denied`` was *"reachable and unraised by this application"*; that is no
+  longer true and is corrected here rather than left standing beside the code that raises
+  it. **It is still not a role model and still not `T-6`'s forbidden capability
+  vocabulary**: there is no group, no grant, no list of who may do what, and the rule is
+  the same for every subject on the surface -- it is a *precondition on the credential*,
+  not a statement about a class of user. The refusal carries a capability *name* because
+  the catalog's ``permission_denied`` already declares ``required_capability`` as a safe
+  detail key and a caller refused for a reason has to be told which one; naming it after
+  the act (``password_changed``) rather than after the credential is the integrator's
+  decision, and its reason is that the client already reads ``is_default_credential`` --
+  one fact with two names would be one name too many;
 * **it does not choose which operations it guards, except by a written register.**
   :data:`UNAUTHENTICATED_OPERATIONS` is the exception list, by ``operationId``, and it holds
   exactly the operation that hands a credential out. A route whose ``operationId`` the seam
@@ -102,10 +118,29 @@ buy back the read and reintroduce exactly the property being removed: a revocati
 takes effect in a little while. The request that follows a revocation is refused, not the
 one after that.
 
-**The port is narrow on purpose.** :class:`CredentialEpochs` has one method, takes a
-``user_uid`` and returns an integer or ``None``. It cannot read a password, cannot list
+**The port is narrow on purpose.** :class:`AccountStandings` has one method, takes a
+``user_uid`` and returns two scalars or ``None``. It cannot read a password, cannot list
 accounts and cannot write. ``None`` -- no such account -- is a refusal and never a
 permissive default, which is how deleting a row revokes that account's credentials for free.
+
+It answered one integer until `R-50`, and the second scalar was added to the *answer* and
+not to the number of questions. The alternative was a second method called beside it on
+every request, which is two reads of one row inside one decision -- and the two values are
+the two halves of one decision, so a disagreement between them would be a request served
+under a stale reading of the account. The cost of the widening is nothing measurable: the
+statement was already a primary-key lookup of that row, and it now projects one more column
+of it.
+
+**Why the default-credential fact is read here and not carried in the credential.** It
+would have been free to stamp into the payload at mint time, and it was refused for two
+reasons. It decides whether a request is *refused*, so a copy on the caller's side of the
+wire is an older second answer to a question only the row can answer now -- and an account
+that acquires the flag without its epoch moving (nothing does that today; nothing has to
+keep not doing it) would keep being served by every credential already minted. And a
+required payload field is an ``am2`` body this seam would no longer accept, which by
+:data:`_FORMAT`'s own rule means ``am3`` and signs every holder out on deploy. The
+refusal is worth one column on a read the seam was already making; it is not worth
+everybody signing in again.
 
 **Unconfigured means refused, not open.** An application built with no deployment secret
 answers ``authentication_required`` to every request on the authorized surface and refuses
@@ -136,9 +171,12 @@ __all__ = [
     "API_TOKEN_VARIABLE",
     "SCHEME_NAME",
     "TOKEN_LIFETIME_SECONDS",
+    "OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES",
+    "PASSWORD_CHANGED_CAPABILITY",
     "UNAUTHENTICATED_OPERATIONS",
     "AuthorizationDependency",
-    "CredentialEpochs",
+    "AccountStanding",
+    "AccountStandings",
     "CurrentSubject",
     "IssuedCredential",
     "Subject",
@@ -172,6 +210,37 @@ API_TOKEN_VARIABLE: Final[str] = "AUDITMANAGER_API_TOKEN"
 #: application and asserts the set of operations that answer without a credential **equals**
 #: this one, so a second open operation is reported rather than tolerated.
 UNAUTHENTICATED_OPERATIONS: Final[frozenset[str]] = frozenset({"issueToken"})
+
+#: `R-50`. The operations a credential minted for an account **still on its seeded
+#: password** may reach, by ``operationId``. Everything else answers ``permission_denied``.
+#:
+#: A register and not a rule, for :data:`UNAUTHENTICATED_OPERATIONS`'s reason and with one
+#: more of its own. "Anything under ``/auth``" would open the next operation somebody puts
+#: there without anybody deciding to; and the *content* of this set is a decision about what
+#: a reviewer who cannot use the application can still do, which is exactly the kind of
+#: decision that must be written down where it can be read rather than derived from a path.
+#:
+#: Two entries, and each is here because refusing it would refuse the way out.
+#: ``issueToken`` is not guarded by this seam at all (it is in
+#: :data:`UNAUTHENTICATED_OPERATIONS`), and it is named here anyway so that this set reads
+#: as the whole answer to "what can a default credential do" rather than as the remainder
+#: after another set. ``changePassword`` is the act the refusal demands: refusing it would
+#: be a deployment in which the only way to satisfy the condition is barred by the condition.
+#:
+#: ``test_a_default_credential_reaches_exactly_the_register`` sweeps the served application
+#: and asserts the operations that answer for such a credential **equal** this set, so a
+#: third one is reported rather than tolerated.
+OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES: Final[frozenset[str]] = frozenset(
+    {"issueToken", "changePassword"}
+)
+
+#: `R-50`. The capability a refused caller is told they are missing, in the
+#: ``required_capability`` detail the catalog already declares safe for
+#: ``permission_denied``. **The value names the act, not the credential**: the client can
+#: already read ``is_default_credential`` off the exchange, so naming the capability after
+#: the credential would give one fact two names, while naming it after the act tells a
+#: caller what to do about it.
+PASSWORD_CHANGED_CAPABILITY: Final[str] = "password_changed"
 
 #: How long a minted credential stays valid, in seconds. One hour.
 #:
@@ -292,22 +361,45 @@ class IssuedCredential:
     is_default_credential: bool
 
 
+@dataclass(frozen=True, slots=True)
+class AccountStanding:
+    """What the seam re-reads about an account on every request it guards.
+
+    Two facts, both about the account and neither about the credential's bytes: the
+    generation of credentials it accepts, and whether it is still on the password the
+    deployment seeded it with. They travel together because they are read together, in one
+    statement, and are the two halves of one decision -- whether this request is served.
+
+    It is the seam's own vocabulary and not the ``access`` boundary's. The adapter between
+    them translates, exactly as it does for :class:`Subject`: this module does not import
+    that boundary's models, and that boundary does not learn what a credential is.
+    """
+
+    token_epoch: int
+    #: `R-50`. ``True`` while the account's password is the one it was seeded with.
+    is_default_credential: bool
+
+
 @runtime_checkable
-class CredentialEpochs(Protocol):
+class AccountStandings(Protocol):
     """The one thing the seam needs from a database, and nothing more.
 
     One method. It cannot read a password, cannot list accounts, cannot write and cannot be
     handed a login -- only the opaque identity the credential itself carries. A wider port
     here would be a wider thing for the seam to be tempted by: this module is on the path of
     every request, and the narrower its reach the fewer decisions it can make by accident.
+
+    It was ``CredentialEpochs`` and answered one integer until `R-50`. What widened is the
+    **answer**, not the number of questions: a second method beside this one would be two
+    reads of one row inside one decision, and this one already reads that row.
     """
 
-    def epoch_of(self, user_uid: str) -> int | None:
-        """This account's current credential generation, or ``None`` when there is none.
+    def standing_of(self, user_uid: str) -> AccountStanding | None:
+        """This account's current standing, or ``None`` when there is no such account.
 
         ``None`` is a **refusal**, never a permissive default. An account that no longer
         exists must not keep authorising requests until its last credential expires, and a
-        deployment whose epoch lookup cannot answer must fail closed.
+        deployment whose lookup cannot answer must fail closed.
         """
 
 
@@ -397,7 +489,7 @@ class TokenSigner:
             # record before this method was reached. It travels here rather than being
             # looked up per request for three reasons, in order: it is the mechanism
             # `D-78` already established for `login`, and `R-37` changes only the *source*
-            # of the label; reading it per request would mean widening `CredentialEpochs`,
+            # of the label; reading it per request would mean widening `AccountStandings`,
             # which the module note argues at length must stay one integer on the path of
             # every request; and a decisions router reaching the `access` boundary for a
             # name would be the deep import `AGENTS.md` section 4 forbids.
@@ -539,7 +631,7 @@ def _operation_of(request: Request) -> str | None:
 
 
 def build_authorization_dependency(
-    environ: Mapping[str, str], *, epochs: CredentialEpochs | None = None
+    environ: Mapping[str, str], *, standings: AccountStandings | None = None
 ) -> object:
     """The dependency that guards the surface, closed over this environment's signer.
 
@@ -549,13 +641,14 @@ def build_authorization_dependency(
     the `D-7` case, and `W5CERT-DEF-2` is the defect that happened the last time a component
     reached for the process environment instead of the injected mapping.
 
-    ``epochs`` is how revocation reaches this seam, and it is a **keyword argument with a
-    ``None`` default that refuses**, not an optional feature. ``None`` means this
-    application was assembled without a way to read credential generations, and a deployment
-    that cannot tell a live credential from a revoked one must answer
-    ``authentication_required`` rather than guess -- the same bargain the module note already
-    strikes for a missing deployment secret. ``create_documentation_app`` is the caller that
-    passes none, and it can serve no request anyway.
+    ``standings`` is how revocation -- and, since `R-50`, the default-credential refusal --
+    reaches this seam, and it is a **keyword argument with a ``None`` default that
+    refuses**, not an optional feature. ``None`` means this application was assembled
+    without a way to read an account's standing, and a deployment that cannot tell a live
+    credential from a revoked one must answer ``authentication_required`` rather than guess
+    -- the same bargain the module note already strikes for a missing deployment secret.
+    ``create_documentation_app`` is the caller that passes none, and it can serve no request
+    anyway. It was called ``epochs`` until `R-50` widened what it answers.
     """
     signer = build_signer(environ)
 
@@ -573,10 +666,22 @@ def build_authorization_dependency(
         One refusal for all of them, as before. A caller learning that their credential was
         *revoked* rather than *forged* learns that the account exists, which is the
         enumeration oracle the exchange already refuses to be.
+
+        **And, since `R-50`, one refusal that is not that one.** An account still on the
+        password this deployment seeded it with reaches
+        :data:`OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES` and nothing else; every other
+        operation answers ``permission_denied`` with
+        ``required_capability: password_changed``. It is a **403 and deliberately not a
+        401**: the caller is authenticated, this deployment knows exactly who they are, and
+        answering "we do not accept this credential" would send them back to sign in again
+        with the one password that will produce the same answer for ever. It says nothing
+        an attacker could not already work out, either -- that a deployment's seeded
+        password is its seeded password is in the migration's own docstring.
         """
-        if _operation_of(request) in UNAUTHENTICATED_OPERATIONS:
+        operation = _operation_of(request)
+        if operation in UNAUTHENTICATED_OPERATIONS:
             return
-        if signer is None or credentials is None or epochs is None:
+        if signer is None or credentials is None or standings is None:
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
         subject = signer.verify(credentials.credentials)
         if subject is None:
@@ -585,9 +690,23 @@ def build_authorization_dependency(
         # can this request be refused for having been revoked. The order is deliberate: a
         # forged credential must not cost a database round trip, or an unauthenticated
         # caller can make this deployment query on demand.
-        current = epochs.epoch_of(subject.user_uid)
-        if current is None or current != subject.token_epoch:
+        standing = standings.standing_of(subject.user_uid)
+        if standing is None or standing.token_epoch != subject.token_epoch:
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+        # `R-50`, and the order matters here too: a revoked credential on a default password
+        # is refused as revoked, because "this deployment does not accept this credential"
+        # is the stronger and less informative answer, and a caller must not learn from a
+        # 403 that a credential the deployment has already stopped accepting names a real
+        # account. An unreadable operation reached this line only by not being in the
+        # register above, and it is not in this one either: it is refused, like everything
+        # else this seam cannot identify.
+        if standing.is_default_credential and (
+            operation not in OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES
+        ):
+            raise DomainError(
+                ErrorCode.PERMISSION_DENIED,
+                required_capability=PASSWORD_CHANGED_CAPABILITY,
+            )
         # Published. `T-6`: the seam says who the caller is; what they may do is still not
         # its question. `changePassword` is the one operation that reads this, and it reads
         # the identity rather than being handed one in a body -- a body could name somebody

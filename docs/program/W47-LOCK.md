@@ -45,3 +45,43 @@ is a window in which the frontend reads a digest the backend does not serve (`D-
   paragraph against the live document and agrees.
 - `contracts/domain/v1/**` untouched; `db/migrations/**` untouched, head still
   `0011_document_section`.
+
+## 3. `R-50`, the refusal — the lock at the seam
+
+Every operation except `issueToken` and `changePassword` answers **403 `permission_denied`**
+with `required_capability: password_changed` while the authenticated account is on the
+password the deployment seeded it with.
+
+**Where the fact comes from, and the one design decision in this half.** The seam already
+read the account's row on every guarded request (`token_epoch`, for revocation). It now
+reads two columns of that row in the same statement instead of one:
+
+- `access/models.py` gains `CredentialStanding(token_epoch, is_default_credential)`;
+  `access/ports.py` and `access/repository.py` replace `token_epoch(...)` with
+  `credential_standing(...)`; `_SELECT_TOKEN_EPOCH` becomes `_SELECT_CREDENTIAL_STANDING`.
+- `api/security.py` gains its own `AccountStanding`, and `CredentialEpochs.epoch_of` becomes
+  `AccountStandings.standing_of`. `bootstrap/adapters.py` translates between the two
+  vocabularies, as it already does for `Subject`.
+
+*Not* two lookups, and *not* the credential's payload. Two lookups would be two reads of one
+row inside one decision, which this package already argues against for the lockout column;
+the payload would be an older second answer to the question that decides the refusal, and a
+required payload field means `am2` → `am3`, which signs every holder out on deploy.
+
+The exempt set is a **register**, `OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES`, not a rule about
+paths — `issueToken` (already open) and `changePassword` (the act the refusal demands;
+refusing it would bar the only way out). `PASSWORD_CHANGED_CAPABILITY = "password_changed"`
+is the integrator's value and names the act, not the credential.
+
+**Order:** a revoked credential on a default password is refused `401`, not `403` — a `403`
+would tell a caller holding a credential the deployment has already stopped accepting that
+the account behind it is real.
+
+Guards, all in `tests/integration/api/test_authorization.py`:
+`test_a_default_credential_reaches_exactly_the_register` (a **set** sweep: refused set ==
+`router.operation_ids - register`, envelope asserted down to `details`),
+`test_the_password_change_is_the_one_operation_that_still_answers`,
+`test_the_exchange_still_answers_and_says_which_state_the_account_is_in`,
+`test_the_same_surface_serves_the_same_credential_once_the_flag_is_off` (anti-vacuity),
+`test_changing_the_password_lifts_the_refusal_on_the_very_next_request`,
+`test_a_revoked_default_credential_is_refused_as_revoked_and_not_as_default`.
