@@ -1005,3 +1005,39 @@ credentials sit on the server's disk, on a volume nothing but the web container 
 still never reach the browser, and a revoked credential (`token_epoch`) still stops working
 the moment it is revoked, because the API checks the epoch on every request, wherever the
 token was kept.
+
+### `R-52` — a restore kills the credentials it restores, and says when it brought a default password back
+
+**Ruled 2026-09-29, by poll, after `W47-JUDGE-X` found it in cross-examination.** Neither judge
+had it alone: `Y8` found credentials surviving the wipe and read the wipe as the end state.
+Cross-examining that, `X` drove the third mode of the same script and found what the end state
+is not.
+
+**What was found, and it is about this wave's own subject.** `reset.sh` dumps the whole database
+with no `--exclude-table` and restores it with `pg_restore --clean --if-exists`, so `app_user`
+comes back entire — `password_hash`, `token_epoch` and `is_default_credential` with it.
+**Restoring any dump taken before the forced password change returns the stand to the shipped
+`admin`/`password`**, silently, by a documented command. It is bounded by nothing, because a
+password is not a token. Driven end to end: default → dump → forced change → restore →
+`is_default_credential = true`, and the shipped pair answers `200`.
+
+**Why that is severe rather than untidy.** `changePassword` is one of the two operations `R-50`
+deliberately leaves reachable to a default credential. Whoever reaches the API after a restore
+signs in with a publicly known pair and takes the account with their first action. The owner
+accepted the seeded pair as a **short** window; this reopens it at an arbitrary later time, with
+nobody aware.
+
+**Ruled: the restore raises `token_epoch` on every row — every restored credential is dead — and
+it names, by login, any account that came back on its default password, saying what to do.**
+
+**It reports; it does not refuse.** That is the owner's own line from `R-46`, taken with `D-72`
+in hand, where a correct fail-closed repair took the stand down for a day. A restore that refuses
+blocks the legitimate one at the moment it is needed most, which is after a failure.
+
+**`Y8` is folded into this change rather than answered separately, by the owner's choice.** The
+wipe leaves `register.json` byte-identical on the session volume with live credentials in it.
+They are inert today **only because the account row is gone**, and a restore is exactly what
+brings that row back — so the two findings are one fact about credential state outliving the
+operations that promise to remove it. `reset.sh` clears the register volume in the same movement
+that clears the database and the bucket. Section 7 promises documents and access in one landing,
+and today that promise is false.
