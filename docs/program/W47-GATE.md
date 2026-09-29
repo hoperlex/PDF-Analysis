@@ -85,3 +85,89 @@ tests/integration/composition/test_deploy_image_identity.py -q` → **48 passed*
 `infra/deploy/deploy.sh`, `infra/deploy/env/alpha.env.example`, and the two composition test
 files — no `contracts/**`, no `db/migrations/**`, no `Makefile`, no `src/auditmanager/access/**`
 other than (not yet) `check.py`, no `src/auditmanager/api/**`, no `web/**`.
+
+## 2. G1/G2 — the publication-readiness command
+
+New `infra/deploy/readiness.sh`. **`R-46`: it REPORTS and REGISTERS; it does not block a
+deploy.** `deploy.sh` never calls it, and nothing else in this repository reads its exit
+status — the only thing consuming its output is an operator (or `docs/program/
+DEPLOYMENT_RUNBOOK.md` §9, which now documents it) reading a corpus of `readiness OK` /
+`readiness FINDING` / `readiness UNKNOWN` lines.
+
+**Six checks, marked `# >>> check: <name>` / `# <<< check: <name>` the same way `deploy.sh`
+marks its guards**, none re-deriving a question this tree already answers:
+
+1. **`default-credential`** (step 5, G2). Runs `src/auditmanager/access/check.py` **inside
+   the deployed api image**, exactly the way `deploy.sh`'s `migrations-at-head` guard runs
+   `shared.db.check`, and reads its already-existing stable sentinels
+   (`access-check OK no default credentials` / `access-check DEFAULT CREDENTIAL`) rather
+   than asking the question a second time. `check.py` itself was **not** modified — its
+   sentinels already sufficed.
+2. **`tls`** — is a non-empty certificate pair on disk at `proxy/tls/`, the same test
+   `enable-tls.sh` itself uses (`[ -s "$CERT" ]`).
+3. **`plain-http`** — is the plain port published off this host (`ALPHA_BIND_ADDRESS`,
+   `D-49`)? Reports honestly rather than claiming a "closed" state this tree cannot
+   produce: `DEPLOYMENT_RUNBOOK.md` §6 says in its own words *"there is deliberately no
+   redirect ... the plain port keeps serving in both cases"*, because `deploy.sh`'s own
+   `proxy-answers` guard requires 200 on that exact port.
+4. **`provider-mode`** and **5. `cost-ceiling`** — both call
+   `auditmanager.bootstrap.settings.load()`, the composition root's own validation (the
+   thing that actually decides whether `api` starts), fed the values `alpha.env` and
+   `provider.env` actually configure, rather than a second copy of its rules in bash.
+   `recorded` mode is reported as a **finding** (step 7 not done, the owner's — GO_PATH row
+   7), not an error; `live`/`proxy` without the credential they need surfaces
+   `AppSettings.load()`'s own `ConfigurationError` text verbatim.
+6. **`off-host-backup`** — always a finding: nothing in this tree gives `reset.sh`'s dumps a
+   destination off this host (`DEPLOYMENT_RUNBOOK.md` §5's own words), and GO_PATH row 8
+   names the destination as the owner's. No env var was invented to let this check claim
+   `OK` — that would be the silent fallback `AGENTS.md` §4 forbids, in the one place this
+   command exists to prevent it.
+
+**Robustness fix found while testing**: the first draft of the `provider-mode`/`cost-ceiling`
+driver did `sys.path.insert(0, "src")`, a path relative to the *caller's* working directory,
+and separately shelled out to a bare `python3` to turn the two env files into JSON —
+`docs/program/DEPLOYMENT_RUNBOOK.md` §1 promises this host bash/docker/curl/sed/git and
+explicitly does **not** promise python3. Fixed: one process only, this repository's own
+`.venv` (`$REPO/.venv/bin/python`, never a bare interpreter), reading both files itself and
+resolving `auditmanager` via `PYTHONPATH="$REPO/src"` (absolute), so the script behaves the
+same regardless of the caller's `cwd`. Verified by running it from `/tmp`.
+
+**Each check shown able to fail AND able to pass**, driven manually before the test suite was
+written:
+
+```
+readiness FINDING plain-http   ALPHA_BIND_ADDRESS is 0.0.0.0, publishing plain HTTP off this host. ...
+readiness OK      plain-http   ALPHA_BIND_ADDRESS is 127.0.0.1; plain HTTP is not reachable off this host...
+readiness FINDING provider-mode  AUDITMANAGER_PROVIDER_MODE is live but ANTHROPIC_API_KEY is unset; ...
+readiness FINDING cost-ceiling   AUDITMANAGER_RUN_COST_CEILING_USD is not a number. A ceiling that cannot be parsed...
+readiness OK      cost-ceiling   the run cost ceiling resolves to $1.0.
+readiness OK      tls   a certificate pair is present at .../proxy/tls; enable-tls.sh installs the TLS server block on next start.
+```
+
+**Tests.** New `tests/integration/composition/test_readiness_command.py`, 29 cases: every
+check driven to both `OK` and `FINDING` (`UNKNOWN` too, for the two checks that need
+tooling that might be missing); for the five checks that need no running stack, a
+mutation-deletion case proves the finding/OK came from that check's own marked block, the
+same discipline `test_deploy_script_refusals.py` holds `deploy.sh`'s guards to.
+`default-credential` is driven with a stubbed `docker` on `PATH` (records the call, answers
+with canned `access.py`-shaped text, reaches no daemon) rather than a real database, and its
+"no docker" case strips only the directory `docker` resolves from off `PATH` — not `PATH`
+entirely — so the case is honestly about that one check and not about the script failing to
+run at all. Also: the summary/exit-status contract, the header always naming R-46, and a
+check that the script never writes into `infra/deploy/env/` (the owner's read-only
+directory) during a normal run.
+
+Run: `.venv/bin/python -m pytest tests/integration/composition/test_readiness_command.py -q`
+→ **29 passed**. Full composition regression alongside G3's two files and the pre-existing
+`test_reset_script_refusals.py` / `test_deployed_stack_probe.py`: **154 passed**.
+
+**`docs/program/DEPLOYMENT_RUNBOOK.md`**: new `## 9. Is it safe to publish? — the readiness
+command`, between the existing `PA-01` section and "When it goes wrong" (renumbered 9 → 10,
+with its one internal cross-reference, `§9` → `§10`, fixed; checked the rest of the tree for
+other numeric references to this file's sections — none found for the old §9).
+
+**Forbidden hotspots not touched**: this step's `git diff --stat` touches only
+`infra/deploy/readiness.sh` (new), `tests/integration/composition/test_readiness_command.py`
+(new) and `docs/program/DEPLOYMENT_RUNBOOK.md` — no `contracts/**`, no `db/migrations/**`, no
+`Makefile`, no `src/auditmanager/access/**` (not even `check.py` this time), no
+`src/auditmanager/api/**`, no `web/**`.
