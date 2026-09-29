@@ -11,11 +11,21 @@ behind each decision. It is what you read when something behaves oddly and you n
 why it was built that way. It is not an order of operations, and three of the things below
 are not facts about `infra/deploy/` at all:
 
-* **`R-4` is an owner ruling with two halves still open.** Who uploads a real client
-  document, and what event counts as *"the end of the pilot"*, are the owner's and are
-  **not settled** (`OWNER_RULINGS_2026-09-17.md` §4). A procedure that depends on an
-  unanswered question has to be able to say so, and `infra/deploy/README.md` is not a place
-  where a programme question can be left open honestly;
+* **`R-4` is an owner ruling with one half open and one half answered.** Who uploads a
+  real client document is the owner's and is **not settled** (`OWNER_RULINGS_2026-09-17.md`
+  §4). What event counts as *"the end of the pilot"* **is settled**, by `R-41` and `R-42`:
+  the owner declares the end explicitly, with no date and no observable event, and performs
+  the wipe personally — §7 below carries it in full, and the argument this runbook lost.
+  A procedure that depends on an unanswered question has to be able to say so, and
+  `infra/deploy/README.md` is not a place where a programme question can be left open
+  honestly;
+
+  *(`Y-A`. This paragraph said **both** halves were open and *"not settled"* until
+  2026-09-29, twenty lines above a §7 that had been rewritten the same day to say `R-41`
+  answered one of them. An operator reading from the top was told the trigger was unsettled
+  before reaching the section that settles it, and the preamble is the paragraph that
+  justifies §7 existing at all. The repair is one sentence and not a deletion, because the
+  preamble is where the reader learns which half is answered and which is not.)*
 * **`PA-01` criteria 1 and 2 stay *cannot be established* for a reason that is not the
   software** (`R-1`). That belongs beside the roadmap it is a criterion of;
 * the order — environment, then deploy, then prove, then TLS, then the wipe — is a
@@ -63,8 +73,8 @@ ssh -L 31500:127.0.0.1:31500 <host>        # then open http://127.0.0.1:31500 lo
 
 **Why the default is loopback, measured rather than assumed.** The compose file used to
 publish with no interface at all, which binds `0.0.0.0`. On this host the stand answered
-**`200`** on its **public** address, at `/bff/v1` — which serves all nineteen operations,
-**writes included**, with no credential, because the browser deliberately holds no secret and
+**`200`** on its **public** address, at `/bff/v1` — which serves **every operation of this
+surface**, **writes included**, with no credential, because the browser deliberately holds no secret and
 the BFF route adds it server-side. The origin is unauthenticated *by design*; nothing but the
 network was keeping anyone out.
 
@@ -121,7 +131,7 @@ docker buildx rm w26cold                    # and df before/after each removal
 | **the two images** | 400 MB + 1.2 GB (`docker images`). Removing both here freed **1.01 GiB**, because this host already had the `python` and `node` bases; a host that does not will pay the full 1.6 GB |
 | the four pinned third-party images compose pulls | **1.08 GB** — postgres 646 MB, MinIO 241 MB, mc 117 MB, nginx 74.5 MB |
 | the clone | 69 MB, with no `.venv` and no `node_modules` |
-| both named volumes, just after a first deploy | ~76 MB, and they grow with the documents |
+| the named volumes, just after a first deploy | ~76 MB for the two `W26-HOST` measured (`-postgres-data`, `-s3-data`), and they grow with the documents. **There are three**: `R-51` added `<instance>-web-sessions`, which holds one small JSON file and is measured in kilobytes, not megabytes |
 | both builds, wall clock, cold | about five minutes |
 
 **One clean-clone cold-cache deploy therefore needs about 5.5 GB**, of which ~2.6 GB is
@@ -165,13 +175,41 @@ Two of its values are not free choices:
 
   **Since wave 34 this is the key the API signs reviewer credentials with, not a token
   anyone presents.** Whoever holds it can mint a credential for any subject, so it goes to
-  the API process and nowhere else — not to a reviewer, not into a browser, not into a
-  request header. The paragraph that used to tell operators to present it as a bearer
-  token is corrected in `infra/deploy/README.md`.
+  no reviewer and into no browser — and it goes to **two** processes, not one:
+  `compose.server.yml` gives it to `api`, where it belongs, and to `web`, which forwards it
+  in an `Authorization: Bearer` header on the **sign-in exchange** and on no other forward.
+  Every data forward carries the *reviewer's* own credential instead. The paragraph that
+  used to tell operators to present it as a bearer token is corrected in
+  `infra/deploy/README.md` and, since 2026-09-29, in `infra/deploy/env/alpha.env.example`
+  — the file you actually edit (`Y6`).
+
+  *(`Y-F`. Until 2026-09-29 this paragraph said the value goes to *"the API process and
+  nowhere else — not to a reviewer, not into a browser, not into a request header."* Two of
+  those three held; the header clause and *"nowhere else"* did not, and this is the paragraph
+  written to repair an earlier falsehood of exactly this kind. Read the chain:
+  `grep -n 'AUDITMANAGER_API_TOKEN' infra/deploy/compose.server.yml` → `:173` api, `:208`
+  web; `grep -n "headers.set('authorization'" web/src/shared/api/credentialed-forward.ts`.
+  **What it does not expose**, measured by `W47-JUDGE-X` §1.4 rather than argued: the value
+  is not itself a usable credential — presented as `Authorization: Bearer` or as `X-API-Key`
+  against a protected operation it answers **401**, because the seam signs with
+  `HMAC(secret, context)` — and nothing about this reaches a browser. What it **is** is mint-capable
+  key material in a second container's environment, which is what an operator deciding where
+  this value may go needs to know. Stopping `web` from holding it at all is a decision about
+  who can mint a credential, which `R-29` §2 reserves to the owner; it is not a repair a
+  wave may take.)*
 
   The seam is **fail-closed**: a container started without it exits non-zero rather than
-  serving `authentication_required` to all nineteen operations, which from a browser looks
-  like a broken product rather than an unconfigured one;
+  serving `authentication_required` to **every one of its operations**, which from a browser
+  looks like a broken product rather than an unconfigured one;
+
+  *(`Y10`: both of those read *"nineteen operations"* until 2026-09-29 and the contract
+  declares **twenty**. The number is not restated here, because nothing reads this file for
+  it — `test_surface_counts_in_prose.py` scans `src/auditmanager/api`, `infra/deploy` and
+  `web/src`, and `docs/` is in no guard's scope (`D-104`). `deploy.sh` prints it from both
+  sides on every run — `frozen ops : 20` and `served ops : 20` — and
+  `python3 -c "import json;d=json.load(open('contracts/api/v1/openapi.json'));print(sum(1
+  for p,i in d['paths'].items() for m in i if m in ('get','post','put','patch','delete')))"`
+  answers **20** against the tree.)*
 
 * **the passwords.** `deploy.sh` compares what you wrote against the example file's own
   published values and refuses, by identity, if you left any of four unchanged. Those
@@ -209,18 +247,46 @@ Run it **from the repository root**; both builds need `src/`, `db/`, `contracts/
 | Exit | Meaning |
 |---|---|
 | **0** | the stack is up **and has answered for itself** — see below |
-| **3** | it refused, and said which of thirteen guards refused and why |
+| **3** | it refused, and said which of **fourteen** guards refused and why |
 | **2** | the arguments were wrong |
 
-Seven guards answer **before docker is touched at all**, so a refusal costs nothing. After
-the build and the `up`, it asks the running stack four questions it can fail: every service
-healthy; the database at the head this code expects; the published port answering 200; and
-**the document the process serves conforming to the frozen
-`contracts/api/v1/openapi.json`** — the gate's own conformance engine, re-run against the
-deployed process. That last one is `PA-01` criterion 1's second clause and it is about the
-**API schema**, not the database schema.
+**Eight** guards answer **before docker is touched at all**, so a refusal costs nothing.
+After the build and the `up`, it asks the running stack four questions it can fail: every
+service healthy; the database at the head this code expects; **the published port answering
+`401`** on `/api/v1/openapi.json`; and **the document the process serves conforming to the
+frozen `contracts/api/v1/openapi.json`** — the gate's own conformance engine, re-run against
+the deployed process. That last one is `PA-01` criterion 1's second clause and it is about
+the **API schema**, not the database schema.
+
+*(Two corrections, 2026-09-29. `Y5`: this said **thirteen** and **seven**, and this wave is
+why — `W47-GATE`'s `D-103` repair added `derived-secrets-coherent`, which joins the set that
+refuses before docker. Count them from the tree, and anchor the marker: `grep -cE '^# >>>
+guard: ' infra/deploy/deploy.sh` → **14**, while a bare `grep -c '# >>> guard:'` answers 15,
+because `deploy.sh:89` documents the marker syntax using the marker. The eight are
+`known-options`, `env-file-present`, `instance-configured`, `identity-policy-known`,
+`placeholder-secrets`, `derived-secrets-coherent`, `compose-file-present`,
+`build-context-complete`; the ninth, `port-not-foreign`, is the first that runs `compose ps`.
+`Y3`: the third question was written as **200**. `R-31` closed the four documentation routes
+behind a credential and moved the guard with them, so **401 is the answer that proves life**
+— only the application's own authorization seam can produce it, while nginx holding a dead
+upstream answers 502/503/504 — and **a 200 there is a refusal**, in `deploy.sh`'s own words:
+`sed -n '751,772p' infra/deploy/deploy.sh`.)*
 
 A second run against an unchanged tree replaces **no container at all** (`W24-IDEM`).
+
+**What a redeploy no longer costs, since `R-51`: the reviewers stay signed in.** `deploy.sh`
+recreates the `web` container on every run that changes it, and until wave 47 that container
+held every open session in its own memory, so **every deploy signed every reviewer out** —
+a support incident per deployment rather than a rare one. The register is now a file on a
+third named volume, `<instance>-web-sessions`, mounted by `web` and by nothing else, and a
+recreated container finds the sessions the previous one left. The mechanism and what it
+costs are in `infra/deploy/README.md`; what belongs here is the order of operations, which
+is the next two paragraphs and §5's line about `down --volumes`.
+
+**So a redeploy is no longer a logout, and `down --volumes` is.** Those are the two facts an
+operator needs while deciding which command to type, and until 2026-09-29 this document
+carried neither (`Y1`): `grep -c -i session docs/program/DEPLOYMENT_RUNBOOK.md` answered
+**0**.
 
 ---
 
@@ -262,6 +328,14 @@ address back — so *"the last rebuild was fine"* is not evidence about the next
 * **certificate renewal.** §6 activates a certificate; nothing here renews one. Whatever
   renews it must drop the new pair into the same directory and restart the proxy
   container — one `docker compose ... restart proxy`, which re-runs the switch.
+
+**And one thing it will not stop you doing, so it says it here.** `docker compose ... down`
+leaves all three named volumes alone. **`docker compose ... down --volumes` removes them —
+the documents, the objects *and* every open session.** The third of those is the one nobody
+expects: it signs every reviewer out at once, and it is the only command that undoes what
+`R-51` bought. `R-4` is why the first two matter: real client documents may be on that
+stack, and the only sanctioned way to remove them is `infra/deploy/reset.sh`, which dumps
+before it drops. **`down --volumes` dumps nothing.**
 
 ---
 
@@ -332,7 +406,11 @@ layer and would otherwise try to load a certificate that is no longer there.
 
 What is lost is exactly the TLS listener. **The plain port keeps serving in both cases** —
 there is deliberately no redirect from it, because `deploy.sh`'s `proxy-answers` guard
-requires 200 on that port and a `301` would turn every successful deploy into a refusal.
+requires **401** on `/api/v1/openapi.json` there, and a `301` is not 401, so a redirect
+would turn every successful deploy into a refusal. *(`Y3`: this said 200. The conclusion
+survives — a 301 was never the answer the guard wants — and the number was wrong. The guard
+is at `infra/deploy/deploy.sh:751-772`; `readiness.sh` printed the same false number at the
+operator and is corrected with it.)*
 
 ---
 
@@ -395,13 +473,38 @@ signs out the operator too and needs a redeploy.
 
 There is now a command, and it publishes no HTTP operation:
 
+**They run inside the `api` image, and that is not a style.** §1 promises this host bash,
+docker, curl, sed and git and explicitly **no `.venv`**. A bare `PYTHONPATH=src python -m
+auditmanager.access.revoke` on such a host dies before it does anything:
+
+```
+PYTHONPATH=src /usr/bin/python3 -m auditmanager.access.revoke --everyone
+#   File ".../src/auditmanager/access/ports.py", line 52, in <module>
+#     from sqlalchemy.orm import Session
+# ModuleNotFoundError: No module named 'sqlalchemy'
+```
+
+The image has the interpreter and the dependencies, and `readiness.sh` already runs the same
+package this way. Set this once and the three commands below are one line each:
+
+```
+DC="docker compose --env-file infra/deploy/env/alpha.env --file infra/deploy/compose.server.yml"
+```
+
 ```
 # end the pilot for everybody -- everyone signs in again, including you
-PYTHONPATH=src python -m auditmanager.access.revoke --everyone
+$DC run --rm --no-deps -T --entrypoint python api -m auditmanager.access.revoke --everyone
 
 # or one account
-PYTHONPATH=src python -m auditmanager.access.revoke --login <login>
+$DC run --rm --no-deps -T --entrypoint python api -m auditmanager.access.revoke --login <login>
 ```
+
+*(`Y-C`, 2026-09-29. These three commands were written as bare `PYTHONPATH=src python` by
+`W39-REVOKE` and `W40-LIMIT`, and the deployment's own migration log tells the operator to
+run two of them. `R-42` makes it worse rather than milder: the person at that keyboard is
+now, by ruling, the owner himself on the server. A development host's `PATH` carries a
+`.venv` and hides this, which is why the reproduction above uses `/usr/bin/python3`
+deliberately.)*
 
 It raises `app_user.token_epoch`, which every credential carries a copy of, so **every
 credential ever minted for those accounts stops being accepted at once** — in every
@@ -414,6 +517,44 @@ Run it **after** `reset.sh`, in the same sitting. The two answer different halve
 *"the pilot has ended"*: one takes the documents away, the other takes the access away, and
 a wipe that leaves live credentials behind has ended the pilot only for the data.
 
+**The wipe now takes a third thing with it: the session register** (`Y8`). `R-51` put each
+signed-in reviewer's API credential in `register.json` on `<instance>-web-sessions`, and
+until 2026-09-29 `reset.sh` could not reach that volume and did not try — driven to the end
+on a deployed stack, the file came through the wipe **byte-identical**, `md5sum` unchanged,
+with three complete reviewer credentials in it. They were inert only because the account row
+was gone, and a restore is exactly what brings that row back. `reset.sh
+--yes-destroy-everything` now clears the register in the same movement as the database and
+the bucket, **before** it drops anything, so a stack that cannot clear it refuses with the
+documents still whole. The `web` container is stopped for that moment and started again,
+because the register is a file *and* a map in that process.
+
+### A restore is not a neutral act — `R-52`
+
+**Restoring one of this script's own dumps rolls credential state back with everything
+else, and that needed a ruling.** The dump is the whole database with no `--exclude-table`
+and the restore is `pg_restore --clean --if-exists`, so `app_user` comes back entire —
+`password_hash`, `token_epoch` **and** `is_default_credential`. Driven by `W47-JUDGE-X`
+against a built API: revoke, then restore a dump taken before it, and **the revoked
+credential answers `200` again**. Worse, and unbounded: restore any dump taken before the
+forced password change and the deployment is back on the shipped `admin`/`password`,
+silently, by a documented command. A revoked *token* at least expires within the hour; a
+password does not expire at all.
+
+**So `--restore` does two more things, after the rows are back:**
+
+1. it raises `token_epoch` on **every** account — every restored credential is dead, and
+   everyone signs in again once. You included;
+2. it runs `auditmanager.access.check` and **names, by login, any account that came back on
+   its default password**, and tells you what to do about it: sign in as that login and
+   change the password. A default credential reaches the sign-in and the change and nothing
+   else (`R-50`), so that is the only thing it can do and it is enough.
+
+**It reports; it does not refuse**, and that is the owner's explicit choice rather than an
+oversight. A restore is run **after a failure**, which is the moment when a script that
+refuses does the most damage — `D-72` is the wave where a correct fail-closed repair took
+this stand down for a day. If either command cannot reach the database, the restore still
+completes and the screen carries a marked block naming the exact command for you to run.
+
 Two more things an operator should know about it:
 
 * **a password change revokes too.** Whoever changes their password through the application
@@ -423,10 +564,11 @@ Two more things an operator should know about it:
   minted before it carry no epoch and are refused. Everyone signs in again, once, at the
   upgrade. The migration says so in its own log line.
 
-`python -m auditmanager.access.check` is the other half of the same operator view: it names
-the accounts still holding the password this system seeded them with, without anybody
-signing in — and, since `W40-LIMIT`, every account that is shut out of signing in right
-now.
+`$DC run --rm --no-deps -T --entrypoint python api -m auditmanager.access.check` is the
+other half of the same operator view: it names the accounts still holding the password this
+system seeded them with, without anybody signing in — and, since `W40-LIMIT`, every account
+that is shut out of signing in right now. Exit `0` none are, `1` at least one is, `2` it
+could not read. `reset.sh --restore` runs this for you and prints what it found (below).
 
 ### When somebody cannot sign in and the password is right — `R-26`
 
@@ -455,10 +597,10 @@ published in a migration and in this runbook. What bounds it:
 
 ```
 # let one account sign in again, immediately
-PYTHONPATH=src python -m auditmanager.access.unlock --login <login>
+$DC run --rm --no-deps -T --entrypoint python api -m auditmanager.access.unlock --login <login>
 
 # or everybody, when you do not yet know what is shut
-PYTHONPATH=src python -m auditmanager.access.unlock --everyone
+$DC run --rm --no-deps -T --entrypoint python api -m auditmanager.access.unlock --everyone
 ```
 
 Exit `0` released something, **`1` released nothing** — and the printed line says whether
@@ -585,3 +727,5 @@ discipline `test_deploy_script_refusals.py` already holds `deploy.sh`'s guards t
 | a mount arrives **empty** | `D-37`: a `-v` source is resolved by the **daemon**, not the shell, and docker **invents an empty directory rather than refusing**. A relative source is a *volume name*. This host's docker is a snap build whose private `/tmp` is not the shell's `/tmp` — `W26-HOST` hit it again from a third direction: `docker compose --env-file /tmp/...` answered *"couldn't find env file"* for a file that was plainly there. **Keep deployment files inside the clone** |
 | `docker compose config` to debug | it prints **every** value in clear, including `AUDITMANAGER_API_TOKEN`, both passwords, and — measured on Compose v5.3.1, contrary to what `provider.env.example` used to say — the **provider credential**, which `config` resolves out of `env_file:`. Use `--no-env-resolution`, and treat the output as a secret either way. The TLS private key is the one thing it cannot print: the overlay reaches it through a bind mount, so what appears is the path |
 | the app answers `authentication_required` to everything | the token. `T-6` is fail-closed by design |
+| `[session-register] could not write /var/lib/auditmanager/sessions/register.json (…)` in the `web` container's log | `R-51`'s volume is not writable — a restored volume owned by `root`, or a full disk. **The stand keeps serving and nobody is signed out**: the sessions are live in the container's memory either way, and refusing a sign-in over a full disk would take the stand down for a reason no reviewer can act on. What it means is that **the next deploy will sign everyone out**. Check the volume: `docker compose … exec web ls -la /var/lib/auditmanager/sessions`, and `df -h` |
+| `[session-register] AUDITMANAGER_SESSION_STORE is not set` | this stack is running the pre-wave-47 behaviour — sessions in memory only, and every deploy is a logout. `compose.server.yml` sets that variable; a stand that does not have it is not this compose file |

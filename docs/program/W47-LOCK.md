@@ -329,11 +329,31 @@ and the one below to `docs/program/W47-LOCK.md` and changes nothing else: `git d
 and `docs/manual-tests/**`. `tests/contract` (battery scope) was re-run at the tip to confirm:
 `378 passed, 49 subtests passed`.
 
-| | this gate | `W47-DISPATCH.md` baseline | delta |
+| | this gate | the baseline | delta |
 |---|---|---|---|
 | battery | **2581 passed / 5 skipped** (519.63 s) | 2567 passed / 5 skipped | **+14** |
 | foundation | **35** | 35 | 0 |
 | frontend | **1156 in 82 files** | 1139 in 81 files | **+17 tests, +1 file** |
+
+> **Provenance, corrected 2026-09-29 by `W47-FIX` (`Y-E`, as `W47-JUDGE-X` §7.2 narrowed
+> it).** The two rows above cited `docs/program/dispatch/W47-DISPATCH.md` for the baseline
+> `2567 / 5` and `1139 in 81`, and **that document does not contain those figures** — it
+> carries `2516 passed / 5 skipped` and `1135 in 80 files`, at `:17`, which is wave 46's
+> close. Two of this wave's briefs inherited the same misattribution.
+>
+> **The figures themselves are real and were measured by a gate**, which is the half of `Y-E`
+> that `X` falsified: they are **`/root/w47-a-merged-gate.log`**, the gate on merged
+> sub-stage A — line **125** `2567 passed, 5 skipped, 4 warnings, 169 subtests passed in
+> 650.98s`, lines **230-231** `Test Files 81 passed (81)` / `Tests 1139 passed (1139)`, and
+> line **235** `GATE OK`. `Y` searched `docs/` for `2567`, found it once, and concluded it
+> had never been printed by a gate; this programme's measurements live in `/root/*.log`,
+> outside git, so searching the repository answered a different question.
+>
+> **The source is the log, not a brief**, and it is named here so the next reader does not
+> have to re-derive it. `W47-FIX`'s own baseline is **`/root/w47-a2-merge-gate.log`** line
+> **258** (`GATE OK`), with battery at line 134 and the frontend at lines 253-254: battery
+> **2581 passed / 5 skipped**, foundation **35**, frontend **1156 in 82 files** — this
+> gate's own numbers, which is what makes it the baseline for the repair after it.
 
 **The +14, by test id.** Every one is a test this stream added; nothing was removed, renamed
 or skipped.
