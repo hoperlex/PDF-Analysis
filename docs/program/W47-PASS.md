@@ -256,14 +256,60 @@ mutation harness.)
 
 ## 5. The live journey
 
-`web/src/features/change-password`'s form gained a field. Journey driven live per
-`D-108`/the brief:
+`web/src/features/change-password`'s form gained a field. Driven live, per `D-108`/the
+brief, against a real stand: `make up` (lane `gate-w47b`, bucket `audit-w47b`), `make
+migrate` (head `0011_document_section`), API served with `PYTHONPATH=src .venv/bin/python
+infra/deploy/serve.py` (`AUDITMANAGER_API_PORT=56421`, `AUDITMANAGER_HEALTH_PORT=56422`,
+`AUDITMANAGER_BIND_HOST=127.0.0.1`, `AUDITMANAGER_PROVIDER_MODE=recorded`, this lane's
+`DATABASE_URL`/`S3_*`, a freshly generated `AUDITMANAGER_API_TOKEN` — PID `2804252`,
+confirmed this session's own descendant via `readlink /proc/2804252/cwd` → `/root/w47pass`,
+`operations=20` at startup, unchanged surface). Web: `NEXT_PUBLIC_API_BASE_URL=/bff/v1 npm
+run build` then `npx next start -p 56423 -H 127.0.0.1`,
+`AUDITMANAGER_API_UPSTREAM=http://127.0.0.1:56421`, the same token — wrapper PID `2809178`,
+listener PID `2809192`, both confirmed via `readlink /proc/<pid>/cwd` →
+`/root/w47pass/web`.
 
 ```
-npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:56423 --phase all --out <dir>
+E2E_PC01_LOGIN=admin E2E_PC01_PASSWORD=password npm --prefix web run e2e:pc01 -- \
+  --origin http://127.0.0.1:56423 --phase all --out /root/w47pass-journey-out
 ```
 
-Summary recorded in §6 below once run against the built stand.
+Quoted in full:
+
+```
+sign-in: ok at /login -- carrying 'am_session' (HttpOnly=true, SameSite=Strict) into every cold browser
+
+write half: 3 step(s), fixture fixtures/synthetic/ar/ar_baseline.pdf
+
+ok  create-project   api=3 {"project_uid":"prj_01M3N8J70ZA0ZTVMJW5FHYY28F"}
+ok  upload-document  api=4 {"project_uid":"prj_01M3N8J70ZA0ZTVMJW5FHYY28F","version_uid":"ver_01M3N8K1SWBBTKZ29623XR5WWT"}
+ok  start-run        api=5 {"project_uid":"prj_01M3N8J70ZA0ZTVMJW5FHYY28F","run_id":"run_01M3N8KWBNGJAVBW522NPV0919"} terminal=published in 1508ms/150000ms
+
+ok  root           200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  projects       200  api=1 auth=0 console=0 jar=[am_session] w=780/780 {"project_uid":"prj_01M3N8J70ZA0ZTVMJW5FHYY28F"}
+ok  project        200  api=1 auth=0 console=0 jar=[am_session] w=765/780 {"document_uid":"doc_01M3N8K1SWG9THF0CBHHTX7SN0"}
+ok  document       200  api=1 auth=0 console=0 jar=[am_session] w=780/780 {"version_uid":"ver_01M3N8K1SWBBTKZ29623XR5WWT"}
+ok  version        200  api=2 auth=0 console=0 jar=[am_session] w=765/780 {"run_id":"run_01M3N8KWBNGJAVBW522NPV0919"}
+ok  comparison     200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  run            200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  review         200  api=5 auth=0 console=0 jar=[am_session] w=765/780
+ok  sign-in        200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  knowledge-base 200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  change-password 200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  blocks         200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  optimisation   200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  logs           200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  workers        200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  dashboard      200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+
+envelope: /root/w47pass-journey-out/journey.json
+write steps checked: 3/3
+routes checked: 16/16
+e2e:pc01 OK
+```
+
+`change-password` rendered `200`, `auth=0` (no `Authorization` header on any request the
+browser itself made), `console=0`. Write steps 3/3, routes 16/16, exit `0`.
 
 ## 6. Final gate
 
