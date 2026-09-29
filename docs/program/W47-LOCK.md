@@ -214,11 +214,17 @@ Every mutation below was applied to the committed tree, measured, and reverted w
 | W4 | the BFF reads a missing `is_default_credential` as `false` | `refuses an answer it does not understand rather than inventing a session` |
 | W5 | the bar returned to the unconditional `Вход` link | `offers the way in when there is no session, and the way out when there is` |
 
-The R-51 guards are shown able to fail by construction rather than by mutation, and it is the
-same demonstration: the block they replace **was** the failing state. `session-durability`'s
-wave-47 text asserted that a restart loses every session and said it would go red the day a
-durable mechanism landed; the file now asserts the opposite of that on the same event, so the
-tree before this wave fails the file after it.
+| R1 | `persist()` returns before it writes | `finds the session again in a process that has never seen it`, `keeps the credential in a file only this process reads`, `reports a register it cannot read…` (3 failed / 5 passed) |
+| R2 | `hydrate()` returns before it reads the file back | the first and the last of those (2 failed / 6 passed) |
+| V1 | the `api` service mounts the volume too | `test_exactly_one_service_mounts_it_and_that_service_is_web` |
+| V2 | the register configured one directory **outside** the mount | `test_the_web_service_is_told_where_the_register_goes` |
+| V3 | the `chown` dropped from `Dockerfile.web` | `test_the_image_owns_the_mount_point_so_the_process_can_write_to_it` |
+
+The durability guard is also shown able to fail by construction, which is the stronger of the
+two demonstrations: the block it replaces **was** the failing state. `session-durability`'s
+wave-47 text asserted that a restart loses every session and said in its own comment that it
+would go red the day a durable mechanism landed; the file now asserts the opposite of that on
+the same event, so the tree before this wave fails the file after it.
 
 ## 9. Live evidence, on a running stand
 
