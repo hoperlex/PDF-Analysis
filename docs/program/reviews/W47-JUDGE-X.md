@@ -98,3 +98,105 @@ BFF mirrors that with a screen-lock and 403 data routes; tokens die at once on c
 revoke; the signing key cannot act; the browser never sees the JWT. Open question carried into
 section 2: the min-length-8 policy is enforced by the server, and I must check the frozen
 contract text still describes the shape truthfully.
+
+## 2. Verification phase — the diff, read only now
+
+Read after section 1 was committed (`ba68c85`). The wave's security work is `R-50` (the
+forced-change lock and `is_default_credential`) and `R-51` (the persistent session register),
+spanning `a53d4a1..44937fe`. Core seam: `src/auditmanager/api/security.py`.
+
+### 2.1 Was the check bypassed, or the fixtures repaired?
+- No test-only branch, environment flag, `skip`/`xfail`, or fixture that skips the refusal in
+  the enforcement path. `grep` for `getenv|environ|NODE_ENV|skip|xfail|bypass|disable` across
+  `security.py`, `auth.py`, `repository.py`, `screen-lock.ts`, `store.ts`, `route.ts` finds
+  only references to test *names* in comments and legitimate `SESSION_ID_PATTERN.test()` regex
+  calls. `store.ts`'s one test-only helper (`clear`, l.387-403) empties the register; it is not
+  a refusal bypass.
+- The seam (`security.py:655-717`) decides `is_default_credential` from the **account row**
+  (`AccountStandings.standing_of`, l.693/703), not from the credential payload — a forged or
+  stale token cannot assert it. Confirmed against the payload in §1.2 (no such claim in it).
+- The epoch check (401, l.694-695) runs **before** the default check (403, l.703-709), so a
+  revoked default credential is refused as revoked, not enumerable. See M3.
+
+### 2.2 Each new guard fails when the thing it guards is broken (my own mutations)
+Every mutation below was applied to the committed tree, the named tests run, then
+`git checkout --` reverted the file (`git diff --quiet` confirmed clean each time). Lane DB
+`56430`. Baseline: the four API tests and the two frontend guard files pass unmutated.
+
+| my mutation | file:line | result | matches doc |
+|---|---|---|---|
+| M1 — `if False and standing.is_default_credential` (403 disabled) | `api/security.py:703` | **3 failed / 1 passed** (`…reaches_exactly_the_register`, `…once_the_flag_is_off`, `…lifts_the_refusal…`; the revoked-default test still passes, correctly) | yes |
+| M3 — default 403 check moved **before** the epoch 401 check | `api/security.py:693-695` | **1 failed** (`test_a_revoked_default_credential_is_refused_as_revoked_and_not_as_default`), 3 passed | yes |
+| W2 — `requireAChangedPassword` made a no-op (`return;` first) | `web/src/app/bff/session/screen-lock.ts:48` | **2 failed / 7 passed** (`default-credential-screens.guard`) | yes |
+| R1 — `persist()` returns before it writes | `web/src/app/bff/session/store.ts:222` | **3 failed / 5 passed** (`session-durability.guard`) | yes |
+
+All four guards are non-vacuous. I did **not** independently run M2, M4, M5 or R2 (the same
+files' remaining mutations); M1/M3 exercise the same seam and W2/R1 the same two modules, and
+the doc's table is internally consistent with what I did reproduce.
+
+### 2.3 The contract reseal holds together
+`is_default_credential` on `IssueTokenResponse`, `required` and `boolean`, in all four places,
+with the same description:
+- the document `contracts/api/v1/openapi.json`;
+- the mirror `web/openapi/openapi.json` — **byte-identical** to the document;
+- the generated client `web/src/shared/api/generated/types.gen.ts`;
+- the lock `web/FRONTEND_LOCK.json`.
+
+`sha256(contracts/api/v1/openapi.json) == sha256(web/openapi/openapi.json) ==
+FRONTEND_LOCK.json.openapi.sha256 == ffcf3c0c59807d735bbc03be4c811f5f590920b36a133f038edffec49b369359`,
+`content_commit a53d4a1`. `node scripts/generate-api-client.mjs --check` (from `web/`) →
+`OK - 20 operations, contract sha256 ffcf3c0c…`. The reseal is coherent.
+
+### 2.4 Where the stream did the right thing
+- The default-credential fact is read from the row on every guarded request and refused to be
+  carried in the credential payload (`security.py` module note; verified: the `am2` payload has
+  no such field). This is the correct dual-write avoidance.
+- The signing key is `HMAC(AUDITMANAGER_API_TOKEN, context)`, so the raw deployment secret is
+  not a usable credential — verified in §1.4 (401). The runbook's wave-34 warning holds in code.
+- Session id is rotated on password change on both server and browser; persistence and
+  immediate revocation both hold (§1.5).
+
+## 3. Findings
+
+### F1 (narrow / low) — the changePassword contract text contradicts the enforced R-48 policy
+- **File/line.** `contracts/api/v1/openapi.json`, `ChangePasswordRequest.new_password.description`
+  (and its byte-identical mirror `web/openapi/openapi.json`, and `types.gen.ts:398`... the
+  changePassword request schema): *"The bounds are mechanical, not a policy: this surface
+  declares no minimum length, no complexity rule, no history and no expiry."*
+- **What is false.** The surface **does** enforce a policy on this operation: `R-48`
+  (`src/auditmanager/access/policy.py`) imposes minimum length 8 and a contextual blocklist
+  (login, product name, current password), applied on the `POST /auth/password` path.
+- **Reproduction.** `curl -s -X POST http://127.0.0.1:8000/auth/password -H 'authorization:
+  Bearer <default token>' -H 'content-type: application/json' -d
+  '{"current_password":"password","new_password":"1234567"}'` → **422 validation_failed**,
+  message *"a password must be at least 8 characters"* — while the contract says the surface
+  declares no minimum length.
+- **Counter-argument, stated honestly.** This is defensible by design and is documented: the
+  commit is titled *"R-48's policy as a policy"*, and `policy.py` argues the policy belongs to
+  the access boundary, not the transport contract, so a deployment can change it without
+  renegotiating the contract. The word *"declares"* is defensible for a document whose schema
+  `minLength` is 1. So this is a **documentation-clarity** issue, not a security bypass: the
+  refusal works. It is reported because the sentence, read by an API client, states the
+  opposite of the operation's behaviour — the same drift-shape (`document vs code`) this
+  codebase's own reviewers flag. Severity low; it admits nothing.
+
+### F2 (informational, already recorded) — D-101: the shipped default value is a legal new password
+- `policy.py` names `D-101`: `"password"` (8 chars, not a login, not the product name) is a
+  legal **new** password everywhere except as the *current* password, and the one-line repair
+  (adding the shipped default to the blocklist) is **owner-deferred**, recorded as a passing
+  assertion `test_the_d101_gap_is_still_open`.
+- **Reproduction (confirmed in §1.3).** From default `password`, `new_password:"Password"`
+  (capital P) → **200 changed**. The policy permits weak dictionary-adjacent passwords.
+- This is **not a new finding**: it is a known, documented, owner-ruled gap. Named here because
+  an attacker who forces a change is not thereby forced to a strong password.
+
+## 4. Questions I could not close
+- **The full docker deploy stack** (`compose.server.yml`, the real `<instance>-web-sessions`
+  volume, the nginx proxy at one origin) I did **not** bring up — I attacked the API and BFF
+  directly in my lane (`next dev`, a file-backed register), which is the same enforcement code
+  but not the deployed topology. The volume-mount permissions, the proxy path rewriting
+  (`/api/v1`), and TLS were not exercised by me. `W47-JUDGE-Y` (operator entry) covers the
+  runbook/deploy path.
+- **M2, M4, M5, R2 mutations** I did not independently run (see §2.2).
+- **Concurrency**: I did not test two simultaneous sign-ins racing the file-backed register
+  (temp-file + rename is used; I read it but did not stress it).
