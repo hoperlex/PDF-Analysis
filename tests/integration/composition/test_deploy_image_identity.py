@@ -57,6 +57,8 @@ REFUSED = 3
 INSTANCE = "an-instance"
 DATABASE = "the_configured_database"
 BUCKET = "the-configured-bucket"
+#: `D-103`'s `derived-secrets-coherent` reads this too now; see `_env_text` below.
+PG_USER = "the_configured_user"
 
 #: Spelled out rather than read from the example file -- `OPERATING_CONSTRAINTS.md` §12 --
 #: and different from the example's values, so `placeholder-secrets` lets these cases past.
@@ -276,15 +278,26 @@ def serving() -> Iterator[int]:
 
 
 def _env_text(port: int, *, secrets: dict[str, str] = EDITED_SECRETS, policy: str | None = None) -> str:
+    """`D-103`: `DATABASE_URL`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` are derived
+    from `secrets` so this stays coherent under `derived-secrets-coherent` -- this suite is
+    about `identity-policy-known` and the retag mechanism, not about that guard, and must
+    reach past it the same way every other case here does."""
     lines = [
         f"ALPHA_INSTANCE={INSTANCE}",
         f"ALPHA_HTTP_PORT={port}",
         f"POSTGRES_DB={DATABASE}",
+        f"POSTGRES_USER={PG_USER}",
         f"S3_BUCKET={BUCKET}",
     ]
     if policy is not None:
         lines.append(f"ALPHA_PRESERVE_IMAGE_IDENTITY={policy}")
     lines += [f"{name}={value}" for name, value in sorted(secrets.items())]
+    lines.append(
+        "DATABASE_URL=postgresql+psycopg://"
+        f"{PG_USER}:{secrets['POSTGRES_PASSWORD']}@postgres:5432/{DATABASE}"
+    )
+    lines.append(f"S3_ACCESS_KEY_ID={secrets['MINIO_ROOT_USER']}")
+    lines.append(f"S3_SECRET_ACCESS_KEY={secrets['MINIO_ROOT_PASSWORD']}")
     return "\n".join(lines) + "\n"
 
 

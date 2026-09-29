@@ -239,6 +239,64 @@ for name in POSTGRES_PASSWORD MINIO_ROOT_PASSWORD MINIO_ROOT_USER AUDITMANAGER_A
 done
 # <<< guard: placeholder-secrets
 
+# >>> guard: derived-secrets-coherent
+# `D-103`. `alpha.env.example` embeds the four secrets above a SECOND time, inside
+# `DATABASE_URL`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. `placeholder-secrets`
+# reads exactly the four names it and its own error message list -- rotating only those
+# four passes it clean, builds both images, starts five containers, and fails roughly 93
+# seconds later inside Alembic with a trace that names none of the four: `DATABASE_URL`
+# still carries the OLD `POSTGRES_PASSWORD`, so `postgres`, now started with the NEW one,
+# refuses the connection.
+#
+# `FF-01` section 3 already makes the developer `.env` prove this same coherence
+# (`COHERENCE_PROBE`, `Makefile`) before `make up` touches a service. `alpha.env` had no
+# equivalent, and this is it, applied to the file an operator actually copies.
+#
+# PARSED RATHER THAN SOURCED, like every other read of `$ENV_FILE` here -- and in bash,
+# not python: `docs/program/DEPLOYMENT_RUNBOOK.md` section 1 lists this host's tools as
+# bash, docker, curl, sed and git and promises no python3, and this guard sits beside
+# `placeholder-secrets` in the set that refuses before docker is touched at all.
+#
+# An unparseable `DATABASE_URL` is refused rather than skipped, for `placeholder-secrets`'
+# own reason: an unverifiable value is not a verified one.
+DERIVED_PG_USER="$(configured POSTGRES_USER)"
+DERIVED_PG_PASSWORD="$(configured POSTGRES_PASSWORD)"
+DERIVED_PG_DB="$(configured POSTGRES_DB)"
+DERIVED_S3_KEY="$(configured S3_ACCESS_KEY_ID)"
+DERIVED_S3_SECRET="$(configured S3_SECRET_ACCESS_KEY)"
+DERIVED_MINIO_USER="$(configured MINIO_ROOT_USER)"
+DERIVED_MINIO_PASSWORD="$(configured MINIO_ROOT_PASSWORD)"
+
+DERIVED_MISMATCH=()
+DB_URL_RE='^postgresql\+psycopg://([^:@/]+):([^@/]+)@([^:@/]+):([0-9]+)/([^?]+)$'
+if [[ "$(configured DATABASE_URL)" =~ $DB_URL_RE ]]; then
+    [ "${BASH_REMATCH[1]}" = "$DERIVED_PG_USER" ] || DERIVED_MISMATCH+=(
+        "  DATABASE_URL's user is '${BASH_REMATCH[1]}' but POSTGRES_USER is '$DERIVED_PG_USER'")
+    [ "${BASH_REMATCH[2]}" = "$DERIVED_PG_PASSWORD" ] || DERIVED_MISMATCH+=(
+        "  DATABASE_URL's password does not match POSTGRES_PASSWORD")
+    [ "${BASH_REMATCH[5]}" = "$DERIVED_PG_DB" ] || DERIVED_MISMATCH+=(
+        "  DATABASE_URL's database is '${BASH_REMATCH[5]}' but POSTGRES_DB is '$DERIVED_PG_DB'")
+else
+    DERIVED_MISMATCH+=(
+        "  DATABASE_URL does not parse as postgresql+psycopg://user:password@host:port/db")
+fi
+[ "$DERIVED_S3_KEY" = "$DERIVED_MINIO_USER" ] || DERIVED_MISMATCH+=(
+    "  S3_ACCESS_KEY_ID does not match MINIO_ROOT_USER")
+[ "$DERIVED_S3_SECRET" = "$DERIVED_MINIO_PASSWORD" ] || DERIVED_MISMATCH+=(
+    "  S3_SECRET_ACCESS_KEY does not match MINIO_ROOT_PASSWORD")
+
+if [ "${#DERIVED_MISMATCH[@]}" -gt 0 ]; then
+    refuse "DATABASE_URL, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must carry the same" \
+           "secrets as POSTGRES_* and MINIO_ROOT_*, and at least one does not:" \
+           "${DERIVED_MISMATCH[@]}" \
+           "" \
+           "Rotating only POSTGRES_PASSWORD, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD and" \
+           "AUDITMANAGER_API_TOKEN is not enough -- DATABASE_URL, S3_ACCESS_KEY_ID and" \
+           "S3_SECRET_ACCESS_KEY embed the same values again and must be edited to match." \
+           "Nothing was built."
+fi
+# <<< guard: derived-secrets-coherent
+
 # >>> guard: compose-file-present
 if [ ! -r "$COMPOSE_FILE" ]; then
     refuse "$COMPOSE_FILE is missing." \

@@ -180,7 +180,7 @@ Two of its values are not free choices:
 **No credential is ever pasted into a chat message** — `OWNER_RULINGS_2026-09-17.md` §3:
 *"the credential goes on that host's disk, by the owner"*. That includes the output of
 `docker compose config`, which prints **every** environment value in clear, the provider
-credential included (measured — §9).
+credential included (measured — §10).
 
 ### The provider credential is a second file, and it is optional
 
@@ -525,7 +525,53 @@ the app over TLS.
 
 ---
 
-## 9. When it goes wrong
+## 9. Is it safe to publish? — the readiness command
+
+```
+infra/deploy/readiness.sh
+```
+
+**`R-46`, ruled 2026-09-25**: this command **reports and registers; it does not block a
+deploy.** `deploy.sh` never calls it and nothing in this repository reads its exit status.
+That reads backwards on a first pass, and the owner chose it deliberately, with a precedent
+in hand: `D-72`'s repair was correct and fail-closed, and it took the owner's own stand down
+for a day, because a configuration that had always been wrong stopped being survivable the
+moment the code got strict. A readiness check that refuses is the same shape.
+
+So its output is not a green light. It is **a corpus of problems**, each printed as one line
+you can grep, and each one is a register row that needs the owner's ruling:
+
+```
+readiness OK      <check>            <what was found>
+readiness FINDING <check>            <what was found -- a register row>
+readiness UNKNOWN <check>            <the check could not be answered -- never read as OK>
+```
+
+Six checks, none of them re-deriving a question this tree already answers elsewhere:
+
+| check | what it asks | reuses |
+|---|---|---|
+| `default-credential` | step 5 — is any account still on the password this system seeded it with? | `src/auditmanager/access/check.py`'s own stable sentinels, run inside the deployed api image the way `deploy.sh`'s `migrations-at-head` guard runs `shared.db.check` |
+| `tls` | is a certificate pair on disk at `proxy/tls/`? | `enable-tls.sh`'s own test (`[ -s "$CERT" ]`, not merely present) |
+| `plain-http` | is the plain port published off this host, with no way in this tree to close it once it is? | `ALPHA_BIND_ADDRESS` (`D-49`) and §6's own words: *"there is deliberately no redirect ... the plain port keeps serving in both cases"* |
+| `provider-mode` | is `AUDITMANAGER_PROVIDER_MODE` a real provider, and does it have the credential it needs? | `auditmanager.bootstrap.settings.load()` — the composition root's own validation, the thing that actually decides whether `api` starts |
+| `cost-ceiling` | what does `AUDITMANAGER_RUN_COST_CEILING_USD` resolve to? | the same `load()` call |
+| `off-host-backup` | is there a destination off this host for `reset.sh`'s dumps? | nothing — §5 above already says this is not automated anywhere in this tree, so this check always finds it open, honestly, rather than inventing a name for a mechanism that does not exist |
+
+`default-credential` needs `docker`, because the question is about the *deployed* database;
+`provider-mode` and `cost-ceiling` need this repository's own `.venv` (`make bootstrap`),
+because they run the real `AppSettings.load()` rather than a second copy of its rules. Either
+missing is reported `UNKNOWN`, never guessed at as `OK` — the one thing this command must
+never do is claim to have checked something it could not reach.
+
+`tests/integration/composition/test_readiness_command.py` drives every check to both an `OK`
+and a `FINDING`, and — for the five that need no running stack — proves each is doing its own
+job by deleting its marked block and showing the finding disappears, the same mutation
+discipline `test_deploy_script_refusals.py` already holds `deploy.sh`'s guards to.
+
+---
+
+## 10. When it goes wrong
 
 | What you see | What it is |
 |---|---|

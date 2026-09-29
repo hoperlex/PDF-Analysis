@@ -67,6 +67,9 @@ REFUSED = 3
 INSTANCE = "an-instance"
 DATABASE = "the_configured_database"
 BUCKET = "the-configured-bucket"
+#: `D-103`'s `derived-secrets-coherent` reads this one too, so every fixture below needs a
+#: value for it or the new guard would refuse every case that predates it.
+PG_USER = "the_configured_user"
 
 #: The placeholder values the staged `alpha.env.example` ships, and which
 #: `placeholder-secrets` refuses by identity. They are this file's own literals for the
@@ -87,15 +90,56 @@ EDITED_SECRETS = {
 }
 
 
-def _env_text(secrets: dict[str, str], *, instance: str | None = INSTANCE, port: int) -> str:
+def _env_text(
+    secrets: dict[str, str],
+    *,
+    instance: str | None = INSTANCE,
+    port: int,
+    coherent: bool = True,
+) -> str:
+    """`coherent=True` (the default) derives `DATABASE_URL`, `S3_ACCESS_KEY_ID` and
+    `S3_SECRET_ACCESS_KEY` FROM `secrets`, so every existing case that is not specifically
+    about `derived-secrets-coherent` stays coherent no matter which secrets dict it is
+    handed -- exactly the property `D-103`'s own guard now requires before any build."""
     lines = [
         f"ALPHA_HTTP_PORT={port}",
         f"POSTGRES_DB={DATABASE}",
+        f"POSTGRES_USER={PG_USER}",
         f"S3_BUCKET={BUCKET}",
     ]
     if instance is not None:
         lines.insert(0, f"ALPHA_INSTANCE={instance}")
     lines += [f"{name}={value}" for name, value in sorted(secrets.items())]
+    if coherent:
+        lines.append(
+            "DATABASE_URL=postgresql+psycopg://"
+            f"{PG_USER}:{secrets['POSTGRES_PASSWORD']}@postgres:5432/{DATABASE}"
+        )
+        lines.append(f"S3_ACCESS_KEY_ID={secrets['MINIO_ROOT_USER']}")
+        lines.append(f"S3_SECRET_ACCESS_KEY={secrets['MINIO_ROOT_PASSWORD']}")
+    return "\n".join(lines) + "\n"
+
+
+def _d103_env_text(port: int) -> str:
+    """`D-103`'s exact reproduction: the four names `placeholder-secrets` names, rotated --
+    and `DATABASE_URL`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` left at the example's
+    own placeholder values, which is what an operator following only that guard's advice
+    actually produces. Coherent by `placeholder-secrets`' own test (none of the four match
+    the example any more); incoherent by this file's new one."""
+    lines = [
+        f"ALPHA_INSTANCE={INSTANCE}",
+        f"ALPHA_HTTP_PORT={port}",
+        f"POSTGRES_DB={DATABASE}",
+        f"POSTGRES_USER={PG_USER}",
+        f"S3_BUCKET={BUCKET}",
+    ]
+    lines += [f"{name}={value}" for name, value in sorted(EDITED_SECRETS.items())]
+    lines.append(
+        "DATABASE_URL=postgresql+psycopg://"
+        f"{PG_USER}:{EXAMPLE_SECRETS['POSTGRES_PASSWORD']}@postgres:5432/{DATABASE}"
+    )
+    lines.append(f"S3_ACCESS_KEY_ID={EXAMPLE_SECRETS['MINIO_ROOT_USER']}")
+    lines.append(f"S3_SECRET_ACCESS_KEY={EXAMPLE_SECRETS['MINIO_ROOT_PASSWORD']}")
     return "\n".join(lines) + "\n"
 
 
@@ -359,6 +403,9 @@ def _before_docker_cases(tmp_path: Path, port: int) -> dict[str, tuple[Path, tup
     stale = tmp_path / "stale.env"
     stale.write_text(_env_text(EXAMPLE_SECRETS, port=port), encoding="utf-8")
 
+    d103 = tmp_path / "d103.env"
+    d103.write_text(_d103_env_text(port), encoding="utf-8")
+
     return {
         "known-options": (
             _stage(tmp_path / "known"), ("--dryrun",), good,
@@ -376,6 +423,10 @@ def _before_docker_cases(tmp_path: Path, port: int) -> dict[str, tuple[Path, tup
             _stage(tmp_path / "secrets"), (), stale,
             "still the value shipped in alpha.env.example",
         ),
+        "derived-secrets-coherent": (
+            _stage(tmp_path / "d103"), (), d103,
+            "must carry the same",
+        ),
         "compose-file-present": (
             _stage(tmp_path / "compose", with_compose=False), (), good,
             "compose.server.yml is missing",
@@ -392,6 +443,7 @@ BEFORE_DOCKER = (
     "env-file-present",
     "instance-configured",
     "placeholder-secrets",
+    "derived-secrets-coherent",
     "compose-file-present",
     "build-context-complete",
 )
@@ -426,6 +478,62 @@ class TestTheGuardsThatRefuseBeforeDockerIsTouched:
         assert says not in completed.stderr, (
             f"the {guard} guard was deleted and the refusal happened anyway, so this case "
             "was never testing that guard"
+        )
+
+
+class TestD103TheThreeDerivedValues:
+    """`D-103` itself, spelled out rather than left to the generic parametrization above:
+    rotate only the four names `placeholder-secrets` and its own error message name, and
+    the guard must refuse before any build, naming the three derived values that were not
+    rotated."""
+
+    def test_rotating_only_the_four_names_is_refused_before_any_build(
+        self, tmp_path: Path, free_port: int
+    ) -> None:
+        env_file = tmp_path / "d103.env"
+        env_file.write_text(_d103_env_text(free_port), encoding="utf-8")
+        script = _stage(tmp_path / "d103")
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        # The three derived values, named -- not the four rotated ones, which are fine.
+        assert "DATABASE_URL's password does not match POSTGRES_PASSWORD" in completed.stderr, (
+            completed.stderr
+        )
+        assert "S3_ACCESS_KEY_ID does not match MINIO_ROOT_USER" in completed.stderr, (
+            completed.stderr
+        )
+        assert "S3_SECRET_ACCESS_KEY does not match MINIO_ROOT_PASSWORD" in completed.stderr, (
+            completed.stderr
+        )
+        # Refused before docker was touched at all -- no build, no five containers, no
+        # Alembic trace 93 seconds later.
+        assert not log.exists(), (
+            f"D-103's reproduction refused, but only after running docker: {log.read_text()}"
+        )
+
+    def test_a_fully_edited_environment_is_not_refused_here(
+        self, tmp_path: Path, free_port: int
+    ) -> None:
+        """The control: an operator who edited all seven names is not caught by this
+        guard. Without this case, a guard that refused every environment would look
+        identical to one doing its actual job."""
+        env_file = tmp_path / "good.env"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=free_port), encoding="utf-8")
+        script = _stage(tmp_path / "good")
+        completed, _ = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert "must carry the same" not in completed.stderr, completed.stderr
+
+    def test_the_guard_is_shown_able_to_fail(self, tmp_path: Path, free_port: int) -> None:
+        """Delete `derived-secrets-coherent` and D-103's exact reproduction sails through
+        to the build -- which is the defect this guard exists to close."""
+        cut = _mutant(tmp_path, "derived-secrets-coherent")
+        script = _stage(tmp_path / "mutant-d103", script=cut)
+        env_file = tmp_path / "d103.env"
+        env_file.write_text(_d103_env_text(free_port), encoding="utf-8")
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert "must carry the same" not in completed.stderr
+        assert "build" in log.read_text(encoding="utf-8"), (
+            "the mutant never reached the build, so this case was not testing this guard"
         )
 
 
@@ -973,11 +1081,12 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
 
     The count is a literal for the same reason every other figure in this file is. It was
     12 until `W24-IDEM` added `identity-policy-known`, whose case lives in
-    `test_deploy_image_identity.py` beside this file and is named in the set below.
+    `test_deploy_image_identity.py` beside this file and is named in the set below, and 13
+    until `D-103`'s repair added `derived-secrets-coherent`, covered above.
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 13, markers
+    assert len(markers) == 14, markers
     covered = set(BEFORE_DOCKER) | {
         "port-not-foreign",
         "images-built",
