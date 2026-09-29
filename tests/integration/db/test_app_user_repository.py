@@ -293,3 +293,137 @@ class TestTheDefaultCredentialReport:
             {"login": SEED_LOGIN},
         )
         assert repository.users_on_default_credentials(session) == ()
+
+
+class TestChangingAPasswordUnderTheR48Policy:
+    """`R-48`, exercised through the same method ``tests/integration/auth/test_revocation.py``
+    drives over HTTP -- these assert the policy itself, at the layer that owns it.
+
+    The account under test is created fresh in each test with a password already 8
+    characters or longer, so a policy refusal in these tests is always about the
+    *attempted* new password and never an artefact of the fixture's own current one.
+    """
+
+    def test_a_password_under_eight_characters_is_refused_and_nothing_moves(
+        self, repository: UserRepository, session: Session
+    ) -> None:
+        created = repository.create_user(session, "shortie", "the-original-password")
+        with pytest.raises(DomainError) as caught:
+            repository.change_password(
+                session,
+                user_uid=str(created.user_uid),
+                current_password="the-original-password",
+                new_password="short1",  # 6 characters
+            )
+        assert caught.value.code is ErrorCode.VALIDATION_FAILED
+        # Nothing moved: the account still authenticates on the password it had. No
+        # rollback here -- the refusal is a plain Python raise from `enforce_password_
+        # policy`, before any statement that could abort the transaction, so the session
+        # is exactly as usable as it was, and a rollback would undo the fixture's own
+        # `create_user` along with it.
+        assert (
+            repository.authenticate(session, "shortie", "the-original-password") is not None
+        )
+
+    def test_the_login_itself_is_refused_as_a_new_password(
+        self, repository: UserRepository, session: Session
+    ) -> None:
+        created = repository.create_user(session, "loginasnewpw", "the-original-password")
+        with pytest.raises(DomainError) as caught:
+            repository.change_password(
+                session,
+                user_uid=str(created.user_uid),
+                current_password="the-original-password",
+                new_password="loginasnewpw",
+            )
+        assert caught.value.code is ErrorCode.VALIDATION_FAILED
+
+    def test_the_login_is_refused_regardless_of_case(
+        self, repository: UserRepository, session: Session
+    ) -> None:
+        """`R-48`'s blocklist is contextual, not a literal-string match somebody could
+        defeat by capitalising a letter differently than they signed up with."""
+        created = repository.create_user(session, "caseytoo", "the-original-password")
+        with pytest.raises(DomainError) as caught:
+            repository.change_password(
+                session,
+                user_uid=str(created.user_uid),
+                current_password="the-original-password",
+                new_password="CaseyToo",
+            )
+        assert caught.value.code is ErrorCode.VALIDATION_FAILED
+
+    def test_the_product_name_is_refused_as_a_new_password(
+        self, repository: UserRepository, session: Session
+    ) -> None:
+        created = repository.create_user(session, "productname", "the-original-password")
+        with pytest.raises(DomainError) as caught:
+            repository.change_password(
+                session,
+                user_uid=str(created.user_uid),
+                current_password="the-original-password",
+                new_password="AuditManager",
+            )
+        assert caught.value.code is ErrorCode.VALIDATION_FAILED
+
+    def test_an_unrelated_eight_character_password_is_accepted(
+        self, repository: UserRepository, session: Session
+    ) -> None:
+        """The policy's floor, not a false positive: a password that is nobody's login,
+        not the product's name, and not the current password must still go through."""
+        created = repository.create_user(session, "acceptme", "the-original-password")
+        changed = repository.change_password(
+            session,
+            user_uid=str(created.user_uid),
+            current_password="the-original-password",
+            new_password="a1b2c3d4",
+        )
+        assert changed is not None
+        assert changed.token_epoch == created.token_epoch + 1
+
+    def test_the_d101_gap_is_still_open(
+        self, repository: UserRepository, session: Session
+    ) -> None:
+        """`D-101`, stated as a passing assertion rather than left to be rediscovered.
+
+        `OWNER_RULINGS_2026-09-17.md` §3.16 `R-48` names the consequence out loud: with a
+        contextual-only blocklist and an 8-character floor, the literal string
+        ``"password"`` is itself a legal password -- it is exactly 8 characters, it is not
+        a login, and it is not the product's name (`AuditManager`). It is refused only at
+        the *forced first change*, where it is the account's own *current* password; this
+        test changes the password **twice**, so the second change reaches the gap the
+        first change cannot: by then ``"password"`` is nobody's current password any more,
+        and nothing in `R-48`'s ruled policy refuses it.
+
+        **This is not a defect this stream introduced or may close.** `D-101` records that
+        the one-line repair -- adding the shipped default credential value to the
+        contextual blocklist -- is written down and not taken, because the owner has been
+        asked and has not answered. Closing it here, silently, inside a task that was not
+        asked to rule on it, would be exactly the thing `docs/program/dispatch/W47-PASS.md`
+        `P2` forbids for a different fork: choosing a security state nobody ruled on.
+
+        If this assertion ever goes red, the owner's answer landed and this test -- and
+        this comment -- are the stale half; `D-101`'s row says what the repair is.
+        """
+        created = repository.create_user(session, "gapwitness", "the-original-password")
+        first = repository.change_password(
+            session,
+            user_uid=str(created.user_uid),
+            current_password="the-original-password",
+            new_password="a-second-password-8",
+        )
+        assert first is not None
+        # Second change: "password" is no longer this account's current password, is not
+        # its login ("gapwitness") and is not the product's name ("AuditManager"). R-48's
+        # policy, exactly as ruled, has nothing left to refuse it with.
+        second = repository.change_password(
+            session,
+            user_uid=str(created.user_uid),
+            current_password="a-second-password-8",
+            new_password="password",
+        )
+        assert second is not None, (
+            "D-101's gap closed itself -- either the policy changed or this test is "
+            "stale; read D-101 in DEBT_REGISTER.md before touching either"
+        )
+        assert repository.authenticate(session, "gapwitness", "password") is not None

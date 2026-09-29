@@ -102,6 +102,7 @@ from auditmanager.access.passwords import (
     spend_a_verification,
     verify_password,
 )
+from auditmanager.access.policy import enforce_password_policy
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -235,8 +236,18 @@ _SELECT_CREDENTIAL = text(
 #: and holds the identity the seam published -- and because a login can be renamed while an
 #: identity cannot, so a password change addressed by name could in principle be applied to
 #: a different account than the one that proved itself.
+#:
+#: **Carries ``login`` too, since `R-48`.** Not a credential column and no widening of the
+#: "credential columns are read in exactly two places" claim above -- the login already
+#: travels through ``_PUBLIC_COLUMNS`` to every other reader of this table. It is added
+#: here because :func:`~auditmanager.access.policy.enforce_password_policy` needs the
+#: account's own login to enforce the blocklist's first entry, and the account this
+#: statement addresses is the only place that login can honestly come from: not the
+#: caller's request body, which carries no login at all (`api/routers/auth.py`'s
+#: ``ChangePasswordRequest`` docstring says why), and not a second query, which would be a
+#: second read of a row this statement already has open.
 _SELECT_CREDENTIAL_BY_UID = text(
-    "SELECT password_algorithm, password_iterations, password_salt, password_hash "
+    "SELECT password_algorithm, password_iterations, password_salt, password_hash, login "
     "FROM app_user WHERE user_uid = :user_uid"
 )
 
@@ -665,17 +676,21 @@ class UserRepository:
         the caller holding a credential for a deleted account learns nothing from being told
         which it was.
 
-        **The order of the four steps is the security property, not house style.**
+        **The order of the five steps is the security property, not house style.**
 
         1. the current password is proved first, so nothing about the *new* one -- not even
            that it was malformed -- is reported to somebody who has not shown they may
            change it;
         2. the new password is refused when it is the current one, because an operation
            called "change password" that changes nothing would tell a reviewer their
-           password had changed when it had not;
-        3. the new digest is derived, which is where the mechanical bounds in
+           password had changed when it had not -- and this is the blocklist's third entry,
+           `R-48`; see :mod:`auditmanager.access.policy` for the other two;
+        3. `R-48`'s policy is enforced --
+           :func:`~auditmanager.access.policy.enforce_password_policy` -- length and the
+           blocklist's first two entries, the login and the product name;
+        4. the new digest is derived, which is where the mechanical bounds in
            :mod:`~auditmanager.access.passwords` apply and raise;
-        4. one UPDATE writes the digest, clears ``is_default_credential`` and raises
+        5. one UPDATE writes the digest, clears ``is_default_credential`` and raises
            ``token_epoch``.
 
         The returned record carries the **new** epoch, so the caller can mint a credential
@@ -693,7 +708,7 @@ class UserRepository:
             spend_a_verification(current_password)
             return None
 
-        algorithm, iterations, salt, digest = credential
+        algorithm, iterations, salt, digest, login = credential
         stored = StoredPassword(
             algorithm=algorithm,
             iterations=int(iterations),
@@ -720,6 +735,12 @@ class UserRepository:
                     "that changes nothing is not a password change"
                 ),
             )
+
+        # `R-48`. Raises `VALIDATION_FAILED` for a password shorter than the floor, or one
+        # that is the account's own login or the product's name -- before any write, exactly
+        # as the mechanical bounds below do. `enforce_password_policy` does not re-check the
+        # current password: the comparison just above already is the blocklist's third entry.
+        enforce_password_policy(new_password, login=login)
 
         # Raises `VALIDATION_FAILED` for an empty or over-long new password, before any
         # write. Nothing has been changed at this point, so a refusal here leaves the
