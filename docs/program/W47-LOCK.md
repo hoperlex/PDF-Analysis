@@ -122,3 +122,76 @@ Signed out: the `Вход` link, as before. One global-stylesheet rule gained fo
 (`background`, `border`, `padding`, `font-family`, `cursor`) so the `<button>` looks like the
 `<a>`; no new selector and no new colour, so the contrast census has nothing new to reach —
 and it renders both states now anyway.
+
+## 6. `R-51` — the register on a volume
+
+- `infra/deploy/compose.server.yml`: a named volume `${ALPHA_INSTANCE}-web-sessions`,
+  mounted at `/var/lib/auditmanager/sessions` **by the `web` service and by nothing else**,
+  and `AUDITMANAGER_SESSION_STORE` set to `register.json` inside it (a literal, not a
+  substitution: an operator who could point it elsewhere could get a register that silently
+  stops surviving deploys).
+- `infra/deploy/Dockerfile.web`: the mount point is created and `chown`ed to `node` **before**
+  `USER node`. Docker seeds a fresh named volume from the image's directory, ownership
+  included, so a missing or root-owned directory would give a volume the process cannot write
+  to — and the register would report a write failure on every sign-in while appearing to work.
+- `web/src/app/bff/session/store.ts`: whole-file writes, atomic (temp + `rename`), mode `0600`;
+  hydrated once per process on the first read, dropping what expired while nothing was running;
+  a file it cannot read is **reported** and treated as empty (refusing to serve because of one
+  corrupt line turns a lost session into a lost deployment); a write failure is reported and
+  does not refuse the request (the session is live in memory either way).
+- `web/src/shared/config/session-store.ts` (new): the env read, because `shared/config` is the
+  only place in `web/` that reads `process.env`. Deliberately not in the barrel, for
+  `server-env.ts`'s reason. Not imported by `server-env.ts` and not importing it, so
+  `server-credential.guard.test.ts`'s "imported by exactly the BFF route handler" stays true.
+- **No new dependency in `web/package-lock.json`** (`node:fs` and `node:path` only) and no reseal.
+- The cost `R-51` states is in `infra/deploy/README.md` where an operator meets it, with the two
+  things that are unchanged by it (never in the browser; `token_epoch` still revokes at once)
+  and the two operational consequences (`down --volumes` signs everyone out; a write failure
+  names itself in the log).
+
+Guards:
+- `web/tests/guards/session-durability.guard.test.ts`: the wave-47 block that characterized the
+  gap — and said in its own comment that it *"is expected to go red the day a genuine durable
+  mechanism lands ... the assertions above invert"* — is replaced by that inversion, driven
+  against a real file in a temp directory: a session opened before `dropTheInMemoryRegister()`
+  is found after it, with `isDefaultCredential` intact; a closed one and an expired one are not;
+  a corrupt register is reported and recovered from; the file is not world-readable and the
+  cookie still carries none of the credential. The memory-only deployment is kept as its own
+  named case, because it is a configuration that really exists (`next dev`, this suite).
+- `tests/integration/composition/test_session_register_volume.py` (new, 5 tests): the volume is
+  declared and instance-scoped; **exactly one service mounts it and that service is `web`** (a
+  set comparison — "web mounts it" would pass on a stack where the API mounted it too); the
+  mount point and the configured file agree; no other service is even told where the register
+  is; and the image owns the directory before it drops privileges.
+
+## 7. The fixtures — repaired, not bypassed
+
+Nothing was given a way past the refusal. There is no test-only branch, no environment flag
+and no fixture that skips the check; what changed is **which credentials the fixtures use**.
+
+- `tests/integration/api/driver.py`: `SuiteCredentialAdapter` holds
+  `is_default_credential` as a **field** (default `False` — this suite's account is an
+  account that has changed its password, like every account a deployment is meant to have),
+  and `change_password` clears it in the same step it raises the epoch, because the real
+  repository does it in one UPDATE and a suite adapter that did not would let a test pass
+  that the deployment fails. The field is what lets the sweep drive the refusal against the
+  real seam.
+- `tests/integration/api/test_decision_authorship.py`: its two-account adapter answers
+  `standing_of` with `is_default_credential=False` — that module is about *whose* decision a
+  row records, and a default credential would refuse every operation it drives.
+- `tests/integration/auth/test_the_exchange_over_real_users.py`: a new `seeded_user`
+  fixture creates a **real row with the flag set**, rather than using the seeded `admin`
+  (whose password a suite must not change out from under the rest of the tree). The chain to
+  the real deployment is not broken by that: `tests/integration/db/test_app_user_migration.py`
+  already pins that migration `0006` leaves `admin` with `is_default_credential = true`, and
+  the sweep pins that such an account reaches two operations.
+- `web/tests/unit/session/bff-session.test.ts` and `change-password.test.ts`: the fake
+  upstream answers the contract's body — all three properties — and `is_default_credential`
+  is a **parameter** of the fixture so both states are drivable. Two new unusable-answer
+  shapes were added rather than removed: the field missing, and the field not a boolean.
+- The live journey: `tests/e2e/pc01/journey/README.md` states the precondition — the account
+  must be one whose password has been changed, which is what every deployment must do anyway
+  — and says explicitly that there is no flag that skips the refusal and that a harness able
+  to put itself past it would stop proving it is there. `session.mjs` names the state in its
+  failure when a run lands on `/account/password`: the sign-in was *accepted*, and R-50 sent
+  that account to the one screen it may open.

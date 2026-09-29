@@ -143,6 +143,30 @@ same two checkers read it as they read everything else here.
 `value` fails `make gate`, so the obvious shortcut is caught by a guard rather than by a
 reviewer.
 
+**The account must not be on the deployment's seeded password — `R-50`.** Since wave 47 a
+credential minted for an account that has never changed its password reaches `issueToken`
+and `changePassword` and nothing else: every other operation answers `403 permission_denied`
+with `required_capability: password_changed`, and the sign-in screen sends that reviewer to
+`/account/password` rather than to the project list. So a journey run with the seeded
+`admin`/`password` pair stops at the sign-in with *"the browser was at `/account/password`
+and not at `/projects`"* — and that is the feature working, not the instrument breaking.
+
+Give it an account whose password has been changed, which is what every deployment is
+required to do anyway. On a stand that is the one command:
+
+```
+# through the application, as a reviewer would, on the stand's own origin
+curl -s -X POST "$ORIGIN/api/v1/auth/password" \
+  -H "Authorization: Bearer $(…/auth/token …)" -H 'content-type: application/json' \
+  -d '{"current_password":"password","new_password":"<the new one>"}'
+```
+
+There is deliberately **no way for the journey to do this for itself**, and no flag that
+skips the check. A harness that could put itself past the refusal is a harness that no
+longer proves the refusal is there; `tests/integration/api/test_authorization.py` proves
+the refusal, and this instrument's job is to walk the application a reviewer can actually
+use.
+
 **A run that cannot sign in stops.** It names the sign-in as the reason, walks nothing,
 and exits 1. A journey that quietly covers fewer routes is exactly how `D-92` survived
 nine waves.
