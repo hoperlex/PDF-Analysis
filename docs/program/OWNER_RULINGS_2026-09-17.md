@@ -1041,3 +1041,26 @@ brings that row back — so the two findings are one fact about credential state
 operations that promise to remove it. `reset.sh` clears the register volume in the same movement
 that clears the database and the bucket. Section 7 promises documents and access in one landing,
 and today that promise is false.
+
+**Narrowed 2026-09-29 by `W47-JUDGE-Y`, driving this ruling on a deployed stack.** The sentence
+above is about the **wipe**, and it is true of the wipe: after `--yes-destroy-everything` the
+register directory is empty, measured against the judge's own byte-identical control from the
+first round. **It is not true of `--restore`.** There, the epoch rise does its work — a live
+session's cookie answers `401` immediately afterwards — but `register.json` stays byte-identical,
+so dead credential material sits on the volume until the next sign-in overwrites it.
+
+**Left as it is, deliberately, by the integrator.** Closing it means calling the same clearing
+line in the restore branch, which is one line. The argument against it is the argument the ruling
+already makes about the wipe: a restore is performed **after a failure**, and signing every
+reviewer out at that moment adds a second outage to the first. The material left behind is inert
+by the ruling's own mechanism — the epoch has already risen — and inert material is not access.
+**Recorded rather than fixed**, so the next reader finds the trade-off rather than rediscovering
+the gap.
+
+**What the drive did establish, and it is the load-bearing half.** The epoch rises **per row**,
+not by assignment: the judge seeded a second account with `token_epoch = 7`, a value this code
+never produces, and after the restore the two rows read 2 and 8 from a dump carrying 1 and 7. A
+global `SET token_epoch = 2` is indistinguishable from `+1` on one row and obvious on two. The
+script named both accounts by login and **exited 0** — it reported and did not refuse, which is
+the clause the owner chose. And `revoke` really does run in a deployment: the stub's named blind
+spot, closed by driving the documented command in the `api` image.
