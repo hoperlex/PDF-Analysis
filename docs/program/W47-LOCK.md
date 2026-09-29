@@ -195,3 +195,48 @@ and no fixture that skips the check; what changed is **which credentials the fix
   to put itself past it would stop proving it is there. `session.mjs` names the state in its
   failure when a run lands on `/account/password`: the sign-in was *accepted*, and R-50 sent
   that account to the one screen it may open.
+
+## 8. Guards, and each one shown able to fail
+
+Every mutation below was applied to the committed tree, measured, and reverted with
+`git checkout --`; nothing was left in the tree and the suites were green before and after.
+
+| # | mutation | what went red |
+|---|---|---|
+| M1 | the seam's refusal block replaced by `pass` | `test_a_default_credential_reaches_exactly_the_register`, `…_once_the_flag_is_off`, `…_lifts_the_refusal_on_the_very_next_request` (3 failed / 33 passed) |
+| M2 | `listProjects` written into `OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES` | the same three (3 failed / 33 passed) — the sweep is a set comparison, so a third entry is reported |
+| M3 | the default-credential check moved **before** the epoch check | `test_a_revoked_default_credential_is_refused_as_revoked_and_not_as_default` (1 failed / 35 passed) |
+| M4 | `issueToken`'s body writes the constant `True` instead of the port's value | `test_the_exchange_reports_a_changed_credential_as_not_default`, `test_changing_a_default_password_turns_the_field_off_in_the_same_answer` (2 failed / 12 passed) |
+| M5 | the capability renamed to `non_default_credential` (the declined alternative) | `test_a_default_credential_reaches_exactly_the_register` (1 failed / 35 passed) |
+| W1 | `await requireAChangedPassword()` deleted from `/dashboard`'s route | `default-credential-screens.guard.test.ts` — *"/dashboard (web/src/app/dashboard/page.tsx)"*, by address, plus the comment-strip case |
+| W2 | `requireAChangedPassword` made a no-op | the two driven cases in the same file (2 failed / 7 passed) |
+| W3 | the BFF lands every sign-in on `/projects` | `lands a changed password on the application and a seeded one on the change screen` |
+| W4 | the BFF reads a missing `is_default_credential` as `false` | `refuses an answer it does not understand rather than inventing a session` |
+| W5 | the bar returned to the unconditional `Вход` link | `offers the way in when there is no session, and the way out when there is` |
+
+The R-51 guards are shown able to fail by construction rather than by mutation, and it is the
+same demonstration: the block they replace **was** the failing state. `session-durability`'s
+wave-47 text asserted that a restart loses every session and said it would go red the day a
+durable mechanism landed; the file now asserts the opposite of that on the same event, so the
+tree before this wave fails the file after it.
+
+## 9. Live evidence, on a running stand
+
+The refusal, driven with `curl` against the API served from this worktree (lane `gate-w47b`,
+`127.0.0.1:56421`, `operations=20` at startup) on an account seeded with the flag:
+
+```
+POST /auth/token   -> 200 {"token":"<redacted>","expires_in":3600,"is_default_credential":true}
+GET  /projects     -> 403 {"error_code":"permission_denied", …,
+                           "details":{"required_capability":"password_changed"}}
+GET  /dashboard    -> 403
+POST /auth/password-> 200 {"token":"<redacted>","expires_in":3600,"is_default_credential":false}
+GET  /projects     -> 200   (with the replacement)
+GET  /projects     -> 401   (with the credential the change revoked)
+```
+
+`R-51`, on the same stand: Next was started with
+`AUDITMANAGER_SESSION_STORE=/root/w47lock-sessions/register.json`, and after the journey's
+sign-in that file existed with mode `-rw-------`, `{"version":1,"sessions":[…]}`, one row
+carrying `login: "admin"`, `isDefaultCredential: false` and the credential — on the disk, as
+`R-51` says it will be, and nowhere the browser can reach.
