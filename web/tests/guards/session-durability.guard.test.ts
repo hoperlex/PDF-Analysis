@@ -37,7 +37,7 @@
  * credential's bytes — and `R-51`'s durability, driven against a real file.
  */
 
-import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -178,6 +178,145 @@ describe('R-51: a session survives the container being recreated', () => {
     const id = openSession(LOGIN, CREDENTIAL, HOUR, false);
     dropTheInMemoryRegister();
     expect(credentialOf(id)).toBe(CREDENTIAL);
+  });
+});
+
+describe('Y7: it answers which register is IN FORCE, not how this deployment is configured', () => {
+  /**
+   * `sessionDurability()` used to answer `durable: path !== null` — the configuration —
+   * while its own sentence promised *"which of the two registers is in force"*. On a volume
+   * the process cannot write, those are different answers: the register in force is the
+   * memory one, every open session dies with the container, and it answered `durable: true`.
+   *
+   * **This block is new and nothing replaced it**, which is the point. `W47-JUDGE-X` checked
+   * the whole tree for a test that pinned this and found none: the file asserted `true` for a
+   * *writable* configured directory and `false` for *unset*, and never asked about a
+   * configured path the process cannot use. The wrong answer was therefore **uncovered
+   * rather than frozen**, which is the cheaper kind of debt and is why this is an addition
+   * and not an inversion.
+   *
+   * **On the two shapes chosen here.** The judge drove a read-only directory and a full
+   * filesystem. Neither is drivable from this suite, which runs as **root**: root bypasses
+   * the permission bits, so `chmod 0o500` on a directory does not stop it writing and
+   * `accessSync(dir, W_OK)` returns success — a test built on `chmod` here would pass for
+   * the wrong reason and go red for somebody else. Shown:
+   * `mkdir -p ro && chmod 500 ro && node -e "require('fs').accessSync('ro',
+   * require('fs').constants.W_OK)"` exits **0** as root; the same line under
+   * `setpriv --reuid=65534 --regid=65534 --clear-groups` throws `EACCES`. Measured.
+   *
+   * So the two cases below use failures the kernel applies to root as well, and each is a
+   * real operator shape rather than a contrivance:
+   *
+   * - **the parent is a file** — a stale file where the mount point should be. The probe
+   *   fails at `mkdirSync` and the answer is `false` *before any session exists*, which is
+   *   the half a recorded write error can never reach;
+   * - **the register path is a directory** — precisely what `- web-sessions:/var/lib/
+   *   auditmanager/sessions/register.json` produces, a volume mounted one level too deep.
+   *   The probe **passes** (the directory is there and is writable) and the write fails at
+   *   `renameSync`, so this is the half that only a recorded failure can see. It stands in
+   *   for the full disk for the same reason: permissions are fine and the write is not.
+   */
+
+  let directory: string;
+
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), 'w47fix-durability-'));
+    dropTheInMemoryRegister();
+  });
+
+  afterEach(() => {
+    delete process.env[SESSION_STORE_VARIABLE];
+    dropTheInMemoryRegister();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it('the control: a configured path it can really write is durable', () => {
+    process.env[SESSION_STORE_VARIABLE] = join(directory, 'register.json');
+    expect(sessionDurability()).toEqual({
+      durable: true,
+      path: join(directory, 'register.json'),
+    });
+  });
+
+  it('a configured path whose directory cannot be created is not durable', () => {
+    // A file where the mount point should be. `persist()` would die on its `mkdirSync`, so
+    // the register in force is memory -- before a single session has been opened.
+    const blocked = join(directory, 'sessions');
+    writeFileSync(blocked, 'not a directory', 'utf8');
+    const path = join(blocked, 'register.json');
+    process.env[SESSION_STORE_VARIABLE] = path;
+
+    expect(sessionDurability().durable).toBe(false);
+    // And it still names the volume that was meant to hold it: `durable: false` with the
+    // configured path beside it is the pair an operator acts on.
+    expect(sessionDurability().path).toBe(path);
+  });
+
+  it('a session opened there really is lost, which is what durable: false means', () => {
+    const blocked = join(directory, 'sessions');
+    writeFileSync(blocked, 'not a directory', 'utf8');
+    process.env[SESSION_STORE_VARIABLE] = join(blocked, 'register.json');
+
+    const complaint = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      // It still serves -- turning a broken volume into "you cannot sign in" would take the
+      // stand down for a reason no reviewer can act on.
+      const id = openSession(LOGIN, CREDENTIAL, HOUR, false);
+      expect(credentialOf(id)).toBe(CREDENTIAL);
+      expect(complaint).toHaveBeenCalled();
+      dropTheInMemoryRegister();
+      // The event `R-51` is about. The session is gone, so `durable: true` would have been
+      // a false answer about this exact register.
+      expect(subjectOf(id)).toBeNull();
+    } finally {
+      complaint.mockRestore();
+    }
+  });
+
+  it('a write that fails although the path looked writable makes it not durable', () => {
+    // The directory exists and is writable, and the register path is a directory -- a volume
+    // mounted one level too deep. Nothing can see this until a write is attempted: this is
+    // the case the permission probe alone would get wrong, and it stands in for a full disk.
+    const path = join(directory, 'register.json');
+    mkdirSync(path);
+    process.env[SESSION_STORE_VARIABLE] = path;
+
+    // Before any write: the probe is satisfied, and honestly so.
+    expect(sessionDurability().durable).toBe(true);
+
+    const complaint = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      openSession(LOGIN, CREDENTIAL, HOUR, false);
+      expect(complaint).toHaveBeenCalled();
+    } finally {
+      complaint.mockRestore();
+    }
+    // After the write that failed: it says so, rather than repeating the configuration.
+    expect(sessionDurability()).toEqual({ durable: false, path });
+  });
+
+  it('a register that starts working is durable again', () => {
+    // The control on the line above: a recorded failure must not be sticky, or a deployment
+    // that repaired its volume would go on being told it had not.
+    const path = join(directory, 'register.json');
+    mkdirSync(path);
+    process.env[SESSION_STORE_VARIABLE] = path;
+    const complaint = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      openSession(LOGIN, CREDENTIAL, HOUR, false);
+    } finally {
+      complaint.mockRestore();
+    }
+    expect(sessionDurability().durable).toBe(false);
+
+    rmSync(path, { recursive: true, force: true });
+    forgetEverySession(); // the next successful write
+    expect(sessionDurability()).toEqual({ durable: true, path });
+  });
+
+  it('unset is still a configured absence and not a broken volume', () => {
+    delete process.env[SESSION_STORE_VARIABLE];
+    expect(sessionDurability()).toEqual({ durable: false, path: null });
   });
 });
 

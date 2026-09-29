@@ -60,7 +60,16 @@
  * register says so in the log the first time it writes.
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  accessSync,
+  constants as fsConstants,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
 
 import { SESSION_STORE_VARIABLE, getSessionStorePath } from '@/shared/config/session-store';
@@ -118,6 +127,17 @@ const REGISTRY_KEY = Symbol.for('auditmanager.web.session-register');
 interface Registry {
   readonly rows: Map<string, HeldSession>;
   hydrated: boolean;
+  /**
+   * `Y7`. Whether the last attempt to write the file failed, and with what.
+   *
+   * It lives beside the rows for the reason `hydrated` does — two module graphs, one
+   * process — and it exists because a *permission* probe cannot see a full disk. A
+   * directory the process may write to and a directory it can actually write a file into
+   * are different questions, and `ENOSPC` only answers the second. So
+   * {@link sessionDurability} asks both: the probe before anything has been written, and
+   * this after.
+   */
+  lastWriteError: string | null;
 }
 
 /** The shape written to the volume. Versioned, so a later format is distinguishable. */
@@ -130,7 +150,11 @@ function registry(): Registry {
   const host = globalThis as unknown as Record<symbol, Registry | undefined>;
   const existing = host[REGISTRY_KEY];
   if (existing !== undefined) return existing;
-  const created: Registry = { rows: new Map<string, HeldSession>(), hydrated: false };
+  const created: Registry = {
+    rows: new Map<string, HeldSession>(),
+    hydrated: false,
+    lastWriteError: null,
+  };
   host[REGISTRY_KEY] = created;
   return created;
 }
@@ -141,6 +165,31 @@ function registry(): Registry {
  * `AGENTS.md` §4 forbids a silent fallback, and "sessions end when this container is
  * recreated" is exactly the kind of fact that is discovered in an incident rather than read
  * in a log. So it is said out loud, at the first use, whichever answer it is.
+ *
+ * **The two branches are on different channels on purpose, and `D-118` is why that is
+ * written down here.** `eslint.config.mjs:94` sets `no-console` to allow `warn` and `error`
+ * only, so the *configured* branch — the healthy one — is the one that trips the rule, and
+ * the linter is not in `make gate` (`D-118`'s structural half, which is not this repair's).
+ * Three answers were available and two of them cost something real:
+ *
+ * - **escalate it to `warn`.** Then both branches are warnings, and the level stops carrying
+ *   any information: an operator reading `docker compose logs web` could no longer tell a
+ *   healthy stand from one that has silently lost its volume without reading the sentence.
+ *   The unset branch below is a genuine warning — every reviewer is signed out on the next
+ *   deploy and somebody has to act — and burying it beside a notice that fires on every
+ *   correct deployment is how a warning becomes furniture;
+ * - **delete it.** `R-51` asked for this to be said out loud: it is the cost the owner
+ *   accepted, in the one place an operator meets it. `infra/deploy/README.md` describes both
+ *   lines as things a reader will see. Deleting it to satisfy a rule about debug logging
+ *   would be the tool editing the product;
+ * - **keep it, on the channel that says what it is, and exempt this one line by name** —
+ *   taken. It is information about a healthy configuration, which is what `info` means, and
+ *   the exemption is narrow, permanent and reasoned rather than a blanket rule change. The
+ *   rule exists to stop debug logging being left behind; this is not that, and it is once
+ *   per process rather than once per request.
+ *
+ * The structural half of `D-118` — wiring `lint` into `make gate` — is deliberately not done
+ * here and stays open.
  */
 let announced = false;
 
@@ -154,6 +203,10 @@ function announce(path: string | null): void {
         'The deployed stack sets it to a file on a volume only the web container mounts.',
     );
   } else {
+    // `D-118`. Deliberate, and argued in this function's own docstring: `info` is what this
+    // is, and the alternatives cost either the unset branch's warning or the statement
+    // `R-51` asked for. Not a blanket exemption -- one line, by name.
+    // eslint-disable-next-line no-console
     console.info(
       `[session-register] sessions persist to ${path}. Until each credential expires, the ` +
         'API credentials are on that volume; they still never reach the browser, and a ' +
@@ -232,7 +285,9 @@ function persist(): void {
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     writeFileSync(temporary, JSON.stringify(snapshot), { encoding: 'utf8', mode: 0o600 });
     renameSync(temporary, path);
+    held.lastWriteError = null;
   } catch (error) {
+    held.lastWriteError = String(error);
     console.error(
       `[session-register] could not write ${path} (${String(error)}). The sessions open ` +
         'now will not survive this container being recreated.',
@@ -246,10 +301,66 @@ function persist(): void {
   }
 }
 
-/** Which of the two registers is in force, for a diagnostic and for a test. */
+/**
+ * Which of the two registers is **in force**, for a diagnostic and for a test.
+ *
+ * `Y7`, repaired 2026-09-29. This used to answer `durable: path !== null` — that is, it
+ * reported **how this deployment is configured**, while its own sentence promised *which
+ * register is in force*, and on an unwritable volume those are different answers. Driven by
+ * `W47-JUDGE-Y` §2e: on a directory the process cannot write and on a full filesystem, the
+ * register actually in force is the memory one, every open session dies with the container,
+ * and this answered `durable: true`. It is the one function an operator or a later readiness
+ * check would reach for, and it could not distinguish the state this whole wave is about.
+ *
+ * **Configured is necessary and not sufficient**, so it is now three questions:
+ *
+ * 1. is a path configured at all? An unset value is a real configuration — `next dev` and
+ *    this suite — and it is the memory register, announced at the first sign-in;
+ * 2. has a write already failed? `persist()` records it. This is the only question that can
+ *    see a **full disk**: the permissions are fine, the directory exists, and `ENOSPC`
+ *    arrives at the moment of writing and at no earlier one;
+ * 3. if nothing has been written yet, can this process write there? Asked of the filesystem
+ *    (`mkdir` the directory as `persist()` would, then `W_OK | X_OK` on it, and `W_OK` on
+ *    the file when it already exists) rather than assumed from the variable being set. This
+ *    is what catches a **restored volume owned by `root`** on the first request of a fresh
+ *    container, before a session has been opened to fail.
+ *
+ * It **writes nothing** and creates no session file: a diagnostic that had to write to
+ * answer would be a diagnostic nobody could call twice. Creating the directory is what
+ * `persist()` does anyway on its first write and is the only way to ask about a path whose
+ * parent the image creates.
+ *
+ * `path` still reports what is **configured**, unchanged, because "durable: false, path:
+ * /var/lib/…" is exactly the pair an operator needs: the volume that was meant to hold the
+ * register, and the fact that it is not holding it.
+ */
 export function sessionDurability(): { readonly durable: boolean; readonly path: string | null } {
   const path = getSessionStorePath();
-  return { durable: path !== null, path };
+  if (path === null) return { durable: false, path: null };
+  if (registry().lastWriteError !== null) return { durable: false, path };
+  return { durable: canPersistTo(path), path };
+}
+
+/**
+ * Can this process actually put the register at `path`? Asked of the filesystem.
+ *
+ * Deliberately the same two steps `persist()` takes, minus the write: the directory is
+ * created if it is missing, because that is what the first write would do and a not-yet-
+ * created directory is not an unwritable one. Anything that throws is an answer of `false`
+ * — the question is whether the register can live there, and every reason it cannot is the
+ * same answer to the caller. The **reason** is not swallowed: a real failure to write says
+ * so on `console.error` from `persist()`, per attempt.
+ */
+function canPersistTo(path: string): boolean {
+  try {
+    const directory = dirname(path);
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    accessSync(directory, fsConstants.W_OK | fsConstants.X_OK);
+    if (existsSync(path)) accessSync(path, fsConstants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function register(): Map<string, HeldSession> {
