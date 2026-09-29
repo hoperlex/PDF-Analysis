@@ -309,3 +309,117 @@ what `D-65` says every deploy did to every reviewer.
 6. **The register announces itself in the server log once per process**, which in the frontend
    suite means one line per vitest worker. Noise, deliberately: the alternative was a test-only
    branch, which is the shape this wave exists to refuse.
+
+## 12. The final gate, and the counts accounted by test id
+
+```
+GATE OK: battery, foundation, frontend and whitespace all pass
+```
+
+`/root/w47lock-gate.log`, run on `efc8165`'s tree plus the two documentation commits after
+it, in `/root/w47pass`, lane `gate-w47b`. No other `make gate` was running (checked by
+`pgrep -f "make gate"` and each match's `/proc/<pid>/cwd`); `free -g` reported 5 GB
+available at the start.
+
+| | this gate | `W47-DISPATCH.md` baseline | delta |
+|---|---|---|---|
+| battery | **2581 passed / 5 skipped** (519.63 s) | 2567 passed / 5 skipped | **+14** |
+| foundation | **35** | 35 | 0 |
+| frontend | **1156 in 82 files** | 1139 in 81 files | **+17 tests, +1 file** |
+
+**The +14, by test id.** Every one is a test this stream added; nothing was removed, renamed
+or skipped.
+
+`tests/integration/auth/test_the_exchange_over_real_users.py` (3):
+`test_the_exchange_reports_a_default_credential_as_one`,
+`test_the_exchange_reports_a_changed_credential_as_not_default`,
+`test_changing_a_default_password_turns_the_field_off_in_the_same_answer`.
+
+`tests/integration/api/test_authorization.py` (6):
+`test_a_default_credential_reaches_exactly_the_register`,
+`test_the_password_change_is_the_one_operation_that_still_answers`,
+`test_the_exchange_still_answers_and_says_which_state_the_account_is_in`,
+`test_the_same_surface_serves_the_same_credential_once_the_flag_is_off`,
+`test_changing_the_password_lifts_the_refusal_on_the_very_next_request`,
+`test_a_revoked_default_credential_is_refused_as_revoked_and_not_as_default`.
+
+`tests/integration/composition/test_session_register_volume.py` (5, the whole file):
+`test_the_block_split_finds_the_services_this_stack_has`,
+`test_the_register_volume_is_declared_and_named`,
+`test_exactly_one_service_mounts_it_and_that_service_is_web`,
+`test_the_web_service_is_told_where_the_register_goes`,
+`test_the_image_owns_the_mount_point_so_the_process_can_write_to_it`.
+
+**The +17 and the +1 file, by file and count** (`it(` counts, base → now):
+
+| file | base | now | + |
+|---|---|---|---|
+| `web/tests/guards/default-credential-screens.guard.test.ts` (**new**) | — | 9 | +9 |
+| `web/tests/guards/session-durability.guard.test.ts` | 3 | 8 | +5 |
+| `web/tests/unit/session/bff-session.test.ts` | 16 | 18 | +2 |
+| `web/tests/unit/screens/forms-and-pages.test.ts` | 15 | 16 | +1 |
+
+9 + 5 + 2 + 1 = 17, and the one new file is the 82nd. Every other frontend file's count is
+unchanged: the edits to `routes.test.ts`, `prepared-sections.guard.test.ts`,
+`rendered-language.guard.test.ts`, `styles/screens.ts`, `session-store.test.ts`,
+`login-route.test.ts` and `change-password.test.ts` changed what existing cases are handed,
+never how many there are.
+
+## 13. The live journey
+
+`npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:56423 --phase all`, driven
+against a stand served from this worktree: API `PYTHONPATH=src .venv/bin/python
+infra/deploy/serve.py` (`operations=20` at startup, PID `852734`, `readlink /proc/852734/cwd`
+→ `/root/w47pass`), web `npx next start -p 56423` on a `npm run build` of the final tree
+(PID `960383`, cwd `/root/w47pass/web`), with `AUDITMANAGER_SESSION_STORE` set so that
+`R-51`'s register was live for the whole run.
+
+**The credential:** `E2E_PC01_LOGIN=admin` with a password changed on the stand beforehand,
+through the repository's own `change_password` — `admin: is_default_credential True -> False,
+token_epoch 1 -> 2`. Not a bypass: `admin` is simply an account whose password is not the
+seeded one now, which is the state `R-50` requires of every account that is going to be used,
+and an account that still was would still be refused. It was run **twice**: once before the
+last two screen commits, and again, quoted below, on the tree being handed back.
+
+```
+sign-in: ok at /login -- carrying 'am_session' (HttpOnly=true, SameSite=Strict) into every cold browser
+
+write half: 3 step(s), fixture fixtures/synthetic/ar/ar_baseline.pdf
+
+ok  create-project   api=3 {"project_uid":"prj_01M3P1B98NV2E0KQJAC3CETHW6"}
+ok  upload-document  api=4 {"project_uid":"prj_01M3P1B98NV2E0KQJAC3CETHW6","version_uid":"ver_01M3P1C65WF88HR6FR2HGS8N28"}
+ok  start-run        api=5 {"project_uid":"prj_01M3P1B98NV2E0KQJAC3CETHW6","run_id":"run_01M3P1D1ZZ1GRSZ25H9ZMSP0RS"} terminal=published in 1506ms/150000ms
+
+ok  root           200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  projects       200  api=1 auth=0 console=0 jar=[am_session] w=765/780 {"project_uid":"prj_01M3P1B98NV2E0KQJAC3CETHW6"}
+ok  project        200  api=1 auth=0 console=0 jar=[am_session] w=765/780 {"document_uid":"doc_01M3P1C65T86W6PJ49HXTHBY0A"}
+ok  document       200  api=1 auth=0 console=0 jar=[am_session] w=780/780 {"version_uid":"ver_01M3P1C65WF88HR6FR2HGS8N28"}
+ok  version        200  api=2 auth=0 console=0 jar=[am_session] w=765/780 {"run_id":"run_01M3P1D1ZZ1GRSZ25H9ZMSP0RS"}
+ok  comparison     200  api=1 auth=0 console=0 jar=[am_session] w=780/780
+ok  run            200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  review         200  api=5 auth=0 console=0 jar=[am_session] w=765/780
+ok  sign-in        200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  knowledge-base 200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  change-password 200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  blocks         200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+ok  optimisation   200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  logs           200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  workers        200  api=0 auth=0 console=0 jar=[am_session] w=780/780
+ok  dashboard      200  api=1 auth=0 console=0 jar=[am_session] w=765/780
+
+envelope: /root/w47lock-journey-out2/journey.json
+write steps checked: 3/3
+routes checked: 16/16
+e2e:pc01 OK
+```
+
+**`D-113`, from the envelope rather than from a claim.** The dashboard — the screen the
+defect was measured on — records its own rendered text as:
+
+```
+AuditManager | База знаний | Смена пароля | Блоки | Оптимизация | Журнал выполнения |
+Исполнители | Дашборд | admin | Выйти | Дашборд | …
+```
+
+`Вход` does not appear on it at all, and the login reads as it is stored. In the run before
+the last commit it read `ADMIN`, which is how the upper-casing was found.
