@@ -240,3 +240,32 @@ GET  /projects     -> 401   (with the credential the change revoked)
 sign-in that file existed with mode `-rw-------`, `{"version":1,"sessions":[…]}`, one row
 carrying `login: "admin"`, `isDefaultCredential: false` and the credential — on the disk, as
 `R-51` says it will be, and nowhere the browser can reach.
+
+## 10. The screens and the register, driven on the stand
+
+With the API and Next served from this worktree (`127.0.0.1:56421` / `:56423`, the web tier
+started with `AUDITMANAGER_SESSION_STORE` set), on an account seeded with the flag:
+
+```
+POST /bff/v1/session     -> 303  location: /account/password   (+ the HttpOnly cookie)
+GET  /projects           -> 307  -> /account/password
+GET  /dashboard          -> 307  -> /account/password
+GET  /knowledge-base     -> 307  -> /account/password
+GET  /blocks             -> 307  -> /account/password
+GET  /logs               -> 307  -> /account/password
+GET  /account/password   -> 200  and carries data-change-password-required="true"
+```
+
+`R-51`, driven as a restart rather than simulated: the session the journey's own browser
+opened was read back after the Next process was **killed by PID and started again**, with
+the same opaque cookie —
+
+```
+GET /bff/v1/projects -> 200     (before the restart)
+kill <pid>; npx next start …    (a new process, empty memory, same volume)
+GET /bff/v1/projects -> 200     (after it)
+GET /projects        -> 200
+```
+
+Before this wave both of those would have been a redirect to the sign-in screen, which is
+what `D-65` says every deploy did to every reviewer.
