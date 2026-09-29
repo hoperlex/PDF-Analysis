@@ -22,7 +22,7 @@
  * process can read. That is what makes `closeSession` a real logout rather than a cosmetic
  * one: the row is deleted, and the cookie the browser keeps is a key to nothing.
  *
- * ## Where the map lives
+ * ## Where the map lives inside the process
  *
  * On `globalThis`, under a `Symbol.for` key, rather than in a module-scope `const`.
  *
@@ -32,7 +32,7 @@
  * and is the same object from both graphs. This is deliberate and is the only reason the
  * indirection is here.
  *
- * ## Where the map is kept, since `R-51`
+ * ## What the map outlives, since `R-51`
  *
  * On a **named docker volume that only the web container mounts**, as a file, and the owner
  * ruled it over the two alternatives: giving the web tier its own database connection, and

@@ -159,7 +159,7 @@ export function AppFrame({ children, session }: AppFrameProps) {
           </Link>
         ) : (
           <>
-            <span className="am-app__instance" data-session-login={session.login}>
+            <span className="am-app__session" data-session-login={session.login}>
               {session.login}
             </span>
             <form method="post" action={SESSION_CLOSE_PATH}>

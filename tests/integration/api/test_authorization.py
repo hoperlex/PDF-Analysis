@@ -752,7 +752,7 @@ def test_a_credential_minted_under_a_stale_epoch_is_refused(router: Surface) -> 
 def test_a_credential_naming_an_account_this_deployment_has_not_got_is_refused(
     router: Surface,
 ) -> None:
-    """``epoch_of`` answers ``None``, and ``None`` is a refusal and never a permissive default.
+    """``standing_of`` answers ``None``, and ``None`` is a refusal, never a permissive default.
 
     This is the property that makes deleting a row a revocation: before `W39-REVOKE` a
     credential for a deleted account went on working until its expiry, because nothing on

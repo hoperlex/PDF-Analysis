@@ -725,6 +725,21 @@ input[type='file']::file-selector-button:hover {
   letter-spacing: var(--am-tracking-caps);
 }
 
+/*
+ * `D-113`. Who is signed in, beside the way out.
+ *
+ * It is not `.am-app__instance`, although it sits in the same place and is the same size:
+ * that rule upper-cases what it renders, which is right for a stand's label and wrong for
+ * a login. A login is an ADDRESS -- the `access` boundary folds it to lower case and
+ * stores the folded value -- so rendering `ADMIN` for a login that is `admin` shows a
+ * reviewer a string their deployment does not hold. It declares no colour and inherits the
+ * bar's, so nothing new is added for the contrast census to have to reach.
+ */
+.am-app__session {
+  margin-left: auto;
+  font-size: var(--am-text-xs);
+}
+
 .am-app__instance {
   margin-left: auto;
 }
