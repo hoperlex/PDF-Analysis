@@ -212,7 +212,9 @@ esac
 # example and forget to edit it and you get a reachable stack whose database password is in
 # git and whose `AUDITMANAGER_API_TOKEN` is the string the example file itself describes as
 # one that "authorizes nothing" -- and `T-6`'s seam is fail-closed, so that stack answers
-# `authentication_required` to all fifteen operations and looks like a broken product.
+# `authentication_required` to every one of its operations and looks like a broken product.
+# (`Y10`: this said "fifteen" and was true at `c4fcc77`; the last guard in this file prints
+# the live number on every run.)
 #
 # Compared against `alpha.env.example`'s values rather than grepped for `change-me`: a
 # pattern stops being true the day somebody rewrites the example, and the claim this guard
@@ -892,7 +894,7 @@ if [ "$CONFORMANCE_STATUS" -ne 0 ]; then
     refuse "the document this stack serves does not conform to the frozen contract." \
            "The differences are listed above, in the gate's own words. The stack is up and" \
            "serving; what it serves is not the agreed surface, so no claim about the" \
-           "fifteen operations of this deployment is a claim about PC-01."
+           "operations of this deployment is a claim about PC-01."
 fi
 echo
 # <<< guard: schema-conforms

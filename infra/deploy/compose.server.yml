@@ -245,7 +245,7 @@ services:
     #
     # This line used to read `"${ALPHA_HTTP_PORT}:8080"` with no interface, which binds
     # `0.0.0.0`. That was measured, not supposed: `GET http://<host public ip>:31500/bff/v1/projects`
-    # answered **200**, and `/bff/v1` serves all fifteen operations — writes included — with
+    # answered **200**, and `/bff/v1` serves every operation of this surface — writes included — with
     # no credential, because the BFF adds it server-side. `ufw` was not in the way and could
     # not be: a Docker-published port never reaches ufw's `INPUT` chain, since Docker writes
     # its own `nat/DOCKER` and `filter/DOCKER` rules, which are traversed first. `ufw status`

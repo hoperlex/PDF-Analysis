@@ -173,16 +173,23 @@ echo
 # all; its safe default is loopback. Publishing it is checkable; CLOSING plain HTTP once
 # published is not something anything in this tree can do -- `DEPLOYMENT_RUNBOOK.md` §6
 # says so in its own words: "there is deliberately no redirect ... the plain port keeps
-# serving in both cases", because `deploy.sh`'s own `proxy-answers` guard requires 200 on
-# that port. So this reports the one thing that is true either way, rather than a "closed"
-# this codebase cannot produce.
+# serving in both cases", because `deploy.sh`'s own `proxy-answers` guard requires **401**
+# on that port and a redirect's `301` is not 401. So this reports the one thing that is
+# true either way, rather than a "closed" this codebase cannot produce.
+#
+# `Y2`: this line said **200** until 2026-09-29, and it is the one assertion in this file
+# about another file's behaviour rather than a reading of the tree. `R-31` closed the four
+# documentation routes behind a credential and moved the guard with them; a 200 there is
+# now a refusal in `deploy.sh`'s own words. The conclusion survived its false premise -- a
+# 301 is not 401 either -- so the operator was misled about the number and not into a
+# wrong action. Read it off the guard: `sed -n '751,772p' infra/deploy/deploy.sh`.
 BIND="$(configured ALPHA_BIND_ADDRESS)"
 [ -n "$BIND" ] || BIND=127.0.0.1
 case "$BIND" in
     127.0.0.1|::1|localhost)
         ok plain-http "ALPHA_BIND_ADDRESS is $BIND; plain HTTP is not reachable off this host, so there is nothing published to close." ;;
     *)
-        finding plain-http "ALPHA_BIND_ADDRESS is $BIND, publishing plain HTTP off this host. No mechanism in this repository closes it once published -- nginx.conf carries no redirect, and deploy.sh's own proxy-answers guard requires 200 on this exact port (DEPLOYMENT_RUNBOOK.md section 6). 'Close plain HTTP' cannot be satisfied by configuration alone; publish only behind a firewall you have verified reaches Docker's chains (D-49), serving TLS." ;;
+        finding plain-http "ALPHA_BIND_ADDRESS is $BIND, publishing plain HTTP off this host. No mechanism in this repository closes it once published -- nginx.conf carries no redirect, and deploy.sh's own proxy-answers guard requires 401 on this exact port and refuses a 200 there (DEPLOYMENT_RUNBOOK.md section 6). 'Close plain HTTP' cannot be satisfied by configuration alone; publish only behind a firewall you have verified reaches Docker's chains (D-49), serving TLS." ;;
 esac
 echo
 # <<< check: plain-http

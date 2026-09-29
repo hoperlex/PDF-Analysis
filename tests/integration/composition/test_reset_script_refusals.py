@@ -511,7 +511,7 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", RESET.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 12, markers
+    assert len(markers) == 13, markers
     covered = {guard for guard, _, _ in CASES} | {
         "env-file-present",
         "instance-configured",
@@ -520,6 +520,9 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
         "restore-complete",
         # `W22-OPS`, `D-24`: a rehearsal that could not count does not exit 0.
         "rehearsal-counted",
+        # `Y8`/`R-52`: a wipe that could not clear the session register refuses before it
+        # drops anything, rather than ending the pilot for the data only.
+        "sessions-cleared",
     }
     assert set(markers) == covered, set(markers) ^ covered
 
@@ -567,6 +570,29 @@ elif "pg_dump" in line:
     sys.stdout.buffer.write(b"PGDMP-not-a-real-dump")
 elif "ls --recursive" in line and "wc -l" in line:
     sys.stdout.write(os.environ["STUB_OBJECTS"] + "\\n")
+elif "json stat --recursive" in line:
+    # `Y-D`. THIS IS WHAT `mc` REALLY DOES on a bucket with no objects: it writes an error
+    # payload to STDOUT -- which `reset.sh` redirects into the sidecar -- and exits 1.
+    # Reproduced here rather than described, because the defect was the exit status and a
+    # stub that always exited 0 could never have shown it.
+    if os.environ["STUB_OBJECTS"] == "0":
+        sys.stdout.write(
+            '{"status":"error","error":{"message":"Unable to stat `local/b`.",'
+            '"cause":{"message":"Object does not exist"}}}\\n'
+        )
+        sys.exit(1)
+elif "auditmanager.access.revoke" in line:
+    sys.stdout.write("access-revoke REVOKED login=admin\\n")
+    sys.exit(int(os.environ.get("STUB_REVOKE_STATUS", "0")))
+elif "auditmanager.access.check" in line:
+    status = int(os.environ.get("STUB_CHECK_STATUS", "0"))
+    if status == 1:
+        sys.stdout.write("access-check DEFAULT CREDENTIAL: login=admin user_uid=usr_x\\n")
+    elif status == 0:
+        sys.stdout.write("access-check OK no default credentials\\n")
+    sys.exit(status)
+elif "register.json" in line:
+    sys.exit(int(os.environ.get("STUB_SESSIONS_STATUS", "0")))
 sys.exit(0)
 '''
 
@@ -584,7 +610,14 @@ def _sidecar(rows: int, *, role: str = "source_document") -> str:
 
 
 def _run_through_the_dump(
-    script: Path, *, tmp_path: Path, env_file: Path, attrs: str, objects: int = 2
+    script: Path,
+    *,
+    tmp_path: Path,
+    env_file: Path,
+    attrs: str,
+    objects: int = 2,
+    statuses: dict[str, str] | None = None,
+    mode: tuple[str, ...] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], str]:
     binary = tmp_path / "bin"
     binary.mkdir(exist_ok=True)
@@ -599,9 +632,10 @@ def _run_through_the_dump(
     environment["STUB_LOG"] = str(log)
     environment["STUB_ATTRS"] = attrs
     environment["STUB_OBJECTS"] = str(objects)
+    environment.update(statuses or {})
     completed = subprocess.run(
         ["bash", str(script), "--database", DATABASE, "--bucket", BUCKET,
-         "--yes-destroy-everything"],
+         *(mode or ("--yes-destroy-everything",))],
         capture_output=True, text=True, env=environment, timeout=120,
     )
     return completed, (log.read_text(encoding="utf-8") if log.exists() else "")
@@ -712,3 +746,296 @@ def test_the_restore_reattaches_every_attribute_the_adapter_publishes() -> None:
     assert attr is not None, "reset.sh no longer reattaches attributes on restore"
     reattached = {pair.split("=", 1)[0] for pair in attr.group(1).split(";")}
     assert reattached == published | {"Content-Type"}, reattached
+
+
+class TestARestoreTakesBackTheCredentialsItPutsBack:
+    """`R-52`, ruled 2026-09-29 after `W47-JUDGE-X` found it in cross-examination.
+
+    `pg_dump` here is the whole database with no ``--exclude-table`` and the restore is
+    ``pg_restore --clean --if-exists``, so ``app_user`` comes back entire -- ``password_hash``,
+    ``token_epoch`` and ``is_default_credential`` with it. Driven end to end by the judge
+    against a built API: default -> dump -> forced change -> restore ->
+    ``is_default_credential = true``, and the shipped ``admin``/``password`` pair answers 200.
+
+    Two of the three consequences are bounded by ``TOKEN_LIFETIME_SECONDS``; **the third is
+    bounded by nothing, because a password is not a token.**
+
+    **It reports; it does not refuse**, and that is the owner's explicit choice taken with
+    `D-72` in hand, where a correct fail-closed repair took the stand down for a day. A
+    restore that refuses blocks the legitimate one at the moment it is needed most, which is
+    after a failure. So the two cases below that put a failure in front of it assert **exit
+    0** -- the restore happened -- and assert on the report instead.
+    """
+
+    def _a_dump(self, directory: Path) -> Path:
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "database.dump").write_bytes(b"PGDMP")
+        (directory / "objects.attrs").write_text(_sidecar(1), encoding="utf-8")
+        (directory / "objects").mkdir(exist_ok=True)
+        return directory
+
+    def _restore(
+        self, tmp_path: Path, env_file: Path, statuses: dict[str, str] | None = None
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
+        dump = self._a_dump(tmp_path / "dump")
+        return _run_through_the_dump(
+            _staged(tmp_path),
+            tmp_path=tmp_path,
+            env_file=env_file,
+            attrs=_sidecar(1),
+            statuses=statuses,
+            mode=("--restore", str(dump)),
+        )
+
+    def test_every_restored_credential_is_dead_by_the_time_the_restore_returns(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """The epoch is raised on **every** row, after the rows are back and not before.
+
+        Before the rows are back there is nothing to raise it on: `pg_restore --clean`
+        replaces them. Ordering is therefore the whole of the assertion.
+        """
+        completed, calls = self._restore(tmp_path, env_file)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        lines = calls.splitlines()
+        restored = next(i for i, line in enumerate(lines) if "pg_restore" in line)
+        revoked = next(
+            i for i, line in enumerate(lines) if "auditmanager.access.revoke" in line
+        )
+        assert "--everyone" in lines[revoked], lines[revoked]
+        assert restored < revoked, (
+            "the epoch was raised before the dumped rows were put back, so it raised it on "
+            "the rows the restore was about to replace"
+        )
+
+    def test_it_runs_inside_the_api_image_and_not_on_the_host(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """`Y-C`. The deploy host is promised bash/docker/curl/sed/git and explicitly **no**
+        ``.venv``, so a bare ``PYTHONPATH=src python -m auditmanager.access.revoke`` dies on
+        ``ModuleNotFoundError: sqlalchemy``. ``readiness.sh`` already uses the working idiom
+        and this uses the same one."""
+        _, calls = self._restore(tmp_path, env_file)
+        for module in ("auditmanager.access.revoke", "auditmanager.access.check"):
+            line = next(one for one in calls.splitlines() if module in one)
+            assert "--entrypoint python api" in line, line
+            assert "PYTHONPATH" not in line, line
+
+    def test_it_names_by_login_any_account_back_on_its_default_password(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """`access-check` prints one ``DEFAULT CREDENTIAL`` line per account, with the
+        login on it, and exits 1. That exit status is the report, not a refusal."""
+        completed, calls = self._restore(
+            tmp_path, env_file, statuses={"STUB_CHECK_STATUS": "1"}
+        )
+        assert completed.returncode == 0, (
+            "a default credential coming back turned the restore into a failure; R-52 says "
+            "it reports and does not refuse"
+        )
+        assert "auditmanager.access.check" in calls
+        assert "DEFAULT CREDENTIAL" in completed.stdout, completed.stdout
+        assert "CAME BACK ON ITS SHIPPED DEFAULT PASSWORD" in completed.stdout
+        # And it says what to do, which is the other half of the ruling.
+        assert "change the password" in completed.stdout, completed.stdout
+
+    def test_a_revocation_that_could_not_run_is_reported_and_does_not_refuse(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """Status 2 is "could not reach the database". The restore has already happened, so
+        there is nothing left to refuse; what the operator needs is the command to type."""
+        completed, _ = self._restore(
+            tmp_path, env_file, statuses={"STUB_REVOKE_STATUS": "2"}
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "THE RESTORED CREDENTIALS WERE NOT REVOKED" in completed.stdout
+        assert "auditmanager.access.revoke --everyone" in completed.stdout
+
+    def test_a_dump_with_no_accounts_in_it_is_not_reported_as_a_failure(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """`revoke` exits **1** when it was well-formed and matched nothing. That is a
+        successful reading of an empty table, not a fault, and the control that stops the
+        two cases above from passing on any non-zero status at all."""
+        completed, _ = self._restore(
+            tmp_path, env_file, statuses={"STUB_REVOKE_STATUS": "1"}
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "WERE NOT REVOKED" not in completed.stdout, completed.stdout
+
+    def test_a_clean_restore_says_so_and_raises_no_alarm(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """The control. Without it a report that fired on every restore would look right."""
+        completed, _ = self._restore(tmp_path, env_file)
+        assert completed.returncode == 0
+        assert "CAME BACK ON ITS SHIPPED DEFAULT PASSWORD" not in completed.stdout
+        assert "restored. Verify with a read" in completed.stdout
+
+
+class TestTheWipeClearsTheSessionRegister:
+    """`Y8`, folded into `R-52` by the owner's choice.
+
+    `R-51` put the web tier's open sessions on a third named volume as ``register.json``,
+    mode 0600. Driven by `W47-JUDGE-Y` §6 on a deployed stack: the file was **byte-identical
+    across the wipe**, ``md5sum`` unchanged, with three complete 199-character reviewer
+    credentials in it. §7 of the runbook promises the documents and the access in one
+    landing; without this the wipe ended the pilot for the data only.
+
+    The credentials were inert **only because the account row was gone** -- and ``--restore``
+    is the mode that brings that row back, which is why the two findings are one change.
+    """
+
+    def test_the_register_is_cleared_and_before_anything_is_destroyed(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        completed, calls = _run_through_the_dump(
+            _staged(tmp_path), tmp_path=tmp_path, env_file=env_file, attrs=_sidecar(2)
+        )
+        assert "REFUSED" not in completed.stderr, completed.stderr
+        lines = calls.splitlines()
+        cleared = next(
+            i
+            for i, line in enumerate(lines)
+            if "register.json" in line and "rm -f" in line
+        )
+        dropped = next(i for i, line in enumerate(lines) if "DROP SCHEMA" in line)
+        assert cleared < dropped, (
+            "the schema was dropped before the register was cleared, so a wipe that could "
+            "not clear it would already have destroyed the documents"
+        )
+        # The process's copy goes with the file: `persist()` writes the whole in-memory map
+        # out after every change, so a live container can write those credentials straight
+        # back on the next sweep.
+        stopped = next(i for i, line in enumerate(lines) if "stop web" in line)
+        started = next(
+            i for i, line in enumerate(lines) if "up -d --no-deps web" in line
+        )
+        assert stopped < cleared < started, lines[stopped : started + 1]
+
+    def test_a_register_that_cannot_be_cleared_refuses_and_destroys_nothing(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        completed, calls = _run_through_the_dump(
+            _staged(tmp_path),
+            tmp_path=tmp_path,
+            env_file=env_file,
+            attrs=_sidecar(2),
+            statuses={"STUB_SESSIONS_STATUS": "1"},
+        )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "session register could not be cleared" in completed.stderr, completed.stderr
+        # It got as far as dumping -- so this is the refusal under test and not an earlier
+        # guard -- and no further.
+        assert "pg_dump" in calls, "it refused before even trying to dump"
+        assert "DROP SCHEMA" not in calls, calls
+        assert "rm --recursive --force" not in calls, calls
+
+    def test_that_guard_is_shown_able_to_fail(self, tmp_path: Path, env_file: Path) -> None:
+        """Delete the guard block and the same failure is followed by a DROP -- the wipe
+        this repair exists to stop, which ends the pilot for the data and leaves the
+        credentials on the disk."""
+        mutant = _mutant(tmp_path / "mutant", "sessions-cleared")
+        completed, calls = _run_through_the_dump(
+            mutant,
+            tmp_path=tmp_path,
+            env_file=env_file,
+            attrs=_sidecar(2),
+            statuses={"STUB_SESSIONS_STATUS": "1"},
+        )
+        assert "session register could not be cleared" not in completed.stderr
+        assert "DROP SCHEMA" in calls, (
+            "the mutant did not reach the drop, so this case was not testing that guard"
+        )
+
+
+class TestAnEmptyBucketIsAStateAndNotAFailure:
+    """`Y-D`. Found by `W47-JUDGE-Y` running §7's own sequence on a fresh instance.
+
+    ``mc --json stat --recursive`` exits **1** on a bucket with no objects, writing its error
+    payload to stdout -- which ``reset.sh`` redirects into ``objects.stat.json``. Under
+    ``set -euo pipefail`` the whole wipe died with **exit 1**, a status ``usage()`` does not
+    list and the script issues nowhere else, after a complete 100 KB database dump had
+    already been written and with not one word about why. ``--dry-run``, which is what §7
+    tells the operator to run first, handled the same bucket correctly and said nothing was
+    wrong.
+
+    The stub reproduces ``mc``'s real behaviour rather than describing it: on
+    ``STUB_OBJECTS=0`` it writes that payload and exits 1.
+    """
+
+    def test_a_wipe_on_an_empty_bucket_runs_to_the_end(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        completed, calls = _run_through_the_dump(
+            _staged(tmp_path), tmp_path=tmp_path, env_file=env_file, attrs="", objects=0
+        )
+        assert completed.returncode == 0, (
+            completed.returncode,
+            completed.stdout,
+            completed.stderr,
+        )
+        assert "REFUSED" not in completed.stderr, completed.stderr
+        assert "DROP SCHEMA" in calls, calls
+        assert "the bucket holds no objects" in completed.stdout, completed.stdout
+
+    def test_the_command_that_exits_one_on_empty_is_not_run_on_an_empty_bucket(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """And **is** run otherwise. Without the second half this would pass just as well
+        for a script that had stopped taking object metadata at all."""
+        _, empty = _run_through_the_dump(
+            _staged(tmp_path), tmp_path=tmp_path, env_file=env_file, attrs="", objects=0
+        )
+        assert "json stat --recursive" not in empty, empty
+        _, full = _run_through_the_dump(
+            _staged(tmp_path), tmp_path=tmp_path, env_file=env_file, attrs=_sidecar(2)
+        )
+        assert "json stat --recursive" in full, full
+
+    def test_an_empty_sidecar_is_the_right_length_and_not_a_short_one(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """`Y-D` one layer on, uncovered by repairing the first layer. ``grep -c`` PRINTS
+        the count and EXITS 1 when it is zero, so ``$(grep -c . … || echo 0)`` captured the
+        two-line string ``0\\n0`` -- and ``0\\n0`` is not ``0``, so ``dump-verified`` refused a
+        wipe whose dump was exactly right, saying the sidecar was *short* when it was the
+        correct length."""
+        completed, _ = _run_through_the_dump(
+            _staged(tmp_path), tmp_path=tmp_path, env_file=env_file, attrs="", objects=0
+        )
+        assert "sidecar is short" not in completed.stderr, completed.stderr
+
+    def test_an_absent_sidecar_is_still_refused_on_an_empty_bucket(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """The control on the line above, and the reason it is not ``|| echo 0``. An absent
+        sidecar means ``object_attrs.py`` did not finish and **nothing** is known about the
+        objects; a zero there would let that pass on exactly the bucket that produced it."""
+        staged = _staged(tmp_path)
+        # A docker that plays everything through EXCEPT writing the sidecar.
+        binary = tmp_path / "bin"
+        binary.mkdir(exist_ok=True)
+        log = tmp_path / "docker-calls.log"
+        stub = binary / "docker"
+        stub.write_text(
+            STAGING_STUB.replace('if "object_attrs.py" in line:', 'if False:'),
+            encoding="utf-8",
+        )
+        stub.chmod(0o755)
+        environment = dict(os.environ)
+        environment["PATH"] = f"{binary}{os.pathsep}{environment['PATH']}"
+        environment["ALPHA_ENV_FILE"] = str(env_file)
+        environment["ALPHA_DUMP_ROOT"] = str(tmp_path / "dumps")
+        environment["STUB_LOG"] = str(log)
+        environment["STUB_ATTRS"] = ""
+        environment["STUB_OBJECTS"] = "0"
+        completed = subprocess.run(
+            ["bash", str(staged), "--database", DATABASE, "--bucket", BUCKET,
+             "--yes-destroy-everything"],
+            capture_output=True, text=True, env=environment, timeout=120,
+        )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "sidecar is short" in completed.stderr, completed.stderr
+        calls = log.read_text(encoding="utf-8") if log.exists() else ""
+        assert "DROP SCHEMA" not in calls, calls

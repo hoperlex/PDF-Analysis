@@ -257,6 +257,90 @@ if [ -n "$RESTORE" ]; then
     mc_run -v "$RESTORE:/dump:ro" s3-init -c "$MC_ALIAS; $restore_objects"
     compose exec -T postgres pg_restore --clean --if-exists --no-owner \
         --username "$CONFIGURED_USER" --dbname "$DATABASE" < "$RESTORE/database.dump"
+
+    # --- `R-52`: A RESTORE ROLLS CREDENTIAL STATE BACK, SO THE RESTORE TAKES IT AWAY AGAIN
+    #
+    # `pg_dump` here is the whole database with no `--exclude-table` and the line above is
+    # `pg_restore --clean --if-exists`, so `app_user` comes back ENTIRE -- `password_hash`,
+    # `token_epoch` and `is_default_credential` with it. Three consequences, all driven by
+    # `W47-JUDGE-X` §7.1 against a built API:
+    #
+    #   * a restore UN-REVOKES. `revoke --everyone` raises `token_epoch`; a dump taken
+    #     before it carries the older epoch, and the credential that was refused answers
+    #     200 again;
+    #   * a restore re-animates the credentials on the session volume, because they were
+    #     inert only while the row was absent;
+    #   * a restore of any dump taken before the forced password change puts the deployment
+    #     back on the shipped `admin`/`password`. The first two are bounded by
+    #     `TOKEN_LIFETIME_SECONDS`; **this one is bounded by nothing, because a password is
+    #     not a token.**
+    #
+    # `security.py` argues the epoch is trustworthy because "it is a column: the same answer
+    # after a restart, after a redeploy, and to every replica at once". True -- and a column
+    # is also the thing a database restore rolls back.
+    #
+    # IT REPORTS; IT DOES NOT REFUSE. `R-46`'s line, taken by the owner with `D-72` in hand,
+    # where a correct fail-closed repair took the stand down for a day. A restore that
+    # refuses blocks the legitimate one at the moment it is needed most, which is after a
+    # failure. So nothing below can turn a completed restore into a non-zero exit: the two
+    # commands' statuses are captured, never asserted on, and what an operator gets is a
+    # named report.
+    #
+    # BOTH RUN INSIDE THE `api` IMAGE, which is the idiom `readiness.sh` already uses and
+    # the only one that works on the host `DEPLOYMENT_RUNBOOK.md` §1 describes: that host is
+    # promised bash/docker/curl/sed/git and explicitly not a `.venv`, so a bare
+    # `PYTHONPATH=src python -m auditmanager.access.revoke` dies on `ModuleNotFoundError:
+    # sqlalchemy` (`Y-C`).
+    echo
+    echo "reset.sh: every restored credential is dead -- raising token_epoch on every account"
+    REVOKE_STATUS=0
+    compose run --rm --no-deps -T --entrypoint python api \
+        -m auditmanager.access.revoke --everyone || REVOKE_STATUS=$?
+    # `0` revoked something, `1` was well-formed and matched nothing (a dump with no
+    # accounts in it), `2` could not reach the database. Only the third is worth a report,
+    # and it is worth a loud one: the restore HAS happened, so there is nothing left to
+    # refuse, and what the operator needs is the command he must now type himself.
+    if [ "$REVOKE_STATUS" -ge 2 ]; then
+        echo
+        echo "reset.sh: !! THE RESTORED CREDENTIALS WERE NOT REVOKED -- the command above"
+        echo "reset.sh: !! could not reach the database (status $REVOKE_STATUS)."
+        echo "reset.sh: !! Every credential minted before the dump was taken is live again."
+        echo "reset.sh: !! Run this yourself, now:"
+        echo "reset.sh: !!   docker compose --env-file $ENV_FILE --file $COMPOSE_FILE \\"
+        echo "reset.sh: !!     run --rm --no-deps -T --entrypoint python api \\"
+        echo "reset.sh: !!     -m auditmanager.access.revoke --everyone"
+    fi
+
+    echo
+    echo "reset.sh: which accounts came back on their shipped default password"
+    CHECK_STATUS=0
+    compose run --rm --no-deps -T --entrypoint python api \
+        -m auditmanager.access.check || CHECK_STATUS=$?
+    # `access-check` names each one by login on its own `access-check DEFAULT CREDENTIAL`
+    # line and exits `1` when there is at least one, `0` when there is none and `2` when it
+    # could not read. `1` is the case this whole block exists for, and it is a REPORT.
+    if [ "$CHECK_STATUS" -eq 1 ]; then
+        echo
+        echo "reset.sh: !! AN ACCOUNT CAME BACK ON ITS SHIPPED DEFAULT PASSWORD."
+        echo "reset.sh: !! The lines above name it by login. The restore put back the"
+        echo "reset.sh: !! password digest the dump carried, and raising token_epoch does"
+        echo "reset.sh: !! not change a password -- it kills credentials, and a password is"
+        echo "reset.sh: !! not a credential. The pair is published in a migration."
+        echo "reset.sh: !! What to do, for each login named above: sign in with it and"
+        echo "reset.sh: !! change the password. A default credential reaches the sign-in"
+        echo "reset.sh: !! and the change and nothing else (R-50), so this is the only"
+        echo "reset.sh: !! thing it can do and it is enough."
+    elif [ "$CHECK_STATUS" -ge 2 ]; then
+        echo
+        echo "reset.sh: !! WHETHER AN ACCOUNT CAME BACK ON A DEFAULT PASSWORD IS UNKNOWN --"
+        echo "reset.sh: !! the check above could not read the database (status $CHECK_STATUS)."
+        echo "reset.sh: !! Run this yourself, now:"
+        echo "reset.sh: !!   docker compose --env-file $ENV_FILE --file $COMPOSE_FILE \\"
+        echo "reset.sh: !!     run --rm --no-deps -T --entrypoint python api \\"
+        echo "reset.sh: !!     -m auditmanager.access.check"
+    fi
+
+    echo
     echo "reset.sh: restored. Verify with a read of one document version through the API."
     exit 0
 fi
@@ -403,8 +487,30 @@ mc_run -v "$DUMP_DIR/objects:/out" s3-init \
     -c "$MC_ALIAS; mc --quiet mirror --overwrite \"local/$BUCKET\" /out >/dev/null; chmod -R a+rX /out" \
     >/dev/null
 # The bytes are only two thirds of an object. See object_attrs.py for the third.
-mc_run s3-init -c "$MC_ALIAS; mc --json stat --recursive \"local/$BUCKET\"" \
-    > "$DUMP_DIR/objects.stat.json"
+#
+# AN EMPTY BUCKET IS A STATE, NOT A FAULT -- `Y-D`. `mc --json stat --recursive` exits **1**
+# on a bucket with no objects, writing `{"status":"error", ... "Object does not exist"}` to
+# stdout, which this line redirects into the sidecar. Under `set -euo pipefail` that killed
+# the whole wipe with **exit 1** -- a status `usage()` does not list and this script issues
+# nowhere else (it uses `2` for arguments and `3` for every refusal), after a complete
+# database dump had already been written. Driven by `W47-JUDGE-Y` §6 on a deployed stack
+# whose bucket held nothing: `exit=1`, and not one word about why. `--dry-run` handled the
+# same bucket correctly, so the rehearsal §7 tells the operator to run first said nothing
+# was wrong.
+#
+# The count is already in hand from the line above, which is `mc ls --recursive | wc -l` and
+# exits 0 on an empty bucket. So the empty case is DECIDED here and SAID OUT LOUD rather
+# than inferred from an exit code that means two different things. It is not a silent
+# fallback (`AGENTS.md` §4): the screen carries the line, and the `dump-verified` guard
+# below still compares the sidecar and the mirror against this same count, so a sidecar
+# that came back empty for a bucket that was not would still refuse the wipe.
+if [ "${LIVE_OBJECTS:-x}" = 0 ]; then
+    echo "reset.sh: the bucket holds no objects -- the object half of this dump is empty"
+    : > "$DUMP_DIR/objects.stat.json"
+else
+    mc_run s3-init -c "$MC_ALIAS; mc --json stat --recursive \"local/$BUCKET\"" \
+        > "$DUMP_DIR/objects.stat.json"
+fi
 compose run --rm --no-deps --user root \
     -v "$DUMP_DIR:/dump" -v "$HERE/object_attrs.py:/object_attrs.py:ro" \
     --entrypoint python api /object_attrs.py /dump
@@ -427,7 +533,22 @@ if ! compose exec -T postgres pg_restore --list < "$DUMP_DIR/database.dump" >/de
     refuse "the dump at $DUMP_DIR/database.dump could not be read back." \
            "Nothing has been dropped. A dump nobody read is not a backup."
 fi
-RECORDED="$(grep -c . "$DUMP_DIR/objects.attrs" 2>/dev/null || echo 0)"
+# `Y-D`, ONE LAYER ON, AND IT IS THE SAME FINDING. `grep -c` PRINTS the count and EXITS 1
+# when the count is zero, so `$(grep -c . … || echo 0)` captured **both** on an empty
+# sidecar -- the two-line string `0\n0`, which is not `0`. On a bucket with no objects this
+# guard therefore refused a wipe whose dump was exactly right, saying the sidecar was
+# "short" when it was the correct length. Nobody had seen it because the empty bucket killed
+# the run thirty lines earlier, with `exit 1` and no message; repairing that uncovered this.
+# Measured: `R="$(grep -c . empty 2>/dev/null || echo 0)"` gives `0\n0`.
+#
+# An ABSENT sidecar is a different thing and must still refuse: `object_attrs.py` did not
+# run, or did not finish, and nothing is known about the objects. It gets a value no count
+# can equal rather than a zero that would pass on an empty bucket.
+if [ -e "$DUMP_DIR/objects.attrs" ]; then
+    RECORDED="$(grep -c . "$DUMP_DIR/objects.attrs")" || true
+else
+    RECORDED="<absent>"
+fi
 if [ "$RECORDED" != "${LIVE_OBJECTS:-x}" ]; then
     refuse "the object metadata sidecar is short." \
            "  objects in $BUCKET  : ${LIVE_OBJECTS:-<unknown>}" \
@@ -466,6 +587,52 @@ echo "reset.sh: dump verified -- database.dump readable, $MIRRORED/$LIVE_OBJECTS
 # <<< guard: dump-verified
 
 # --- 4. and only now, destroy -------------------------------------------------------
+#
+# THE SESSION REGISTER GOES FIRST, AND IT GOES IN THE SAME MOVEMENT -- `Y8`.
+#
+# `R-51` put the web tier's open sessions on a third named volume,
+# `${ALPHA_INSTANCE}-web-sessions`, as `register.json`, mode 0600, and stated the cost out
+# loud: until each credential expires, the API credentials sit on that volume, on the
+# server's disk. Until this commit `reset.sh` could not reach it and did not try -- driven
+# by `W47-JUDGE-Y` §6, the file was **byte-identical across a wipe**, `md5sum` unchanged,
+# with three complete 199-character reviewer credentials in it.
+#
+# §7 of `DEPLOYMENT_RUNBOOK.md` promises the documents and the access in one landing, and
+# without this the wipe took the documents and left the credential material. It was inert
+# only because the account row was gone -- and `--restore` is exactly the mode that brings
+# that row back, which is why `R-52` folds the two findings into one change.
+#
+# IT GOES BEFORE THE DROP, so a deployment that cannot clear it loses nothing: the guard
+# below refuses while the database and the bucket are still whole. Same discipline as
+# `dump-verified`.
+#
+# THE CONTAINER IS STOPPED FIRST, and that is not tidiness. The register is a file AND a
+# `Map` on `globalThis` in the running Node process (`web/src/app/bff/session/store.ts`);
+# `persist()` writes the whole map out after every change. Deleting the file under a live
+# container leaves a process that can write those same credentials straight back on the
+# next sweep. Stopped, cleared, started: the file and the process's copy go together.
+# The wipe already assumes a running stack -- `compose exec postgres` above requires one --
+# so bringing `web` back up is the state this script found and leaves.
+echo "reset.sh: clearing the session register on $CONFIGURED_INSTANCE-web-sessions"
+SESSIONS_CLEARED=yes
+{
+    compose stop web &&
+    compose run --rm --no-deps -T --entrypoint sh web \
+        -c 'rm -f /var/lib/auditmanager/sessions/register.json' &&
+    compose up -d --no-deps web
+} || SESSIONS_CLEARED=no
+# >>> guard: sessions-cleared
+if [ "$SESSIONS_CLEARED" != yes ]; then
+    refuse "the session register could not be cleared." \
+           "  volume : $CONFIGURED_INSTANCE-web-sessions" \
+           "  file   : /var/lib/auditmanager/sessions/register.json" \
+           "Nothing has been dropped and nothing has been purged. R-4 asks for the" \
+           "documents and the access in one landing, and a wipe that left live reviewer" \
+           "credentials in a file on this disk would have ended the pilot only for the" \
+           "data. Is the web service up? Run it again once it is."
+fi
+# <<< guard: sessions-cleared
+
 echo "reset.sh: dropping and recreating schema public in $DATABASE"
 compose exec -T postgres psql --quiet --username "$CONFIGURED_USER" --dbname "$DATABASE" \
     --command "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO \"$CONFIGURED_USER\";"
@@ -483,3 +650,9 @@ echo
 echo "reset.sh: done. The dump is at $DUMP_DIR"
 echo "reset.sh: put it back -- BOTH halves, with the object attributes -- with"
 echo "  $0 --database $DATABASE --bucket $BUCKET --restore $DUMP_DIR"
+echo
+# `R-52`, said here as well as done there. The operator reading this screen is the one who
+# will type that command later, possibly after a failure and possibly in a hurry.
+echo "reset.sh: that restore brings the dumped app_user rows back with it, so it raises"
+echo "reset.sh: token_epoch on every account afterwards -- every restored credential is"
+echo "reset.sh: dead -- and it names any account that came back on its default password."

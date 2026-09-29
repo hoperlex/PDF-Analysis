@@ -260,3 +260,99 @@ def test_the_stripped_assertion_still_catches_real_tls_in_the_base() -> None:
             f"a base compose carrying {injected!r} was not caught after comment stripping; "
             "the strip has made the assertion vacuous"
         )
+
+
+class TestTheRedirectStaysOnThisOrigin:
+    """`Y-G`, found by `W47-JUDGE-Y` at cross-examination and reproducible in a minute.
+
+    A trailing slash on any `/api/v1/…` path answers `307` and the application builds an
+    **absolute** `Location` out of the request URL. Two faults put that `Location` on a
+    different origin and a different tier:
+
+    1. ``proxy_set_header Host $host`` -- ``$host`` is the host name with the **port
+       stripped**, so the redirect named port 80. Measured by the judge on the deployed
+       stack on port 56441: ``location: http://127.0.0.1/dashboard``. Over the owner's own
+       tunnel that is port 80 of the operator's laptop, and `T-2`'s "one origin" does not
+       survive a redirect that leaves the origin's port;
+    2. ``proxy_pass http://api:8000/`` strips ``/api/v1`` and nothing put it back, so an
+       **API** path redirected to the **web screen** of the same name, which answers 200.
+
+    Not a bypass -- the screen renders empty and its data calls answer 401 -- and a
+    correctness defect on the one published origin.
+
+    **This is the static half.** The dynamic half was driven for this repair against
+    `nginx:1.27-alpine` with the real file and two stub upstreams: before, three paths
+    answered `http://127.0.0.1/<name>`; after, `http://127.0.0.1:58099/api/v1/<name>`, and
+    `/projects/` on the web tier kept its port and correctly gained **no** prefix. It is not
+    in the gate because the gate has no stack; `docs/program/W47-FIX.md` §3 carries the
+    commands.
+    """
+
+    #: Both files. The body is copied on purpose (see `test_the_two_server_bodies_do_not_drift`)
+    #: and this must hold in the copy too, or TLS re-introduces the defect the plain path lost.
+    CONFIGS = (PLAIN, TLS_BLOCK)
+
+    def test_the_forwarded_host_carries_the_port(self) -> None:
+        for path in self.CONFIGS:
+            lines = directives(path.read_text())
+            host = [line for line in lines if line.startswith("proxy_set_header Host ")]
+            assert host == ["proxy_set_header Host $http_host;"], (path.name, host)
+
+    def test_no_configuration_forwards_the_port_stripped_host(self) -> None:
+        """Stated as its own case rather than inferred from the one above, because
+        ``$host`` could come back in a second `proxy_set_header` inside a `location`."""
+        for path in self.CONFIGS:
+            for line in directives(path.read_text()):
+                assert not line.startswith("proxy_set_header Host $host"), (path.name, line)
+
+    def test_every_api_location_puts_the_prefix_back_on_the_way_out(self) -> None:
+        """Asserted per `location`, not once per file: the bare `/api/v1` and the prefixed
+        `/api/v1/` are two blocks with the same `proxy_pass`, and a repair that reached only
+        one of them would leave the defect on the path a caller reaches by typing the base."""
+        for path in self.CONFIGS:
+            lines = directives(path.read_text())
+            api_blocks = 0
+            for index, line in enumerate(lines):
+                if not line.startswith("location = /api/v1 {") and not line.startswith(
+                    "location /api/v1/ {"
+                ):
+                    continue
+                api_blocks += 1
+                end = next(i for i in range(index + 1, len(lines)) if lines[i] == "}")
+                block = lines[index + 1 : end]
+                assert any(one.startswith("proxy_pass http://api:8000/") for one in block), (
+                    path.name,
+                    block,
+                )
+                assert any(
+                    one.startswith("proxy_redirect ") and "/api/v1/" in one for one in block
+                ), (
+                    f"{path.name}: {lines[index]} strips /api/v1 on the way in and nothing "
+                    f"puts it back on the way out, so a redirect from the API lands on the "
+                    f"web screen of the same name (Y-G): {block}"
+                )
+            assert api_blocks == 2, (path.name, api_blocks)
+
+    def test_the_web_location_does_not_gain_the_prefix(self) -> None:
+        """The control, and it is not symmetry for its own sake: a `proxy_redirect` written
+        at `server` level rather than inside the two `location` blocks would rewrite the web
+        tier's own redirects too, and `/projects/` -> `/api/v1/projects` is the same defect
+        pointing the other way."""
+        for path in self.CONFIGS:
+            lines = directives(path.read_text())
+            start = next(i for i, line in enumerate(lines) if line.startswith("location / {"))
+            end = next(i for i in range(start + 1, len(lines)) if lines[i] == "}")
+            assert not any(
+                line.startswith("proxy_redirect") for line in lines[start + 1 : end]
+            ), (path.name, lines[start:end])
+            # And not at server level either, which is where it would reach everything.
+            depth = 0
+            for line in lines:
+                if line.endswith("{"):
+                    depth += 1
+                    continue
+                if line == "}":
+                    depth -= 1
+                    continue
+                if depth == 1:
+                    assert not line.startswith("proxy_redirect"), (path.name, line)

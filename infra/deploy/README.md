@@ -70,6 +70,32 @@ docker compose --env-file infra/deploy/env/alpha.env \
 `migrate` runs once and exits; `api` waits for it. Migrations are never run by a serving
 process — two replicas starting together would race the same upgrade.
 
+### A trailing slash, and the two things that made it leave this origin — `Y-G`
+
+`/api/v1/<anything>/` answers **307**, and the application builds that `Location` as an
+**absolute** URL out of the request. Until this wave the proxy gave it the wrong request to
+build it from, twice over, so the header named a different port *and* a different tier:
+
+```
+# before -- driven on the deployed stack on port 56441
+curl -s -i --path-as-is 'http://127.0.0.1:56441/api/v1/dashboard/' | grep -i '^location'
+#  location: http://127.0.0.1/dashboard          <- port 80, and the WEB screen
+```
+
+* **`proxy_set_header Host $host`** strips the port, so every absolute redirect named port
+  **80** of whatever the caller typed. Over the owner's tunnel that is port 80 of *his own
+  machine*. It is now `$http_host`, which is the Host header as sent, port and all;
+* **`proxy_pass http://api:8000/`** strips `/api/v1` on the way in — correctly, that is how
+  the base path is mounted — and nothing put it back on the way out, so an **API** path
+  redirected to the **web screen** of the same name. A `proxy_redirect` inside each of the
+  two `/api/v1` blocks puts it back. It is inside them and not at `server` level on purpose:
+  at `server` level it would rewrite the web tier's own redirects the other way.
+
+It never leaked anything — the screen renders empty and its data calls answer `401` — and a
+redirect that leaves the origin's port is not one origin, which is what `T-2` promises.
+`tests/integration/composition/test_proxy_tls_path.py::TestTheRedirectStaysOnThisOrigin`
+holds all of it, in **both** server bodies.
+
 ### A rebuild is not finished when the images are
 
 `up -d --build` replaces the api and web containers, and each replacement gets a new address
@@ -168,17 +194,22 @@ infra/deploy/deploy.sh [--env-file <path>]
 ```
 
 Exit **0** the stack is up and has answered for itself, **3** it refused and said why,
-**2** the arguments were wrong. Thirteen guards, delimited by `# >>> guard:` markers, and
+**2** the arguments were wrong. Fourteen guards, delimited by `# >>> guard:` markers, and
 `tests/integration/composition/test_deploy_script_refusals.py` shows every one of them able
 to fail by deleting it from a copy — the same form as `reset.sh` and for the same reason.
-The thirteenth, `identity-policy-known`, is `W24-IDEM`'s and its case lives beside that file
+One of them, `identity-policy-known`, is `W24-IDEM`'s and its case lives beside that file
 in `test_deploy_image_identity.py`.
 
-Seven refuse **before docker is touched at all**, so an empty `docker` call log is the
+**Count them with the marker anchored to the start of the line** — `grep -cE '^# >>> guard: '`
+→ **14**. A bare `grep -c '# >>> guard:'` answers **15**, because `deploy.sh:89` documents
+the marker syntax using the marker string itself (`Y5`).
+
+Eight refuse **before docker is touched at all**, so an empty `docker` call log is the
 evidence the refusal came first: an unknown option, a missing environment, a
 half-configured instance, an `ALPHA_PRESERVE_IMAGE_IDENTITY` that is neither `yes` nor `no`,
-**secrets still set to the example file's own published values**, a missing compose file,
-and a clone that does not contain the paths the two Dockerfiles copy. That last one is the clean-clone guard: the paths are read out of the Dockerfiles'
+**secrets still set to the example file's own published values**, **`derived-secrets-coherent`**
+(`W47-GATE`'s `D-103` repair, which is what moved both of these numbers), a missing compose
+file, and a clone that does not contain the paths the two Dockerfiles copy. That last one is the clean-clone guard: the paths are read out of the Dockerfiles'
 own `COPY` lines, so it cannot drift from what the build needs.
 
 Then `port-not-foreign` — the published port must be free, or held by *this* instance's own
@@ -188,7 +219,10 @@ that is serving should be replaced until the images that would replace it exist.
 Then it asks the running stack four questions it can fail: every service healthy;
 **the database at the head this code expects**, asked by running the application's own
 `auditmanager.shared.db.check` inside the api image, with the `FOUNDATION-CHECK OK check-db`
-sentinel as the evidence rather than an exit code; the published port answering 200; and
+sentinel as the evidence rather than an exit code; **the published port answering 401** on
+`/api/v1/openapi.json` — `R-31` closed those four documentation routes behind a credential, so
+401 is the answer that proves the application's own authorization seam is reached, and a
+**200 there is a refusal** (`Y3`); and
 **the document the process serves conforming to the frozen `contracts/api/v1/openapi.json`**,
 compared by mounting `tests/contract/api_v1/openapi_conformance.py` — the gate's own engine,
 not a second one — into a one-off container and piping the served bytes to it.
@@ -305,8 +339,9 @@ That is the opposite of what the same command does with `env_file:`; see
 
 **Turning it off** is dropping the second `-f`, and what is lost is the TLS listener and
 nothing else. There is deliberately **no redirect** from the plain port: `deploy.sh`'s
-`proxy-answers` guard requires 200 there and a `301` would turn a successful deploy into a
-refusal.
+`proxy-answers` guard requires **401** on `/api/v1/openapi.json` there, and a `301` is not
+401, so it would turn a successful deploy into a refusal. The conclusion is unchanged and
+the number was wrong (`Y3`).
 
 ## The session register — `R-51`, and what it costs
 
@@ -341,6 +376,14 @@ Two operational consequences to know before you meet them:
 * `docker compose down` does **not** remove it, exactly as it does not remove the database
   or the object store; `down --volumes` does, and doing that signs everybody out. That is
   the one command that undoes what this volume is for.
+* **`reset.sh --yes-destroy-everything` clears it**, in the same movement as the database
+  and the bucket, and it does so *before* it drops anything, so a deployment that cannot
+  clear it refuses with the documents still whole. Until wave 47 it could not reach the
+  volume and did not try: `W47-JUDGE-Y` drove the wipe to the end and found `register.json`
+  **byte-identical**, `md5sum` unchanged, with three complete reviewer credentials in it
+  (`Y8`). The `web` container is stopped for the moment of the clearing and started again
+  afterwards, because the register is a file *and* a map in that process, and a live
+  container writes the map back out after every change.
 * a `web` container that cannot write the file **still serves**: the sessions are live in
   its memory either way, and refusing to sign anybody in because of a full disk would take
   the stand down for a reason no reviewer can act on. It says so in its own log, on every
@@ -386,9 +429,32 @@ recovered* — while bytes without rows looks exactly as empty as it is. `W22-OP
 by running the relative-path invocation this script prints, which until then restored the
 database and then died on the object half, leaving the misleading one.
 
-The twelve refusals are delimited by `# >>> guard:` markers, and
+The thirteen refusals are delimited by `# >>> guard:` markers, and
 `tests/integration/composition/test_reset_script_refusals.py` shows every one of them able
 to fail by deleting it from a copy.
+
+**A wipe takes three things and not two** — the database, the bucket and the **session
+register** (`Y8`, above). The register goes first, before anything is dropped.
+
+**A restore takes the credentials back that it puts back** — `R-52`, ruled 2026-09-29. The
+dump is the whole database with no `--exclude-table` and the restore is `pg_restore --clean
+--if-exists`, so `app_user` comes back entire: `password_hash`, `token_epoch` **and**
+`is_default_credential`. So restoring any dump taken before a forced password change would
+otherwise put the deployment back on the shipped `admin`/`password`, silently, by a
+documented command — and unlike a revoked token, a password is bounded by nothing.
+`--restore` therefore, after the rows are back:
+
+* runs `auditmanager.access.revoke --everyone`, so **every restored credential is dead**;
+* runs `auditmanager.access.check`, which **names by login** any account that came back on
+  its default password, and prints what to do about it.
+
+Both run inside the `api` image (`docker compose run --rm --no-deps -T --entrypoint python
+api -m …`), which is the only idiom that works on the host §1 of the runbook describes.
+**It reports; it does not refuse** — the owner's own line from `R-46`, taken with `D-72` in
+hand: a restore that refuses blocks the legitimate one at the moment it is needed most,
+which is after a failure. Neither command's status can turn a completed restore into a
+non-zero exit; what a failure of either buys is a named block on the screen and the exact
+command to type.
 
 ## Is the deployed stack this repository? — `D-27`
 
