@@ -70,6 +70,32 @@ docker compose --env-file infra/deploy/env/alpha.env \
 `migrate` runs once and exits; `api` waits for it. Migrations are never run by a serving
 process — two replicas starting together would race the same upgrade.
 
+### A trailing slash, and the two things that made it leave this origin — `Y-G`
+
+`/api/v1/<anything>/` answers **307**, and the application builds that `Location` as an
+**absolute** URL out of the request. Until this wave the proxy gave it the wrong request to
+build it from, twice over, so the header named a different port *and* a different tier:
+
+```
+# before -- driven on the deployed stack on port 56441
+curl -s -i --path-as-is 'http://127.0.0.1:56441/api/v1/dashboard/' | grep -i '^location'
+#  location: http://127.0.0.1/dashboard          <- port 80, and the WEB screen
+```
+
+* **`proxy_set_header Host $host`** strips the port, so every absolute redirect named port
+  **80** of whatever the caller typed. Over the owner's tunnel that is port 80 of *his own
+  machine*. It is now `$http_host`, which is the Host header as sent, port and all;
+* **`proxy_pass http://api:8000/`** strips `/api/v1` on the way in — correctly, that is how
+  the base path is mounted — and nothing put it back on the way out, so an **API** path
+  redirected to the **web screen** of the same name. A `proxy_redirect` inside each of the
+  two `/api/v1` blocks puts it back. It is inside them and not at `server` level on purpose:
+  at `server` level it would rewrite the web tier's own redirects the other way.
+
+It never leaked anything — the screen renders empty and its data calls answer `401` — and a
+redirect that leaves the origin's port is not one origin, which is what `T-2` promises.
+`tests/integration/composition/test_proxy_tls_path.py::TestTheRedirectStaysOnThisOrigin`
+holds all of it, in **both** server bodies.
+
 ### A rebuild is not finished when the images are
 
 `up -d --build` replaces the api and web containers, and each replacement gets a new address
