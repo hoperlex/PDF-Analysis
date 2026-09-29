@@ -316,10 +316,18 @@ what `D-65` says every deploy did to every reviewer.
 GATE OK: battery, foundation, frontend and whitespace all pass
 ```
 
-`/root/w47lock-gate.log`, run on `efc8165`'s tree plus the two documentation commits after
-it, in `/root/w47pass`, lane `gate-w47b`. No other `make gate` was running (checked by
-`pgrep -f "make gate"` and each match's `/proc/<pid>/cwd`); `free -g` reported 5 GB
-available at the start.
+`/root/w47lock-gate.log`, in `/root/w47pass`, lane `gate-w47b`. No other `make gate` was
+running (checked by `pgrep -f "make gate"` and each match's `/proc/<pid>/cwd`); `free -g`
+reported 5 GB available at the start.
+
+**Which tree it measured, exactly.** `4a4a5d8` — the last commit before it started, and the
+working tree was clean for the whole run (`git status --short` empty before and after;
+nothing was edited while it measured). The one commit after it, `fa0ac17`, adds this section
+and the one below to `docs/program/W47-LOCK.md` and changes nothing else: `git diff --stat
+4a4a5d8..HEAD` is one file, and no test in the battery reads it — the only doc-globbing test,
+`tests/contract/api_v1/test_doc_prose_facts.py`, reads `CURRENT_STATE.md`, `ALPHA_ROADMAP.md`
+and `docs/manual-tests/**`. `tests/contract` (battery scope) was re-run at the tip to confirm:
+`378 passed, 49 subtests passed`.
 
 | | this gate | `W47-DISPATCH.md` baseline | delta |
 |---|---|---|---|
