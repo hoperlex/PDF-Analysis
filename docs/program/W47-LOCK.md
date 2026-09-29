@@ -285,10 +285,13 @@ what `D-65` says every deploy did to every reviewer.
    that never runs would satisfy both. Driving all thirteen would need the framework's request
    context around each one, which is what the live journey is for — and the live check above
    drove five of them plus the change screen.
-2. **A client-side (soft) navigation to a locked screen is not measured here.** Every check
-   above is a full document load, and the journey opens a cold browser per route by design.
-   Next re-renders the target server component for a soft navigation, so the same `redirect()`
-   runs — but that is reasoning, not a measurement, and it is the one path a reviewer uses most.
+2. **A client-side (soft) navigation was reasoned about and then measured**, because it is
+   the path a reviewer uses most and every other check here is a full document load. The
+   request the Next router makes, `RSC: 1`, was driven against the stand with a
+   default-credential session: `GET /dashboard` answers `200` with a payload whose body is
+   `NEXT_REDIRECT;replace;/account/password;307;` and none of the dashboard's own content.
+   So the lock holds on that path too. What is still not measured is the *browser* following
+   it, which is the router's own behaviour rather than this application's.
 3. **The volume is verified as a composition, not on a built image.** There is no deployed
    stand in this worktree: `compose.server.yml` and `Dockerfile.web` are parsed and asserted,
    and the register is driven against a real file on a real disk, but no `docker build` +
