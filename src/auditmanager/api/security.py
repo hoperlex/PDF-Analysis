@@ -707,9 +707,12 @@ def build_authorization_dependency(
                 ErrorCode.PERMISSION_DENIED,
                 required_capability=PASSWORD_CHANGED_CAPABILITY,
             )
-        # Published. `T-6`: the seam says who the caller is; what they may do is still not
-        # its question. `changePassword` is the one operation that reads this, and it reads
-        # the identity rather than being handed one in a body -- a body could name somebody
+        # Published. `T-6`: the seam says who the caller is, and -- since `R-50`, above and
+        # only there -- whether this deployment will serve a credential whose account has
+        # never changed its password. What a subject may *otherwise* do is still not this
+        # module's question, and there is still no role, group or grant anywhere in it.
+        # `changePassword` is the one operation that reads this subject, and it reads the
+        # identity rather than being handed one in a body -- a body could name somebody
         # else.
         request.state.subject = subject
 

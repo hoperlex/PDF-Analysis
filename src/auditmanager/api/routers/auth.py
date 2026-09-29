@@ -229,7 +229,16 @@ def build_auth_routes(router: APIRouter, credentials: CredentialPort) -> None:
             # reason that makes it right here: a generated client needs a typed shape for
             # `permission_denied` on every authorized operation, and an operation that
             # omitted it would be asserting something about a role model this surface does
-            # not have. Nothing raises it, here or anywhere else.
+            # not have.
+            #
+            # **This sentence used to read "Nothing raises it, here or anywhere else," and
+            # `R-50` made it false.** The seam raises it, on every operation that is not
+            # this one and not the exchange, while the authenticated account is still on the
+            # password the deployment seeded it with
+            # (`auditmanager.api.security.OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES`). It is
+            # still not raised *here*, and that is the point of this operation being in that
+            # register: it is the act the refusal demands, so refusing it would bar the only
+            # way out of the refusal.
             #
             # 409 is absent because nothing here is idempotent: a second identical change
             # is refused by its own current password, not replayed. 404 is absent because
