@@ -63,11 +63,19 @@ export const CHANGE_PASSWORD_OUTCOME_PARAM = 'outcome';
  * API independently. Two checks and not one: the API's is the one that counts, and this one
  * means a reviewer who typed the same password twice gets a Russian sentence rather than a
  * translated API message — and no request carrying two passwords goes out for nothing.
+ *
+ * `mismatch` is `R-48`'s confirmation: the new password and its second entry disagree.
+ * Checked only here — the API's `ChangePasswordRequest` has no confirmation field and
+ * never sees the second entry at all, so this is a BFF-local outcome and not a catalog
+ * code. Checked *before* `unchanged`, so two passwords typed differently from each other
+ * are reported as the mismatch a reviewer can act on (retype both) rather than risk being
+ * read as "same as current", which they may not be.
  */
 export const CHANGE_PASSWORD_OUTCOMES = [
   'changed',
   'credentials',
   'unchanged',
+  'mismatch',
   'validation',
   'unconfigured',
   'upstream',
@@ -108,8 +116,13 @@ export function changePasswordMessage(outcome: ChangePasswordOutcome): string {
         'Новый пароль совпадает с текущим. Запрос никуда не отправлен: смена пароля, ' +
         'которая ничего не меняет, сообщила бы о смене там, где её не было.'
       );
+    case 'mismatch':
+      return (
+        'Новый пароль и его повтор не совпадают. Запрос никуда не отправлен — ' +
+        'введите новый пароль в оба поля одинаково.'
+      );
     case 'validation':
-      return 'Заполните оба поля: текущий пароль и новый. Запрос никуда не отправлен.';
+      return 'Заполните все поля: текущий пароль, новый и его повтор. Запрос никуда не отправлен.';
     case 'unconfigured':
       return (
         'Сменить пароль нельзя: это развёртывание не настроено на обмен учётными ' +

@@ -134,6 +134,7 @@ function changePassword(
   fields: Record<string, string> = {
     current_password: PASSWORD,
     new_password: NEW_PASSWORD,
+    confirm_new_password: NEW_PASSWORD,
   },
 ): Promise<Response> {
   return POST(
@@ -257,6 +258,7 @@ describe('every way it can refuse, and none of them changes the session', () => 
     const response = await changePassword(cookie, {
       current_password: PASSWORD,
       new_password: PASSWORD,
+      confirm_new_password: PASSWORD,
     });
     // Nothing went out. The API refuses this independently -- its rule is the one that
     // counts -- and this one means no request carrying two passwords is made for nothing.
@@ -270,9 +272,25 @@ describe('every way it can refuse, and none of them changes the session', () => 
     const response = await changePassword(cookie, {
       current_password: PASSWORD,
       new_password: '',
+      confirm_new_password: '',
     });
     expect(seen).toEqual([]);
     expect(response.headers.get('location')).toBe(changePasswordOutcomeUrl('validation'));
+  });
+
+  it("refuses the new password and its confirmation when they disagree, R-48's confirmation", async () => {
+    const cookie = await openASession();
+    const response = await changePassword(cookie, {
+      current_password: PASSWORD,
+      new_password: NEW_PASSWORD,
+      confirm_new_password: `${NEW_PASSWORD}-typo`,
+    });
+    // Nothing went out: the mismatch is caught before the request to the API is built, so
+    // the API never sees the confirmation field at all.
+    expect(seen).toEqual([]);
+    expect(response.headers.get('location')).toBe(changePasswordOutcomeUrl('mismatch'));
+    expect(response.headers.get('location')).not.toBe(changePasswordOutcomeUrl('unchanged'));
+    expect(openSessionCount()).toBe(1);
   });
 
   it('reports a refused current password, and leaves the session exactly as it was', async () => {
@@ -339,7 +357,7 @@ describe('every way it can refuse, and none of them changes the session', () => 
 });
 
 describe('the screen this seam redirects to can render every outcome it produces', () => {
-  it('renders each of the six, with its machine value on a data attribute', () => {
+  it('renders each of the seven, with its machine value on a data attribute', () => {
     for (const outcome of CHANGE_PASSWORD_OUTCOMES) {
       const markup = render(
         createElement(ChangePasswordPage, { login: LOGIN, outcome }),
@@ -349,19 +367,21 @@ describe('the screen this seam redirects to can render every outcome it produces
     }
   });
 
-  it('offers both fields and posts to the address the handler answers', () => {
+  it('offers all three fields and posts to the address the handler answers', () => {
     const markup = render(createElement(ChangePasswordPage, { login: LOGIN }));
     expect(markup).toContain(`action="${CHANGE_PASSWORD_SUBMIT_PATH}"`);
     expect(markup).toContain('method="post"');
     expect(markup).toContain('name="current_password"');
     expect(markup).toContain('name="new_password"');
-    // The two `autoComplete` values are what tell a password manager which field is
-    // which. Without `new-password` a manager offers to save the OLD password as the new
-    // one, which would be this screen teaching a reviewer's own tools to undo it.
+    expect(markup).toContain('name="confirm_new_password"');
+    // Both `new_password` and `confirm_new_password` carry `new-password`: they are the
+    // same secret typed twice, not two different ones, and a password manager should
+    // treat them as such. Without it on either, a manager offers to save the OLD password
+    // as the new one, which would be this screen teaching a reviewer's own tools to undo it.
     expect(markup).toContain('autoComplete="current-password"');
     expect(markup).toContain('autoComplete="new-password"');
     const inputs = markup.match(/<input[^>]*>/g) ?? [];
-    expect(inputs.length).toBe(2);
+    expect(inputs.length).toBe(3);
     // No `value=`: the form is uncontrolled, so the markup never carries what was typed.
     for (const input of inputs) expect(input).not.toContain('value=');
     for (const input of inputs) expect(input).toContain('type="password"');
