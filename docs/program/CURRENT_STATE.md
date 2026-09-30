@@ -1,7 +1,8 @@
 # Current state
 
-> **Updated 2026-09-30 by `W47-CLOSE`.** The runtime/product candidate is `b0e5ae5`;
-> the closeout adds verification/tests/docs only. Tagging and remote refs remain integration work.
+> **Updated 2026-09-30 by `W47-INT-CLOSE`.** Wave 47 is closed as `alpha-w47`.
+> The runtime/product candidate remains `b0e5ae5`; the tagged integration tip adds only the
+> accepted closeout's verification/tests/docs and this release-state update.
 >
 > **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
 > true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
@@ -28,10 +29,11 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Where the programme is, 2026-09-30 — wave 47 closeout candidate
+## Where the programme is, 2026-09-30 — wave 47 closed
 
-**Wave 47 implementation, independent judging and repair are complete.** `W47-CLOSE` changes
-only the verification command surface, its guards, and programme records. The runtime/product
+**Wave 47 is closed as `alpha-w47`.** The tag, `origin/dev` and `origin/main` resolve to one
+integration commit: accepted closeout `2330854` plus this state update. `W47-CLOSE` changes only
+the verification command surface, its guards, and programme records. The runtime/product
 candidate remains `b0e5ae5`; no runtime path, contract, migration or dependency changes here.
 
 **The closeout tree passes `make gate`** with the literal `GATE OK` sentinel: battery
@@ -57,12 +59,11 @@ writes**, visited **16/16 routes**, and recorded **0 auth** and **0 console** fa
 `W47-CLOSE` additionally closes `D-76`, `D-101`, `D-103` and `D-118`, and reconciles
 the already-repaired `D-80` and `D-102`.
 
-**Release boundary.** This task neither tags nor pushes. `W47-INT-CLOSE` owns the
-`alpha-w47` tag and fast-forwarding the accepted tip to `main`/the intended integration
-refs. Deployment is a following operator action. In particular, `D-70` remains a real
-development-stand precondition: the API will not start with the hostless stub provider URL;
-a reachable endpoint and real credential must be supplied. Owner-held product decisions and
-the independent wave-48 audit rows remain open in `DEBT_REGISTER.md`.
+**Release boundary.** `W47-INT-CLOSE` tags this state commit and atomically fast-forwards
+`origin/dev` and `origin/main` to it. Deployment is a following operator action. In particular,
+`D-70` remains a real development-stand precondition: the API will not start with the hostless
+stub provider URL; a reachable endpoint and real credential must be supplied. Owner-held
+product decisions and the independent wave-48 audit rows remain open in `DEBT_REGISTER.md`.
 
 ## Previous release state — wave 46 (historical record)
 
