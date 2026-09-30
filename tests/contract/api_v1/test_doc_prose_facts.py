@@ -42,14 +42,12 @@ surface phrase -- never a heuristic about tense or nearby words, because a heuri
 exactly the kind of query that can share an assumption with what it is checking
 (`OPERATING_CONSTRAINTS.md` §12).
 
-**One exception is registered and it is a finding, not a fix.** `docs/manual-tests/PC-
-01_prototype.md` -- a runbook a reviewer runs today, not a wave report -- states "Observe
-the migration head is `0008_sign_in_throttle`", which is stale: the tree's head has been
-`0010_run_terminal_detail` since wave 42. This is the exact defect class `D-79` names,
-found live rather than injected, and `docs/manual-tests/**` is not in this task's
-`allowed_paths` -- so it is registered in :data:`KNOWN_OUTSTANDING_CLAIMS` with a citation
-rather than silently passed over or silently edited, and reported to the integrator.
-Removing the entry is the acceptance test for whoever owns that file next.
+**Outstanding live claims are never normalised.** A previous task registered the stale
+`docs/manual-tests/PC-01_prototype.md` migration head here because that runbook was outside
+its write scope. `W47-CLOSE` owns the runbook, corrected the claim to the real head and
+removed the exception. :data:`KNOWN_OUTSTANDING_CLAIMS` therefore remains an explicit empty
+set: a future live mismatch fails the guard instead of inheriting a permanent allow-list.
+
 """
 
 from __future__ import annotations
@@ -326,21 +324,10 @@ KNOWN_HISTORICAL_TRIPLES: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
-#: `(file, exact matched phrase)` -- claims this guard would otherwise catch that ARE
-#: currently wrong and are NOT fixed here, because the file is outside this task's
-#: `allowed_paths`. Registering one is a report, not a silent fallback: each entry names
-#: the row it belongs to, and the guard goes back to red on this file the moment the
-#: entry is removed without the prose being corrected -- so it cannot be forgotten twice.
-KNOWN_OUTSTANDING_CLAIMS: frozenset[tuple[str, str]] = frozenset(
-    {
-        # docs/manual-tests/PC-01_prototype.md:39, "Observe the migration head is
-        # `0008_sign_in_throttle`" -- true head is 0010_run_terminal_detail since wave
-        # 42. Found by W45-READY re-measuring D-79's premise; docs/manual-tests/** is
-        # not in W45-READY's allowed_paths, so this is reported to the integrator, not
-        # repaired here. Remove this entry when PC-01_prototype.md §1 is corrected.
-        ("docs/manual-tests/PC-01_prototype.md", "migration head is `0008"),
-    }
-)
+#: `(file, exact matched phrase)` -- currently wrong live claims temporarily owned by a
+#: different task. This set must normally be empty; a non-empty entry is a cited finding,
+#: never a way to normalise stale prose.
+KNOWN_OUTSTANDING_CLAIMS: frozenset[tuple[str, str]] = frozenset()
 
 
 def _is_registered(file: str, matched_text: str, registry: frozenset[tuple[str, str]]) -> bool:
@@ -803,12 +790,6 @@ def test_the_known_historical_triple_is_registered_and_not_flagged() -> None:
     assert not _is_registered(file, phrase, frozenset())
 
 
-def test_the_known_outstanding_claim_is_registered_and_not_silently_absent() -> None:
-    """The exception exists, is documented, and is a real defect -- not swept away."""
-    file, phrase = next(iter(KNOWN_OUTSTANDING_CLAIMS))
-    assert file == "docs/manual-tests/PC-01_prototype.md"
-    true_head = _true_migration_head()
-    # The registered claim really does disagree with the truth -- proving the exception
-    # is suppressing a live defect, not a dead one that stopped mattering.
-    match = MIGRATION_HEAD_CLAIM.search(phrase)
-    assert match and not true_head.startswith(match.group("value"))
+def test_no_known_outstanding_live_claim_is_normalised() -> None:
+    """A repaired finding leaves no permanent allow-list behind."""
+    assert KNOWN_OUTSTANDING_CLAIMS == frozenset()

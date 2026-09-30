@@ -135,7 +135,7 @@ describe('the compiler runs inside the gate, not only in a command nobody runs t
     expect(exitCode, `tsc --noEmit reported:\n${output}`).toBe(0);
   });
 
-  it('is named in the Makefile, so the obligation cannot quietly leave the gate', () => {
+  it('keeps lint, typecheck and tests in fail-fast order in the Makefile', () => {
     /*
      * `W37-D57` put this case here because the gate ran no typecheck at all and a case was
      * the only place it could reach. The integrator then moved the obligation INTO
@@ -150,11 +150,18 @@ describe('the compiler runs inside the gate, not only in a command nobody runs t
     const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
     const frontend = makefile.slice(makefile.indexOf('run_frontend() {'));
     const body = frontend.slice(0, frontend.indexOf('\n}'));
+    expect(body, 'run_frontend no longer runs lint').toContain('npm --prefix web run lint');
     expect(body, 'run_frontend no longer runs the typecheck').toContain(
       'npm --prefix web run typecheck',
     );
-    // Non-vacuous: a slice that found nothing would otherwise pass every `toContain` above.
     expect(body).toContain('npm --prefix web test');
+    expect(body.indexOf('npm --prefix web run lint')).toBeLessThan(
+      body.indexOf('npm --prefix web run typecheck'),
+    );
+    expect(body.indexOf('npm --prefix web run typecheck')).toBeLessThan(
+      body.indexOf('npm --prefix web test'),
+    );
+    // Non-vacuous: a slice that found nothing would otherwise make order checks meaningless.
     expect(body.length).toBeGreaterThan(200);
   });
 });

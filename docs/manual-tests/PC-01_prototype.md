@@ -36,12 +36,16 @@ the expected one.
 A sentinel is the evidence, not the exit code: a checker that exits 0 without printing one is
 refused by the command surface on purpose.
 
-**Observe the migration head is `0008_sign_in_throttle`**, not merely "a head".
+**Observe the migration head is `0011_document_section`**, not merely "a head".
 
 > *Corrected 2026-09-23.* This line said `0005_truncated_call_status`, and a PC-01
 > recertification recorded that it was stale — after which the document went stale **twice
 > more**, through `0006_app_user`, `0007_credential_epoch` and `0008_sign_in_throttle`. A
 > finding recorded in an artifact nobody edits repairs nothing; `D-76`.
+>
+> *Corrected again by `W47-CLOSE`.* The same live claim later fell behind `0009`, `0010`
+> and `0011`. The prose guard's temporary exception is now removed, so the next stale head
+> is a gate failure rather than another recorded-only finding.
 Measured at `e6eae1e` from `information_schema`: **16 `BASE TABLE`s** — fifteen domain tables plus
 `alembic_version` — and **one `VIEW`**, `finding_current_verdict`. An earlier record said "17
 tables" and §8 below said "sixteen"; both were counting, neither said what. Count the two kinds
@@ -56,7 +60,7 @@ set -a; . ./.env; . ./.env.provider; set +a
 PYTHONPATH=src .venv/bin/python -m auditmanager.api.app
 ```
 
-**Observe:** `wired, provider_mode=proxy` and `operations=12`.
+**Observe:** `wired, provider_mode=proxy` and `operations=20`.
 
 > **From a dispatched worktree, `./.env.provider` is not there.** The credential is
 > git-ignored, so it lives in the checkout the worktree was created from, not in the
@@ -207,7 +211,7 @@ suite and would mean four of the five rules were not exercised. All five answer 
 The unreachable provider fails the run at `terminal_reason dependency_unavailable` after
 three attempts over ~10.4 s on the pinned `(2.0, 8.0)` ladder, publishing nothing.
 
-**Two failures in §8 criterion 10 cannot be induced through the twelve operations**, and this
+**Two failures in §8 criterion 10 cannot be induced through the twenty operations**, and this
 is a known limit rather than an untested path:
 
 * **a checksum mismatch** is proved at the storage layer, where a corrupt upload is refused

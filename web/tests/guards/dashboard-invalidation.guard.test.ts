@@ -14,7 +14,7 @@
  * never re-fires — so this guard reads the mutation hooks themselves. It does two things
  * together, and both matter:
  *
- *   1. **Discovers** every `features/*​/model/use-*.ts` file that calls `useMutation(`,
+ *   1. **Discovers** every `features/<feature>/model/use-*.ts` file that calls `useMutation(`,
  *      and refuses to run unless that discovered set is exactly `EXPECTED_INVALIDATION`'s
  *      keys — so a new mutation hook that nobody maps here fails loudly instead of
  *      silently passing by omission.
@@ -55,7 +55,7 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/upload-document/model/use-upload-document.ts': true,
 };
 
-/** Every `features/*​/model/use-*.ts` file that calls `useMutation(`, relative to `WEB_ROOT`. */
+/** Every `features/<feature>/model/use-*.ts` file that calls `useMutation(`, relative to `WEB_ROOT`. */
 function discoverMutationHooks(): string[] {
   return walkFiles(FEATURES_ROOT, (path) => /\/model\/use-[^/]+\.ts$/.test(path))
     .filter((path) => /useMutation\s*[<(]/.test(readText(path)))

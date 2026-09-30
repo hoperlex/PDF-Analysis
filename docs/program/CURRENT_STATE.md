@@ -1,7 +1,7 @@
 # Current state
 
-> **Updated 2026-09-29 by the integrator for wave 46.** The gated release candidate is
-> `1196ca7`; the wave is tagged `alpha-w46`, locally only.
+> **Updated 2026-09-30 by `W47-CLOSE`.** The runtime/product candidate is `b0e5ae5`;
+> the closeout adds verification/tests/docs only. Tagging and remote refs remain integration work.
 >
 > **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
 > true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
@@ -21,14 +21,50 @@
 > it describes becomes an attack** (`OPERATING_CONSTRAINTS.md` §4.7), and this is the document
 > with the widest blast radius in the programme, because it is the one every dispatched session
 > reads before it reads anything else. Registered as `D-79`, where the structural repair is
-> named: **the gate measures prose against the tree and does not read `docs/`.**
+> implemented: **the gate measures live prose in `docs/` against the tree.**
 >
 > *The 2026-09-20 note, kept:* "It had not been touched since 2026-09-14 and still opened with
 > the `P0-PLN-01` planning candidate — nine waves out of date. Every session dispatched in that
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Where the programme is, 2026-09-29 — wave 46 closed
+## Where the programme is, 2026-09-30 — wave 47 closeout candidate
+
+**Wave 47 implementation, independent judging and repair are complete.** `W47-CLOSE` changes
+only the verification command surface, its guards, and programme records. The runtime/product
+candidate remains `b0e5ae5`; no runtime path, contract, migration or dependency changes here.
+
+**The closeout tree passes `make gate`** with the literal `GATE OK` sentinel: battery
+**2604 passed / 5 skipped / 4 warnings / 169 subtests**, foundation **35**, frontend
+**1162 in 82 files**, with frontend lint, TypeScript typecheck and the complete Vitest suite
+all explicit gate steps. The log is `/root/w47-close-gate.log`.
+
+**The frozen surface remains 17 paths / 20 operations / 61 schemas**, error catalog **22**,
+API SHA-256 `f043eb6c3a5bbba3cb95fff59039fff42582c79ae0dc8ff2ba261e2cb4583585`,
+and migration head **`0011_document_section`**.
+
+**What wave 47 delivered:**
+
+- a publication-readiness command and a pre-docker coherence refusal for all primary and
+  derived deploy secrets;
+- the password policy and confirmation flow, forced first change for the shipped default,
+  durable reviewer sessions, restore-time credential revocation and wipe-time session clearing;
+- correct public-origin API redirects and operator documentation aligned with the executable
+  deploy/reset paths.
+
+**Behavioural evidence is unchanged by closeout.** The built-stand journey completed **3/3
+writes**, visited **16/16 routes**, and recorded **0 auth** and **0 console** failures.
+`W47-CLOSE` additionally closes `D-76`, `D-101`, `D-103` and `D-118`, and reconciles
+the already-repaired `D-80` and `D-102`.
+
+**Release boundary.** This task neither tags nor pushes. `W47-INT-CLOSE` owns the
+`alpha-w47` tag and fast-forwarding the accepted tip to `main`/the intended integration
+refs. Deployment is a following operator action. In particular, `D-70` remains a real
+development-stand precondition: the API will not start with the hostless stub provider URL;
+a reachable endpoint and real credential must be supplied. Owner-held product decisions and
+the independent wave-48 audit rows remain open in `DEBT_REGISTER.md`.
+
+## Previous release state — wave 46 (historical record)
 
 **Wave 46 is closed as `alpha-w46`.** The tag is **local**: `origin/main` still ends at
 `alpha-w45`, and `origin/dev` at the wave-47 plan. A push to `dev` was refused by the permission

@@ -517,6 +517,12 @@ run_frontend() {
     "A linked worktree does not inherit it -- node_modules is git-ignored -- and the gate" \
     "will not borrow another checkout's modules, because that would run a dependency set" \
     "this tree never declared."
+  # LINT AND TYPES ARE PART OF THE GATE. A declared check that the canonical gate does
+  # not run is advisory, not a release control. Run lint first so a malformed source
+  # tree fails before the more expensive compiler and test suite.
+  npm --prefix web run lint || fail \
+    "GATE: web/ lint failed. Run: npm --prefix web run lint"
+
   # TYPES ARE PART OF THE GATE, AND FOR FOUR WAVES THEY WERE NOT.
   #
   # `npm test` is vitest, vitest transforms TypeScript with esbuild, and esbuild does not
@@ -1031,4 +1037,4 @@ gate: foundation
 	run_battery
 	run_frontend
 	check_whitespace
-	printf '%s\n' "GATE OK: battery, foundation, frontend and whitespace all pass"
+	printf '%s\n' "GATE OK: battery, foundation, frontend lint/typecheck/tests and whitespace all pass"

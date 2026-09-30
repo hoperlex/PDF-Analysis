@@ -1,25 +1,25 @@
 # Debt register
 
-Written 2026-09-17 by the integrator. **Re-measured against the tree at `315de25`–`80db00f` on
-2026-09-18.**
+Written 2026-09-17 by the integrator. **Reconciled by `W47-CLOSE` against the gated wave-47
+tree at `b0e5ae5` on 2026-09-30.**
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
 register that had been entirely obsolete while still reading as the list of what was open, and this
 file exists to not become that. It very nearly did anyway; see the two rules below.
 
-**What is open right now**, so a reader does not scan twenty-five rows to find out:
+**Current status at wave-47 close**, so a reader does not scan the full register:
 
 | | Row | Needs |
 |---|---|---|
 | ~~D-56~~ | project sections: the field and the aggregation | **closed by wave 46** (`W46-SEAL`, `alpha-w46`) |
 | ~~D-63~~ | a dashboard | **closed by wave 46**: four panels on one read (`W46-WIRE`, `W46-CLIENT`, `alpha-w46`) |
-| **D-118** | **`make gate` never lints.** Three eslint errors sit in the tree and no gate looks at them | wire `lint` into the gate, then fix the three |
+| ~~D-118~~ | `make gate` did not lint | **closed by `W47-CLOSE`**: lint runs first and fails closed; eslint is clean |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
-| **D-76** | **reopened**: the same document went stale again, underneath the note recording that it had | the guard that catches it exists now |
+| ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |
 | D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
 | D-79 | the gate now reads `docs/` — `test_doc_prose_facts.py`, built in wave 45 | **and it was red on arrival**: see `D-102` |
-| **D-80** | no `.dockerignore`: the web image's `node_modules` is the build host's, not the lockfile's — and criterion 1 is blind to it by construction | one file, verified by a build |
+| ~~D-80~~ | the web image overlaid the host's `node_modules` | **closed by `W45-READY`**: root `.dockerignore`, verified by a marker build |
 | **D-83** | twelve refusal sentences cannot be rendered by the stack-free gate | live drive restored: 6 fixtures / 0 findings; boundary remains explicit |
 | D-87 | a full-tree mutation copy still cannot redden a migration — §10.1 names only half the trap | one fixture exists; the class is wider |
 | **D-89** | a shared hotspot with no owner: the journey manifest, and I wrote both grants | the rule is in the row |
@@ -28,9 +28,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-98** | the surface guard's `SURFACE_NOUNS` misses *declarations*, *models*, *copies*, *places* — two live stale sentences sit inside files it **does** scan | a synonym set is a literal |
 | **D-99** | the same guard reads only `.py/.md/.ts/.tsx`, so **eight** stale sentences in `.yml`, `.conf`, `.sh`, `.example` and Dockerfiles are invisible | off by four, and older than this wave |
 | **D-100** | `docs/program/P02_SEAMS.md` is outside every scanner, and has now recorded the same defect about itself **twice** | the note is doing the instrument's job |
-| D-101 | `R-48`'s policy makes the literal string `password` a legal password after the first change | one line, and the owner has been asked |
-| **D-102** | the guard built to catch stale counts **was** the stale count, and I reported green from a scope that excluded it | the pin is a reseal document |
-| **D-103** | `deploy.sh`'s placeholder-secret guard reads four names and the same secrets are embedded again in three derived values | ~93 s and a full build wasted, on deploy day |
+| ~~D-101~~ | `R-48` allowed the shipped default after the first change | **closed by `W47-FIX`**: shipped default is a case-folded contextual refusal |
+| ~~D-102~~ | the prose guard's own pinned count went stale | **closed by `W46-SEAL`**: pin moved to 17/20/61 and is named as a reseal document |
+| ~~D-103~~ | the deploy guard read four secret names but missed three derived values | **closed by `W47-GATE`**: derived-secret coherence refuses before docker |
 | **D-104** | every prose guard this programme has checks **numbers**; `CURRENT_STATE.md` asserts a deployed SHA and a date as present-tense fact | not a number, so nothing checks it |
 | **D-105** | the pin was **not** the only one: three sibling hard-coded literals sit beside derived comparisons, green by luck | the reseal set is five documents and three pins |
 | **D-106** | the whole surface **ignores** undeclared query parameters: a scoped request gets an unscoped `200` with no signal | **owner**: refuse surface-wide, or keep |
@@ -62,6 +62,11 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-9** | corpus: the join is local after all; segmentation is the real work | **ruled `R-9`**: after the screens |
 | D-11 | a licence reading | registered |
 
+**Closed or reconciled 2026-09-30 at wave-47 close** — `D-76`, `D-101`, `D-103` and
+`D-118` close on their executable repairs. `D-80` had already closed in wave 45 and `D-102`
+in wave 46; `W47-CLOSE` reconciles their stale register status. `D-104`–`D-117` and all
+owner-held rows remain open unless their own row says otherwise.
+
 **Closed 2026-09-24 in wave 44** — `D-82`, `D-88`, `D-90`, `D-92`, `D-93`,
 `D-94` and `D-95`. `D-83` remains open on its exact stack-free-gate boundary, and `D-97`
 records the renderer multiplicity the closing judges found.
@@ -89,7 +94,7 @@ Every row names how to check it. A row nobody can re-measure is a row that will 
 
 ## 1. Open, and mine to schedule
 
-### D-118 — `make gate` never runs the linter, so three errors sit in a green tree
+### D-118 — `make gate` never ran the linter, so three errors sat in a green tree — **CLOSED**
 
 **Opened 2026-09-29 by the integrator, at the close of wave 47.** `W47-LOCK` reported two
 eslint errors as a candidate debt and declined to fix them, which was the right call: a stream
@@ -126,6 +131,13 @@ points — the attacker and the operator — and neither points at a tool the ga
 `W47-LOCK` found it in its own lane and said so. **A check nobody runs is invisible to a review
 that starts from behaviour**, which is the same shape as `D-108` (`make gate` does not drive the
 live journey) and `D-79` (the gate does not read `docs/`).
+
+**Closed 2026-09-30 by `W47-CLOSE`.** `W47-FIX` kept the intentional `console.info` on the
+correct channel with a one-line, documented eslint exemption. This closeout removed the two
+U+200B characters from comments, took eslint to zero errors, and made
+`npm --prefix web run lint` the first frontend command in `run_frontend`. The existing
+Makefile guard now pins all three commands and their order. An isolated fake `npm` that fails
+only `run lint` proves the function stops before typecheck and tests.
 
 ### D-1 — PC-01's certification no longer describes the tree — **CLOSED**
 
@@ -1711,7 +1723,7 @@ account (*a default changed*), or restricting `/api/v1/auth/token` at the proxy 
 surface narrowed*). **The stream did neither and said why**, which is the behaviour `R-29` is
 for. The alpha ships without it.
 
-### D-76 — a manual-test document names a migration head three versions stale — **REOPENED, third instance**
+### D-76 — a manual-test document named a stale migration head — **CLOSED after third instance**
 
 **Found by `W40-LIMIT`, outside its grant.** `docs/manual-tests/PC-01_prototype.md:39` names
 `0005_truncated_call_status`. The head is `0008_sign_in_throttle`.
@@ -1743,6 +1755,12 @@ Check: `grep -n 000 docs/manual-tests/PC-01_prototype.md` against `ls db/migrati
 > because the path was outside that stream's grant. **The row closes when the document is
 > corrected AND that exemption is removed in the same commit** — an exemption left behind is how
 > a guard goes back to proving nothing.
+>
+> **Closed 2026-09-30 by `W47-CLOSE`.** The live runbook now names
+> `0011_document_section` and 20 operations. The named outstanding claim was removed in the
+> same change; the two prose-guard modules pass with `KNOWN_OUTSTANDING_CLAIMS` empty. A future
+> stale migration-head sentence is therefore red, not allow-listed.
+
 
 ### D-77 — `origin/dev` sat 41 commits behind `origin/main`, and a peer measured the programme on it
 
@@ -1873,7 +1891,7 @@ Check: `ls tests/contract/api_v1/test_surface_counts_in_prose.py`, then
 `grep -n 'REPO_ROOT /' tests/contract/api_v1/test_surface_counts_in_prose.py` — three trees, no
 `docs`.
 
-### D-80 — the web image's dependencies are the build host's, and the criterion that would catch it cannot
+### D-80 — the web image's dependencies were the build host's — **CLOSED**
 
 **Measured by the integrator 2026-09-23 from a line in `pdf-analysis-04`'s pre-flight review
 that called this a build-context size problem. It is not only that.**
@@ -1952,6 +1970,13 @@ gates are running.
 
 Check: `ls .dockerignore` (absent), `grep -n 'COPY web/' infra/deploy/Dockerfile.web`, and
 `du -sh --exclude=.git .` against `du -sh .local web/node_modules`.
+
+**Closed 2026-09-25 by `W45-READY`; register status reconciled by `W47-CLOSE`.** The root
+`.dockerignore` excludes `**/node_modules`, `web/.next`, local environments, logs and
+credentials. The repair was driven through the real build: a marker present in the host's
+`web/node_modules` appeared in the image before the file and did not appear after it. The
+earlier “absent” check above is retained as the historical reproduction.
+
 
 ### D-81 — the only border under every finding row fails WCAG 1.4.11 in both palettes — **CLOSED**
 
@@ -2628,7 +2653,7 @@ has been doing it with `rglob` since before any of these rows existed.
 Check: `grep -n SURFACE_NOUNS tests/contract/api_v1/test_surface_counts_in_prose.py`, and the
 extension filter beside it.
 
-### D-101 — `R-48`'s policy makes `password` a legal password, after the one moment it is refused
+### D-101 — `R-48` made `password` legal after the first change — **CLOSED**
 
 **Named by the integrator when the ruling was recorded, not discovered later.**
 
@@ -2647,7 +2672,13 @@ this row exists so the gap is not rediscovered as a finding.**
 
 Check: read `R-48` in `OWNER_RULINGS_2026-09-17.md` §3.16 against `access/check.py:65`.
 
-### D-102 — the guard built to catch stale counts was itself the stale count, and the integrator certified green from a scope that excluded it
+**Closed 2026-09-29 by `W47-FIX`.** `SHIPPED_DEFAULT_PASSWORD` is now a fourth contextual,
+case-folded refusal. The tests read the independent `SEED_PASSWORD` literal from migration
+source, prove the two stay equal, and prove both `password` and `Password` are refused after
+the first change. The mutation disabling the entry makes two tests fail.
+
+
+### D-102 — the guard built to catch stale counts was itself stale — **CLOSED**
 
 **Found by `W45-JUDGE-X` on the merged tip, gate-blocking. Both halves are the integrator's.**
 
@@ -2686,7 +2717,13 @@ a sweep of the tree.
 
 Check: `.venv/bin/python -m pytest tests/contract/api_v1/test_doc_prose_facts.py -q` at `a10c7f8`.
 
-### D-103 — the placeholder-secret guard reads four names, and the same secrets are written three more times
+**Closed by `W46-SEAL`; register status reconciled by `W47-CLOSE`.** The independent literal
+moved with the surface to `SurfaceTriple(paths=17, operations=20, schemas=61)`, and its own
+docstring now names it as a reseal document. The close is deliberately narrow: `D-105` remains
+open for the sibling pin set and `D-98`–`D-100` remain open for scanner scope.
+
+
+### D-103 — the placeholder-secret guard missed three derived values — **CLOSED**
 
 **Found by `W45-JUDGE-Y` by *following* `W45-READY`'s rehearsal checklist rather than reading it.
 That is how it was found and it is the more important half.**
@@ -2722,6 +2759,12 @@ Check: rotate only the four named variables in a copy of `alpha.env.example` and
 incomplete until somebody actually ran it. **`DEPLOYMENT_RUNBOOK.md` and `W45-READY`'s own R3
 checklist-as-written are named as unwalked candidates for the same defect** — not accused, named,
 because the only way to know is to walk them.
+
+**Closed 2026-09-27 by `W47-GATE` (`e114519`).** The `derived-secrets-coherent` guard
+parses `DATABASE_URL` and compares its user/password/database plus the two S3 derived values
+with their primary variables before docker is touched. The exact old scenario now refuses with
+all three mismatches named and zero docker calls; mutation cases pin every comparison.
+
 
 ### D-104 — every prose guard here checks a number, and the claims that rot fastest are not numbers
 
