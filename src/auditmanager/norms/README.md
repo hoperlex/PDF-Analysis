@@ -22,8 +22,11 @@ projection that can be rebuilt from the drop at any time.
 | `running_heads.py` | what counts as publisher noise, and the repeated-offcut rule |
 | `segmentation.py` | the `results.md` parse: pages, blocks, recognised text, paragraphs |
 | `chunking.py` | joining paragraphs into ~1200-character retrieval chunks |
-| `snapshot.py` | the corpus-snapshot identifier (`R-17`) and its derivation |
-| `corpus_source.py` | the only module that touches a filesystem; everything else takes text |
+| `snapshot.py` | deterministic effective-text `content_key` derivation (`R-17`) |
+| `repair.py` | the immutable repair ledger and repaired-content key |
+| `corpus_source.py` | the only module that reads the filesystem; strict manifest/projection boundary |
+| `repository.py` | transaction-local PostgreSQL writes and content-key idempotency |
+| `loader.py` | atomic loader and its operator CLI |
 
 ## Rules this context keeps
 
@@ -35,4 +38,24 @@ projection that can be rebuilt from the drop at any time.
   the document's recognised text. Re-segmenting page images is explicitly out of scope.
 - **No identity from a path.** The corpus slug is a directory name and a display attribute.
   Durable identity is an opaque id on a row (`ADR-0010`), never the slug.
+- **Identity is not content.** Persisted `norms_snapshot_id` is an opaque `ns_<ULID>` from the
+  frozen catalog. Each immutable document and canonical paragraph receives its own
+  `ndoc_<ULID>` or `npar_<ULID>`; none is derived from content, names, ordinals or private
+  numeric keys. The readable W33/W39 value is stored as unique `content_key`; it resolves an
+  idempotent load but is never accepted as an entity identity. Retrieval chunks have no public
+  identity.
 - **Nothing is written back into the corpus.** `corpus_source.py` opens files for reading only.
+- **A repair is a projection, never an in-place edit.** `segment_corpus` verifies the ledger's
+  base snapshot and every source block before yielding anything, applies only rows whose outcome
+  is `repaired`, and puts the repaired snapshot identifier on the chunks containing repaired
+  text. A stale or partially applicable ledger is refused rather than silently ignored.
+- **Paragraphs are canonical; chunks are rebuildable.** Stored paragraphs and their source
+  anchors are immutable. A named chunking profile may be deleted and rebuilt from those
+  paragraphs, never edited in place. The measured `bge-m3-dense-v1` profile starts from
+  table-row paragraphs and applies deterministic 512-total-token windows with 64-content-token
+  overlap to any over-limit paragraph; it never truncates or substitutes an AI summary.
+
+After migration `0012_norms_corpus`, load with:
+
+`PYTHONPATH=src .venv/bin/python -m auditmanager.norms.loader --corpus <root> [--ledger <repairs.json>]`
+The command commits one database transaction and performs no S3/provider side effect.

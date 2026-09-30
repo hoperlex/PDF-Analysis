@@ -27,6 +27,17 @@ DEFAULT_TARGET_CHARACTERS = 1200
 #: How paragraphs are rejoined inside a chunk. A blank line, because that is what separated
 #: them in the source and what makes the chunk readable when an expert is shown it.
 JOIN = "\n\n"
+#: Stored with every rebuildable chunk set. Changing the algorithm increments this value;
+#: changing only the target remains visible after the colon.
+CHUNKING_PROFILE_VERSION = "characters-v1"
+
+
+def chunking_profile(target_characters: int) -> str:
+    """Stable profile key for one exact chunking policy."""
+    if target_characters <= 0:
+        raise ValueError("target_characters must be positive")
+    return f"{CHUNKING_PROFILE_VERSION}:{target_characters}"
+
 
 
 def join_into_chunks(

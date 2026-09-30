@@ -100,6 +100,11 @@ class Chunk:
     text: str
 
     @property
+    def content_key(self) -> str:
+        """Deterministic corpus key, not the persisted opaque snapshot identity."""
+        return self.snapshot_id
+
+    @property
     def contains_clause(self) -> bool:
         return bool(self.clause_numbers)
 

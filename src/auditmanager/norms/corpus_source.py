@@ -11,20 +11,23 @@ it and never writes back.
 
 from __future__ import annotations
 
+import hashlib
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from .model import Chunk, CorpusTotals, Paragraph, SegmentationReport
+from .model import BlockBody, Chunk, CorpusTotals, Paragraph, SegmentationReport
 from .chunking import DEFAULT_TARGET_CHARACTERS, join_into_chunks
 from .degeneracy import is_degenerate
+from .repair import RepairLedger, RepairOutcome, repaired_snapshot
 from .rerecognition import PageToRecognise
 from .segmentation import blocks, drawn_on, segment
 from .snapshot import CorpusSnapshot, DocumentFingerprint, derive, fingerprint
 
 RESULTS_FILENAME = "results.md"
 BLOCKS_FILENAME = "blocks.json"
+MANIFEST_FILENAME = "MANIFEST.json"
 
 
 class CorpusUnavailable(RuntimeError):
@@ -35,12 +38,81 @@ class CorpusUnavailable(RuntimeError):
     """
 
 
+class RepairProjectionMismatch(ValueError):
+    """A repair ledger cannot be applied exactly to the corpus bytes it names."""
+
+
 @dataclass(frozen=True, slots=True)
 class CorpusDocument:
     slug: str
     source_document_id: str
     markdown: str
     results_bytes: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class CorpusManifestDocument:
+    """Strict loader metadata from the drop's root manifest."""
+
+    slug: str
+    source_document_ref: str
+    title: str
+    doc_type: str
+    pdf_page_count: int
+    block_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectedCorpusDocument:
+    """One validated document ready for a transaction-scoped repository."""
+
+    metadata: CorpusManifestDocument
+    report: SegmentationReport
+    paragraphs: tuple[Paragraph, ...]
+    chunks: tuple[Chunk, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CorpusProjection:
+    """A re-iterable, prevalidated view over one effective corpus snapshot."""
+
+    root: Path
+    snapshot: CorpusSnapshot
+    base_content_key: str
+    repair_count: int
+    target_characters: int
+    documents: tuple[tuple[Path, CorpusManifestDocument], ...]
+    replacements_by_document: Mapping[str, Mapping[str, str]]
+
+    def iter_documents(self) -> Iterator[ProjectedCorpusDocument]:
+        for directory, metadata in self.documents:
+            document = read_document(directory)
+            if document.source_document_id != metadata.source_document_ref:
+                raise CorpusUnavailable(
+                    f"{metadata.slug}: manifest source reference "
+                    f"{metadata.source_document_ref!r} != blocks.json "
+                    f"{document.source_document_id!r}"
+                )
+            paragraphs, report = segment(
+                document.slug,
+                document.markdown,
+                replacements=self.replacements_by_document.get(document.slug),
+            )
+            if report.blocks != metadata.block_count:
+                raise CorpusUnavailable(
+                    f"{metadata.slug}: manifest block count {metadata.block_count} "
+                    f"!= parsed {report.blocks}"
+                )
+            if report.page_headings > metadata.pdf_page_count:
+                raise CorpusUnavailable(
+                    f"{metadata.slug}: parsed {report.page_headings} page headings "
+                    f"exceed manifest PDF page count {metadata.pdf_page_count}"
+                )
+            chunks = join_into_chunks(
+                paragraphs, self.snapshot.content_key, self.target_characters
+            )
+            yield ProjectedCorpusDocument(metadata, report, paragraphs, chunks)
+
 
 
 def document_directories(root: Path) -> tuple[Path, ...]:
@@ -95,13 +167,191 @@ def segment_corpus(
     root: Path,
     snapshot_id: str,
     target_characters: int = DEFAULT_TARGET_CHARACTERS,
+    *,
+    repair_ledger: RepairLedger | None = None,
 ) -> Iterator[tuple[SegmentationReport, tuple[Paragraph, ...], tuple[Chunk, ...]]]:
-    """Segment every document under `root`, in document-directory order."""
+    """Segment every document under ``root`` under one verified text identity.
+
+    The supplied snapshot identifier is checked against the source bytes before the first
+    document is yielded. When a repair ledger is present, every ledger row is also checked
+    against the raw block's key, page, character count and SHA-256 before any replacement is
+    made. A partially applicable ledger is refused rather than projected partly.
+    """
+    base_snapshot = snapshot_of(root)
+    effective_snapshot = (
+        base_snapshot
+        if repair_ledger is None
+        else repaired_snapshot(base_snapshot, repair_ledger)
+    )
+    if snapshot_id != effective_snapshot.snapshot_id:
+        raise RepairProjectionMismatch(
+            f"projection snapshot {snapshot_id!r} does not identify the effective corpus "
+            f"{effective_snapshot.snapshot_id!r}"
+        )
+
+    replacements_by_document = _validated_replacements(root, repair_ledger)
     for directory in document_directories(root):
         document = read_document(directory)
-        paragraphs, report = segment(document.slug, document.markdown)
+        paragraphs, report = segment(
+            document.slug,
+            document.markdown,
+            replacements=replacements_by_document.get(document.slug),
+        )
         chunks = join_into_chunks(paragraphs, snapshot_id, target_characters)
         yield report, paragraphs, chunks
+
+
+def _validated_replacements(
+    root: Path, repair_ledger: RepairLedger | None
+) -> dict[str, dict[str, str]]:
+    """Return applied replacements only after every ledger row matches its source block."""
+    if repair_ledger is None:
+        return {}
+
+    directories = {directory.name: directory for directory in document_directories(root)}
+    source_blocks: dict[str, dict[str, BlockBody]] = {}
+    replacements: dict[str, dict[str, str]] = {}
+
+    for repair in repair_ledger.repairs:
+        directory = directories.get(repair.document_slug)
+        if directory is None:
+            raise RepairProjectionMismatch(
+                f"repair names document absent from the corpus: {repair.document_slug}"
+            )
+        if repair.document_slug not in source_blocks:
+            document = read_document(directory)
+            source_blocks[repair.document_slug] = {
+                block.block_id: block for block in blocks(document.markdown)
+            }
+        source = source_blocks[repair.document_slug].get(repair.block_id)
+        if source is None:
+            raise RepairProjectionMismatch(
+                f"repair names block absent from {repair.document_slug}: {repair.block_id}"
+            )
+
+        actual_sha256 = hashlib.sha256(source.text.encode("utf-8")).hexdigest()
+        mismatches: list[str] = []
+        if repair.page_label != source.page_label:
+            mismatches.append(f"page {repair.page_label} != {source.page_label}")
+        if repair.original_characters != len(source.text):
+            mismatches.append(
+                f"characters {repair.original_characters} != {len(source.text)}"
+            )
+        if repair.original_sha256 != actual_sha256:
+            mismatches.append(
+                f"original_sha256 {repair.original_sha256} != {actual_sha256}"
+            )
+        if mismatches:
+            raise RepairProjectionMismatch(
+                f"{repair.document_slug}/{repair.block_id}: repair does not match source: "
+                + "; ".join(mismatches)
+            )
+
+        if repair.outcome is RepairOutcome.REPAIRED:
+            # PageRepair's constructor makes a missing replacement impossible. Keep the
+            # assertion local so the type narrowing does not become an implicit fallback.
+            if repair.replacement is None:
+                raise RepairProjectionMismatch(
+                    f"{repair.document_slug}/{repair.block_id}: repaired row has no text"
+                )
+            replacements.setdefault(repair.document_slug, {})[
+                repair.block_id
+            ] = repair.replacement
+
+    return replacements
+
+
+def _required_text(document: Mapping[str, object], key: str, slug: str) -> str:
+    value = document.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise CorpusUnavailable(f"{slug}: manifest field {key!r} must be non-empty text")
+    return value
+
+
+def _required_positive_int(document: Mapping[str, object], key: str, slug: str) -> int:
+    value = document.get(key)
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise CorpusUnavailable(f"{slug}: manifest field {key!r} must be a positive integer")
+    return value
+
+
+def _manifest_documents(
+    root: Path, directories: tuple[Path, ...]
+) -> tuple[tuple[Path, CorpusManifestDocument], ...]:
+    manifest_path = root / MANIFEST_FILENAME
+    if not manifest_path.is_file():
+        raise CorpusUnavailable(f"corpus root has no {MANIFEST_FILENAME}")
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise CorpusUnavailable(f"cannot read corpus manifest: {exc}") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("documents"), list):
+        raise CorpusUnavailable("corpus manifest must contain a documents array")
+
+    by_slug: dict[str, CorpusManifestDocument] = {}
+    for raw in payload["documents"]:
+        if not isinstance(raw, dict):
+            raise CorpusUnavailable("each corpus manifest document must be an object")
+        slug_value = raw.get("slug")
+        slug = slug_value if isinstance(slug_value, str) and slug_value else "<unknown>"
+        slug = _required_text(raw, "slug", slug)
+        if slug in by_slug:
+            raise CorpusUnavailable(f"corpus manifest repeats document slug {slug!r}")
+        by_slug[slug] = CorpusManifestDocument(
+            slug=slug,
+            source_document_ref=_required_text(raw, "document_id", slug),
+            title=_required_text(raw, "document_name", slug),
+            doc_type=_required_text(raw, "doc_type", slug),
+            pdf_page_count=_required_positive_int(raw, "pdf_pages", slug),
+            block_count=_required_positive_int(raw, "blocks_count", slug),
+        )
+
+    directory_by_slug = {directory.name: directory for directory in directories}
+    missing = sorted(set(directory_by_slug) - set(by_slug))
+    extra = sorted(set(by_slug) - set(directory_by_slug))
+    if missing or extra:
+        raise CorpusUnavailable(
+            "manifest and corpus directories disagree: "
+            f"missing metadata={missing[:5]!r}, extra metadata={extra[:5]!r}"
+        )
+
+    ordered = tuple((directory, by_slug[directory.name]) for directory in directories)
+    for directory, metadata in ordered:
+        source_ref = read_document(directory).source_document_id
+        if source_ref != metadata.source_document_ref:
+            raise CorpusUnavailable(
+                f"{metadata.slug}: manifest source reference "
+                f"{metadata.source_document_ref!r} != blocks.json {source_ref!r}"
+            )
+    return ordered
+
+
+def open_corpus_projection(
+    root: Path,
+    target_characters: int = DEFAULT_TARGET_CHARACTERS,
+    *,
+    repair_ledger: RepairLedger | None = None,
+) -> CorpusProjection:
+    """Validate the source and return a re-iterable effective corpus projection."""
+    if target_characters <= 0:
+        raise ValueError("target_characters must be positive")
+    directories = document_directories(root)
+    base_snapshot = snapshot_of(root)
+    effective_snapshot = (
+        base_snapshot
+        if repair_ledger is None
+        else repaired_snapshot(base_snapshot, repair_ledger)
+    )
+    replacements = _validated_replacements(root, repair_ledger)
+    return CorpusProjection(
+        root=root,
+        snapshot=effective_snapshot,
+        base_content_key=base_snapshot.content_key,
+        repair_count=0 if repair_ledger is None else len(repair_ledger.applied),
+        target_characters=target_characters,
+        documents=_manifest_documents(root, directories),
+        replacements_by_document=replacements,
+    )
 
 
 def totals(reports_and_chunks: Iterator[tuple[SegmentationReport, tuple[Paragraph, ...], tuple[Chunk, ...]]]) -> CorpusTotals:

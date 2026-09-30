@@ -157,7 +157,7 @@ class OpaqueId:
 
 
 # ---------------------------------------------------------------------------
-# The 25 declared entity identities, in catalog order.
+# The 27 declared entity identities, in catalog order.
 # ---------------------------------------------------------------------------
 
 
@@ -230,7 +230,15 @@ class PromptBundleId(OpaqueId, prefix="pb", entity="PromptBundle"):
 
 
 class NormsSnapshotId(OpaqueId, prefix="ns", entity="NormsSnapshot"):
-    """Identity of a norms snapshot. Not allocated in PC-01."""
+    """Identity of an immutable norms snapshot."""
+
+
+class NormDocumentId(OpaqueId, prefix="ndoc", entity="NormDocument"):
+    """Identity of one immutable normative document inside a snapshot."""
+
+
+class NormParagraphId(OpaqueId, prefix="npar", entity="NormParagraph"):
+    """Identity of one immutable canonical normative paragraph."""
 
 
 class ModelCallId(OpaqueId, prefix="mc", entity="ModelCallRecord"):

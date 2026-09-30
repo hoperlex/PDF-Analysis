@@ -70,6 +70,27 @@ docker compose --env-file infra/deploy/env/alpha.env \
 `migrate` runs once and exits; `api` waits for it. Migrations are never run by a serving
 process — two replicas starting together would race the same upgrade.
 
+### Normative corpus in the current alpha image
+
+The image now contains migration `0012_norms_corpus` and the deterministic, transaction-scoped
+loader. A normal `deploy.sh` run advances PostgreSQL to that head before the API starts. It does
+**not** import a corpus: source paths and repair-ledger paths are operator inputs, not deployment
+configuration, and corpus bytes are not baked into the image.
+
+This boundary is intentional and observable:
+
+- the durable DB model separates opaque snapshot/document/paragraph identities from the
+  content-derived equality key;
+- canonical paragraphs are immutable evidence, while retrieval chunks are a rebuildable
+  versioned projection;
+- the DB loader performs no MinIO write, and PDF/crop custody remains a separate reconciliation
+  implementation slot;
+- the deployed PostgreSQL image still has no pgvector extension, and no runtime embedding or
+  search API/UI exists yet.
+
+Consequently `env/alpha.env.example` has no corpus path, pgvector or embedding setting. Such a
+setting would be ignored by the current compose/runtime and would falsely suggest search is live.
+
 ### A trailing slash, and the two things that made it leave this origin — `Y-G`
 
 `/api/v1/<anything>/` answers **307**, and the application builds that `Location` as an

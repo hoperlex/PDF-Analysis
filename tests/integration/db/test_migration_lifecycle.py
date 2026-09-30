@@ -28,6 +28,11 @@ EXPECTED_TABLES = {
     "document",
     "document_version",
     "expert_decision_event",
+    "norm_chunk",
+    "norm_chunk_build",
+    "norm_document",
+    "norm_paragraph",
+    "norms_snapshot",
     "finding",
     "finding_evidence",
     "finding_observation",
@@ -50,7 +55,6 @@ FORBIDDEN_TABLES = {
     "export_request",
     "worker",
     "comparison",
-    "norms_snapshot",
     "outbox",
 }
 
@@ -95,8 +99,8 @@ def test_clean_install_creates_exactly_the_declared_relations(
     assert tables == EXPECTED_TABLES
     assert _relnames(migrated_engine, "v") == EXPECTED_VIEWS
     assert tables & FORBIDDEN_TABLES == set(), (
-        "PC-01 instantiates no Job, Attempt, Lease, Import or Export aggregate; "
-        "a table for one is a scope change, not an implementation detail."
+        "This head instantiates no Job, Attempt, Lease, Import or Export aggregate; "
+        "a table for one remains a scope change, not an implementation detail."
     )
 
 

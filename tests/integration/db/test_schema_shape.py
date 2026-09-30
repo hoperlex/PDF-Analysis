@@ -47,6 +47,9 @@ IMMUTABLE_TABLES = {
     "finding_evidence",
     "model_call",
     "contract_state_transition",
+    "norm_document",
+    "norm_paragraph",
+    "norms_snapshot",
 }
 
 
@@ -212,6 +215,8 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "analysis_profile_id": "ap",
         "prompt_bundle_id": "pb",
         "norms_snapshot_id": "ns",
+        "norm_document_id": "ndoc",
+        "norm_paragraph_id": "npar",
         "model_call_id": "mc",
         "finding_uid": "fnd",
         "finding_observation_id": "fobs",

@@ -20,9 +20,14 @@ block's `> **Crop:**` line, up to the next `## Page` or `### BLOCK`, is that blo
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 
 from .model import BlockBody, Paragraph, ParagraphKind, SegmentationReport, SourceAttribution
 from .running_heads import is_publisher_noise, repeated_offcuts
+
+#: Stored with a durable snapshot. A semantic segmentation change must increment this value
+#: rather than silently replacing canonical paragraph anchors for the same content key.
+SEGMENTATION_PROFILE_VERSION = "markdown-v1"
 
 _PAGE = re.compile(r"^## Page (\d+)\s*$")
 _BLOCK = re.compile(r"^### BLOCK #(\d+) \[([A-Z]+)\]: (\S+)\s*$")
@@ -101,15 +106,30 @@ def blocks(markdown: str) -> tuple[BlockBody, ...]:
     )
 
 
-def recognised_text(markdown: str) -> str:
+def _effective_body(block: _Block, replacements: Mapping[str, str]) -> str:
+    raw = "\n".join(block.body).strip("\n")
+    return replacements.get(block.block_id, raw)
+
+
+def _validate_replacement_keys(blocks: list[_Block], replacements: Mapping[str, str]) -> None:
+    unknown = sorted(set(replacements) - {block.block_id for block in blocks})
+    if unknown:
+        raise ValueError(
+            "replacement text names block(s) absent from the document: " + ", ".join(unknown)
+        )
+
+
+def recognised_text(markdown: str, *, replacements: Mapping[str, str] | None = None) -> str:
     """The document's recognised text: block bodies in block order, joined by a blank line.
 
     This is the string `Paragraph.char_offset` indexes into. It is defined here, once, because
     an offset is worthless unless the text it indexes is reconstructible from the source by
     anyone who reads this function.
     """
-    blocks, _page_headings = _parse_blocks(markdown)
-    return "\n\n".join("\n".join(block.body).strip("\n") for block in blocks)
+    parsed, _page_headings = _parse_blocks(markdown)
+    effective = replacements or {}
+    _validate_replacement_keys(parsed, effective)
+    return "\n\n".join(_effective_body(block, effective) for block in parsed)
 
 
 def _classify(paragraph: str) -> ParagraphKind:
@@ -148,15 +168,28 @@ def attribution(markdown: str) -> SourceAttribution:
     return SourceAttribution.UNATTRIBUTED
 
 
-def segment(document_slug: str, markdown: str) -> tuple[tuple[Paragraph, ...], SegmentationReport]:
-    """Parse one `results.md` into substantive paragraphs plus the counts behind them."""
-    blocks, page_headings = _parse_blocks(markdown)
+def segment(
+    document_slug: str,
+    markdown: str,
+    *,
+    replacements: Mapping[str, str] | None = None,
+) -> tuple[tuple[Paragraph, ...], SegmentationReport]:
+    """Parse one `results.md` into substantive paragraphs plus the counts behind them.
+
+    ``replacements`` is the already-validated applied part of a repair ledger, keyed by
+    ``block_id``. The raw markdown remains immutable; offsets and counts describe the
+    effective text a downstream reader receives. Corpus-level validation that the ledger was
+    taken against these exact source bytes lives in :func:`corpus_source.segment_corpus`.
+    """
+    parsed, page_headings = _parse_blocks(markdown)
+    effective = replacements or {}
+    _validate_replacement_keys(parsed, effective)
 
     candidates: list[tuple[int, str, str]] = []  # (page_label, block_id, text)
     offset_by_index: list[int] = []
     cursor = 0
-    for index, block in enumerate(blocks):
-        body = "\n".join(block.body).strip("\n")
+    for index, block in enumerate(parsed):
+        body = _effective_body(block, effective)
         if index:
             cursor += 2  # the "\n\n" recognised_text joins blocks with
         search_from = 0
@@ -215,9 +248,9 @@ def segment(document_slug: str, markdown: str) -> tuple[tuple[Paragraph, ...], S
     report = SegmentationReport(
         document_slug=document_slug,
         page_headings=page_headings,
-        blocks=len(blocks),
-        recognised_characters=sum(len("\n".join(b.body).strip("\n")) for b in blocks)
-        + max(len(blocks) - 1, 0) * 2,
+        blocks=len(parsed),
+        recognised_characters=sum(len(_effective_body(block, effective)) for block in parsed)
+        + max(len(parsed) - 1, 0) * 2,
         candidates=len(candidates),
         discarded_publisher_noise=noise,
         discarded_repeated_offcut=offcut,

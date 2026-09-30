@@ -29,7 +29,41 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Where the programme is, 2026-09-30 — wave 47 closed
+## Active integration, 2026-09-30 — normative corpus foundation
+
+The independent normative-corpus slices are accepted by `NORM-INT-01` for a gated fast-forward to
+`origin/main`. This integration deliberately creates no release tag and does not move `origin/dev`;
+W48 remains the separately planned host/optimisation wave. The frozen API surface remains
+**17 paths / 20 operations / 61 schemas** and the error
+catalog remains **22**. Domain candidate revision 8 now declares **27** opaque identities:
+`NormDocument` uses `ndoc_<ULID>`, `NormParagraph` uses `npar_<ULID>`, and retrieval
+chunks deliberately have no public identity. The migration head is **`0012_norms_corpus`**.
+
+Persistence separates opaque `norms_snapshot_id` from deterministic `content_key`, stores
+immutable canonical paragraphs separately from replace-only retrieval chunks, and loads an exact
+repeat idempotently in one PostgreSQL transaction. The actual read-only corpus projection remains
+**674 documents / 348,777 canonical paragraphs / 55,702 chunks** under content key
+`2026-07-23..2026-08-20+17d.4b74348debf7`.
+
+The real-corpus embedding bake-off freezes `bge-m3-dense-v1`: BGE-M3 revision
+`5617a9f61b028005a4858fdac845db406aefb181`, CLS pooling, 1024 float32 dimensions, normalized
+inner product, 512 total tokens and 64 content-token overlap. On 24 source-grounded Russian
+queries it measured MRR **0.848611**, recall@1 **0.75**, recall@5 **0.958333** and recall@10
+**1.0**. Its tokenizer produces **62,325** lossless windows from the current chunk projection;
+no over-limit input, truncation or AI summary reaches the model.
+
+Source PDF/crop custody is specified independently of MinIO credentials: every PDF and crop has
+its own `blob_id`, and a binding is published only after intent/outbox reconciliation and
+checksum confirmation. The existing DB loader still performs no object-store write. The current
+PostgreSQL image has no `vector` extension, so the pgvector supply-chain choice is recorded as
+`NORM-Q08` before migration slot 0013.
+
+The complete project gate passes with literal `GATE OK`. The last closed release remains
+`alpha-w47`; `origin/main` is the publication authority for this untagged foundation and no
+deployment claim follows from this section. Use
+`infra/deploy/verify-deployed.sh` for the deployed-state answer.
+
+## Previous release state — wave 47 (historical record)
 
 **Wave 47 is closed as `alpha-w47`.** The tag, `origin/dev` and `origin/main` resolve to one
 integration commit: accepted closeout `2330854` plus this state update. `W47-CLOSE` changes only

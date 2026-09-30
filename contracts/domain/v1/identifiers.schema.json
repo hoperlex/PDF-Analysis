@@ -41,7 +41,7 @@
       "const": "1.0.0-draft.0"
     },
     "candidate_revision": {
-      "const": 7,
+      "const": 8,
       "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
     },
     "revision_note": {
@@ -121,6 +121,8 @@
         "analysis_profile_id",
         "prompt_bundle_id",
         "norms_snapshot_id",
+        "norm_document_id",
+        "norm_paragraph_id",
         "model_call_id",
         "comparison_id",
         "sheet_link_id",
@@ -159,6 +161,8 @@
         "AnalysisProfile",
         "PromptBundle",
         "NormsSnapshot",
+        "NormDocument",
+        "NormParagraph",
         "ModelCallRecord",
         "Comparison",
         "SheetLink",
@@ -191,6 +195,8 @@
           "analysis_profile_id",
           "prompt_bundle_id",
           "norms_snapshot_id",
+          "norm_document_id",
+          "norm_paragraph_id",
           "model_call_id",
           "comparison_id",
           "sheet_link_id",
@@ -203,7 +209,7 @@
     },
     "distinct_identities": {
       "type": "array",
-      "minItems": 4,
+      "minItems": 5,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -244,6 +250,8 @@
                 "analysis_profile_id",
                 "prompt_bundle_id",
                 "norms_snapshot_id",
+                "norm_document_id",
+                "norm_paragraph_id",
                 "model_call_id",
                 "comparison_id",
                 "sheet_link_id",

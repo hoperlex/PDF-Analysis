@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.identifiers",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 7,
-  "revision_note": "Fourth review round of the unreleased 1.0.0-draft.1 candidate. Round 4 is a correction round: it adds, removes and renames nothing and changes no rule. The one substantive change in the family is in state-machines.json and README.md, where a stale statement about another lane's ledger is corrected: U-06 is resolved, not open, and every part of the FS-04 fail-soft policy has an assigned encoder. This catalog is unchanged apart from candidate_revision and this note: no identifier, prefix, entity binding, distinct-identity rule, command key or authority capability was added, removed or renamed, and the 25 declared identifiers are exactly those of rounds 2 and 3. The optional branch reference the new policy names is allocated by the contract family that owns the branch and is deliberately not declared as an identifier here. The family carries one candidate_revision, so this catalog moves with the round. contract_version stays 1.0.0-draft.1 because the round redefined no meaning, and round-to-round distinguishability is carried by candidate_revision rather than by the version string.",
+  "candidate_revision": 8,
+  "revision_note": "Candidate revision 8 of the unreleased 1.0.0-draft.1 candidate. Under the repository owner's NORM-ID-01 ruling of 2026-09-30, two identifiers and entity bindings are added: norm_document_id (ndoc) names one immutable normative document inside a NormsSnapshot, and norm_paragraph_id (npar) names one immutable canonical paragraph. Both are opaque, globally unique and generated once; neither is derived from a source reference, slug, ordinal, checksum, content key or database sequence. Retrieval chunks remain replaceable projections and deliberately receive no public identifier. No existing identifier, prefix, rule or binding is removed or renamed. The API and error-code surfaces do not change. The family carries one candidate_revision, so all three catalogs and all three schemas move to 8; state and error catalogs otherwise remain byte-stable. contract_version stays 1.0.0-draft.1 because this is an additive change to an unreleased draft candidate.",
   "status": "draft_candidate",
   "frozen": false,
   "format": "<prefix>_<ULID>",
@@ -24,6 +24,7 @@
     "Prefixes are globally unique across this catalog; a new entity requires a new catalog entry and a new prefix.",
     "Cross-entity references use the referenced identifier verbatim. No composite, derived, encoded or human-readable compound key is defined by this contract.",
     "Suffix -uid marks the workspace/semantic identities carried over from 1.0.0-draft.0 and -id marks every other identity. The suffix is retained for consumer stability only; it is not a type discriminator and grants no different guarantee.",
+    "NormDocument and NormParagraph are immutable public entities inside NormsSnapshot and carry their own opaque identifiers. A rebuildable retrieval chunk, its ordinal and its chunking profile are projections and have no public entity identity.",
     "The canonical name of the execution authority capability is execution_token. fencing_token and authority_token are legacy or cross-lane evidence names only; no target field, payload key, database column or API parameter defined against this contract carries them.",
     "The canonical version key of every catalog in this family is contract_version, a string semver or draft version. $schema stays the JSON Schema dialect and $id stays schema identity; neither is a contract version."
   ],
@@ -46,6 +47,8 @@
     "analysis_profile_id": "ap",
     "prompt_bundle_id": "pb",
     "norms_snapshot_id": "ns",
+    "norm_document_id": "ndoc",
+    "norm_paragraph_id": "npar",
     "model_call_id": "mc",
     "comparison_id": "cmp",
     "sheet_link_id": "sln",
@@ -73,6 +76,8 @@
     "AnalysisProfile": "analysis_profile_id",
     "PromptBundle": "prompt_bundle_id",
     "NormsSnapshot": "norms_snapshot_id",
+    "NormDocument": "norm_document_id",
+    "NormParagraph": "norm_paragraph_id",
     "ModelCallRecord": "model_call_id",
     "Comparison": "comparison_id",
     "SheetLink": "sheet_link_id",
@@ -138,6 +143,20 @@
         "WS-02",
         "WS-03"
       ]
+    },
+    {
+      "name": "normative_corpus_identity",
+      "identifiers": [
+        "norms_snapshot_id",
+        "norm_document_id",
+        "norm_paragraph_id"
+      ],
+      "rule": "NormsSnapshot identifies one immutable corpus state, NormDocument one immutable member document and NormParagraph one immutable canonical paragraph. Each is allocated independently and never derived from content or from another identity. Retrieval chunks are rebuildable projections over canonical paragraphs and have no public entity identity.",
+      "authority": "NORM-ID-01 owner ruling 2026-09-30",
+      "evidence": [
+        "NORM-Q01",
+        "NORM-Q07"
+      ]
     }
   ],
   "non_identity": [
@@ -152,7 +171,8 @@
     "provider request id, model name or prompt text",
     "idempotency key or command payload fingerprint",
     "execution authority capability such as execution_token, and its legacy evidence names fencing_token and authority_token",
-    "content checksum such as sha256"
+    "content checksum such as sha256",
+    "retrieval chunk row, chunk ordinal or chunking profile"
   ],
   "correlation_identifiers": {
     "correlation_id": {

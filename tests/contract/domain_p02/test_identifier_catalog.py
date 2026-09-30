@@ -1,6 +1,6 @@
 """The identity types, the contract catalog and the migration's CHECKs agree.
 
-Three artifacts describe the same 25 identities. Any one of them can be edited
+Three artifacts describe the same 27 identities. Any one of them can be edited
 alone, which is what these tests are for.
 """
 

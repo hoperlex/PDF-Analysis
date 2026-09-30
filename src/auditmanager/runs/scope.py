@@ -93,7 +93,6 @@ AGGREGATES_NOT_INSTANTIATED: Final[tuple[str, ...]] = (
     "export",
     "worker",
     "comparison",
-    "norms_snapshot",
     "outbox",
 )
 

@@ -233,6 +233,33 @@ $EDITOR infra/deploy/env/provider.env
 entirely. It is never passed to `--env-file`, which keeps these names out of compose
 **substitution**, where they could otherwise be interpolated into an image tag or a label.
 
+### Updating an existing VPS to the normative-corpus foundation
+
+The ignored `alpha.env` and `provider.env` are host state. A pull does not replace them, and an
+operator updating an existing alpha must **not** copy the examples over them. From the existing
+clone, with a clean tracked worktree:
+
+```
+git status --short
+git fetch origin
+git switch main
+git pull --ff-only origin main
+
+infra/deploy/deploy.sh --env-file infra/deploy/env/alpha.env
+infra/deploy/verify-deployed.sh --env-file infra/deploy/env/alpha.env
+```
+
+`git status --short` may stay silent even though the ignored secret files exist; that is expected.
+If it reports tracked changes, stop and preserve/reconcile them before pulling instead of resetting
+the VPS checkout. Never force-update the checkout or remote branch as part of deployment.
+
+The deploy's one-shot `migrate` service upgrades the database from `0011_document_section` to
+`0012_norms_corpus` before the API starts. It creates the corpus persistence tables but does not
+load corpus content. The current alpha app also does not use those rows for retrieval: pgvector,
+runtime embeddings and search API/UI remain a later slice. Therefore this update needs no new env
+name. The existing `recorded` provider mode remains the safe no-spend alpha default; a live/proxy
+credential still belongs only in `provider.env`.
+
 ---
 
 ## 3. Deploy

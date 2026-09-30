@@ -68,6 +68,11 @@ class CorpusSnapshot:
     content_digest: str
 
     @property
+    def content_key(self) -> str:
+        """Deterministic equality key, distinct from persisted ``norms_snapshot_id``."""
+        return self.snapshot_id
+
+    @property
     def footnote_window(self) -> str:
         """The appendix footnote's date phrase, in the form `R-17` accepts.
 

@@ -1,9 +1,11 @@
-# Domain contract v1 — candidate `1.0.0-draft.1`, revision 7
+# Domain contract v1 — candidate `1.0.0-draft.1`, revision 8
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
-owner). Status: **candidate draft — committed, not frozen, not ratified.** Every
+owner); the additive norm-identity amendment is owned by
+[NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **candidate draft —
+working-tree amendment, not frozen, not ratified.** Every
 catalog in this directory declares `contract_version` `1.0.0-draft.1`,
-`candidate_revision` `7`, `status` `draft_candidate` and `frozen` `false`.
+`candidate_revision` `8`, `status` `draft_candidate` and `frozen` `false`.
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a
@@ -44,6 +46,13 @@ declares its envelope version exactly once, under `contract_version`, whose valu
 unchanged. See
 [What changed in revision 5](#what-changed-in-revision-5-and-what-breaks-for-a-reader-of-revision-4).
 
+Revision 8 records the repository owner decision of 2026-09-30 for normative-corpus
+identity. `NormDocument` and `NormParagraph` become contracted entities with opaque
+`ndoc_<ULID>` and `npar_<ULID>` identities. They are distinct from `NormsSnapshot`
+and from all content-derived keys; rebuildable retrieval chunks deliberately remain projections
+without a public identity. Revisions 6 and 7 are preserved in Git history; this amendment neither
+rewrites nor relabels those rounds.
+
 ## Files
 
 | File | Role |
@@ -52,7 +61,7 @@ unchanged. See
 | [identifiers.schema.json](identifiers.schema.json) | Shape of the identity catalog |
 | [state-machines.json](state-machines.json) | Six closed lifecycles, guards, terminal semantics, run-creation rule, optional-branch policy, projections |
 | [state-machines.schema.json](state-machines.schema.json) | Shape of the lifecycle catalog |
-| [error-codes.json](error-codes.json) | 20 typed codes, categories, envelope declaration, detail-safety and internal-mapping rules |
+| [error-codes.json](error-codes.json) | 22 typed codes, categories, envelope declaration, detail-safety and internal-mapping rules |
 | [error-codes.schema.json](error-codes.schema.json) | Shape of the error catalog |
 | [error-envelope.schema.json](error-envelope.schema.json) | The externally visible failure envelope |
 | [examples/error-envelope.example.json](examples/error-envelope.example.json) | Valid envelope (`stale_attempt`) |
@@ -65,25 +74,22 @@ string semver/draft version. `$schema` stays the JSON Schema dialect and `$id` s
 schema identity; neither is a contract version. The bare `version` key that revision 1
 used as the contract-envelope version is gone.
 
-`1.0.0-draft.1` is **committed, but neither frozen nor ratified.** The candidate set
-was integrated at `cf7740474b1786163f54d93b013a0d526ef989e0`, where every catalog
-already declares `contract_version` `1.0.0-draft.1` alongside `status`
-`draft_candidate` and `frozen` `false`; `1.0.0-draft.0` is the version it supersedes.
-Being committed is not what governs whether a review round may still change the
-candidate — being unfrozen and unratified is. Until the integrator records a freeze, a
-round edits the candidate in place; after it, the same edit requires the formal
-freeze-break and version procedure.
+The `1.0.0-draft.1` base was integrated at
+`cf7740474b1786163f54d93b013a0d526ef989e0`. Revision 8 is a later working-tree amendment:
+it is neither committed here, frozen nor ratified. Every catalog still declares
+`contract_version` `1.0.0-draft.1`, `status` `draft_candidate` and `frozen` `false`;
+`1.0.0-draft.0` is the version it supersedes. Until an integrator records a freeze, an
+owner-authorized round edits this unreleased candidate in place and advances
+`candidate_revision`; after freeze, the same edit requires the formal freeze-break and
+version procedure.
 
 So the version line stays `1.0.0-draft.0` → `1.0.0-draft.1`, and each review round is
-recorded by `candidate_revision`, which the owning schemas pin with `const`. The
-version string does not move because the **meaning** of the contract did not: round 5
-removes a deprecated mirror that carried no independent value and that no consumer was
-permitted to read, so nothing a consumer keys on changed. What must stay
-distinguishable between rounds is the round itself, and `candidate_revision` carries
-that — giving an unfrozen candidate exactly the guarantee a released version has: it
-cannot change meaning while keeping its number. Bumping to `1.0.0-draft.2` instead
-would announce a new contract version for a round that redefined nothing, and would
-make every consumer re-pin a version string on every review round.
+recorded by `candidate_revision`, which the owning schemas pin with `const`. Revision 8 is
+additive and changes the unreleased candidate identity surface, so consumers must pin and review
+candidate revision 8. The draft version string does not move because this is still the same
+unfrozen `1.0.0-draft.1` candidate; `candidate_revision` is the machine-readable
+discriminator that prevents meaning from changing under the same revision. A freeze or release
+would move this change onto the formal version procedure.
 
 ### `ID-01` is complete for this family: no catalog carries `version`
 
@@ -114,8 +120,7 @@ must read `contract_version`, whose value did not change.
   constrains key names with `propertyNames` and validates every value against a
   strict item schema. Losing an entry fails the schema.
 - `contract`, `contract_version`, `supersedes` and `candidate_revision` are `const`.
-  A released version cannot change meaning while keeping its number, and a committed
-  but unfrozen candidate cannot change meaning while keeping its revision.
+  A released version cannot change meaning while keeping its number, and an unfrozen candidate cannot change meaning while keeping its revision.
 - `error_code` in the envelope is an `enum` **exactly equal** to the key set of
   `error-codes.json`, and `retryable` is pinned per code by `if`/`then`. A provider
   cannot invent a code or contradict the catalog's retry signal.
@@ -135,7 +140,7 @@ must read `contract_version`, whose value did not change.
 
 ## Identity
 
-`<prefix>_<ULID>`, Crockford base32, uppercase, 26 characters. 25 identifiers, 25
+`<prefix>_<ULID>`, Crockford base32, uppercase, 26 characters. 27 identifiers, 27
 entity bindings, all prefixes unique.
 
 Load-bearing rules (full text in [identifiers.json](identifiers.json)):
@@ -152,7 +157,7 @@ Load-bearing rules (full text in [identifiers.json](identifiers.json)):
   stability. The suffix is not a type discriminator and grants no different
   guarantee.
 
-Four distinctions are declared explicitly and machine-readably in
+Five distinctions are declared explicitly and machine-readably in
 `distinct_identities`:
 
 | Distinction | Rule | Authority |
@@ -161,6 +166,7 @@ Four distinctions are declared explicitly and machine-readably in
 | `run_id` vs `job_id` vs `attempt_id` | business history vs schedulable work item vs one leased execution | [ADR-0007](../../../docs/architecture/adr/ADR-0007-postgres-jobs-outbox-and-attempt-fencing.md) |
 | `decision_id` per event | every verdict, correction and revocation allocates a new one | [ADR-0012](../../../docs/architecture/adr/ADR-0012-expert-decision-ledger-and-kb-projection.md) |
 | `version_uid` vs `blob_id` vs `import_id` | published input state vs content bytes vs the operation | Bible P-02, P-03 |
+| `norms_snapshot_id` vs `norm_document_id` vs `norm_paragraph_id` | immutable corpus state vs member document vs canonical paragraph; rebuildable chunks have no public identity | NORM-ID-01 owner ruling 2026-09-30 |
 
 ### `execution_token`: a capability, not an identity, and not a number
 
@@ -718,6 +724,23 @@ assumption.
   - `attempt` gains the `lost` terminal, distinct from `superseded`;
   - the error envelope gains required `contract_version` and required `retryable`;
   - two identifiers are added: `lease_id` (`lse`) and `command_id` (`cmd`).
+
+### What changed in revision 8, and what breaks for a reader of revision 7
+
+Revision 8 carries the repository owner's `NORM-ID-01` ruling of 2026-09-30. It adds two
+opaque identities for canonical normative entities and explicitly refuses an identity for the
+rebuildable retrieval projection.
+
+| Change | Consumer impact |
+|---|---|
+| `norm_document_id` with prefix `ndoc`, bound to `NormDocument` | **Additive.** Closed identity/entity enums must add the member. Source document references, slugs and filenames remain non-identity anchors. |
+| `norm_paragraph_id` with prefix `npar`, bound to `NormParagraph` | **Additive.** Closed identity/entity enums must add the member. Paragraph ordinals, page labels, block references and text hashes remain non-identities. |
+| `normative_corpus_identity` distinction | **Clarifying and fail-closed.** Snapshot, document and paragraph IDs are allocated independently; no identifier is derived from another or from content. Retrieval chunks remain rebuildable and have no public identity. |
+| `candidate_revision` `7` → `8` in all three catalogs and their schemas | Shape-neutral except for readers pinning the candidate revision. State-machine and error semantics are unchanged. |
+
+No API path, operation or schema and no error code, state, transition or machine changes in this
+round. `contract_version` remains `1.0.0-draft.1` because the candidate is unreleased and
+`frozen` remains `false`.
 
 ### What changed in revision 7, and what breaks for a reader of revision 6
 
