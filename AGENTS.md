@@ -58,3 +58,17 @@
 6. доказательство, что forbidden hotspots не затронуты, либо ссылка на разрешающий task.
 
 Не создавать checkpoint/tag самостоятельно, если задача не является `W*-INT-*`.
+
+## 6. `origin/main` запускает развёртывание
+
+После подключения GitHub auto-deploy любой push или merge в `origin/main` является внешним
+deployment-действием, а не только публикацией Git-истории. Перед ним обязательно прочитать и
+выполнить `docs/program/MAIN_AUTODEPLOY_POLICY.md`.
+
+- Правом на push в `origin/main` владеет только явно назначенная integration-задача, в чьём
+  integration contract назван этот ref.
+- Нужны чистое дерево, полный `make gate` с буквальным `GATE OK`, повторная проверка удалённого
+  ref и доказанный fast-forward точного проверенного SHA.
+- Запрещены force-push, непроверенный «маленький фикс» после gate и параллельные публикации.
+- После push задача не завершена, пока workflow не закончен успешно и deployment host не прошёл
+  `infra/deploy/verify-deployed.sh` для того же дерева.
