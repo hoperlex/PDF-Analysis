@@ -1,0 +1,112 @@
+name: deploy-auto
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: auditmanager-alpha-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy exact AuditManager revision
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Prepare SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          test -n "$SSH_KEY"
+          test -n "$KNOWN_HOSTS"
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy and verify exact commit
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]
+
+          ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=4 \
+            -i "$HOME/.ssh/deploy_key" \
+            "${VPS_USER}@${VPS_HOST}" \
+            bash -s -- "$DEPLOY_SHA" <<'REMOTE'
+          set -euo pipefail
+
+          readonly DEPLOY_SHA="$1"
+          readonly REPOSITORY=/srv/auditmanager
+
+          cd "$REPOSITORY"
+
+          echo "=== requested revision ==="
+          printf '%s\n' "$DEPLOY_SHA"
+
+          echo "=== host before deployment ==="
+          git rev-parse HEAD
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "REFUSED: $REPOSITORY has tracked or untracked changes." >&2
+            git status --short >&2
+            exit 3
+          fi
+
+          echo "=== fetch publication authority ==="
+          GIT_TERMINAL_PROMPT=0 git fetch --prune origin
+
+          echo "=== verify requested revision ==="
+          git cat-file -e "${DEPLOY_SHA}^{commit}"
+          git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+
+          echo "=== select exact revision ==="
+          git checkout --detach "$DEPLOY_SHA"
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+          echo "=== deploy ==="
+          infra/deploy/deploy.sh
+
+          echo "=== verify deployed tree ==="
+          infra/deploy/verify-deployed.sh
+
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+          echo "DEPLOY OK: $DEPLOY_SHA"
+          REMOTE
+
+      - name: Remove SSH material
+        if: always()
+        run: |
+          rm -f "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
