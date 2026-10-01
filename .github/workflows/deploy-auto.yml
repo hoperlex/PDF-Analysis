@@ -24,13 +24,14 @@ jobs:
       - name: Prepare SSH
         env:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           umask 077
 
-          test -n "$SSH_KEY"
-          test -n "$KNOWN_HOSTS"
+          if [ -z "$SSH_KEY" ]; then
+            echo "::error::VPS_SSH_KEY is not configured."
+            exit 1
+          fi
 
           mkdir -p "$HOME/.ssh"
           chmod 700 "$HOME/.ssh"
@@ -38,7 +39,11 @@ jobs:
           printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/deploy_key"
           chmod 600 "$HOME/.ssh/deploy_key"
 
-          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          # Public ED25519 host key verified out of band and again against the live VPS on
+          # 2026-10-01. Fingerprint: SHA256:n4RyFDQqWLPJnXyZ3SvyXUf8dpDNWjzShuPRYDdF2LE
+          printf '%s\n' \
+            '135.106.164.147 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPZcfVwHVIUEU7W0auTb70VKY/aLppXM/54vzpmy0+XV' \
+            > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Deploy and verify exact commit

@@ -21,8 +21,13 @@ class DeployAutoWorkflowContract(unittest.TestCase):
         self.assertIn("cancel-in-progress: false", self.text)
 
     def test_ssh_is_fail_closed_and_uses_only_declared_secrets(self) -> None:
-        for secret in ("VPS_HOST", "VPS_USER", "VPS_SSH_KEY", "VPS_KNOWN_HOSTS"):
+        for secret in ("VPS_HOST", "VPS_USER", "VPS_SSH_KEY"):
             self.assertIn(f"secrets.{secret}", self.text)
+        self.assertNotIn("secrets.VPS_KNOWN_HOSTS", self.text)
+        self.assertIn(
+            "SHA256:n4RyFDQqWLPJnXyZ3SvyXUf8dpDNWjzShuPRYDdF2LE", self.text
+        )
+        self.assertIn("135.106.164.147 ssh-ed25519 AAAAC3", self.text)
         self.assertIn("StrictHostKeyChecking=yes", self.text)
         self.assertIn("BatchMode=yes", self.text)
         self.assertIn("IdentitiesOnly=yes", self.text)

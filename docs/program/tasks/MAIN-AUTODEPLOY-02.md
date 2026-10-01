@@ -18,7 +18,9 @@ success until the deployed-tree verifier passes for the same clean checkout.
 - deployment checkout: `/srv/auditmanager`
 - deployment command: `infra/deploy/deploy.sh`
 - proof command: `infra/deploy/verify-deployed.sh`
-- GitHub secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`
+- GitHub secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`
+- pinned public VPS ED25519 host-key fingerprint:
+  `SHA256:n4RyFDQqWLPJnXyZ3SvyXUf8dpDNWjzShuPRYDdF2LE`
 - trigger branch and publication authority: `origin/main`
 - API/domain/migration contracts: unchanged; migration head `0013_norm_embeddings`
 
@@ -53,7 +55,7 @@ composition, environment-secret or host-configuration path.
 
 ## Deliverables
 
-- dependency-free GitHub Actions workflow with exact-SHA, clean-tree and verified-host-key guards
+- dependency-free GitHub Actions workflow with exact-SHA, clean-tree and pinned-host-key guards
 - workflow contract test protecting its trigger, serialization and command ordering
 - executor handoff with candidate SHA, gate result, workflow result and public-origin probes;
   this point-in-time evidence is not committed after the push because that commit would itself
@@ -81,7 +83,8 @@ composition, environment-secret or host-configuration path.
 
 ## Failure/idempotency/security cases
 
-- missing/empty key or known-host material stops before any SSH connection
+- missing/empty private deploy key stops before any SSH connection; a missing, changed or
+  mismatched pinned server key is refused by strict host-key checking
 - malformed user, host or SHA stops locally; strict host-key checking and one explicit identity
   are mandatory
 - dirty host, missing commit, non-main commit, checkout failure, deploy failure, verifier failure
@@ -100,8 +103,9 @@ owned workflow in a newly gated commit.
 
 - Changed files are the three repository paths in `Allowed paths`; the existing manual-alpha
   files in the shared working tree remain untracked and untouched.
-- No API/domain/event/migration/environment contract changes; the new workflow consumes only the
-  four owner-created GitHub secrets named above.
+- No API/domain/event/migration/environment contract changes; the workflow consumes only the
+  three owner-created GitHub secrets named above. The server's public ED25519 key is intentionally
+  reviewable source, not confidential credential material.
 - The executor must return exact candidate SHA, full-gate sentinel, workflow run result and
   public-origin results after the one authorized `origin/main` fast-forward. That live evidence
   belongs in the task response rather than a self-triggering follow-up commit.
