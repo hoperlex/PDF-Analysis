@@ -19,6 +19,8 @@ success until the deployed-tree verifier passes for the same clean checkout.
 - deployment command: `infra/deploy/deploy.sh`
 - proof command: `infra/deploy/verify-deployed.sh`
 - GitHub secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`
+- accepted `VPS_HOST` values: `135.106.164.147` or
+  `audit.135.106.164.147.sslip.io`; both resolve to the same pinned alpha host
 - pinned public VPS ED25519 host-key fingerprint:
   `SHA256:n4RyFDQqWLPJnXyZ3SvyXUf8dpDNWjzShuPRYDdF2LE`
 - trigger branch and publication authority: `origin/main`
@@ -87,6 +89,8 @@ composition, environment-secret or host-configuration path.
   mismatched pinned server key is refused by strict host-key checking
 - malformed user, host or SHA stops locally; strict host-key checking and one explicit identity
   are mandatory
+- either accepted IP/DNS transport name resolves through its own pinned known-host entry; every
+  other `VPS_HOST` value is refused before SSH
 - dirty host, missing commit, non-main commit, checkout failure, deploy failure, verifier failure
   or post-deploy dirt stops the job non-zero
 - a later main push queues behind an in-progress deploy rather than cancelling or racing it
@@ -111,5 +115,15 @@ owned workflow in a newly gated commit.
   belongs in the task response rather than a self-triggering follow-up commit.
 - Known limitation: the workflow proves the repository-owned deploy/verify path but has no
   automatic rollback. A failed run stays failed and requires a separately gated forward fix.
+- Failure evidence before this repair: run `36866391288` for `d9e48bc` passed SSH preparation
+  and exited 255 in the SSH step before the remote deployment script could prove any state. A
+  live read-only probe confirmed port 22 and the pinned ED25519 key for both the IP and sslip.io
+  transport names. This repair removes that code-side host-alias ambiguity; another exit 255
+  means the owner must inspect the authenticated log and the configured user/key.
+- Local repair verification: workflow contract **5 passed**; the complete gate on the isolated
+  `auditmanager-w48-autodeploy` lane reached literal **`GATE OK`** with backend **2641 passed /
+  5 skipped / 4 warnings / 169 subtests**, foundation **35 passed**, and frontend lint,
+  typecheck and **1162 tests in 82 files** green. Workflow/deployed-SHA evidence remains pending
+  until this exact repair commit is published.
 - Forbidden-hotspot proof is the final staged-path list: no contract, migration, dependency,
   composition, deploy script, runtime/UI, environment, secret or manual-alpha path is included.

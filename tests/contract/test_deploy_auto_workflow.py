@@ -27,7 +27,15 @@ class DeployAutoWorkflowContract(unittest.TestCase):
         self.assertIn(
             "SHA256:n4RyFDQqWLPJnXyZ3SvyXUf8dpDNWjzShuPRYDdF2LE", self.text
         )
-        self.assertIn("135.106.164.147 ssh-ed25519 AAAAC3", self.text)
+        for accepted_host in (
+            "135.106.164.147",
+            "audit.135.106.164.147.sslip.io",
+        ):
+            self.assertIn(f"{accepted_host} ssh-ed25519 AAAAC3", self.text)
+        self.assertIn(
+            "135.106.164.147|audit.135.106.164.147.sslip.io", self.text
+        )
+        self.assertIn("VPS_HOST is not the pinned alpha SSH endpoint.", self.text)
         self.assertIn("StrictHostKeyChecking=yes", self.text)
         self.assertIn("BatchMode=yes", self.text)
         self.assertIn("IdentitiesOnly=yes", self.text)
