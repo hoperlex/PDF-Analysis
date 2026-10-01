@@ -17,11 +17,11 @@
 # `T-4`: there is no `make` target for any of this. `OD-16` makes a tenth root target an
 # FF-01 freeze-break needing an explicit break record, and nothing here needs one.
 #
-# IMAGE IDENTITY. Every third-party image input is pinned by digest, measured on 2026-09-18 with
-# `docker image inspect <ref> --format '{{index .RepoDigests 0}}'` and not recalled. The
-# three source digests are the ones `docs/program/FOUNDATION_LOCK.json` records. PostgreSQL
-# is a repository-owned derivative of that exact base plus checksum-pinned pgvector; the
-# object-store images are consumed directly.
+# IMAGE IDENTITY. Every third-party image input is pinned by digest. PostgreSQL is a
+# repository-owned derivative of its exact base plus checksum-pinned pgvector.
+# MINIO-IMAGE-01 replaces the withdrawn direct object-store repositories with the two
+# targets in infra/minio/Dockerfile; that file pins its Go/Alpine inputs by digest and the
+# official MinIO/mc source archives by commit and SHA-256.
 
 name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset. Pass --env-file infra/deploy/env/alpha.env.}
 
@@ -96,7 +96,11 @@ services:
       start_period: 5s
 
   s3:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    build:
+      context: ../..
+      dockerfile: infra/minio/Dockerfile
+      target: server
+    image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-minio:RELEASE.2025-09-07T16-13-09Z-07c3a42
     networks: [alpha]
     restart: unless-stopped
     command: ["server", "/data", "--address", ":9000", "--console-address", ":9001"]
@@ -106,7 +110,12 @@ services:
     volumes:
       - s3-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test:
+        - CMD-SHELL
+        - >-
+          mc alias set local http://127.0.0.1:9000
+          "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1
+          && mc ready local
       interval: 3s
       timeout: 10s
       retries: 40
@@ -115,7 +124,11 @@ services:
   # Idempotent private-bucket initialization, reusing the script the foundation already
   # proved rather than a second copy of the same logic.
   s3-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    build:
+      context: ../..
+      dockerfile: infra/minio/Dockerfile
+      target: client
+    image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-mc:RELEASE.2025-08-13T08-35-41Z-7394ce0
     networks: [alpha]
     depends_on:
       s3:

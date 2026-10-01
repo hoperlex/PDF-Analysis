@@ -61,21 +61,19 @@ UV_HASHES := \
 
 # Third-party container inputs are pinned by exact tag AND multi-arch index digest. No
 # floating tag and no `latest` reference exists in the foundation (FF-01 section 2 item 9).
-# The PostgreSQL value is the base of the repository-owned pgvector derivative; the other
-# two are consumed directly. Compose cannot declare a competing source of truth for them.
+# The PostgreSQL value is the base of the repository-owned pgvector derivative. MinIO and
+# mc became repository-owned derivatives in MINIO-IMAGE-01; their base/source pins live in
+# infra/minio/Dockerfile and expose no build argument that a call site can redirect.
 # `override` is deliberate: it defeats a command-line assignment and `make -e`, so
 # `make up FOUNDATION_POSTGRES_IMAGE=...` cannot swap the image. load_env additionally
-# rejects these names in .env and re-asserts these literals from this file's bytes after
-# parsing it. `.env` is never sourced. Base image identity has exactly one owner and cannot be
-# redirected from the call site.
+# rejects all three reserved names in .env and re-asserts the PostgreSQL literal from this
+# file's bytes after parsing it. `.env` is never sourced. Base image identity has exactly
+# one owner and cannot be redirected from the call site.
 override FOUNDATION_POSTGRES_IMAGE := postgres:17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
-override FOUNDATION_S3_IMAGE := minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-override FOUNDATION_S3_MC_IMAGE := minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
 export FOUNDATION_POSTGRES_IMAGE
-export FOUNDATION_S3_IMAGE
-export FOUNDATION_S3_MC_IMAGE
 
-# Names a lane may never set: they carry image identity, not lane configuration.
+# Names a lane may never set: the two legacy MinIO names remain reserved so an old .env
+# cannot silently suggest it controls image identity after the source-build transition.
 override RESERVED_IMAGE_NAMES := FOUNDATION_POSTGRES_IMAGE FOUNDATION_S3_IMAGE FOUNDATION_S3_MC_IMAGE
 
 # --- owned environment layout ------------------------------------------------------
@@ -302,10 +300,10 @@ load_env() {
     case "$$name" in
       FOUNDATION_POSTGRES_IMAGE|FOUNDATION_S3_IMAGE|FOUNDATION_S3_MC_IMAGE)
         fail "P1-INT-00: .env line $$lineno sets the reserved image variable $$name." \
-          "Container image identity is owned by this Makefile and recorded in" \
+          "Container image identity is owned by repository build files and recorded in" \
           "docs/program/FOUNDATION_LOCK.json. A lane configures instance, ports, database" \
           "and bucket - never which image runs. Remove that line from .env." \
-          "A different image is a pin request back to P1-INT-00." ;;
+          "A different image is a successor pin request under P1-INT-00's rule." ;;
     esac
     # Strict allowlist. Anything not frozen by FF-01 section 3 is refused, whether or not
     # anyone thought to blacklist it: PYTEST_ADDOPTS, PYTHONNOUSERSITE, DOCKER_HOST,
@@ -372,7 +370,7 @@ load_env() {
 # below. The names are spelled literally here for the same reason.
 assert_image_pins() {
   local name value
-  for name in FOUNDATION_POSTGRES_IMAGE FOUNDATION_S3_IMAGE FOUNDATION_S3_MC_IMAGE; do
+  for name in FOUNDATION_POSTGRES_IMAGE; do
     value="$$(awk -v n="$$name" '$$1=="override" && $$2==n {print $$4; exit}' "$(MAKEFILE_SELF)")"
     [ -n "$$value" ] || fail \
       "P1-INT-00: cannot read the pinned $$name out of the Makefile." \
@@ -381,7 +379,7 @@ assert_image_pins() {
       *@sha256:*) ;;
       *) fail "P1-INT-00: the pinned $$name is not digest-pinned." \
            "  value: $$value" \
-           "Every foundation image is pinned by tag AND digest (FF-01 section 2 item 9)." ;;
+           "Every Makefile-exposed third-party base is pinned by tag AND digest (FF-01 section 2 item 9)." ;;
     esac
     export "$$name=$$value"
   done

@@ -67,6 +67,14 @@ Local and alpha composition now build one repository-owned PostgreSQL derivative
 `8ee86c96f0fd72390f890aa8a336fda6d3ab4c6c`, with its archive SHA-256 verified before compilation.
 The image alone changes no database: migration 0013 installs that exact extension.
 
+MinIO packaging is now repository-owned as well. The withdrawn `minio/minio` and `minio/mc`
+Docker Hub repositories are no longer deployment inputs: one multi-target Dockerfile compiles the
+same selected server and client releases from exact official commits and checksum-pinned archives
+over digest-pinned Go and Alpine inputs. Local and alpha composition still mount the same named
+`s3-data` volume and initialize the same private bucket; this is an image-acquisition repair, not
+an S3 identity or persisted-data migration. `D-119` records the separate security/lifecycle
+decision rather than smuggling a MinIO release upgrade into recovery work.
+
 The complete project gate passes with literal `GATE OK`. The last closed release remains
 `alpha-w47`; `origin/main` is the publication authority for this untagged successor, while this
 section makes no deployment claim. Use

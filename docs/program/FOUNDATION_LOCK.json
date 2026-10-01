@@ -125,26 +125,41 @@
       }
     },
     "s3": {
-      "reference": "minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
-      "tag": "RELEASE.2025-09-07T16-13-09Z",
-      "index_digest": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
-      "makefile_export": "FOUNDATION_S3_IMAGE"
+      "role": "repository-owned MinIO server image",
+      "release": "RELEASE.2025-09-07T16-13-09Z",
+      "commit": "07c3a429bfed433e49018cb0f78a52145d4bedeb",
+      "source_archive_sha256": "8819e3e7817e46b7b3798f8f200ead208562e571563c2e040352378031abe9f2",
+      "source_url": "https://github.com/minio/minio/archive/07c3a429bfed433e49018cb0f78a52145d4bedeb.tar.gz",
+      "dockerfile": "infra/minio/Dockerfile",
+      "target": "server",
+      "local_image": "auditmanager-minio:RELEASE.2025-09-07T16-13-09Z-07c3a42",
+      "deploy_image_template": "${ALPHA_INSTANCE}-minio:RELEASE.2025-09-07T16-13-09Z-07c3a42"
     },
     "s3_client": {
-      "reference": "minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727",
-      "tag": "RELEASE.2025-08-13T08-35-41Z",
-      "index_digest": "sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727",
-      "makefile_export": "FOUNDATION_S3_MC_IMAGE",
-      "note": "Pinned so a bucket initializer that prefers the CLI does not have to invent a tag. The boto3 path in .venv is the alternative; P1-INF-01 chooses."
+      "role": "repository-owned MinIO client image",
+      "release": "RELEASE.2025-08-13T08-35-41Z",
+      "commit": "7394ce0dd2a80935aded936b09fa12cbb3cb8096",
+      "source_archive_sha256": "95cd293c7119f16921a6dc515a1fb74a2227f19fd994b9c8b770a154e802ac44",
+      "source_url": "https://github.com/minio/mc/archive/7394ce0dd2a80935aded936b09fa12cbb3cb8096.tar.gz",
+      "dockerfile": "infra/minio/Dockerfile",
+      "target": "client",
+      "local_image": "auditmanager-mc:RELEASE.2025-08-13T08-35-41Z-7394ce0",
+      "deploy_image_template": "${ALPHA_INSTANCE}-mc:RELEASE.2025-08-13T08-35-41Z-7394ce0"
     },
-    "policy": "Every third-party image input is pinned by tag AND multi-arch index digest. No floating tag and no 'latest' reference exists in the foundation. The repository-owned PostgreSQL derivative additionally pins pgvector by official commit and archive SHA-256. An absent or changed input is a single-owner successor pin task, never a lane-side tag choice.",
+    "minio_build_inputs": {
+      "go_image": "golang:1.24.2-bookworm@sha256:79390b5e5af9ee6e7b1173ee3eac7fadf6751a545297672916b59bfa0ecf6f71",
+      "runtime_image": "alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1",
+      "module_policy": "upstream go.sum enforced by go build -mod=readonly; GOTOOLCHAIN=local",
+      "owner": "MINIO-IMAGE-01"
+    },
+    "policy": "Every third-party image input is pinned by tag and multi-arch index digest. No floating tag and no 'latest' reference exists in the foundation. Repository-owned PostgreSQL and MinIO derivatives additionally pin their official source by commit and archive SHA-256. An absent or changed input is a single-owner successor pin task, never a lane-side choice.",
     "immutability": {
-      "rule": "The three third-party image references cannot be redirected from any call site; the PostgreSQL derivative source and Dockerfile are repository-owned inputs.",
+      "rule": "The PostgreSQL base cannot be redirected from a call site; both repository-owned derivative Dockerfiles hardcode all remaining base/source identities.",
       "mechanisms": [
-        "The effective reference is read at run time from the bytes of the makefile make actually parsed, anchored at parse time by $(abspath $(lastword $(MAKEFILE_LIST))), not from a make variable expansion and not from a cwd-relative `Makefile`.",
-        "The Makefile still declares them with `override`, which defeats a plain command-line assignment and `make -e`.",
-        "Each value is rejected unless it contains `@sha256:`, so an un-digested reference cannot become effective.",
-        ".env is parsed as data, and naming any of the three there is refused with an explicit error before any service is touched."
+        "The PostgreSQL base is read at run time from the bytes of the makefile make actually parsed, anchored at parse time by $(abspath $(lastword $(MAKEFILE_LIST))), not from a make variable expansion and not from a cwd-relative `Makefile`.",
+        "The Makefile declares the PostgreSQL base with `override`, which defeats a plain command-line assignment and `make -e`, and refuses it unless it contains `@sha256:`.",
+        "infra/minio/Dockerfile has no base/source build argument: its Go and Alpine inputs are literal tag-plus-index-digest FROM lines, and official MinIO/mc commit archives are literal URLs with ADD --checksum.",
+        ".env is parsed as data. Naming the live PostgreSQL name or either legacy MinIO image name is refused before any service is touched."
       ],
       "changing_an_image": "A single-owner successor pin task under P1-INT-00's rule. Never a lane-side or call-site choice.",
       "attacks_verified_closed": [
@@ -178,11 +193,9 @@
       "S3_BUCKET"
     ],
     "makefile_exported_names": [
-      "FOUNDATION_POSTGRES_IMAGE",
-      "FOUNDATION_S3_IMAGE",
-      "FOUNDATION_S3_MC_IMAGE"
+      "FOUNDATION_POSTGRES_IMAGE"
     ],
-    "makefile_exported_note": "Added by P1-INT-00 beyond the FF-01 name list so third-party image identity has exactly one owner. They are injected into compose by the Makefile, are declared with `override`, and are REJECTED with an explicit failure if a lane sets them in .env. FOUNDATION_POSTGRES_IMAGE is the exact base argument of the repository-owned derivative; the two MinIO references remain direct service images.",
+    "makefile_exported_note": "FOUNDATION_POSTGRES_IMAGE is the exact base argument of the repository-owned PostgreSQL derivative and is injected by the Makefile. MINIO-IMAGE-01 moved MinIO/mc identity into a repository-owned Dockerfile with no redirectable build args. FOUNDATION_S3_IMAGE and FOUNDATION_S3_MC_IMAGE remain rejected legacy names so stale lane configuration fails loudly.",
     "lane_isolation_names": [
       "FOUNDATION_INSTANCE",
       "POSTGRES_PORT",
@@ -195,7 +208,7 @@
       "a .env file must exist; no default is assumed",
       "every name in .env must be one of the 15 frozen names: a strict allowlist, so an unknown name is refused rather than exported",
       "no name may be assigned twice; a repeated assignment is refused instead of silently taking one of the two",
-      "the three reserved image names are refused with a dedicated message, and the Makefile's pins are re-asserted from its own bytes after parsing",
+      "the active PostgreSQL image name and the two legacy MinIO image names are refused with a dedicated message, and the Makefile's PostgreSQL pin is re-asserted from its own bytes after parsing",
       "every frozen name must be set and non-empty",
       "quotes are accepted only as one matching pair wrapping the whole value; an unmatched or interior quote is refused rather than kept as an ambiguous literal",
       "DATABASE_URL must agree with POSTGRES_USER/PASSWORD/PORT/DB and use the postgresql+psycopg driver",
@@ -310,12 +323,12 @@
   "reserved_paths": [
     {
       "path": "infra/local/docker-compose.yml",
-      "owner": "P1-INF-01; PostgreSQL build/image successor slot NORM-VECTOR-01",
-      "must_deliver": "repository-owned PostgreSQL pgvector derivative over the pinned base, pinned MinIO services, namespaced volumes and health checks",
+      "owner": "P1-INF-01; PostgreSQL build/image successor NORM-VECTOR-01; MinIO build/image successor MINIO-IMAGE-01",
+      "must_deliver": "repository-owned PostgreSQL/pgvector and MinIO/mc derivatives over pinned inputs, namespaced volumes and health checks",
       "consumes": [
         "FOUNDATION_POSTGRES_IMAGE",
-        "FOUNDATION_S3_IMAGE",
-        "FOUNDATION_S3_MC_IMAGE"
+        "infra/postgres/Dockerfile",
+        "infra/minio/Dockerfile"
       ]
     },
     {
@@ -414,7 +427,7 @@
       "each of the 7 provider forwarders refused, naming its reserved path and owning task",
       "6 distinct .env incoherence cases refused; a percent-encoded password still accepted",
       "runtime probe refused an environment missing the pinned packages",
-      "command-line and `make -e` image override ignored; the pinned digests still used",
+      "command-line and `make -e` PostgreSQL image override ignored; the pinned digest is still used",
       ".env declaring a reserved image variable refused explicitly",
       "sentinel followed by trailing output refused; sentinel followed only by blank lines accepted",
       "pytest with the root pythonpath neutralised fails to import from src, proving the config is load-bearing"
@@ -446,7 +459,7 @@
     "`.env` is parsed, never sourced. Quotes are accepted only as one matching wrapping pair with no escaping, so a value that must contain both quote characters cannot be expressed and a value containing a quote of the wrapping kind is refused rather than guessed at.",
     "The governance exact-synchronisation check compares distribution names and versions. It does not verify that an installed distribution's files match the artifact its hash pinned; --require-hashes covers the download, not later mutation of site-packages.",
     "The hermeticity guard covers the recipe shell and the interpreter environment. It does not cover `MAKEFLAGS=-n`, where make executes no recipe at all; a conftest.py or a locked plugin inside the QA suite, which are P1-QA-00's own deliverable; or a .pth file written into the git-ignored .venv, which runs during interpreter startup after the scrub.",
-    "Reserved paths and image pins are anchored on the makefile make parsed. A target-scoped --eval redirecting MAKEFILE_SELF itself, combined with an attacker-supplied decoy makefile, is not closed and is recorded rather than claimed."
+    "Reserved paths and the Makefile-exposed PostgreSQL image pin are anchored on the makefile make parsed. A target-scoped --eval redirecting MAKEFILE_SELF itself, combined with an attacker-supplied decoy makefile, is not closed and is recorded rather than claimed."
   ],
   "remediation": {
     "revision": "P1-INT-00-R2",

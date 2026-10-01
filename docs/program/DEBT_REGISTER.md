@@ -14,6 +14,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | ~~D-56~~ | project sections: the field and the aggregation | **closed by wave 46** (`W46-SEAL`, `alpha-w46`) |
 | ~~D-63~~ | a dashboard | **closed by wave 46**: four panels on one read (`W46-WIRE`, `W46-CLIENT`, `alpha-w46`) |
 | ~~D-118~~ | `make gate` did not lint | **closed by `W47-CLOSE`**: lint runs first and fails closed; eslint is clean |
+| **D-119** | the restored MinIO release predates upstream's final security release, and upstream is now archived | **owner**: rehearse the security upgrade after backup, or select the next S3-compatible implementation |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |
@@ -93,6 +94,37 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-119 — reproducible again is not maintained: MinIO needs a security/lifecycle decision
+
+**Opened 2026-10-01 by `MINIO-IMAGE-01`.** The two previously pinned Docker Hub repositories
+are no longer pullable. The immediate repair builds the **same** selected releases from their
+official source commits, so recovery does not quietly combine a packaging repair with an
+object-store version/data-format change while the alpha volume inventory is still unknown.
+
+That conservative boundary leaves a real decision. Upstream published
+`RELEASE.2025-10-15T17-29-55Z` after the selected server release and describes it as a security
+release; the public MinIO repository was subsequently archived and its README says the legacy
+community binaries are no longer maintained. A source build makes today's version retrievable,
+not supported forever.
+
+**Owner decision, after the existing volume is found and backed up:**
+
+1. rehearse an exact source-pinned upgrade to `RELEASE.2025-10-15T17-29-55Z` against a restored
+   copy, verify object reads and rollback limits, then promote it; or
+2. choose and qualify the next S3-compatible implementation before normative PDF/crop custody
+   makes the storage boundary harder to move.
+
+This row does not block the packaging repair or corpus work that does not write custody objects.
+It does block calling the restored 2025-09 server a maintained long-term object-store choice.
+
+Check:
+
+```text
+https://github.com/minio/minio/releases/tag/RELEASE.2025-10-15T17-29-55Z
+https://github.com/minio/minio
+grep -n 'RELEASE.2025-09-07T16-13-09Z' infra/minio/Dockerfile
+```
 
 ### D-118 — `make gate` never ran the linter, so three errors sat in a green tree — **CLOSED**
 

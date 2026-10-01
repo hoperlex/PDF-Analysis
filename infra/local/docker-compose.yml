@@ -8,16 +8,16 @@
 #                    --file infra/local/docker-compose.yml down
 #
 # IMAGE IDENTITY IS NOT CONFIGURABLE HERE. FF-01 section 2 item 9 forbids a floating
-# tag anywhere in the foundation. The Makefile reads the three third-party input pins
-# out of its own bytes and exports FOUNDATION_POSTGRES_IMAGE, FOUNDATION_S3_IMAGE
-# and FOUNDATION_S3_MC_IMAGE, each already carrying `@sha256:`. This file consumes them
-# with `:?` so an unset value is a loud failure, never a silent fall back to a tag.
-# PostgreSQL is built from that exact base plus checksum-pinned pgvector 0.8.6; MinIO
-# consumes its two pins directly.
+# tag anywhere in the foundation. The Makefile reads the PostgreSQL base pin out of its
+# own bytes and exports FOUNDATION_POSTGRES_IMAGE with `@sha256:`. PostgreSQL is built
+# from that exact base plus checksum-pinned pgvector 0.8.6. MINIO-IMAGE-01 replaces the
+# withdrawn direct MinIO repositories with repository-owned images: infra/minio/Dockerfile
+# pins its two base images by digest and its two official source archives by commit and
+# SHA-256. There is no call-site image argument to redirect.
 # Effective references at authoring time (docs/program/FOUNDATION_LOCK.json):
 #   postgres base: 17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
-#   minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-#   minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+#   MinIO server source: RELEASE.2025-09-07T16-13-09Z / 07c3a429bfed
+#   MinIO client source: RELEASE.2025-08-13T08-35-41Z / 7394ce0dd2a8
 #
 # LANE ISOLATION (FF-01 section 5). The project name, the network name and BOTH volume
 # names derive from FOUNDATION_INSTANCE, so two lanes never share live service state.
@@ -79,7 +79,11 @@ services:
       start_period: 5s
 
   s3:
-    image: ${FOUNDATION_S3_IMAGE:?FOUNDATION_S3_IMAGE is unset. The Makefile exports the pinned digest; do not run docker compose by hand.}
+    build:
+      context: ../..
+      dockerfile: infra/minio/Dockerfile
+      target: server
+    image: auditmanager-minio:RELEASE.2025-09-07T16-13-09Z-07c3a42
     networks: [lane]
     command: ["server", "/data", "--address", ":9000", "--console-address", ":9001"]
     environment:
@@ -90,10 +94,17 @@ services:
       - "127.0.0.1:${S3_CONSOLE_PORT:?S3_CONSOLE_PORT is unset.}:9001"
     volumes:
       - s3-data:/data
-    # `mc ready` is MinIO's own readiness probe: it reports ready only once the server
-    # will serve S3 API requests, unlike a bare TCP connect or a liveness ping.
+    # Configure the alias from runtime credentials on every probe. The old registry image
+    # happened to contain a mutable `local` alias; a repository-owned image must not bake
+    # credentials or depend on hidden config. `mc ready` then proves authenticated S3
+    # readiness rather than a bare TCP connect or liveness ping.
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test:
+        - CMD-SHELL
+        - >-
+          mc alias set local http://127.0.0.1:9000
+          "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1
+          && mc ready local
       interval: 3s
       timeout: 10s
       retries: 40
@@ -109,7 +120,11 @@ services:
   # "bucket ready" part of what `--wait` actually waits for, with no manual step. It also
   # keeps `docker compose exec s3-init` available for re-running the initializer by hand.
   s3-init:
-    image: ${FOUNDATION_S3_MC_IMAGE:?FOUNDATION_S3_MC_IMAGE is unset. The Makefile exports the pinned digest; do not run docker compose by hand.}
+    build:
+      context: ../..
+      dockerfile: infra/minio/Dockerfile
+      target: client
+    image: auditmanager-mc:RELEASE.2025-08-13T08-35-41Z-7394ce0
     networks: [lane]
     depends_on:
       s3:
