@@ -1,8 +1,8 @@
 # Current state
 
-> **Updated 2026-09-30 by `W47-INT-CLOSE`.** Wave 47 is closed as `alpha-w47`.
-> The runtime/product candidate remains `b0e5ae5`; the tagged integration tip adds only the
-> accepted closeout's verification/tests/docs and this release-state update.
+> **Updated 2026-10-01 by `NORM-VECTOR-01`.** The gated normative-vector successor is
+> integrated into `origin/main` without a release tag; `9b69dba` is its published base and wave
+> 47 remains the last tagged release.
 >
 > **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
 > true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
@@ -29,15 +29,15 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active integration, 2026-09-30 — normative corpus foundation
+## Active development, 2026-10-01 — normative vector persistence
 
 The independent normative-corpus slices are accepted by `NORM-INT-01` for a gated fast-forward to
-`origin/main`. This integration deliberately creates no release tag and does not move `origin/dev`;
+`origin/main`. `NORM-VECTOR-01` is the untagged successor; it deliberately changes no API or UI.
 W48 remains the separately planned host/optimisation wave. The frozen API surface remains
 **17 paths / 20 operations / 61 schemas** and the error
 catalog remains **22**. Domain candidate revision 8 now declares **27** opaque identities:
 `NormDocument` uses `ndoc_<ULID>`, `NormParagraph` uses `npar_<ULID>`, and retrieval
-chunks deliberately have no public identity. The migration head is **`0012_norms_corpus`**.
+chunks deliberately have no public identity. The migration head is **`0013_norm_embeddings`**.
 
 Persistence separates opaque `norms_snapshot_id` from deterministic `content_key`, stores
 immutable canonical paragraphs separately from replace-only retrieval chunks, and loads an exact
@@ -50,17 +50,26 @@ The real-corpus embedding bake-off freezes `bge-m3-dense-v1`: BGE-M3 revision
 inner product, 512 total tokens and 64 content-token overlap. On 24 source-grounded Russian
 queries it measured MRR **0.848611**, recall@1 **0.75**, recall@5 **0.958333** and recall@10
 **1.0**. Its tokenizer produces **62,325** lossless windows from the current chunk projection;
-no over-limit input, truncation or AI summary reaches the model.
+no over-limit input, truncation or AI summary reaches the model. Migration 0013 now persists
+complete, transaction-local builds under that immutable profile in `vector(1024)` rows with an
+inner-product HNSW index. Exact replay is idempotent and a conflicting digest fails loudly; this
+is persistence and retrieval plumbing only, not a production embedding worker or search surface.
 
 Source PDF/crop custody is specified independently of MinIO credentials: every PDF and crop has
 its own `blob_id`, and a binding is published only after intent/outbox reconciliation and
-checksum confirmation. The existing DB loader still performs no object-store write. The current
-PostgreSQL image has no `vector` extension, so the pgvector supply-chain choice is recorded as
-`NORM-Q08` before migration slot 0013.
+checksum confirmation. The existing DB loader still performs no object-store write. The owner
+confirmed full retention for every corpus snapshot, source PDF Blob, crop Blob and repair ledger;
+the wider product TTL/legal-hold ruling remains open. Corpus use is internal-only with exact
+source attribution until the licensing question is revisited.
+
+Local and alpha composition now build one repository-owned PostgreSQL derivative from the exact
+17.11-trixie base plus official pgvector 0.8.6 commit
+`8ee86c96f0fd72390f890aa8a336fda6d3ab4c6c`, with its archive SHA-256 verified before compilation.
+The image alone changes no database: migration 0013 installs that exact extension.
 
 The complete project gate passes with literal `GATE OK`. The last closed release remains
-`alpha-w47`; `origin/main` is the publication authority for this untagged foundation and no
-deployment claim follows from this section. Use
+`alpha-w47`; `origin/main` is the publication authority for this untagged successor, while this
+section makes no deployment claim. Use
 `infra/deploy/verify-deployed.sh` for the deployed-state answer.
 
 ## Previous release state — wave 47 (historical record)

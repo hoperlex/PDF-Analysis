@@ -48,6 +48,7 @@ IMMUTABLE_TABLES = {
     "model_call",
     "contract_state_transition",
     "norm_document",
+    "norm_embedding_profile",
     "norm_paragraph",
     "norms_snapshot",
 }

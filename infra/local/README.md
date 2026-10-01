@@ -59,7 +59,7 @@ That refusal is deliberate — see "Images are pinned" below.
 
 | compose service | image | published on |
 | --- | --- | --- |
-| `postgres` | `FOUNDATION_POSTGRES_IMAGE` | `127.0.0.1:$POSTGRES_PORT` -> 5432 |
+| `postgres` | repository Dockerfile: `FOUNDATION_POSTGRES_IMAGE` base + pgvector 0.8.6 | `127.0.0.1:$POSTGRES_PORT` -> 5432 |
 | `s3` | `FOUNDATION_S3_IMAGE` (MinIO) | `127.0.0.1:$S3_API_PORT` -> 9000, `127.0.0.1:$S3_CONSOLE_PORT` -> 9001 |
 | `s3-init` | `FOUNDATION_S3_MC_IMAGE` (`mc`) | nothing published |
 
@@ -98,10 +98,12 @@ docker network ls --filter name=$FOUNDATION_INSTANCE
 
 ### Images are pinned
 
-FF-01 forbids a floating tag anywhere in the foundation. The three digests live in the
+FF-01 forbids a floating tag anywhere in the foundation. The three third-party input digests live in the
 `Makefile`'s `override FOUNDATION_*_IMAGE :=` lines and in
 `docs/program/FOUNDATION_LOCK.json`; `make` reads them out of its own bytes and exports
-them. This compose file consumes them with `${...:?}`, so an unset pin is a loud failure
+them. PostgreSQL uses its pin only as the base of `infra/postgres/Dockerfile`, whose
+pgvector source commit and archive checksum are also locked; MinIO consumes its pins
+directly. This compose file consumes the values with `${...:?}`, so an unset pin is a loud failure
 and never silently falls back to a tag. A lane configures instance, ports, database and
 bucket — never which image runs. **Changing an image is a pin request back to
 `P1-INT-00`, not a local edit.**

@@ -52,7 +52,8 @@ is that measurement, not a wish:
 
 **And nothing else.** No `make`, no `npm`, **no `.venv`, no `web/node_modules`** — the
 clone `W23-DEPLOY` deployed had none of them and needed none, because everything is built
-inside the two images. `make bootstrap` and `npm ci` are the *developer's* gate, not this.
+inside the three repository-owned images. `make bootstrap` and `npm ci` are the *developer's*
+gate, not this.
 
 One optional extra: §2 suggests `python3` for one line that generates a token.
 `openssl rand -base64 32` does the same job if the host has no python.
@@ -108,8 +109,9 @@ The second must fail to connect. On this host it printed `200` before the fix an
 
 ### Disk
 
-**Measured on 2026-09-21 by `W26-HOST`, on a cold cache, and it is not the figure that
-was being repeated.**
+**Measured on 2026-09-21 by `W26-HOST`, on a cold cache, before the repository-owned
+pgvector derivative was added.** The numbers below remain the measured application-build
+baseline; they are not a fresh certification of the extra PostgreSQL compile stage.
 
 The shared build cache on this host holds another lane's layers, so a build on the default
 builder would have reused them and measured nothing. The instrument was therefore an
@@ -121,21 +123,23 @@ docker buildx create --name w26cold --driver docker-container --bootstrap
 docker buildx --builder w26cold build --load -f infra/deploy/Dockerfile.api -t m-api .
 docker buildx --builder w26cold build --load -f infra/deploy/Dockerfile.web \
   --build-arg NEXT_PUBLIC_API_BASE_URL=/bff/v1 --build-arg NEXT_PUBLIC_INSTANCE_LABEL=alpha -t m-web .
-docker buildx du --builder w26cold          # the cache the two builds produced
+docker buildx du --builder w26cold          # the cache the two application builds produced
 docker buildx rm w26cold                    # and df before/after each removal
 ```
 
 | what | measured |
 |---|---|
-| **build cache**, both images, cold | **2.59 GB** (`buildx du`), confirmed by `df`: **2.42 GiB** freed when the builder was removed |
-| **the two images** | 400 MB + 1.2 GB (`docker images`). Removing both here freed **1.01 GiB**, because this host already had the `python` and `node` bases; a host that does not will pay the full 1.6 GB |
-| the four pinned third-party images compose pulls | **1.08 GB** — postgres 646 MB, MinIO 241 MB, mc 117 MB, nginx 74.5 MB |
+| **application build cache**, both app images, cold | **2.59 GB** (`buildx du`), confirmed by `df`: **2.42 GiB** freed when the builder was removed |
+| **the two application images** | 400 MB + 1.2 GB (`docker images`). Removing both here freed **1.01 GiB**, because this host already had the `python` and `node` bases; a host that does not will pay the full 1.6 GB |
+| the four pinned third-party image inputs compose pulls | **1.08 GB** — PostgreSQL base 646 MB, MinIO 241 MB, mc 117 MB, nginx 74.5 MB |
 | the clone | 69 MB, with no `.venv` and no `node_modules` |
 | the named volumes, just after a first deploy | ~76 MB for the two `W26-HOST` measured (`-postgres-data`, `-s3-data`), and they grow with the documents. **There are three**: `R-51` added `<instance>-web-sessions`, which holds one small JSON file and is measured in kilobytes, not megabytes |
 | both builds, wall clock, cold | about five minutes |
 
-**One clean-clone cold-cache deploy therefore needs about 5.5 GB**, of which ~2.6 GB is
-build cache that `docker builder prune -af` takes straight back.
+**The pre-pgvector clean-clone cold-cache deploy needed about 5.5 GB**, of which ~2.6 GB was
+build cache that `docker builder prune -af` took straight back. Treat this as a lower bound until
+the new PostgreSQL compile stage is repeated with the isolated-builder instrument above; retain
+the existing **8 GB free** admission rule in the meantime.
 
 **The figure that was being repeated is 8 GB, and it is right as a provisioning number for
 the wrong reason.** It comes from `W24-CERT2` §3c, where two image builds took `/` from
@@ -253,12 +257,13 @@ infra/deploy/verify-deployed.sh --env-file infra/deploy/env/alpha.env
 If it reports tracked changes, stop and preserve/reconcile them before pulling instead of resetting
 the VPS checkout. Never force-update the checkout or remote branch as part of deployment.
 
-The deploy's one-shot `migrate` service upgrades the database from `0011_document_section` to
-`0012_norms_corpus` before the API starts. It creates the corpus persistence tables but does not
-load corpus content. The current alpha app also does not use those rows for retrieval: pgvector,
-runtime embeddings and search API/UI remain a later slice. Therefore this update needs no new env
-name. The existing `recorded` provider mode remains the safe no-spend alpha default; a live/proxy
-credential still belongs only in `provider.env`.
+The deploy first builds the repository-owned PostgreSQL 17.11 derivative with pgvector 0.8.6.
+Its one-shot `migrate` service then upgrades the database through `0013_norm_embeddings` before
+the API starts. It creates corpus persistence and the durable `vector(1024)` projection but does
+not load corpus content or generate embeddings. The current alpha app still has no search API/UI
+or production BGE runtime. Therefore this update needs no new env name. The existing `recorded`
+provider mode remains the safe no-spend alpha default; a live/proxy credential still belongs only
+in `provider.env`.
 
 ---
 

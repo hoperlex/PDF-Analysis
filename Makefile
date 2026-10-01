@@ -59,14 +59,14 @@ UV_HASHES := \
   --hash=sha256:498820071e52b52e7548004459f08180a78c1946c273b9ac6a892ab9f2c4d7d1 \
   --hash=sha256:7651a6288761b202feddd40545aab4b2cfe7af7a07992f85e7d07616cc95ae83
 
-# Container images are pinned by exact tag AND multi-arch index digest. No floating
-# tag and no `latest` reference exists in the foundation (FF-01 section 2 item 9).
-# They are exported so the P1-INF-01 compose file consumes these pins instead of
-# declaring a second, competing source of truth for image identity.
+# Third-party container inputs are pinned by exact tag AND multi-arch index digest. No
+# floating tag and no `latest` reference exists in the foundation (FF-01 section 2 item 9).
+# The PostgreSQL value is the base of the repository-owned pgvector derivative; the other
+# two are consumed directly. Compose cannot declare a competing source of truth for them.
 # `override` is deliberate: it defeats a command-line assignment and `make -e`, so
 # `make up FOUNDATION_POSTGRES_IMAGE=...` cannot swap the image. load_env additionally
 # rejects these names in .env and re-asserts these literals from this file's bytes after
-# parsing it. `.env` is never sourced. Image identity has exactly one owner and cannot be
+# parsing it. `.env` is never sourced. Base image identity has exactly one owner and cannot be
 # redirected from the call site.
 override FOUNDATION_POSTGRES_IMAGE := postgres:17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
 override FOUNDATION_S3_IMAGE := minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e

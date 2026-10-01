@@ -64,5 +64,6 @@ object-store failure cannot leave a published snapshot half-loaded.
 A changed source byte or an applied repair changes `content_key` and creates a new opaque
 snapshot with fresh document and paragraph entities. Existing rows and IDs remain immutable
 because historic audit runs must continue to resolve the exact normative text they pinned.
-Deletion/retention policy is deliberately deferred until the owner decides how long cited
-snapshots must remain available.
+`NORM-Q06` now requires full retention: every loaded snapshot and immutable repair ledger remains
+available with no automatic deletion or TTL. A future erasure capability requires a new explicit
+owner/legal/security ruling; it cannot reinterpret this decision silently.

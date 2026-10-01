@@ -116,6 +116,9 @@ def test_the_migration_creates_the_canonical_and_rebuildable_topology(
         "norm_chunk",
         "norm_chunk_build",
         "norm_document",
+        "norm_embedding",
+        "norm_embedding_build",
+        "norm_embedding_profile",
         "norm_paragraph",
         "norms_snapshot",
     }

@@ -55,7 +55,8 @@ projection that can be rebuilt from the drop at any time.
   table-row paragraphs and applies deterministic 512-total-token windows with 64-content-token
   overlap to any over-limit paragraph; it never truncates or substitutes an AI summary.
 
-After migration `0012_norms_corpus`, load with:
+After migration `0012_norms_corpus` (the current database head is
+`0013_norm_embeddings`), load with:
 
 `PYTHONPATH=src .venv/bin/python -m auditmanager.norms.loader --corpus <root> [--ledger <repairs.json>]`
 The command commits one database transaction and performs no S3/provider side effect.

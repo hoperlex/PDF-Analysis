@@ -8,12 +8,14 @@
 #                    --file infra/local/docker-compose.yml down
 #
 # IMAGE IDENTITY IS NOT CONFIGURABLE HERE. FF-01 section 2 item 9 forbids a floating
-# tag anywhere in the foundation, and P1-INT-00 owns the three pins. The Makefile reads
-# them out of its own bytes and exports FOUNDATION_POSTGRES_IMAGE, FOUNDATION_S3_IMAGE
+# tag anywhere in the foundation. The Makefile reads the three third-party input pins
+# out of its own bytes and exports FOUNDATION_POSTGRES_IMAGE, FOUNDATION_S3_IMAGE
 # and FOUNDATION_S3_MC_IMAGE, each already carrying `@sha256:`. This file consumes them
 # with `:?` so an unset value is a loud failure, never a silent fall back to a tag.
+# PostgreSQL is built from that exact base plus checksum-pinned pgvector 0.8.6; MinIO
+# consumes its two pins directly.
 # Effective references at authoring time (docs/program/FOUNDATION_LOCK.json):
-#   postgres:17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+#   postgres base: 17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
 #   minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
 #   minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
 #
@@ -38,7 +40,12 @@ volumes:
 
 services:
   postgres:
-    image: ${FOUNDATION_POSTGRES_IMAGE:?FOUNDATION_POSTGRES_IMAGE is unset. The Makefile exports the pinned digest; do not run docker compose by hand.}
+    build:
+      context: ../..
+      dockerfile: infra/postgres/Dockerfile
+      args:
+        POSTGRES_BASE_IMAGE: ${FOUNDATION_POSTGRES_IMAGE:?FOUNDATION_POSTGRES_IMAGE is unset. The Makefile exports the pinned base digest; do not run docker compose by hand.}
+    image: auditmanager-postgres:17.11-pgvector0.8.6-8ee86c9
     networks: [lane]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is unset.}

@@ -343,7 +343,7 @@ def _is_registered(file: str, matched_text: str, registry: frozenset[tuple[str, 
 
 
 def test_true_migration_head_is_a_real_single_head() -> None:
-    assert _true_migration_head() == "0012_norms_corpus"
+    assert _true_migration_head() == "0013_norm_embeddings"
 
 
 def test_true_surface_triple_matches_the_frozen_contract() -> None:

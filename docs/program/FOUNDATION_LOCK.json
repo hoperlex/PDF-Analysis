@@ -112,7 +112,17 @@
       "reference": "postgres:17.11-trixie@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675",
       "tag": "17.11-trixie",
       "index_digest": "sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675",
-      "makefile_export": "FOUNDATION_POSTGRES_IMAGE"
+      "makefile_export": "FOUNDATION_POSTGRES_IMAGE",
+      "role": "Exact third-party base for the repository-owned PostgreSQL derivative; never used as the final postgres service image after NORM-VECTOR-01.",
+      "derivative": {
+        "dockerfile": "infra/postgres/Dockerfile",
+        "local_image": "auditmanager-postgres:17.11-pgvector0.8.6-8ee86c9",
+        "deploy_image_template": "${ALPHA_INSTANCE}-postgres-pgvector:17.11-v0.8.6-8ee86c9",
+        "pgvector_version": "0.8.6",
+        "pgvector_commit": "8ee86c96f0fd72390f890aa8a336fda6d3ab4c6c",
+        "source_archive_sha256": "d076a3098010905fd60256649327809651f6288327db6413f0938305f62ea299",
+        "source_url": "https://github.com/pgvector/pgvector/archive/8ee86c96f0fd72390f890aa8a336fda6d3ab4c6c.tar.gz"
+      }
     },
     "s3": {
       "reference": "minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
@@ -127,16 +137,16 @@
       "makefile_export": "FOUNDATION_S3_MC_IMAGE",
       "note": "Pinned so a bucket initializer that prefers the CLI does not have to invent a tag. The boto3 path in .venv is the alternative; P1-INF-01 chooses."
     },
-    "policy": "Every image is pinned by tag AND multi-arch index digest. No floating tag and no 'latest' reference exists in the foundation. An image the lanes need that is absent here is a pin request back to P1-INT-00, never a local tag choice.",
+    "policy": "Every third-party image input is pinned by tag AND multi-arch index digest. No floating tag and no 'latest' reference exists in the foundation. The repository-owned PostgreSQL derivative additionally pins pgvector by official commit and archive SHA-256. An absent or changed input is a single-owner successor pin task, never a lane-side tag choice.",
     "immutability": {
-      "rule": "The three image references cannot be redirected from any call site.",
+      "rule": "The three third-party image references cannot be redirected from any call site; the PostgreSQL derivative source and Dockerfile are repository-owned inputs.",
       "mechanisms": [
         "The effective reference is read at run time from the bytes of the makefile make actually parsed, anchored at parse time by $(abspath $(lastword $(MAKEFILE_LIST))), not from a make variable expansion and not from a cwd-relative `Makefile`.",
         "The Makefile still declares them with `override`, which defeats a plain command-line assignment and `make -e`.",
         "Each value is rejected unless it contains `@sha256:`, so an un-digested reference cannot become effective.",
         ".env is parsed as data, and naming any of the three there is refused with an explicit error before any service is touched."
       ],
-      "changing_an_image": "A pin request back to P1-INT-00. Never a lane-side or call-site choice.",
+      "changing_an_image": "A single-owner successor pin task under P1-INT-00's rule. Never a lane-side or call-site choice.",
       "attacks_verified_closed": [
         "make up FOUNDATION_POSTGRES_IMAGE=<other>",
         "make -e with the name exported in the ambient environment",
@@ -172,7 +182,7 @@
       "FOUNDATION_S3_IMAGE",
       "FOUNDATION_S3_MC_IMAGE"
     ],
-    "makefile_exported_note": "Added by P1-INT-00 beyond the FF-01 name list so image identity has exactly one owner. They are injected into compose by the Makefile, are declared with `override`, and are REJECTED with an explicit failure if a lane sets them in .env.",
+    "makefile_exported_note": "Added by P1-INT-00 beyond the FF-01 name list so third-party image identity has exactly one owner. They are injected into compose by the Makefile, are declared with `override`, and are REJECTED with an explicit failure if a lane sets them in .env. FOUNDATION_POSTGRES_IMAGE is the exact base argument of the repository-owned derivative; the two MinIO references remain direct service images.",
     "lane_isolation_names": [
       "FOUNDATION_INSTANCE",
       "POSTGRES_PORT",
@@ -300,8 +310,8 @@
   "reserved_paths": [
     {
       "path": "infra/local/docker-compose.yml",
-      "owner": "P1-INF-01",
-      "must_deliver": "pinned PostgreSQL and MinIO services, namespaced volumes and health checks",
+      "owner": "P1-INF-01; PostgreSQL build/image successor slot NORM-VECTOR-01",
+      "must_deliver": "repository-owned PostgreSQL pgvector derivative over the pinned base, pinned MinIO services, namespaced volumes and health checks",
       "consumes": [
         "FOUNDATION_POSTGRES_IMAGE",
         "FOUNDATION_S3_IMAGE",

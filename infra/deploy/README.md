@@ -70,10 +70,12 @@ docker compose --env-file infra/deploy/env/alpha.env \
 `migrate` runs once and exits; `api` waits for it. Migrations are never run by a serving
 process — two replicas starting together would race the same upgrade.
 
-### Normative corpus in the current alpha image
+### Normative corpus in this alpha candidate
 
-The image now contains migration `0012_norms_corpus` and the deterministic, transaction-scoped
-loader. A normal `deploy.sh` run advances PostgreSQL to that head before the API starts. It does
+The API image contains migrations through `0013_norm_embeddings` and the deterministic,
+transaction-scoped corpus loader. A normal `deploy.sh` run first builds the repository-owned
+PostgreSQL 17.11 derivative with pgvector 0.8.6, then advances the database to that head before
+the API starts. It does
 **not** import a corpus: source paths and repair-ledger paths are operator inputs, not deployment
 configuration, and corpus bytes are not baked into the image.
 
@@ -85,11 +87,12 @@ This boundary is intentional and observable:
   versioned projection;
 - the DB loader performs no MinIO write, and PDF/crop custody remains a separate reconciliation
   implementation slot;
-- the deployed PostgreSQL image still has no pgvector extension, and no runtime embedding or
-  search API/UI exists yet.
+- migration 0013 installs the exact pgvector extension and durable `vector(1024)` projection;
+- no production BGE runtime, embedding worker or search API/UI exists yet.
 
-Consequently `env/alpha.env.example` has no corpus path, pgvector or embedding setting. Such a
-setting would be ignored by the current compose/runtime and would falsely suggest search is live.
+Consequently `env/alpha.env.example` has no corpus path, pgvector or embedding setting: the image,
+migration and frozen profile own those constants. Runtime model credentials and search settings
+would still be ignored and would falsely suggest search is live.
 
 ### A trailing slash, and the two things that made it leave this origin — `Y-G`
 

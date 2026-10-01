@@ -103,6 +103,7 @@ retry/poison policy, reconciler command and tests. It also decides private objec
 no consumer may depend on that layout. Credential material, bucket/key names and filesystem
 paths never enter caller-safe errors or the domain identity catalog.
 
-Retention and physical deletion remain blocked on `NORM-Q06`/`U-04`. Until that decision,
-confirmed source/crop Blobs and their bindings are retained; only never-confirmed, unreferenced
-temporary bytes follow the already approved rejection/cleanup semantics.
+`NORM-Q06` requires full retention of every confirmed source PDF Blob, crop Blob and binding,
+with no automatic deletion or TTL. `U-04` remains open for system-wide retention/legal-hold
+authority, so no physical deletion capability is introduced here. Only never-confirmed,
+unreferenced temporary bytes follow the already approved rejection/cleanup semantics.
