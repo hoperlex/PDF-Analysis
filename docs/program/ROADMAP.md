@@ -244,13 +244,22 @@ Use P04 evidence to choose, reject or simplify the old backlog. Candidate work i
 
 The output is a new beta/v1 roadmap with estimates based on actual P01–P04 throughput.
 
-## Normative corpus — into PostgreSQL at paragraph granularity, then vectors
+## Normative corpus — PostgreSQL authority, pgvector retrieval, S3 custody
 
-**Owner direction, 2026-09-17.** The normative-document corpus is to be carried into
-PostgreSQL in later stages, **split to paragraph granularity**, so that vector embeddings can
-be laid over it afterwards. It is recorded here rather than in `ALPHA_ROADMAP.md`: nothing in
-it belongs to the alpha deployment, and putting it there would make the alpha look like it
-waits on this. It does not.
+**Owner direction, 2026-10-01.** [ADR-0020](../architecture/adr/ADR-0020-normative-corpus-alpha-runtime.md)
+now freezes the alpha topology: canonical documents/paragraphs and rebuildable retrieval rows
+share the existing PostgreSQL service, pgvector is the only alpha vector store, and source
+PDF/crop bytes live only in private S3-compatible custody. There is no external/distributed
+vector service and `.local/norms/corpus/**` is not an alpha runtime input.
+
+This pulls storage and retrieval plumbing forward into the untagged successor to `alpha-w47`;
+it does not claim that the corpus, embeddings or search are deployed. The original owner
+direction below is retained as the source-plan record, but its open store choice and its claim
+that no corpus work belongs to alpha are superseded by ADR-0020.
+
+**Original direction, 2026-09-17.** The normative-document corpus was to be carried into
+PostgreSQL in later stages, split to paragraph granularity, so that vector embeddings could be
+laid over it afterwards. This did not block the tagged alpha programme.
 
 **Read the next two sections before estimating this.** It is not a data-movement task. The
 paragraph boundaries do not exist in the corpus and neither does their geometry — both have to
@@ -274,7 +283,7 @@ the index. Measured 2026-09-17 from that manifest:
 Layout per document: `corpus/<slug>/{document.pdf, blocks.json, stamp_audit.json, results.md,
 results.html}`.
 
-### What the corpus is not yet, and it is the whole of the work
+### What the source corpus was before the owned normative tasks
 
 **Its granularity today is a page, not a paragraph.** There are 28 249 blocks over 28 251
 pages — approximately one per page — and every one is `block_type: text`. Worse for planning
@@ -283,44 +292,50 @@ purposes: `blocks.json` carries **geometry and a crop URL and no text at all**
 recognised text exists only inside `results.md` and `results.html`, as markdown under a
 `### BLOCK #n [TEXT]` heading per page.
 
-Two consequences a later task should not rediscover:
+Two consequences the later tasks had to resolve:
 
-- **paragraph segmentation is work that does not exist yet**, and its input is markdown that
-  has to be parsed, not a structured text field that can be read;
+- **paragraph segmentation was missing**, and its input was markdown that had to be parsed,
+  not a structured text field that could be read. `NORM-INT-01` now projects the measured
+  source into **348,777 canonical paragraphs** and **55,702 rebuildable chunks** under one
+  content-derived snapshot key;
 - **a paragraph cannot be given a bounding box from what is stored.** Page-level polygons are
   all there is. A paragraph anchored as *page plus character offset in the recognised text* is
   derivable today; a paragraph anchored *visually* requires re-segmenting the page images, and
   those images are `crop_url` values pointing at an external service rather than bytes in the
   corpus. The recognised text is self-contained; the page images are not.
 
-### The stages this implies, and what each one must decide
+### Delivery stages and their current state
 
-1. **Custody.** Bring the corpus under the immutable-version model the product already has —
-   `DocumentVersion`, `Blob`, `InputManifest` — so a norm has an identity, a digest and a
-   version instead of being a directory on one machine. *Decision:* what a version of a norm
-   means. The corpus already holds `Изменение` and `Поправка` as separate documents, which is
-   the versioning question arriving in disguise.
-2. **Segmentation.** Paragraphs with stable identity and an anchor. *Decision:* textual anchor
-   or visual one — see above; the first reuses the evidence model unchanged, the second opens
-   a new pipeline.
-3. **Persistence.** Paragraph rows in PostgreSQL under the same append-only discipline.
-   *Decision, and it is new for this system:* 28 251 pages become some hundreds of thousands
-   of paragraphs, and that is **the first table here whose row count is not bounded by one
-   audit run**. Every query and index assumption in the product predates it.
-4. **Vectors.** Embeddings per paragraph. *Decisions:* provider and cost at that volume,
-   in-database (`pgvector`) against an external index, and the re-embedding policy when a norm
-   gains a new edition.
+1. **Custody — designed, not yet promoted.** `NORM-CUSTODY-01` gives every source PDF and crop
+   an immutable `Blob` identity and publishes a binding only after outbox/reconciliation and
+   checksum confirmation. MinIO owns bytes; PostgreSQL owns opaque bindings and state. The
+   existing corpus loader performs no object-store write.
+2. **Segmentation — complete for the measured projection.** `NORM-INT-01` produces stable
+   opaque document/paragraph identities and textual page/offset anchors. Available geometry is
+   still page-level; exact paragraph geometry would require a separately owned image pipeline.
+3. **Persistence — schema and idempotent loader complete, real promotion pending.** Canonical
+   snapshots/documents/paragraphs are append-only PostgreSQL authority; chunks are replaceable
+   projections. Migration 0012 creates the schema, but Alembic deliberately does not carry the
+   5.1 GB corpus and the normal alpha deploy leaves these tables empty.
+4. **Vectors — profile and persistence complete, production build/search pending.** The frozen
+   BGE-M3 profile creates lossless tokenizer windows over chunks while retaining canonical
+   paragraph spans. Migration 0013 stores complete builds in `vector(1024)` and ADR-0020 closes
+   the earlier pgvector-versus-external-index choice in favour of pgvector for alpha. A
+   production embedding process, promoted build and search API/UI remain separate tasks.
 
-### Why this is P05+ and not sooner
+### Why this was P05+ and what changed
 
-It is not a storage task. The prototype's analysis checks **internal** contradictions and
-literal placeholders and is explicitly forbidden from judging external normative compliance
-(P02 outline above). A normative corpus in the database exists to enable exactly that
-judgement, so adopting it is a **scope change at ADR level**, not an ingestion job — and it
-should be taken on the evidence live use produces about what experts actually need, which is
-what P04 and the alpha are for.
+It is not merely a storage task. The prototype's analysis checks **internal** contradictions
+and literal placeholders and is explicitly forbidden from judging external normative
+compliance (P02 outline above). Using this corpus for findings remains a product-scope change,
+and raw retrieval output still cannot become an expert decision.
 
-The corpus's existence changes none of the alpha's dates and blocks none of its waves.
+The 2026-09-17 plan therefore placed the whole capability in P05+. The owner later pulled the
+safe foundation forward: identity, canonical persistence, rebuildable chunks, one measured
+embedding profile, pgvector schema and custody design. ADR-0020 now records that topology. It
+does not retroactively block or change the dates of the tagged alpha waves, and it does not
+authorize normative findings until the promotion, retrieval, citation and expert-decision
+contracts are delivered.
 
 ## Existing work retained
 

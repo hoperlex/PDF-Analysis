@@ -21,6 +21,7 @@
 | [ADR-0017-contract-waves-and-worktree-ownership](adr/ADR-0017-contract-waves-and-worktree-ownership.md) | accepted bootstrap | Contract waves and worktree-per-task ownership |
 | [ADR-0018-checkpoint-versioning](adr/ADR-0018-checkpoint-versioning.md) | accepted bootstrap | Checkpoint version = tag + frozen contracts + automated + manual evidence |
 | [ADR-0019-decision-code-navigation](adr/ADR-0019-decision-code-navigation.md) | proposed prototype extension | Rebuildable decision ↔ code/contracts/tests navigation for humans and AI agents |
+| [ADR-0020-normative-corpus-alpha-runtime](adr/ADR-0020-normative-corpus-alpha-runtime.md) | accepted alpha | PostgreSQL canonical norms + in-database pgvector; source bytes in private S3 |
 
 ## CP-00 disposition
 
@@ -31,6 +32,10 @@ original set was changed by the review and it added, rewrote or removed no ADR.
 
 ADR-0019 was added afterwards as a post-CP-00 prototype extension. It is not included in
 the earlier CP-00 disposition and is accepted or revised with the detailed P02–P05 plan.
+
+ADR-0020 is a post-CP-00 owner decision for the alpha normative-runtime topology. It does not
+rewrite the historical CP-00 disposition and must be superseded by a new ADR before an external
+or distributed vector service is introduced.
 
 State after the repository owner recorded `PD-01`–`PD-04` on 2026-09-01:
 

@@ -1,8 +1,8 @@
 # Current state
 
-> **Updated 2026-10-01 by `NORM-VECTOR-01`.** The gated normative-vector successor is
-> integrated into `origin/main` without a release tag; `9b69dba` is its published base and wave
-> 47 remains the last tagged release.
+> **Updated 2026-10-01 by `NORM-ADR-01`.** The gated normative-vector successor and its alpha
+> runtime decision are integrated without a release tag; wave 47 remains the last tagged
+> release.
 >
 > **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
 > true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
@@ -66,6 +66,16 @@ Local and alpha composition now build one repository-owned PostgreSQL derivative
 17.11-trixie base plus official pgvector 0.8.6 commit
 `8ee86c96f0fd72390f890aa8a336fda6d3ab4c6c`, with its archive SHA-256 verified before compilation.
 The image alone changes no database: migration 0013 installs that exact extension.
+
+The owner has now frozen the alpha runtime boundary in ADR-0020: there is one PostgreSQL service
+with pgvector and no external/distributed vector database. Canonical snapshots, documents and
+paragraphs live in PostgreSQL; chunks, tokenizer windows and embeddings are rebuildable
+projections there. Source PDFs and crops live only as immutable private MinIO/S3 Blobs with
+PostgreSQL bindings. `.local/norms/corpus/**` is an offline/bootstrap source and is never an
+alpha image payload, serving mount or environment setting. This decision does **not** mean that
+the corpus is already loaded: custody implementation, credentialed repair of the 121 affected
+pages, verified snapshot/embedding promotion, search/citation contracts and run pinning remain
+separately owned work.
 
 MinIO packaging is now repository-owned as well. The withdrawn `minio/minio` and `minio/mc`
 Docker Hub repositories are no longer deployment inputs: one multi-target Dockerfile compiles the

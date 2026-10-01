@@ -509,14 +509,19 @@ certificate, who has root), who holds the alpha token, and who may upload under 
    do. Anything richer waits for the release line, where it will be cheap because the seam
    exists.
 
-## 10.5 One thing this plan is deliberately not the home of
+## 10.5 Normative-corpus boundary after the tagged alpha plan
 
-The **normative corpus** — 674 documents, 28 251 pages, outside git at `.local/norms/corpus/`
-— is to be carried into PostgreSQL at paragraph granularity with vectors laid over it
-afterwards. That is owner direction of 2026-09-17 and it lives in `ROADMAP.md` under
-"Normative corpus", because it is a P05-and-later scope change at ADR level rather than
-anything the alpha deploys. It blocks no wave here and moves no date here. It is named only so
-that a reader of this file does not conclude the programme has forgotten it.
+This plan originally kept the **normative corpus** — 674 documents, 28 251 pages, outside git
+at `.local/norms/corpus/` — wholly in P05+. That historical boundary still explains why no
+tagged alpha wave waited for corpus work.
+
+The untagged successor now includes the separately owned foundation: canonical PostgreSQL
+tables, rebuildable chunk/window/embedding tables, and a PostgreSQL image with pgvector.
+[ADR-0020](../architecture/adr/ADR-0020-normative-corpus-alpha-runtime.md) freezes one alpha
+PostgreSQL+pgvector service and private MinIO custody for PDFs/crops. A normal deploy still does
+**not** copy or mount the filesystem corpus, load corpus rows, call an embedding provider or
+expose corpus search. Those are explicit promotion/runtime tasks, not migration side effects,
+and none changes the dates or acceptance of the tagged waves in this plan.
 
 ## 11. What this plan will not do, and why that is deliberate
 
