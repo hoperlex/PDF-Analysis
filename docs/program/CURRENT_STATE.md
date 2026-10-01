@@ -33,8 +33,10 @@
 
 The independent normative-corpus slices are accepted by `NORM-INT-01` for a gated fast-forward to
 `origin/main`. `NORM-VECTOR-01` is the untagged successor; it deliberately changes no API or UI.
-W48 remains the separately planned host/optimisation wave. The frozen API surface remains
-**17 paths / 20 operations / 61 schemas** and the error
+W48 is now planned under owner ruling `R-49` as correction, debt closure and a whole-tree code
+audit; this supersedes the older host/optimisation placeholder in `WAVE_PLAN_45_48.md`. The public
+host and live provider are release evidence and prerequisites for the W48 tag, not a new product
+vertical. The frozen API surface remains **17 paths / 20 operations / 61 schemas** and the error
 catalog remains **22**. Domain candidate revision 8 now declares **27** opaque identities:
 `NormDocument` uses `ndoc_<ULID>`, `NormParagraph` uses `npar_<ULID>`, and retrieval
 chunks deliberately have no public identity. The migration head is **`0013_norm_embeddings`**.
