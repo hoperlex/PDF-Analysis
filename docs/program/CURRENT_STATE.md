@@ -36,7 +36,11 @@ The independent normative-corpus slices are accepted by `NORM-INT-01` for a gate
 W48 is now planned under owner ruling `R-49` as correction, debt closure and a whole-tree code
 audit; this supersedes the older host/optimisation placeholder in `WAVE_PLAN_45_48.md`. The public
 host and live provider are release evidence and prerequisites for the W48 tag, not a new product
-vertical. The frozen API surface remains **17 paths / 20 operations / 61 schemas** and the error
+vertical. W49 is queued, not dispatchable, behind `alpha-w48` as verified normative-corpus
+promotion: it must resolve storage/Blob identity first, then prove custody, all 121 repairs,
+repaired snapshot load and a complete embedding build. Public retrieval, exact citations and
+audit-run snapshot consumption are W50-or-later work and remain absent. The frozen API surface
+remains **17 paths / 20 operations / 61 schemas** and the error
 catalog remains **22**. Domain candidate revision 8 now declares **27** opaque identities:
 `NormDocument` uses `ndoc_<ULID>`, `NormParagraph` uses `npar_<ULID>`, and retrieval
 chunks deliberately have no public identity. The migration head is **`0013_norm_embeddings`**.

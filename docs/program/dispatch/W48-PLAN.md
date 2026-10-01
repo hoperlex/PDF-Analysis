@@ -339,6 +339,7 @@ W48 does not build normative search/citation APIs, upload the normative corpus, 
 source pages, introduce another section profile, choose a MinIO successor, add roles/tenancy or
 change dashboard pagination. Those need owner/contract decisions and belong to W49 or later.
 
-The next feature wave should start from `alpha-w48` and choose one coherent vertical. The leading
-candidate is normative retrieval with exact citation and run snapshot pinning, but only after
-custody, licensing and D-59 repair evidence are accepted.
+W49 is now queued as the prerequisite data-plane vertical: maintained storage, verified
+source/crop custody, the ruled 121-page repair, repaired snapshot promotion and its complete
+embedding build. Retrieval with exact citations and audit-run snapshot consumption moves to W50
+or later, after W49 evidence and an external-use licensing ruling exist.
