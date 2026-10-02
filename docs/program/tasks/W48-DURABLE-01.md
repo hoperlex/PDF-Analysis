@@ -134,10 +134,15 @@ completion report and never rewrites their verdicts.
 - `src/auditmanager/ingest/reconciliation.py`
 - `tests/integration/db/test_migration_lifecycle.py`
 - `tests/integration/db/test_schema_shape.py`
+- `tests/integration/db/test_schema_invariant_inventory.py` (reseal only)
 - `tests/integration/db/test_durable_analysis_effects.py`
 - `tests/integration/foundation/test_real_providers.py` (only the BlobStore
   implementation-enumerator distinction between a backend and the owned decorator)
 - `tests/integration/runs/**`
+- `tests/integration/composition/test_the_run_leaves_the_request_thread.py` (only the
+  crash-boundary expectation superseded by committed effect checkpoints)
+- `tests/integration/shared_kernel/test_topology_guard.py` (only the instantiated
+  Job/Attempt topology expectation)
 - `tests/integration/ingest/test_reconciliation.py`
 - `tests/integration/ingest/test_reconciliation_reads_the_bytes.py`
 - `tests/integration/ingest/test_reconciliation_rules_with_no_guard.py`
