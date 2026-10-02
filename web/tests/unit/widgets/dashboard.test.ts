@@ -105,6 +105,26 @@ const SUMMARY_NO_SPEND: DashboardSummary = {
   run_activity: runActivityWithoutSpend(SUMMARY.run_activity.by_state),
 };
 
+/** `SUMMARY`, with a transport value outside the closed CostBasis enum (`D-113`). */
+const SUMMARY_COST_BASIS_UNKNOWN = {
+  ...SUMMARY,
+  run_activity: {
+    ...SUMMARY.run_activity,
+    spend: {
+      ...SUMMARY.run_activity.spend,
+      cost_basis: 'guessed',
+    },
+  },
+} as unknown as DashboardSummary;
+
+const LONG_PROJECT_NAME = 'П'.repeat(200);
+const SUMMARY_LONG_PROJECT_NAME: DashboardSummary = {
+  ...SUMMARY,
+  documents_by_project: [
+    { ...SUMMARY.documents_by_project[0]!, name: LONG_PROJECT_NAME },
+  ],
+};
+
 // ============================================================================
 // C1 — an omitted or unrecognised row is a fault, never a zero. Fixtures below
 // mutate the DATA a response could arrive with; the code under test is unmutated.
@@ -257,6 +277,13 @@ describe('every number the dashboard renders is the fixture, and nothing else is
     expect(text).toContain('документов 5');
   });
 
+  it('keeps a contract-maximum 200-character project name inside the contained row', () => {
+    const markup = render(SUMMARY_LONG_PROJECT_NAME);
+    expect(LONG_PROJECT_NAME).toHaveLength(200);
+    expect(markup).toContain(`class="am-state__title"><a href=`);
+    expect(markup).toContain(LONG_PROJECT_NAME);
+  });
+
   it('renders all four verdict rows, including needs_manual_review at zero', () => {
     const markup = render(SUMMARY);
     expect(markup).toContain('data-verdict="pending"');
@@ -290,6 +317,14 @@ describe('every number the dashboard renders is the fixture, and nothing else is
       (token) => !expectedNumberTokens(SUMMARY_NO_SPEND).has(token),
     );
     expect(invented).toEqual([]);
+  });
+
+  it('an unknown cost basis is a fault, never a blank or raw spend label', () => {
+    const panel = sectionMarkup(render(SUMMARY_COST_BASIS_UNKNOWN), 'dashboard-runs-heading');
+    expect(panel).toContain('data-panel-fault="incomplete"');
+    expect(panel).toContain('Основание стоимости не распознано.');
+    expect(panel).not.toContain('data-cost-basis="guessed"');
+    expect(visible(panel)).not.toContain('guessed');
   });
 
   it('always shows the unclassified section row, never folded into the fourteen', () => {

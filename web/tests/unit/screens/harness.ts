@@ -64,10 +64,11 @@ export function renderWith(client: QueryClient, element: ReactElement): string {
  * `renderWith` above is enough for a component; a screen is not, because any screen that
  * calls `useRouter` throws *"invariant expected app router to be mounted"* without this.
  *
- * **This lives here because five existing test files had written their own copy of it.**
- * None was migrated by the integration repair: those five remain, and this shared helper
- * is a sixth implementation site consumed by newer guards. That residue is `D-97`, with
- * the five files named there rather than hidden behind false consolidation arithmetic.
+ * **This lives here because five screen-wide test files had written their own copy of it.**
+ * `W48-WEB` migrated those five consumers to this function and added a source guard that
+ * rejects another private provider mount. Focused component tests may still mount a router
+ * directly when router behaviour itself is their subject; `D-97` is about screen-wide
+ * instruments disagreeing on their provider/state contract, not every provider occurrence.
  */
 export function renderScreen(client: QueryClient, element: ReactElement): string {
   const router = {

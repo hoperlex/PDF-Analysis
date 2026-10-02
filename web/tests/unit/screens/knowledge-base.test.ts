@@ -105,6 +105,20 @@ describe('a row addresses its finding by the identities the record carries', () 
   });
 });
 
+describe('hostile-width reviewer text remains in a contained knowledge-base row', () => {
+  it('renders an unbroken 400-character comment under the row containment class', () => {
+    const unbroken = 'Ж'.repeat(400);
+    const markup = render(
+      createElement(KnowledgeBase, {
+        records: [record({ event_type: 'comment', verdict: null, comment: unbroken })],
+      }),
+    );
+    expect(unbroken).toHaveLength(400);
+    expect(markup).toContain('class="am-kb__record"');
+    expect(markup).toContain(`class="am-kb__comment">${unbroken}</p>`);
+  });
+});
+
 describe('the three states a read can end in are all explicit', () => {
   it('an empty journal is an emptiness, not a silence and not a failure', () => {
     const markup = render(createElement(KnowledgeBase, { records: [] }));
@@ -127,6 +141,26 @@ describe('the three states a read can end in are all explicit', () => {
     const markup = render(createElement(KnowledgeBase, { records: [], isLoading: true }));
     expect(markup).not.toContain('Решений пока нет');
   });
+});
+
+describe('closed transport vocabulary fails closed', () => {
+  const cases = [
+    ['current_verdict', { current_verdict: 'guessed' }],
+    ['category', { category: 'guessed' }],
+    ['event_type', { event_type: 'guessed' }],
+    ['event verdict', { verdict: 'guessed' }],
+  ] as const;
+
+  for (const [name, mutation] of cases) {
+    it(`shows one typed fault for an unknown ${name}`, () => {
+      const broken = { ...record(), ...mutation } as unknown as DecisionRecord;
+      const markup = render(createElement(KnowledgeBase, { records: [broken] }));
+      expect(markup).toContain('data-knowledge-base-fault="closed-vocabulary"');
+      expect(markup).toContain('Запись решения содержит неизвестное значение.');
+      expect(markup).not.toContain('class="am-kb__record"');
+      expect(markup).not.toContain('guessed');
+    });
+  }
 });
 
 describe('the screen computes no projection of its own', () => {

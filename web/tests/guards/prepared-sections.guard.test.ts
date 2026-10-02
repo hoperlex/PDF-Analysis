@@ -54,10 +54,6 @@ vi.mock('next/headers', () => ({
   cookies: async () => ({ get: () => undefined }),
 }));
 
-import { renderToStaticMarkup } from 'react-dom/server';
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-
 import { AppFrame } from '@/_app';
 import { LogsPage } from '@/_pages/logs';
 import { OptimisationPage } from '@/_pages/optimisation';
@@ -66,21 +62,13 @@ import { RoutePlaceholder } from '@/shared/ui';
 import LogsRoute from '@/app/logs/page';
 import OptimisationRoute from '@/app/optimisation/page';
 import WorkersRoute from '@/app/workers/page';
+import { newClient, renderScreen } from '../unit/screens/harness';
 
 // ------------------------------------------------------------------ rendering machinery
 
-function stubRouter(): AppRouterInstance {
-  return {
-    push: () => {}, replace: () => {}, back: () => {}, forward: () => {},
-    refresh: () => {}, prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
-
 /** `next/link` reads the router from context even on a server pass. */
 function render(element: ReactElement): string {
-  return renderToStaticMarkup(
-    createElement(AppRouterContext.Provider, { value: stubRouter() }, element),
-  );
+  return renderScreen(newClient(), element);
 }
 
 /**

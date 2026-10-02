@@ -58,14 +58,10 @@ import { classifyListingFailure } from '@/shared/lib';
 import { CONTRACT_PATH, REPO_ROOT, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
 
-import { createElement } from 'react';
 import type { ReactElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
+import { newClient, renderScreen } from '../unit/screens/harness';
 
 // ======================================================================= the lexicon
 
@@ -320,24 +316,8 @@ function listingSentences(): readonly { readonly where: string; readonly text: s
  * surface — every parent, every contract error code — is exercised directly above, which
  * is the one place a cache state would have mattered.
  */
-function stubRouter(): AppRouterInstance {
-  return {
-    push: () => {}, replace: () => {}, back: () => {}, forward: () => {},
-    refresh: () => {}, prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
-
 function renderCold(element: ReactElement): string {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, refetchOnMount: false, retryOnMount: false } },
-  });
-  return renderToStaticMarkup(
-    createElement(
-      QueryClientProvider,
-      { client },
-      createElement(AppRouterContext.Provider, { value: stubRouter() }, element),
-    ),
-  );
+  return renderScreen(newClient(), element);
 }
 
 const ULID = '01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
