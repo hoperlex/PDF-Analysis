@@ -8,10 +8,18 @@
 Ориентир по времени: 30–45 минут. Логин и пароль вводятся только в браузере. Не передавайте их
 скрипту, не вставляйте в URL, заметки, снимки экрана или DevTools export.
 
-## 1. Условия старта
+## 1. Условия старта и правило веток
 
-- Развёрнутый SHA зафиксирован в успешном deployment workflow и равен ожидаемой вершине
-  `origin/main`. Сам hostname этого не доказывает.
+- Integration-кандидат сначала публикуется как точный SHA в `origin/dev`. Это обычная ветка
+  доставки версии на development-контур.
+- Переход этого SHA в `origin/main` **не является продолжением приёмки по умолчанию**. Он
+  выполняется только по отдельному прямому указанию владельца и строго по
+  `docs/program/MAIN_AUTODEPLOY_POLICY.md`, потому что push/merge в `origin/main` запускает
+  внешнее развёртывание.
+- Для приёмки уже развёрнутой версии deployment workflow и `infra/deploy/verify-deployed.sh`
+  дают отдельный факт `deployed SHA`. Он обязан буквально совпасть с проверенным
+  `candidate SHA`; hostname сам по себе этого не доказывает. Ветка — канал доставки, SHA —
+  идентичность версии.
 - Есть отдельная учётная запись ревьюера. Начальный пароль уже изменён. Если после первого входа
   приложение направило на `/account/password`, смените пароль, выйдите и начните сценарий заново:
   это обязательная защита, а не дефект.
@@ -40,7 +48,7 @@
 Пароль `encrypted.pdf` (`synthetic-user-pw`) нужен только для независимой проверки, что файл
 действительно зашифрован. В приложении пароль не вводите: файл должен быть отклонён.
 
-## 3. Автоматический preflight
+## 3. Автоматический preflight и release-команда
 
 Из корня репозитория:
 
@@ -58,9 +66,36 @@
 4. убеждается, что `/api/v1/openapi.json` без сессии отвечает `401`;
 5. сохраняет только безопасное резюме в `.local/manual-alpha/<UTC timestamp>-<pid>/report.md`.
 
-Нужна строка `PREFLIGHT OK`. Любое иное состояние — `FAIL`; ручной путь не начинайте. Preflight
+Нужна строка `PREFLIGHT OK`. Любое иное состояние — `FAIL` либо `BLOCKED`; ручной путь не
+начинайте. Preflight
 не доказывает, какой SHA развёрнут: для этого deployment owner запускает
 `infra/deploy/verify-deployed.sh` на сервере и прикладывает безопасную ссылку на результат.
+
+После того как deployment owner отдельно доказал `deployed SHA`, выполните полный
+автоматизированный контур из **чистого checkout того же candidate SHA**. Значения
+`E2E_PC01_LOGIN` и `E2E_PC01_PASSWORD` должны быть заранее переданы процессу через разрешённый
+секретный канал; команда не принимает их аргументами и не имеет значений по умолчанию.
+
+```bash
+make alpha-acceptance \
+  ALPHA_ORIGIN=https://audit.135.106.164.147.sslip.io \
+  ALPHA_CANDIDATE_SHA=<полный-candidate-sha-из-origin/dev> \
+  ALPHA_DEPLOYED_SHA=<полный-sha-из-deployment-evidence>
+```
+
+Команда выполняет preflight, вход через экран приложения, все 3 write-шага PC-01, все 16
+cold routes при 780 × 900, проверку `provider_mode=live` и все 6 refusal-сценариев. Результат
+сохраняется в `.local/manual-alpha/<UTC timestamp>-<pid>/`: сырые browser envelopes,
+безопасные логи, `report.md` и машинный `automated-verdict.json` схемы
+`w48-alpha-acceptance/v1` с раздельными `candidateSha` и `deployedSha`.
+
+- `ALPHA ACCEPTANCE PASS` — автоматические фазы полны; это **не** подпись A01–A12.
+- `ALPHA ACCEPTANCE FAIL` — наблюдаемое поведение или полнота evidence нарушили контракт.
+- `ALPHA ACCEPTANCE BLOCKED` — нет требуемого доступа/инструмента либо новый run получил
+  типизированный `dependency_unavailable`. Это не `PASS`.
+
+`make alpha-acceptance` намеренно не входит в `make gate`: первый мутирует разрешённый alpha
+stand и требует credential, второй остаётся воспроизводимым и host-free.
 
 Для интерактивного протокола запустите ту же команду с `--interactive`. После preflight скрипт
 будет принимать только `PASS`, `FAIL` или `BLOCKED` и однострочную безопасную заметку:
@@ -75,8 +110,10 @@
 
 ### A01 — версия развёртывания и вход
 
-Сверьте SHA успешного deployment workflow с ожидаемым `origin/main`. В приватном окне откройте
-origin, перейдите на `/login`, введите учётные данные и войдите.
+Сверьте `candidate SHA` из принятой версии `origin/dev` с SHA успешного deployment workflow и
+результатом `verify-deployed.sh`. Если версия была перенесена в `origin/main`, отдельно приложите
+прямое указание, разрешившее этот deployment-action. В приватном окне откройте origin, перейдите
+на `/login`, введите учётные данные и войдите.
 
 **PASS:** SHA совпал; после входа открыт `/projects`; пароль и token не появились в URL или
 странице; нет бесконечного редиректа и необработанной ошибки. Если приложение разрешило работу с
@@ -201,7 +238,8 @@ authentication required; повторный вход возвращает дос
 
 ## 5. Вердикт
 
-- `PASS`: автоматический preflight и все A01–A12 прошли.
+- `PASS`: `make alpha-acceptance` завершился строкой `ALPHA ACCEPTANCE PASS` для точного
+  candidate/deployed SHA и все A01–A12 подписаны человеком.
 - `FAIL`: нарушено ожидание хотя бы одного обязательного шага. Зафиксируйте шаг, время,
   correlation id и безопасный screenshot; не повторяйте модельный вызов вслепую.
 - `BLOCKED`: шаг нельзя выполнить из-за доступа или внешней зависимости. Это не `PASS`; укажите
@@ -216,5 +254,6 @@ authentication required; повторный вход возвращает дос
 - нагрузку, многопользовательскую изоляцию и hostile security testing;
 - качество на реальных проектных документах;
 - OCR: image-only PDF должен быть явно отклонён;
-- соответствие deployed SHA: его доказывает только deployment workflow плюс
-  `infra/deploy/verify-deployed.sh` на целевом сервере.
+- происхождение и соответствие deployed SHA: release-команда связывает переданные SHA с
+  evidence, но сами факты публикации в `origin/dev`, разрешения на `origin/main` и развёртывания
+  доказывают Git remote ref, deployment workflow и `infra/deploy/verify-deployed.sh`.
