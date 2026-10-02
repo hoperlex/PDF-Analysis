@@ -120,6 +120,7 @@ completion report and never rewrites their verdicts.
 
 - `db/migrations/versions/20261002_0014_durable_analysis_effects.py`
 - `src/auditmanager/jobs/**`
+- `src/auditmanager/shared/identity/ids.py`
 - `src/auditmanager/runs/carrier.py`
 - `src/auditmanager/runs/executor.py`
 - `src/auditmanager/runs/reconciliation.py`
@@ -140,6 +141,12 @@ completion report and never rewrites their verdicts.
 - `tests/integration/analysis_text/**`
 - `tests/integration/p02_journey/**`
 - `tests/integration/exports/**`
+- `tests/contract/domain_p02/test_identifier_catalog.py`
+- `tests/contract/domain_p02/test_seam_register.py`
+- `docs/program/P02_SEAMS.md`
+- `docs/program/PROTOTYPE_EXECUTION_PLAN.md`
+- `docs/program/PROTOTYPE_PROFILE.md`
+- `docs/program/tasks/W48-DURABLE-01.md`
 - `docs/program/W48-DURABLE-01.md`
 
 ## Forbidden hotspots
