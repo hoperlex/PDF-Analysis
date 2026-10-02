@@ -1,8 +1,20 @@
 # `origin/main` auto-deploy policy
 
-**Effective for publication decisions from 2026-10-01.** The owner is connecting GitHub
-auto-deploy to `origin/main`. Until the workflow exists and its first run is verified, this
-document records the required boundary; it does not claim the automation is already operational.
+**Effective for publication decisions from 2026-10-02.** GitHub auto-deploy from `origin/main`
+is operational: run `36873558201`, attempt 2, deployed and verified exact commit `608632a`.
+That success proves the mechanism, not standing permission to invoke it.
+
+## The two refs
+
+- `origin/dev` is the default publication ref for a clean, gated development candidate. Updating
+  it does not deploy the public alpha and must not be described as deployed acceptance.
+- `origin/main` is the auto-deploy ref. It is updated only after a separate direct instruction
+  from the repository owner to publish the exact candidate to `main`.
+
+A task title, integration role, green gate, release target, earlier permission or an instruction
+such as “continue”/“close the wave” is not authority to update `origin/main`. Without a direct
+main-publication instruction, the integrator stops after publishing the candidate to
+`origin/dev` and reports the exact SHA awaiting deployment authority.
 
 ## The boundary
 
@@ -10,9 +22,11 @@ A push or merge to `origin/main` is an externally consequential deployment reque
 repository-only cleanup operation. This includes a pull-request merge, an integration
 fast-forward and any command that updates `refs/heads/main`.
 
-Only an explicitly assigned integration task whose integration contract names `origin/main` may
-perform that update. Implementation, documentation, review and repair lanes do not inherit push
-authority from having a green local branch.
+Only an explicitly assigned integration task whose integration contract names `origin/main`,
+and which is acting on that separate direct owner instruction for the exact candidate, may
+perform the update. Implementation, documentation, review and repair lanes do not inherit push
+authority from having a green local branch. A normal integration task may publish its gated
+candidate to `origin/dev` without gaining `origin/main` authority.
 
 The operator-provided temporary alpha address is
 `https://audit.135.106.164.147.sslip.io/`. On 2026-10-01 at 14:46 MSK it was observed with a
@@ -24,15 +38,16 @@ not identify the deployed Git revision and must not replace `infra/deploy/verify
 
 The integration owner must keep one evidence chain for one exact candidate SHA:
 
-1. Fetch `origin` and record the current remote `main`; stop if it moved during integration.
-2. Require a clean candidate tree and prove the update is a fast-forward with
+1. Record the direct owner instruction authorising this exact candidate for `origin/main`.
+2. Fetch `origin` and record the current remote `main`; stop if it moved during integration.
+3. Require a clean candidate tree and prove the update is a fast-forward with
    `git merge-base --is-ancestor origin/main <candidate>`.
-3. Run the complete canonical `make gate` on that exact candidate and require the literal
+4. Run the complete canonical `make gate` on that exact candidate and require the literal
    `GATE OK` sentinel. A partial rerun, an inherited earlier log or a gate from another SHA is
    not evidence.
-4. Re-read the frozen contract counts, error catalog, migration head and deployment inputs. Any
+5. Re-read the frozen contract counts, error catalog, migration head and deployment inputs. Any
    owned change must be recorded by the integration task; an unowned change stops publication.
-5. Re-read `origin/main` immediately before the push. Push the intended SHA as a fast-forward;
+6. Re-read `origin/main` immediately before the push. Push the intended SHA as a fast-forward;
    never force, never move `main` backwards and never add a post-gate fix to the pushed tip.
 
 Only one deployment publication may be in flight. The workflow must serialize main deployments;
@@ -71,6 +86,7 @@ host-owned and mode `0600`.
 
 - It does not implement or enable the workflow.
 - It does not claim what SHA is currently deployed.
-- It does not turn `origin/dev`, tags or agent branches into deployment triggers.
+- It does not turn `origin/dev`, tags or agent branches into deployment triggers or grant
+  `origin/main` authority by implication.
 - It does not replace `infra/deploy/deploy.sh`, `infra/deploy/readiness.sh` or
   `infra/deploy/verify-deployed.sh`.

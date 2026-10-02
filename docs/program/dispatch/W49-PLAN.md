@@ -45,7 +45,7 @@ right the programme has explicitly not claimed.
 
 | Gate | Required evidence | If absent |
 | --- | --- | --- |
-| W48 closed | `alpha-w48`, `origin/dev` and `origin/main` name the accepted exact SHA; deployed verification and public manual pass are attached | do not freeze W49 |
+| W48 released | `alpha-w48` names the exact `origin/dev` candidate that was separately authorised for `origin/main`; deployed verification and public manual pass are attached | do not freeze W49 |
 | clean base | no pending task or unowned working-tree change; full `make gate` prints `GATE OK` | stop |
 | D-70 live provider | alpha acceptance A04 records `provider_mode=live`; endpoint and credential are supplied only through the approved secret boundary | repair execution blocked |
 | source inventory | read-only inventory proves 674 PDFs, 28,246 crops and stable input digests without committing source bytes | custody batch blocked |
@@ -226,7 +226,8 @@ release blockers, with newly explicit paths and repeated mutations.
 | public API/router/UI/global styles | frozen, no owner | none |
 | root dependency/lock files | frozen, no owner | none |
 | whole-tree repair after judges | `W49-FIX`, only explicit upheld paths | none |
-| alpha DB/S3/provider, `origin/dev`, `origin/main`, tag | `W49-INT-CLOSE` | none |
+| alpha DB/S3/provider, final `origin/dev`, tag | `W49-INT-CLOSE` | none |
+| `origin/main` auto-deploy publication | separately assigned integration task after direct owner instruction | none |
 | judge reports | each named judge, report-only | none |
 
 If exact file enumeration reveals overlap between `W49-STORAGE` and `W49-CORPUS`, freeze moves
@@ -252,15 +253,17 @@ with separately signed evidence; a missing credential is `BLOCKED`, never `SKIP`
 
 ## 11. Alpha promotion and checkpoint sequence
 
-`W49-INT-CLOSE` is the only task with authority over publication refs or mutable alpha state.
-It executes this serialized sequence:
+`W49-INT-CLOSE` owns final development publication and mutable alpha work after deployment is
+separately authorised. It executes this serialized sequence:
 
 1. Freeze the final clean candidate SHA; run the full code gate and disposable rehearsal.
 2. Fast-forward `origin/dev`; prove equality to the gated SHA.
 3. Back up alpha PostgreSQL and object storage, capture inventory/digests and prove a disposable
    restore before any upgrade.
-4. Re-read `origin/main`; stop if it moved. Fast-forward the exact candidate. Auto-deploy may
-   install code/schema only: it must not import corpus, call the provider or build embeddings.
+4. Stop and report the exact development candidate. Only after a separate direct owner
+   instruction may an assigned integration action re-read `origin/main` and fast-forward that
+   exact candidate. Auto-deploy may install code/schema only: it must not import corpus, call the
+   provider or build embeddings.
 5. Verify the deployed SHA and schema/storage version; prove existing alpha objects and PC-01
    still work.
 6. Run the custody batch to convergence: 674 PDF inputs and 28,246 crop inputs each have an

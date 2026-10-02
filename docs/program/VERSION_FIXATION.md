@@ -2,11 +2,17 @@
 
 Two published lines, one rule each. Written 2026-09-15.
 
+> **Owner ruling, 2026-10-02.** A clean gated development version is published to
+> `origin/dev`. `origin/main` now triggers external deployment and moves only after a separate
+> direct owner instruction to publish the exact candidate; no wave plan or integration role
+> supplies that authority implicitly. The historical fixations below remain evidence of what
+> happened at those dates, not standing permission for another `main` update.
+
 ## The two lines
 
 | Ref | Carries | Moves when |
 |---|---|---|
-| `origin/main` | **accepted checkpoints only** | a checkpoint is accepted by the owner |
+| `origin/main` | **owner-authorised deployed checkpoints only** | the owner directly instructs publication of the exact gated candidate |
 | `origin/dev` | the working tip of `planning/prototype-roadmap` | any integrator merge worth publishing |
 
 Both are fast-forward-only. `origin/main` is an ancestor of `origin/dev`, which is an
@@ -50,9 +56,9 @@ firing.
 
 ## What this fixation does not claim
 
-Publishing a commit is not accepting it. `origin/dev` carries whatever the integrator has
-merged, including work no checkpoint has certified. Only `origin/main` carries an accepted
-state, and only the owner moves it.
+Publishing a commit to `dev` is not accepting or deploying it. `origin/dev` carries whatever the
+integrator has merged, including work no checkpoint has certified. `origin/main` carries only a
+separately owner-authorised deployed checkpoint, and a direct instruction is required each time.
 
 ## `main` advances for the first time since PC-01, 2026-09-15
 
@@ -69,4 +75,3 @@ from `origin/main`. Wave 5's two sessions did not hit it only because their laun
 created worktrees from `origin/dev` explicitly — preempted, not absent, as `W5_CLOSURE.md` §6
 records. With `main` at the tip, a session provisioned the ordinary way now lands on current
 code.
-

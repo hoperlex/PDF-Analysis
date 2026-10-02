@@ -27,8 +27,8 @@ The following are entry conditions, not claims that they already hold:
 | --- | --- | --- |
 | `MAIN-AUTODEPLOY-02` completed | a push to `main` is now a deployment action | workflow run, exact SHA and `verify-deployed.sh` result |
 | `ALPHA-MANUAL-01` reviewed and integrated | W48-LIVE consumes its script/PDF pack | committed task report and fixture checksums |
-| pending planning checkout reconciled with `origin/main` | planning began at local `deda533`; fetched `origin/main` is now `d9e48bc` and its deploy run failed | clean linear history and fetched refs |
-| `origin/dev` brought to the accepted base | D-77 must not let a reviewer measure an obsolete branch again | exact equality with the freeze SHA |
+| pending planning checkout reconciled with `origin/main` | planning began at local `deda533`; `origin/main` advanced through the reviewed workflow repair to `608632a` | clean linear history and fetched refs |
+| `origin/dev` brought to the accepted dispatch tip | D-77 must not let a reviewer measure an obsolete branch again | exact equality with the docs-only dispatch tip containing the frozen base record |
 | complete `make gate` on the freeze candidate | no lane starts from an inherited green | literal `GATE OK` tied to SHA |
 | no unowned working-tree changes | the requested manual-alpha package must be independently reviewed and committed as its own task | empty `git status --porcelain` |
 
@@ -51,7 +51,8 @@ contract_set:
   analysis: PC-01 synthetic AR oracle, unchanged
   comparison: four-way same/changed/only_left/only_right, unchanged
 migration_head: 0013_norm_embeddings
-frozen_commit: <filled by W48-FREEZE-01>
+frozen_code_base: <filled by W48-FREEZE-01>
+dispatch_tip: <resolved by origin/dev after the docs-only freeze commit>
 frozen_by: W48-FREEZE-01
 ```
 
@@ -105,11 +106,22 @@ reconciled; the YAML in §3 contains a real SHA; individual task files are gener
 `TASK_TEMPLATE.md` with exact `allowed_paths`, commands and lane ports.
 
 **Allowed paths:** W48 plan/dispatch/task documents and the integration branch/ref bookkeeping
-needed to fast-forward `origin/dev`. It owns no product/runtime path and has no `origin/main`
-authority.
+needed to fast-forward `origin/dev`. This freeze slot is the initial W48 owner of `origin/dev`;
+the closeout slot owns its later final-candidate update. Neither owns `origin/main` authority.
 
-**Required checks:** clean tree; fetched refs; `origin/dev == frozen_commit`; full gate from the
-exact SHA; contract SHA/counts/catalog/migration measurements; `git diff --check`.
+**Required checks:** clean tree; fetched refs; `origin/dev` contains the recorded frozen code
+base and equals the docs-only dispatch tip; full gate from the exact code-base SHA; focused
+documentary checks after the freeze record; contract SHA/counts/catalog/migration measurements;
+`git diff --check`.
+
+The freeze uses two explicit identities because a commit cannot contain its own SHA:
+
+- `frozen_code_base` — the exact clean commit that passed the full gate;
+- `dispatch_tip` — its docs-only descendant containing the freeze report and executable Stage-A
+  task files, published to `origin/dev` after focused guards pass.
+
+Stage-A lanes branch from `dispatch_tip`; every runtime/contract byte is inherited unchanged from
+`frozen_code_base`.
 
 **Stop:** any pending task is only locally committed, any ref moved during freeze, or any
 contract count differs from §3.
@@ -231,8 +243,9 @@ W46 historical addendum and focused documentary guards.
 **Required behaviour:** every task adding a route/screen/error/migration names the enumerating
 file and its sole owner; every exact path/count premise includes captured query output and date;
 historical reports are never rewritten; `origin/dev` is the integration candidate and
-`origin/main` the auto-deploy publication ref; both resolve to the same accepted candidate at
-release. Incorrect examples must make a guard fail.
+`origin/main` the separately authorised auto-deploy ref. Development publication stops at
+`origin/dev`; only a direct owner instruction for the exact candidate permits `main` publication.
+Incorrect examples must make a guard fail.
 
 ## 9. Ownership matrix
 
@@ -248,7 +261,9 @@ release. Incorrect examples must make a guard fail.
 | templates/execution rules/history addendum | `W48-GOV` in Stage B | none |
 | `CURRENT_STATE.md`, `DEBT_REGISTER.md`, integration fixes | `W48-INT-CLOSE` | none |
 | root locks/composition/deploy scripts/workflow | frozen unless a new integration grant names one | none |
-| `origin/dev`, `origin/main`, `alpha-w48` | `W48-INT-CLOSE` only | none |
+| initial `origin/dev` freeze/dispatch tip | `W48-FREEZE-01` only | none |
+| final `origin/dev` candidate, `alpha-w48` | `W48-INT-CLOSE` only | none |
+| `origin/main` auto-deploy publication | separately assigned integration task after direct owner instruction | none |
 
 If Stage A needs to correct a comment in a Stage B-owned source family, Stage A closes before
 Stage B branches are cut. No two live lanes edit the same file.
@@ -267,7 +282,8 @@ Stage B branches are cut. No two live lanes edit the same file.
    cross-examine before repair.
 8. One `W48-FIX` slot repairs upheld findings with explicit path grants. Re-run the affected
    mutation plus regression scope.
-9. `W48-INT-CLOSE` runs the final local gates, publication and deployed acceptance sequence.
+9. `W48-INT-CLOSE` runs the final local gates and publishes the exact candidate to `origin/dev`.
+   It stops there unless the owner separately gives direct `origin/main` publication authority.
 
 ## 11. Automated gates
 
@@ -288,24 +304,29 @@ the canonical battery or quoting a previous lane's gate is not evidence.
 
 ## 12. Manual, deployment and checkpoint sequence
 
-`W48-INT-CLOSE` is the only task allowed to perform these state changes:
+`W48-INT-CLOSE` owns the final W48 `origin/dev` update and local acceptance. `origin/main`
+publication remains a separate owner-authorised action:
 
 1. Fast-forward `origin/dev` to the clean candidate and prove it names the gated SHA.
 2. Re-read `origin/main`; stop if it moved. Prove candidate is its fast-forward descendant.
 3. Run a disposable local/built-stack alpha acceptance before publication.
-4. Fast-forward the exact candidate to `origin/main`. This intentionally triggers auto-deploy.
-5. Wait for the serialized workflow; require success and host-side `verify-deployed.sh` for the
+4. Report the exact candidate as development-published and stop. Do not update `origin/main`
+   without a separate direct owner instruction naming publication of this exact candidate.
+5. If and only if that instruction is given, the separately authorised integration action
+   re-fetches refs, revalidates the gate evidence and fast-forwards the exact candidate to
+   `origin/main`. This intentionally triggers auto-deploy.
+6. Wait for the serialized workflow; require success and host-side `verify-deployed.sh` for the
    triggering SHA.
-6. Run public preflight, PC-01 browser journey/refusals and A01–A12. Require
+7. Run public preflight, PC-01 browser journey/refusals and A01–A12. Require
    `provider_mode=live`, 3/3 writes, 16/16 routes, no auth/console failures, rule-specific PDF
    refusals and no unexplained `BLOCKED`.
-7. Only then create/push annotated `alpha-w48` at that exact commit. The tag itself must not move
+8. Only then create/push annotated `alpha-w48` at that exact commit. The tag itself must not move
    a branch or trigger a second deployment.
 
 The candidate's `CURRENT_STATE.md` describes commands and the candidate boundary, not a
-present-tense deployed SHA. If step 4–6 fails, no tag is created. Recovery is a separately gated
-forward repair or explicit revert commit through `main`; never force-push, reset the host or hide
-the failed workflow.
+present-tense deployed SHA. If the separately authorised deployment or public acceptance fails,
+no tag is created. Recovery is a separately gated forward repair or explicit revert commit
+through `main`; never force-push, reset the host or hide the failed workflow.
 
 ## 13. Judging
 

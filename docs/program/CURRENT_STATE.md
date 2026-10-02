@@ -1,8 +1,9 @@
 # Current state
 
-> **Updated 2026-10-01 by `NORM-ADR-01`.** The gated normative-vector successor and its alpha
-> runtime decision are integrated without a release tag; wave 47 remains the last tagged
-> release.
+> **Updated 2026-10-02 by `MAIN-REF-POLICY-01`.** The gated normative-vector successor and its
+> alpha runtime decision are integrated without a release tag; wave 47 remains the last tagged
+> release. Development candidates now publish to `origin/dev`; `origin/main` requires a separate
+> direct owner instruction because it triggers external deployment.
 >
 > **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
 > true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
@@ -29,7 +30,13 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-01 — normative vector persistence
+## Active development, 2026-10-02 — W48 alpha hardening
+
+The owner has set the publication boundary for W48 and following waves: a gated development
+candidate is published to `origin/dev`; `origin/main` is the external auto-deploy ref and may be
+updated only after a separate direct owner instruction for the exact candidate. Wave completion,
+an integration slot and a green gate do not imply that instruction. A candidate on `dev` is not
+described as deployed and receives no release tag that requires deployed/manual evidence.
 
 The independent normative-corpus slices are accepted by `NORM-INT-01` for a gated fast-forward to
 `origin/main`. `NORM-VECTOR-01` is the untagged successor; it deliberately changes no API or UI.
@@ -92,8 +99,9 @@ an S3 identity or persisted-data migration. `D-119` records the separate securit
 decision rather than smuggling a MinIO release upgrade into recovery work.
 
 The complete project gate passes with literal `GATE OK`. The last closed release remains
-`alpha-w47`; `origin/main` is the publication authority for this untagged successor, while this
-section makes no deployment claim. Use
+`alpha-w47`; `origin/dev` is the working publication target for this untagged successor, while
+`origin/main` remains unchanged without direct deployment authority. This section makes no
+deployment claim. Use
 `infra/deploy/verify-deployed.sh` for the deployed-state answer.
 
 ## Previous release state — wave 47 (historical record)

@@ -123,7 +123,11 @@ owned workflow in a newly gated commit.
 - Local repair verification: workflow contract **5 passed**; the complete gate on the isolated
   `auditmanager-w48-autodeploy` lane reached literal **`GATE OK`** with backend **2641 passed /
   5 skipped / 4 warnings / 169 subtests**, foundation **35 passed**, and frontend lint,
-  typecheck and **1162 tests in 82 files** green. Workflow/deployed-SHA evidence remains pending
-  until this exact repair commit is published.
+  typecheck and **1162 tests in 82 files** green.
+- **Completed live evidence:** run `36873558201`, attempt 2, for exact SHA
+  `608632a52940cbff70a1e8361f241901f48182aa` completed successfully on 2026-10-01. `Prepare SSH`
+  and `Deploy and verify exact commit` both concluded `success`; the latter is the workflow step
+  that runs the repository deploy command and refuses success until `verify-deployed.sh` passes
+  for the same clean detached checkout.
 - Forbidden-hotspot proof is the final staged-path list: no contract, migration, dependency,
   composition, deploy script, runtime/UI, environment, secret or manual-alpha path is included.
