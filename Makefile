@@ -138,7 +138,7 @@ override DB_CHECK := src/auditmanager/shared/db/check.py
 override STO_CHECK := src/auditmanager/storage/check.py
 override QA_SUITE := tests/integration/foundation
 
-.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate mutation-copy foundation
+.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate mutation-copy foundation alpha-acceptance
 
 # --- shared guards -----------------------------------------------------------------
 # Expanded verbatim into each recipe that needs them. No guard has a success path that
@@ -972,6 +972,17 @@ test-foundation:
 # The accepted foundation sequence, serial by .NOTPARALLEL.
 foundation: up check-services migrate check-db check-storage test-foundation
 	@echo "foundation sequence complete"
+
+# Non-hermetic release evidence. This is intentionally adjacent to, and never a
+# prerequisite of, `gate`: the deterministic gate needs neither a public host nor a
+# reviewer credential. There is no origin or SHA default. Login/password cross the
+# existing E2E_PC01_* environment boundary and never appear in this recipe's argv.
+alpha-acceptance:
+	@./scripts/manual-alpha-check.sh \
+	  --automated \
+	  --origin "$${ALPHA_ORIGIN:-}" \
+	  --candidate-sha "$${ALPHA_CANDIDATE_SHA:-}" \
+	  --deployed-sha "$${ALPHA_DEPLOYED_SHA:-}"
 
 # --- the gate ----------------------------------------------------------------------
 # Everything a wave must pass, as one command.
