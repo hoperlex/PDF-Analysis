@@ -21,9 +21,10 @@ migration head `0005` at commit `ac7c348` -- that was the head *then*. Two struc
 rules keep this guard off wave reports and off a live document's own history section,
 neither of which is "does this file mention an old date":
 
-1. **Scope is a fixed, named set of documents**, exactly as `SCANNED_TREES` in the sibling
-   module is a fixed set of trees rather than "everything under `src/`". Wave reports
-   (`docs/program/W30-CERT3.md`, `W37-CERT4.md`, ...) are simply never in it --
+1. **Scope is a fixed, named set of live documents.** The sibling module discovers tracked
+   runtime/deployment text through Git, while this module names the maintained state/roadmap/
+   runbook documents whose present-tense facts it judges. Wave reports
+   (`docs/program/W30-CERT3.md`, `W37-CERT4.md`, ...) are simply never in this set --
    :func:`test_wave_reports_are_never_scanned` asserts that by name, not by pattern, so a
    new report file does not have to be excluded by guessing its shape.
 2. **`CURRENT_STATE.md` marks its own history.** Its "Where the programme is" section is
@@ -56,6 +57,7 @@ import json
 import pathlib
 import re
 import subprocess
+from collections import Counter
 from dataclasses import dataclass
 from typing import Iterator
 
@@ -70,6 +72,75 @@ MIGRATIONS_DIR = REPO_ROOT / "db" / "migrations" / "versions"
 CURRENT_STATE = REPO_ROOT / "docs" / "program" / "CURRENT_STATE.md"
 ALPHA_ROADMAP = REPO_ROOT / "docs" / "program" / "ALPHA_ROADMAP.md"
 MANUAL_TESTS_DIR = REPO_ROOT / "docs" / "manual-tests"
+PIN_REGISTRY = REPO_ROOT / "docs" / "program" / "CONTRACT_PIN_REGISTRY.md"
+
+_PIN_REGISTRY_BLOCK = re.compile(r"```json\n(?P<body>\{.*?\})\n```", re.DOTALL)
+_PIN_ASSIGNMENT = re.compile(
+    r"^(?:FROZEN_OPERATION_COUNT|FROZEN_SCHEMA_COUNT|FROZEN_OPERATIONS|"
+    r"FROZEN_SCHEMA_NAMES|PATH_COUNT|OPERATION_COUNT|SCHEMA_COUNT)\s*(?::[^=]+)?=",
+    re.MULTILINE,
+)
+_PIN_ASSERTION = re.compile(
+    r"^\s*assert\s+.*(?:declared_operations\(|router\.routes\)|router\.operation_ids\)|"
+    r"len\(paths\)|ERROR_CODES\)|raw\[\"codes\"\]|len\(declared\).*len\(set\(declared\)\)|"
+    r"_true_migration_head\(\)|SurfaceTriple\(paths=).*?$",
+    re.MULTILINE,
+)
+
+
+def _pin_registry() -> list[dict[str, str]]:
+    match = _PIN_REGISTRY_BLOCK.search(PIN_REGISTRY.read_text(encoding="utf-8"))
+    assert match, f"{PIN_REGISTRY}: one fenced JSON registry is required"
+    document = json.loads(match.group("body"))
+    assert document["registry_version"] == 1
+    return document["pins"]
+
+
+def _discovered_independent_pins() -> list[tuple[str, str]]:
+    """A deliberately narrow inventory of independent surface/error/head pins.
+
+    HTTP statuses and local enum sizes are not candidates. Symbolic frozen-count assignments,
+    semantic literal assertions, the frontend surface lock and the history-boundary shape are.
+    The value assertion remains in its owning test; this inventory proves no sibling pin lives
+    in an unregistered path or appears without increasing that path's registered count.
+    """
+    found: list[tuple[str, str]] = []
+    for path in sorted((REPO_ROOT / "tests").rglob("*.py")):
+        relative = str(path.relative_to(REPO_ROOT))
+        text = path.read_text(encoding="utf-8")
+        found.extend((relative, match.group(0).strip()) for match in _PIN_ASSIGNMENT.finditer(text))
+        for match in _PIN_ASSERTION.finditer(text):
+            assertion = match.group(0).strip()
+            if re.search(r'==\s*(?:17|20|22|61|"0013|SurfaceTriple)', assertion):
+                found.append((relative, assertion))
+
+    lock = json.loads((REPO_ROOT / "web" / "FRONTEND_LOCK.json").read_text(encoding="utf-8"))
+    for field in ("paths", "operations", "component_schemas"):
+        found.append(("web/FRONTEND_LOCK.json", f'{field}={lock["openapi"][field]}'))
+    found.append(
+        (
+            "tests/contract/api_v1/test_doc_prose_facts.py",
+            "_GENUINE_HISTORICAL_HEADING_SHAPE",
+        )
+    )
+    return found
+
+
+def _pin_needle_errors(
+    pins: list[dict[str, str]], *, overrides: dict[str, str] | None = None
+) -> list[str]:
+    overrides = overrides or {}
+    errors: list[str] = []
+    for pin in pins:
+        target = REPO_ROOT / pin["path"]
+        text = overrides.get(pin["path"], target.read_text(encoding="utf-8"))
+        occurrences = text.count(pin["needle"])
+        if occurrences != 1:
+            errors.append(
+                f"{pin['pin_id']}: needle must identify exactly one live pin in "
+                f"{pin['path']}, found {occurrences}"
+            )
+    return errors
 
 #: The exact heading `CURRENT_STATE.md` uses to mark its own history. Matched by the
 #: literal phrase the file's own prose uses ("historical record"), not by a wave number,
@@ -139,15 +210,38 @@ def _historical_boundary(full_text: str) -> "re.Match[str]":
     rather than failing on it.
     """
     masked = _mask_fenced_code_blocks(full_text)
-    boundary = _HISTORICAL_HEADING.search(masked)
-    assert boundary, "no historical-record heading found outside a code fence"
-    candidate = boundary.group(0).strip()
-    assert _GENUINE_HISTORICAL_HEADING_SHAPE.match(candidate), (
-        "the first historical-record marker outside a code fence does not look like "
-        "this file's genuine heading (`## Previous release state -- wave N "
-        f"(historical record)`): {candidate!r} -- a line that merely mentions the "
-        "phrase must not silently become the live/historical boundary (F-5c's second "
-        "hole, X-4)"
+    boundaries = list(_HISTORICAL_HEADING.finditer(masked))
+    assert boundaries, "no historical-record heading found outside a code fence"
+    boundary = boundaries[0]
+    waves: list[int] = []
+    for candidate_match in boundaries:
+        candidate = candidate_match.group(0).strip()
+        assert _GENUINE_HISTORICAL_HEADING_SHAPE.match(candidate), (
+            "a historical-record marker outside a code fence does not look like "
+            "this file's genuine heading (`## Previous release state -- wave N "
+            f"(historical record)`): {candidate!r} -- a line that merely mentions the "
+            "phrase must not silently become the live/historical boundary (F-5c's second "
+            "hole, X-4)"
+        )
+        wave = re.search(r"\bwave\s+(\d+)\b", candidate, re.IGNORECASE)
+        assert wave
+        waves.append(int(wave.group(1)))
+    assert len(waves) == len(set(waves)) and all(
+        newer > older for newer, older in zip(waves, waves[1:])
+    ), f"historical headings must be unique and newest-first; D-115 mutation: {waves}"
+    return boundary
+
+
+def _assert_boundary_matches_tag(full_text: str, tagged_tip: str) -> "re.Match[str]":
+    """The first historical section is the latest tagged release, not the active wave."""
+    boundary = _historical_boundary(full_text)
+    actual = re.search(r"\bwave\s+(\d+)\b", boundary.group(0), re.IGNORECASE)
+    expected = re.fullmatch(r"alpha-w(\d+)(?:\.\d+)?", tagged_tip)
+    assert actual and expected
+    assert int(actual.group(1)) == int(expected.group(1)), (
+        "the first history heading does not name the tagged tip; a correctly shaped heading "
+        "for the active wave was placed before live claims (D-115): "
+        f"heading wave {actual.group(1)}, tagged tip {tagged_tip}"
     )
     return boundary
 
@@ -382,6 +476,54 @@ def test_true_tagged_tip_is_read_from_git_and_is_plausible() -> None:
     assert re.fullmatch(r"alpha-w\d+(?:\.\d+)?", tip), tip
 
 
+def test_contract_pin_registry_is_complete_and_points_to_live_needles() -> None:
+    """`D-105`: independent pins are enumerable and each entry still identifies code."""
+    pins = _pin_registry()
+    assert pins
+    assert {pin["family"] for pin in pins} == {
+        "surface",
+        "error_catalog",
+        "migration_head",
+        "history_boundary",
+    }
+    ids = [pin["pin_id"] for pin in pins]
+    assert len(ids) == len(set(ids)), "pin_id values must be unique"
+
+    registered_by_path = Counter(pin["path"] for pin in pins)
+    for pin in pins:
+        assert set(pin) == {"pin_id", "family", "path", "needle", "event"}, pin
+        target = REPO_ROOT / pin["path"]
+        assert target.is_file(), f"{pin['pin_id']}: missing {pin['path']}"
+    assert not _pin_needle_errors(pins)
+
+    discovered = _discovered_independent_pins()
+    discovered_by_path = Counter(path for path, _ in discovered)
+    unknown_paths = sorted(set(discovered_by_path) - set(registered_by_path))
+    assert not unknown_paths, f"independent pins outside CONTRACT_PIN_REGISTRY.md: {unknown_paths}"
+    overflow = {
+        path: (count, registered_by_path[path])
+        for path, count in discovered_by_path.items()
+        if count > registered_by_path[path]
+    }
+    assert not overflow, f"new independent pins lack their own registry entries: {overflow}"
+
+
+@pytest.mark.parametrize(
+    "family",
+    ["surface", "error_catalog", "migration_head", "history_boundary"],
+)
+def test_one_changed_pin_per_registry_family_is_red(family: str) -> None:
+    """A registry entry cannot stay green after its independently maintained pin moves."""
+    pins = _pin_registry()
+    pin = next(candidate for candidate in pins if candidate["family"] == family)
+    target = REPO_ROOT / pin["path"]
+    original = target.read_text(encoding="utf-8")
+    mutated = original.replace(pin["needle"], f"MUTATED_{pin['pin_id']}", 1)
+    assert mutated != original
+    errors = _pin_needle_errors(pins, overrides={pin["path"]: mutated})
+    assert any(error.startswith(f"{pin['pin_id']}:") for error in errors), errors
+
+
 def test_the_guard_reaches_the_three_named_documents() -> None:
     scanned = {file for file, _ in _scanned_documents()}
     assert "docs/program/CURRENT_STATE.md" in scanned
@@ -414,7 +556,7 @@ def test_the_historical_section_is_excluded_from_the_live_scan() -> None:
     before it survives -- without carrying a fact about which wave is currently live.
     """
     full_text = CURRENT_STATE.read_text(encoding="utf-8")
-    boundary = _historical_boundary(full_text)
+    boundary = _assert_boundary_matches_tag(full_text, _true_tagged_tip())
     (scanned_text,) = (
         text for file, text in _scanned_documents() if file == "docs/program/CURRENT_STATE.md"
     )
@@ -477,14 +619,30 @@ def test_the_historical_section_is_excluded_from_the_live_scan() -> None:
     # *position* relative to the claims -- only its shape. Non-vacuity is what would
     # still catch the one case that has the right shape *and* the wrong position: the
     # genuine heading text itself, copied verbatim and placed early by hand.
-    live_claims = (
-        {m.group(0) for m in _migration_head_claims(scanned_text)}
-        | {m.group(0) for m in _surface_triple_claims(scanned_text)}
-        | {m.group(0) for m in _tagged_tip_claims(scanned_text)}
+    migration_claims = {m.group(0) for m in _migration_head_claims(scanned_text)}
+    surface_claims = {m.group(0) for m in _surface_triple_claims(scanned_text)}
+    assert migration_claims and surface_claims, (
+        "the live section must retain both its migration-head and surface claims before the "
+        "history boundary; one surviving family cannot hide another (D-115): "
+        f"migration={migration_claims}, surface={surface_claims}"
     )
-    assert live_claims, (
-        "the live section survives truncation but makes no claim this guard can read -- "
-        "the non-vacuity half of the control (F-5c) is failing"
+    assert "infra/deploy/verify-deployed.sh" in scanned_text, (
+        "the command that replaces a perishable deployed-SHA/date assertion was truncated"
+    )
+
+
+def test_live_state_names_a_probe_not_a_deployed_sha_snapshot() -> None:
+    """`D-104`: live prose points to verification and carries no present-tense SHA snapshot."""
+    (live,) = (
+        text for file, text in _scanned_documents() if file == "docs/program/CURRENT_STATE.md"
+    )
+    assert "infra/deploy/verify-deployed.sh" in live
+    perishable = re.compile(
+        r"\b(?:deployed|redeployed)\b[^\n]{0,100}?\b[0-9a-f]{7,40}\b",
+        re.IGNORECASE,
+    )
+    assert not perishable.search(live), (
+        "CURRENT_STATE live prose asserts a deployed SHA; name verify-deployed.sh instead"
     )
 
 
@@ -659,6 +817,21 @@ def test_the_genuine_heading_is_still_found_as_the_boundary() -> None:
     boundary = _historical_boundary(_SYNTHETIC_HONEST_DOCUMENT)
     assert boundary.start() == len(_SYNTHETIC_LIVE_PREFIX)
     assert _SYNTHETIC_HONEST_DOCUMENT[: boundary.start()] == _SYNTHETIC_LIVE_PREFIX
+
+
+def test_a_correctly_shaped_early_heading_cannot_hide_later_live_claims() -> None:
+    """`D-115`: shape alone is insufficient when the genuine heading still exists later."""
+    stale_head_sentence = "The migration head is `0010_run_terminal_detail`.\n\n"
+    early = "## Previous release state -- wave 46 (historical record)\n\n"
+    mutated = (
+        _SYNTHETIC_LIVE_PREFIX
+        + early
+        + stale_head_sentence
+        + _SYNTHETIC_GENUINE_HEADING
+        + _SYNTHETIC_HISTORICAL_TAIL
+    )
+    with pytest.raises(AssertionError, match="does not name the tagged tip"):
+        _assert_boundary_matches_tag(mutated, "alpha-w45")
 
 
 def test_a_historical_heading_inside_a_code_fence_is_not_a_boundary() -> None:

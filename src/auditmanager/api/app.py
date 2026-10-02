@@ -162,7 +162,7 @@ def create_asgi_app(
 def create_documentation_app(environ: Mapping[str, str] | None = None) -> FastAPI:
     """The same application shape, with nothing wired behind the six ports.
 
-    The served document is a function of the eighteen declarations and the 61 models and not
+    The served document is a function of the twenty declarations and the 61 models and not
     of what sits behind the ports, so this builds it without a database, an object store or
     a credential -- which is what lets the conformance gate read
     ``create_documentation_app().openapi()`` on any checkout. It **cannot serve a request**:
@@ -397,7 +397,7 @@ def _assemble(
         swagger_ui_oauth2_redirect_url=None,
         # `R-31`, the other half. These seed `app.router.dependencies`, which
         # `add_api_route` copies onto **every** route the application carries -- the
-        # eighteen merged in by `include_router` below and the four declared beneath it.
+        # API routes merged in by `include_router` below and the four declared beneath it.
         # They were arguments to `include_router` until this wave, which is what left the
         # four outside the seam. The order is unchanged: an included route ends up with
         # `app.router.dependencies + <include_router's> + <the route's own>`, so moving

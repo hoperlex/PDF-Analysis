@@ -602,11 +602,11 @@ added `changePassword` under `R-26` on 2026-09-23, and nineteen after `W45-BLOCK
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
-identical paragraph, found by `W45-JUDGE-A` on 2026-09-25 and not by the guard. **Both
-sentences above are outside every scanner this programme has**: the surface-count guard reads
-`src/auditmanager/api`, `infra/deploy` and `web/src`, and this file is in none of them. The line
-you are reading has now recorded the same defect twice, which is what a note does instead of an
-instrument.*
+identical paragraph, found by `W45-JUDGE-A` on 2026-09-25 and not by the guard. **Both sentences
+were outside the predecessor scanner**: it read `src/auditmanager/api`, `infra/deploy` and
+`web/src`, and this file was in none of them. W48 now discovers tracked text without a suffix
+filter and names this live seam specification explicitly; the note remains as the record of why
+that scope is load-bearing.*
 `tests/contract/api_v1/test_surface_counts_in_prose.py` reads `src/auditmanager/api`,
 `infra/deploy` and `web/src` and does **not** read `docs/`, so the sentence outlived two
 reseals with nothing able to see it. The count here is checked instead by

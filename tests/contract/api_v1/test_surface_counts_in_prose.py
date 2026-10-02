@@ -33,31 +33,21 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+import subprocess
+from dataclasses import dataclass
+from functools import cache
 from typing import Iterator
 
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-#: The two trees that describe the surface in prose. `W18-SEAL`'s sweep covered `src/`
-#: only, so `infra/deploy/` kept four statements saying twelve operations -- including
-#: `serve.py`'s module docstring, which is the first thing an operator reads about the
-#: process. This guard found them on its first widening, which is the row's own point:
-#: a claim a checker cannot read is a claim nobody is checking.
-SCANNED_TREES = (
-    REPO_ROOT / "src" / "auditmanager" / "api",
-    REPO_ROOT / "infra" / "deploy",
-    # `W22-WEB` added `web/src/app/bff` for the fifth stale count and called it "the only
-    # place in `web/` that makes such a claim". That was false: `D-41` found two more in
-    # `web/src/shared/api/errors.ts` and this session found a third next to them in
-    # `authorization.ts`, all outside that subtree. `W27-WEB` therefore reads the whole of
-    # `web/src` -- a claim about the size of this surface is not confined to the directory
-    # that last carried a stale one.
-    #
-    # `web/tests` is deliberately NOT read, for the reason this file is not read either:
-    # a suite that proves a guard can fail has to write the stale spelling down on purpose.
-    REPO_ROOT / "web" / "src",
-)
-API_SOURCE = SCANNED_TREES[0]
+#: Runtime/deployment families in which prose describes the live HTTP surface. File discovery
+#: inside them is from Git's tracked-file inventory, never an extension list. Tests are outside
+#: this scope because they must contain deliberately stale mutation strings. Programme reports
+#: are records; the one live seam specification is named separately because it is an input to
+#: implementation, not a wave report (`D-100`).
+LIVE_SURFACE_PREFIXES = ("src/auditmanager/api/", "infra/deploy/", "web/src/")
+LIVE_SURFACE_DOCUMENTS = frozenset({"docs/program/P02_SEAMS.md"})
 API_CONTRACT = REPO_ROOT / "contracts" / "api" / "v1" / "openapi.json"
 ERROR_CATALOG = REPO_ROOT / "contracts" / "domain" / "v1" / "error-codes.json"
 
@@ -96,49 +86,66 @@ def _number_words() -> dict[str, int]:
 
 NUMBER_WORDS = _number_words()
 
-#: The nouns whose count is a claim about the size of something a document declares, and
-#: the document key each one is checked against.
-SURFACE_NOUNS: dict[str, str] = {
-    "operation": "operations",
-    "operations": "operations",
-    "schema": "schemas",
-    "schemas": "schemas",
-    "path": "paths",
-    "paths": "paths",
-    "code": "codes",
-    "codes": "codes",
-    # A count of handlers is a count of operations: the BFF's docstring argued for a
-    # catch-all by saying what a route-per-operation would cost, "not to twelve
-    # handlers", and that number is a claim about the surface exactly as "twelve
-    # operations" is. Without this the sentence was invisible to the guard while
-    # carrying the same stale figure.
-    "handler": "operations",
-    "handlers": "operations",
-}
-
-_NUMBER = r"(?:\d{1,3}|" + "|".join(
+_NUMBER = r"(?:\d{1,2}|" + "|".join(
     sorted((re.escape(w) for w in NUMBER_WORDS), key=len, reverse=True)
 ) + r")"
-#: ``forty-six schemas``, ``46 schema names``, ``fifteen-operation surface``.
-#:
-#: Two things are excluded structurally rather than by registering a phrase, because both
-#: are about what the words *mean* and neither depends on the number (`W27-WEB`):
-#:
-#: * a number that is part of a hyphenated token is not a count of anything --
-#:   ``UTF-16 code units`` read as "16 codes" and was the first thing the widening to
-#:   ``web/src`` reported;
-#: * ``code units`` and ``code points`` are units of text, not entries in a catalog.
-#:
-#: Registering those in :data:`LOCAL_COUNTS` would have worked for the exact numbers seen
-#: and silently let the next one through, which is the literal this guard exists to refuse.
-_CLAIM = re.compile(
-    rf"(?<![\w-])(?P<number>{_NUMBER})[ -](?P<noun>operations?|schemas?|paths?|codes?|handlers?)\b"
-    r"(?![ -](?:unit|point)s?\b)",
+#: A quantified noun phrase, without an allow-list of nouns. The old pattern knew only
+#: operation/schema/path/code/handler; declarations, models, copies and places walked straight
+#: through it (`D-98`). The *subject* is established independently by `_SURFACE_SUBJECT`, then
+#: any count-bearing phrase in that subject is inspected. Up to three words are retained so a
+#: local exception is an exact phrase, not an exemption for a number everywhere.
+_QUANTIFIED_PHRASE = re.compile(
+    rf"(?<![\w-])(?P<number>{_NUMBER})[ -]"
+    r"(?P<label>[A-Za-z][A-Za-z-]*)\b",
     re.IGNORECASE,
 )
 
-#: Phrases that state a count of one of :data:`SURFACE_NOUNS` and deliberately do **not**
-#: claim the size of the surface. Each is a statement about a subset or about a local
+#: These words identify prose whose subject is the API contract. They do not classify the noun
+#: after a number, so `the API surface has nineteen widgets` is still a claim and still fails.
+#: The anchors describe repository concepts, not a growing synonym list for count labels.
+_SURFACE_SUBJECT = re.compile(
+    r"\b(?:api[ \t]+surface|openapi[ \t]+surface|served[ \t]+document|frozen[ \t]+document|"
+    r"contract[ \t]+declares|document[ \t]+declares|surface[ \t]+(?:is|has|contains))\b",
+    re.IGNORECASE,
+)
+
+#: Only the four canonical contract vocabulary words get a dimension-specific expectation.
+#: They are derived from `_surface_counts()`'s keys. Every other noun is checked against the
+#: complete set of current surface values, which is enough to reject an unseen synonym carrying
+#: an old/arbitrary surface count without pretending to understand natural language.
+_SINGULAR = {"operations": "operation", "schemas": "schema", "paths": "path", "codes": "code"}
+_NON_NOUN_LABELS = frozenset(
+    {
+        "after",
+        "against",
+        "and",
+        "as",
+        "at",
+        "before",
+        "below",
+        "cannot",
+        "for",
+        "from",
+        "in",
+        "into",
+        "is",
+        "of",
+        "on",
+        "out",
+        "plus",
+        "that",
+        "the",
+        "this",
+        "to",
+        "was",
+        "were",
+        "with",
+        "would",
+    }
+)
+
+#: Phrases that carry a canonical surface word and deliberately do **not** claim the size
+#: of the whole surface. Each is a statement about a subset or about a local
 #: mechanism, and each is true. This register is about PROSE: a reseal that changes the
 #: surface counts requires no edit here, which is what keeps it from becoming the literal
 #: `D-23` is a row about.
@@ -160,8 +167,65 @@ LOCAL_COUNTS: frozenset[str] = frozenset(
         "two codes",
         # openapi.json info: "gains one code" -- the R-8 addition, not the catalog size.
         "one code",
+        # app.py: current subsets of the operation surface, explained in the same paragraph.
+        "fourteen of the",
+        "six operation joined",
+        # deployment/source comments whose subject shares an API word but whose count is local.
+        "four middlewares",
+        "four documentation routes",
     }
 )
+
+#: Exact historical records inside an otherwise live specification. Path qualification matters:
+#: the same phrase in runtime/deployment prose remains a failure. The record is retained rather
+#: than rewritten, and the test below proves the registration cannot outlive its sentence.
+KNOWN_HISTORICAL_SURFACE_CLAIMS: frozenset[tuple[str, str]] = frozenset(
+    {("docs/program/P02_SEAMS.md", "Fifteen operations")}
+)
+
+
+@dataclass(frozen=True)
+class TrackedText:
+    path: pathlib.Path
+    relative: str
+    text: str | None
+    classification: str
+
+
+def _tracked_inventory() -> list[TrackedText]:
+    """Classify every tracked path as UTF-8 text, binary or unreadable.
+
+    Git, not a suffix list, owns file discovery. A new `.conf`, Dockerfile or extensionless
+    script therefore enters the inventory automatically. Binary/unparseable paths are explicit
+    results rather than silent skips; none may appear in the live-surface families.
+    """
+    completed = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=True,
+    )
+    entries: list[TrackedText] = []
+    for raw_name in completed.stdout.split(b"\0"):
+        if not raw_name:
+            continue
+        relative = raw_name.decode("utf-8")
+        path = REPO_ROOT / relative
+        try:
+            payload = path.read_bytes()
+        except OSError:
+            entries.append(TrackedText(path, relative, None, "unreadable"))
+            continue
+        if b"\0" in payload:
+            entries.append(TrackedText(path, relative, None, "binary"))
+            continue
+        try:
+            text = payload.decode("utf-8")
+        except UnicodeDecodeError:
+            entries.append(TrackedText(path, relative, None, "non-utf8"))
+            continue
+        entries.append(TrackedText(path, relative, text, "utf8-text"))
+    return entries
 
 
 def _surface_counts() -> dict[str, int]:
@@ -182,15 +246,65 @@ def _surface_counts() -> dict[str, int]:
     }
 
 
+@cache
+def _historical_surface_values() -> frozenset[int]:
+    """Every surface/catalog size that was ever canonical, derived from Git objects.
+
+    This replaces the old noun-synonym guess with repository evidence. An unseen noun is a
+    stale-surface candidate when it carries a value an earlier contract/catalog actually had;
+    arbitrary local numbers are not reclassified merely because the word `contract` is nearby.
+    """
+    values: set[int] = set(_surface_counts().values())
+    for relative, extractor in (
+        (
+            "contracts/api/v1/openapi.json",
+            lambda document: {
+                len(document["paths"]),
+                sum(
+                    1
+                    for item in document["paths"].values()
+                    for method in item
+                    if method.lower() in _METHODS
+                ),
+                len(document["components"]["schemas"]),
+            },
+        ),
+        (
+            "contracts/domain/v1/error-codes.json",
+            lambda document: {len(document["codes"])},
+        ),
+    ):
+        history = subprocess.run(
+            ["git", "log", "--format=%H", "--", relative],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+        for commit in history:
+            shown = subprocess.run(
+                ["git", "show", f"{commit}:{relative}"],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if shown.returncode == 0:
+                values.update(extractor(json.loads(shown.stdout)))
+    return frozenset(values)
+
+
 def _api_source_files() -> list[pathlib.Path]:
-    return sorted(
-        path
-        for tree in SCANNED_TREES
-        for path in tree.rglob("*")
-        if path.is_file()
-        and path.suffix in {".py", ".md", ".ts", ".tsx"}
-        and "__pycache__" not in path.parts
-    )
+    return [entry.path for entry in _surface_inventory() if entry.text is not None]
+
+
+def _surface_inventory() -> list[TrackedText]:
+    return [
+        entry
+        for entry in _tracked_inventory()
+        if entry.relative in LIVE_SURFACE_DOCUMENTS
+        or entry.relative.startswith(LIVE_SURFACE_PREFIXES)
+    ]
 
 
 def _contract_info_prose() -> str:
@@ -233,32 +347,68 @@ def _unwrap(text: str) -> str:
     return _WRAP.sub(" ", text)
 
 
-def _claims(text: str) -> Iterator[tuple[str, str, int]]:
-    """Every count-of-a-surface-noun claim in ``text`` that is not registered as local."""
+def _claims(text: str) -> Iterator[tuple[str, str | None, int]]:
+    """Every quantified phrase in prose whose surrounding subject is the API surface.
+
+    Canonical operation/path/schema/code nouns get a dimension-specific expectation. An unknown
+    noun is considered only inside an explicit API-surface/document assertion and only when its
+    value occurred in real contract history. Exact local-count exemptions remain visible and
+    mutation-testable.
+    """
     text = _unwrap(text)
-    for match in _CLAIM.finditer(text):
+    for match in _QUANTIFIED_PHRASE.finditer(text):
         phrase = match.group(0).lower().replace("-", " ")
-        number, noun = match.group("number").lower(), match.group("noun").lower()
-        if phrase in LOCAL_COUNTS:
+        if any(phrase.startswith(local) for local in LOCAL_COUNTS):
             continue
-        # A registered local phrase may be the head of a longer one.
-        if any(
-            text[match.start() : match.start() + len(local)].lower().replace("-", " ")
-            == local
-            for local in LOCAL_COUNTS
-        ):
-            continue
+        number = match.group("number").lower()
         value = int(number) if number.isdigit() else NUMBER_WORDS[number]
-        yield match.group(0), SURFACE_NOUNS[noun], value
+        first_label = match.group("label").lower().rstrip("s")
+        if first_label in _NON_NOUN_LABELS:
+            continue
+        tail = text[match.end() : match.end() + 12]
+        if first_label == "code" and re.match(r"[ -]+(?:unit|point)s?\b", tail, re.IGNORECASE):
+            continue
+        dimension = next(
+            (plural for plural, singular in _SINGULAR.items() if first_label == singular),
+            None,
+        )
+        if dimension is None:
+            clause_start = max(text.rfind(mark, 0, match.start()) for mark in ".!?;\n") + 1
+            following = [text.find(mark, match.end()) for mark in ".!?;\n"]
+            clause_end = min(position for position in following if position >= 0) if any(
+                position >= 0 for position in following
+            ) else len(text)
+            if not _SURFACE_SUBJECT.search(text[clause_start:clause_end]):
+                continue
+            if value not in _historical_surface_values():
+                continue
+        yield match.group(0), dimension, value
 
 
 def _sources() -> list[tuple[str, str]]:
     named = [
-        (str(path.relative_to(REPO_ROOT)), path.read_text(encoding="utf-8"))
-        for path in _api_source_files()
+        (entry.relative, entry.text)
+        for entry in _surface_inventory()
+        if entry.text is not None
     ]
     named.append(("contracts/api/v1/openapi.json -> info", _contract_info_prose()))
     return named
+
+
+def _wrong_surface_claims(name: str, text: str) -> list[str]:
+    counts = _surface_counts()
+    wrong: list[str] = []
+    for phrase, dimension, value in _claims(text):
+        if (name, phrase) in KNOWN_HISTORICAL_SURFACE_CLAIMS:
+            continue
+        expected = counts[dimension] if dimension is not None else set(counts.values())
+        disagrees = value != expected if isinstance(expected, int) else value not in expected
+        if disagrees:
+            wrong.append(
+                f"{name}: {phrase!r} states {value} for "
+                f"{dimension or 'an unlisted surface noun'}, expected {expected}"
+            )
+    return wrong
 
 
 # ---------------------------------------------------------------------------
@@ -280,15 +430,9 @@ def test_the_counts_are_read_from_the_documents_and_are_plausible() -> None:
 
 def test_the_api_prose_states_the_surface_this_document_declares() -> None:
     """`D-23`. Every claim about the size of the surface agrees with the surface."""
-    counts = _surface_counts()
     wrong: list[str] = []
     for name, text in _sources():
-        for phrase, noun, value in _claims(text):
-            if value != counts[noun]:
-                wrong.append(
-                    f"{name}: {phrase!r} states {value} {noun}, "
-                    f"but the document declares {counts[noun]}"
-                )
+        wrong.extend(_wrong_surface_claims(name, text))
     assert not wrong, (
         "prose states a surface size the frozen document contradicts. The conformance "
         "engine cannot see this -- it drops description, summary and title as "
@@ -308,6 +452,65 @@ def test_the_guard_actually_reaches_the_files_that_carried_the_defect() -> None:
     # ...and it finds claims in them, rather than matching nothing at all.
     found = sum(len(list(_claims(text))) for _, text in _sources())
     assert found >= 10, f"the claim pattern matched {found} statements; it is not working"
+
+
+def test_tracked_file_discovery_has_no_suffix_blind_spot() -> None:
+    """`D-99`/`D-100`: Git inventory reaches every old blind extension and the seam spec."""
+    inventory = _tracked_inventory()
+    assert len(inventory) == len({entry.relative for entry in inventory})
+    assert all(entry.classification in {"utf8-text", "binary", "non-utf8", "unreadable"} for entry in inventory)
+
+    surface = {entry.relative: entry for entry in _surface_inventory()}
+    for relative in (
+        "infra/deploy/Dockerfile.api",
+        "infra/deploy/compose.server.yml",
+        "infra/deploy/proxy/nginx.conf",
+        "infra/deploy/env/alpha.env.example",
+        "infra/deploy/deploy.sh",
+        "docs/program/P02_SEAMS.md",
+    ):
+        assert relative in surface, f"tracked live prose escaped discovery: {relative}"
+        assert surface[relative].classification == "utf8-text", surface[relative]
+
+    opaque = [entry for entry in surface.values() if entry.classification != "utf8-text"]
+    assert not opaque, "live surface file is binary/unreadable and needs an explicit parser or exclusion"
+
+
+def test_p02_seam_makes_a_current_claim_the_guard_reads() -> None:
+    counts = _surface_counts()
+    seam = (REPO_ROOT / "docs/program/P02_SEAMS.md").read_text(encoding="utf-8")
+    claims = list(_claims(seam))
+    assert any(dimension == "operations" and value == counts["operations"] for _, dimension, value in claims)
+
+
+def test_historical_surface_claim_registry_is_exact_and_live() -> None:
+    current = _surface_counts()
+    for relative, phrase in KNOWN_HISTORICAL_SURFACE_CLAIMS:
+        text = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        matches = [claim for claim in _claims(text) if claim[0] == phrase]
+        assert len(matches) == 1, (relative, phrase, matches)
+        _, dimension, value = matches[0]
+        assert dimension is not None and value != current[dimension]
+
+
+def test_a_stale_claim_in_a_previously_excluded_conf_file_is_red() -> None:
+    """`D-99`: mutate the real extensionless scanner input in memory; `.conf` is not skipped."""
+    relative = "infra/deploy/proxy/nginx.conf"
+    text = (REPO_ROOT / relative).read_text(encoding="utf-8")
+    mutated = text.replace("the seventeen paths", "the sixteen paths", 1)
+    assert mutated != text
+    wrong = _wrong_surface_claims(relative, mutated)
+    assert any("'sixteen paths' states 16" in item for item in wrong), wrong
+
+
+def test_a_stale_current_claim_in_p02_seams_is_red() -> None:
+    """`D-100`: the once-unscanned live seam document is mutation-tested by path."""
+    relative = "docs/program/P02_SEAMS.md"
+    text = (REPO_ROOT / relative).read_text(encoding="utf-8")
+    mutated = text.replace("Twenty operations, sealed.", "Nineteen operations, sealed.", 1)
+    assert mutated != text
+    wrong = _wrong_surface_claims(relative, mutated)
+    assert any("'Nineteen operations' states 19" in item for item in wrong), wrong
 
 
 def test_the_guard_reaches_the_bff_route_handler() -> None:
@@ -385,8 +588,8 @@ def test_the_shared_api_client_still_makes_a_claim_this_guard_can_read() -> None
         # `W22-WEB`: the two spellings that were invisible before the widening.
         # A claim wrapped across a JSDoc continuation line, exactly as route.ts had it.
         ("`T-6` says the same twelve\n * operations must keep working", "operations"),
-        # A count of handlers is a count of operations.
-        ("not to twelve handlers.", "operations"),
+        # An unlisted noun inside an explicit surface assertion is still read.
+        ("the API surface has twelve widgets.", None),
     ],
 )
 def test_a_stale_count_is_caught(prose: str, noun: str) -> None:
@@ -399,9 +602,12 @@ def test_a_stale_count_is_caught(prose: str, noun: str) -> None:
     counts = _surface_counts()
     claims = list(_claims(prose))
     assert claims, f"the pattern did not even match {prose!r}"
-    assert any(
-        value != counts[noun] for _, found_noun, value in claims if found_noun == noun
-    ), f"{prose!r} no longer disagrees with the document; the counts are {counts}"
+    if noun is None:
+        assert any(value not in set(counts.values()) for _, _, value in claims)
+    else:
+        assert any(
+            value != counts[noun] for _, found_noun, value in claims if found_noun == noun
+        ), f"{prose!r} no longer disagrees with the document; the counts are {counts}"
 
 
 def test_a_current_count_is_not_caught() -> None:
@@ -431,7 +637,7 @@ def test_a_claim_wrapped_across_a_comment_line_is_still_one_claim() -> None:
         "says the same twelve\n# operations must keep working",
         "says the same twelve\n    operations must keep working",
     ):
-        assert not list(_CLAIM.finditer(wrapped)), "the raw text should not match"
+        assert not list(_QUANTIFIED_PHRASE.finditer(wrapped)), "the raw text should not match"
         claims = list(_claims(wrapped))
         assert claims, f"_unwrap did not join {wrapped!r}"
         assert claims[0][1] == "operations" and claims[0][2] == 12
@@ -450,15 +656,17 @@ def test_unwrapping_does_not_invent_a_claim_across_a_blank_line() -> None:
 
 
 def test_a_handler_count_is_checked_as_an_operation_count() -> None:
-    """`W22-WEB`. ``handlers`` was not a surface noun, so the claim was not read."""
+    """`W22-WEB`. An unlisted noun is checked from its API-surface context."""
     counts = _surface_counts()
-    claims = list(_claims("not to twelve handlers"))
-    assert claims == [("twelve handlers", "operations", 12)]
-    assert 12 != counts["operations"]
+    claims = list(_claims("the API surface would need twelve handlers"))
+    assert claims == [("twelve handlers", None, 12)]
+    assert 12 not in set(counts.values())
     # And the true figure passes, so this is not simply always red.
     assert all(
-        value == counts["operations"]
-        for _, _, value in _claims(f"not to {counts['operations']} handlers")
+        value in set(counts.values())
+        for _, _, value in _claims(
+            f"the API surface would need {counts['operations']} handlers"
+        )
     )
 
 

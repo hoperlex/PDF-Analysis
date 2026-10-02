@@ -213,8 +213,8 @@ esac
 # git and whose `AUDITMANAGER_API_TOKEN` is the string the example file itself describes as
 # one that "authorizes nothing" -- and `T-6`'s seam is fail-closed, so that stack answers
 # `authentication_required` to every one of its operations and looks like a broken product.
-# (`Y10`: this said "fifteen" and was true at `c4fcc77`; the last guard in this file prints
-# the live number on every run.)
+# (`Y10`: this once restated the operation count; the tracked-text prose guard now checks this
+# suffix, while the last guard in this file prints the live number on every run.)
 #
 # Compared against `alpha.env.example`'s values rather than grepped for `change-me`: a
 # pattern stops being true the day somebody rewrites the example, and the claim this guard

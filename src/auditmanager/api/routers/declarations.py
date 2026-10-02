@@ -1,6 +1,6 @@
 """The parts of the frozen document every operation repeats.
 
-Declared once, because fifteen copies of a response table is fifteen places for one of them
+Declared once, because twenty copies of a response table is twenty places for one of them
 to be missing a status -- which is the shape of the defect ``openapi-drift.contract.test.ts``
 and `W13-CONF`'s gate both exist to catch. Each helper here produces exactly what the
 contract declares, and the gate compares the result on every run.
@@ -44,7 +44,7 @@ CORRELATION_RESPONSE_HEADER: Final[Mapping[str, Any]] = {
 }
 
 #: The catalog summary each declared status carries in the document. Prose, dropped by the
-#: conformance gate's `N4`; written out because a served document with fifteen responses
+#: conformance gate's `N4`; written out because a served document with repeated responses
 #: described as "Additional Response" is a document nobody reads twice.
 _DESCRIPTIONS: Final[Mapping[int, str]] = {
     401: "No credential was presented, or the deployment does not accept it.",
@@ -165,8 +165,8 @@ VerdictFilterParam = Annotated[
 def declare_correlation_id(correlation_id: CorrelationIdParam = None) -> None:  # type: ignore[assignment]
     """Declare the ``X-Correlation-Id`` request parameter on every operation.
 
-    A router-level dependency and not fifteen signatures, because the parameter is the same
-    on all fifteen and a sixteenth spelling of it is a sixteenth thing to get wrong. The
+    A router-level dependency and not one signature per operation, because the parameter is the
+    same throughout and an extra spelling is another thing to get wrong. The
     value is *read* by :class:`~auditmanager.api.routers.correlation.CorrelationMiddleware`,
     which has to see it on requests no operation serves as well -- an undeclared path, an
     undeclared method -- so this declares the contract's parameter and does nothing else.
