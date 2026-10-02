@@ -81,23 +81,21 @@ const SUMMARY: DashboardSummary = {
     { project_uid: `prj_${ULID_B}`, name: 'Проект Бета', document_count: 5 },
   ],
   findings_by_verdict: [
-    { verdict: 'pending', count: 4 },
-    { verdict: 'accepted', count: 2 },
-    { verdict: 'rejected', count: 1 },
-    { verdict: 'needs_manual_review', count: 0 },
+    { verdict: 'pending', count: 16 },
+    { verdict: 'accepted', count: 17 },
+    { verdict: 'rejected', count: 18 },
+    { verdict: 'needs_manual_review', count: 19 },
   ],
   run_activity: {
-    by_state: ZERO_BY_STATE.map((row) =>
-      row.state === 'published' ? { ...row, count: 6 } : row.state === 'failed' ? { ...row, count: 1 } : row,
-    ),
+    by_state: ZERO_BY_STATE.map((row, index) => ({ ...row, count: 31 + index })),
     spend: { model_call_count: 9, cost_micros: 1_500_000, cost_basis: 'measured' },
   },
   section_breakdown: [
-    ...PROJECT_SECTIONS.map((section) => ({
+    ...PROJECT_SECTIONS.map((section, index) => ({
       section: section.code,
-      document_count: section.code === 'KM' ? 4 : section.code === 'PB' ? 2 : 0,
+      document_count: index + 1,
     })),
-    { document_count: 11 },
+    { document_count: PROJECT_SECTIONS.length + 1 },
   ],
 };
 
@@ -266,13 +264,13 @@ describe('every number the dashboard renders is the fixture, and nothing else is
     expect(markup).toContain('data-verdict="rejected"');
     expect(markup).toContain('data-verdict="needs_manual_review"');
     const text = visible(markup);
-    expect(text).toContain('Находок: 7');
+    expect(text).toContain('Находок: 70');
   });
 
   it('renders the run count and the reported spend, with its cost basis', () => {
     const markup = render(SUMMARY);
     const text = visible(markup);
-    expect(text).toContain('Прогонов: 7');
+    expect(text).toContain('Прогонов: 276');
     expect(text).toContain(formatCostMicros(1_500_000));
     expect(text).toContain('вызовов модели: 9');
     expect(markup).toContain('data-cost-basis="measured"');
@@ -297,14 +295,14 @@ describe('every number the dashboard renders is the fixture, and nothing else is
   it('always shows the unclassified section row, never folded into the fourteen', () => {
     const markup = render(SUMMARY);
     expect(markup).toContain('data-section="unclassified"');
-    expect(visible(markup)).toContain('Без раздела: 11');
+    expect(visible(markup)).toContain('Без раздела: 15');
     // The mutation this catches, run by hand and confirmed red: deleting the
     // `<li data-section="unclassified">` block from `sections-panel.tsx` drops both
     // assertions above — the count moves nowhere, it simply stops being on screen, which
     // is exactly `F-3b`'s warning: fourteen true zeros with this row hidden read as "no
     // documents" even when the deployment holds plenty, all of them unclassified.
     expect(markup).toContain('data-section="KM"');
-    expect(visible(markup)).toContain('4');
+    expect(rowNumber(markup, 'li', 'section', 'KM')).toBe(3);
   });
 
   it('renders every one of the fourteen frozen sections, zeros included', () => {
@@ -388,6 +386,15 @@ describe('an omitted or unrecognised row is a fault, never a zero', () => {
  *      and back.
  */
 describe('every row is keyed to its own data attribute, not to membership on the page', () => {
+  it('uses pairwise-distinct values in every closed breakdown fixture', () => {
+    const sectionCounts = SUMMARY.section_breakdown.map((row) => row.document_count);
+    const verdictCounts = SUMMARY.findings_by_verdict.map((row) => row.count);
+    const runCounts = SUMMARY.run_activity.by_state.map((row) => row.count);
+    expect(new Set(sectionCounts).size).toBe(sectionCounts.length);
+    expect(new Set(verdictCounts).size).toBe(verdictCounts.length);
+    expect(new Set(runCounts).size).toBe(runCounts.length);
+  });
+
   it('every section row carries its own section’s count, never a neighbour’s', () => {
     const markup = render(SUMMARY);
     for (const row of SUMMARY.section_breakdown) {

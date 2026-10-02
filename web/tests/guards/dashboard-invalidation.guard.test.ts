@@ -33,12 +33,81 @@
 
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import { WEB_ROOT, readText, repoRelative, walkFiles } from './lib/repo';
 
 const FEATURES_ROOT = join(WEB_ROOT, 'src', 'features');
-const DASHBOARD_INVALIDATION = 'queryKeys.dashboard.summary()';
+const DASHBOARD_INVALIDATION = 'queryKeys.dashboard.summary';
+
+function parsed(source: string): ts.SourceFile {
+  return ts.createSourceFile('guard-subject.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+}
+
+/** True only for an executable call expression; comments and string literals are not syntax nodes. */
+function subtreeCalls(sourceFile: ts.SourceFile, root: ts.Node, expression: string): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(sourceFile).replace(/\s+/g, '') === expression
+    ) {
+      found = true;
+      return;
+    }
+    if (!found) ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+}
+
+function sourceCalls(source: string, expression: string): boolean {
+  const sourceFile = parsed(source);
+  return subtreeCalls(sourceFile, sourceFile, expression);
+}
+
+function declaredFunctionCalls(source: string, name: string, expression: string): boolean {
+  const sourceFile = parsed(source);
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    const namedFunction = ts.isFunctionDeclaration(node) && node.name?.text === name;
+    const namedVariable =
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === name &&
+      node.initializer !== undefined &&
+      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer));
+    if ((namedFunction || namedVariable) && subtreeCalls(sourceFile, node, expression)) {
+      found = true;
+      return;
+    }
+    if (!found) ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+function importedBindings(source: string): ReadonlyArray<{
+  exported: string;
+  local: string;
+  specifier: string;
+}> {
+  const bindings: Array<{ exported: string; local: string; specifier: string }> = [];
+  for (const statement of parsed(source).statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const elements = statement.importClause?.namedBindings;
+    if (elements === undefined || !ts.isNamedImports(elements)) continue;
+    for (const element of elements.elements) {
+      bindings.push({
+        exported: element.propertyName?.text ?? element.name.text,
+        local: element.name.text,
+        specifier: statement.moduleSpecifier.text,
+      });
+    }
+  }
+  return bindings;
+}
 
 /**
  * Every mutation hook under `features/**`, keyed by its path relative to `WEB_ROOT`, and
@@ -58,7 +127,7 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
 /** Every `features/<feature>/model/use-*.ts` file that calls `useMutation(`, relative to `WEB_ROOT`. */
 function discoverMutationHooks(): string[] {
   return walkFiles(FEATURES_ROOT, (path) => /\/model\/use-[^/]+\.ts$/.test(path))
-    .filter((path) => /useMutation\s*[<(]/.test(readText(path)))
+    .filter((path) => sourceCalls(readText(path), 'useMutation'))
     .map((path) => repoRelative(path).replace(/^web\//, ''))
     .sort();
 }
@@ -86,18 +155,22 @@ function resolveImport(spec: string, fromFile: string): string | null {
  */
 function definitionInvalidatesDashboard(filePath: string, name: string, depth = 0): boolean {
   if (depth > 4) return false;
-  const text = readText(filePath);
-  if (text.includes(DASHBOARD_INVALIDATION) && new RegExp(`\\b${name}\\b`).test(text)) return true;
+  const source = readText(filePath);
+  if (declaredFunctionCalls(source, name, DASHBOARD_INVALIDATION)) return true;
 
-  const namedReExport = text.match(
-    new RegExp(`export\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*'([^']+)'`),
-  );
-  if (namedReExport) {
-    const resolved = resolveImport(namedReExport[1]!, filePath);
-    if (resolved !== null && definitionInvalidatesDashboard(resolved, name, depth + 1)) return true;
-  }
-  for (const starExport of text.matchAll(/export\s*\*\s*from\s*'([^']+)'/g)) {
-    const resolved = resolveImport(starExport[1]!, filePath);
+  for (const statement of parsed(source).statements) {
+    if (!ts.isExportDeclaration(statement)) continue;
+    const moduleSpecifier = statement.moduleSpecifier;
+    if (moduleSpecifier === undefined || !ts.isStringLiteral(moduleSpecifier)) continue;
+    const exports = statement.exportClause;
+    const reExportsName =
+      exports === undefined ||
+      (ts.isNamedExports(exports) &&
+        exports.elements.some(
+          (element) => (element.propertyName?.text ?? element.name.text) === name,
+        ));
+    if (!reExportsName) continue;
+    const resolved = resolveImport(moduleSpecifier.text, filePath);
     if (resolved !== null && definitionInvalidatesDashboard(resolved, name, depth + 1)) return true;
   }
   return false;
@@ -107,19 +180,18 @@ function definitionInvalidatesDashboard(filePath: string, name: string, depth = 
  * Whether `hookPath` invalidates the dashboard's one read: directly, or by delegating to
  * an imported `*CacheKeys` helper that itself does (`decisionCacheKeys`'s shape).
  */
-function invalidatesDashboard(hookPath: string): boolean {
-  const text = readText(hookPath);
-  if (text.includes(DASHBOARD_INVALIDATION)) return true;
+function invalidatesDashboard(hookPath: string, source = readText(hookPath)): boolean {
+  if (sourceCalls(source, DASHBOARD_INVALIDATION)) return true;
 
-  const importLine = /import\s*\{([^}]+)\}\s*from\s*'([^']+)';/g;
-  for (const match of text.matchAll(importLine)) {
-    const names = match[1]!.split(',').map((n) => n.trim().split(/\s+as\s+/)[0]!.trim());
-    const spec = match[2]!;
-    for (const name of names) {
-      if (!/CacheKeys$/.test(name)) continue; // not the delegation shape this guard follows
-      if (!new RegExp(`\\b${name}\\(`).test(text)) continue; // imported but never called here
-      const resolved = resolveImport(spec, hookPath);
-      if (resolved !== null && definitionInvalidatesDashboard(resolved, name)) return true;
+  for (const binding of importedBindings(source)) {
+    if (!/CacheKeys$/.test(binding.exported)) continue; // not the delegation shape this guard follows
+    if (!sourceCalls(source, binding.local)) continue; // imported but never called here
+    const resolved = resolveImport(binding.specifier, hookPath);
+    if (
+      resolved !== null &&
+      definitionInvalidatesDashboard(resolved, binding.exported)
+    ) {
+      return true;
     }
   }
   return false;
@@ -140,4 +212,19 @@ describe('every mutation hook is mapped to whether it invalidates the dashboard'
       );
     });
   }
+
+  it('goes red when create-project comments out the real invalidation call', () => {
+    const hookPath = join(WEB_ROOT, 'src/features/create-project/model/use-create-project.ts');
+    const original = readText(hookPath);
+    const call = 'void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });';
+    expect(original).toContain(call);
+    const commentedOut = original.replace(call, `// ${call}`);
+    expect(invalidatesDashboard(hookPath, commentedOut)).toBe(false);
+  });
+
+  it('does not accept dashboard invalidation text that exists only in a decoy comment', () => {
+    const hookPath = join(WEB_ROOT, 'src/features/export-run/model/use-export-run.ts');
+    const decoy = `${readText(hookPath)}\n// queryKeys.dashboard.summary()\n`;
+    expect(invalidatesDashboard(hookPath, decoy)).toBe(false);
+  });
 });

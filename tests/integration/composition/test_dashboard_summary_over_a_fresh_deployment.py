@@ -601,9 +601,9 @@ def test_a_deployment_with_known_data_reports_the_exact_counts(
     those tests drive is all zeros except one `spend` call that genuinely is
     `measured`.
 
-    Every count below is known before the read: two projects with a known document
-    each, classified under two known sections plus one unclassified; one run in each
-    of the eight frozen states; four findings across three reachable verdicts (see
+    Every count below is known before the read and pairwise distinct inside its breakdown:
+    all fourteen sections plus unclassified carry 1..15 documents; the eight run states
+    carry distinct positive counts; six findings span the three reachable verdicts (see
     `_seed_finding` for why `needs_manual_review` is asserted at exactly `0` rather
     than seeded); and two provider calls, one measured and one estimated, so the
     aggregate basis is a real decision (`estimated`, `F-1`'s own rule) rather than a
@@ -612,12 +612,24 @@ def test_a_deployment_with_known_data_reports_the_exact_counts(
     """
     project_a = _create_project(app, token, "counts-a")
     project_b = _create_project(app, token, "counts-b")
-    _seed_published_document(engine, project_a, "counts-a-1", "AR")
-    _seed_published_document(engine, project_a, "counts-a-2", "KM")
-    _seed_published_document(engine, project_b, "counts-b-1", None)
+    expected_by_section = {code: index + 1 for index, code in enumerate(PROJECT_SECTIONS)}
+    expected_by_section[None] = len(PROJECT_SECTIONS) + 1
+    for section, count in expected_by_section.items():
+        project_uid = project_b if section is None else project_a
+        for ordinal in range(count):
+            _seed_published_document(
+                engine,
+                project_uid,
+                f"section-{section or 'unclassified'}-{ordinal}",
+                section,
+            )
 
-    for state in RUN_STATES:
-        _seed_run(engine, project_a, f"state-{state}", state)
+    expected_by_state = {state: index + 1 for index, state in enumerate(RUN_STATES)}
+    # The finding allocation below contributes one additional published run.
+    for state, count in expected_by_state.items():
+        seed_count = count - 1 if state == "published" else count
+        for ordinal in range(seed_count):
+            _seed_run(engine, project_a, f"state-{state}-{ordinal}", state)
 
     finding_project = _create_project(app, token, "counts-findings")
     finding_run_id, finding_version_uid = _seed_run(
@@ -627,6 +639,8 @@ def test_a_deployment_with_known_data_reports_the_exact_counts(
     _seed_finding(engine, finding_project, finding_version_uid, finding_run_id, "f2", "accepted")
     _seed_finding(engine, finding_project, finding_version_uid, finding_run_id, "f3", "accepted")
     _seed_finding(engine, finding_project, finding_version_uid, finding_run_id, "f4", "rejected")
+    _seed_finding(engine, finding_project, finding_version_uid, finding_run_id, "f5", "rejected")
+    _seed_finding(engine, finding_project, finding_version_uid, finding_run_id, "f6", "rejected")
 
     _seed_model_call(engine, finding_run_id, "spend-measured", 12_000, "measured")
     _seed_model_call(engine, finding_run_id, "spend-estimated", 30_000, "estimated")
@@ -634,35 +648,29 @@ def test_a_deployment_with_known_data_reports_the_exact_counts(
     body = _dashboard(app, token)
 
     projects_by_uid = {row["project_uid"]: row for row in body["documents_by_project"]}
-    assert projects_by_uid[project_a]["document_count"] == 2, projects_by_uid
-    assert projects_by_uid[project_b]["document_count"] == 1, projects_by_uid
+    assert projects_by_uid[project_a]["document_count"] == sum(
+        expected_by_section[code] for code in PROJECT_SECTIONS
+    ), projects_by_uid
+    assert projects_by_uid[project_b]["document_count"] == expected_by_section[None], projects_by_uid
 
     sections = body["section_breakdown"]
     assert len(sections) == len(PROJECT_SECTIONS) + 1, sections
     by_section = {row.get("section"): row["document_count"] for row in sections}
-    assert by_section["AR"] == 1, by_section
-    assert by_section["KM"] == 1, by_section
-    assert by_section[None] == 1, by_section
-    for code in PROJECT_SECTIONS:
-        if code in ("AR", "KM"):
-            continue
-        assert by_section[code] == 0, (code, by_section)
+    assert by_section == expected_by_section, by_section
+    assert len(set(by_section.values())) == len(by_section), by_section
 
     by_verdict = {row["verdict"]: row["count"] for row in body["findings_by_verdict"]}
     assert by_verdict == {
         "pending": 1,
         "accepted": 2,
-        "rejected": 1,
+        "rejected": 3,
         "needs_manual_review": 0,
     }, by_verdict
+    assert len(set(by_verdict.values())) == len(by_verdict), by_verdict
 
-    # One run per state, plus one more `published` run to allocate the findings from --
-    # `_seed_run(..., "published")` below is a second published run, not a reuse of the
-    # one the state loop already made.
-    expected_by_state = dict.fromkeys(RUN_STATES, 1)
-    expected_by_state["published"] = 2
     by_state = {row["state"]: row["count"] for row in body["run_activity"]["by_state"]}
     assert by_state == expected_by_state, by_state
+    assert len(set(by_state.values())) == len(by_state), by_state
 
     assert body["run_activity"]["spend"] == {
         "model_call_count": 2,
