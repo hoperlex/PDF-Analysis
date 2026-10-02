@@ -143,6 +143,8 @@ completion report and never rewrites their verdicts.
 - `tests/integration/exports/**`
 - `tests/contract/domain_p02/test_identifier_catalog.py`
 - `tests/contract/domain_p02/test_seam_register.py`
+- `tests/contract/api_v1/test_doc_prose_facts.py` (only the derived migration-head
+  assertion owned by this slot)
 - `docs/program/P02_SEAMS.md`
 - `docs/program/PROTOTYPE_EXECUTION_PLAN.md`
 - `docs/program/PROTOTYPE_PROFILE.md`
