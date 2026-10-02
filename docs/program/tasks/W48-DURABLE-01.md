@@ -125,6 +125,7 @@ completion report and never rewrites their verdicts.
 - `src/auditmanager/runs/carrier.py`
 - `src/auditmanager/runs/executor.py`
 - `src/auditmanager/runs/reconciliation.py`
+- `src/auditmanager/runs/repository.py` (documentation only; no repository SQL change)
 - `src/auditmanager/runs/retry.py`
 - `src/auditmanager/runs/scope.py`
 - `src/auditmanager/analysis/text/stage.py`
