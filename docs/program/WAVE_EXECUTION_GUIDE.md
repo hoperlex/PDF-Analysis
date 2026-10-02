@@ -41,6 +41,11 @@ Integrator creates/updates a wave-plan from `docs/templates/WAVE_PLAN_TEMPLATE.m
 - expected integration order;
 - checkpoint impact.
 
+Every dispatched task is created from `docs/templates/TASK_TEMPLATE.md` and records four pieces
+of governance evidence even when their value is `none`: enumerator ownership, captured premise
+evidence, historical-evidence mode and publication authority. A route/screen/error/migration task
+is not dispatchable until the shared enumerator and its sole wave owner are named.
+
 ### B. Contract task
 One owner changes shared semantics/contracts. Consumers may create mocks/fixtures **against draft contract**, but do not merge production consumer code until freeze.
 
@@ -80,6 +85,10 @@ Agents receive task files with disjoint `allowed_paths`. Safe examples after fre
 - web viewer vs backend read model;
 - telemetry/dashboard definitions vs business implementation.
 
+An exact premise is evidence only when the task carries the dated command **and its captured,
+untruncated output**. A command somebody could run later is a recipe, not proof that the premise
+was true at dispatch. Paths, line numbers and counts all follow this rule.
+
 ### E. Integration slot
 Only integrator may:
 
@@ -114,6 +123,15 @@ Checkpoint candidate is locally started from a clean state using the matching `d
 
 ### H. Checkpoint
 Integrator fills `CHECKPOINT_REPORT_TEMPLATE.md`, updates `CURRENT_STATE.md`, then creates annotated tag from the accepted integration commit.
+
+Corrections to a completed task log, review or checkpoint record are committed as a new addendum
+that cites the immutable source. The source record is not rewritten to make the past cleaner.
+
+Development publication and deployment publication are different integration outcomes:
+
+- `origin/dev` is the default ref for the exact clean, gated development candidate;
+- `origin/main` is an auto-deploy action and requires a separate direct owner instruction for
+  that exact candidate. A green gate, wave close or integration role never implies it.
 
 ## 4. Shared hotspots
 
