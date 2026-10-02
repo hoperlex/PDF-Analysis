@@ -138,7 +138,10 @@ the report or reinterpret its verdict.
 - `src/auditmanager/storage/models.py`
 - `src/auditmanager/storage/blob_repository.py`
 - `src/auditmanager/storage/durable_publication.py`
+- `src/auditmanager/storage/port.py`
+- `src/auditmanager/storage/s3.py`
 - `src/auditmanager/runs/executor.py`
+- `src/auditmanager/ingest/reconciliation.py`
 - `src/auditmanager/analysis/text/__main__.py`
 - `tests/integration/db/test_durable_analysis_effects.py`
 - `tests/integration/db/test_schema_invariant_inventory.py`
@@ -172,8 +175,9 @@ the report or reinterpret its verdict.
 
 - authority-scoped response, unknown and completion writes plus a database invariant that prevents
   final model-call/run cross-wiring
-- a validated declared-blob breadcrumb and attempt-scoped publication intent committed before
-  the temporary upload, followed by the existing verified/canonical checkpoints
+- a validated declared-blob breadcrumb and attempt-scoped publication intent carrying an opaque
+  DB-generated upload handle, committed before the temporary upload, followed by the existing
+  verified/canonical checkpoints
 - reconciliation evidence from a fresh transaction for process loss immediately after temporary
   upload/verification
 - a truthful replay-only standalone diagnostic whose live configuration fails before constructing
@@ -186,7 +190,8 @@ the report or reinterpret its verdict.
   unchanged and disclose no execution token
 - direct database completion cannot bind an effect to a `model_call` from another run
 - a process-exit signal after temporary verification leaves a `temporary` blob row and unbound
-  attempt publication enumerable by `Reconciler.report()` from a new transaction
+  attempt publication whose exact temporary object is point-inspected by `Reconciler.report()`
+  from a new transaction, without exposing its handle or listing the bucket
 - malformed blob declarations fail before a breadcrumb or S3 write; ordinary and successful paths
   preserve cleanup, idempotency and binding behaviour
 - standalone live invocation with a synthetic key fails before adapter construction/network and
@@ -199,10 +204,10 @@ the report or reinterpret its verdict.
 A current Attempt may advance only provider effects whose stored run/job/attempt tuple exactly
 equals that authority, and the database prevents the final immutable `model_call` from naming a
 different run. For analysis artifacts, validated declared content identity plus the current
-Attempt's publication intent commits before the first S3 write; verification advances that same
-blob record before canonical publish. Every kill boundary is therefore enumerable from database
-identity without bucket listing. The standalone module is a replay diagnostic; live calls occur
-only through the durable Run executor.
+  Attempt's publication intent and opaque upload handle commit before the first S3 write;
+  verification advances that same blob record before canonical publish. Every kill boundary is
+  therefore enumerable and point-inspectable from database identity without bucket listing. The
+  standalone module is a replay diagnostic; live calls occur only through the durable Run executor.
 
 ## Failure/idempotency/security cases
 
