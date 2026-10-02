@@ -1,6 +1,7 @@
 # Wave 48 — alpha hardening, debt closure and whole-tree audit
 
-**Status:** planned, not dispatchable until `W48-FREEZE-01` records an exact clean base.
+**Status:** frozen at code base `6118e66033380661bb747244e0f7a222fb9a87b4`; Stage A is
+dispatchable from the docs-only `origin/dev` tip published by `W48-FREEZE-01`.
 **Controlling ruling:** `R-49`.
 **Release target:** `alpha-w48`, only after local, deployed and manual evidence all pass.
 
@@ -51,7 +52,7 @@ contract_set:
   analysis: PC-01 synthetic AR oracle, unchanged
   comparison: four-way same/changed/only_left/only_right, unchanged
 migration_head: 0013_norm_embeddings
-frozen_code_base: <filled by W48-FREEZE-01>
+frozen_code_base: 6118e66033380661bb747244e0f7a222fb9a87b4
 dispatch_tip: <resolved by origin/dev after the docs-only freeze commit>
 frozen_by: W48-FREEZE-01
 ```
