@@ -158,76 +158,96 @@ if (refusals !== null) {
 expect(journeyExit === 0, `journey process exited ${journeyExit}`);
 expect(refusalsExit === 0, `refusal process exited ${refusalsExit}`);
 
-// A typed outage of the provider on the run this command just created is an access/dependency
-// block, not a product pass. It takes precedence over the structural incompleteness caused by
-// that stopped run; identity errors and successful-but-wrong observations remain FAIL above.
-const verdict =
-  identityOk && dependencyUnavailable && journeyExit !== 0
-    ? 'BLOCKED'
-    : findings.length === 0
-      ? 'PASS'
-      : 'FAIL';
-const evidence = {
-  schema: 'w48-alpha-acceptance/v1',
-  candidateSha: args['candidate-sha'],
-  deployedSha: args['deployed-sha'],
-  origin: journey?.origin ?? refusals?.origin ?? null,
-  phases: {
+const journeyFailuresClean = Array.isArray(journey?.failures) && journey.failures.length === 0;
+const writeComplete =
+  journey?.phase === 'all' &&
+  journey?.write?.ran === true &&
+  journey?.write?.stepsChecked === 3 &&
+  journey?.write?.stepsDeclared === 3 &&
+  journey?.write?.stoppedAt === null;
+const routesComplete =
+  journey?.phase === 'all' &&
+  journey?.routesChecked === 16 &&
+  journey?.routesDeclared === 16;
+const widthComplete =
+  journey?.viewport?.width === 780 &&
+  journey?.viewport?.height === 900 &&
+  journey?.records?.length === 16 &&
+  journey.records.every(
+    (record) =>
+      record?.width?.innerWidth === 780 &&
+      Number.isFinite(record?.width?.scrollWidth) &&
+      record.width.scrollWidth <= record.width.innerWidth,
+  );
+const providerComplete =
+  journeyExit === 0 &&
+  journeyFailuresClean &&
+  terminalReading?.body?.provider_mode === 'live' &&
+  ['published', 'partial'].includes(terminalReading?.body?.state);
+const refusalRecordsValid =
+  Array.isArray(refusals?.records) &&
+  refusals.records.length === 6 &&
+  refusals.records.every((record) => Array.isArray(record?.findings));
+const refusalsComplete =
+  refusalsExit === 0 &&
+  refusalRecordsValid &&
+  refusals.records.every((record) => record.findings.length === 0);
+const refusalHasFinding =
+  Array.isArray(refusals?.records) &&
+  refusals.records.some(
+    (record) => Array.isArray(record?.findings) && record.findings.length > 0,
+  );
+const refusalsBlockedByDependency =
+  dependencyUnavailable && refusalsExit === 99 && refusalsRead.error !== null;
+
+const phases = {
     identity: {
       outcome: identityOk ? 'PASS' : 'FAIL',
     },
     signIn: { outcome: journey?.session?.opened === true ? 'PASS' : 'FAIL' },
     write: {
-      outcome:
-        journey?.phase === 'all' &&
-        journey?.write?.ran === true &&
-        journey?.write?.stepsChecked === 3 &&
-        journey?.write?.stepsDeclared === 3 &&
-        journey?.write?.stoppedAt === null
-          ? 'PASS'
-          : dependencyUnavailable
-            ? 'BLOCKED'
-            : 'FAIL',
+      outcome: writeComplete ? 'PASS' : 'FAIL',
       checked: journey?.write?.stepsChecked ?? 0,
       declared: journey?.write?.stepsDeclared ?? 0,
     },
     coldRoutes: {
-      outcome: journey?.routesChecked === 16 && journey?.routesDeclared === 16 ? 'PASS' : 'FAIL',
+      outcome: routesComplete ? 'PASS' : 'FAIL',
       checked: journey?.routesChecked ?? 0,
       declared: journey?.routesDeclared ?? 0,
     },
     width780: {
-      outcome:
-        journey?.records?.length === 16 &&
-        journey.records.every(
-          (record) =>
-            record?.width?.innerWidth === 780 &&
-            Number.isFinite(record?.width?.scrollWidth) &&
-            record.width.scrollWidth <= record.width.innerWidth,
-        )
-          ? 'PASS'
-          : 'FAIL',
+      outcome: widthComplete ? 'PASS' : 'FAIL',
     },
     providerLive: {
-      outcome: dependencyUnavailable
-        ? 'BLOCKED'
-        : terminalReading?.body?.provider_mode === 'live' &&
-            ['published', 'partial'].includes(terminalReading?.body?.state)
-          ? 'PASS'
-          : 'FAIL',
+      outcome: dependencyUnavailable ? 'BLOCKED' : providerComplete ? 'PASS' : 'FAIL',
       observed: terminalReading?.body?.provider_mode ?? null,
     },
     refusals: {
-      outcome:
-        refusalsExit === 0 &&
-        refusals?.records?.length === 6 &&
-        refusals.records.every((record) => record.findings?.length === 0)
-          ? 'PASS'
+      outcome: refusalsComplete
+        ? 'PASS'
+        : refusalsBlockedByDependency && !refusalHasFinding
+          ? 'BLOCKED'
           : 'FAIL',
       checked: refusals?.records?.length ?? 0,
       declared: 6,
     },
-  },
+};
+
+// The root verdict is a projection of the required phase verdicts. In particular, a provider
+// outage cannot turn into PASS merely because the browser observed a legitimate `partial`
+// terminal and exited zero. FAIL wins over BLOCKED; PASS requires every phase to pass.
+const phaseOutcomes = Object.values(phases).map((phase) => phase.outcome);
+const verdict = phaseOutcomes.includes('FAIL')
+  ? 'FAIL'
+  : phaseOutcomes.includes('BLOCKED')
+    ? 'BLOCKED'
+    : 'PASS';
+const evidence = {
+  schema: 'w48-alpha-acceptance/v1',
+  candidateSha: args['candidate-sha'],
+  deployedSha: args['deployed-sha'],
+  origin: journey?.origin ?? refusals?.origin ?? null,
+  phases,
   processes: { journeyExit, refusalsExit },
   humanChecklist: { required: true, automated: false, outcome: 'PENDING' },
   findings,

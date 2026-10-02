@@ -12,7 +12,9 @@ TEMPLATE = ROOT / "docs" / "templates" / "TASK_TEMPLATE.md"
 GUIDE = ROOT / "docs" / "program" / "WAVE_EXECUTION_GUIDE.md"
 OPERATING = ROOT / "docs" / "program" / "dispatch" / "OPERATING_CONSTRAINTS.md"
 ADDENDUM = ROOT / "docs" / "program" / "W46-HISTORICAL-ADDENDUM.md"
+TASKS = ROOT / "docs" / "program" / "tasks"
 FROZEN_BASE = "fad3c28748ef52bc9b5f711191ff0130483e0055"
+GOVERNANCE_ACTIVATION_BASE = "14caf886e78883ed771d81fbf463c98af727c938"
 W46_REPORTS = (
     "docs/program/W46-DASH.md",
     "docs/program/W46-WIRE.md",
@@ -90,6 +92,42 @@ def governance_findings(markdown: str) -> set[str]:
     return findings
 
 
+def _activation_task_paths() -> frozenset[str]:
+    result = subprocess.run(
+        [
+            "git",
+            "ls-tree",
+            "-r",
+            "--name-only",
+            GOVERNANCE_ACTIVATION_BASE,
+            "docs/program/tasks",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return frozenset(result.stdout.splitlines())
+
+
+def governed_task_findings(
+    root: Path = ROOT, *, baseline_paths: frozenset[str] | None = None
+) -> dict[str, set[str]]:
+    """Validate every task absent from the exact governance-activation tree."""
+
+    baseline = _activation_task_paths() if baseline_paths is None else baseline_paths
+    tasks = root / "docs" / "program" / "tasks"
+    findings: dict[str, set[str]] = {}
+    for task in sorted(tasks.glob("*.md")):
+        relative = task.relative_to(root).as_posix()
+        if relative in baseline:
+            continue
+        task_findings = governance_findings(task.read_text(encoding="utf-8"))
+        if task_findings:
+            findings[relative] = task_findings
+    return findings
+
+
 VALID_TASK = """# Task W49-QA-01 — example
 
 ## Enumerator ownership
@@ -135,6 +173,41 @@ def test_the_task_template_carries_all_four_governance_sections() -> None:
 
 def test_a_complete_new_task_satisfies_the_executable_rules() -> None:
     assert governance_findings(VALID_TASK) == set()
+
+
+def test_every_task_added_after_governance_activation_satisfies_the_rules() -> None:
+    assert governed_task_findings() == {}
+
+
+def test_the_activation_inventory_is_the_captured_85_task_baseline() -> None:
+    baseline = _activation_task_paths()
+    assert len(baseline) == 85
+    assert "docs/program/tasks/W48-GOV.md" in baseline
+    assert "docs/program/tasks/W48-JUDGE-X.md" not in baseline
+
+
+def test_a_new_real_task_file_cannot_escape_the_enumerator(tmp_path: Path) -> None:
+    tasks = tmp_path / "docs" / "program" / "tasks"
+    tasks.mkdir(parents=True)
+    legacy = tasks / "W48-LEGACY.md"
+    broken = tasks / "W49-BROKEN.md"
+    valid = tasks / "W49-VALID.md"
+    legacy.write_text("# historical task without the new sections\n", encoding="utf-8")
+    broken.write_text("# new task without the new sections\n", encoding="utf-8")
+    valid.write_text(VALID_TASK, encoding="utf-8")
+
+    findings = governed_task_findings(
+        tmp_path,
+        baseline_paths=frozenset({"docs/program/tasks/W48-LEGACY.md"}),
+    )
+    assert findings == {
+        "docs/program/tasks/W49-BROKEN.md": {
+            "ENUMERATOR_SECTION_REQUIRED",
+            "PREMISE_SECTION_REQUIRED",
+            "HISTORY_SECTION_REQUIRED",
+            "PUBLICATION_SECTION_REQUIRED",
+        }
+    }
 
 
 @pytest.mark.parametrize(
