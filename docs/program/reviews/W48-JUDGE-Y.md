@@ -211,4 +211,28 @@ docs/program/reviews/W48-JUDGE-Y.md
 
 ## 8. Cross-examination
 
-Pending receipt of `W48-JUDGE-X`; it will be appended without rewriting the evidence above.
+Judge Y read `W48-JUDGE-X` at report commit `05031d2` and inspected both retained synthetic
+evidence sets plus the named source branches. The following rulings are final:
+
+- **`X-01` upheld and release-blocking for the acceptance instrument.** The generated JSON is
+  internally contradictory exactly as reported: `providerLive.outcome` is `BLOCKED`, both process
+  exits are zero and the root verdict is `PASS`. The verifier's verdict expression requires a
+  non-zero journey exit before dependency outage can block. No other finding is added for the
+  outage. This is a real reachable classification branch, not malformed evidence.
+- **`X-02` upheld.** The shell condition is a suffix match only. X's fake response is sufficient
+  because the preflight parses the attacker URL verbatim and calls it PASS. The later full journey
+  does not repair a false positive emitted by the documented standalone preflight mode.
+- The refusal mutation, unreachable-origin result and focused WEB checks are consistent with the
+  source and do not falsify either finding. In particular, the existing dependency fixture exits
+  non-zero and therefore cannot cover X's `partial`/exit-zero branch.
+- X correctly refuses to convert absent public credentials into positive live evidence. This
+  matches Y's command-separation trace: `make gate` cannot satisfy the external acceptance
+  prerequisite.
+
+One scope correction guides repair: same-origin redirect comparison must normalise default ports
+and reject user-info/host ambiguity; a hand-written string-prefix test would create another false
+green. The implementation can use a small standard-library URL parser/probe without changing an
+API contract or dependency lock.
+
+Cross-verdict: neither `X-01` nor `X-02` is falsified. Together with `Y-01` they warrant one
+bounded guard/acceptance repair. `A-01` and `A-02` remain independently blocking after that repair.
