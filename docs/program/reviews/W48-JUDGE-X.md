@@ -207,4 +207,29 @@ docs/program/reviews/W48-JUDGE-X.md
 
 ## 8. Cross-examination
 
-Pending receipt of `W48-JUDGE-Y`; it will be appended without rewriting the evidence above.
+Judge X read `W48-JUDGE-Y` at report commit `59c58af` and repeated its decisive source query.
+The following rulings are final:
+
+- **`Y-01` upheld.** The governance module contains no task-directory enumerator and no call that
+  applies `governance_findings()` to a repository task. Its ten tests operate on the template,
+  embedded fixture strings and specifically named historical files. This independently explains
+  why Y's real untracked `W49-*` mutation stayed green. The repair must own an explicit task-set
+  boundary; merely adding a fifth embedded invalid string would preserve the false green.
+- **`A-01` upheld.** X's acceptance finding does not weaken it. `X-01` concerns classification
+  after a browser observed a terminal. `A-01` is the earlier kill interval between external
+  provider effect and durable provenance; the acceptance verifier cannot recover evidence that
+  never committed.
+- **`A-02` upheld.** The object publication/DB commit order is explicit and no analysis-side
+  metadata/outbox/orphan owner was found. X did not run Y's requested destructive fault injection,
+  so the static finding stands with the same stated test debt.
+- **`A-03` upheld as debt, not promoted to a new Stage-B regression.** The minimum sixteen sites
+  predate these runtime lanes and need the owner ruling Y names.
+
+One qualification is retained: Y's judge-worktree D-74 database command is not behavioural
+evidence because its configured listener was absent. Its source trace and the completed PORTS
+lane's isolated `20 passed` result are sufficient to uphold the narrow seam; the failed rerun is
+correctly disclosed rather than counted.
+
+Cross-verdict: neither Y's finding nor its three upheld audit rows is falsified. The repair slot
+may combine `X-01`, `X-02` and `Y-01` only because all three are guard/acceptance false greens with
+small disjoint paths. It must not absorb `A-01`, `A-02` or `A-03`.
