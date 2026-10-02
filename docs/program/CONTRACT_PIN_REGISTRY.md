@@ -176,6 +176,20 @@ inventory until the registry and the owning change move together.
       "event": "Domain error-catalog addition or removal"
     },
     {
+      "pin_id": "error-frontend-contract-enum-count",
+      "family": "error_catalog",
+      "path": "web/tests/contract/seam-operations.contract.test.ts",
+      "needle": "expect(ERROR_CODE_VALUES).toHaveLength(22);",
+      "event": "Domain error-catalog addition or removal and its generated frontend reseal"
+    },
+    {
+      "pin_id": "error-frontend-failure-enum-count",
+      "family": "error_catalog",
+      "path": "web/tests/unit/api/failure-surface.test.ts",
+      "needle": "expect(ERROR_CODE_VALUES).toHaveLength(22);",
+      "event": "Domain error-catalog addition or removal and its generated frontend reseal"
+    },
+    {
       "pin_id": "migration-application-head",
       "family": "migration_head",
       "path": "tests/contract/api_v1/test_doc_prose_facts.py",

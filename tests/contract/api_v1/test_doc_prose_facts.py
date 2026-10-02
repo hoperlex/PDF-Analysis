@@ -87,6 +87,98 @@ _PIN_ASSERTION = re.compile(
     re.MULTILINE,
 )
 
+# TypeScript/TSX has independent contract tests too. Only literal symbolic pins and the exact
+# generated-error-catalog length assertion are candidates: a derived `SCHEMA_COUNT =
+# Object.keys(...).length`, HTTP status, fixture size or local enum count is not independent.
+_TS_PIN_ASSIGNMENT = re.compile(
+    r"^\s*const\s+(?:FROZEN_OPERATION_COUNT|FROZEN_SCHEMA_COUNT|FROZEN_OPERATIONS|"
+    r"FROZEN_SCHEMA_NAMES|PATH_COUNT|OPERATION_COUNT|SCHEMA_COUNT)\s*(?::[^=]+)?=\s*"
+    r"(?:\d+|\[[^\n]*\])\s*;?",
+    re.MULTILINE,
+)
+_TS_ERROR_COUNT_ASSERTION = re.compile(
+    r"^\s*expect\(ERROR_CODE_VALUES\)\.toHaveLength\((?:17|20|22|61)\);?",
+    re.MULTILINE,
+)
+
+
+def _mask_typescript_comments_and_strings(source: str) -> str:
+    """Preserve code/newlines while making comments and string/template bodies invisible.
+
+    This is a deliberately small lexical pass, not a TypeScript parser. The candidate grammar
+    above needs only identifiers, punctuation and numeric literals; masking every quoted body is
+    safer than letting a comment or test fixture string manufacture executable pin syntax.
+    """
+    output = list(source)
+    index = 0
+    state = "code"
+    quote = ""
+    while index < len(source):
+        char = source[index]
+        next_char = source[index + 1] if index + 1 < len(source) else ""
+        if state == "code":
+            if char == "/" and next_char == "/":
+                output[index] = output[index + 1] = " "
+                index += 2
+                state = "line_comment"
+                continue
+            if char == "/" and next_char == "*":
+                output[index] = output[index + 1] = " "
+                index += 2
+                state = "block_comment"
+                continue
+            if char in {"'", '"', "`"}:
+                quote = char
+                output[index] = " "
+                index += 1
+                state = "string"
+                continue
+        elif state == "line_comment":
+            if char == "\n":
+                state = "code"
+            else:
+                output[index] = " "
+            index += 1
+            continue
+        elif state == "block_comment":
+            if char == "*" and next_char == "/":
+                output[index] = output[index + 1] = " "
+                index += 2
+                state = "code"
+                continue
+            if char != "\n":
+                output[index] = " "
+            index += 1
+            continue
+        else:
+            if char == "\\":
+                output[index] = " "
+                if index + 1 < len(source):
+                    if source[index + 1] != "\n":
+                        output[index + 1] = " "
+                    index += 2
+                    continue
+            if char == quote:
+                output[index] = " "
+                index += 1
+                state = "code"
+                continue
+            if char != "\n":
+                output[index] = " "
+            index += 1
+            continue
+        index += 1
+    return "".join(output)
+
+
+def _typescript_pin_candidates(relative: str, source: str) -> list[tuple[str, str]]:
+    masked = _mask_typescript_comments_and_strings(source)
+    matches = [match.group(0).strip() for match in _TS_PIN_ASSIGNMENT.finditer(masked)]
+    matches.extend(
+        match.group(0).strip() for match in _TS_ERROR_COUNT_ASSERTION.finditer(masked)
+    )
+    return [(relative, match) for match in matches]
+
 
 def _pin_registry() -> list[dict[str, str]]:
     match = _PIN_REGISTRY_BLOCK.search(PIN_REGISTRY.read_text(encoding="utf-8"))
@@ -113,6 +205,14 @@ def _discovered_independent_pins() -> list[tuple[str, str]]:
             assertion = match.group(0).strip()
             if re.search(r'==\s*(?:17|20|22|61|"0013|SurfaceTriple)', assertion):
                 found.append((relative, assertion))
+
+    for path in sorted((REPO_ROOT / "web" / "tests").rglob("*")):
+        if path.suffix not in {".ts", ".tsx"}:
+            continue
+        relative = str(path.relative_to(REPO_ROOT))
+        found.extend(
+            _typescript_pin_candidates(relative, path.read_text(encoding="utf-8"))
+        )
 
     lock = json.loads((REPO_ROOT / "web" / "FRONTEND_LOCK.json").read_text(encoding="utf-8"))
     for field in ("paths", "operations", "component_schemas"):
@@ -506,6 +606,44 @@ def test_contract_pin_registry_is_complete_and_points_to_live_needles() -> None:
         if count > registered_by_path[path]
     }
     assert not overflow, f"new independent pins lack their own registry entries: {overflow}"
+
+
+def test_typescript_pin_discovery_reads_code_and_ignores_comments_and_strings() -> None:
+    """`JA-03`: the same symbolic pin is evidence only when it is executable syntax."""
+    relative = "web/tests/contract/judge-independent-pin.contract.test.ts"
+    real = "const FROZEN_OPERATION_COUNT = 12;\n"
+    decoys = (
+        "// const FROZEN_OPERATION_COUNT = 12;\n"
+        "/* const FROZEN_OPERATION_COUNT = 12; */\n"
+        "const text = 'const FROZEN_OPERATION_COUNT = 12;';\n"
+        "const template = `const FROZEN_OPERATION_COUNT = 12;`;\n"
+    )
+    assert _typescript_pin_candidates(relative, real) == [
+        (relative, "const FROZEN_OPERATION_COUNT = 12;")
+    ]
+    assert _typescript_pin_candidates(relative, decoys) == []
+
+
+def test_existing_frontend_error_count_pins_are_discovered() -> None:
+    discovered = set(_discovered_independent_pins())
+    needle = "expect(ERROR_CODE_VALUES).toHaveLength(22);"
+    assert ("web/tests/contract/seam-operations.contract.test.ts", needle) in discovered
+    assert ("web/tests/unit/api/failure-surface.test.ts", needle) in discovered
+
+
+@pytest.mark.parametrize(
+    "pin_id",
+    ["error-frontend-contract-enum-count", "error-frontend-failure-enum-count"],
+)
+def test_each_registered_frontend_pin_is_red_when_its_needle_moves(pin_id: str) -> None:
+    pins = _pin_registry()
+    pin = next(candidate for candidate in pins if candidate["pin_id"] == pin_id)
+    target = REPO_ROOT / pin["path"]
+    original = target.read_text(encoding="utf-8")
+    mutated = original.replace(pin["needle"], f"MUTATED_{pin_id}", 1)
+    assert mutated != original
+    errors = _pin_needle_errors(pins, overrides={pin["path"]: mutated})
+    assert any(error.startswith(f"{pin_id}:") for error in errors), errors
 
 
 @pytest.mark.parametrize(

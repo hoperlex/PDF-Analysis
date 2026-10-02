@@ -41,12 +41,16 @@ from typing import Iterator
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-#: Runtime/deployment families in which prose describes the live HTTP surface. File discovery
-#: inside them is from Git's tracked-file inventory, never an extension list. Tests are outside
-#: this scope because they must contain deliberately stale mutation strings. Programme reports
-#: are records; the one live seam specification is named separately because it is an input to
-#: implementation, not a wave report (`D-100`).
-LIVE_SURFACE_PREFIXES = ("src/auditmanager/api/", "infra/deploy/", "web/src/")
+#: Git's tracked text is live by default. These are role exclusions, not the directory allow-list
+#: `JA-02` defeated: test/fixture material deliberately carries stale probes, contracts and their
+#: generated mirror are checked structurally, documentation is governed by the live/history
+#: scanner beside this module, and migration source is immutable history. A new top-level runtime,
+#: operator or generator directory therefore enters without changing this file.
+NON_LIVE_PATH_PARTS = frozenset({"artifacts", "contracts", "docs", "fixtures", "tests"})
+NON_LIVE_PREFIXES = ("db/migrations/", "web/openapi/")
+NON_LIVE_FILES = frozenset({"web/FRONTEND_LOCK.json"})
+#: P02_SEAMS is a maintained implementation input, not a wave/history report, so it is the one
+#: documentation role explicitly admitted after the role exclusions above (`D-100`).
 LIVE_SURFACE_DOCUMENTS = frozenset({"docs/program/P02_SEAMS.md"})
 API_CONTRACT = REPO_ROOT / "contracts" / "api" / "v1" / "openapi.json"
 ERROR_CATALOG = REPO_ROOT / "contracts" / "domain" / "v1" / "error-codes.json"
@@ -106,6 +110,17 @@ _QUANTIFIED_PHRASE = re.compile(
 _SURFACE_SUBJECT = re.compile(
     r"\b(?:api[ \t]+surface|openapi[ \t]+surface|served[ \t]+document|frozen[ \t]+document|"
     r"contract[ \t]+declares|document[ \t]+declares|surface[ \t]+(?:is|has|contains))\b",
+    re.IGNORECASE,
+)
+
+#: A totality statement is a whole-surface assertion even when it invents both a new subject and
+#: a new noun. `JA-01` used "The complete HTTP interface exposes twelve endpoints" and showed
+#: that adding aliases to `_SURFACE_SUBJECT` merely moves the next false green. The totality word
+#: and an assertion verb must both lead into the number; bare phrases such as "all 18 PASS" or
+#: "the full run took ten minutes" are not surface-size grammar.
+_TOTALITY_ASSERTION_PREFIX = re.compile(
+    r"\b(?:all|complete|entire|full|total|whole)\b"
+    r"(?:(?![.!?;\n]).){0,96}\b(?:comprises|contains|declares|exposes|has|includes|numbers|totals)\s*$",
     re.IGNORECASE,
 )
 
@@ -176,11 +191,36 @@ LOCAL_COUNTS: frozenset[str] = frozenset(
     }
 )
 
+#: True local counts exposed by widening from three hand-listed source prefixes to every tracked
+#: live-text role. Path qualification prevents, for example, "three operations" from becoming a
+#: repository-wide exemption for a future stale surface. These phrases are deliberately facts
+#: about a local port/model/branch, not the frozen HTTP surface or error catalog.
+PATH_LOCAL_COUNTS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("src/auditmanager/access/__init__.py", "three operations"),
+        ("src/auditmanager/access/passwords.py", "two paths"),
+        ("src/auditmanager/access/ports.py", "three operations"),
+        ("src/auditmanager/access/ports.py", "two operations"),
+        ("src/auditmanager/access/repository.py", "three paths"),
+        ("src/auditmanager/access/repository.py", "two paths"),
+        ("src/auditmanager/analysis/engine/result.py", "two schema"),
+        ("src/auditmanager/documents/models.py", "fourteen codes"),
+        ("src/auditmanager/documents/repository.py", "fourteen codes"),
+        ("tools/validation/ledger_report.py", "twenty code"),
+        ("tools/validation/ledger_report.py", "1 code"),
+    }
+)
+
 #: Exact historical records inside an otherwise live specification. Path qualification matters:
 #: the same phrase in runtime/deployment prose remains a failure. The record is retained rather
 #: than rewritten, and the test below proves the registration cannot outlive its sentence.
 KNOWN_HISTORICAL_SURFACE_CLAIMS: frozenset[tuple[str, str]] = frozenset(
-    {("docs/program/P02_SEAMS.md", "Fifteen operations")}
+    {
+        ("docs/program/P02_SEAMS.md", "Fifteen operations"),
+        # An explicitly past-tense account of the pre-W15 deployment, retained in the live
+        # environment example so the BFF setting explains why it exists.
+        ("web/.env.example", "twelve operations"),
+    }
 )
 
 
@@ -298,13 +338,22 @@ def _api_source_files() -> list[pathlib.Path]:
     return [entry.path for entry in _surface_inventory() if entry.text is not None]
 
 
+def _is_live_surface_entry(entry: TrackedText) -> bool:
+    """Whether tracked text belongs to a live source/configuration role.
+
+    Default-allow is the load-bearing property: a new path such as ``scripts/*.toml`` enters
+    without teaching this guard its parent or suffix. Exclusions name repository roles whose
+    stale counts are intentional inputs/evidence and are guarded by their own instruments.
+    """
+    if entry.relative in LIVE_SURFACE_DOCUMENTS:
+        return True
+    if entry.relative in NON_LIVE_FILES or entry.relative.startswith(NON_LIVE_PREFIXES):
+        return False
+    return not NON_LIVE_PATH_PARTS.intersection(entry.relative.split("/"))
+
+
 def _surface_inventory() -> list[TrackedText]:
-    return [
-        entry
-        for entry in _tracked_inventory()
-        if entry.relative in LIVE_SURFACE_DOCUMENTS
-        or entry.relative.startswith(LIVE_SURFACE_PREFIXES)
-    ]
+    return [entry for entry in _tracked_inventory() if _is_live_surface_entry(entry)]
 
 
 def _contract_info_prose() -> str:
@@ -378,7 +427,12 @@ def _claims(text: str) -> Iterator[tuple[str, str | None, int]]:
             clause_end = min(position for position in following if position >= 0) if any(
                 position >= 0 for position in following
             ) else len(text)
-            if not _SURFACE_SUBJECT.search(text[clause_start:clause_end]):
+            clause = text[clause_start:clause_end]
+            before_count = text[clause_start : match.start()]
+            if not (
+                _SURFACE_SUBJECT.search(clause)
+                or _TOTALITY_ASSERTION_PREFIX.search(before_count)
+            ):
                 continue
             if value not in _historical_surface_values():
                 continue
@@ -400,6 +454,9 @@ def _wrong_surface_claims(name: str, text: str) -> list[str]:
     wrong: list[str] = []
     for phrase, dimension, value in _claims(text):
         if (name, phrase) in KNOWN_HISTORICAL_SURFACE_CLAIMS:
+            continue
+        normalised_phrase = phrase.lower().replace("-", " ")
+        if (name, normalised_phrase) in PATH_LOCAL_COUNTS:
             continue
         expected = counts[dimension] if dimension is not None else set(counts.values())
         disagrees = value != expected if isinstance(expected, int) else value not in expected
@@ -438,7 +495,7 @@ def test_the_api_prose_states_the_surface_this_document_declares() -> None:
         "engine cannot see this -- it drops description, summary and title as "
         "annotation -- so this guard is the only thing that can. Correct the prose by "
         "re-measuring it, never by find-and-replace (W18-SEAL), or register the phrase "
-        "in LOCAL_COUNTS if it is a subset and not the surface:\n  "
+        "in the path-qualified local-count registry if it is a subset and not the surface:\n  "
         + "\n  ".join(wrong)
     )
 
@@ -455,7 +512,7 @@ def test_the_guard_actually_reaches_the_files_that_carried_the_defect() -> None:
 
 
 def test_tracked_file_discovery_has_no_suffix_blind_spot() -> None:
-    """`D-99`/`D-100`: Git inventory reaches every old blind extension and the seam spec."""
+    """`D-99`/`D-100`: Git inventory reaches old blind extensions and the seam spec."""
     inventory = _tracked_inventory()
     assert len(inventory) == len({entry.relative for entry in inventory})
     assert all(entry.classification in {"utf8-text", "binary", "non-utf8", "unreadable"} for entry in inventory)
@@ -474,6 +531,33 @@ def test_tracked_file_discovery_has_no_suffix_blind_spot() -> None:
 
     opaque = [entry for entry in surface.values() if entry.classification != "utf8-text"]
     assert not opaque, "live surface file is binary/unreadable and needs an explicit parser or exclusion"
+
+
+def test_a_new_top_level_live_path_is_in_scope_without_a_path_or_suffix_edit() -> None:
+    """`JA-02`: default-allow reaches a new scripts/TOML source; test evidence stays out."""
+    relative = "scripts/judge-surface.toml"
+    prose = "The API surface has twelve facets."
+    live = TrackedText(REPO_ROOT / relative, relative, prose, "utf8-text")
+    assert _is_live_surface_entry(live)
+    assert any("'twelve facets' states 12" in item for item in _wrong_surface_claims(relative, prose))
+
+    fixture_relative = "web/tests/fixtures/judge-surface.toml"
+    fixture = TrackedText(
+        REPO_ROOT / fixture_relative, fixture_relative, prose, "utf8-text"
+    )
+    assert not _is_live_surface_entry(fixture)
+
+
+def test_a_whole_surface_claim_needs_no_registered_subject_or_noun_alias() -> None:
+    """`JA-01`: totality, not a list containing HTTP/interface/endpoint, makes this a claim."""
+    counts = _surface_counts()
+    for prose in (
+        "The complete HTTP interface exposes twelve endpoints.",
+        "The entire RPC facade exposes twelve facets.",
+    ):
+        claims = list(_claims(prose))
+        assert len(claims) == 1 and claims[0][1:] == (None, 12), claims
+        assert claims[0][2] not in set(counts.values())
 
 
 def test_p02_seam_makes_a_current_claim_the_guard_reads() -> None:
@@ -590,6 +674,10 @@ def test_the_shared_api_client_still_makes_a_claim_this_guard_can_read() -> None
         ("`T-6` says the same twelve\n * operations must keep working", "operations"),
         # An unlisted noun inside an explicit surface assertion is still read.
         ("the API surface has twelve widgets.", None),
+        # `JA-01`: neither the subject nor the noun is a registered API alias. The semantic
+        # totality assertion is enough.
+        ("The complete HTTP interface exposes twelve endpoints.", None),
+        ("The entire RPC facade exposes twelve facets.", None),
     ],
 )
 def test_a_stale_count_is_caught(prose: str, noun: str) -> None:
