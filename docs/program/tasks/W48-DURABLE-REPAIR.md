@@ -148,6 +148,7 @@ the report or reinterpret its verdict.
 - `tests/integration/runs/test_durable_effect_boundaries.py`
 - `tests/integration/ingest/test_blob_metadata.py`
 - `tests/integration/ingest/test_reconciliation.py`
+- `tests/integration/storage/test_publication.py`
 - `tests/integration/analysis_text/test_provider_modes.py`
 - `docs/program/tasks/W48-DURABLE-REPAIR.md`
 - `docs/program/W48-DURABLE-REPAIR.md`
