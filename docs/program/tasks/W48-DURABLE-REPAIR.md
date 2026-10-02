@@ -135,6 +135,7 @@ the report or reinterpret its verdict.
 - `db/migrations/versions/20261002_0014_durable_analysis_effects.py`
 - `src/auditmanager/jobs/repository.py`
 - `src/auditmanager/storage/__init__.py`
+- `src/auditmanager/storage/README.md`
 - `src/auditmanager/storage/models.py`
 - `src/auditmanager/storage/blob_repository.py`
 - `src/auditmanager/storage/durable_publication.py`
@@ -149,6 +150,7 @@ the report or reinterpret its verdict.
 - `tests/integration/ingest/test_blob_metadata.py`
 - `tests/integration/ingest/test_reconciliation.py`
 - `tests/integration/storage/test_publication.py`
+- `tests/integration/foundation/test_real_providers.py`
 - `tests/integration/analysis_text/test_provider_modes.py`
 - `docs/program/tasks/W48-DURABLE-REPAIR.md`
 - `docs/program/W48-DURABLE-REPAIR.md`
