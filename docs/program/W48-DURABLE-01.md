@@ -2,8 +2,8 @@
 
 ## Result
 
-**IMPLEMENTED; final clean-tree gate pending.** The task closes the implementation gaps behind
-W48 blockers `A-01` and `A-02` without changing the frozen API/domain/error contracts:
+**DONE for the owned implementation slot.** The task closes the implementation gaps behind W48
+blockers `A-01` and `A-02` without changing the frozen API/domain/error contracts:
 
 - a committed `Job`, current `Attempt`, `Lease` and opaque execution-token authority now exist
   before a production run can perform an external effect;
@@ -129,9 +129,21 @@ removed, and ordinary artifact faults now exercise cleanup rather than simulatin
 process exit. The 24-test regression scope above covers every corrected failure except the
 clean-tree assertion.
 
-The authoritative completion result must be a subsequent full `make gate` on a clean candidate
-commit with literal terminal sentinel `GATE OK`. Until that result replaces this paragraph, the
-task is not ready for independent judgment or integration.
+Clean implementation candidate `afc6fcb` then completed the full canonical command:
+
+```text
+make gate
+foundation: 35 passed
+backend battery: 2705 passed, 5 skipped, 297 subtests passed
+frontend: lint PASS; typecheck PASS; 82 files / 1176 tests passed
+whitespace: PASS
+GATE OK: battery, foundation, frontend lint/typecheck/tests and whitespace all pass
+```
+
+The only warnings were one upstream Starlette deprecation and three pre-existing SQLAlchemy
+transaction-cleanup warnings. No test was failed or deselected beyond the gate's five recorded
+skips. The completion-report commit is followed by the same full gate on the final clean task
+tree; a green report does not substitute for that final execution.
 
 ## Contracts and limitations
 
