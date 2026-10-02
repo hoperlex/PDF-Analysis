@@ -37,14 +37,14 @@ class TopologyCase(unittest.TestCase):
 
 
 class TheTopologyIsTheContractOne(TopologyCase):
-    def test_exactly_the_three_machines_pc01_instantiates(self) -> None:
+    def test_exactly_the_five_machines_the_alpha_instantiates(self) -> None:
         self.assertEqual(
-            self.topology.machines, frozenset({"audit_run", "blob", "command_idempotency"})
+            self.topology.machines,
+            frozenset({"audit_run", "blob", "command_idempotency", "job", "attempt"}),
         )
 
-    def test_no_import_job_or_attempt_machine_exists(self) -> None:
-        for absent in ("import", "job", "attempt"):
-            self.assertNotIn(absent, self.topology.machines)
+    def test_the_import_machine_remains_uninstantiated(self) -> None:
+        self.assertNotIn("import", self.topology.machines)
 
     def test_there_is_no_succeeded_run_state(self) -> None:
         self.assertNotIn("succeeded", self.topology.states("audit_run"))

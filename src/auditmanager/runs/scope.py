@@ -9,9 +9,10 @@ step with what the executor does. It is also the answer to "which guards did you
 that a reviewer can diff between releases.
 
 Note the distinction the task draws and this module preserves. An **unevaluated guard**
-is a clause of a declared transition guard that PC-01 does not check. An **absent
-capability** is a thing PC-01 does not have at all. Cancellation and Attempt publication
-authority are the second kind, and folding them into the first would misdescribe both.
+is a clause of a declared transition guard that the alpha runner does not check. An
+**absent capability** is a thing it does not have at all. Cancellation remains the
+second kind. W48-DURABLE-01 made Job/Attempt publication authority executable, so it is
+no longer in either list.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ class UnevaluatedGuard:
     reason: str
 
 
-#: The four unevaluated clauses. Complete: there is no fifth, and the count is derived
+#: The two unevaluated clauses. Complete: there is no third, and the count is derived
 #: from this tuple rather than written beside it.
 UNEVALUATED_GUARDS: Final[tuple[UnevaluatedGuard, ...]] = (
     UnevaluatedGuard(
@@ -39,24 +40,6 @@ UNEVALUATED_GUARDS: Final[tuple[UnevaluatedGuard, ...]] = (
             "PC-01 pins no norms snapshot; audit_run.norms_snapshot_id is written NULL "
             "and read by no PC-01 path. The input-manifest, AnalysisProfile and "
             "PromptBundle clauses of this same guard ARE evaluated."
-        ),
-    ),
-    UnevaluatedGuard(
-        transition="queued -> running",
-        clause="the whole guard",
-        reason=(
-            "it requires a Job to exist and its current Attempt to hold the execution "
-            "token. PC-01 has no Job, no Attempt and no token, and therefore no "
-            "producer for execution_token_invalid."
-        ),
-    ),
-    UnevaluatedGuard(
-        transition="running -> validating",
-        clause="the whole guard",
-        reason=(
-            "it requires every delivered result to come from the current Attempt. "
-            "PC-01 runs one execution in one process, so there is no second attempt a "
-            "result could come from, and no producer for stale_attempt."
         ),
     ),
     UnevaluatedGuard(
@@ -75,20 +58,15 @@ UNEVALUATED_GUARDS: Final[tuple[UnevaluatedGuard, ...]] = (
 ABSENT_CAPABILITIES: Final[tuple[str, ...]] = (
     "cancellation: no cancel command exists, so the terminal 'cancelled' is declared "
     "by the topology and unreachable in PC-01",
-    "Attempt publication authority: there is no Job, no Attempt and no execution token "
-    "for authority to be held by or lost from",
 )
 
 #: Schemas this module makes no conformance claim to, per C-3. PC-01 constructs neither:
-#: both envelopes carry attempt authority because they exist to cross a remote-dispatch
-#: boundary, and PC-01 does not dispatch remotely.
+#: both envelopes exist to cross a remote-dispatch boundary. The local executor now has
+#: Attempt authority, but still does not claim either remote transport envelope.
 SCHEMAS_NOT_CLAIMED: Final[tuple[str, ...]] = ("JobPackage", "ResultPackage")
 
-#: Aggregates PC-01 does not instantiate (P02 §3.1). A test asserts the tables' absence.
+#: Aggregates the alpha runner still does not instantiate (P02 §3.1).
 AGGREGATES_NOT_INSTANTIATED: Final[tuple[str, ...]] = (
-    "job",
-    "attempt",
-    "lease",
     "import",
     "export",
     "worker",

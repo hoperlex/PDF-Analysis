@@ -191,12 +191,9 @@ def test_the_unallocated_list_names_only_declared_identifiers(
     assert set(UNALLOCATED_IN_PC01) <= declared
 
 
-def test_the_unallocated_list_covers_the_task_handoff() -> None:
-    """P2-DOM-01's handoff names these explicitly; the seam register must too."""
+def test_the_unallocated_list_covers_the_remaining_deferred_identities() -> None:
+    """The W48 durable slot supersedes the old Job/Attempt/Lease deferral."""
     required = {
-        "job_id",
-        "attempt_id",
-        "lease_id",
         "worker_id",
         "export_id",
         "comparison_id",
@@ -206,6 +203,7 @@ def test_the_unallocated_list_covers_the_task_handoff() -> None:
         "import_id",
     }
     assert required <= set(UNALLOCATED_IN_PC01)
+    assert {"job_id", "attempt_id", "lease_id"}.isdisjoint(UNALLOCATED_IN_PC01)
 
 
 def test_the_migration_checks_use_the_contract_pattern(

@@ -52,20 +52,19 @@ load-bearing and are each guarded by a test in ``tests/integration/runs``:
 * the attempt count reaches the persisted ``stage_result.metrics``, so a first-try success
   and a third-try success stay distinguishable after the process is gone.
 
-No ``Job``, no ``Attempt`` row, no lease, no heartbeat, no fencing token, no resume and no
-outbox. One execution per run, in one process, and a retry is a loop inside that one
-execution rather than a second delivery of it. The run's idempotency key never changes.
+Every execution now commits one local ``Job`` and current ``Attempt`` before its first
+external effect. Provider-call retries remain bounded call attempts inside that one
+execution Attempt; an ambiguous live outcome is never retried automatically. Remote
+workers, heartbeat-driven failover and resume remain out of scope.
 """
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
-from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
 
 from auditmanager.analysis.public import (
@@ -87,8 +86,12 @@ from auditmanager.analysis.text import (
     ARTIFACT_ROLE as ROLE_TEXT_OBSERVATIONS,
     CostMeter,
     ModelAdapter,
+    ModelCallJournal,
     ModelCallRecord,
+    ModelRequest,
+    ModelResponse,
     ProviderConfig,
+    ProviderMode,
     TextAnalysisOutcome,
     load_provider_config,
     run_text_analysis,
@@ -105,6 +108,7 @@ from auditmanager.findings import (
     run_grounding_gate,
     select_terminal,
 )
+from auditmanager.jobs import AttemptAuthority, JobRepository
 from auditmanager.runs.repository import (
     INITIAL_STATE,
     PC01_STAGES,
@@ -118,44 +122,10 @@ from auditmanager.runs.retry import (
     not_attempted,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import RunId, VersionUid
-from auditmanager.storage import BlobStore
-from auditmanager.storage.models import parse_blob_id
-
-#: The two vocabularies now agree, so nothing is mapped. ``analysis.text`` reports one of
-#: ``succeeded|truncated|failed`` for a provider call and migration ``0005`` makes
-#: ``model_call.status`` hold exactly those three, so the status is written through
-#: unchanged. What stood here before was a map collapsing ``truncated`` onto ``succeeded``,
-#: kept lossless by stashing the real stop reason in ``parameters.call_status`` — a
-#: workaround adopted because the CHECK would have refused the row, and recorded as such in
-#: ``GATE_B2_CLOSURE.md`` §5.3. It cost the ledger the one distinction the PC-02 report
-#: needs: a reply cut short at the output ceiling is a different product fact from a clean
-#: answer, and the run it belongs to is ``partial`` rather than ``published``.
-#:
-#: ``parameters.call_status`` is still written. It is now redundant for a new row and it is
-#: deliberately kept, because it is the *only* thing that lets a row written before ``0005``
-#: be read back correctly, and a key that disappears from new rows would leave the reader
-#: unable to tell an old truncated call from an old clean one.
-#:
-#: A ``truncated`` row carries **no** ``error_code``. The catalog has no code meaning "usable
-#: output over a strict subset of the input" — ``GATE_B1_CLOSURE.md`` §4 item 6, still an
-#: open owner decision about a frozen twenty-member enum — and a call status is a different
-#: object from an error code. ``ck_model_call_truncated_has_no_error_code`` refuses the row
-#: that would conflate them.
-
-_INSERT_MODEL_CALL = sql_text(
-    """
-    INSERT INTO model_call (
-        model_call_id, run_id, stage_id, provider, model_identity, provider_mode,
-        parameters, request_sha256, response_sha256, input_tokens, output_tokens,
-        latency_ms, cost_micros, cost_basis, status, error_code
-    ) VALUES (
-        :model_call_id, :run_id, :stage_id, :provider, :model_identity, :provider_mode,
-        CAST(:parameters AS jsonb), :request_sha256, :response_sha256, :input_tokens,
-        :output_tokens, :latency_ms, :cost_micros, :cost_basis, :status, :error_code
-    )
-    """
-)
+from auditmanager.shared.identity import ModelCallId, RunId, VersionUid
+from auditmanager.storage import BlobStore, DurablePublicationStore
+from auditmanager.storage.blob_repository import BlobMetadataRepository
+from auditmanager.storage.models import VerifiedBlob, parse_blob_id
 
 Clock = Callable[[], datetime]
 
@@ -163,13 +133,13 @@ Clock = Callable[[], datetime]
 #: test must be able to assert *that* the pinned backoff was taken without spending it.
 Sleep = Callable[[float], None]
 
-#: `D-20`. What a caller does with the fact that the run has reached ``running``. The
-#: default is nothing, which is what every caller that owns one transaction wants.
+#: Optional observer retained for narrow tests. Durability no longer depends on it:
+#: ``execute_run`` commits Job/Attempt authority itself before any external effect.
 Checkpoint = Callable[[], None]
 
-
-def _no_checkpoint() -> None:
-    return None
+#: Test/observability hook invoked only *after* a mandatory durability boundary. It
+#: never performs the commit and production does not need to supply one.
+EffectCheckpoint = Callable[[str], None]
 
 
 def _utc_now() -> datetime:
@@ -253,51 +223,124 @@ def _persist(
     runs.record_stage_result(session, run_id=run_id, document=result.to_document())
 
 
-def _record_model_calls(
-    session: Session, *, run_id: str, stage_id: str, calls: tuple[ModelCallRecord, ...]
-) -> None:
-    """Persist provenance for every provider call, live or replayed.
+class _DurableCallJournal(ModelCallJournal):
+    """Commit every provider boundary under the current Attempt authority."""
 
-    ``provider_mode`` comes off the record, which took it from the adapter's own class
-    constant rather than from configuration — so a run configured "live" that in fact
-    replayed is recorded as what it was.
-    """
-    for call in calls:
-        document = call.as_dict()
-        session.execute(
-            _INSERT_MODEL_CALL,
-            {
-                "model_call_id": document["model_call_id"],
-                "run_id": run_id,
-                "stage_id": stage_id,
-                "provider": document["provider"],
-                "model_identity": document["model_id"],
-                "provider_mode": document["provider_mode"],
-                # The provider's own stop reason. Redundant with ``status`` since
-                # ``0005`` and kept anyway: it is what makes a pre-0005 row legible.
-                "parameters": json.dumps(
-                    {**document["parameters"], "call_status": call.status},
-                    sort_keys=True,
-                ),
-                "request_sha256": document["request_sha256"],
-                "response_sha256": document["response_sha256"],
-                "input_tokens": document["input_tokens"],
-                "output_tokens": document["output_tokens"],
-                "latency_ms": document["latency_ms"],
-                "cost_micros": int(round(document["cost_usd"] * 1_000_000)),
-                # Defaults to estimated rather than to the more flattering value: a row
-                # whose basis the stage did not state was derived, and saying otherwise
-                # would invent provenance.
-                "cost_basis": document.get("cost_basis", "estimated"),
-                # Written through, not mapped. The stage that consumed a truncated call
-                # is ``partial``; the call itself is ``truncated``; the two are recorded
-                # separately because they are separate facts.
-                "status": call.status,
-                "error_code": (
-                    ErrorCode.ANALYSIS_FAILED.value if call.status == "failed" else None
-                ),
-            },
+    __slots__ = ("_session", "_jobs", "_authority", "_checkpoint")
+
+    def __init__(
+        self,
+        session: Session,
+        jobs: JobRepository,
+        authority: AttemptAuthority,
+        checkpoint: EffectCheckpoint | None = None,
+    ) -> None:
+        self._session = session
+        self._jobs = jobs
+        self._authority = authority
+        self._checkpoint = checkpoint
+
+    def _committed(self, boundary: str) -> None:
+        if self._checkpoint is not None:
+            self._checkpoint(boundary)
+
+    def prepare(self, request: ModelRequest, *, mode: ProviderMode) -> ModelCallId:
+        model_call_id = self._jobs.prepare_provider_call(
+            self._session,
+            self._authority,
+            provider="anthropic",
+            model_identity=request.model_id,
+            provider_mode=mode.value,
+            parameters=request.parameters,
+            request_sha256=request.request_sha256,
         )
+        self._session.commit()
+        self._committed("provider_intent_committed")
+        return model_call_id
+
+    def response_received(
+        self, model_call_id: ModelCallId, response: ModelResponse
+    ) -> None:
+        self._jobs.record_provider_response(
+            self._session,
+            self._authority,
+            model_call_id=model_call_id,
+            response_sha256=response.response_sha256,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            latency_ms=response.latency_ms,
+        )
+        self._session.commit()
+        self._committed("provider_response_committed")
+
+    def complete(self, call: ModelCallRecord) -> None:
+        self._jobs.complete_provider_call(
+            self._session, self._authority, call=call.as_dict()
+        )
+        self._session.commit()
+        self._committed("provider_call_completed")
+
+    def outcome_unknown(
+        self, model_call_id: ModelCallId, error: DomainError
+    ) -> None:
+        self._jobs.record_provider_unknown(
+            self._session,
+            self._authority,
+            model_call_id=model_call_id,
+            error_code=error.code.value,
+        )
+        self._session.commit()
+        self._committed("provider_outcome_unknown")
+
+
+def _publication_store(
+    session: Session,
+    *,
+    store: BlobStore,
+    jobs: JobRepository,
+    blobs: BlobMetadataRepository,
+    authority: AttemptAuthority,
+    stage_id: str,
+    checkpoint: EffectCheckpoint | None = None,
+) -> DurablePublicationStore:
+    def before_publish(verified: VerifiedBlob) -> None:
+        blobs.record_verified(session, verified)
+        jobs.prepare_artifact(
+            session, authority, stage_id=stage_id, verified=verified
+        )
+        # The breadcrumb is durable before BlobStore.publish performs the external
+        # effect. A crash afterwards is therefore enumerable without bucket listing.
+        session.commit()
+        if checkpoint is not None:
+            checkpoint(f"{stage_id}:artifact_intent_committed")
+
+    def after_publish(_published: Any) -> None:
+        if checkpoint is not None:
+            checkpoint(f"{stage_id}:artifact_published")
+
+    return DurablePublicationStore(
+        store, before_publish=before_publish, after_publish=after_publish
+    )
+
+
+def _persist_and_bind(
+    session: Session,
+    *,
+    runs: RunRepository,
+    jobs: JobRepository,
+    blobs: BlobMetadataRepository,
+    authority: AttemptAuthority,
+    run_id: str,
+    result: StageResult,
+) -> None:
+    _persist(session, runs, run_id, result)
+    for blob_id in jobs.bind_artifacts(
+        session,
+        authority,
+        stage_id=result.stage_id,
+        artifacts=result.artifacts,
+    ):
+        blobs.mark_available(session, blob_id)
 
 
 def _text_stage_result(
@@ -346,7 +389,6 @@ def _text_stage_result(
 
 
 def _run_text_analysis_stage(
-    session: Session,
     *,
     run_id: str,
     version_uid: str,
@@ -358,6 +400,7 @@ def _run_text_analysis_stage(
     policy: RetryPolicy,
     sleep: Sleep,
     clock: Clock,
+    call_journal: ModelCallJournal,
 ) -> tuple[StageResult, Mapping[str, Any] | None, AttemptSummary]:
     """Run ``text_analysis``, retrying transport failures, and publish its artifact.
 
@@ -432,20 +475,18 @@ def _run_text_analysis_stage(
             # would give every attempt a fresh USD 1.00, which is precisely the reading of
             # OD-03 that a retry must not be able to buy.
             meter=cost_meter,
+            call_journal=call_journal,
         )
 
-        # Every attempt's provenance, as that attempt produced it. A transport failure
-        # carries none - `adapter.complete()` raised, so there is no response to record a
-        # row from, which is the `model_call_rows: 0` P4_CLOSURE section 1 cites as the
-        # evidence that the failed attempts were preserved rather than swallowed.
-        _record_model_calls(
-            session, run_id=run_id, stage_id="text_analysis", calls=outcome.model_calls
-        )
+        # Complete responses were committed by ``call_journal`` before parsing reached
+        # this point. A live transport exception leaves an explicit outcome-unknown
+        # intent and is not reissued automatically: no response is not proof that the
+        # provider performed no billable effect.
         ledger.record(
             status=outcome.status, error=outcome.error, waited_seconds=waited
         )
 
-        if not policy.retries(outcome.error):
+        if outcome.provider_effect_uncertain or not policy.retries(outcome.error):
             # Succeeded, partial, or a failure no second attempt could answer
             # differently - `analysis_failed` above all, which is the model having
             # answered. The policy owns that classification; there is no status or code
@@ -537,13 +578,17 @@ def execute_run(
     retry_policy: RetryPolicy | None = None,
     cost_meter: CostMeter | None = None,
     sleep: Sleep = time.sleep,
-    checkpoint: Checkpoint = _no_checkpoint,
+    checkpoint: Checkpoint | None = None,
+    effect_checkpoint: EffectCheckpoint | None = None,
+    jobs: JobRepository | None = None,
+    blob_metadata: BlobMetadataRepository | None = None,
 ) -> ExecutionResult:
     """Drive one run from ``created`` to a terminal state.
 
-    The caller owns the transaction. Every stage result is persisted as it is produced,
-    and the terminal is whatever :func:`select_terminal` returns for the statuses that
-    were actually written.
+    The executor owns the authority and external-effect commits; the caller commits the
+    final stage/result transaction on normal return. Every stage result is persisted as it
+    is produced, and the terminal is whatever :func:`select_terminal` returns for the
+    statuses that were actually written.
 
     ``cost_meter`` is the run's whole model budget, and it is built **here**, once, so that
     ``OD-03``'s ceiling is a property of the run rather than of an attempt. A caller may
@@ -551,6 +596,8 @@ def execute_run(
     place a run mid-budget and show that a retry does not refill it.
     """
     run_repo = runs or RunRepository()
+    job_repo = jobs or JobRepository()
+    blob_repo = blob_metadata or BlobMetadataRepository()
     document_repo = documents or DocumentRepository()
     policy = retry_policy or RetryPolicy()
     # Resolved once, here, rather than once per attempt inside the stage: the ceiling the
@@ -618,22 +665,23 @@ def execute_run(
             session, run_id=run_id, from_state=INITIAL_STATE, to_state="queued"
         )
     run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
-    # `D-20`. The one place a caller is invited to make what has happened so far durable.
+    # `D-20`. The authority boundary that makes what has happened so far durable.
     #
     # Every state this function writes used to be written and overwritten inside the
     # caller's single uncommitted transaction, so `running` existed for the length of one
     # `UPDATE` and no second connection could ever read it. A poller therefore made exactly
     # one request and `PA-01` criterion 4's UI clause was unreachable.
     #
-    # The hook is here and nowhere else, and that placement is the crash story. Committing
-    # here leaves a reader exactly two pictures of a run whose process died: `running` with
-    # no stage rows, or a terminal with all of them. A second checkpoint inside the stage
-    # loop would add a third -- stage rows belonging to a run no terminal accounts for --
-    # and PC-01 cannot resume, so nothing would ever account for them.
-    #
-    # It defaults to doing nothing, so the 50-odd in-process callers that create and
-    # execute a run inside one unit of work are unchanged and still get all-or-nothing.
-    checkpoint()
+    # Effect journals add finer commits later in the stage loop. A crash can therefore
+    # expose truthful partial rows, which startup reconciliation accounts for by failing
+    # the run and its current Attempt rather than resuming or erasing them.
+    authority = job_repo.start_execution(session, run_id=run_id)
+    # Unlike the old optional checkpoint, this commit is unconditional. It makes the
+    # running Run plus Job/Attempt/Lease authority durable before the first S3 or provider
+    # effect on every caller path, including direct integration invocations.
+    session.commit()
+    if checkpoint is not None:
+        checkpoint()
 
     outputs = _StageOutputs()
     outputs.refs[ROLE_SOURCE_DOCUMENT] = ArtifactRef(
@@ -654,14 +702,31 @@ def execute_run(
     )
     halted = False
     for stage_id, roles in deterministic:
+        stage_store = _publication_store(
+            session,
+            store=blob_store,
+            jobs=job_repo,
+            blobs=blob_repo,
+            authority=authority,
+            stage_id=stage_id,
+            checkpoint=effect_checkpoint,
+        )
         result = run_stage(
             stage_id,
             version_uid=run.version_uid,
             inputs=outputs.blob_inputs(*roles),
-            blob_store=blob_store,
+            blob_store=stage_store,
             clock=clock,
         )
-        _persist(session, run_repo, run_id, result)
+        _persist_and_bind(
+            session,
+            runs=run_repo,
+            jobs=job_repo,
+            blobs=blob_repo,
+            authority=authority,
+            run_id=run_id,
+            result=result,
+        )
         outputs.absorb(result)
         if result.status is not StageStatus.SUCCEEDED:
             # A failed preparation stage removes the inputs the rest of the chain
@@ -675,20 +740,39 @@ def execute_run(
     # failed attempt. The two are different claims and the tally says which.
     attempts = not_attempted(policy)
     if not halted:
-        text_result, observations_document, attempts = _run_text_analysis_stage(
+        text_store = _publication_store(
             session,
+            store=blob_store,
+            jobs=job_repo,
+            blobs=blob_repo,
+            authority=authority,
+            stage_id="text_analysis",
+            checkpoint=effect_checkpoint,
+        )
+        text_result, observations_document, attempts = _run_text_analysis_stage(
             run_id=run_id,
             version_uid=run.version_uid,
             outputs=outputs,
-            blob_store=blob_store,
+            blob_store=text_store,
             adapter=adapter,
             provider_config=config,
             cost_meter=meter,
             policy=policy,
             sleep=sleep,
             clock=clock,
+            call_journal=_DurableCallJournal(
+                session, job_repo, authority, effect_checkpoint
+            ),
         )
-        _persist(session, run_repo, run_id, text_result)
+        _persist_and_bind(
+            session,
+            runs=run_repo,
+            jobs=job_repo,
+            blobs=blob_repo,
+            authority=authority,
+            run_id=run_id,
+            result=text_result,
+        )
         outputs.absorb(text_result)
 
     run_repo.advance(session, run_id=run_id, from_state="running", to_state="validating")
@@ -747,6 +831,9 @@ def execute_run(
         terminal_reason=selection.terminal_reason,
         terminal_detail=selection.terminal_detail,
     )
+    job_repo.finish_execution(
+        session, authority, publishes_result=selection.is_publishable
+    )
 
     return ExecutionResult(
         run_id=run_id,
@@ -761,4 +848,11 @@ def execute_run(
     )
 
 
-__all__ = ["Checkpoint", "Clock", "ExecutionResult", "Sleep", "execute_run"]
+__all__ = [
+    "Checkpoint",
+    "Clock",
+    "EffectCheckpoint",
+    "ExecutionResult",
+    "Sleep",
+    "execute_run",
+]

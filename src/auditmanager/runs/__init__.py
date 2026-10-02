@@ -7,13 +7,12 @@ executor, a read model and a reconciler — because ``B6``'s API is written agai
 
     from auditmanager.runs import start_audit_run, execute_run, reconcile
 
-What PC-01 has no such thing as
--------------------------------
-``Job``, ``Attempt``, lease, heartbeat, execution token, fencing, resume and outbox. None
-of those tables exists (P02 §3.1) and a test asserts their absence. The model stage does
-retry an unreachable provider, in process and within a pinned budget
-(:mod:`auditmanager.runs.retry`); that is a loop inside one execution, and it creates no
-``Attempt`` row, takes no lease and redelivers nothing.
+Durable local authority
+-----------------------
+W48 gives each accepted run one local ``Job``, current ``Attempt``, lease and opaque
+execution token before its first external effect. Provider-call retries remain a bounded
+loop *inside* that execution Attempt. Remote dispatch, heartbeat/failover, run-level
+resume and outbox delivery are still absent.
 
 There is also **no ``succeeded`` run state**: the success terminal is ``published``, and
 ``succeeded`` is a *stage* status. :mod:`auditmanager.runs.scope` records, as data, every
@@ -28,7 +27,7 @@ from auditmanager.runs.commands import (
     start_audit_run,
     start_run_fingerprint,
 )
-from auditmanager.runs.executor import ExecutionResult, execute_run
+from auditmanager.runs.executor import EffectCheckpoint, ExecutionResult, execute_run
 from auditmanager.runs.carrier import (
     CRASHED_REASON,
     RUN_CONCURRENCY,
@@ -84,6 +83,7 @@ __all__ = [
     "BACKOFF_SECONDS",
     "COMMAND_TYPE_START_RUN",
     "CRASHED_REASON",
+    "EffectCheckpoint",
     "ExecutionResult",
     "INITIAL_STATE",
     "INTERRUPTED_REASON",

@@ -108,8 +108,9 @@ expected.
 
 ## 3. Persistence seam — the P02 migration head
 
-**Head: `0002_pc01_schema`**, parent `0001_baseline`. One head, one owner. No Gate B
-session writes DDL.
+**Original P02 head: `0002_pc01_schema`; W48 durable-effects head:
+`0014_durable_analysis_effects`.** The W48 slot is the single owner of the new execution
+authority/effect-journal DDL; earlier migrations remain immutable.
 
 ### 3.1 Tables
 
@@ -124,6 +125,11 @@ session writes DDL.
 | `command_record` | `command_id` | state transitions only; key and fingerprint frozen |
 | `stage_result` | `(run_id, stage_id)` | mutable |
 | `model_call` | `model_call_id` | **immutable after insert** |
+| `job` | `job_id`; one per `run_id` | state transitions only; current Attempt is fenced |
+| `attempt` | `attempt_id` | state transitions only; execution token is secret-class |
+| `lease` | `lease_id`; one per Attempt | acquired once, released at terminal |
+| `provider_call_effect` | `model_call_id` | explicit effect-state transitions; request identity frozen |
+| `analysis_artifact_publication` | `(attempt_id, stage_id, blob_id, blob_role)` | `prepared → bound`; identity frozen |
 | `finding` | `finding_uid` | mutable |
 | `finding_observation` | `finding_observation_id` | **immutable after insert** |
 | `finding_evidence` | `(finding_observation_id, evidence_ordinal)` | **immutable after insert** |
@@ -133,10 +139,9 @@ session writes DDL.
 
 Plus the view `finding_current_verdict`, which is §5.4.
 
-**There is no `job`, `attempt`, `lease`, `import`, `export`, `worker`, `comparison`,
-`norms_snapshot` or `outbox` table.** PC-01 instantiates none of those aggregates. A
-test asserts their absence, so adding one is a visible scope change rather than a
-quiet convenience.
+**There is still no `import`, `export`, `worker`, `comparison` or `outbox` table.**
+W48-DURABLE-01 intentionally instantiates `job`, `attempt` and `lease`; the remaining
+absence set is asserted so another scope change cannot arrive as a quiet convenience.
 
 ### 3.2 What the database refuses, and how to read the refusal
 
@@ -160,7 +165,7 @@ asked for something the contract forbids, and the answer is the typed code.
 
 ### 3.3 The declared state topology
 
-`contract_state_transition` holds the topology of the three machines PC-01
+`contract_state_transition` holds the topology of the five machines the alpha runner
 instantiates, seeded by the migration and frozen against further inserts. The trigger
 consults it, so the enforcement and the declaration cannot drift.
 
@@ -173,10 +178,14 @@ consults it, so the enforcement and the declaration cannot drift.
   `erasure_pending → erased|available`.
 * `command_idempotency`, on `command_record` — initial `in_progress`;
   `in_progress → succeeded|failed|abandoned`.
+* `job` — initial `queued`; the local path walks `queued → leased → running` and then
+  `running → succeeded|failed`; the complete frozen topology remains in reference data.
+* `attempt` — initial `created`; the local path walks `created → leased → running` and
+  then `running → succeeded|failed|lost`; the complete frozen topology remains in
+  reference data.
 
-The `import`, `job` and `attempt` machines are **not instantiated**. PC-01 has no
-Import, no Job and no Attempt, so there is no table, no state column and no
-conformance claim.
+The `import` machine remains **not instantiated**. Job and Attempt are now instantiated
+only for local durable authority; remote dispatch and resume remain outside the claim.
 
 ### 3.4 Constraints your slice will meet
 
@@ -673,7 +682,7 @@ Recorded here so the catalog does not silently promise an aggregate nobody build
 
 ### 9.1 Identifiers declared and deliberately unallocated
 
-`import_id`, `job_id`, `attempt_id`, `lease_id`, `worker_id`, `export_id`,
+`import_id`, `worker_id`, `export_id`,
 `comparison_id`, `sheet_link_id`, `norms_snapshot_id`, `erasure_request_id`,
 `object_uid`, `discipline_uid`.
 
@@ -688,41 +697,42 @@ conformance to it.
 
 ### 9.2 `audit_run` guards recorded as unevaluated — `OD-24`
 
-PC-01 uses the contract's **state names and transition topology** and claims no more.
-Four guard clauses are recorded unevaluated rather than generated and left
+The runner uses the contract's **state names and transition topology** and claims no more.
+Two guard clauses are recorded unevaluated rather than generated and left
 unreachable:
 
 1. the `NormsSnapshot` clause of the `created → queued` reference-resolution guard —
    PC-01 pins no norms snapshot. The input-manifest, `AnalysisProfile` and
    `PromptBundle` clauses of that same guard **are** evaluated;
-2. the whole `queued → running` guard, which requires a Job whose current Attempt
-   holds the execution token — no producer for `execution_token_invalid`;
-3. the whole `running → validating` guard, which requires every delivered result to
-   come from the current Attempt — no producer for `stale_attempt`;
-4. the `ResultPackage` **schema** clause of `validating → published`. PC-01 publishes
+2. the `ResultPackage` **schema** clause of `validating → published`. PC-01 publishes
    no result package and validates declared checksums and required artifact roles
    directly.
 
-Cancellation and Attempt publication authority are outside PC-01 entirely: no cancel
-command exists, so `cancelled` is declared and unreachable.
+The `queued → running` and `running → validating` authority clauses are now evaluated:
+the Job row and current Attempt are locked, and the opaque execution token is compared
+inside every guarded publication transaction. `execution_token_invalid` and
+`stale_attempt` therefore have concrete producers. Cancellation remains outside the
+slice: no cancel command exists, so `cancelled` is declared and unreachable.
 
-The suite asserts these guards **absent**, never passing, so it never reports coverage
-it does not have.
+The suite asserts the two remaining guards **absent**, never passing, so it never
+reports coverage it does not have.
 
 ### 9.3 Contract objects PC-01 does not publish
 
 `JobPackage` and `ResultPackage` both list `attempt_authority` in their top-level
 `required` array, and that object requires `run_id`, `job_id`, `attempt_id` and
-`execution_token`. PC-01 has no Job and no Attempt, so it publishes neither envelope
-and claims no conformance to either schema. Neither contract file is edited.
+`execution_token`. The local runner now produces that authority tuple internally, but
+does not cross a remote-dispatch boundary; it therefore still publishes neither
+envelope and claims no conformance to either schema. Neither contract file is edited.
 
 The one analysis object PC-01 publishes as a contract is the `StageResult`, whose
 `required` array contains no `attempt_authority`. PC-01 claims **full** conformance to
 that schema and validates every emitted result against it.
 
-### 9.4 Error codes with no PC-01 producer
+### 9.4 Error-code producer status
 
-`execution_token_invalid` and `stale_attempt` — no Job and no Attempt to raise them.
+`execution_token_invalid` and `stale_attempt` now have producers in the current-Attempt
+guard. Neither error contains the supplied or stored token.
 
 `partial_result_not_publishable` — see §6.
 

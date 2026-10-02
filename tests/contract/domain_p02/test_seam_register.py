@@ -251,9 +251,12 @@ def test_the_unallocated_identifiers_are_recorded(seam_register_text: str) -> No
 def test_the_unevaluated_guards_are_recorded(seam_register_text: str) -> None:
     section = seam_register_text.split("### 9.2")[1].split("### 9.3")[0]
     assert "OD-24" in seam_register_text.split("### 9.2")[0][-400:] or "OD-24" in section
-    for clause in ("NormsSnapshot", "queued → running", "running → validating", "ResultPackage"):
+    for clause in ("NormsSnapshot", "ResultPackage"):
         assert clause in section, f"{clause} is not recorded as unevaluated"
-    assert "asserts these guards **absent**" in section
+    for evaluated in ("queued → running", "running → validating"):
+        assert evaluated in section
+    assert "authority clauses are now evaluated" in section
+    assert "asserts the two remaining guards **absent**" in section
 
 
 def test_the_error_codes_without_a_producer_are_recorded(
@@ -261,13 +264,14 @@ def test_the_error_codes_without_a_producer_are_recorded(
 ) -> None:
     section = seam_register_text.split("### 9.4")[1].split("## 10.")[0]
     for code in (
-        "execution_token_invalid",
-        "stale_attempt",
         "partial_result_not_publishable",
         "required_norm_unavailable",
         "unsupported_contract_version",
     ):
         assert code in section, f"{code} has no producer and is not recorded"
+    for code in ("execution_token_invalid", "stale_attempt"):
+        assert code in section
+    assert "now have producers" in section
 
 
 def test_the_api_operation_table_matches_the_frozen_document(

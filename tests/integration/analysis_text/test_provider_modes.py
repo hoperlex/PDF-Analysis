@@ -87,6 +87,27 @@ def test_configuration_cannot_relabel_a_replay(text_layer_document, recorded_ada
     assert all(call.provider_mode is ProviderMode.RECORDED for call in outcome.model_calls)
 
 
+def test_a_live_call_without_a_durable_journal_is_refused_before_dispatch(
+    text_layer_document,
+):
+    class LiveNeverCalled:
+        provider_mode = ProviderMode.LIVE
+
+        def complete(self, request):
+            raise AssertionError("live provider dispatch happened without a journal")
+
+    outcome = run_text_analysis(
+        run_id=RunId.new(),
+        text_layer_document=text_layer_document,
+        adapter=LiveNeverCalled(),
+    )
+
+    assert outcome.status == STATUS_FAILED
+    assert outcome.model_calls == ()
+    assert outcome.error.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert outcome.error.detail_fields["reason"] == "durable_call_journal_required"
+
+
 # --- 3. a recording has nothing to forge ----------------------------------------
 
 

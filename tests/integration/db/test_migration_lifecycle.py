@@ -20,6 +20,8 @@ EXPECTED_TABLES = {
     # `0006_app_user`: the one table outside the PC-01 analysis schema. It is listed
     # here rather than exempted, because "exactly the declared relations" is the claim.
     "app_user",
+    "analysis_artifact_publication",
+    "attempt",
     "audit_event",
     "audit_run",
     "blob",
@@ -40,19 +42,19 @@ EXPECTED_TABLES = {
     "finding_evidence",
     "finding_observation",
     "input_manifest_entry",
+    "job",
+    "lease",
     "model_call",
+    "provider_call_effect",
     "project",
     "stage_result",
 }
 
 EXPECTED_VIEWS = {"finding_current_verdict"}
 
-#: PC-01 instantiates none of these aggregates. Their absence is a deliverable, so
+#: The alpha runner instantiates none of these aggregates. Their absence is a deliverable, so
 #: it is asserted rather than assumed.
 FORBIDDEN_TABLES = {
-    "job",
-    "attempt",
-    "lease",
     "import",
     "export",
     "export_request",
@@ -102,7 +104,7 @@ def test_clean_install_creates_exactly_the_declared_relations(
     assert tables == EXPECTED_TABLES
     assert _relnames(migrated_engine, "v") == EXPECTED_VIEWS
     assert tables & FORBIDDEN_TABLES == set(), (
-        "This head instantiates no Job, Attempt, Lease, Import or Export aggregate; "
+        "This head instantiates no Import, Export, Worker, Comparison or Outbox aggregate; "
         "a table for one remains a scope change, not an implementation detail."
     )
 

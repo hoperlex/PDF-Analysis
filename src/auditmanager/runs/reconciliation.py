@@ -1,7 +1,7 @@
 """Startup reconciliation — ``OD-10``: a restart leaves no run falsely ``running``.
 
-PC-01 runs one execution per run in one process. There is no lease, no heartbeat and no
-fencing token to consult, so when a process dies its run stays ``running`` forever unless
+PC-01 runs one execution per run in one process. W48 adds a durable local Lease and current
+Attempt authority but no heartbeat scheduler, so when a process dies its run stays ``running`` unless
 something reconciles it. That something is this module, called at startup --
 :func:`reconcile_at_startup`, from the serving application's lifespan.
 
@@ -44,6 +44,7 @@ from typing import Any, Final
 from sqlalchemy.orm import Session
 
 from auditmanager.ingest import CommandRepository
+from auditmanager.jobs import JobRepository, UnresolvedProviderEffect
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.scope import RECONCILIATION_TERMINAL
 from auditmanager.shared.errors import ErrorCode
@@ -88,6 +89,7 @@ class ReconciliationReport:
 
     runs: tuple[ReconciledRun, ...] = ()
     abandoned_command_ids: tuple[str, ...] = ()
+    unresolved_provider_effects: tuple[UnresolvedProviderEffect, ...] = ()
 
     @property
     def run_count(self) -> int:
@@ -103,6 +105,7 @@ def reconcile_interrupted_runs(
     *,
     older_than: str = "1 hour",
     runs: RunRepository | None = None,
+    jobs: JobRepository | None = None,
     interrupted_reason: str = INTERRUPTED_REASON,
 ) -> tuple[ReconciledRun, ...]:
     """Move every stranded run -- ``running`` or ``queued`` -- to the ``OD-10`` terminal.
@@ -117,11 +120,13 @@ def reconcile_interrupted_runs(
     contract rather than a repair around it.
     """
     run_repo = runs or RunRepository()
+    job_repo = jobs or JobRepository()
     reconciled: list[ReconciledRun] = []
     for state in STRANDED_STATES:
         for run in run_repo.stale_in_state(
             session, state=state, older_than=older_than
         ):
+            job_repo.fail_for_run(session, run_id=run.run_id)
             run_repo.terminate(
                 session,
                 run_id=run.run_id,
@@ -167,6 +172,7 @@ def reconcile(
     *,
     older_than: str = "1 hour",
     runs: RunRepository | None = None,
+    jobs: JobRepository | None = None,
     commands: CommandRepository | None = None,
 ) -> ReconciliationReport:
     """Both clauses, in the order a startup wants them.
@@ -175,9 +181,17 @@ def reconcile(
     while its command record has already been resolved would be the more confusing of
     the two intermediate states.
     """
-    reconciled = reconcile_interrupted_runs(session, older_than=older_than, runs=runs)
+    job_repo = jobs or JobRepository()
+    reconciled = reconcile_interrupted_runs(
+        session, older_than=older_than, runs=runs, jobs=job_repo
+    )
     abandoned = abandon_stale_commands(session, older_than=older_than, commands=commands)
-    return ReconciliationReport(runs=reconciled, abandoned_command_ids=abandoned)
+    unresolved = job_repo.unresolved_provider_effects(session)
+    return ReconciliationReport(
+        runs=reconciled,
+        abandoned_command_ids=abandoned,
+        unresolved_provider_effects=unresolved,
+    )
 
 
 #: The threshold a *process start* reconciles with, and the assumption it rests on.

@@ -50,7 +50,8 @@ audit-run snapshot consumption are W50-or-later work and remain absent. The froz
 remains **17 paths / 20 operations / 61 schemas** and the error
 catalog remains **22**. Domain candidate revision 8 now declares **27** opaque identities:
 `NormDocument` uses `ndoc_<ULID>`, `NormParagraph` uses `npar_<ULID>`, and retrieval
-chunks deliberately have no public identity. The migration head is **`0013_norm_embeddings`**.
+chunks deliberately have no public identity. The migration head is
+**`0014_durable_analysis_effects`**.
 
 Persistence separates opaque `norms_snapshot_id` from deterministic `content_key`, stores
 immutable canonical paragraphs separately from replace-only retrieval chunks, and loads an exact

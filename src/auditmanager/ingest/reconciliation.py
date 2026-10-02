@@ -32,6 +32,17 @@ follows from that single decision:
     the version is not repairable -- the version row is immutable, and correcting a
     source file creates a new ``version_uid``.
 
+``missing_analysis_artifacts``
+    A bound analysis publication names bytes the store no longer holds. Unlike an
+    unbound intent this is consumer-visible evidence, so the report names its exact
+    run, stage and artifact role. Bound analysis blobs are excluded from
+    ``orphan_objects`` for the same reason manifest blobs are.
+
+``unbound_analysis_artifacts``
+    An Attempt committed publication intent but never committed the stage-result binding.
+    The entry retains run/Attempt/stage attribution and says whether point inspection
+    found the canonical object; it is never adopted or deleted automatically.
+
 ``stale_commands``
     A ``command_record`` still ``in_progress`` long after its executor should have
     finished. Left alone it makes the key unusable forever, so an operator can abandon
@@ -40,8 +51,8 @@ follows from that single decision:
 Why the scan can work without listing the bucket
 ------------------------------------------------
 It never enumerates the store. It starts from database rows -- the unsettled blobs, the
-available blobs no manifest references, the blobs every manifest does reference -- and
-asks the store about each specific ``blob_id``. That is exactly why
+available blobs no manifest or bound analysis publication references, and the blobs those
+two reference sets name -- and asks the store about each specific ``blob_id``. That is exactly why
 :mod:`auditmanager.storage.blob_repository` commits the ``verifying`` row *before* the
 object is published: without that breadcrumb an orphan would be unfindable through a
 port that offers no ``list``.
@@ -86,17 +97,34 @@ from .commands import CommandRepository
 from .failures import domain_error_from_storage
 
 __all__ = [
+    "MissingAnalysisArtifact",
     "MissingObject",
     "OrphanObject",
     "ReconciliationReport",
     "Reconciler",
+    "UnboundAnalysisArtifact",
 ]
 
 _AVAILABLE_WITHOUT_MANIFEST = text(
     "SELECT b.blob_id, b.state, b.sha256, b.size_bytes FROM blob b "
     "WHERE b.state = 'available' AND NOT EXISTS ("
     "  SELECT 1 FROM input_manifest_entry m WHERE m.blob_id = b.blob_id"
+    ") AND NOT EXISTS ("
+    "  SELECT 1 FROM analysis_artifact_publication a "
+    "  WHERE a.blob_id = b.blob_id AND a.state = 'bound'"
     ") ORDER BY b.created_at"
+)
+
+_BOUND_ANALYSIS_ARTIFACTS = text(
+    "SELECT DISTINCT blob_id, run_id, stage_id, artifact_role "
+    "FROM analysis_artifact_publication WHERE state = 'bound' "
+    "ORDER BY blob_id, run_id, stage_id, artifact_role"
+)
+
+_UNBOUND_ANALYSIS_ARTIFACTS = text(
+    "SELECT blob_id, run_id, job_id, attempt_id, stage_id, blob_role "
+    "FROM analysis_artifact_publication WHERE state = 'prepared' "
+    "ORDER BY created_at, attempt_id, stage_id, blob_id, blob_role"
 )
 
 
@@ -120,12 +148,37 @@ class MissingObject:
 
 
 @dataclass(frozen=True, slots=True)
+class MissingAnalysisArtifact:
+    """A committed stage result binding whose content-addressed bytes are absent."""
+
+    blob_id: BlobId
+    run_id: str
+    stage_id: str
+    role: str
+
+
+@dataclass(frozen=True, slots=True)
+class UnboundAnalysisArtifact:
+    """A pre-effect publication intent that never became a stage-result binding."""
+
+    blob_id: BlobId
+    run_id: str
+    job_id: str
+    attempt_id: str
+    stage_id: str
+    role: str
+    object_present: bool
+
+
+@dataclass(frozen=True, slots=True)
 class ReconciliationReport:
     """What one reconciliation pass found. Empty on a healthy instance."""
 
     orphan_objects: tuple[OrphanObject, ...] = ()
     unpublished_records: tuple[OrphanObject, ...] = ()
     missing_objects: tuple[MissingObject, ...] = ()
+    missing_analysis_artifacts: tuple[MissingAnalysisArtifact, ...] = ()
+    unbound_analysis_artifacts: tuple[UnboundAnalysisArtifact, ...] = ()
     stale_commands: tuple[CommandId, ...] = ()
 
     @property
@@ -134,6 +187,8 @@ class ReconciliationReport:
             self.orphan_objects
             or self.unpublished_records
             or self.missing_objects
+            or self.missing_analysis_artifacts
+            or self.unbound_analysis_artifacts
             or self.stale_commands
         )
 
@@ -143,6 +198,8 @@ class ReconciliationReport:
             f"orphan_objects={len(self.orphan_objects)} "
             f"unpublished_records={len(self.unpublished_records)} "
             f"missing_objects={len(self.missing_objects)} "
+            f"missing_analysis_artifacts={len(self.missing_analysis_artifacts)} "
+            f"unbound_analysis_artifacts={len(self.unbound_analysis_artifacts)} "
             f"stale_commands={len(self.stale_commands)}"
         )
 
@@ -181,6 +238,30 @@ class Reconciler:
                 )
             )
             manifest_blobs = self._documents.manifest_blob_ids(session)
+            analysis_artifacts = tuple(
+                (
+                    parse_blob_id(blob_id),
+                    str(run_id),
+                    str(stage_id),
+                    str(role),
+                )
+                for blob_id, run_id, stage_id, role in session.execute(
+                    _BOUND_ANALYSIS_ARTIFACTS
+                ).all()
+            )
+            unbound_artifacts = tuple(
+                (
+                    parse_blob_id(blob_id),
+                    str(run_id),
+                    str(job_id),
+                    str(attempt_id),
+                    str(stage_id),
+                    str(role),
+                )
+                for blob_id, run_id, job_id, attempt_id, stage_id, role in session.execute(
+                    _UNBOUND_ANALYSIS_ARTIFACTS
+                ).all()
+            )
             stale = tuple(
                 record.command_id
                 for record in self._commands.stale_in_progress(
@@ -213,10 +294,38 @@ class Reconciler:
                 for version_uid, role in references
             )
 
+        missing_analysis: list[MissingAnalysisArtifact] = []
+        for blob_id, run_id, stage_id, role in analysis_artifacts:
+            if self._object_exists(blob_id):
+                continue
+            missing_analysis.append(
+                MissingAnalysisArtifact(
+                    blob_id=blob_id,
+                    run_id=run_id,
+                    stage_id=stage_id,
+                    role=role,
+                )
+            )
+
+        unbound_analysis = tuple(
+            UnboundAnalysisArtifact(
+                blob_id=blob_id,
+                run_id=run_id,
+                job_id=job_id,
+                attempt_id=attempt_id,
+                stage_id=stage_id,
+                role=role,
+                object_present=self._object_exists(blob_id),
+            )
+            for blob_id, run_id, job_id, attempt_id, stage_id, role in unbound_artifacts
+        )
+
         return ReconciliationReport(
             orphan_objects=tuple(orphans),
             unpublished_records=tuple(unpublished),
             missing_objects=tuple(missing),
+            missing_analysis_artifacts=tuple(missing_analysis),
+            unbound_analysis_artifacts=unbound_analysis,
             stale_commands=stale,
         )
 

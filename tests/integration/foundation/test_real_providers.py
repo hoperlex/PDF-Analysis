@@ -203,12 +203,12 @@ def test_the_adapter_under_test_is_the_s3_adapter(
 
 
 def test_the_storage_package_offers_no_filesystem_canonical_adapter() -> None:
-    """``S3BlobStore`` is the only BlobStore implementation in the package.
+    """``S3BlobStore`` is the only canonical BlobStore backend in the package.
 
     ``FF-01`` section 4 does not approve filesystem or JSON canonical storage,
-    and the port's own docstring says this package "must never gain one". A
-    second implementation would give a future run somewhere to degrade to, so
-    its absence is asserted rather than assumed.
+    and the port's own docstring says this package "must never gain one".
+    ``DurablePublicationStore`` is the W48 decorator around that exact backend: it
+    owns no bytes or address and cannot be selected as a fallback by itself.
     """
     found: dict[str, str] = {}
     for module_info in pkgutil.walk_packages(
@@ -225,10 +225,13 @@ def test_the_storage_package_offers_no_filesystem_canonical_adapter() -> None:
             if all(callable(getattr(obj, method, None)) for method in _BLOB_STORE_METHODS):
                 found[f"{module_info.name}.{name}"] = module_info.name
 
-    assert list(found) == ["auditmanager.storage.s3.S3BlobStore"], (
-        "the storage package defines a BlobStore implementation other than the S3 "
-        f"adapter: {sorted(found)}. FF-01 section 4 does not approve a filesystem "
-        "canonical store, and a second implementation is somewhere to degrade to."
+    decorator = "auditmanager.storage.durable_publication.DurablePublicationStore"
+    assert decorator in found, "the durable publication decorator escaped enumeration"
+    canonical_backends = set(found) - {decorator}
+    assert canonical_backends == {"auditmanager.storage.s3.S3BlobStore"}, (
+        "the storage package defines a canonical BlobStore backend other than S3: "
+        f"{sorted(canonical_backends)}. FF-01 section 4 does not approve a filesystem "
+        "canonical store, and a second backend is somewhere to degrade to."
     )
 
 

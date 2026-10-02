@@ -194,15 +194,15 @@ class RunId(OpaqueId, prefix="run", entity="AuditRun"):
 
 
 class JobId(OpaqueId, prefix="job", entity="Job"):
-    """Identity of a durable schedulable work item. Not allocated in PC-01."""
+    """Identity of the durable schedulable work item for one local run."""
 
 
 class AttemptId(OpaqueId, prefix="att", entity="Attempt"):
-    """Identity of one leased execution. Not allocated in PC-01."""
+    """Identity of one fenced execution of a Job."""
 
 
 class LeaseId(OpaqueId, prefix="lse", entity="Lease"):
-    """Identity of an execution lease. Not allocated in PC-01."""
+    """Identity of the execution lease held by the current Attempt."""
 
 
 class CommandId(OpaqueId, prefix="cmd", entity="CommandRecord"):
@@ -277,14 +277,11 @@ IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {
 #: Every concrete identity type, keyed by contract prefix.
 IDENTITY_TYPES_BY_PREFIX: Final[dict[str, type[OpaqueId]]] = dict(_REGISTRY)
 
-#: Identifiers PC-01 deliberately allocates nowhere. Recorded here, and in
+#: Identifiers the alpha runner deliberately allocates nowhere. Recorded here, and in
 #: ``docs/program/P02_SEAMS.md`` section 9, so the catalog does not silently promise
-#: an aggregate nobody builds. The type exists; no PC-01 code path calls ``new()``.
+#: an aggregate nobody builds. The type exists; no active code path calls ``new()``.
 UNALLOCATED_IN_PC01: Final[tuple[str, ...]] = (
     "import_id",
-    "job_id",
-    "attempt_id",
-    "lease_id",
     "worker_id",
     "export_id",
     "comparison_id",

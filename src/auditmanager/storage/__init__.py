@@ -56,6 +56,7 @@ from .models import (
     parse_blob_role,
 )
 from .port import BlobSource, BlobStore
+from .durable_publication import AfterPublish, BeforePublish, DurablePublicationStore
 from .s3 import S3BlobStore, sha256_of
 from .settings import S3StorageSettings
 
@@ -75,6 +76,8 @@ __all__ = [
     "BlobSource",
     "BlobState",
     "BlobStore",
+    "AfterPublish",
+    "BeforePublish",
     "ChecksumMismatchError",
     "InvalidBlobIdError",
     "PublishedBlob",
@@ -90,6 +93,7 @@ __all__ = [
     "TemporaryBlobLostError",
     "VerifiedBlob",
     "derive_blob_id",
+    "DurablePublicationStore",
     "parse_blob_id",
     "parse_blob_role",
     "sha256_of",

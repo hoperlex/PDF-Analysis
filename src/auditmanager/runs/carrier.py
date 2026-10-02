@@ -26,9 +26,8 @@ and the second one says the opposite of that: state is persisted *before* execut
 only means anything if something other than the accepting call can read it in between.
 
 So: **one bounded pool inside the serving process**, :data:`RUN_CONCURRENCY` wide, owned by
-the composition root. It creates no ``Job``, no ``Attempt``, no lease, no heartbeat, no
-fencing token and no outbox -- ``auditmanager.runs``'s own module note lists those as the
-things PC-01 has no such thing as, and this module adds none of them. A queue that outlives
+the composition root. W48 adds a durable local Job, current Attempt and Lease before the
+first effect, but no remote queue, heartbeat scheduler or worker protocol. A queue that outlives
 the process, a second machine, or work that can be handed from one process to another would
 be the deferred thing; a thread that outlives one HTTP response is not.
 
@@ -38,23 +37,20 @@ and it buys something the inline version could not offer: a second run submitted
 first is executing sits in ``queued`` and *says so*, which is the state the contract
 declares for precisely that situation.
 
-Two transactions, and the crash story that follows from where the boundary is
------------------------------------------------------------------------------
-:func:`run_to_terminal` executes a queued run in **two** transactions:
+Durability boundaries and the crash story
+------------------------------------------
+:func:`run_to_terminal` begins with a durable authority transaction:
 
-1. up to and including ``queued -> running``, committed. This is what makes ``running`` a
-   reading rather than an internal step. The commit happens through ``execute_run``'s
-   ``checkpoint`` hook, which is called there and nowhere else and defaults to doing
-   nothing, so the fifty-odd in-process callers that create and execute a run inside one
-   unit of work keep the all-or-nothing they have always had.
-2. everything else -- all four stages, every ``stage_result`` row, the evidence gate, the
-   published findings and the terminal -- committed once, at the end.
+1. ``queued -> running`` plus Job/Attempt/Lease creation is committed before the first
+   external effect. This is what makes both status and authority durable.
+2. each provider and artifact boundary records its own pre-effect breadcrumb; stage results,
+   artifact binding and final publication remain fenced by the current Attempt.
 
-The boundary is deliberately not finer. A commit in the middle of the analysis would let a
-reader see the stage rows of a run that then died, and PC-01 cannot resume, so those rows
-would describe work no terminal ever accounts for. With one boundary there are exactly two
-things a process death can leave: a run in ``running`` with no stage rows at all, or a run
-that reached its terminal with all of them. Nothing in between.
+Those effect commits can also make earlier stage-result/binding rows visible. A killed
+process may therefore leave a truthful partial execution: ``running``, its current
+Attempt, completed earlier stages and explicit unresolved effect breadcrumbs. The startup
+reconciler accounts for that execution by moving both run and Attempt to declared failure
+terminals; it never pretends the partial rows did not happen and never resumes them.
 
 That leaves ``running`` as *the* stranded state, which is what
 :mod:`auditmanager.runs.reconciliation` was already written to resolve -- ``OD-10``, at
@@ -90,6 +86,7 @@ from typing import Any, Final, Protocol
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.runs.executor import execute_run
+from auditmanager.jobs import JobRepository
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.scope import RECONCILIATION_TERMINAL
 from auditmanager.shared.errors import ErrorCode
@@ -259,13 +256,6 @@ def run_to_terminal(
                 adapter=adapter,
                 provider_config=provider_config,
                 runs=run_repo,
-                # The two transactions. `execute_run` calls this once, the moment the run
-                # is `running` and before any stage has done anything; committing there is
-                # the whole of what makes the state readable. Everything after it -- four
-                # stages, every `stage_result` row, the evidence gate, the published
-                # findings and the terminal -- is the second transaction and commits
-                # below, together or not at all.
-                checkpoint=session.commit,
             )
             session.commit()
     except Exception as failure:
@@ -283,8 +273,9 @@ def _record_crash(
 ) -> None:
     """Terminate a run whose execution raised, from whatever state it had reached.
 
-    A fresh session, because the one the exception escaped has been rolled back and the
-    stage rows it held are gone with it -- which is the point of the single boundary.
+    A fresh session, because the one the exception escaped may be failed and still hold
+    uncommitted writes. Earlier effect checkpoints may already have committed truthful
+    partial rows; reconciliation preserves them and only closes the execution authority.
 
     The ``from_state`` is **read** rather than assumed: the exception can escape before
     ``running -> validating`` or after it, and both are declared edges to ``failed``. A
@@ -300,6 +291,7 @@ def _record_crash(
             row = runs.find(session, run_id)
             if row is None or row.state in _TERMINAL_STATES:
                 return
+            JobRepository().fail_for_run(session, run_id=run_id)
             runs.terminate(
                 session,
                 run_id=run_id,

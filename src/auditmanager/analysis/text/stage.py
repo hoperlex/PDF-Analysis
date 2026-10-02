@@ -28,9 +28,15 @@ Status mapping, from the stage registry's status policy (``skip_allowed: false``
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
-from auditmanager.analysis.text.adapter import PROVIDER, ModelAdapter, build_request
+from auditmanager.analysis.text.adapter import (
+    PROVIDER,
+    ModelAdapter,
+    ModelRequest,
+    ModelResponse,
+    build_request,
+)
 from auditmanager.analysis.text.anchors import (
     BlockIndex,
     ResolvedAnchor,
@@ -69,6 +75,10 @@ class TextAnalysisOutcome:
     model_calls: tuple[ModelCallRecord, ...]
     error: DomainError | None
     metrics: Mapping[str, Any] = field(default_factory=dict)
+    # A live transport failure after dispatch cannot prove the provider performed no
+    # billable work. The durable intent records that ambiguity and the executor must not
+    # automatically repeat it as though the call never happened.
+    provider_effect_uncertain: bool = False
 
     def __post_init__(self) -> None:
         if self.status == STATUS_SUCCEEDED and self.error is not None:
@@ -83,6 +93,22 @@ class _Grounding:
     resolved_evidence: int
     unresolved: list[UnresolvedAnchor]
     dropped_observations: int
+
+
+class ModelCallJournal(Protocol):
+    """Durability callbacks around the external provider effect."""
+
+    def prepare(self, request: ModelRequest, *, mode: ProviderMode) -> ModelCallId: ...
+
+    def response_received(
+        self, model_call_id: ModelCallId, response: ModelResponse
+    ) -> None: ...
+
+    def complete(self, call: ModelCallRecord) -> None: ...
+
+    def outcome_unknown(
+        self, model_call_id: ModelCallId, error: DomainError
+    ) -> None: ...
 
 
 def _partial_error(run_id: RunId) -> DomainError:
@@ -198,6 +224,7 @@ def run_text_analysis(
     profile: AnalysisProfile = AR_TEXT_PROFILE,
     lock: ProviderLock | None = None,
     meter: CostMeter | None = None,
+    call_journal: ModelCallJournal | None = None,
 ) -> TextAnalysisOutcome:
     """Run the stage over one document version.
 
@@ -223,7 +250,6 @@ def run_text_analysis(
             text_layer=text_layer,
         )
         cost_meter.check_before_call()
-        response = adapter.complete(request)
     except DomainError as error:
         return TextAnalysisOutcome(
             status=STATUS_FAILED,
@@ -237,7 +263,41 @@ def run_text_analysis(
     # configuration, so a run configured "live" that in fact replayed is recorded as
     # what it was.
     mode = adapter.provider_mode
-    model_call_id = ModelCallId.new()
+    if call_journal is None and mode is ProviderMode.LIVE:
+        return TextAnalysisOutcome(
+            status=STATUS_FAILED,
+            artifact=None,
+            model_calls=(),
+            error=DomainError(
+                ErrorCode.ANALYSIS_INPUT_INVALID,
+                message="a live provider call requires a durable call journal",
+                stage_id=STAGE_ID,
+                reason="durable_call_journal_required",
+            ),
+            metrics={"stage_id": STAGE_ID, "stage_version": STAGE_VERSION},
+        )
+
+    model_call_id = (
+        ModelCallId.new()
+        if call_journal is None
+        else call_journal.prepare(request, mode=mode)
+    )
+    try:
+        response = adapter.complete(request)
+    except DomainError as error:
+        if call_journal is not None:
+            call_journal.outcome_unknown(model_call_id, error)
+        return TextAnalysisOutcome(
+            status=STATUS_FAILED,
+            artifact=None,
+            model_calls=(),
+            error=error,
+            metrics={"stage_id": STAGE_ID, "stage_version": STAGE_VERSION},
+            provider_effect_uncertain=mode is ProviderMode.LIVE,
+        )
+
+    if call_journal is not None:
+        call_journal.response_received(model_call_id, response)
     call_status = CALL_TRUNCATED if response.truncated else CALL_SUCCEEDED
 
     try:
@@ -253,25 +313,21 @@ def run_text_analysis(
         overrun = pin.cost_usd(
             input_tokens=response.input_tokens, output_tokens=response.output_tokens
         )
+        call = _record(
+            model_call_id,
+            request,
+            response,
+            mode=mode,
+            status=call_status,
+            cost_usd=overrun,
+            cost_basis="estimated",
+        )
+        if call_journal is not None:
+            call_journal.complete(call)
         return TextAnalysisOutcome(
             status=STATUS_FAILED,
             artifact=None,
-            model_calls=(
-                _record(
-                    model_call_id,
-                    request,
-                    response,
-                    mode=mode,
-                    status=call_status,
-                    cost_usd=overrun,
-                    # `overrun` above is `pin.cost_usd(...)` -- the pin's own rates over
-                    # the token counts. It does not consult `response.reported_cost_usd`,
-                    # so this basis is estimated whatever the provider reported, and the
-                    # success path below can legitimately say `measured` for the very same
-                    # response. Spelled out rather than defaulted: see `_record`.
-                    cost_basis="estimated",
-                ),
-            ),
+            model_calls=(call,),
             error=error,
             metrics={
                 "stage_id": STAGE_ID,
@@ -306,6 +362,8 @@ def run_text_analysis(
         # metrics dict below now carries the same expression.
         cost_basis="measured" if response.reported_cost_usd is not None else "estimated",
     )
+    if call_journal is not None:
+        call_journal.complete(call)
     parsed = parse_response(response.output_text, truncated=response.truncated)
     grounding = _ground(
         text_layer, parsed.observations, model_call_id=model_call_id, block_index=block_index
@@ -475,3 +533,13 @@ def _check_graph_version(document: Mapping[str, Any] | None) -> None:
             stage_id=STAGE_ID,
             reason="artifact_version_unsupported",
         )
+
+
+__all__ = [
+    "ModelCallJournal",
+    "STATUS_FAILED",
+    "STATUS_PARTIAL",
+    "STATUS_SUCCEEDED",
+    "TextAnalysisOutcome",
+    "run_text_analysis",
+]

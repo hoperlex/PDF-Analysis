@@ -13,9 +13,9 @@ locale may reword, and the SQLSTATE is the contract.
 
 What is not here
 ----------------
-No ``Job``, no ``Attempt``, no lease, no heartbeat, no fencing token and no outbox.
-Those tables do not exist (P02 §3.1) and PC-01 instantiates none of those aggregates.
-There is also no ``succeeded`` run state: the success terminal is ``published``, and
+Job/Attempt/Lease authority is deliberately owned by :mod:`auditmanager.jobs`, not by
+this run-row repository. Remote heartbeat/failover, resume and outbox delivery remain
+absent. There is also no ``succeeded`` run state: the success terminal is ``published``, and
 ``succeeded`` is a *stage* status. The two vocabularies are separate and this module
 keeps them separate.
 
@@ -463,9 +463,9 @@ class RunRepository:
         picking the job up, ``running`` if it died during the analysis.
 
         PC-01 runs one execution in one process, so a row older than the threshold in
-        either state means that process is gone. There is no lease and no heartbeat to
-        consult: age is the only evidence available, and ``OD-10`` says what to do about
-        it rather than inventing an ``interrupted`` state to park it in.
+        either state means that process is gone. The local Lease has no heartbeat clock,
+        so age remains the evidence available; ``OD-10`` says what to do about it rather
+        than inventing an ``interrupted`` state to park it in.
         """
         rows = session.execute(_STALE_IN_STATE, {"state": state, "age": older_than}).all()
         return tuple(_run_row(row) for row in rows)

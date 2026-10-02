@@ -38,8 +38,11 @@ PDF upload
   -> proven restart path
 ```
 
-**What PC-01 deliberately does not contain.** No Job and no Attempt entity, no lease, no
-heartbeat, no execution token, no fencing, no resume, no retry, no outbox, no revocation
+**Original PC-01 boundary (superseded in part by W48-DURABLE-01).** The original plan had
+no Job or Attempt entity, lease, heartbeat, execution token, fencing, resume, retry or
+outbox. W48-DURABLE-01 now adds one local Job/current Attempt/Lease, token fencing and
+effect journals to close crash windows A-01/A-02. Remote heartbeat, failover, run-level
+resume and outbox delivery remain deferred. No revocation
 UI, and no export resource of any kind — no export aggregate, table, identity, polling or
 idempotency key, because the CSV endpoint is a synchronous read that creates nothing. Each
 of those was in the first candidate and each is removed here: they are durable-execution
@@ -615,34 +618,33 @@ different aggregate. The contract wins: the column, the API field, the CSV and e
 use the machine vocabulary. The ban is scoped to run state — `succeeded` is correct on a
 per-stage row, and a repository-wide ban would fail on correct code.
 
-**C-3 — the package schemas require an attempt-authority tuple PC-01 has no producer for.**
+**C-3 — the package schemas require an attempt-authority tuple the local runner does not
+transport.**
 `job-package.schema.json` and `result-package.schema.json` both list `attempt_authority` in
 their top-level `required` array, and that object requires `run_id`, `job_id`, `attempt_id`
-and `execution_token`. PC-01 therefore publishes **no** JobPackage and **no** ResultPackage
-and claims **no** conformance to those two schemas. The one analysis object PC-01 publishes
+and `execution_token`. W48-DURABLE-01 produces those values for internal fencing but still
+crosses no remote-dispatch boundary. It therefore publishes **no** JobPackage and **no**
+ResultPackage and claims **no** conformance to those two schemas. The one analysis object PC-01 publishes
 as a contract is the `StageResult`, whose `required` array is `contract_version`,
 `stage_id`, `stage_version`, `status`, `artifacts`, `metrics` and contains **no**
 `attempt_authority`; PC-01 claims full conformance to that schema and validates every
 emitted result against it. No contract file is edited: both package schemas keep their
 `required` arrays unaltered, and `PROTOTYPE_PROFILE.md` §5 already scopes the claim to
 objects actually published as those contracts. PC-01 therefore uses the `audit_run` **state names and transition topology** and claims no
-more than that. Four guard clauses are recorded as **unevaluated**, under `OD-24`, rather
+more than that. Two guard clauses remain **unevaluated**, under `OD-24`, rather
 than generated and left unreachable:
 
 - the `NormsSnapshot` clause of the `created -> queued` reference-resolution guard, because
   PC-01 pins no norms snapshot; the input-manifest, AnalysisProfile and PromptBundle
   clauses of that same guard **are** evaluated;
-- the whole `queued -> running` guard, which requires that a Job exist and its current
-  Attempt hold the execution token — no producer for `execution_token_invalid`;
-- the whole `running -> validating` guard, which requires every delivered result to come
-  from the current Attempt — no producer for `stale_attempt`;
 - the `ResultPackage` schema clause of the `validating -> published` guard; PC-01 validates
   declared checksums and required artifact roles directly and publishes no result package.
 
-Cancellation and Attempt publication authority are outside PC-01 entirely: no cancel
-command exists, so `cancelled` is declared and unreachable. Restoring Job, Attempt,
-NormsSnapshot pinning and package conformance is a P05 candidate under the section 7 rule,
-not a PC-01 deliverable, and none of them returns to prototype scope here.
+W48-DURABLE-01 evaluates the other two clauses by locking the Job/current Attempt and
+equality-checking its token before guarded writes; `execution_token_invalid` and
+`stale_attempt` now have producers. Cancellation remains outside PC-01: no cancel command
+exists, so `cancelled` is declared and unreachable. NormsSnapshot pinning and package
+conformance remain later candidates under the section 7 rule.
 
 **C-4 — CP-00 is mid-supersession, and this branch's copy of its status is stale.**
 Implementation outside the frozen P01 provider paths remains locked until the detailed

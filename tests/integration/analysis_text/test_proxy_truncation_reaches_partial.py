@@ -38,7 +38,7 @@ from auditmanager.analysis.text.stage import (
     run_text_analysis,
 )
 from auditmanager.shared.errors import ErrorCode
-from auditmanager.shared.identity import RunId
+from auditmanager.shared.identity import ModelCallId, RunId
 
 MODEL_ID = "claude-opus-5"
 PAGE_ONE = "Отчёт за год. Выручка выросла.\n"
@@ -120,6 +120,26 @@ class _Response:
         return None
 
 
+class _BoundaryJournal:
+    """Explicit stage-seam test double; production live calls use the DB journal."""
+
+    def __init__(self) -> None:
+        self.model_call_id = ModelCallId.new()
+
+    def prepare(self, request: Any, *, mode: ProviderMode) -> ModelCallId:
+        assert mode is ProviderMode.LIVE
+        return self.model_call_id
+
+    def response_received(self, model_call_id: ModelCallId, response: Any) -> None:
+        assert model_call_id == self.model_call_id
+
+    def complete(self, call: Any) -> None:
+        assert call.model_call_id == self.model_call_id
+
+    def outcome_unknown(self, model_call_id: ModelCallId, error: Any) -> None:
+        raise AssertionError("the local proxy stub did not fail")
+
+
 def _run(finish_reason: str) -> Any:
     adapter = ProxyAdapter(
         ProxySettings(base_url="https://proxy.example", token="tok"),
@@ -138,6 +158,7 @@ def _run(finish_reason: str) -> Any:
             api_key=None,
             ceiling_is_explicit=False,
         ),
+        call_journal=_BoundaryJournal(),
     )
 
 

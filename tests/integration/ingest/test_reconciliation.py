@@ -287,7 +287,8 @@ def test_report_is_clean_on_a_healthy_instance(
 
     assert report.is_clean
     assert report.describe() == (
-        "orphan_objects=0 unpublished_records=0 missing_objects=0 stale_commands=0"
+        "orphan_objects=0 unpublished_records=0 missing_objects=0 "
+        "missing_analysis_artifacts=0 unbound_analysis_artifacts=0 stale_commands=0"
     )
 
 

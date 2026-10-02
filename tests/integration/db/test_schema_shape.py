@@ -90,10 +90,12 @@ def test_no_column_names_an_address_a_secret_or_a_model_payload(
         f"{table}.{column}"
         for table, column in _columns(migrated_engine)
         if column in BANNED_COLUMN_NAMES
+        and (table, column) != ("attempt", "execution_token")
     ]
     assert offenders == [], (
         "the object-key layout is confined to the S3 adapter and secrets are stored "
-        f"nowhere; found {offenders}"
+        "only in the exact contract-owned attempt.execution_token column; "
+        f"found {offenders}"
     )
 
 
@@ -166,8 +168,8 @@ def test_exactly_the_declared_tables_are_immutable(migrated_engine: Engine) -> N
     assert with_immutability == IMMUTABLE_TABLES
 
 
-def test_every_state_column_carries_the_transition_guard(migrated_engine: Engine) -> None:
-    for table in ("audit_run", "blob", "command_record"):
+def test_every_contract_state_column_carries_the_transition_guard(migrated_engine: Engine) -> None:
+    for table in ("audit_run", "blob", "command_record", "job", "attempt"):
         assert "am_guard_state_transition" in _trigger_functions(migrated_engine, table), (
             f"{table} has a state column with no transition guard"
         )
@@ -223,6 +225,11 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "finding_observation_id": "fobs",
         "decision_id": "dec",
         "audit_event_id": "evt",
+        "job_id": "job",
+        "current_attempt_id": "att",
+        "attempt_id": "att",
+        "lease_id": "lse",
+        "final_model_call_id": "mc",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

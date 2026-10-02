@@ -12,11 +12,11 @@ This module is that policy, and :mod:`auditmanager.runs.executor` is its only ca
 
 What this is not
 ----------------
-It is **not** durable execution. PC-01 has no ``Job``, no ``Attempt`` row, no lease, no
-heartbeat, no execution token and no outbox (``PROTOTYPE_EXECUTION_PLAN.md`` §1), and this
-module instantiates none of them: an attempt here is a loop counter in one process, and it
-survives only as scalar provenance on the stage result the process writes. Nothing here
-retries a *run*; the run's idempotency key never changes and no second command is issued.
+It is **not** a durable execution Attempt. W48 gives each run one ``Job``, current
+``Attempt``, lease and execution token before effects begin. An attempt in this module is
+instead a provider-call loop counter *inside* that durable execution Attempt and survives
+as scalar provenance on the stage result. Nothing here retries or supersedes a run-level
+Attempt; the run's idempotency key never changes and no second command is issued.
 
 The distinction that matters, and why it is structural
 ------------------------------------------------------
@@ -142,7 +142,7 @@ class RetryPolicy:
 
 @dataclass(frozen=True, slots=True)
 class AttemptRecord:
-    """One attempt at one stage. Not an ``Attempt`` aggregate — PC-01 has none."""
+    """One provider call try, not the durable execution ``Attempt`` aggregate."""
 
     attempt: int
     status: str

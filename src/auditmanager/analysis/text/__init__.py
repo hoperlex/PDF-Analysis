@@ -63,6 +63,7 @@ from auditmanager.analysis.text.provenance import ModelCallRecord, assert_consis
 from auditmanager.analysis.text.proxy import ProxyAdapter, ProxySettings
 from auditmanager.analysis.text.recorded import RecordedAdapter, recording_document
 from auditmanager.analysis.text.stage import (
+    ModelCallJournal,
     STATUS_FAILED,
     STATUS_PARTIAL,
     STATUS_SUCCEEDED,
@@ -94,6 +95,7 @@ __all__ = [
     "LiveAdapter",
     "ModelAdapter",
     "ModelCallRecord",
+    "ModelCallJournal",
     "ModelPin",
     "ModelRequest",
     "ModelResponse",

@@ -197,6 +197,8 @@ Included:
 - private S3 publication with checksum verification;
 - persisted Blob metadata, AuditRun and per-stage status plus a narrow reconciliation
   path for interrupted DB/S3 publication;
+- one local durable Job/current Attempt/Lease authority per run, plus provider-call and
+  analysis-artifact effect journals committed before their external effects;
 - the four-stage preparation/text path above with live and recorded-response adapters;
 - Finding plus FindingObservation with validated text/page evidence and provenance;
 - project/upload, run-progress and PDF/finding-review views;
@@ -211,7 +213,7 @@ Deferred:
 - disciplines other than the single AR validation profile;
 - visual finding detection, block-analysis, finding merge, grounding-review,
   correction, normative verification and every optimization pipeline;
-- automatic retry/skip/resume policy, Job/Attempt lease, heartbeat, fencing and outbox;
+- run-level retry/supersession/resume, remote lease heartbeat/failover and outbox delivery;
 - stable finding identity and decision carryover across reruns;
 - knowledge-base projection and AI re-review;
 - comparison, repair/undo and graphic/vector evidence;

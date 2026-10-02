@@ -443,7 +443,7 @@ class TestACrashDoesNotStrandARun:
             gated.release.set()
             carrier.shutdown()
 
-    def test_a_crashed_run_leaves_no_half_written_stage_results(
+    def test_a_crashed_run_preserves_only_completed_deterministic_stage_results(
         self,
         sessions: sessionmaker[Session],
         blob_store: Any,
@@ -451,12 +451,13 @@ class TestACrashDoesNotStrandARun:
         provider_config: Any,
         committed_version: Any,
     ) -> None:
-        """The single commit boundary, asserted rather than described.
+        """Effect checkpoints leave truthful partial history, never invented completion.
 
-        Three deterministic stages succeed before the provider is reached, and their rows
-        are written in the transaction that the escaping exception rolls back. A reader of
-        the failed run therefore sees no stage results at all, rather than three
-        successful ones belonging to a run that PC-01 can never finish or resume.
+        Three deterministic stages succeed before the provider is reached. Their artifact
+        intents commit before S3 publication and the following checkpoint makes their
+        result/binding visible. The provider then raises before text completion. A reader
+        therefore sees exactly the completed deterministic work, no text result, while
+        the run itself is reconciled to ``failed`` rather than resumable.
         """
         gated = GatedAdapter(recorded_adapter, fail_with=RuntimeError("the disk went away"))
         carrier = ThreadCarrier()
@@ -467,10 +468,13 @@ class TestACrashDoesNotStrandARun:
             gated.release.set()
             assert carrier.drain(timeout=300)
 
-            assert _status(client, started["run_id"])["stages"] == [], (
-                "a run whose execution was rolled back reported stage results; the "
-                "commit boundary moved inside the analysis"
-            )
+            stages = _status(client, started["run_id"])["stages"]
+            assert {stage["stage_id"] for stage in stages} == {
+                "source_preparation",
+                "page_geometry_extraction",
+                "document_context_build",
+            }
+            assert {stage["status"] for stage in stages} == {"succeeded"}
         finally:
             gated.release.set()
             carrier.shutdown()

@@ -279,8 +279,8 @@ def test_an_audit_run_may_not_be_inserted_in_a_non_initial_state(
         savepoint.rollback()
 
 
-def test_pc01_instantiates_none_of_the_durable_execution_aggregates(session: Session):
-    """No ``job``, ``attempt``, ``lease``, ``worker`` or ``outbox`` table exists.
+def test_the_remaining_deferred_aggregates_are_absent(session: Session):
+    """No ``worker``, ``outbox`` or other still-deferred aggregate table exists.
 
     Adding one would be a visible scope change rather than a quiet convenience, which
     is precisely why the absence is asserted rather than assumed.
@@ -295,7 +295,7 @@ def test_pc01_instantiates_none_of_the_durable_execution_aggregates(session: Ses
         ).scalar_one_or_none()
         is not None
     ]
-    assert present == [], f"PC-01 declares no such aggregate, but these tables exist: {present}"
+    assert present == [], f"the alpha declares no such aggregate, but these tables exist: {present}"
 
 
 # --- isolating the two guards the database would otherwise mask ---------------
