@@ -121,6 +121,7 @@ completion report and never rewrites their verdicts.
 - `db/migrations/versions/20261002_0014_durable_analysis_effects.py`
 - `src/auditmanager/jobs/**`
 - `src/auditmanager/shared/identity/ids.py`
+- `src/auditmanager/runs/__init__.py`
 - `src/auditmanager/runs/carrier.py`
 - `src/auditmanager/runs/executor.py`
 - `src/auditmanager/runs/reconciliation.py`
