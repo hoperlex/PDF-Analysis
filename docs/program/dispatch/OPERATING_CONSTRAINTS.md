@@ -630,7 +630,6 @@ integrator cited it as `docs/program/OPERATING_CONSTRAINTS.md` in briefs for a w
 repository never carried the wrong path, so only dispatched sessions met it. A session that
 took the path literally would have found nothing — **§12 applied to §12's own location.**
 
-
 ### A seventh entry, 2026-09-23: the shapes in this section are recurring, and that is the finding
 
 **Two of the six shapes above came back within two weeks, and in each case the session that
@@ -669,3 +668,51 @@ guard at a path that did not exist and **its own check command caught that withi
 The structural gap is named there and is measurable: every count the gate checks is a count in
 **code**, and `tests/contract/api_v1/test_surface_counts_in_prose.py` reads
 `src/auditmanager/api`, `infra/deploy` and `web/src` — **not `docs/`.**
+
+## 13. A maintained set has an enumerator, and the enumerator has one owner
+
+Routes, screens, error codes and migrations have the same failure mode as ports: a lane can add a
+member correctly while the file that enumerates the whole set belongs to nobody. `D-89` measured
+the result: two streams added screens, both needed the journey manifest, neither owned it, and a
+helpful edit by either would have created a shared hotspot.
+
+Every task that changes a maintained set therefore records, before dispatch:
+
+1. the enumerating file;
+2. its one owner for the wave;
+3. a totality query whose complete output accounts for every member.
+
+`allowed_paths` alone is insufficient: it says who may edit a path, not that somebody is
+responsible for keeping the set complete. Two tasks may consume an enumerator; only one task owns
+its update.
+
+## 14. A premise needs captured output; history receives an addendum
+
+`D-96` is five plausible premises that named the wrong path, line or count. Each carried a check
+command, and none carried the output from running it at dispatch. A future command cannot prove a
+past premise. An exact path, line or count is dispatch evidence only when the task records the
+date, full command and complete, untruncated output that supported it. `head`, clipped UI output
+and a prose paraphrase are samples, not captured totality.
+
+The same discipline runs in the other direction. A completed task log or review records what its
+author observed then, including mistakes and missing evidence. Correct it with a new addendum
+that cites the immutable source and gives a new dated measurement. Do not edit the source into a
+claim its author did not make. `docs/program/W46-HISTORICAL-ADDENDUM.md` is the first canonical
+example and carries hashes of the records it leaves untouched.
+
+## 15. `origin/dev` is a candidate; `origin/main` is a deployment action
+
+`D-77` showed that an unverified branch intention can orient another session to the wrong tree.
+The current rule deliberately does **not** require `origin/dev == origin/main`: the refs now have
+different roles.
+
+- A clean, gated development candidate is published to `origin/dev` by its named integration
+  owner and read back as an exact SHA.
+- `origin/main` triggers external auto-deploy. It is updated only after a separate direct owner
+  instruction naming publication of the exact candidate and the procedure in
+  `docs/program/MAIN_AUTODEPLOY_POLICY.md`.
+- A task that says “close”, “integrate”, “continue” or “publish the candidate” does not acquire
+  `origin/main` authority. Without the separate instruction it stops at `origin/dev` and reports
+  the SHA awaiting deployment authority.
+- Branch equality, workflow SHA and deployed SHA are separate facts. Read back and quote only
+  the facts the task actually owns; never describe a dev candidate as deployed.
