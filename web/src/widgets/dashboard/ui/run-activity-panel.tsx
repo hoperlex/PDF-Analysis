@@ -35,7 +35,7 @@
 import { COST_BASIS_LABELS, ErrorState, EmptyState, STATE_LABELS } from '@/shared/ui';
 import { formatCostMicros, costBasisCaption } from '@/entities/audit-run';
 import type { RunActivity, RunActivitySpend } from '@/shared/api';
-import { RUN_STATE_VALUES } from '@/shared/api';
+import { COST_BASIS_VALUES, RUN_STATE_VALUES } from '@/shared/api';
 
 import { incompleteBreakdownFailure } from '../model/dashboard-failure';
 import { summarizeRunStateBreakdown } from '../model/run-state-breakdown';
@@ -79,6 +79,18 @@ export function RunActivityPanel({ activity, hasProjects }: RunActivityPanelProp
   // `run_activity.spend` after `W46-SPEND`'s reseal: absent, not `0`, when nothing has
   // called a provider.
   const spend: RunActivitySpend | undefined = activity.spend;
+
+  if (
+    spend !== undefined &&
+    !(COST_BASIS_VALUES as readonly unknown[]).includes(spend.cost_basis)
+  ) {
+    const failure = incompleteBreakdownFailure('Основание стоимости не распознано.');
+    return (
+      <div data-panel="run-activity-and-spend" data-panel-fault={failure.kind}>
+        <ErrorState title={failure.title} detail={failure.detail} />
+      </div>
+    );
+  }
 
   return (
     <div data-panel="run-activity-and-spend">

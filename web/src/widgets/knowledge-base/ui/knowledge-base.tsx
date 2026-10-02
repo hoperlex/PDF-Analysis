@@ -24,7 +24,12 @@
 
 import Link from 'next/link';
 
-import type { DecisionRecord, DecisionEventType, FindingCategory, Verdict } from '@/shared/api';
+import type { DecisionRecord, DecisionEventType, FindingCategory } from '@/shared/api';
+import {
+  DECISION_EVENT_TYPE_VALUES,
+  FINDING_CATEGORY_VALUES,
+  VERDICT_VALUES,
+} from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
@@ -54,13 +59,35 @@ const EVENT_TYPE_LABELS: Readonly<Record<DecisionEventType, string>> = {
   revoke: 'отзыв',
 };
 
-function verdictLabel(verdict: Verdict): string {
-  return VERDICT_LABELS[verdict] ?? verdict;
+function hasValue(values: readonly string[], value: unknown): boolean {
+  return typeof value === 'string' && values.includes(value);
+}
+
+function hasInvalidVocabulary(record: DecisionRecord): boolean {
+  return (
+    !hasValue(FINDING_CATEGORY_VALUES, record.category) ||
+    !hasValue(DECISION_EVENT_TYPE_VALUES, record.event_type) ||
+    !hasValue(VERDICT_VALUES, record.current_verdict) ||
+    (record.verdict !== null &&
+      record.verdict !== undefined &&
+      !hasValue(VERDICT_VALUES, record.verdict))
+  );
 }
 
 export function KnowledgeBase({ records, isLoading, error }: KnowledgeBaseProps) {
   if (isLoading === true) return <LoadingState what="базу знаний" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
+
+  if (records.some(hasInvalidVocabulary)) {
+    return (
+      <section className="am-kb" data-knowledge-base-fault="closed-vocabulary">
+        <ErrorState
+          title="Запись решения содержит неизвестное значение."
+          detail="Категорию, событие или вердикт нельзя показать достоверно — частичная запись скрыта."
+        />
+      </section>
+    );
+  }
 
   if (records.length === 0) {
     return (
@@ -93,7 +120,7 @@ export function KnowledgeBase({ records, isLoading, error }: KnowledgeBaseProps)
             <p className="am-kb__heading">
               <span className="am-kb__category">{CATEGORY_LABELS[record.category]}</span>
               <span className="am-kb__verdict" data-verdict={record.current_verdict}>
-                {verdictLabel(record.current_verdict)}
+                {VERDICT_LABELS[record.current_verdict]}
               </span>
               <span className="am-kb__event">{EVENT_TYPE_LABELS[record.event_type]}</span>
             </p>

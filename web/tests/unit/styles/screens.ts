@@ -17,9 +17,6 @@
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
 
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-
 import { ProjectsPage } from '@/_pages/projects';
 import { ReviewPage } from '@/_pages/review';
 import { VersionDetailPage } from '@/_pages/version-detail';
@@ -62,23 +59,13 @@ import {
   render,
   runStatus,
 } from '../review/fixtures';
-import { newClient, renderWith, seedError } from '../screens/harness';
+import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 
 import type { Screen } from './contrast';
 
-function stubRouter(): AppRouterInstance {
-  return {
-    push: () => {}, replace: () => {}, back: () => {}, forward: () => {},
-    refresh: () => {}, prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
-
 function withRouter(element: ReactElement): string {
-  return renderWith(
-    newClient(),
-    createElement(AppRouterContext.Provider, { value: stubRouter() }, element),
-  );
+  return renderScreen(newClient(), element);
 }
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
@@ -446,7 +433,7 @@ export function screens(): Screen[] {
   {
     const client = populatedClient();
     const at = (element: ReactElement): string =>
-      renderWith(client, createElement(AppRouterContext.Provider, { value: stubRouter() }, element));
+      renderScreen(client, element);
     add('ProjectList loaded', at(createElement(ProjectList, {})));
     add('DocumentList loaded', at(createElement(DocumentList, { projectUid: PROJECT_UID })));
     add('VersionList loaded', at(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
@@ -476,13 +463,9 @@ export function screens(): Screen[] {
     });
     add(
       'ReviewPage loaded',
-      renderWith(
+      renderScreen(
         client,
-        createElement(
-          AppRouterContext.Provider,
-          { value: stubRouter() },
-          createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
-        ),
+        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
       ),
     );
   }
@@ -601,13 +584,9 @@ export function screens(): Screen[] {
     });
     add(
       'StageComparisonPage with two runs',
-      renderWith(
+      renderScreen(
         client,
-        createElement(
-          AppRouterContext.Provider,
-          { value: stubRouter() },
-          createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
-        ),
+        createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
       ),
     );
   }

@@ -130,6 +130,12 @@ export function colourLiteralsOutsideTokens(css: string): string[] {
   return withoutTokenBlocks.match(/#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)|\bhsla?\([^)]*\)/g) ?? [];
 }
 
+/** Declarations in one exact flat selector; enough for the two containment roots below. */
+export function declarationsOf(css: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`, 'm').exec(css)?.[1] ?? '';
+}
+
 // ================================================================================ tests
 
 describe('a class the markup names is a class the stylesheet declares', () => {
@@ -229,6 +235,27 @@ describe('every colour is a token read, so the second theme stayed additive', ()
     for (const path of walk(SRC, (n) => n.endsWith('.module.css'))) {
       const declarations = readFileSync(path, 'utf8').match(/^\s*--[a-z-]+\s*:/gm) ?? [];
       expect({ path, declarations }).toEqual({ path, declarations: [] });
+    }
+  });
+});
+
+describe('contract-length user text cannot widen its screen', () => {
+  const globals = readFileSync(GLOBALS, 'utf8');
+
+  it('can fail when a row keeps its intrinsic unbroken width', () => {
+    const broken = '.am-state { min-width: auto; }';
+    const body = declarationsOf(broken, '.am-state');
+    expect(body).not.toMatch(/overflow-wrap\s*:\s*anywhere/);
+    expect(body).not.toMatch(/min-width\s*:\s*0/);
+  });
+
+  it('contains project names and knowledge-base comments at their row roots', () => {
+    for (const selector of ['.am-state', '.am-kb__record']) {
+      const body = declarationsOf(globals, selector);
+      expect(body, `${selector} has no overflow-wrap containment`).toMatch(
+        /overflow-wrap\s*:\s*anywhere/,
+      );
+      expect(body, `${selector} retains intrinsic minimum width`).toMatch(/min-width\s*:\s*0/);
     }
   });
 });

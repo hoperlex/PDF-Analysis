@@ -55,9 +55,6 @@ import { createElement } from 'react';
 import type { ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-
 import { ApiError, queryKeys } from '@/shared/api';
 import type {
   DashboardSummary,
@@ -86,11 +83,12 @@ import { ChangePasswordPage } from '@/_pages/change-password';
 import NotFound from '@/app/not-found';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
+import { KnowledgeBase } from '@/widgets/knowledge-base';
 
 import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
-import { newClient, renderWith, seedError } from '../unit/screens/harness';
+import { newClient, renderScreen, seedError } from '../unit/screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
 
 // ===================================================================== the vocabulary
@@ -381,21 +379,7 @@ export function unexplainedLatin(text: string, vocabulary: ReadonlySet<string>):
 
 // ===================================================================== the screens
 
-function stubRouter(): AppRouterInstance {
-  return {
-    push: () => {}, replace: () => {}, back: () => {}, forward: () => {},
-    refresh: () => {}, prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
-
 type Client = ReturnType<typeof newClient>;
-
-function renderScreen(client: Client, element: ReactElement): string {
-  return renderWith(
-    client,
-    createElement(AppRouterContext.Provider, { value: stubRouter() }, element),
-  );
-}
 
 // --------------------------------------------------------- Cyrillic-only server data
 
@@ -1155,6 +1139,15 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
   {
     name: 'decision-history-pending',
     make: () => createElement(DecisionHistory, { events: [], isLoading: true }),
+  },
+  {
+    name: 'knowledge-base-invalid-vocabulary',
+    make: () =>
+      createElement(KnowledgeBase, {
+        records: [
+          { ...record(), current_verdict: 'guessed' } as unknown as DecisionRecord,
+        ],
+      }),
   },
 ];
 
@@ -2356,4 +2349,3 @@ describe('D-61: every sentence the journey calls evidence is evidence', () => {
     ).toEqual([]);
   });
 });
-

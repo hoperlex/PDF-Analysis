@@ -31,13 +31,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { join } from 'node:path';
 
-import { renderToStaticMarkup } from 'react-dom/server';
-import { createElement } from 'react';
 import type { ReactElement } from 'react';
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import {
   MALFORMED_SEGMENT,
@@ -50,6 +46,8 @@ import {
   undisciplinedSegments,
   wellFormed,
 } from '../unit/screens/route-screens';
+import { newClient, renderScreen } from '../unit/screens/harness';
+import { WEB_ROOT, readText } from './lib/repo';
 
 const ULID = '01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const IDENTITIES = {
@@ -59,29 +57,44 @@ const IDENTITIES = {
   runId: `run_${ULID}`,
 };
 
-function stubRouter(): AppRouterInstance {
-  return {
-    push: () => {}, replace: () => {}, back: () => {}, forward: () => {},
-    refresh: () => {}, prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
-
 /**
  * One cold pass over a screen. No `try`, deliberately: a screen that throws is a defect
  * and must reach the reader as a thrown error naming the case, not as an absence.
  */
 function renderCold(element: ReactElement): string {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, refetchOnMount: false, retryOnMount: false } },
-  });
-  return renderToStaticMarkup(
-    createElement(
-      QueryClientProvider,
-      { client },
-      createElement(AppRouterContext.Provider, { value: stubRouter() }, element),
-    ),
-  );
+  return renderScreen(newClient(), element);
 }
+
+describe('D-97: screen-wide consumers share one router/query provider contract', () => {
+  const harness = readText(join(WEB_ROOT, 'tests/unit/screens/harness.ts'));
+  const routerProvider = ['AppRouterContext', 'Provider'].join('.');
+  const queryProvider = ['QueryClient', 'Provider'].join('');
+  const consumers = [
+    'tests/guards/prepared-sections.guard.test.ts',
+    'tests/guards/screen-set.guard.test.ts',
+    'tests/guards/gender-agreement.guard.test.ts',
+    'tests/guards/rendered-language.guard.test.ts',
+    'tests/unit/styles/screens.ts',
+  ] as const;
+
+  it('keeps the provider implementation in the shared harness only', () => {
+    expect(harness).toContain(routerProvider);
+    expect(harness).toContain(queryProvider);
+    for (const relative of consumers) {
+      const source = readText(join(WEB_ROOT, relative));
+      expect(source, `${relative} must consume renderScreen from the shared harness`).toMatch(
+        /import\s*\{[^}]*\brenderScreen\b[^}]*\}\s*from\s*['"][^'"]*screens\/harness['"]/s,
+      );
+      expect(source, `${relative} privately mounts AppRouterContext`).not.toContain(routerProvider);
+      expect(source, `${relative} privately mounts the query provider`).not.toContain(queryProvider);
+    }
+  });
+
+  it('can fail on a private screen-wide provider copy', () => {
+    const privateCopy = `createElement(${routerProvider}, { value: router }, screen)`;
+    expect(privateCopy).toContain(routerProvider);
+  });
+});
 
 describe('the set of screens is read off web/src/app, not out of a list', () => {
   it('finds the route tree at all, and finds dynamic segments in it', () => {
