@@ -45,18 +45,25 @@ from .models import (
     BLOB_ID_PREFIX,
     ROLE_FOUNDATION_CHECK,
     ROLE_SOURCE_DOCUMENT,
+    BlobDeclaration,
     BlobId,
     BlobRole,
     BlobState,
     PublishedBlob,
     TemporaryBlob,
     VerifiedBlob,
+    declare_blob,
     derive_blob_id,
     parse_blob_id,
     parse_blob_role,
 )
 from .port import BlobSource, BlobStore
-from .durable_publication import AfterPublish, BeforePublish, DurablePublicationStore
+from .durable_publication import (
+    AfterPublish,
+    BeforePublish,
+    BeforeStage,
+    DurablePublicationStore,
+)
 from .s3 import S3BlobStore, sha256_of
 from .settings import S3StorageSettings
 
@@ -68,6 +75,7 @@ __all__ = [
     "ROLE_SOURCE_DOCUMENT",
     "SAFE_DETAIL_KEYS",
     "BlobAttributeConflictError",
+    "BlobDeclaration",
     "BlobId",
     "BlobIntegrityError",
     "BlobMetadataInvalidError",
@@ -78,6 +86,7 @@ __all__ = [
     "BlobStore",
     "AfterPublish",
     "BeforePublish",
+    "BeforeStage",
     "ChecksumMismatchError",
     "InvalidBlobIdError",
     "PublishedBlob",
@@ -92,6 +101,7 @@ __all__ = [
     "TemporaryBlob",
     "TemporaryBlobLostError",
     "VerifiedBlob",
+    "declare_blob",
     "derive_blob_id",
     "DurablePublicationStore",
     "parse_blob_id",

@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import AttemptId, JobId, LeaseId, ModelCallId
-from auditmanager.storage.models import BlobId, VerifiedBlob, parse_blob_id
+from auditmanager.storage.models import BlobDeclaration, BlobId, parse_blob_id
 
 _INSERT_JOB = text(
     "INSERT INTO job (job_id, run_id, state) VALUES (:job_id, :run_id, 'queued')"
@@ -82,7 +82,8 @@ _PROVIDER_RESPONSE = text(
        SET state = 'response_received', response_sha256 = :response_sha256,
            input_tokens = :input_tokens, output_tokens = :output_tokens,
            latency_ms = :latency_ms, updated_at = statement_timestamp()
-     WHERE model_call_id = :model_call_id AND state = 'prepared'
+     WHERE model_call_id = :model_call_id AND run_id = :run_id
+       AND job_id = :job_id AND attempt_id = :attempt_id AND state = 'prepared'
     """
 )
 _PROVIDER_UNKNOWN = text(
@@ -90,7 +91,8 @@ _PROVIDER_UNKNOWN = text(
     UPDATE provider_call_effect
        SET state = 'outcome_unknown', error_code = :error_code,
            updated_at = statement_timestamp()
-     WHERE model_call_id = :model_call_id AND state = 'prepared'
+     WHERE model_call_id = :model_call_id AND run_id = :run_id
+       AND job_id = :job_id AND attempt_id = :attempt_id AND state = 'prepared'
     """
 )
 _COMPLETE_PROVIDER = text(
@@ -98,7 +100,18 @@ _COMPLETE_PROVIDER = text(
     UPDATE provider_call_effect
        SET state = 'completed', final_model_call_id = model_call_id,
            updated_at = statement_timestamp()
-     WHERE model_call_id = :model_call_id AND state = 'response_received'
+     WHERE model_call_id = :model_call_id AND run_id = :run_id
+       AND job_id = :job_id AND attempt_id = :attempt_id
+       AND state = 'response_received'
+    """
+)
+_PROVIDER_FOR_COMPLETION = text(
+    """
+    SELECT 1 FROM provider_call_effect
+     WHERE model_call_id = :model_call_id AND run_id = :run_id
+       AND job_id = :job_id AND attempt_id = :attempt_id
+       AND state = 'response_received'
+     FOR UPDATE
     """
 )
 _INSERT_MODEL_CALL = text(
@@ -123,7 +136,9 @@ _INSERT_ARTIFACT_INTENT = text(
     ) VALUES (
         :run_id, :job_id, :attempt_id, :stage_id, :blob_id, :blob_role
     )
-    ON CONFLICT (attempt_id, stage_id, blob_id, blob_role) DO NOTHING
+    ON CONFLICT (attempt_id, stage_id, blob_id, blob_role) DO UPDATE
+       SET upload_token = analysis_artifact_publication.upload_token
+    RETURNING upload_token
     """
 )
 _BIND_ARTIFACT = text(
@@ -230,7 +245,7 @@ class JobRepository:
 
     def finish_execution(
         self, session: Session, authority: AttemptAuthority, *, publishes_result: bool
-    ) -> None:
+    ) -> str:
         self.require_current(session, authority)
         target = "succeeded" if publishes_result else "failed"
         self._advance_attempt(session, authority.attempt_id, "running", target)
@@ -299,6 +314,9 @@ class JobRepository:
             _PROVIDER_RESPONSE,
             {
                 "model_call_id": str(model_call_id),
+                "run_id": authority.run_id,
+                "job_id": authority.job_id,
+                "attempt_id": authority.attempt_id,
                 "response_sha256": response_sha256,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
@@ -321,7 +339,13 @@ class JobRepository:
         self.require_current(session, authority)
         changed = session.execute(
             _PROVIDER_UNKNOWN,
-            {"model_call_id": str(model_call_id), "error_code": error_code},
+            {
+                "model_call_id": str(model_call_id),
+                "run_id": authority.run_id,
+                "job_id": authority.job_id,
+                "attempt_id": authority.attempt_id,
+                "error_code": error_code,
+            },
         ).rowcount
         if changed != 1:
             raise self._transition_error(
@@ -336,6 +360,19 @@ class JobRepository:
         call: Mapping[str, Any],
     ) -> None:
         self.require_current(session, authority)
+        ownership = {
+            "model_call_id": call["model_call_id"],
+            "run_id": authority.run_id,
+            "job_id": authority.job_id,
+            "attempt_id": authority.attempt_id,
+        }
+        owned_effect = session.execute(
+            _PROVIDER_FOR_COMPLETION, ownership
+        ).scalar_one_or_none()
+        if owned_effect is None:
+            raise self._transition_error(
+                "provider_call_effect", "response_received", "completed"
+            )
         session.execute(
             _INSERT_MODEL_CALL,
             {
@@ -364,7 +401,8 @@ class JobRepository:
             },
         )
         changed = session.execute(
-            _COMPLETE_PROVIDER, {"model_call_id": call["model_call_id"]}
+            _COMPLETE_PROVIDER,
+            ownership,
         ).rowcount
         if changed != 1:
             raise self._transition_error(
@@ -377,19 +415,21 @@ class JobRepository:
         authority: AttemptAuthority,
         *,
         stage_id: str,
-        verified: VerifiedBlob,
-    ) -> None:
+        declaration: BlobDeclaration,
+    ) -> str:
         self.require_current(session, authority)
-        session.execute(
-            _INSERT_ARTIFACT_INTENT,
-            {
-                "run_id": authority.run_id,
-                "job_id": authority.job_id,
-                "attempt_id": authority.attempt_id,
-                "stage_id": stage_id,
-                "blob_id": str(verified.blob_id),
-                "blob_role": str(verified.role),
-            },
+        return str(
+            session.execute(
+                _INSERT_ARTIFACT_INTENT,
+                {
+                    "run_id": authority.run_id,
+                    "job_id": authority.job_id,
+                    "attempt_id": authority.attempt_id,
+                    "stage_id": stage_id,
+                    "blob_id": str(declaration.blob_id),
+                    "blob_role": str(declaration.role),
+                },
+            ).scalar_one()
         )
 
     def bind_artifacts(

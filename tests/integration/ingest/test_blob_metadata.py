@@ -17,7 +17,16 @@ from sqlalchemy import text
 
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.storage import BlobState, VerifiedBlob, derive_blob_id, sha256_of
+from auditmanager.storage import (
+    BlobMetadataInvalidError,
+    BlobState,
+    DurablePublicationStore,
+    VerifiedBlob,
+    declare_blob,
+    derive_blob_id,
+    parse_blob_role,
+    sha256_of,
+)
 from auditmanager.storage.blob_repository import (
     BlobMetadataRecord,
     BlobMetadataRepository,
@@ -62,6 +71,55 @@ def test_the_row_walks_the_declared_lifecycle(session_factory, engine) -> None:
             text("SELECT state FROM blob WHERE blob_id = :b"),
             {"b": str(verified.blob_id)},
         ).scalar_one() == "available"
+
+
+def test_declared_identity_is_temporary_until_verification(session_factory) -> None:
+    repository = BlobMetadataRepository()
+    verified = verified_for(CONTENT)
+    declaration = declare_blob(
+        sha256=verified.sha256,
+        size=verified.size,
+        role=verified.role,
+        media_type=verified.media_type,
+    )
+
+    with session_scope(session_factory) as session:
+        pending = repository.record_declared(session, declaration)
+    assert pending.blob_id == verified.blob_id
+    assert pending.state is BlobState.TEMPORARY
+
+    with session_scope(session_factory) as session:
+        advanced = repository.record_verified(session, verified)
+    assert advanced.state is BlobState.VERIFYING
+
+
+def test_invalid_declaration_fails_before_callback_or_external_stage() -> None:
+    class NeverStage:
+        calls = 0
+
+        def stage_temporary(self, *args, **kwargs):
+            self.calls += 1
+            raise AssertionError("invalid declaration reached external storage")
+
+    store = NeverStage()
+    callbacks: list[str] = []
+    publisher = DurablePublicationStore(
+        store,  # type: ignore[arg-type]
+        before_stage=lambda _declaration: callbacks.append("before_stage"),
+        before_publish=lambda _verified: callbacks.append("before_publish"),
+    )
+
+    with pytest.raises(BlobMetadataInvalidError):
+        publisher.put_blob(
+            b"",
+            declared_sha256="not-a-digest",
+            declared_size=0,
+            role=parse_blob_role("analysis_artifact"),
+            media_type="application/json",
+        )
+
+    assert store.calls == 0
+    assert callbacks == []
 
 
 def test_an_identifier_the_repository_cannot_re_derive_is_refused(
@@ -169,13 +227,13 @@ def test_no_row_the_writer_can_create_reaches_the_comparison_without_a_digest(
 ) -> None:
     """The discriminator, and the reason the test below is not itself the repair.
 
-    `_assert_same_content` runs only on an `available` or `verifying` row. Two
-    independent facts stop either carrying a NULL digest, and both are asserted because
-    either alone would leave the other free to change silently:
+    `_assert_same_content` can now run from the pre-upload `temporary` row onward. Two
+    independent facts stop any writer-produced row carrying a NULL digest, and both are
+    asserted because either alone would leave the other free to change silently:
 
     * the schema forbids it on an `available` row;
     * `_INSERT` is the only statement in the tree that creates a `blob` row, and it
-      always supplies `verified.sha256`, so a `verifying` row never acquires one either.
+      always supplies the validated declaration digest.
 
     If either stops being true this reddens, and the branch below stops being unreachable.
     """

@@ -113,6 +113,7 @@ def test_authority_tuple_foreign_keys_cannot_be_cross_wired(migrated_engine) -> 
         "fk_lease_attempt_belongs_to_job",
         "fk_provider_effect_job_belongs_to_run",
         "fk_provider_effect_attempt_belongs_to_job",
+        "fk_provider_effect_final_call_belongs_to_run",
         "fk_analysis_artifact_job_belongs_to_run",
         "fk_analysis_artifact_attempt_belongs_to_job",
     }
@@ -128,6 +129,63 @@ def test_authority_tuple_foreign_keys_cannot_be_cross_wired(migrated_engine) -> 
             )
         }
     assert present == expected
+
+
+def test_final_model_call_is_composite_bound_to_the_effect_run(migrated_engine) -> None:
+    with migrated_engine.connect() as connection:
+        foreign_key = connection.execute(
+            text(
+                "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+                "JOIN pg_class t ON t.oid = c.conrelid "
+                "WHERE t.relname = 'provider_call_effect' "
+                "AND c.conname = 'fk_provider_effect_final_call_belongs_to_run'"
+            )
+        ).scalar_one()
+        unique = connection.execute(
+            text(
+                "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+                "JOIN pg_class t ON t.oid = c.conrelid "
+                "WHERE t.relname = 'model_call' "
+                "AND c.conname = 'uq_model_call_run_call'"
+            )
+        ).scalar_one()
+
+    assert "FOREIGN KEY (run_id, final_model_call_id)" in foreign_key
+    assert "REFERENCES model_call(run_id, model_call_id)" in foreign_key
+    assert unique == "UNIQUE (run_id, model_call_id)"
+
+
+def test_analysis_upload_handle_is_opaque_unique_and_frozen(migrated_engine) -> None:
+    with migrated_engine.connect() as connection:
+        check = connection.execute(
+            text(
+                "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+                "JOIN pg_class t ON t.oid = c.conrelid "
+                "WHERE t.relname = 'analysis_artifact_publication' "
+                "AND c.conname = 'ck_analysis_artifact_upload_token'"
+            )
+        ).scalar_one()
+        unique = connection.execute(
+            text(
+                "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+                "JOIN pg_class t ON t.oid = c.conrelid "
+                "WHERE t.relname = 'analysis_artifact_publication' "
+                "AND c.conname = 'uq_analysis_artifact_upload_token'"
+            )
+        ).scalar_one()
+        frozen = connection.execute(
+            text(
+                "SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t "
+                "JOIN pg_class c ON c.oid = t.tgrelid "
+                "WHERE c.relname = 'analysis_artifact_publication' "
+                "AND t.tgname = 'trg_analysis_artifact_frozen_guard'"
+            )
+        ).scalar_one()
+
+    assert "upload_token" in check
+    assert unique == "UNIQUE (upload_token)"
+    assert "am_guard_frozen_columns" in frozen
+    assert "upload_token" in frozen
 
 
 def test_provider_effect_error_code_is_the_closed_catalog(migrated_engine) -> None:

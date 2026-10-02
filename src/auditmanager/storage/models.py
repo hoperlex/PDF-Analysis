@@ -50,6 +50,7 @@ BLOB_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
 #: Domain separation for the identifier digest. Changing this string changes
 #: every derived blob_id, so it is a freeze-break, not an implementation detail.
 _BLOB_ID_NAMESPACE: Final[bytes] = b"auditmanager.blob.identity.v1"
+_SHA256_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _crockford_base32(value: int, length: int) -> str:
@@ -105,6 +106,46 @@ def parse_blob_role(value: str) -> BlobRole:
             field="role", constraint=_ROLE_PATTERN.pattern
         )
     return BlobRole(value)
+
+
+@dataclass(frozen=True, slots=True)
+class BlobDeclaration:
+    """Validated content facts known before the first external upload.
+
+    The identifier is provisional only in the physical sense: it is the canonical
+    deterministic identity of the bytes *if* verification confirms the declaration.
+    Persisting it before staging gives a killed upload an enumerable database owner;
+    verification remains mandatory before canonical publication.
+    """
+
+    blob_id: BlobId
+    sha256: str
+    size: int
+    role: BlobRole
+    media_type: str
+
+
+def declare_blob(
+    *, sha256: str, size: int, role: BlobRole, media_type: str
+) -> BlobDeclaration:
+    """Validate a caller declaration and derive its stable pre-upload identity."""
+    candidate = (sha256 or "").strip().lower()
+    if not _SHA256_PATTERN.fullmatch(candidate):
+        raise BlobMetadataInvalidError(
+            field="declared_sha256", constraint="64 lowercase hex characters"
+        )
+    if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        raise BlobMetadataInvalidError(
+            field="declared_size", constraint="non-negative integer"
+        )
+    parsed_role = parse_blob_role(role)
+    return BlobDeclaration(
+        blob_id=derive_blob_id(sha256=candidate, size=size),
+        sha256=candidate,
+        size=size,
+        role=parsed_role,
+        media_type=media_type,
+    )
 
 
 # --- state -------------------------------------------------------------------
@@ -189,11 +230,13 @@ __all__ = [
     "ROLE_FOUNDATION_CHECK",
     "ROLE_SOURCE_DOCUMENT",
     "BlobId",
+    "BlobDeclaration",
     "BlobRole",
     "BlobState",
     "PublishedBlob",
     "TemporaryBlob",
     "VerifiedBlob",
+    "declare_blob",
     "derive_blob_id",
     "parse_blob_id",
     "parse_blob_role",

@@ -41,7 +41,8 @@ follows from that single decision:
 ``unbound_analysis_artifacts``
     An Attempt committed publication intent but never committed the stage-result binding.
     The entry retains run/Attempt/stage attribution and says whether point inspection
-    found the canonical object; it is never adopted or deleted automatically.
+    found either its exact opaque temporary handle or the canonical object; neither
+    handle nor storage location is exposed, and nothing is adopted or deleted.
 
 ``stale_commands``
     A ``command_record`` still ``in_progress`` long after its executor should have
@@ -52,10 +53,12 @@ Why the scan can work without listing the bucket
 ------------------------------------------------
 It never enumerates the store. It starts from database rows -- the unsettled blobs, the
 available blobs no manifest or bound analysis publication references, and the blobs those
-two reference sets name -- and asks the store about each specific ``blob_id``. That is exactly why
-:mod:`auditmanager.storage.blob_repository` commits the ``verifying`` row *before* the
-object is published: without that breadcrumb an orphan would be unfindable through a
-port that offers no ``list``.
+two reference sets name -- and asks the store about each specific ``blob_id``. Unbound
+analysis intents additionally carry an internal opaque upload handle, so the same sweep
+can point-inspect the exact temporary object without returning that handle. That is why
+:mod:`auditmanager.storage.blob_repository` commits ``temporary`` before upload and
+``verifying`` before canonical publication: without those breadcrumbs an orphan would be
+unfindable through a port that offers no ``list``.
 
 What is cheap here and what is not
 ----------------------------------
@@ -89,8 +92,16 @@ from auditmanager.documents import DocumentRepository
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import CommandId, VersionUid
-from auditmanager.storage import BlobId, BlobNotFoundError, BlobStore, StorageError
-from auditmanager.storage import parse_blob_id, sha256_of
+from auditmanager.storage import (
+    BlobId,
+    BlobNotFoundError,
+    BlobStore,
+    StorageError,
+    TemporaryBlob,
+    parse_blob_id,
+    parse_blob_role,
+    sha256_of,
+)
 from auditmanager.storage.blob_repository import BlobMetadataRepository
 
 from .commands import CommandRepository
@@ -122,9 +133,11 @@ _BOUND_ANALYSIS_ARTIFACTS = text(
 )
 
 _UNBOUND_ANALYSIS_ARTIFACTS = text(
-    "SELECT blob_id, run_id, job_id, attempt_id, stage_id, blob_role "
-    "FROM analysis_artifact_publication WHERE state = 'prepared' "
-    "ORDER BY created_at, attempt_id, stage_id, blob_id, blob_role"
+    "SELECT a.blob_id, a.run_id, a.job_id, a.attempt_id, a.stage_id, a.blob_role, "
+    "a.upload_token, b.sha256, b.size_bytes, b.media_type "
+    "FROM analysis_artifact_publication a JOIN blob b ON b.blob_id = a.blob_id "
+    "WHERE a.state = 'prepared' "
+    "ORDER BY a.created_at, a.attempt_id, a.stage_id, a.blob_id, a.blob_role"
 )
 
 
@@ -159,7 +172,10 @@ class MissingAnalysisArtifact:
 
 @dataclass(frozen=True, slots=True)
 class UnboundAnalysisArtifact:
-    """A pre-effect publication intent that never became a stage-result binding."""
+    """A pre-effect publication intent that never became a stage-result binding.
+
+    Presence booleans expose the two point inspections, never the opaque upload handle.
+    """
 
     blob_id: BlobId
     run_id: str
@@ -168,6 +184,7 @@ class UnboundAnalysisArtifact:
     stage_id: str
     role: str
     object_present: bool
+    temporary_present: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,10 +274,26 @@ class Reconciler:
                     str(attempt_id),
                     str(stage_id),
                     str(role),
+                    TemporaryBlob(
+                        upload_token=str(upload_token),
+                        declared_sha256=str(sha256),
+                        declared_size=int(size_bytes),
+                        role=parse_blob_role(str(role)),
+                        media_type=str(media_type),
+                    ),
                 )
-                for blob_id, run_id, job_id, attempt_id, stage_id, role in session.execute(
-                    _UNBOUND_ANALYSIS_ARTIFACTS
-                ).all()
+                for (
+                    blob_id,
+                    run_id,
+                    job_id,
+                    attempt_id,
+                    stage_id,
+                    role,
+                    upload_token,
+                    sha256,
+                    size_bytes,
+                    media_type,
+                ) in session.execute(_UNBOUND_ANALYSIS_ARTIFACTS).all()
             )
             stale = tuple(
                 record.command_id
@@ -316,8 +349,17 @@ class Reconciler:
                 stage_id=stage_id,
                 role=role,
                 object_present=self._object_exists(blob_id),
+                temporary_present=self._store.temporary_exists(temporary),
             )
-            for blob_id, run_id, job_id, attempt_id, stage_id, role in unbound_artifacts
+            for (
+                blob_id,
+                run_id,
+                job_id,
+                attempt_id,
+                stage_id,
+                role,
+                temporary,
+            ) in unbound_artifacts
         )
 
         return ReconciliationReport(

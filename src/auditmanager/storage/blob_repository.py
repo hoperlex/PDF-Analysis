@@ -23,11 +23,11 @@ The declared ``blob`` machine is ``temporary -> verifying -> available``, with
 * by ``trg_blob_state_guard`` in the database, which reads the same
   ``contract_state_transition`` rows. No code path bypasses the second check.
 
-The row is written **after verification and before publication**. That ordering is what
-makes an interrupted publication recoverable: a committed ``verifying`` row is the
-database's record that these exact bytes were about to become canonical, so
-``auditmanager.ingest.reconciliation`` can find an orphaned object by asking the store
-about a blob the database never finished -- without the port needing a ``list``
+The ``temporary`` row is written from a validated content declaration **before the
+temporary upload**. Verification advances it to ``verifying`` before canonical
+publication. Those two checkpoints make every interrupted state recoverable:
+``auditmanager.ingest.reconciliation`` can start from the declared ``blob_id`` and ask
+the store about that exact canonical identity without the port needing a ``list``
 operation it deliberately does not have.
 """
 
@@ -44,7 +44,15 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.statemachine import Topology, assert_initial, assert_transition
 from auditmanager.shared.statemachine import load as load_topology
 
-from .models import BlobId, BlobState, VerifiedBlob, derive_blob_id, parse_blob_id
+from .models import (
+    BlobDeclaration,
+    BlobId,
+    BlobState,
+    VerifiedBlob,
+    declare_blob,
+    derive_blob_id,
+    parse_blob_id,
+)
 
 __all__ = ["BLOB_MACHINE", "BlobMetadataRecord", "BlobMetadataRepository"]
 
@@ -151,6 +159,34 @@ class BlobMetadataRepository:
 
     # -- writes --------------------------------------------------------------
 
+    def record_declared(
+        self, session: Session, declaration: BlobDeclaration
+    ) -> BlobMetadataRecord:
+        """Record validated declared identity before any external upload.
+
+        A temporary row is deliberately not proof that bytes exist or match the
+        declaration. It is the durable owner from which reconciliation can enumerate
+        a process killed during staging or verification without listing the bucket.
+        """
+        topology = self.topology(session)
+        existing = self.get(session, declaration.blob_id)
+        if existing is None:
+            assert_initial(topology, BLOB_MACHINE, BlobState.TEMPORARY.value)
+            session.execute(
+                _INSERT,
+                {
+                    "blob_id": str(declaration.blob_id),
+                    "state": BlobState.TEMPORARY.value,
+                    "sha256": declaration.sha256,
+                    "size_bytes": declaration.size,
+                    "media_type": declaration.media_type,
+                },
+            )
+            return self.require(session, declaration.blob_id)
+
+        self._assert_same_content(existing, declaration)
+        return existing
+
     def record_verified(
         self, session: Session, verified: VerifiedBlob
     ) -> BlobMetadataRecord:
@@ -162,22 +198,13 @@ class BlobMetadataRepository:
         finds the row already in ``verifying`` and leaves it there.
         """
         self._assert_derived(verified)
-        topology = self.topology(session)
-
-        existing = self.get(session, verified.blob_id)
-        if existing is None:
-            assert_initial(topology, BLOB_MACHINE, BlobState.TEMPORARY.value)
-            session.execute(
-                _INSERT,
-                {
-                    "blob_id": str(verified.blob_id),
-                    "state": BlobState.TEMPORARY.value,
-                    "sha256": verified.sha256,
-                    "size_bytes": verified.size,
-                    "media_type": verified.media_type,
-                },
-            )
-            existing = self.require(session, verified.blob_id)
+        declaration = declare_blob(
+            sha256=verified.sha256,
+            size=verified.size,
+            role=verified.role,
+            media_type=verified.media_type,
+        )
+        existing = self.record_declared(session, declaration)
 
         if existing.state in (BlobState.AVAILABLE, BlobState.VERIFYING):
             self._assert_same_content(existing, verified)
@@ -250,7 +277,7 @@ class BlobMetadataRepository:
 
     @staticmethod
     def _assert_same_content(
-        existing: BlobMetadataRecord, verified: VerifiedBlob
+        existing: BlobMetadataRecord, declared: BlobDeclaration | VerifiedBlob
     ) -> None:
         if existing.sha256 is None:
             # `D-4`, the second site. This used to send `existing.sha256 or ""` into the
@@ -258,13 +285,11 @@ class BlobMetadataRepository:
             # bytes nothing has looked at, which is the exact shape `verify_version` was
             # repaired for at `1b2549b`.
             #
-            # **It is unreachable, and saying so is the repair.** The row reaches here
-            # only in `available` or `verifying`. `ck_blob_available_is_verified` forbids
-            # a NULL digest on an `available` row outright; a `verifying` row could carry
-            # one as far as the schema is concerned, and does not, because `_INSERT` is
-            # the only statement in the tree that creates a `blob` row and it always
-            # supplies `verified.sha256`. So the `| None` on the record is the column's
-            # type, not a state this writer can produce.
+            # **It is unreachable, and saying so is the repair.** `_INSERT` is the only
+            # statement in the tree that creates a `blob` row, and `record_declared`
+            # always supplies a validated digest. `ck_blob_available_is_verified` also
+            # forbids a NULL digest once the row is available. So the `| None` on the
+            # record is the column's type, not a state this writer can produce.
             #
             # An unreachable branch that invents a plausible value is worse than one that
             # refuses: the empty string would have reached an operator looking exactly
@@ -276,10 +301,14 @@ class BlobMetadataRepository:
                     "storage invariant, not a fact about the bytes the caller sent"
                 ),
             )
-        if existing.sha256 != verified.sha256 or existing.size_bytes != verified.size:
+        if (
+            existing.sha256 != declared.sha256
+            or existing.size_bytes != declared.size
+            or existing.media_type != declared.media_type
+        ):
             raise DomainError(
                 ErrorCode.STORAGE_INTEGRITY_ERROR,
-                blob_id=str(verified.blob_id),
-                expected_sha256=verified.sha256,
+                blob_id=str(declared.blob_id),
+                expected_sha256=declared.sha256,
                 actual_sha256=existing.sha256,
             )

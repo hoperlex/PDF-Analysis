@@ -27,6 +27,7 @@ impossible, see :mod:`auditmanager.storage.errors`.
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 from datetime import datetime, timezone
 from typing import Any, Final
@@ -67,6 +68,7 @@ from .port import BlobSource
 from .settings import BUCKET_VAR, S3StorageSettings
 
 _CHUNK: Final[int] = 1024 * 1024
+_UPLOAD_TOKEN_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9._~-]{1,128}$")
 
 # User metadata names. S3 lower-cases and prefixes these with `x-amz-meta-`.
 _META_BLOB_ID: Final[str] = "blob-id"
@@ -126,12 +128,17 @@ class S3BlobStore:
         declared_size: int,
         role: BlobRole,
         media_type: str,
+        upload_token: str | None = None,
     ) -> TemporaryBlob:
         role = parse_blob_role(role)
         declared_sha256 = _normalize_sha256(declared_sha256)
         _require_non_negative_size(declared_size)
 
-        token = secrets.token_hex(16)
+        token = (
+            secrets.token_hex(16)
+            if upload_token is None
+            else _normalize_upload_token(upload_token)
+        )
         key = layout.temporary_key(token)
         try:
             if isinstance(source, (bytes, bytearray)):
@@ -159,6 +166,13 @@ class S3BlobStore:
             declared_size=declared_size,
             role=role,
             media_type=media_type,
+        )
+
+    def temporary_exists(self, temporary: TemporaryBlob) -> bool:
+        """Point-inspect one opaque temporary handle without listing the bucket."""
+        return (
+            self._head(layout.temporary_key(temporary.upload_token), missing=None)
+            is not None
         )
 
     def verify_temporary(self, temporary: TemporaryBlob) -> VerifiedBlob:
@@ -500,6 +514,14 @@ def _normalize_sha256(value: str) -> str:
             field="declared_sha256", constraint="64 lowercase hex characters"
         )
     return candidate
+
+
+def _normalize_upload_token(value: str) -> str:
+    if not isinstance(value, str) or not _UPLOAD_TOKEN_PATTERN.fullmatch(value):
+        raise BlobMetadataInvalidError(
+            field="upload_token", constraint="1-128 URL-safe opaque characters"
+        )
+    return value
 
 
 def _require_non_negative_size(size: int) -> None:

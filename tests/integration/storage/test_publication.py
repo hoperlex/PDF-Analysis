@@ -161,9 +161,10 @@ def test_the_port_offers_no_way_to_name_or_delete_an_object() -> None:
     """The port's shape is part of the invariant, so it is asserted.
 
     A ``delete`` or ``key_for`` on the port would let a consumer bypass
-    ``temporary -> verify -> publish`` or observe the layout. Erasure is an
-    ``erasure_pending -> erased`` transition under an approved request, which
-    P01 does not implement and must not approximate.
+    ``temporary -> verify -> publish`` or observe the layout. ``temporary_exists``
+    point-inspects an already-owned opaque handle; it neither reveals the key nor
+    enumerates the bucket. Erasure is an ``erasure_pending -> erased`` transition
+    under an approved request, which P01 does not implement and must not approximate.
     """
     members = {name for name in dir(BlobStore) if not name.startswith("_")}
     assert members == {
@@ -174,5 +175,6 @@ def test_the_port_offers_no_way_to_name_or_delete_an_object() -> None:
         "put_blob",
         "read",
         "stage_temporary",
+        "temporary_exists",
         "verify_temporary",
     }

@@ -35,6 +35,7 @@ from auditmanager.storage import S3BlobStore, S3StorageSettings
 _BLOB_STORE_METHODS = (
     "check_access",
     "stage_temporary",
+    "temporary_exists",
     "verify_temporary",
     "publish",
     "discard_temporary",

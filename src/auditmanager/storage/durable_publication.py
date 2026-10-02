@@ -1,34 +1,46 @@
-"""BlobStore decorator that journals verified analysis bytes before publication."""
+"""BlobStore decorator that journals analysis intent before any external write."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
-from .models import BlobId, BlobRole, PublishedBlob, TemporaryBlob, VerifiedBlob
+from .models import (
+    BlobDeclaration,
+    BlobId,
+    BlobRole,
+    PublishedBlob,
+    TemporaryBlob,
+    VerifiedBlob,
+    declare_blob,
+)
 from .port import BlobSource, BlobStore
 
+BeforeStage = Callable[[BlobDeclaration], str]
 BeforePublish = Callable[[VerifiedBlob], None]
 AfterPublish = Callable[[PublishedBlob], None]
 
 
 class DurablePublicationStore:
-    """Delegate reads, but expand ``put_blob`` around a durable pre-publish callback.
+    """Delegate reads, but expand ``put_blob`` around two durable callbacks.
 
-    The callback commits both ``blob.verifying`` and the attempt-scoped publication
-    intent. If canonical publication then succeeds but the caller's later binding
-    transaction rolls back, reconciliation can still find the object by ``blob_id``.
+    ``before_stage`` commits ``blob.temporary`` plus the Attempt publication intent
+    before temporary upload. ``before_publish`` advances the same identity to
+    ``verifying`` after checksum verification and before canonical publication. A kill
+    at either external-effect seam is therefore enumerable by ``blob_id``.
     """
 
-    __slots__ = ("_store", "_before_publish", "_after_publish")
+    __slots__ = ("_store", "_before_stage", "_before_publish", "_after_publish")
 
     def __init__(
         self,
         store: BlobStore,
         *,
+        before_stage: BeforeStage,
         before_publish: BeforePublish,
         after_publish: AfterPublish | None = None,
     ) -> None:
         self._store = store
+        self._before_stage = before_stage
         self._before_publish = before_publish
         self._after_publish = after_publish
 
@@ -43,6 +55,7 @@ class DurablePublicationStore:
         declared_size: int,
         role: BlobRole,
         media_type: str,
+        upload_token: str | None = None,
     ) -> TemporaryBlob:
         return self._store.stage_temporary(
             source,
@@ -50,7 +63,11 @@ class DurablePublicationStore:
             declared_size=declared_size,
             role=role,
             media_type=media_type,
+            upload_token=upload_token,
         )
+
+    def temporary_exists(self, temporary: TemporaryBlob) -> bool:
+        return self._store.temporary_exists(temporary)
 
     def verify_temporary(self, temporary: TemporaryBlob) -> VerifiedBlob:
         return self._store.verify_temporary(temporary)
@@ -70,12 +87,22 @@ class DurablePublicationStore:
         role: BlobRole,
         media_type: str,
     ) -> PublishedBlob:
-        temporary = self.stage_temporary(
-            source,
-            declared_sha256=declared_sha256,
-            declared_size=declared_size,
+        declaration = declare_blob(
+            sha256=declared_sha256,
+            size=declared_size,
             role=role,
             media_type=media_type,
+        )
+        # This transaction commits the Attempt attribution and declared content
+        # identity before stage_temporary performs the first external S3 write.
+        upload_token = self._before_stage(declaration)
+        temporary = self.stage_temporary(
+            source,
+            declared_sha256=declaration.sha256,
+            declared_size=declaration.size,
+            role=declaration.role,
+            media_type=declaration.media_type,
+            upload_token=upload_token,
         )
         try:
             verified = self.verify_temporary(temporary)
@@ -99,4 +126,4 @@ class DurablePublicationStore:
         return self._store.read(blob_id, verify=verify)
 
 
-__all__ = ["AfterPublish", "BeforePublish", "DurablePublicationStore"]
+__all__ = ["AfterPublish", "BeforePublish", "BeforeStage", "DurablePublicationStore"]

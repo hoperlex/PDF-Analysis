@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import socket
+from pathlib import Path
 
 import pytest
 
@@ -27,7 +28,11 @@ from auditmanager.analysis.text import (
     load_provider_config,
     run_text_analysis,
 )
-from auditmanager.analysis.text.config import ENV_API_KEY, ENV_PROVIDER_MODE
+from auditmanager.analysis.text.config import (
+    ENV_API_KEY,
+    ENV_COST_CEILING,
+    ENV_PROVIDER_MODE,
+)
 from auditmanager.analysis.text.lock import STAGE_ID
 from auditmanager.analysis.text.recorded import RECORDING_VERSION
 from auditmanager.runs import RETRYABLE_STAGE_ERRORS
@@ -106,6 +111,31 @@ def test_a_live_call_without_a_durable_journal_is_refused_before_dispatch(
     assert outcome.model_calls == ()
     assert outcome.error.code is ErrorCode.ANALYSIS_INPUT_INVALID
     assert outcome.error.detail_fields["reason"] == "durable_call_journal_required"
+
+
+def test_standalone_runner_is_truthfully_replay_only(monkeypatch) -> None:
+    from auditmanager.analysis.text import __main__ as runner
+
+    assert "replay-only diagnostic" in (runner.__doc__ or "")
+    assert "live run, once" not in (runner.__doc__ or "")
+
+    monkeypatch.setenv(ENV_PROVIDER_MODE, "live")
+    monkeypatch.setenv(ENV_API_KEY, "synthetic-never-used")
+    monkeypatch.setenv(ENV_COST_CEILING, "0.50")
+    monkeypatch.setattr(
+        runner,
+        "RecordedAdapter",
+        lambda: pytest.fail("live refusal constructed an adapter"),
+    )
+    input_path = Path(
+        "fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json"
+    )
+
+    with pytest.raises(DomainError) as refused:
+        runner.main([str(input_path), "--capture", "/tmp/never-created-by-live-refusal"])
+
+    assert refused.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert refused.value.detail_fields["reason"] == "durable_call_journal_required"
 
 
 # --- 3. a recording has nothing to forge ----------------------------------------

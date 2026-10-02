@@ -1,26 +1,25 @@
-"""The manual runner. The only way the live path is ever reached.
+"""A replay-only diagnostic runner for the recorded text-analysis corpus.
 
-``OD-13`` keeps live calls out of automated acceptance, so there is no test that
-invokes this and no code path that reaches it on a failure. It exists so an operator
-can make the one deliberate live run, and so that run can capture its own recording.
+Live provider effects require committed Run/Job/Attempt authority and the durable call
+journal owned by :mod:`auditmanager.runs.executor`. This standalone module has neither,
+so it deliberately refuses ``AUDITMANAGER_PROVIDER_MODE=live`` before constructing a
+provider adapter. Public alpha acceptance exercises the durable Run path instead.
 
     # replay - the default, and what every suite does
     PYTHONPATH=src .venv/bin/python -m auditmanager.analysis.text \\
         fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json
 
-    # the live run, once, with the credential injected for that command only
-    ANTHROPIC_API_KEY=... AUDITMANAGER_PROVIDER_MODE=live \\
-    AUDITMANAGER_RUN_COST_CEILING_USD=0.50 \\
+    # optionally write a normalized copy of the replayed exchange
     PYTHONPATH=src .venv/bin/python -m auditmanager.analysis.text \\
         fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json \\
-        --capture fixtures/recorded/text_analysis
+        --capture /tmp/auditmanager-recorded-capture
 
 ``--capture`` writes the response through
 :func:`auditmanager.analysis.text.recorded.recording_document`, which is the only
 supported constructor and which has no parameter that could stamp a provider mode into
 the file. Capturing therefore cannot produce a recording that claims to be live.
 
-Nothing here prints the credential, and nothing writes it to a file.
+Nothing here initializes a live client or reads a provider credential.
 """
 
 from __future__ import annotations
@@ -33,10 +32,9 @@ from typing import Any
 
 from auditmanager.analysis.text.adapter import ModelRequest, ModelResponse
 from auditmanager.analysis.text.config import ProviderMode, load_provider_config
-from auditmanager.analysis.text.live import LiveAdapter
 from auditmanager.analysis.text.recorded import RecordedAdapter, recording_document
 from auditmanager.analysis.text.stage import run_text_analysis
-from auditmanager.shared.errors import DomainError
+from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId
 
 
@@ -65,9 +63,11 @@ class _Capturing:
 
 def _build_adapter(config: Any) -> Any:
     if config.mode is ProviderMode.LIVE:
-        # Constructed only here, only on an explicit AUDITMANAGER_PROVIDER_MODE=live.
-        # It is never a fallback from a recorded miss.
-        return LiveAdapter(api_key=config.api_key)
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="the standalone text-analysis runner is replay-only",
+            reason="durable_call_journal_required",
+        )
     return RecordedAdapter()
 
 

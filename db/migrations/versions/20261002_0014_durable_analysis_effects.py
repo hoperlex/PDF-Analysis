@@ -230,6 +230,10 @@ def _create_execution_authority() -> None:
 
 def _create_effect_journals() -> None:
     op.execute(
+        "ALTER TABLE model_call ADD CONSTRAINT uq_model_call_run_call "
+        "UNIQUE (run_id, model_call_id);"
+    )
+    op.execute(
         f"""
         CREATE TABLE provider_call_effect (
             model_call_id       text PRIMARY KEY,
@@ -248,7 +252,7 @@ def _create_effect_journals() -> None:
             output_tokens       integer NULL,
             latency_ms          integer NULL,
             error_code          text NULL,
-            final_model_call_id text NULL REFERENCES model_call (model_call_id),
+            final_model_call_id text NULL,
             prepared_at         timestamptz NOT NULL DEFAULT clock_timestamp(),
             updated_at          timestamptz NOT NULL DEFAULT clock_timestamp(),
             CONSTRAINT ck_provider_effect_model_call_id_format
@@ -303,7 +307,10 @@ def _create_effect_journals() -> None:
                 REFERENCES job (run_id, job_id),
             CONSTRAINT fk_provider_effect_attempt_belongs_to_job
                 FOREIGN KEY (job_id, attempt_id)
-                REFERENCES attempt (job_id, attempt_id)
+                REFERENCES attempt (job_id, attempt_id),
+            CONSTRAINT fk_provider_effect_final_call_belongs_to_run
+                FOREIGN KEY (run_id, final_model_call_id)
+                REFERENCES model_call (run_id, model_call_id)
         );
         """
     )
@@ -322,6 +329,7 @@ def _create_effect_journals() -> None:
             stage_id      text NOT NULL,
             blob_id       text NOT NULL REFERENCES blob (blob_id),
             blob_role     text NOT NULL,
+            upload_token  text NOT NULL DEFAULT gen_random_uuid()::text,
             artifact_role text NULL,
             state         text NOT NULL DEFAULT 'prepared',
             created_at    timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -337,6 +345,8 @@ def _create_effect_journals() -> None:
             CONSTRAINT ck_analysis_artifact_blob_id_format CHECK ({_id_check('blob_id', 'blob')}),
             CONSTRAINT ck_analysis_artifact_blob_role
                 CHECK (blob_role ~ '^[a-z][a-z0-9_]{{2,63}}$'),
+            CONSTRAINT ck_analysis_artifact_upload_token
+                CHECK (upload_token ~ '^[A-Za-z0-9._~-]{{1,128}}$'),
             CONSTRAINT ck_analysis_artifact_role CHECK (
                 artifact_role IS NULL
                 OR artifact_role ~ '^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$'
@@ -345,6 +355,7 @@ def _create_effect_journals() -> None:
             CONSTRAINT ck_analysis_artifact_bound_shape CHECK (
                 (state = 'bound') = (artifact_role IS NOT NULL AND bound_at IS NOT NULL)
             ),
+            CONSTRAINT uq_analysis_artifact_upload_token UNIQUE (upload_token),
             CONSTRAINT fk_analysis_artifact_job_belongs_to_run FOREIGN KEY (run_id, job_id)
                 REFERENCES job (run_id, job_id),
             CONSTRAINT fk_analysis_artifact_attempt_belongs_to_job
@@ -449,7 +460,7 @@ def _attach_guards() -> None:
             BEFORE UPDATE ON analysis_artifact_publication
             FOR EACH ROW EXECUTE FUNCTION am_guard_frozen_columns(
                 'run_id', 'job_id', 'attempt_id', 'stage_id', 'blob_id',
-                'blob_role', 'created_at');
+                'blob_role', 'upload_token', 'created_at');
         """
     )
 
@@ -475,6 +486,7 @@ def downgrade() -> None:
 
     op.execute("DROP TABLE analysis_artifact_publication;")
     op.execute("DROP TABLE provider_call_effect;")
+    op.execute("ALTER TABLE model_call DROP CONSTRAINT uq_model_call_run_call;")
     op.execute("DROP TABLE lease;")
     op.execute(
         "ALTER TABLE job DROP CONSTRAINT IF EXISTS "

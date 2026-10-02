@@ -34,6 +34,7 @@ assert store.read(blob.blob_id) == pdf_bytes
 |---|---|
 | `check_access()` | Prove the configured credentials reach the private bucket. |
 | `stage_temporary(source, ...)` | Upload to a temporary location. Verifies nothing. |
+| `temporary_exists(temporary)` | Point-inspect one owned opaque upload handle; never list the bucket. |
 | `verify_temporary(temporary)` | Read the staged bytes back; prove size and SHA-256. |
 | `publish(verified)` | Copy verified bytes to their canonical location. |
 | `discard_temporary(temporary)` | Remove a staged upload. Idempotent. |
@@ -42,9 +43,10 @@ assert store.read(blob.blob_id) == pdf_bytes
 | `read(blob_id, verify=True)` | Published bytes, re-hashed on the way out by default. |
 
 There is deliberately no `delete`, no `erase`, no `presign`, no `list` and no
-way to name an object. Erasure is an `erasure_pending -> erased` transition
-under an approved `erasure_request_id`, which P01 does not implement and must
-not approximate.
+way to name an object. The temporary presence probe accepts only the opaque
+handle already returned by staging; the adapter alone resolves its location.
+Erasure is an `erasure_pending -> erased` transition under an approved
+`erasure_request_id`, which P01 does not implement and must not approximate.
 
 `source` is `bytes` or a binary file object, so a large artifact never has to be
 held in memory.

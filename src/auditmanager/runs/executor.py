@@ -125,7 +125,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId, VersionUid
 from auditmanager.storage import BlobStore, DurablePublicationStore
 from auditmanager.storage.blob_repository import BlobMetadataRepository
-from auditmanager.storage.models import VerifiedBlob, parse_blob_id
+from auditmanager.storage.models import BlobDeclaration, VerifiedBlob, parse_blob_id
 
 Clock = Callable[[], datetime]
 
@@ -303,13 +303,21 @@ def _publication_store(
     stage_id: str,
     checkpoint: EffectCheckpoint | None = None,
 ) -> DurablePublicationStore:
+    def before_stage(declaration: BlobDeclaration) -> str:
+        blobs.record_declared(session, declaration)
+        upload_token = jobs.prepare_artifact(
+            session, authority, stage_id=stage_id, declaration=declaration
+        )
+        # The breadcrumb is durable before BlobStore.stage_temporary performs the
+        # first external effect. Process loss afterwards is DB-enumerable.
+        session.commit()
+        if checkpoint is not None:
+            checkpoint(f"{stage_id}:artifact_upload_intent_committed")
+        return upload_token
+
     def before_publish(verified: VerifiedBlob) -> None:
         blobs.record_verified(session, verified)
-        jobs.prepare_artifact(
-            session, authority, stage_id=stage_id, verified=verified
-        )
-        # The breadcrumb is durable before BlobStore.publish performs the external
-        # effect. A crash afterwards is therefore enumerable without bucket listing.
+        # Verification is separately durable before canonical publication.
         session.commit()
         if checkpoint is not None:
             checkpoint(f"{stage_id}:artifact_intent_committed")
@@ -319,7 +327,10 @@ def _publication_store(
             checkpoint(f"{stage_id}:artifact_published")
 
     return DurablePublicationStore(
-        store, before_publish=before_publish, after_publish=after_publish
+        store,
+        before_stage=before_stage,
+        before_publish=before_publish,
+        after_publish=after_publish,
     )
 
 

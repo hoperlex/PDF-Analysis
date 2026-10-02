@@ -77,6 +77,25 @@ class MissingOneObject:
         return getattr(self._inner, name)
 
 
+class ExitAfterVerification:
+    """Keep the exact temporary handle, then model process loss before DB verify state."""
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+        self.temporary = None
+
+    def stage_temporary(self, *args, **kwargs):
+        self.temporary = self._inner.stage_temporary(*args, **kwargs)
+        return self.temporary
+
+    def verify_temporary(self, temporary):
+        self._inner.verify_temporary(temporary)
+        raise ProcessExit("artifact_verified_before_checkpoint")
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
 def _factory(engine) -> sessionmaker[Session]:
     return sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
@@ -106,6 +125,142 @@ def _live_config() -> ProviderConfig:
         api_key=None,
         ceiling_is_explicit=True,
     )
+
+
+def _authority_for(session: Session, started, jobs: JobRepository):
+    runs = RunRepository()
+    runs.advance(session, run_id=started.run_id, from_state="created", to_state="queued")
+    runs.advance(session, run_id=started.run_id, from_state="queued", to_state="running")
+    return jobs.start_execution(session, run_id=started.run_id)
+
+
+def test_provider_checkpoints_refuse_a_foreign_current_authority(
+    session,
+    blob_store,
+    helpers,
+) -> None:
+    jobs = JobRepository()
+    _seeded_a, started_a = _start(
+        session, helpers, blob_store, provider_mode="recorded"
+    )
+    _seeded_b, started_b = _start(
+        session, helpers, blob_store, provider_mode="recorded"
+    )
+    authority_a = _authority_for(session, started_a, jobs)
+    authority_b = _authority_for(session, started_b, jobs)
+    session.commit()
+
+    response_effect = jobs.prepare_provider_call(
+        session,
+        authority_a,
+        provider="anthropic",
+        model_identity="claude-opus-5",
+        provider_mode="recorded",
+        parameters={},
+        request_sha256="1" * 64,
+    )
+    unknown_effect = jobs.prepare_provider_call(
+        session,
+        authority_a,
+        provider="anthropic",
+        model_identity="claude-opus-5",
+        provider_mode="recorded",
+        parameters={},
+        request_sha256="2" * 64,
+    )
+    completion_effect = jobs.prepare_provider_call(
+        session,
+        authority_a,
+        provider="anthropic",
+        model_identity="claude-opus-5",
+        provider_mode="recorded",
+        parameters={},
+        request_sha256="3" * 64,
+    )
+    jobs.record_provider_response(
+        session,
+        authority_a,
+        model_call_id=completion_effect,
+        response_sha256="4" * 64,
+        input_tokens=10,
+        output_tokens=20,
+        latency_ms=30,
+    )
+    session.commit()
+
+    with pytest.raises(DomainError) as response_refused:
+        jobs.record_provider_response(
+            session,
+            authority_b,
+            model_call_id=response_effect,
+            response_sha256="5" * 64,
+            input_tokens=1,
+            output_tokens=2,
+            latency_ms=3,
+        )
+    with pytest.raises(DomainError) as unknown_refused:
+        jobs.record_provider_unknown(
+            session,
+            authority_b,
+            model_call_id=unknown_effect,
+            error_code=ErrorCode.DEPENDENCY_UNAVAILABLE.value,
+        )
+    with pytest.raises(DomainError) as completion_refused:
+        jobs.complete_provider_call(
+            session,
+            authority_b,
+            call={
+                "model_call_id": str(completion_effect),
+                "provider": "anthropic",
+                "model_id": "claude-opus-5",
+                "provider_mode": "recorded",
+                "parameters": {},
+                "request_sha256": "3" * 64,
+                "response_sha256": "4" * 64,
+                "input_tokens": 10,
+                "output_tokens": 20,
+                "latency_ms": 30,
+                "cost_usd": 0.0,
+                "cost_basis": "estimated",
+                "status": "succeeded",
+            },
+        )
+
+    assert {
+        response_refused.value.code,
+        unknown_refused.value.code,
+        completion_refused.value.code,
+    } == {ErrorCode.STATE_TRANSITION_NOT_ALLOWED}
+    states = dict(
+        session.execute(
+            text(
+                "SELECT model_call_id, state FROM provider_call_effect "
+                "WHERE model_call_id = ANY(:ids)"
+            ),
+            {
+                "ids": [
+                    str(response_effect),
+                    str(unknown_effect),
+                    str(completion_effect),
+                ]
+            },
+        ).all()
+    )
+    assert states == {
+        str(response_effect): "prepared",
+        str(unknown_effect): "prepared",
+        str(completion_effect): "response_received",
+    }
+    assert session.execute(
+        text("SELECT count(*) FROM model_call WHERE model_call_id = :model_call_id"),
+        {"model_call_id": str(completion_effect)},
+    ).scalar_one() == 0
+    rendered = "".join(
+        str(error.value) + repr(error.value.detail_fields)
+        for error in (response_refused, unknown_refused, completion_refused)
+    )
+    assert authority_a.execution_token not in rendered
+    assert authority_b.execution_token not in rendered
 
 
 @pytest.mark.parametrize(
@@ -213,10 +368,35 @@ def test_an_ambiguous_live_failure_is_journalled_once_and_not_retried(
 
 
 @pytest.mark.parametrize(
-    ("boundary", "object_exists", "report_field"),
+    (
+        "boundary",
+        "blob_state_expected",
+        "object_exists",
+        "temporary_exists",
+        "report_field",
+    ),
     [
-        ("source_preparation:artifact_intent_committed", False, "unpublished_records"),
-        ("source_preparation:artifact_published", True, "orphan_objects"),
+        (
+            "source_preparation:artifact_upload_intent_committed",
+            "temporary",
+            False,
+            False,
+            "unpublished_records",
+        ),
+        (
+            "source_preparation:artifact_intent_committed",
+            "verifying",
+            False,
+            False,
+            "unpublished_records",
+        ),
+        (
+            "source_preparation:artifact_published",
+            "verifying",
+            True,
+            False,
+            "orphan_objects",
+        ),
     ],
 )
 def test_artifact_crash_boundaries_leave_enumerable_breadcrumbs(
@@ -226,7 +406,9 @@ def test_artifact_crash_boundaries_leave_enumerable_breadcrumbs(
     provider_config,
     helpers,
     boundary: str,
+    blob_state_expected: str,
     object_exists: bool,
+    temporary_exists: bool,
     report_field: str,
 ) -> None:
     factory = _factory(engine)
@@ -266,7 +448,7 @@ def test_artifact_crash_boundaries_leave_enumerable_breadcrumbs(
         ).scalar_one()
 
     assert publication["state"] == "prepared"
-    assert blob_state == "verifying"
+    assert blob_state == blob_state_expected
     try:
         blob_store.inspect(parse_blob_id(publication["blob_id"]))
         observed_exists = True
@@ -285,6 +467,73 @@ def test_artifact_crash_boundaries_leave_enumerable_breadcrumbs(
     assert len(unbound) == 1
     assert unbound[0].stage_id == "source_preparation"
     assert unbound[0].object_present is object_exists
+    assert unbound[0].temporary_present is temporary_exists
+
+
+def test_process_loss_after_temporary_verification_keeps_a_pre_upload_breadcrumb(
+    engine,
+    blob_store,
+    recorded_adapter,
+    provider_config,
+    helpers,
+) -> None:
+    factory = _factory(engine)
+    killing_store = ExitAfterVerification(blob_store)
+    session = factory()
+    try:
+        _seeded, started = _start(
+            session, helpers, blob_store, provider_mode="recorded"
+        )
+        with pytest.raises(ProcessExit, match="artifact_verified_before_checkpoint"):
+            execute_run(
+                session,
+                started.run_id,
+                blob_store=killing_store,
+                adapter=recorded_adapter,
+                provider_config=provider_config,
+            )
+    finally:
+        session.close()
+
+    assert killing_store.temporary is not None
+    try:
+        # A second exact read proves the external temporary bytes survived the modeled
+        # process loss; it neither lists the bucket nor publishes the object.
+        verified = blob_store.verify_temporary(killing_store.temporary)
+        with factory() as observer:
+            publication = observer.execute(
+                text(
+                    "SELECT blob_id, state, stage_id FROM analysis_artifact_publication "
+                    "WHERE run_id = :run_id ORDER BY created_at LIMIT 1"
+                ),
+                {"run_id": started.run_id},
+            ).mappings().one()
+            blob_state = observer.execute(
+                text("SELECT state FROM blob WHERE blob_id = :blob_id"),
+                {"blob_id": publication["blob_id"]},
+            ).scalar_one()
+
+        assert publication["blob_id"] == str(verified.blob_id)
+        assert publication["state"] == "prepared"
+        assert publication["stage_id"] == "source_preparation"
+        assert blob_state == "temporary"
+
+        report = Reconciler(blob_store, session_factory=factory).report()
+        assert publication["blob_id"] in {
+            str(item.blob_id) for item in report.unpublished_records
+        }
+        unbound = [
+            item
+            for item in report.unbound_analysis_artifacts
+            if item.run_id == started.run_id
+            and str(item.blob_id) == publication["blob_id"]
+        ]
+        assert len(unbound) == 1
+        assert unbound[0].object_present is False
+        assert unbound[0].temporary_present is True
+        assert not hasattr(unbound[0], "upload_token")
+    finally:
+        blob_store.discard_temporary(killing_store.temporary)
 
 
 def test_a_wrong_execution_token_and_a_superseded_attempt_fail_closed(

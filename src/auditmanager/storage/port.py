@@ -61,8 +61,17 @@ class BlobStore(Protocol):
         declared_size: int,
         role: BlobRole,
         media_type: str,
+        upload_token: str | None = None,
     ) -> TemporaryBlob:
-        """Upload bytes to a temporary location. Verifies nothing yet."""
+        """Upload bytes to a temporary location. Verifies nothing yet.
+
+        ``upload_token`` is an optional opaque pre-reserved handle. Durable analysis
+        publication persists one before this call; ordinary ingest lets the adapter
+        allocate it. It is never a business identity or object key.
+        """
+
+    def temporary_exists(self, temporary: TemporaryBlob) -> bool:
+        """Point-inspect one exact temporary handle without listing the store."""
 
     def verify_temporary(self, temporary: TemporaryBlob) -> VerifiedBlob:
         """Read the staged bytes back and prove they match what was declared.
