@@ -6,6 +6,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "manual-alpha-check.sh"
@@ -123,6 +125,7 @@ def _write_stub_commands(bin_dir: Path, real_node: str) -> None:
     curl = bin_dir / "curl"
     curl.write_text(
         """#!/usr/bin/env python3
+import os
 import pathlib
 import sys
 
@@ -134,7 +137,8 @@ if url.endswith('/api/v1/openapi.json'):
 elif url.endswith('/login'):
     status, extra = '200', ''
 else:
-    status, extra = '307', 'Location: /projects\\r\\n'
+    location = os.environ.get('ALPHA_STUB_ROOT_LOCATION', '/projects')
+    status, extra = '307', f'Location: {location}\\r\\n'
 headers.write_text(f'HTTP/1.1 {status} test\\r\\n{extra}\\r\\n', encoding='utf-8')
 print(status, end='')
 """,
@@ -260,6 +264,8 @@ def test_release_command_cannot_turn_skips_recorded_mode_or_outage_into_pass(
             "automated": False,
             "outcome": "PENDING",
         }
+        if machine["verdict"] == "PASS":
+            assert {phase["outcome"] for phase in machine["phases"].values()} == {"PASS"}
         assert "not-a-real-secret" not in output
         assert "not-a-real-secret" not in (evidence / "report.md").read_text()
 
@@ -296,3 +302,95 @@ def test_verifier_itself_rejects_a_partial_or_non_live_envelope(tmp_path: Path) 
         assert result.returncode == 1
         assert json.loads(out.read_text())["verdict"] == "FAIL"
         assert "acceptance verdict: PASS" not in result.stdout
+
+
+def test_dependency_outage_blocks_even_when_partial_journey_exits_zero(
+    tmp_path: Path,
+) -> None:
+    sha = "c" * 40
+    journey = _journey(dependency=True)
+    terminal_exchange = journey["write"]["steps"][-1]["exchanges"][0]
+    terminal = json.loads(terminal_exchange["responseBody"])
+    terminal["state"] = "partial"
+    terminal_exchange["responseBody"] = json.dumps(terminal)
+    journey["failures"] = []
+
+    journey_path = tmp_path / "journey.json"
+    refusals_path = tmp_path / "refusals.json"
+    verdict_path = tmp_path / "verdict.json"
+    journey_path.write_text(json.dumps(journey), encoding="utf-8")
+    refusals_path.write_text(json.dumps(_refusals()), encoding="utf-8")
+
+    result = run(
+        "node",
+        str(VERIFY),
+        "--journey",
+        str(journey_path),
+        "--refusals",
+        str(refusals_path),
+        "--out",
+        str(verdict_path),
+        "--candidate-sha",
+        sha,
+        "--deployed-sha",
+        sha,
+        "--journey-exit",
+        "0",
+        "--refusals-exit",
+        "0",
+    )
+
+    evidence = json.loads(verdict_path.read_text())
+    assert result.returncode == 2
+    assert evidence["phases"]["providerLive"]["outcome"] == "BLOCKED"
+    assert evidence["verdict"] == "BLOCKED"
+    assert "acceptance verdict: PASS" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("location", "passes"),
+    (
+        ("/projects", True),
+        ("https://alpha.example.test/projects", True),
+        ("https://ALPHA.EXAMPLE.TEST:443/projects", True),
+        ("https://attacker.invalid/projects", False),
+        ("http://alpha.example.test/projects", False),
+        ("https://alpha.example.test:444/projects", False),
+        ("https://reviewer@alpha.example.test/projects", False),
+        ("https://alpha.example.test.evil/projects", False),
+        ("/projects/other", False),
+        ("/projects?next=/", False),
+    ),
+)
+def test_root_redirect_must_resolve_to_projects_on_the_declared_origin(
+    tmp_path: Path, location: str, passes: bool
+) -> None:
+    real_node = shutil.which("node")
+    assert real_node is not None
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_stub_commands(bin_dir, real_node)
+    evidence = tmp_path / "evidence"
+    result = run(
+        str(SCRIPT),
+        "--preflight-only",
+        "--origin",
+        "https://alpha.example.test",
+        "--evidence-dir",
+        str(evidence),
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "ALPHA_STUB_ROOT_LOCATION": location,
+        },
+    )
+    output = result.stdout + result.stderr
+    report = (evidence / "report.md").read_text()
+    if passes:
+        assert result.returncode == 0, output
+        assert "PREFLIGHT OK" in output
+        assert "| HTTP-root | PASS |" in report
+    else:
+        assert result.returncode == 1, output
+        assert "PREFLIGHT OK" not in output
+        assert "| HTTP-root | FAIL |" in report

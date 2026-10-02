@@ -102,6 +102,7 @@ done
 
 if [[ "$MODE" != "files" ]]; then
   command -v curl >/dev/null 2>&1 || die "не найдена команда curl"
+  command -v python3 >/dev/null 2>&1 || die "не найдена команда python3"
   [[ -n "$ORIGIN" ]] || blocked "укажите --origin"
   ORIGIN="${ORIGIN%/}"
   case "$ORIGIN" in
@@ -240,9 +241,43 @@ http_status() {
     --max-time 20 --connect-timeout 10 --write-out '%{http_code}' "$url"
 }
 
+root_redirect_is_same_origin_projects() {
+  local origin="$1"
+  local location="$2"
+  python3 - "$origin" "$location" <<'PY'
+import sys
+from urllib.parse import urljoin, urlsplit
+
+
+def normalized_origin(value: str) -> tuple[str, str, int] | None:
+    try:
+        parsed = urlsplit(value)
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return None
+        if parsed.username is not None or parsed.password is not None or parsed.hostname is None:
+            return None
+        port = parsed.port
+    except ValueError:
+        return None
+    if port is None:
+        port = 443 if parsed.scheme.lower() == "https" else 80
+    return parsed.scheme.lower(), parsed.hostname.lower(), port
+
+
+origin, location = sys.argv[1:]
+if not location:
+    raise SystemExit(1)
+target = urlsplit(urljoin(f"{origin}/", location))
+same_origin = normalized_origin(origin) == normalized_origin(target.geturl())
+exact_route = target.path == "/projects" and not target.query and not target.fragment
+raise SystemExit(0 if same_origin and exact_route else 1)
+PY
+}
+
 ROOT_STATUS="$(http_status "$ORIGIN/" "$TMP_DIR/root.headers")" || ROOT_STATUS="curl-error"
 ROOT_LOCATION="$(awk 'BEGIN {IGNORECASE=1} /^location:/ {sub(/^[^:]+:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' "$TMP_DIR/root.headers")"
-if [[ ("$ROOT_STATUS" == "307" || "$ROOT_STATUS" == "308") && "$ROOT_LOCATION" == */projects ]]; then
+if [[ ("$ROOT_STATUS" == "307" || "$ROOT_STATUS" == "308") ]] && \
+  root_redirect_is_same_origin_projects "$ORIGIN" "$ROOT_LOCATION"; then
   record_auto "HTTP-root" "PASS" "$ROOT_STATUS -> $ROOT_LOCATION"
 elif [[ "$ROOT_STATUS" == "curl-error" ]]; then
   record_auto "HTTP-root" "BLOCKED" "origin недоступен по сети/TLS"
