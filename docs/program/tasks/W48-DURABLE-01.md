@@ -145,6 +145,9 @@ completion report and never rewrites their verdicts.
 - `tests/contract/domain_p02/test_seam_register.py`
 - `tests/contract/api_v1/test_doc_prose_facts.py` (only the derived migration-head
   assertion owned by this slot)
+- `docs/program/CONTRACT_PIN_REGISTRY.md` (only the migration-head pin)
+- `docs/program/CURRENT_STATE.md` (only the live migration-head claim)
+- `docs/manual-tests/PC-01_prototype.md` (only the live migration-head claim)
 - `docs/program/P02_SEAMS.md`
 - `docs/program/PROTOTYPE_EXECUTION_PLAN.md`
 - `docs/program/PROTOTYPE_PROFILE.md`
@@ -160,8 +163,8 @@ completion report and never rewrites their verdicts.
   styles
 - API routers, authentication, deployment state, credentials, public-host data and object
   deletion
-- task briefs other than this dispatch document; immutable judge/audit reports;
-  `CURRENT_STATE.md` and `DEBT_REGISTER.md`
+- task briefs other than this dispatch document; immutable judge/audit reports and
+  `DEBT_REGISTER.md`
 - tags, `origin/dev`, `origin/main` and every deployment action
 
 ## Non-goals
