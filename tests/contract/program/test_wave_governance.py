@@ -44,27 +44,39 @@ def governance_findings(markdown: str) -> set[str]:
     enumerator = _section(markdown, "Enumerator ownership")
     if enumerator is None:
         findings.add("ENUMERATOR_SECTION_REQUIRED")
-    elif _field(enumerator, "enumerated_set_changed") == "yes":
-        path = _field(enumerator, "enumerator_path")
-        owner = _field(enumerator, "enumerator_owner")
-        query = _field(enumerator, "totality_query")
-        if not path or path == "not_applicable":
-            findings.add("ENUMERATOR_PATH_REQUIRED")
-        if not owner or owner == "not_applicable":
-            findings.add("ENUMERATOR_OWNER_REQUIRED")
-        if not query or query == "not_applicable":
-            findings.add("ENUMERATOR_TOTALITY_REQUIRED")
+    else:
+        changed = _field(enumerator, "enumerated_set_changed")
+        if changed not in {"yes", "no"}:
+            findings.add("ENUMERATOR_CHANGE_DECLARATION_REQUIRED")
+        elif changed == "yes":
+            path = _field(enumerator, "enumerator_path")
+            owner = _field(enumerator, "enumerator_owner")
+            query = _field(enumerator, "totality_query")
+            if not path or path == "not_applicable":
+                findings.add("ENUMERATOR_PATH_REQUIRED")
+            if not owner or owner == "not_applicable":
+                findings.add("ENUMERATOR_OWNER_REQUIRED")
+            if not query or query == "not_applicable":
+                findings.add("ENUMERATOR_TOTALITY_REQUIRED")
 
     premises = _section(markdown, "Captured premise evidence")
     if premises is None:
         findings.add("PREMISE_SECTION_REQUIRED")
+    elif _field(premises, "premise") is None:
+        findings.add("PREMISE_DECLARATION_REQUIRED")
     elif _field(premises, "premise") != "none":
         if re.search(r"(?m)^- captured_at: \d{4}-\d{2}-\d{2}\s*$", premises) is None:
             findings.add("PREMISE_DATE_REQUIRED")
         if re.search(r"(?m)^- command: `[^`]+`\s*$", premises) is None:
             findings.add("PREMISE_COMMAND_REQUIRED")
-        if re.search(r"(?ms)^- captured_output:\s*$\n\s*```text\n.+?\n\s*```", premises) is None:
+        output = re.search(
+            r"(?ms)^- captured_output:\s*$\n\s*```text\s*$\n(?P<output>.*?)\n\s*```\s*$",
+            premises,
+        )
+        if output is None:
             findings.add("PREMISE_OUTPUT_REQUIRED")
+        elif len(output.group("output").strip()) < 2:
+            findings.add("PREMISE_OUTPUT_SUBSTANTIVE_REQUIRED")
 
     history = _section(markdown, "Historical evidence")
     if history is None:
@@ -85,8 +97,12 @@ def governance_findings(markdown: str) -> set[str]:
     else:
         target = _field(publication, "development_target")
         authority = _field(publication, "origin_main_authority") or ""
-        if target == "origin/main" and not authority.startswith("separate direct owner instruction "):
-            findings.add("MAIN_DIRECT_AUTHORITY_REQUIRED")
+        if target == "origin/main":
+            match = re.fullmatch(r"separate direct owner instruction (?P<reference>\S(?:.*\S)?)", authority)
+            if match is None:
+                findings.add("MAIN_DIRECT_AUTHORITY_REQUIRED")
+            elif len(match.group("reference")) < 7:
+                findings.add("MAIN_DIRECT_AUTHORITY_REFERENCE_REQUIRED")
         if target not in {"none", "origin/dev", "origin/main"}:
             findings.add("PUBLICATION_TARGET_INVALID")
     return findings
@@ -235,6 +251,37 @@ def test_a_new_real_task_file_cannot_escape_the_enumerator(tmp_path: Path) -> No
 )
 def test_each_invalid_example_fails_for_its_intended_rule(broken: str, expected: str) -> None:
     assert expected in governance_findings(broken)
+
+
+def test_empty_governance_sections_are_not_valid_declarations() -> None:
+    broken = re.sub(
+        r"(?ms)^## (Enumerator ownership|Captured premise evidence|Historical evidence|Publication authority)\n.*?(?=^## |\Z)",
+        lambda match: f"## {match.group(1)}\n\n",
+        VALID_TASK,
+    )
+    assert governance_findings(broken) >= {
+        "ENUMERATOR_CHANGE_DECLARATION_REQUIRED",
+        "PREMISE_DECLARATION_REQUIRED",
+        "HISTORICAL_ADDENDUM_REQUIRED",
+        "PUBLICATION_TARGET_INVALID",
+    }
+
+
+def test_enumerator_flag_captured_output_and_main_authority_are_validated() -> None:
+    unread_enumerator = VALID_TASK.replace(
+        "- enumerated_set_changed: yes", "- enumerated_set_changed: perhaps"
+    )
+    assert "ENUMERATOR_CHANGE_DECLARATION_REQUIRED" in governance_findings(unread_enumerator)
+
+    one_character_output = VALID_TASK.replace("web/src/app/page.tsx", "x")
+    assert "PREMISE_OUTPUT_SUBSTANTIVE_REQUIRED" in governance_findings(one_character_output)
+
+    unbound_main = VALID_TASK.replace(
+        "- development_target: origin/dev\n- origin_main_authority: none",
+        "- development_target: origin/main\n"
+        "- origin_main_authority: separate direct owner instruction x",
+    )
+    assert "MAIN_DIRECT_AUTHORITY_REFERENCE_REQUIRED" in governance_findings(unbound_main)
 
 
 def test_the_operational_docs_state_the_same_rules_the_guard_executes() -> None:

@@ -45,8 +45,28 @@ function parsed(source: string): ts.SourceFile {
   return ts.createSourceFile('guard-subject.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 }
 
+function callHasName(node: ts.CallExpression, name: string): boolean {
+  return (
+    (ts.isIdentifier(node.expression) && node.expression.text === name) ||
+    (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === name)
+  );
+}
+
 /** True only for an executable call expression; comments and string literals are not syntax nodes. */
-function subtreeCalls(sourceFile: ts.SourceFile, root: ts.Node, expression: string): boolean {
+function subtreeCalls(root: ts.Node, name: string): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && callHasName(node, name)) {
+      found = true;
+      return;
+    }
+    if (!found) ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+}
+
+function subtreeCallsExpression(sourceFile: ts.SourceFile, root: ts.Node, expression: string): boolean {
   let found = false;
   const visit = (node: ts.Node): void => {
     if (
@@ -62,12 +82,36 @@ function subtreeCalls(sourceFile: ts.SourceFile, root: ts.Node, expression: stri
   return found;
 }
 
-function sourceCalls(source: string, expression: string): boolean {
+function sourceCalls(source: string, name: string): boolean {
   const sourceFile = parsed(source);
-  return subtreeCalls(sourceFile, sourceFile, expression);
+  return subtreeCalls(sourceFile, name);
 }
 
-function declaredFunctionCalls(source: string, name: string, expression: string): boolean {
+function subtreeInvalidatesDashboard(sourceFile: ts.SourceFile, root: ts.Node): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && callHasName(node, 'invalidateQueries')) {
+      if (
+        node.arguments.some((argument) =>
+          subtreeCallsExpression(sourceFile, argument, DASHBOARD_INVALIDATION),
+        )
+      ) {
+        found = true;
+        return;
+      }
+    }
+    if (!found) ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+}
+
+function sourceInvalidatesDashboard(source: string): boolean {
+  const sourceFile = parsed(source);
+  return subtreeInvalidatesDashboard(sourceFile, sourceFile);
+}
+
+function declaredFunctionCallsExpression(source: string, name: string, expression: string): boolean {
   const sourceFile = parsed(source);
   let found = false;
   const visit = (node: ts.Node): void => {
@@ -78,7 +122,7 @@ function declaredFunctionCalls(source: string, name: string, expression: string)
       node.name.text === name &&
       node.initializer !== undefined &&
       (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer));
-    if ((namedFunction || namedVariable) && subtreeCalls(sourceFile, node, expression)) {
+    if ((namedFunction || namedVariable) && subtreeCallsExpression(sourceFile, node, expression)) {
       found = true;
       return;
     }
@@ -126,7 +170,7 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
 
 /** Every `features/<feature>/model/use-*.ts` file that calls `useMutation(`, relative to `WEB_ROOT`. */
 function discoverMutationHooks(): string[] {
-  return walkFiles(FEATURES_ROOT, (path) => /\/model\/use-[^/]+\.ts$/.test(path))
+  return walkFiles(FEATURES_ROOT, (path) => /\/model\/use-[^/]+\.(?:ts|tsx)$/.test(path))
     .filter((path) => sourceCalls(readText(path), 'useMutation'))
     .map((path) => repoRelative(path).replace(/^web\//, ''))
     .sort();
@@ -156,7 +200,7 @@ function resolveImport(spec: string, fromFile: string): string | null {
 function definitionInvalidatesDashboard(filePath: string, name: string, depth = 0): boolean {
   if (depth > 4) return false;
   const source = readText(filePath);
-  if (declaredFunctionCalls(source, name, DASHBOARD_INVALIDATION)) return true;
+  if (declaredFunctionCallsExpression(source, name, DASHBOARD_INVALIDATION)) return true;
 
   for (const statement of parsed(source).statements) {
     if (!ts.isExportDeclaration(statement)) continue;
@@ -181,11 +225,12 @@ function definitionInvalidatesDashboard(filePath: string, name: string, depth = 
  * an imported `*CacheKeys` helper that itself does (`decisionCacheKeys`'s shape).
  */
 function invalidatesDashboard(hookPath: string, source = readText(hookPath)): boolean {
-  if (sourceCalls(source, DASHBOARD_INVALIDATION)) return true;
+  if (sourceInvalidatesDashboard(source)) return true;
 
   for (const binding of importedBindings(source)) {
     if (!/CacheKeys$/.test(binding.exported)) continue; // not the delegation shape this guard follows
     if (!sourceCalls(source, binding.local)) continue; // imported but never called here
+    if (!sourceCalls(source, 'invalidateQueries')) continue; // keys read without invalidation do not refresh
     const resolved = resolveImport(binding.specifier, hookPath);
     if (
       resolved !== null &&
@@ -220,6 +265,22 @@ describe('every mutation hook is mapped to whether it invalidates the dashboard'
     expect(original).toContain(call);
     const commentedOut = original.replace(call, `// ${call}`);
     expect(invalidatesDashboard(hookPath, commentedOut)).toBe(false);
+  });
+
+  it('does not confuse a dashboard read with invalidation', () => {
+    const hookPath = join(WEB_ROOT, 'src/features/create-project/model/use-create-project.ts');
+    const original = readText(hookPath);
+    const invalidation = 'void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });';
+    expect(original).toContain(invalidation);
+    const readInstead = original.replace(
+      invalidation,
+      'void queryClient.getQueryData(queryKeys.dashboard.summary());',
+    );
+    expect(invalidatesDashboard(hookPath, readInstead)).toBe(false);
+  });
+
+  it('recognises namespace-qualified mutation hooks', () => {
+    expect(sourceCalls('const mutation = RQ.useMutation({ mutationFn });', 'useMutation')).toBe(true);
   });
 
   it('does not accept dashboard invalidation text that exists only in a decoy comment', () => {

@@ -203,7 +203,10 @@ def _discovered_independent_pins() -> list[tuple[str, str]]:
         found.extend((relative, match.group(0).strip()) for match in _PIN_ASSIGNMENT.finditer(text))
         for match in _PIN_ASSERTION.finditer(text):
             assertion = match.group(0).strip()
-            if re.search(r'==\s*(?:17|20|22|61|"0013|SurfaceTriple)', assertion):
+            if (
+                "_true_migration_head()" in assertion
+                or re.search(r"==\s*(?:17|20|22|61|SurfaceTriple)", assertion)
+            ):
                 found.append((relative, assertion))
 
     for path in sorted((REPO_ROOT / "web" / "tests").rglob("*")):

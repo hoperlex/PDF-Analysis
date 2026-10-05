@@ -47,7 +47,7 @@ import {
   wellFormed,
 } from '../unit/screens/route-screens';
 import { newClient, renderScreen } from '../unit/screens/harness';
-import { WEB_ROOT, readText } from './lib/repo';
+import { WEB_ROOT, readText, repoRelative, walkFiles } from './lib/repo';
 
 const ULID = '01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const IDENTITIES = {
@@ -69,30 +69,53 @@ describe('D-97: screen-wide consumers share one router/query provider contract',
   const harness = readText(join(WEB_ROOT, 'tests/unit/screens/harness.ts'));
   const routerProvider = ['AppRouterContext', 'Provider'].join('.');
   const queryProvider = ['QueryClient', 'Provider'].join('');
+
+  const harnessImport = /import\s*\{(?<bindings>[^}]*)\}\s*from\s*['"][^'"]*screens\/harness['"]/s;
+  const importsRenderScreen = (source: string): boolean => {
+    const bindings = harnessImport.exec(source)?.groups?.bindings ?? '';
+    return /(?:^|,)\s*renderScreen(?:\s+as\s+\w+)?\s*(?:,|$)/s.test(bindings);
+  };
+  const isScreenWideConsumer = (source: string): boolean =>
+    importsRenderScreen(source) ||
+    source.includes(routerProvider) ||
+    source.includes(queryProvider);
+  const findings = (relative: string, source: string): string[] => {
+    const found: string[] = [];
+    if (!importsRenderScreen(source)) {
+      found.push(`${relative} must consume renderScreen from the shared harness`);
+    }
+    if (source.includes(routerProvider)) found.push(`${relative} privately mounts AppRouterContext`);
+    if (source.includes(queryProvider)) found.push(`${relative} privately mounts the query provider`);
+    return found;
+  };
   const consumers = [
-    'tests/guards/prepared-sections.guard.test.ts',
-    'tests/guards/screen-set.guard.test.ts',
-    'tests/guards/gender-agreement.guard.test.ts',
-    'tests/guards/rendered-language.guard.test.ts',
-    'tests/unit/styles/screens.ts',
-  ] as const;
+    ...walkFiles(join(WEB_ROOT, 'tests/guards'), (path) => /\.(?:ts|tsx)$/.test(path)),
+    ...walkFiles(join(WEB_ROOT, 'tests/unit/styles'), (path) => /\.(?:ts|tsx)$/.test(path)),
+  ]
+    .filter((path) => isScreenWideConsumer(readText(path)))
+    .map((path) => repoRelative(path).replace(/^web\//, ''))
+    .sort();
 
   it('keeps the provider implementation in the shared harness only', () => {
     expect(harness).toContain(routerProvider);
     expect(harness).toContain(queryProvider);
+    expect(consumers.length, 'screen-wide consumer discovery found too little to be credible')
+      .toBeGreaterThanOrEqual(5);
+    expect(consumers).toContain('tests/unit/styles/screens.ts');
     for (const relative of consumers) {
       const source = readText(join(WEB_ROOT, relative));
-      expect(source, `${relative} must consume renderScreen from the shared harness`).toMatch(
-        /import\s*\{[^}]*\brenderScreen\b[^}]*\}\s*from\s*['"][^'"]*screens\/harness['"]/s,
-      );
-      expect(source, `${relative} privately mounts AppRouterContext`).not.toContain(routerProvider);
-      expect(source, `${relative} privately mounts the query provider`).not.toContain(queryProvider);
+      expect(findings(relative, source)).toEqual([]);
     }
   });
 
   it('can fail on a private screen-wide provider copy', () => {
+    const relative = 'tests/guards/new-screen-wide.guard.test.ts';
     const privateCopy = `createElement(${routerProvider}, { value: router }, screen)`;
-    expect(privateCopy).toContain(routerProvider);
+    expect(isScreenWideConsumer(privateCopy)).toBe(true);
+    expect(findings(relative, privateCopy)).toEqual([
+      `${relative} must consume renderScreen from the shared harness`,
+      `${relative} privately mounts AppRouterContext`,
+    ]);
   });
 });
 

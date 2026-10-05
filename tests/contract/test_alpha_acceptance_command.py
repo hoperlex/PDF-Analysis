@@ -40,22 +40,38 @@ def test_alpha_acceptance_is_named_beside_but_not_inside_gate() -> None:
 def test_missing_origin_sha_and_credential_never_print_pass() -> None:
     sha = "a" * 40
     attempts = [
-        ("--automated",),
-        ("--automated", "--origin", "https://alpha.example.test"),
+        (("--automated",), "укажите --origin"),
         (
-            "--automated",
-            "--origin",
-            "https://alpha.example.test",
-            "--candidate-sha",
-            sha,
-            "--deployed-sha",
-            sha,
+            ("--automated", "--origin", "https://alpha.example.test"),
+            "укажите --candidate-sha",
+        ),
+        (
+            (
+                "--automated",
+                "--origin",
+                "https://alpha.example.test",
+                "--candidate-sha",
+                sha,
+                "--deployed-sha",
+                sha,
+            ),
+            "E2E_PC01_LOGIN не задан",
         ),
     ]
-    for args in attempts:
+    fired: set[str] = set()
+    for args, expected_guard in attempts:
         result = run(str(SCRIPT), *args, env={**os.environ, "E2E_PC01_LOGIN": "", "E2E_PC01_PASSWORD": ""})
         assert result.returncode != 0
-        assert "ALPHA ACCEPTANCE PASS" not in result.stdout + result.stderr
+        output = result.stdout + result.stderr
+        assert "ALPHA ACCEPTANCE PASS" not in output
+        assert output.count("ALPHA ACCEPTANCE BLOCKED:") == 1, output
+        assert f"ALPHA ACCEPTANCE BLOCKED: {expected_guard}" in output
+        fired.add(expected_guard)
+    assert fired == {
+        "укажите --origin",
+        "укажите --candidate-sha",
+        "E2E_PC01_LOGIN не задан",
+    }
 
 
 def _journey(*, phase: str = "all", provider_mode: str = "live", dependency: bool = False) -> dict:
@@ -267,7 +283,10 @@ def test_release_command_cannot_turn_skips_recorded_mode_or_outage_into_pass(
         if machine["verdict"] == "PASS":
             assert {phase["outcome"] for phase in machine["phases"].values()} == {"PASS"}
         assert "not-a-real-secret" not in output
-        assert "not-a-real-secret" not in (evidence / "report.md").read_text()
+        report = (evidence / "report.md").read_text()
+        assert f"- attested_deployed_sha: {head}" in report
+        assert "deployed_sha_attestation: operator_input" in report
+        assert "not-a-real-secret" not in report
 
 
 def test_verifier_itself_rejects_a_partial_or_non_live_envelope(tmp_path: Path) -> None:
@@ -344,6 +363,50 @@ def test_dependency_outage_blocks_even_when_partial_journey_exits_zero(
     assert result.returncode == 2
     assert evidence["phases"]["providerLive"]["outcome"] == "BLOCKED"
     assert evidence["verdict"] == "BLOCKED"
+    assert "acceptance verdict: PASS" not in result.stdout
+
+
+def test_partial_with_failed_text_analysis_is_not_provider_live_pass(tmp_path: Path) -> None:
+    sha = "d" * 40
+    journey = _journey()
+    terminal_exchange = journey["write"]["steps"][-1]["exchanges"][0]
+    terminal = json.loads(terminal_exchange["responseBody"])
+    terminal["state"] = "partial"
+    terminal["stages"] = [
+        {"stage_id": "text_analysis", "status": "failed", "error_code": "analysis_failed"}
+    ]
+    terminal_exchange["responseBody"] = json.dumps(terminal)
+
+    journey_path = tmp_path / "journey.json"
+    refusals_path = tmp_path / "refusals.json"
+    verdict_path = tmp_path / "verdict.json"
+    journey_path.write_text(json.dumps(journey), encoding="utf-8")
+    refusals_path.write_text(json.dumps(_refusals()), encoding="utf-8")
+
+    result = run(
+        "node",
+        str(VERIFY),
+        "--journey",
+        str(journey_path),
+        "--refusals",
+        str(refusals_path),
+        "--out",
+        str(verdict_path),
+        "--candidate-sha",
+        sha,
+        "--deployed-sha",
+        sha,
+        "--journey-exit",
+        "0",
+        "--refusals-exit",
+        "0",
+    )
+
+    evidence = json.loads(verdict_path.read_text())
+    assert result.returncode == 1
+    assert evidence["phases"]["providerLive"]["outcome"] == "FAIL"
+    assert evidence["verdict"] == "FAIL"
+    assert "failed text_analysis stage" in "\n".join(evidence["findings"])
     assert "acceptance verdict: PASS" not in result.stdout
 
 

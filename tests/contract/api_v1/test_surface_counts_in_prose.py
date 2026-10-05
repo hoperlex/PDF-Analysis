@@ -100,6 +100,7 @@ _NUMBER = r"(?:\d{1,2}|" + "|".join(
 #: local exception is an exact phrase, not an exemption for a number everywhere.
 _QUANTIFIED_PHRASE = re.compile(
     rf"(?<![\w-])(?P<number>{_NUMBER})[ -]"
+    r"(?:(?:public)[ -])?"
     r"(?P<label>[A-Za-z][A-Za-z-]*)\b",
     re.IGNORECASE,
 )
@@ -108,7 +109,8 @@ _QUANTIFIED_PHRASE = re.compile(
 #: after a number, so `the API surface has nineteen widgets` is still a claim and still fails.
 #: The anchors describe repository concepts, not a growing synonym list for count labels.
 _SURFACE_SUBJECT = re.compile(
-    r"\b(?:api[ \t]+surface|openapi[ \t]+surface|served[ \t]+document|frozen[ \t]+document|"
+    r"\b(?:api[ \t]+(?:surface|has)|openapi[ \t]+surface|"
+    r"served[ \t]+document|frozen[ \t]+document|"
     r"contract[ \t]+declares|document[ \t]+declares|surface[ \t]+(?:is|has|contains))\b",
     re.IGNORECASE,
 )
@@ -286,51 +288,26 @@ def _surface_counts() -> dict[str, int]:
     }
 
 
-@cache
-def _historical_surface_values() -> frozenset[int]:
-    """Every surface/catalog size that was ever canonical, derived from Git objects.
+_DOCUMENTED_SURFACE_TRIPLE = re.compile(
+    r"(?P<paths>\d{1,2})\s+paths?\s*/\s*"
+    r"(?P<operations>\d{1,2})\s+operations?\s*/\s*"
+    r"(?P<schemas>\d{1,3})\s+schemas?",
+    re.IGNORECASE,
+)
 
-    This replaces the old noun-synonym guess with repository evidence. An unseen noun is a
-    stale-surface candidate when it carries a value an earlier contract/catalog actually had;
-    arbitrary local numbers are not reclassified merely because the word `contract` is nearby.
+
+@cache
+def _documented_surface_values() -> frozenset[int]:
+    """Surface values retained in the repository, independent of clone depth.
+
+    Historical reports remain tracked even in a shallow clone. Their complete numeric triples
+    are a durable source for deciding whether an unfamiliar noun carries an old surface value;
+    unlike ``git log`` this source cannot silently shrink with the clone's object history.
     """
-    values: set[int] = set(_surface_counts().values())
-    for relative, extractor in (
-        (
-            "contracts/api/v1/openapi.json",
-            lambda document: {
-                len(document["paths"]),
-                sum(
-                    1
-                    for item in document["paths"].values()
-                    for method in item
-                    if method.lower() in _METHODS
-                ),
-                len(document["components"]["schemas"]),
-            },
-        ),
-        (
-            "contracts/domain/v1/error-codes.json",
-            lambda document: {len(document["codes"])},
-        ),
-    ):
-        history = subprocess.run(
-            ["git", "log", "--format=%H", "--", relative],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.splitlines()
-        for commit in history:
-            shown = subprocess.run(
-                ["git", "show", f"{commit}:{relative}"],
-                cwd=REPO_ROOT,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if shown.returncode == 0:
-                values.update(extractor(json.loads(shown.stdout)))
+    values = set(_surface_counts().values())
+    for path in sorted((REPO_ROOT / "docs").rglob("*.md")):
+        for match in _DOCUMENTED_SURFACE_TRIPLE.finditer(_unwrap(path.read_text(encoding="utf-8"))):
+            values.update(int(match.group(name)) for name in ("paths", "operations", "schemas"))
     return frozenset(values)
 
 
@@ -400,8 +377,9 @@ def _claims(text: str) -> Iterator[tuple[str, str | None, int]]:
     """Every quantified phrase in prose whose surrounding subject is the API surface.
 
     Canonical operation/path/schema/code nouns get a dimension-specific expectation. An unknown
-    noun is considered only inside an explicit API-surface/document assertion and only when its
-    value occurred in real contract history. Exact local-count exemptions remain visible and
+    noun is considered only inside an explicit API-surface/document assertion. It is compared
+    with the current dimensions without consulting Git history, so a shallow clone cannot make
+    an old or arbitrary count invisible. Exact local-count exemptions remain visible and
     mutation-testable.
     """
     text = _unwrap(text)
@@ -434,7 +412,7 @@ def _claims(text: str) -> Iterator[tuple[str, str | None, int]]:
                 or _TOTALITY_ASSERTION_PREFIX.search(before_count)
             ):
                 continue
-            if value not in _historical_surface_values():
+            if value not in _documented_surface_values():
                 continue
         yield match.group(0), dimension, value
 
@@ -560,6 +538,19 @@ def test_a_whole_surface_claim_needs_no_registered_subject_or_noun_alias() -> No
         assert claims[0][2] not in set(counts.values())
 
 
+def test_historical_surface_values_do_not_depend_on_git_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _documented_surface_values.cache_clear()
+
+    def refuse_git(*args: object, **kwargs: object) -> None:
+        raise AssertionError("documented surface history must not invoke git")
+
+    monkeypatch.setattr(subprocess, "run", refuse_git)
+    assert 12 in _documented_surface_values()
+    _documented_surface_values.cache_clear()
+
+
 def test_p02_seam_makes_a_current_claim_the_guard_reads() -> None:
     counts = _surface_counts()
     seam = (REPO_ROOT / "docs/program/P02_SEAMS.md").read_text(encoding="utf-8")
@@ -662,6 +653,8 @@ def test_the_shared_api_client_still_makes_a_claim_this_guard_can_read() -> None
     ("prose", "noun"),
     [
         ("The twelve operations of the PC-01 surface.", "operations"),
+        ("twelve public operations", "operations"),
+        ("The API has twelve routes", None),
         ("guards all twelve operations", "operations"),
         ("The 43 schema names are generated from the models.", "schemas"),
         ("the ten paths of this surface", "paths"),
