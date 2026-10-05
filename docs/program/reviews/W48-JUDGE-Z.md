@@ -250,3 +250,121 @@ No release-blocking or must-fix-before-merge finding in the black-box pass.
 - **U-2.** No live provider call was made; the stand ran `recorded`.
 - **U-3.** The full battery was not re-run by the judge; the integrator's gate (P-02) is
   accepted as the battery's statement, and the judge ran only focused suites.
+
+## Part B — cross-examination (after Part A was committed as `3562a6f`)
+
+Read afterwards: `W48-CLOSE.md` §2, `docs/program/W48-GUARDS-2.md`, `W48-TAILS.md`,
+`W48-DURABLE-FIX-2.md`, `W48-PUBLIC-01.md`, `reviews/W48-DURABLE-JUDGE-2.md`.
+
+### B-1 New measurement prompted by the cross-examination: F-8 and F-9 are load-bearing
+
+`W48-DURABLE-JUDGE-2` §5 required that `reject_unpublished` be bound to "terminal authority plus
+an explicit age" (DJ-R3) and that the effect sweep settle only terminal owners (DJ-R4).
+`W48-DURABLE-FIX-2` claims both, and its mutation table weakened only the classification
+exclusion and the settlement *call*. Two disposable behavioural probes were appended to the
+copy's `tests/integration/runs/test_durable_effect_boundaries.py` (source kept at
+`.local/judge/judgez_probes.py`, not committed):
+
+- `test_judgez_live_attempt_without_bytes_is_not_rejectable` — process loss after temporary
+  verification, then the temporary discarded: Attempt `running`, no canonical and no temporary
+  bytes; `reject_unpublished(..., older_than="0 seconds")` must refuse and the blob must not be
+  `rejected`;
+- `test_judgez_sweep_leaves_a_live_attempts_effect_alone` — a live run stopped at
+  `provider_intent_committed`, Run and Attempt still `running`;
+  `JobRepository().settle_terminal_provider_effects(older_than="0 seconds")` must not settle it.
+
+| tree | result |
+| --- | --- |
+| subject `819b6bd` | **2 passed** — the behaviour is correct today |
+| subject minus `attempt_not_terminal` (`reconciliation.py:595-596`) and minus the three terminality predicates (`jobs/repository.py:173-179`) | **2 failed**: `DID NOT RAISE DomainError` (a running Attempt's blob was rejected — JUDGE-2's identity-burn shape, in the bytes-absent window); the live run appeared in `settled_provider_effects` (a running Attempt's call was marked `abandoned`) |
+
+So the clauses JUDGE-2 demanded are present and load-bearing, and no committed test fails when
+they are removed (A-6: 268 and 401 tests green). This is the same class JUDGE-2 itself graded
+for DJ-R6 — correct behaviour, no behavioural regression — which it classified
+**must-fix-before-merge**. F-8 and F-9 are re-graded accordingly (table B-3).
+
+### B-2 Author claims, item by item
+
+| claim | source | verdict | evidence |
+| --- | --- | --- | --- |
+| every G-1…G-6 mutation red | `W48-GUARDS-2.md` | **upheld** | A-4: all 17 named mutations red for the stated reason |
+| G-4: `separate direct owner instruction x` → `MAIN_DIRECT_AUTHORITY_REFERENCE_REQUIRED` | same | **narrowed** | red only when `development_target: origin/main` (G-4c2); with target `none` the value passes (G-4c1). The report does not say the target was changed. F-3 |
+| G-5: report "explicitly states that operator input is not served-revision proof" | same | **upheld, narrowed** | the sentence exists (`manual-alpha-check.sh:168`); its negation is not asserted (G-5b2). F-4 |
+| G-1 discovery replaces the five-file list | same; §2 G-1 | **upheld, narrowed** | walk covers `tests/guards` and `tests/unit/styles` — the directories of the old list — and nothing under `tests/unit/screens`, where five files mount the router privately. F-1 |
+| G-2 discovery sees `.tsx` and `RQ.useMutation` | same; §2 G-2 | **upheld, narrowed** | the `use-*` filename prefix from §2 remains (G-2c). F-2 |
+| G-6 checked "structurally" | same; §2 G-6 | **narrowed** | triggers and top-level permissions are structural; job-level permissions and extra host keys are not (G-6d/e). F-5 |
+| every T-1 site classified; provider mode / cost basis "total through narrowing" | `W48-TAILS.md` | **upheld** | A-5 matches the author's table site for site; the author records the absent/unrecognised conflation as a known limit — F-7 stays register |
+| `.am-history__comment` contained | same; §2 T-2 | **upheld in a browser** | A-8: 400 unbroken characters wrap at 636 px inside a 780 px viewport |
+| DJ-R3 "cannot be rejected while live, fresh, or backed by bytes" | `W48-DURABLE-FIX-2.md` | **upheld for behaviour, falsified for regression cover** | B-1, A-6: live and fresh clauses unpinned (F-8) |
+| DJ-R4 "eligibility requires terminal Run, Job, Attempt plus age" | same | **upheld for behaviour, falsified for regression cover** | B-1, A-6 (F-9) |
+| DJ-R5 live norms refused before transport | same | **upheld** | A-6 revert red |
+| DJ-R6 three behavioural refusals | same | **upheld** | A-6: FK, trigger and downgrade reverts each red |
+| 0 deep / 0 package-root; imports only; identity re-exports | `W48-PUBLIC-01.md` | **upheld** | A-2, A-3: own walk 0/0 calibrated at 18/24; 101 rebound names identical by `is` |
+| `test_doc_prose_facts.py` derives the head | GUARDS-2 | **upheld** | A-7 probe: a fake `0015` reddens the prose check, not only the pin |
+
+### B-3 Final classification
+
+| id | class | one line |
+| --- | --- | --- |
+| F-8 | **must-fix-before-merge** | `ingest/reconciliation.py:595-598`: live-Attempt and staleness refusals of `reject_unpublished` have no regression; removing them rejects a running Attempt's blob (B-1) while 268 tests stay green |
+| F-9 | **must-fix-before-merge** | `jobs/repository.py:173-180`: sweep terminality/age predicates have no regression; removing them abandons a running Attempt's provider effect (B-1) while 401 tests stay green; the sweep runs on every API start |
+| F-1 … F-7, F-10, F-11 | register | as A-9 |
+
+No finding is release-blocking: every shipped behaviour measured here is correct on the subject,
+including the two that F-8 and F-9 leave unguarded (B-1, subject row).
+
+## Mutations, restoration and security
+
+- All mutations ran in `.local/worktrees/w48-judge-z-mut` (detached at `819b6bd`). After each:
+  `git checkout -q -- <paths>` / `git clean -fdq -e node_modules web` / `git reset --hard 819b6bd`,
+  followed by `git status --short` = 0 changed paths (printed as `restored dirty=0` in every
+  log). The throw-away commits used for the G-5 script mutations exist only as unreferenced
+  objects of that detached worktree.
+- Throw-away vitest/pytest probe files were written into the copy and removed (or reset) in
+  the same command.
+- The subject worktree was never mutated; `git status --short` in `w48-judge-z` showed only
+  this report before each commit.
+- Own database `auditmanager_w48judgez` was dropped and recreated twice for the browser stand
+  (only that database, in container `gate-w48judgez-postgres-1`).
+- Sign-in used the migration's documented seed; the rotated password was generated in-process,
+  never printed, and its local 0600 file is deleted before hand-back. No API token, cookie or
+  provider body appears here.
+- Processes were stopped by recorded PID after confirming each one's command line, working
+  directory (`/proc/<pid>/cwd` inside this worktree) and listening port; no pattern kill.
+  Containers `gate-w48judgez-*` are stopped with `make down` from this worktree.
+- The integrator's tree `.local/worktrees/w48-close` was read once (its `.env`, with secrets
+  redacted on screen) and never written; no `gate-w48close*` container was touched.
+
+## Verdict
+
+**Publishable to `origin/dev` from this judge's side: no release-blocking finding.** The subject
+`819b6bd` does what the four closure lanes claim at runtime; the frozen contract set and root
+locks are byte-identical to `6118e66`; the migration head is `0014_durable_analysis_effects` on
+a fresh database; ALR-05 reads 0/0; hostile strings stay inside 780 px.
+
+Two **must-fix-before-merge** findings (F-8, F-9) are regression gaps over correct behaviour.
+Under this task's integration contract they do not open `W48-FIX-C`; `W48-INT-CLOSE` may proceed
+on the same subject and should register them with the B-1 probes as their check commands. If the
+integrator chooses to close them before publication instead, the smallest grant is:
+
+- **allowed paths:** `tests/integration/runs/test_durable_effect_boundaries.py` and
+  `tests/integration/ingest/test_reconciliation.py` only — no source, migration or contract;
+- **deliverable:** the two B-1 probes as committed regressions, each shown red by removing
+  `reconciliation.py:595-596` / `:597-598` (one test per refusal, so each is pinned alone) and
+  `jobs/repository.py:173-179` / `:180`;
+- **checks:** the focused files above, `make gate`, `git diff --check`.
+
+Registers F-1…F-7, F-10, F-11 need no action before publication.
+
+## Untested questions (final)
+
+U-1 (no Chromium: the journey's own cold-browser walk did not run; widths were taken with its
+measurement module in Firefox 157), U-2 (no live provider) and U-3 (no full battery re-run by
+the judge) from A-10 stand.
+
+## Handoff
+
+- changed files: `docs/program/reviews/W48-JUDGE-Z.md` only
+- branch: `agent/w48-judge-z` (base `b04ba95`)
+- forbidden hotspots: `git diff --name-only 819b6bd..HEAD` lists this report and the task file
+  that the dispatch commit `b04ba95` added; nothing else
