@@ -117,6 +117,16 @@ class TestFindingAUser:
             # reviewer has chosen no name" -- which is why `display_label` and not this
             # field is what anything reads.
             "display_name",
+            # `W49-ACCESS-01`. Six more, reported by this closed set exactly as the last
+            # three arrivals were. The names and the profile completion are what a person
+            # gave to be shown; the archive pair is a state and the identity of the
+            # administrator who set it. None says anything about a password.
+            "last_name",
+            "first_name",
+            "middle_name",
+            "profile_completed_at",
+            "archived_at",
+            "archived_by",
         }, "a credential column reached the record the boundary hands out"
         for forbidden in (
             "password_algorithm",

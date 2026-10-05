@@ -31,13 +31,23 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `W49-ACCESS-01a` for ``0015_accounts_roles_registration``; the delta was
+#: reviewed family by family against the migration (columns +29: six on ``app_user``,
+#: four on ``app_user_role``, eighteen on ``registration_request``, one on
+#: ``expert_decision_event``; relations +2; constraints +33 -- +8 and -1 (the UNIQUE
+#: constraint ``uq_app_user_login`` became a partial unique index) on ``app_user``, +6, +18
+#: and +2 on the others; indexes +11;
+#: triggers +1; functions +1 -- ``am_guard_registration_request``). Views, extensions,
+#: sequences, policies and the state topology are unchanged: ``0015`` adds no machine to
+#: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
+#: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (305, "96f53413c1ec54bba05d4d36504adac671fc1659beda945f9bc040c18dfd4278"),
-    "relations": (37, "69fde692fc73abdf170ae2717118c89359de9151767979ba7b2920a6df5a72d8"),
-    "constraints": (331, "2d34f93eee023d9360564ebea889ba304b7dd6ba1adeb782f38772d049ecbabf"),
-    "indexes": (76, "985d04baa19f86f392bc49a447d72fd9a07ffebba21aacaa7fe17863ba7fa8fd"),
-    "triggers": (31, "34698155a8a3b59548f31d97cc1b91d3e5c97669171bf35c84e41f38bad57718"),
-    "functions": (7, "626c62f1ef96cf8fd9d60dfd83d99fcac653e3abcabec83d04d865de755d12b8"),
+    "columns": (334, "365da6b1bfb9b9beaa29eeb6086fd2eda12cf8cc1e36da9abcaa67ed93c093fd"),
+    "relations": (39, "b2dc24d63603b88a52b2bb72a21ee08ee2edbd03b60dd7dcc7b62ae80a243aee"),
+    "constraints": (364, "bbe203b8941ce99bef60b22bc3ae0d19fb085b0c5907fc9578d300f03199a7f4"),
+    "indexes": (87, "244302c6c3fcbdc99c61743abba3ef2849251362a12a203ff897e3dc8f9e1003"),
+    "triggers": (32, "663fdebe4a5cc307360db2acdacaed61fbe41fe35c1ab0dab4145cc975fb004a"),
+    "functions": (8, "9567150cc4ac48215e7076f5bba95568fa1715061f24973fcdbf4005ce3b405c"),
     "views": (1, "099049415234da3d04583c58a693a68fda934f77e9eaf00b0d12e2542842734d"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (6, "c93f818ef0134cc85c2d8664bd97842ccaa20dc96fd25adbeb610fb40cc4d7e1"),

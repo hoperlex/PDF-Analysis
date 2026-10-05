@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from auditmanager.access.models import MAX_DISPLAY_NAME_LENGTH
 from auditmanager.access.repository import UserRepository
 from tests.integration.db.conftest import (  # type: ignore[import-not-found]
+    clear_the_role_backfill,
     MIGRATE_ARGV,
     run_foundation_command,
 )
@@ -272,6 +273,9 @@ class TestTheRollback:
     def test_it_downgrades_and_upgrades_again(self, migrated_database) -> None:
         url = migrated_database.url.render_as_string(hide_password=False)
 
+        # `0015` refuses its own downgrade while its role backfill is there; this test is about an
+        # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+        clear_the_role_backfill(url)
         down = run_foundation_command(DOWNGRADE_ARGV, url)
         assert down.returncode == 0, down.describe()
 
@@ -321,6 +325,9 @@ class TestTheRollback:
         finally:
             engine.dispose()
 
+        # `0015` refuses its own downgrade while its role backfill is there; this test is about an
+        # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+        clear_the_role_backfill(url)
         down = run_foundation_command(DOWNGRADE_ARGV, url)
         assert down.returncode == 0, down.describe()
         printed = down.describe()

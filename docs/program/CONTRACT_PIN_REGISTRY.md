@@ -193,7 +193,7 @@ inventory until the registry and the owning change move together.
       "pin_id": "migration-application-head",
       "family": "migration_head",
       "path": "tests/contract/api_v1/test_doc_prose_facts.py",
-      "needle": "assert _true_migration_head() == \"0014_durable_analysis_effects\"",
+      "needle": "assert _true_migration_head() == \"0015_accounts_roles_registration\"",
       "event": "A new application migration head"
     },
     {

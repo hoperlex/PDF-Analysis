@@ -191,11 +191,22 @@ COOLING_OFF_SECONDS: Final[int] = 300
 #: material either: they say how often somebody has been wrong, never what the password is.
 #: They are projected because the operator's two views of a lockout read them, and a
 #: refusal state nobody can see is one nobody can answer for.
+#:
+#: `W49-ACCESS-01` appends the names, the profile completion and the archive state. None of
+#: them is credential material either.
 _PUBLIC_COLUMNS: Final[str] = (
     "user_uid, login, is_default_credential, created_at, password_updated_at, "
     "token_epoch, token_epoch_updated_at, "
-    "failed_sign_ins, last_failed_sign_in_at, sign_in_blocked_until, display_name"
+    "failed_sign_ins, last_failed_sign_in_at, sign_in_blocked_until, display_name, "
+    "last_name, first_name, middle_name, profile_completed_at, archived_at, archived_by"
 )
+
+#: `R-61`, `W49-PLAN.md` §3.1. Every statement here that is addressed **by login** is
+#: addressed to the **active** account holding it: since ``0015`` a login is unique only
+#: among accounts that are not archived, so an archived account and the active one that
+#: took its login share the value. An archived account is reachable by ``user_uid`` only,
+#: and by nothing that signs in.
+_ACTIVE: Final[str] = "archived_at IS NULL"
 
 _INSERT_USER = text(
     f"""
@@ -210,7 +221,9 @@ _INSERT_USER = text(
     """
 )
 
-_SELECT_BY_LOGIN = text(f"SELECT {_PUBLIC_COLUMNS} FROM app_user WHERE login = :login")
+_SELECT_BY_LOGIN = text(
+    f"SELECT {_PUBLIC_COLUMNS} FROM app_user WHERE login = :login AND {_ACTIVE}"
+)
 
 #: One of the two statements in this package that read credential material. Addressed by
 #: login, because a sign-in form types a name and not an identity.
@@ -230,7 +243,7 @@ _SELECT_BY_LOGIN = text(f"SELECT {_PUBLIC_COLUMNS} FROM app_user WHERE login = :
 _SELECT_CREDENTIAL = text(
     "SELECT password_algorithm, password_iterations, password_salt, password_hash, "
     "COALESCE(sign_in_blocked_until > now(), false) "
-    "FROM app_user WHERE login = :login"
+    f"FROM app_user WHERE login = :login AND {_ACTIVE}"
 )
 
 #: The other. Addressed by ``user_uid``, because its caller has already been authenticated
@@ -290,7 +303,7 @@ _REVOKE_ONE = text(
     UPDATE app_user SET
         token_epoch = token_epoch + 1,
         token_epoch_updated_at = now()
-    WHERE login = :login
+    WHERE login = :login AND {_ACTIVE}
     RETURNING {_PUBLIC_COLUMNS}
     """
 )
@@ -315,8 +328,13 @@ _REVOKE_EVERY = text(
 #: about the lockout column: a second statement addressed at the same row inside one
 #: decision is a second read that can disagree with the first, and these two values are the
 #: two halves of one decision -- whether this request is served at all.
+#:
+#: **An archived account has no standing** (`R-61`, `W49-PLAN.md` §3.1): the row is there,
+#: and the answer is the same ``None`` a deleted row gives, so every credential it holds is
+#: refused with the generic ``authentication_required``.
 _SELECT_CREDENTIAL_STANDING = text(
-    "SELECT token_epoch, is_default_credential FROM app_user WHERE user_uid = :user_uid"
+    "SELECT token_epoch, is_default_credential FROM app_user "
+    f"WHERE user_uid = :user_uid AND {_ACTIVE}"
 )
 
 #: What this failure makes the count, computed by the **database** from the row as it
@@ -365,7 +383,7 @@ _NOTE_A_FAILED_SIGN_IN = text(
                 THEN NULL
             ELSE sign_in_blocked_until
         END
-    WHERE login = :login
+    WHERE login = :login AND {_ACTIVE}
     RETURNING {_PUBLIC_COLUMNS}
     """
 )
@@ -383,7 +401,7 @@ _CLEAR_ONE = text(
         failed_sign_ins = 0,
         last_failed_sign_in_at = NULL,
         sign_in_blocked_until = NULL
-    WHERE login = :login
+    WHERE login = :login AND {_ACTIVE}
       AND (failed_sign_ins <> 0
            OR last_failed_sign_in_at IS NOT NULL
            OR sign_in_blocked_until IS NOT NULL)
@@ -426,7 +444,7 @@ _SELECT_DEFAULT_CREDENTIALS = text(
 _SET_DISPLAY_NAME = text(
     f"""
     UPDATE app_user SET display_name = :display_name
-    WHERE login = :login
+    WHERE login = :login AND {_ACTIVE}
     RETURNING {_PUBLIC_COLUMNS}
     """
 )
@@ -452,6 +470,12 @@ def _record(row: object) -> UserRecord:
         last_failed_sign_in_at,
         sign_in_blocked_until,
         display_name,
+        last_name,
+        first_name,
+        middle_name,
+        profile_completed_at,
+        archived_at,
+        archived_by,
     ) = row  # type: ignore[misc]
     return UserRecord(
         user_uid=UserUid.parse(user_uid),
@@ -465,6 +489,12 @@ def _record(row: object) -> UserRecord:
         last_failed_sign_in_at=last_failed_sign_in_at,
         sign_in_blocked_until=sign_in_blocked_until,
         display_name=display_name,
+        last_name=last_name,
+        first_name=first_name,
+        middle_name=middle_name,
+        profile_completed_at=profile_completed_at,
+        archived_at=archived_at,
+        archived_by=archived_by,
     )
 
 

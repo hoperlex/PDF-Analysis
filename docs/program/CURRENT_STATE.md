@@ -64,7 +64,7 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 
 The frozen API surface remains **17 paths / 20 operations / 61 schemas**, the error catalog
 **22**, domain candidate revision 8 with **27** opaque identities, and the migration head is
-**`0014_durable_analysis_effects`**. The last closed release remains `alpha-w47`. This section
+**`0015_accounts_roles_registration`**. The last closed release remains `alpha-w47`. This section
 makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is deployed.
 
 ### Normative-corpus persistence and the alpha runtime boundary (integrated before W48, unchanged)

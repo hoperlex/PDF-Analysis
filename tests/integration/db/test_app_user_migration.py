@@ -16,6 +16,7 @@ from auditmanager.access.models import USER_UID_PATTERN
 from auditmanager.access.passwords import ALGORITHM, StoredPassword, verify_password
 from auditmanager.shared.db.config import DatabaseSettings
 from tests.integration.db.conftest import (  # type: ignore[import-not-found]
+    clear_the_role_backfill,
     MIGRATE_ARGV,
     run_foundation_command,
 )
@@ -239,6 +240,9 @@ class TestTheDowngradeRefusesToDeleteTheOnlyCopy:
         self, migrated_database: DatabaseSettings, migrated_engine: Engine
     ) -> None:
         url = migrated_database.url.render_as_string(hide_password=False)
+        # `0015` refuses its own downgrade while its role backfill is there; this test is about an
+        # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+        clear_the_role_backfill(url)
         result = run_foundation_command(DOWNGRADE_ARGV, url)
         assert "Running downgrade 0006_app_user" in (result.stdout + result.stderr), (
             result.describe()
@@ -267,6 +271,9 @@ class TestTheDowngradeRefusesToDeleteTheOnlyCopy:
             session.commit()
 
         url = migrated_database.url.render_as_string(hide_password=False)
+        # `0015` refuses its own downgrade while its role backfill is there; this test is about an
+        # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+        clear_the_role_backfill(url)
         result = run_foundation_command(DOWNGRADE_ARGV, url)
         combined = result.stdout + result.stderr
         assert "refusing to downgrade 0006_app_user" in combined, result.describe()
