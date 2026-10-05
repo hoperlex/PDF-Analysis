@@ -70,6 +70,9 @@ P02_TABLES = (
     # `0006_app_user`. A journey writes no user, so its count is expected to be
     # unchanged across one -- which is a claim worth counting rather than skipping.
     "app_user",
+    # `0015_accounts_roles_registration`. A journey grants no role and submits no request,
+    # so both counts are expected unchanged across one.
+    "app_user_role",
     "audit_event",
     "audit_run",
     "attempt",
@@ -96,6 +99,7 @@ P02_TABLES = (
     "model_call",
     "project",
     "provider_call_effect",
+    "registration_request",
     "stage_result",
 )
 

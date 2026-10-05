@@ -187,10 +187,19 @@ def test_every_contract_state_column_carries_the_transition_guard(migrated_engin
 #: it against. Its format CHECK is asserted directly in
 #: ``test_app_user_migration.py::test_the_identity_column_carries_the_contract_shaped_format_check``,
 #: so excluding it here loses no coverage. When users are contracted, delete this entry.
+#:
+#: ``request_id``, ``created_user_uid`` and ``author_user_uid`` (``0015``) are here for the
+#: same reason as ``user_uid``: ``reg`` and ``usr`` enter the catalog only with
+#: ``W49-SEAL-01a``. Their format CHECKs are asserted directly in
+#: ``test_accounts_migration.py::test_every_account_identity_column_carries_its_format_check``.
+#: When the seal contracts both prefixes, move all four into ``prefix_by_column``.
 NON_CONTRACT_IDENTITY_COLUMNS = {
     "aggregate_id",
+    "author_user_uid",
     "block_id",
     "correlation_id",
+    "created_user_uid",
+    "request_id",
     "section_id",
     "sequence_no",
     "stage_id",

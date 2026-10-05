@@ -19,6 +19,9 @@ from auditmanager.shared.identity import (
     RunId,
     VersionUid,
 )
+from tests.integration.db.conftest import (  # type: ignore[import-not-found]
+    clear_the_role_backfill,
+)
 
 
 NEW_TABLES = {
@@ -374,6 +377,9 @@ def test_empty_0014_downgrades_to_0013_and_upgrades_back(
         "downgrade",
         "0013_norm_embeddings",
     ]
+    # `0015` refuses its own downgrade while its role backfill is there; this test is about an
+    # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+    clear_the_role_backfill(url)
     result = foundation_command(downgrade, url)
     assert result.returncode == 0, result.describe()
 
@@ -413,6 +419,9 @@ def test_occupied_0014_downgrade_refuses_without_moving_the_head(
         )
 
     url = migrated_database.url.render_as_string(hide_password=False)
+    # `0015` refuses its own downgrade while its role backfill is there; this test is about an
+    # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+    clear_the_role_backfill(url)
     result = foundation_command(
         [
             ".venv/bin/python",

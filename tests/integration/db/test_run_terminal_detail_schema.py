@@ -49,6 +49,7 @@ from auditmanager.shared.identity import (
     VersionUid,
 )
 from tests.integration.db.conftest import (  # type: ignore[import-not-found]
+    clear_the_role_backfill,
     MIGRATE_ARGV,
     run_foundation_command,
 )
@@ -304,6 +305,9 @@ class TestTheRollback:
         url = migrated_database.url.render_as_string(hide_password=False)
         from auditmanager.shared.db.engine import create_database_engine
 
+        # `0015` refuses its own downgrade while its role backfill is there; this test is about an
+        # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+        clear_the_role_backfill(url)
         down = run_foundation_command(DOWNGRADE_ARGV, url)
         assert down.returncode == 0, down.describe()
 

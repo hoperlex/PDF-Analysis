@@ -92,6 +92,28 @@ def run_foundation_command(argv: list[str], database_url: str) -> CommandResult:
     )
 
 
+def clear_the_role_backfill(database_url: str) -> int:
+    """Empty ``app_user_role`` so a downgrade can pass ``0015``; returns the rows removed.
+
+    ``0015_accounts_roles_registration`` refuses its downgrade while ``app_user_role`` or
+    ``registration_request`` hold a row, and its own backfill gives the seeded account two
+    roles -- so after ``0015`` every database refuses, which is the intended forward-only
+    behaviour (`W49-PLAN.md` §4, 01a). A test whose subject is an *earlier* revision's
+    downgrade must first remove what ``0015`` wrote, or it would be measuring ``0015``'s
+    refusal instead of its own revision's behaviour -- and a test asserting "downgrade
+    refused" would pass on the wrong refusal. ``registration_request`` is never written by
+    those tests and its guard refuses a DELETE, so it is not touched here.
+    """
+    from auditmanager.shared.db.engine import create_database_engine
+
+    engine = create_database_engine(DatabaseSettings(url=parse_database_url(database_url)))
+    try:
+        with engine.begin() as connection:
+            return int(connection.execute(text("DELETE FROM app_user_role")).rowcount or 0)
+    finally:
+        engine.dispose()
+
+
 @pytest.fixture(scope="session")
 def foundation_command():
     """The literal-command runner, handed to tests as a fixture.

@@ -20,6 +20,7 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from tests.integration.db.conftest import (  # type: ignore[import-not-found]
+    clear_the_role_backfill,
     MIGRATE_ARGV,
     run_foundation_command,
 )
@@ -101,6 +102,9 @@ def test_a_database_with_no_measurements_still_downgrades(
         ).scalar_one()
     assert measured == 0, "a freshly migrated database carries no calls at all"
 
+    # `0015` refuses its own downgrade while its role backfill is there; this test is about an
+    # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+    clear_the_role_backfill(url)
     result = run_foundation_command(DOWNGRADE_ARGV, url)
     assert result.returncode == 0, result.describe()
 
@@ -115,6 +119,9 @@ def test_a_measured_call_makes_the_downgrade_refuse(
     url = migrated_database.url.render_as_string(hide_password=False)
     _seed_a_measured_call(migrated_engine)
 
+    # `0015` refuses its own downgrade while its role backfill is there; this test is about an
+    # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+    clear_the_role_backfill(url)
     result = run_foundation_command(DOWNGRADE_ARGV, url)
 
     assert result.returncode != 0, (

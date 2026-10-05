@@ -20,6 +20,9 @@ EXPECTED_TABLES = {
     # `0006_app_user`: the one table outside the PC-01 analysis schema. It is listed
     # here rather than exempted, because "exactly the declared relations" is the claim.
     "app_user",
+    # `0015_accounts_roles_registration`: the role set and the registration requests.
+    "app_user_role",
+    "registration_request",
     "analysis_artifact_publication",
     "attempt",
     "audit_event",

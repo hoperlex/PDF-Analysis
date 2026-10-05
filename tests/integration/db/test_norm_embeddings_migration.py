@@ -16,6 +16,9 @@ from auditmanager.norms.embedding_repository import (
     input_digest,
 )
 from auditmanager.shared.identity import NormsSnapshotId
+from tests.integration.db.conftest import (  # type: ignore[import-not-found]
+    clear_the_role_backfill,
+)
 
 SNAPSHOT_ID = NormsSnapshotId.parse("ns_" + "0" * 26)
 CHUNKING_PROFILE = "characters-v1-12000"
@@ -307,6 +310,9 @@ def test_downgrade_refuses_to_drop_a_complete_retained_build(
             windows=_windows(chunk_pks),
         )
 
+    # `0015` refuses its own downgrade while its role backfill is there; this test is about an
+    # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+    clear_the_role_backfill(migrated_database.url.render_as_string(hide_password=False))
     result = foundation_command(
         [
             ".venv/bin/python",
