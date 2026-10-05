@@ -61,6 +61,7 @@ whose revert reproduces the failure.
 - `tests/integration/runs/**`
 - `tests/integration/db/**`
 - `tests/integration/storage/**`
+- `tests/integration/ingest/**` (focused DJ-R3 reconciliation regressions)
 - `tests/integration/norms/**`
 - `docs/program/W48-DURABLE-FIX-2.md`
 - `docs/program/W48-DURABLE-01.md` (DJ-R2 addendum only)
