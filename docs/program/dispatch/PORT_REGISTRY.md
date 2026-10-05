@@ -71,6 +71,13 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56440`, `60040/60041`; API `56441`, Next `56443` | `gate-w47k` — cross-judge Y | 2026-09-29 | wave 47 closes |
 | `56290–56320`, `59890–59921` | wave 44 | 2026-09-24 | **released** — streams and two cross-judges merged; containers, volumes and worktrees removed |
 | `31500` | the owner's alpha stand, `auditmanager-w19a` | standing | never |
+| `56450`, `60050/60051`; API `56451`, Next `56453` | `gate-w48dj2` — `W48-DURABLE-JUDGE-2` | 2026-10-05 | judge hands back |
+| `56460`, `60060/60061`; API `56461`, Next `56463` | `gate-w48df2` — `W48-DURABLE-FIX-2` | 2026-10-05 | merged into W48 closure |
+| `56470`, `60070/60071`; API `56471`, Next `56473` | `gate-w48g2` — `W48-GUARDS-2` | 2026-10-05 | merged into W48 closure |
+| `56480`, `60080/60081`; API `56481`, Next `56483` | `gate-w48tails` — `W48-TAILS` | 2026-10-05 | merged into W48 closure |
+| `56490`, `60090/60091`; API `56491`, Next `56493` | `gate-w48public` — `W48-PUBLIC-01` | 2026-10-05 | merged into W48 closure |
+| `56500`, `60100/60101`; API `56501`, Next `56503` | `gate-w48judgez` — `W48-JUDGE-Z` | 2026-10-05 | W48 closes |
+| `56510`, `60110/60111`; API `56511`, Next `56513` | `gate-w48close` — `W48-INT-CLOSE` | 2026-10-05 | candidate published to `origin/dev` |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
