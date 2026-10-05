@@ -8,7 +8,12 @@ and owns no behaviour.
 
 from __future__ import annotations
 
-from auditmanager.access.accounts import AccountRepository
+from auditmanager.access.accounts import (
+    LAST_ADMIN,
+    SELF_ACTION,
+    AccountInvariantViolation,
+    AccountRepository,
+)
 from auditmanager.access.models import (
     EMAIL_LOGIN_PATTERN,
     MAX_EMAIL_LENGTH,
@@ -21,6 +26,8 @@ from auditmanager.access.models import (
     ROLES,
     USER_UID_PATTERN,
     USER_UID_PREFIX,
+    Account,
+    AccountStanding,
     CredentialStanding,
     RegistrationId,
     UserRecord,
@@ -30,12 +37,14 @@ from auditmanager.access.models import (
     normalize_login,
     normalize_person_name,
 )
+from auditmanager.access.ports import AccountRepository as AccountRepositoryPort
 from auditmanager.access.references import ACCOUNT_REFERENCES, AccountReference
 from auditmanager.access.repository import UserRepository
 
 __all__ = [
     "ACCOUNT_REFERENCES",
     "EMAIL_LOGIN_PATTERN",
+    "LAST_ADMIN",
     "MAX_EMAIL_LENGTH",
     "MAX_NAME_LABEL_LENGTH",
     "MAX_PERSON_NAME_LENGTH",
@@ -44,10 +53,15 @@ __all__ = [
     "ROLES",
     "ROLE_ADMIN",
     "ROLE_EXPERT",
+    "SELF_ACTION",
     "USER_UID_PATTERN",
     "USER_UID_PREFIX",
+    "Account",
+    "AccountInvariantViolation",
     "AccountReference",
     "AccountRepository",
+    "AccountRepositoryPort",
+    "AccountStanding",
     "CredentialStanding",
     "RegistrationId",
     "UserRecord",

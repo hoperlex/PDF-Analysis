@@ -51,9 +51,14 @@ from typing import Protocol, runtime_checkable
 
 from sqlalchemy.orm import Session
 
-from auditmanager.access.models import CredentialStanding, UserRecord
+from auditmanager.access.models import (
+    Account,
+    AccountStanding,
+    CredentialStanding,
+    UserRecord,
+)
 
-__all__ = ["UserRepository"]
+__all__ = ["AccountRepository", "UserRepository"]
 
 
 @runtime_checkable
@@ -155,3 +160,62 @@ class UserRepository(Protocol):
         at one row inside one decision can disagree, and these two facts are the two halves
         of one decision -- whether to serve this request at all.
         """
+
+
+@runtime_checkable
+class AccountRepository(Protocol):
+    """The management half of ``app_user`` that `W49-SEAL-01` wires (`W49-PLAN.md` §3.4).
+
+    A separate port from :class:`UserRepository` on purpose: the credential adapter reaches
+    that one on every request and must not be able to archive anybody. Every method takes
+    the caller's session and leaves the commit to it; every §3.2 invariant is enforced by
+    the implementation, so a router that calls these cannot skip one.
+    """
+
+    def account_standing(self, session: Session, user_uid: str) -> AccountStanding | None:
+        """Epoch, default credential, archived, profile complete and roles, in one read."""
+
+    def get_account(self, session: Session, user_uid: str) -> Account | None:
+        """``getUser``: the account and its roles, archived or not."""
+
+    def list_accounts(
+        self, session: Session, *, include_archived: bool = False
+    ) -> tuple[Account, ...]:
+        """``listUsers``."""
+
+    def update_my_profile(
+        self,
+        session: Session,
+        *,
+        user_uid: str,
+        last_name: str,
+        first_name: str,
+        middle_name: str | None = None,
+        email: str | None = None,
+    ) -> UserRecord:
+        """``updateMyProfile``: completion in one UPDATE, or names on a complete profile."""
+
+    def update_names(
+        self,
+        session: Session,
+        *,
+        user_uid: str,
+        last_name: str,
+        first_name: str,
+        middle_name: str | None = None,
+    ) -> UserRecord:
+        """``updateUser``'s names."""
+
+    def archive_account(self, session: Session, *, actor_uid: str, user_uid: str) -> UserRecord:
+        """``archiveUser``: not oneself, never the last administrator; bumps the epoch."""
+
+    def restore_account(self, session: Session, *, actor_uid: str, user_uid: str) -> UserRecord:
+        """``restoreUser``: ``login_taken`` when the login was taken meanwhile."""
+
+    def purge_account(self, session: Session, *, actor_uid: str, user_uid: str) -> None:
+        """``purgeUser``: archived and unreferenced only; not oneself; irreversible."""
+
+    def reset_password(
+        self, session: Session, *, actor_uid: str, user_uid: str, temporary_password: str
+    ) -> UserRecord:
+        """``resetUserPassword``: not oneself; must-change; bumps the epoch."""
