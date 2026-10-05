@@ -140,7 +140,7 @@ def interrupted(store, session_factory, project, baseline_pdf, key, track):
     return blob_id
 
 
-def test_an_interruption_after_publish_leaves_an_orphan_not_a_half_version(
+def test_a_pre_0014_publish_interruption_is_legacy_unattributed_not_an_orphan(
     interrupted, store, engine, reconciler: Reconciler, baseline_pdf
 ) -> None:
     blob_id = interrupted
@@ -159,9 +159,11 @@ def test_an_interruption_after_publish_leaves_an_orphan_not_a_half_version(
 
     report = reconciler.report()
 
-    assert [item.blob_id for item in report.orphan_objects] == [blob_id]
-    assert report.orphan_objects[0].recorded_state == "verifying"
+    assert report.orphan_objects == ()
     assert report.unpublished_records == ()
+    assert [item.blob_id for item in report.legacy_unattributed_blobs] == [blob_id]
+    assert report.legacy_unattributed_blobs[0].recorded_state == "verifying"
+    assert report.legacy_unattributed_blobs[0].object_present is True
     assert report.missing_objects == ()
     assert not report.is_clean
     screen_message(report.describe())
@@ -223,8 +225,10 @@ def test_a_record_with_no_object_is_reported_as_unpublished_not_as_an_orphan(
     report = reconciler.report()
 
     assert report.orphan_objects == ()
-    assert [item.blob_id for item in report.unpublished_records] == [blob_id]
-    assert report.unpublished_records[0].recorded_state == "verifying"
+    assert report.unpublished_records == ()
+    assert [item.blob_id for item in report.legacy_unattributed_blobs] == [blob_id]
+    assert report.legacy_unattributed_blobs[0].recorded_state == "verifying"
+    assert report.legacy_unattributed_blobs[0].object_present is False
 
 
 # --- a published version whose bytes have gone -------------------------------
@@ -287,7 +291,8 @@ def test_report_is_clean_on_a_healthy_instance(
 
     assert report.is_clean
     assert report.describe() == (
-        "orphan_objects=0 unpublished_records=0 missing_objects=0 "
+        "orphan_objects=0 unpublished_records=0 legacy_unattributed_blobs=0 "
+        "missing_objects=0 "
         "missing_analysis_artifacts=0 unbound_analysis_artifacts=0 stale_commands=0"
     )
 
@@ -345,31 +350,27 @@ def test_a_stale_in_progress_command_is_reported_and_can_be_abandoned(
     assert reconciler.report(stale_command_age="1 hour").stale_commands == ()
 
 
-def test_rejecting_a_never_published_record_is_explicit_and_permanent(
+def test_a_legacy_unattributed_blob_cannot_be_rejected_without_attempt_authority(
     interrupted, store, engine, reconciler, service, project, baseline_pdf, key
 ) -> None:
-    """``reject_unpublished`` is opt-in, and its consequence is asserted, not implied.
-
-    ``blob_id`` is content-derived, so rejecting a record permanently occupies the
-    identity of those exact bytes. A later upload of identical content is then refused.
-    That is why the ingest path never rejects on its own.
-    """
+    """A pre-0014 row cannot prove that no producer still owns its content identity."""
     blob_id = interrupted
     store._purge_published(blob_id)
 
-    reconciler.reject_unpublished(blob_id)
-    assert blob_state(engine, blob_id) == "rejected"
-
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
-            project_uid=project.project_uid,
-            content=baseline_pdf,
-            source_filename=SOURCE_FILENAME,
-            display_title=DISPLAY_TITLE,
-            idempotency_key=key("after-reject"),
-        )
+        reconciler.reject_unpublished(blob_id, older_than="0 seconds")
     assert raised.value.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED
-    assert counts(engine, "document_version") == 0
+    assert blob_state(engine, blob_id) == "verifying"
+
+    outcome = service.upload_single_pdf(
+        project_uid=project.project_uid,
+        content=baseline_pdf,
+        source_filename=SOURCE_FILENAME,
+        display_title=DISPLAY_TITLE,
+        idempotency_key=key("after-refusal"),
+    )
+    assert outcome.version.source.blob_id == blob_id
+    assert counts(engine, "document_version") == 1
 
 
 def test_an_available_blob_is_never_rejected(

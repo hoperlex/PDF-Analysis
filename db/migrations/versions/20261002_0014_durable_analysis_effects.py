@@ -272,7 +272,10 @@ def _create_effect_journals() -> None:
                 response_sha256 IS NULL OR response_sha256 ~ '^[0-9a-f]{{64}}$'
             ),
             CONSTRAINT ck_provider_effect_state CHECK (
-                state IN ('prepared', 'response_received', 'completed', 'outcome_unknown')
+                state IN (
+                    'prepared', 'response_received', 'completed', 'outcome_unknown',
+                    'abandoned'
+                )
             ),
             CONSTRAINT ck_provider_effect_error_code CHECK (
                 error_code IS NULL OR error_code IN ({ERROR_CODES_SQL})
@@ -302,6 +305,12 @@ def _create_effect_journals() -> None:
                 OR (state = 'outcome_unknown' AND response_sha256 IS NULL
                     AND input_tokens IS NULL AND output_tokens IS NULL
                     AND latency_ms IS NULL AND error_code IS NOT NULL)
+                OR (state = 'abandoned' AND error_code IS NOT NULL AND (
+                    (response_sha256 IS NULL AND input_tokens IS NULL
+                        AND output_tokens IS NULL AND latency_ms IS NULL)
+                    OR (response_sha256 IS NOT NULL AND input_tokens IS NOT NULL
+                        AND output_tokens IS NOT NULL AND latency_ms IS NOT NULL)
+                ))
             ),
             CONSTRAINT fk_provider_effect_job_belongs_to_run FOREIGN KEY (run_id, job_id)
                 REFERENCES job (run_id, job_id),
@@ -317,7 +326,8 @@ def _create_effect_journals() -> None:
     op.execute("CREATE INDEX ix_provider_call_effect_run_id ON provider_call_effect (run_id);")
     op.execute(
         "CREATE INDEX ix_provider_call_effect_unsettled "
-        "ON provider_call_effect (state, prepared_at) WHERE state <> 'completed';"
+        "ON provider_call_effect (state, prepared_at) "
+        "WHERE state IN ('prepared', 'response_received');"
     )
 
     op.execute(
@@ -388,6 +398,8 @@ def _create_effect_journals() -> None:
             IF TG_TABLE_NAME = 'provider_call_effect' AND (
                 (OLD.state = 'prepared' AND NEW.state IN ('response_received', 'outcome_unknown'))
                 OR (OLD.state = 'response_received' AND NEW.state = 'completed')
+                OR (OLD.state IN ('prepared', 'response_received')
+                    AND NEW.state = 'abandoned')
             ) THEN
                 IF (to_jsonb(OLD) - ARRAY[
                         'state', 'response_sha256', 'input_tokens', 'output_tokens',

@@ -12,14 +12,14 @@ What is canonical
 follows from that single decision:
 
 ``orphan_objects``
-    The store holds an object the database never finished claiming. This is the crash
-    between publish and commit. The bytes are inert -- no manifest references them, so
-    no run can read them -- and they are *adoptable*: because ``blob_id`` is derived
-    from ``(sha256, size)``, re-uploading the identical content resolves to the same
-    identifier, finds the ``verifying`` row already there and completes it, re-using the
-    object rather than writing a second copy. Reconciliation therefore **reports** and
-    does not delete. It could not delete in any case: the BlobStore port has no delete
-    or erase operation, by design.
+    Bytes that a current publication protocol can prove lost their owner.  W48's
+    Attempt-scoped analysis intents are not placed here while they are live.
+
+``legacy_unattributed_blobs``
+    Blob rows with no manifest and no W48 publication intent.  They may pre-date
+    migration ``0014`` and therefore have no Attempt authority from which an operator
+    could infer that rejection is safe.  They remain visible and adoptable, but are
+    never presented as action-ready orphans.
 
 ``unpublished_records``
     The database is mid-publication and the store has nothing. Nothing was ever
@@ -40,9 +40,10 @@ follows from that single decision:
 
 ``unbound_analysis_artifacts``
     An Attempt committed publication intent but never committed the stage-result binding.
-    The entry retains run/Attempt/stage attribution and says whether point inspection
-    found either its exact opaque temporary handle or the canonical object; neither
-    handle nor storage location is exposed, and nothing is adopted or deleted.
+    The entry retains run/Attempt/stage attribution, Attempt state, creation time and
+    staleness classification, and says whether point inspection found either its exact
+    opaque temporary handle or the canonical object; neither handle nor storage location
+    is exposed, and nothing is adopted or deleted.
 
 ``stale_commands``
     A ``command_record`` still ``in_progress`` long after its executor should have
@@ -84,6 +85,7 @@ the sweep.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
@@ -110,6 +112,7 @@ from .failures import domain_error_from_storage
 __all__ = [
     "MissingAnalysisArtifact",
     "MissingObject",
+    "LegacyUnattributedBlob",
     "OrphanObject",
     "ReconciliationReport",
     "Reconciler",
@@ -122,7 +125,7 @@ _AVAILABLE_WITHOUT_MANIFEST = text(
     "  SELECT 1 FROM input_manifest_entry m WHERE m.blob_id = b.blob_id"
     ") AND NOT EXISTS ("
     "  SELECT 1 FROM analysis_artifact_publication a "
-    "  WHERE a.blob_id = b.blob_id AND a.state = 'bound'"
+    "  WHERE a.blob_id = b.blob_id"
     ") ORDER BY b.created_at"
 )
 
@@ -134,11 +137,29 @@ _BOUND_ANALYSIS_ARTIFACTS = text(
 
 _UNBOUND_ANALYSIS_ARTIFACTS = text(
     "SELECT a.blob_id, a.run_id, a.job_id, a.attempt_id, a.stage_id, a.blob_role, "
-    "a.upload_token, b.sha256, b.size_bytes, b.media_type "
-    "FROM analysis_artifact_publication a JOIN blob b ON b.blob_id = a.blob_id "
+    "a.upload_token, b.sha256, b.size_bytes, b.media_type, execution_attempt.state, "
+    "a.created_at, "
+    "a.created_at <= statement_timestamp() - CAST(:older_than AS interval) AS is_stale "
+    "FROM analysis_artifact_publication a "
+    "JOIN blob b ON b.blob_id = a.blob_id "
+    "JOIN attempt execution_attempt ON execution_attempt.attempt_id = a.attempt_id "
     "WHERE a.state = 'prepared' "
     "ORDER BY a.created_at, a.attempt_id, a.stage_id, a.blob_id, a.blob_role"
 )
+
+_REJECTION_AUTHORITY = text(
+    "SELECT a.upload_token, a.blob_role, a.created_at, b.sha256, b.size_bytes, "
+    "b.media_type, execution_attempt.state AS attempt_state, "
+    "a.created_at <= statement_timestamp() - CAST(:older_than AS interval) AS is_stale "
+    "FROM analysis_artifact_publication a "
+    "JOIN blob b ON b.blob_id = a.blob_id "
+    "JOIN attempt execution_attempt ON execution_attempt.attempt_id = a.attempt_id "
+    "WHERE a.blob_id = :blob_id AND a.state = 'prepared' "
+    "ORDER BY a.created_at, a.attempt_id, a.stage_id, a.blob_role "
+    "FOR UPDATE OF a, execution_attempt"
+)
+
+_ATTEMPT_TERMINALS = frozenset({"succeeded", "failed", "superseded", "lost", "cancelled"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +170,17 @@ class OrphanObject:
     recorded_state: str
     sha256: str | None
     size_bytes: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class LegacyUnattributedBlob:
+    """A pre-0014-style blob with no Attempt-scoped publication authority."""
+
+    blob_id: BlobId
+    recorded_state: str
+    sha256: str | None
+    size_bytes: int | None
+    object_present: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,8 +215,21 @@ class UnboundAnalysisArtifact:
     attempt_id: str
     stage_id: str
     role: str
+    attempt_state: str
+    created_at: datetime
+    is_stale: bool
     object_present: bool
     temporary_present: bool
+
+    @property
+    def rejection_eligible(self) -> bool:
+        """Whether the ordinary rejection action may safely settle this evidence."""
+        return (
+            self.attempt_state in _ATTEMPT_TERMINALS
+            and self.is_stale
+            and not self.object_present
+            and not self.temporary_present
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +238,7 @@ class ReconciliationReport:
 
     orphan_objects: tuple[OrphanObject, ...] = ()
     unpublished_records: tuple[OrphanObject, ...] = ()
+    legacy_unattributed_blobs: tuple[LegacyUnattributedBlob, ...] = ()
     missing_objects: tuple[MissingObject, ...] = ()
     missing_analysis_artifacts: tuple[MissingAnalysisArtifact, ...] = ()
     unbound_analysis_artifacts: tuple[UnboundAnalysisArtifact, ...] = ()
@@ -203,6 +249,7 @@ class ReconciliationReport:
         return not (
             self.orphan_objects
             or self.unpublished_records
+            or self.legacy_unattributed_blobs
             or self.missing_objects
             or self.missing_analysis_artifacts
             or self.unbound_analysis_artifacts
@@ -214,6 +261,7 @@ class ReconciliationReport:
         return (
             f"orphan_objects={len(self.orphan_objects)} "
             f"unpublished_records={len(self.unpublished_records)} "
+            f"legacy_unattributed_blobs={len(self.legacy_unattributed_blobs)} "
             f"missing_objects={len(self.missing_objects)} "
             f"missing_analysis_artifacts={len(self.missing_analysis_artifacts)} "
             f"unbound_analysis_artifacts={len(self.unbound_analysis_artifacts)} "
@@ -238,16 +286,22 @@ class Reconciler:
         self._blobs = BlobMetadataRepository()
         self._commands = CommandRepository()
 
-    def report(self, *, stale_command_age: str = "1 hour") -> ReconciliationReport:
+    def report(
+        self,
+        *,
+        stale_command_age: str = "1 hour",
+        unbound_artifact_age: str = "1 hour",
+    ) -> ReconciliationReport:
         """One full pass. Reads only; changes nothing anywhere."""
         with session_scope(self._factory) as session:
             unsettled = self._blobs.unsettled(session)
             detached = tuple(
-                OrphanObject(
+                LegacyUnattributedBlob(
                     blob_id=parse_blob_id(blob_id),
                     recorded_state=state,
                     sha256=sha256,
                     size_bytes=None if size is None else int(size),
+                    object_present=True,
                 )
                 for blob_id, state, sha256, size in (
                     tuple(row)
@@ -281,6 +335,9 @@ class Reconciler:
                         role=parse_blob_role(str(role)),
                         media_type=str(media_type),
                     ),
+                    str(attempt_state),
+                    created_at,
+                    bool(is_stale),
                 )
                 for (
                     blob_id,
@@ -293,7 +350,13 @@ class Reconciler:
                     sha256,
                     size_bytes,
                     media_type,
-                ) in session.execute(_UNBOUND_ANALYSIS_ARTIFACTS).all()
+                    attempt_state,
+                    created_at,
+                    is_stale,
+                ) in session.execute(
+                    _UNBOUND_ANALYSIS_ARTIFACTS,
+                    {"older_than": unbound_artifact_age},
+                ).all()
             )
             stale = tuple(
                 record.command_id
@@ -302,19 +365,21 @@ class Reconciler:
                 )
             )
 
-        orphans: list[OrphanObject] = list(detached)
-        unpublished: list[OrphanObject] = []
+        unbound_blob_ids = {blob_id for blob_id, *_rest in unbound_artifacts}
+        legacy: list[LegacyUnattributedBlob] = list(detached)
         for record in unsettled:
-            candidate = OrphanObject(
-                blob_id=record.blob_id,
-                recorded_state=record.state.value,
-                sha256=record.sha256,
-                size_bytes=record.size_bytes,
+            if record.blob_id in unbound_blob_ids:
+                continue
+            object_present = self._object_exists(record.blob_id)
+            legacy.append(
+                LegacyUnattributedBlob(
+                    blob_id=record.blob_id,
+                    recorded_state=record.state.value,
+                    sha256=record.sha256,
+                    size_bytes=record.size_bytes,
+                    object_present=object_present,
+                )
             )
-            if self._object_exists(record.blob_id):
-                orphans.append(candidate)
-            else:
-                unpublished.append(candidate)
 
         missing: list[MissingObject] = []
         for blob_id in manifest_blobs:
@@ -348,6 +413,9 @@ class Reconciler:
                 attempt_id=attempt_id,
                 stage_id=stage_id,
                 role=role,
+                attempt_state=attempt_state,
+                created_at=created_at,
+                is_stale=bool(is_stale),
                 object_present=self._object_exists(blob_id),
                 temporary_present=self._store.temporary_exists(temporary),
             )
@@ -359,12 +427,14 @@ class Reconciler:
                 stage_id,
                 role,
                 temporary,
+                attempt_state,
+                created_at,
+                is_stale,
             ) in unbound_artifacts
         )
 
         return ReconciliationReport(
-            orphan_objects=tuple(orphans),
-            unpublished_records=tuple(unpublished),
+            legacy_unattributed_blobs=tuple(legacy),
             missing_objects=tuple(missing),
             missing_analysis_artifacts=tuple(missing_analysis),
             unbound_analysis_artifacts=unbound_analysis,
@@ -497,15 +567,15 @@ class Reconciler:
                 self._commands.abandon(session, record.command_id)
             return tuple(record.command_id for record in stale)
 
-    def reject_unpublished(self, blob_id: BlobId) -> None:
+    def reject_unpublished(
+        self, blob_id: BlobId, *, older_than: str = "1 hour"
+    ) -> None:
         """Settle one never-published blob record as ``rejected``.
 
-        Explicit and opt-in, and it has a consequence worth stating: ``blob_id`` is
-        derived from ``(sha256, size)``, so a rejected record permanently occupies the
-        identity of that exact content and a later upload of identical bytes will be
-        refused with ``state_transition_not_allowed``. Rejection is for content an
-        operator has decided must never be stored. For an ordinary interrupted upload,
-        do nothing: a re-upload adopts the record and completes it.
+        Eligibility requires Attempt-scoped W48 authority, a terminal producing Attempt,
+        and an explicit age threshold. Legacy rows cannot prove that authority. A
+        canonical or temporary object also requires a separate recovery decision and is
+        refused here rather than burned under a content-derived identity.
         """
         with session_scope(self._factory) as session:
             record = self._blobs.require(session, blob_id)
@@ -516,6 +586,28 @@ class Reconciler:
                     current_state=record.state.value,
                     requested_state="rejected",
                 )
+            authorities = session.execute(
+                _REJECTION_AUTHORITY,
+                {"blob_id": str(blob_id), "older_than": older_than},
+            ).mappings().all()
+            if not authorities:
+                self._refuse_rejection("legacy_unattributed")
+            if any(row["attempt_state"] not in _ATTEMPT_TERMINALS for row in authorities):
+                self._refuse_rejection("attempt_not_terminal")
+            if any(not bool(row["is_stale"]) for row in authorities):
+                self._refuse_rejection("publication_not_stale")
+            if self._object_exists(blob_id):
+                self._refuse_rejection("canonical_object_present")
+            for row in authorities:
+                temporary = TemporaryBlob(
+                    upload_token=str(row["upload_token"]),
+                    declared_sha256=str(row["sha256"]),
+                    declared_size=int(row["size_bytes"]),
+                    role=parse_blob_role(str(row["blob_role"])),
+                    media_type=str(row["media_type"]),
+                )
+                if self._store.temporary_exists(temporary):
+                    self._refuse_rejection("temporary_object_present")
             self._blobs.mark_rejected(session, blob_id)
 
     # -- internals -----------------------------------------------------------
@@ -531,3 +623,12 @@ class Reconciler:
             # would turn a transient outage into a permanent integrity verdict.
             raise domain_error_from_storage(exc) from None
         return True
+
+    @staticmethod
+    def _refuse_rejection(current_state: str) -> None:
+        raise DomainError(
+            ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
+            machine="analysis_artifact_publication",
+            current_state=current_state,
+            requested_state="reject_blob",
+        )

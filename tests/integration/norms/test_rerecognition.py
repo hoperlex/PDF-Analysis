@@ -11,6 +11,7 @@ import json
 
 import pytest
 
+from auditmanager.norms import __main__ as norms_command
 from auditmanager.norms import (
     DegeneracySignal,
     PageRepair,
@@ -321,3 +322,29 @@ def test_a_complete_transport_resolves() -> None:
             "PROXY_LLM_MODEL": "m",
         }
     ) == ("https://proxy.example.invalid", "t", "m")
+
+
+def test_live_command_refuses_before_transport_or_ledger_write(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(norms_command, "degenerate_pages", lambda _root: ())
+
+    def transport_must_not_be_constructed():
+        raise AssertionError("live refusal must precede provider transport construction")
+
+    monkeypatch.setattr(
+        norms_command,
+        "resolve_transport",
+        transport_must_not_be_constructed,
+    )
+    ledger = tmp_path / "repairs.json"
+    with pytest.raises(RunRefused, match="durable_call_journal_required"):
+        norms_command.main(
+            [
+                "--corpus",
+                str(tmp_path),
+                "--ledger",
+                str(ledger),
+            ]
+        )
+    assert not ledger.exists()
