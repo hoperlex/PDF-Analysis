@@ -38,13 +38,23 @@ from auditmanager.access.models import (
     normalize_person_name,
 )
 from auditmanager.access.ports import AccountRepository as AccountRepositoryPort
+from auditmanager.access.ports import RegistrationRepository as RegistrationRepositoryPort
 from auditmanager.access.references import ACCOUNT_REFERENCES, AccountReference
+from auditmanager.access.registrations import (
+    MAX_PENDING_REQUESTS,
+    MAX_REJECTION_REASON_LENGTH,
+    RegistrationRecord,
+    RegistrationRepository,
+    RegistrationStatus,
+)
 from auditmanager.access.repository import UserRepository
 
 __all__ = [
     "ACCOUNT_REFERENCES",
     "EMAIL_LOGIN_PATTERN",
     "LAST_ADMIN",
+    "MAX_PENDING_REQUESTS",
+    "MAX_REJECTION_REASON_LENGTH",
     "MAX_EMAIL_LENGTH",
     "MAX_NAME_LABEL_LENGTH",
     "MAX_PERSON_NAME_LENGTH",
@@ -64,6 +74,10 @@ __all__ = [
     "AccountStanding",
     "CredentialStanding",
     "RegistrationId",
+    "RegistrationRecord",
+    "RegistrationRepository",
+    "RegistrationRepositoryPort",
+    "RegistrationStatus",
     "UserRecord",
     "UserRepository",
     "UserUid",

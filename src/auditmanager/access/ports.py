@@ -58,7 +58,7 @@ from auditmanager.access.models import (
     UserRecord,
 )
 
-__all__ = ["AccountRepository", "UserRepository"]
+__all__ = ["AccountRepository", "RegistrationRepository", "UserRepository"]
 
 
 @runtime_checkable
@@ -219,3 +219,54 @@ class AccountRepository(Protocol):
         self, session: Session, *, actor_uid: str, user_uid: str, temporary_password: str
     ) -> UserRecord:
         """``resetUserPassword``: not oneself; must-change; bumps the epoch."""
+
+    def set_roles(
+        self,
+        session: Session,
+        *,
+        actor_uid: str,
+        user_uid: str,
+        roles: frozenset[str] | set[str] | tuple[str, ...],
+    ) -> frozenset[str]:
+        """``updateUser``'s roles: not a self-demotion, never the last administrator."""
+
+
+@runtime_checkable
+class RegistrationRepository(Protocol):
+    """Registration requests (`W49-PLAN.md` §3.3), for the seal's ``registrations`` router.
+
+    Return types live in :mod:`auditmanager.access.registrations`; annotated loosely here
+    so this module keeps importing only the value types it already did.
+    """
+
+    def submit(
+        self,
+        session: Session,
+        *,
+        login: str,
+        password: str,
+        last_name: str,
+        first_name: str,
+        middle_name: str | None = None,
+    ) -> object:
+        """``submitRegistration``: unauthenticated; ``login_taken``, ``request_pending``,
+        ``queue_full``."""
+
+    def approve(
+        self, session: Session, *, actor_uid: str, request_id: str, roles: object
+    ) -> object:
+        """``approveRegistration``: one transaction, ``FOR UPDATE``, at least one role."""
+
+    def reject(
+        self, session: Session, *, actor_uid: str, request_id: str, reason: str
+    ) -> object:
+        """``rejectRegistration``: a reason of 1-256 characters."""
+
+    def list_requests(self, session: Session, *, status: str | None = None) -> tuple:
+        """``listRegistrations``."""
+
+    def pending_total(self, session: Session) -> int:
+        """``listRegistrations``'s ``pending_total``."""
+
+    def read_status(self, session: Session, *, login: str, password: str) -> object:
+        """``readRegistrationStatus``: one derivation on every path."""

@@ -65,6 +65,7 @@ record that anybody ever looked.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Final
 
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -100,7 +101,9 @@ PRODUCT_NAME: Final[str] = "AuditManager"
 SHIPPED_DEFAULT_PASSWORD: Final[str] = "password"  # noqa: S105 - the published default
 
 
-def enforce_password_policy(new_password: str, *, login: str) -> None:
+def enforce_password_policy(
+    new_password: str, *, login: str, context: Iterable[str | None] = ()
+) -> None:
     """Refuse ``new_password`` when `R-48` says a deployment must not accept it.
 
     Raises :class:`~auditmanager.shared.errors.DomainError` with
@@ -123,6 +126,11 @@ def enforce_password_policy(new_password: str, *, login: str) -> None:
        in exactly the casing it happened to be typed in at sign-up, which is not a security
        property, just an accident of the keyboard.
 
+    **``context``, since `W49-ACCESS-01c`** (`W49-PLAN.md` §3.3): further facts this call
+    has in hand about the account -- a registration's names and its e-mail's local part --
+    each refused exactly as the login is, case-folded, compared whole. Still nothing
+    stored and nothing to license: every entry is the applicant's own input.
+
     The blocklist's **third** entry -- the current password -- is not checked here; see
     the module docstring for where it is and why it stays there. The **fourth**, the
     shipped default (`D-101`), is checked here and nowhere else: it is a fact about the
@@ -144,6 +152,12 @@ def enforce_password_policy(new_password: str, *, login: str) -> None:
             ErrorCode.VALIDATION_FAILED,
             message="a password may not be the product's name",
         )
+    for entry in context:
+        if entry and folded == entry.casefold():
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message="a password may not be the account's own name or e-mail",
+            )
     if folded == SHIPPED_DEFAULT_PASSWORD.casefold():
         # `D-101`. Folded for the same reason the two entries above are, and here the
         # reason is not hypothetical: the change `W47-JUDGE-X` drove from the shipped

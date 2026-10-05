@@ -384,17 +384,20 @@ class TestArchiveAndRestore:
         worker.start()
         waiting = 0
         deadline = time.monotonic() + 5
-        with migrated_engine.connect() as probe:
-            while time.monotonic() < deadline and not outcome:
+        # A fresh connection per probe: pg_stat_activity is a per-transaction snapshot
+        # (stats_fetch_consistency = cache), so one connection polling inside one transaction
+        # would read the first answer for ever.
+        while time.monotonic() < deadline and not outcome:
+            with migrated_engine.connect() as probe:
                 waiting = probe.execute(
                     text(
                         "SELECT count(*) FROM pg_stat_activity "
                         "WHERE datname = current_database() AND wait_event_type = 'Lock'"
                     )
                 ).scalar_one()
-                if waiting:
-                    break
-                time.sleep(0.05)
+            if waiting:
+                break
+            time.sleep(0.05)
         first.commit()
         first.close()
         worker.join(30)

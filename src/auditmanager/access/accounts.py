@@ -232,6 +232,10 @@ _COMPLETE_PROFILE = text(
     """
 )
 
+_DELETE_ROLE = text(
+    "DELETE FROM app_user_role WHERE user_uid = :user_uid AND role = :role RETURNING role"
+)
+
 _INSERT_ROLE = text(
     "INSERT INTO app_user_role (user_uid, role, granted_by) "
     "VALUES (:user_uid, :role, :granted_by) "
@@ -693,3 +697,78 @@ class AccountRepository:
             role,
         )
         return True
+
+    def revoke_role(
+        self, session: Session, *, actor_uid: str, user_uid: str, role: str
+    ) -> bool:
+        """Remove ``role`` from the account's set; ``True`` when the set changed.
+
+        `W49-PLAN.md` §3.2: an account cannot demote itself (``permission_denied``), and the
+        last active administrator cannot lose ``admin`` (``conflict``) -- decided under the
+        lock on the administrator set, like archive. A change raises ``token_epoch``.
+        """
+        role = parse_role(role)
+        _refuse_self(actor_uid, user_uid, "demote")
+        current = self._lock_admins_then(session, user_uid)
+        if current is None:
+            raise _no_such_account()
+        if role == ROLE_ADMIN and not current.archived:
+            self._refuse_last_admin(session, user_uid, "lose the role admin")
+        removed = session.execute(_DELETE_ROLE, {"user_uid": user_uid, "role": role}).first()
+        if removed is None:
+            return False
+        session.execute(_BUMP_EPOCH, {"user_uid": user_uid})
+        _log.warning(
+            "%s: %s (%r) no longer holds %r (by %s); every credential it held is refused.",
+            ROLES_CHANGED,
+            user_uid,
+            current.login,
+            role,
+            actor_uid,
+        )
+        return True
+
+    def set_roles(
+        self,
+        session: Session,
+        *,
+        actor_uid: str,
+        user_uid: str,
+        roles: frozenset[str] | set[str] | tuple[str, ...],
+    ) -> frozenset[str]:
+        """Make the account's role set exactly ``roles`` (``updateUser``'s roles).
+
+        The difference is applied as revocations then grants, each under the rules above,
+        and ``token_epoch`` is raised **once** when anything changed. An empty set is
+        allowed: an account with no role reaches only what every complete account reaches
+        (`R-60`). Removing a role from oneself is refused even when another is added in
+        the same call -- "demote" is any loss, not a net count.
+        """
+        wanted = frozenset(parse_role(role) for role in roles)
+        current = self._lock_admins_then(session, user_uid)
+        if current is None:
+            raise _no_such_account()
+        held = self.roles_of(session, user_uid)
+        losing = held - wanted
+        gaining = wanted - held
+        if losing:
+            _refuse_self(actor_uid, user_uid, "demote")
+            if ROLE_ADMIN in losing and not current.archived:
+                self._refuse_last_admin(session, user_uid, "lose the role admin")
+        for role in sorted(losing):
+            session.execute(_DELETE_ROLE, {"user_uid": user_uid, "role": role})
+        for role in sorted(gaining):
+            session.execute(
+                _INSERT_ROLE, {"user_uid": user_uid, "role": role, "granted_by": actor_uid}
+            )
+        if losing or gaining:
+            session.execute(_BUMP_EPOCH, {"user_uid": user_uid})
+            _log.warning(
+                "%s: %s (%r) now holds %s (by %s); every credential it held is refused.",
+                ROLES_CHANGED,
+                user_uid,
+                current.login,
+                sorted(wanted),
+                actor_uid,
+            )
+        return wanted
