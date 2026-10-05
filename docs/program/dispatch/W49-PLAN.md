@@ -423,6 +423,7 @@ measured at the base, into the ACCESS and SEAL task files.
   attaching `conflict_reason` to the `conflict` raises once the catalog declares the key, moving
   `usr`/`reg` into the shared identity registry, and removing `access/name.py`, which
   `access.profile` replaces —
+  `src/auditmanager/decisions/ledger.py` (removing the `author_user_uid = None` default from `record_decision` and `append_decision_under_key`, decided at the DECISIONS-01 merge) and the call sites that then need the keyword — `tests/integration/decisions/**`, `tests/integration/exports/test_verdict_columns.py`, `tests/integration/p02_journey/journey.py`, `tests/integration/p02_journey/test_journey_figures.py`, `tests/integration/p02_journey/test_query_surface_over_the_corpus.py` — one keyword argument per call, nothing else,
   `tests/e2e/pc01/test_acceptance.py` (the route-count assertion only),
   `web/src/app/bff/v1/[...path]/route.ts` and `web/src/shared/api/authorization.ts` (the one
   count comment in each, §3.6), `docs/program/CONTRACT_PIN_REGISTRY.md` (all rows but the
@@ -445,7 +446,9 @@ measured at the base, into the ACCESS and SEAL task files.
   `.venv/bin/python -m pytest tests/integration/api/test_authorization.py tests/integration/auth -q`
   green.
 - **01c — the routers:** `me.py`, `registrations.py`, `users.py`; the decisions router passes the
-  subject's `user_uid` to the ledger; the status read with constant work. The suite's own logins
+  subject's `user_uid` to the ledger, the ledger's `None` default is removed so a new event can
+  never be written without its author's account, and `test_the_ledger_declares_no_default_author`
+  extends to `author_user_uid`; the status read with constant work. The suite's own logins
   change where the plan changes the rule: `tests/integration/api/driver.py` (`SUITE_LOGIN`
   becomes an e-mail with a complete profile), `test_authorization.py` (the open set is now three),
   `test_decision_authorship.py` and `tests/integration/auth/test_the_reviewer_name_is_visible.py`

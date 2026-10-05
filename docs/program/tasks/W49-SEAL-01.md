@@ -55,6 +55,7 @@ The resealed contract, the three access registers plus `OPERATION_ROLES`, and th
 - `contracts/api/v1/openapi.json`, `contracts/api/v1/README.md`
 - `contracts/domain/v1/identifiers.json`, `contracts/domain/v1/error-codes.json`, `contracts/domain/v1/error-envelope.schema.json`, `contracts/domain/v1/state-machines.json`, `contracts/domain/v1/README.md`
 - `src/auditmanager/shared/identity/ids.py` — the `usr` and `reg` registry types only
+- `src/auditmanager/decisions/ledger.py` (removing the `author_user_uid = None` default from `record_decision` and `append_decision_under_key`, decided at the DECISIONS-01 merge) and the call sites that then need the keyword — `tests/integration/decisions/**`, `tests/integration/exports/test_verdict_columns.py`, `tests/integration/p02_journey/journey.py`, `tests/integration/p02_journey/test_journey_figures.py`, `tests/integration/p02_journey/test_query_surface_over_the_corpus.py` — one keyword argument per call, nothing else
 - `src/auditmanager/access/**` — only (a) attaching `conflict_reason` to the `conflict` raises once the catalog declares it, (b) moving `usr`/`reg` into the shared registry, (c) removing `access/name.py`, which `access.profile` replaces
 - `web/openapi/openapi.json`, `web/src/shared/api/generated/**` (via `npm --prefix web run api:generate`), `web/FRONTEND_LOCK.json`
 - `web/src/shared/api/catalog-message.ts` — the `rate_limited` sentence only
@@ -79,7 +80,7 @@ The resealed contract, the three access registers plus `OPERATION_ROLES`, and th
 
 - 01a: `W49-PLAN.md` §3.4 operations and schemas; `conflict_reason`; `rate_limited` in all four places; identifiers `usr`, `reg`; the two state machines; the superseded denials with the sweep `rg -n -i -e role -e 'rate limit' contracts/api/v1/openapi.json`; regenerated client, mirror and lock; every surface pin; measured triple and SHA-256
 - 01b: the three registers and `OPERATION_ROLES` (any-of), `AccountStanding` widened, the evaluation order of §3.2, sweep tests over operation × role set × profile × credential
-- 01c: routers `me.py`, `registrations.py`, `users.py`; the decisions router passes the subject's `user_uid`; suite logins become e-mails with complete profiles
+- 01c: routers `me.py`, `registrations.py`, `users.py`; the decisions router passes the subject's `user_uid` and the ledger's `None` default is removed (every call site passes the keyword); `test_the_ledger_declares_no_default_author` covers `author_user_uid`; suite logins become e-mails with complete profiles
 
 ## Required tests
 
