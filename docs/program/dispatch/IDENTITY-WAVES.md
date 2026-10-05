@@ -130,9 +130,10 @@ guard that already exists or a task below that adds one.
 - **A reseal is four documents in one change:** `contracts/api/v1/openapi.json`, the generated
   client under `web/src/shared/api/generated/`, the mirror `web/openapi/openapi.json`, and
   `web/FRONTEND_LOCK.json` (`CURRENT_STATE.md`, `D-18`). A new error code or detail key is a
-  second reseal in the same slot, and a code lives in four places — `error-codes.json`,
-  `error-envelope.schema.json`, the `== 22` literal in `test_openapi_document.py`, and the
-  Russian sentence in `web/src/shared/api/catalog-message.ts`; this programme adds one code
+  second reseal in the same slot, and a code lives in at least seven places — the catalog, the
+  envelope schema, the backend enum `shared/errors/codes.py`, the Russian sentence in
+  `catalog-message.ts`, the exhaustive map in `terminal-reason.ts` and the literal counts in the
+  contract and failure-surface tests (measured by `W49-SEAL-01`'s stop, `W49-PLAN.md` §3.4); this programme adds one code
   (`rate_limited`) and one detail key (`conflict_reason`), both in W49.
 - **Registers, not rules.** Which operations answer without a credential, which a default
   credential reaches, and now which roles each operation requires, are written sets in

@@ -172,7 +172,7 @@ is stated with its reason.
 | `getMe` | `GET /me` | ∅ | default-credential and incomplete-profile reachable |
 | `updateMyProfile` | `PATCH /me` | ∅ | incomplete-profile reachable; `login` writable only while `profile_completed_at IS NULL`; completion is one UPDATE |
 | `submitRegistration` | `POST /registrations` | none | unauthenticated; `security: []` in the document |
-| `readRegistrationStatus` | `POST /registrations/status` | none | unauthenticated; `security: []`; constant work |
+| `readRegistrationStatus` | `POST /registrations/status` | none | unauthenticated; `security: []`; constant work; declares `401` for the generic refusal and no `403`, as `issueToken` does (`submitRegistration` declares neither) |
 | `listRegistrations` | `GET /registrations?status=` | `{admin}` | response carries `pending_total` for the badge |
 | `approveRegistration` | `POST /registrations/{request_id}/approve` | `{admin}` | body: roles (≥ 1); idempotency key as other mutations |
 | `rejectRegistration` | `POST /registrations/{request_id}/reject` | `{admin}` | body: reason, 1–256 chars |
@@ -194,12 +194,20 @@ true`, category `policy`, no detail keys): the proxy throttle of §3.5 has to an
 catalog code — it answers direct callers of `/api/v1/`, the safety rules forbid inventing a code
 at the edge, and the catalog has no 429 today. That is the
 second reseal of the slot `IDENTITY-WAVES.md` §5 allows; no other code
-is added. A code lives in three places at once — `error-codes.json`,
-`error-envelope.schema.json` (its `enum` and the per-code `retryable` `allOf`) and the literal
-`== 22` in `tests/contract/domain_p02/test_openapi_document.py` — and in the Russian sentence
-`web/src/shared/api/catalog-message.ts` carries for every code
-(`catalog-message.contract.test.ts` "describes every code the catalog declares"); all four move
-in `W49-SEAL-01a`. One safe detail key is added (`conflict_reason` on `conflict`).
+is added. A code lives in more places than the catalog — measured by the seal's stop on
+2026-10-06 (`docs/program/W49-SEAL-01a.md` at `2fae883`): `error-codes.json`;
+`error-envelope.schema.json` (its `enum` and the per-code `retryable` `allOf`); the backend enum
+`src/auditmanager/shared/errors/codes.py`, which refuses to import out of step with the catalog;
+the Russian sentence in `web/src/shared/api/catalog-message.ts`; the exhaustive
+`Record<ErrorCode, …>` in `web/src/entities/audit-run/model/terminal-reason.ts`; and the literal
+counts `== 22` / `toHaveLength(22)` in the contract, failure-surface and vocabulary tests — all
+move in `W49-SEAL-01a`. The database's own code vocabulary (migration `0002` `ERROR_CODES`, used
+by the `terminal_reason` and `error_code` CHECKs) does **not** grow: `rate_limited` is answered
+only by the proxy and is never stored, so `test_contract_vocabulary.py` declares an explicit
+edge-only set `{rate_limited}` and asserts the database domain equals the catalog minus that set.
+Because the catalog, the identifiers and the state machines all change, the domain family's
+`candidate_revision` moves from 8 to 9 together (the catalog's own revision note says the family
+carries one revision). One safe detail key is added (`conflict_reason` on `conflict`).
 `DecisionEvent` on the wire is unchanged. Every sentence in `openapi.json` that denies a role,
 subject or capability vocabulary, or rate limiting, is superseded under `R-55` — not a counted
 list: the seal's required check is
@@ -426,7 +434,24 @@ measured at the base, into the ACCESS and SEAL task files.
   `src/auditmanager/decisions/ledger.py` (removing the `author_user_uid = None` default from `record_decision` and `append_decision_under_key`, decided at the DECISIONS-01 merge) and the call sites that then need the keyword — `tests/integration/decisions/**`, `tests/integration/exports/test_verdict_columns.py`, `tests/integration/p02_journey/journey.py`, `tests/integration/p02_journey/test_journey_figures.py`, `tests/integration/p02_journey/test_query_surface_over_the_corpus.py` — one keyword argument per call, nothing else,
   `tests/e2e/pc01/test_acceptance.py` (the route-count assertion only),
   `web/src/app/bff/v1/[...path]/route.ts` and `web/src/shared/api/authorization.ts` (the one
-  count comment in each, §3.6), `docs/program/CONTRACT_PIN_REGISTRY.md` (all rows but the
+  count comment in each, §3.6),
+  **granted after the seal's stop of 2026-10-06** — the error-code and surface sites it measured:
+  `src/auditmanager/shared/errors/codes.py` (the `rate_limited` member and its count sentence),
+  `web/src/shared/api/errors.ts` (its count sentence), `web/src/shared/api/catalog-message.ts` (the
+  `rate_limited` sentence and its count sentences), `web/src/entities/audit-run/model/terminal-reason.ts`
+  (the `rate_limited` entry), `web/tests/unit/screens/run-terminal-reason.test.ts`,
+  `web/tests/unit/api/failure-surface.test.ts`, `web/tests/unit/api/authorization-state.test.ts`
+  (the open set becomes `issueToken`, `submitRegistration`, `readRegistrationStatus`),
+  `docs/program/P02_SEAMS.md`, `infra/deploy/README.md`, `infra/deploy/serve.py` and
+  `infra/deploy/proxy/nginx.conf` (only sentences naming the surface triple or the code count;
+  `W49-EDGE-01` takes `nginx.conf` afterwards), and the suite-account sites that must create
+  complete expert accounts — `tests/support/accounts.py` (one helper: complete profile, role
+  `expert`, an e-mail login derived from the suite label), `tests/e2e/pc01/driver.py`,
+  `tests/characterization/w13_baseline/**` (records 10 and 11 re-captured with a
+  `permitted_change` naming the derived name form as the only difference),
+  `tests/integration/ingest/test_size_guard_boundary.py`,
+  `tests/integration/p02_journey/test_truncated_end_to_end.py` and
+  `tests/integration/p02_journey/test_query_surface_over_the_corpus.py`; `docs/program/CONTRACT_PIN_REGISTRY.md` (all rows but the
   head's), the exact live triple sentences of `docs/program/CURRENT_STATE.md` and
   `docs/program/ALPHA_ROADMAP.md` named by the task file, `docs/program/W49-SEAL-01{a,b,c}.md`.
 - **01a — the documents:** §3.4 operations and schemas; `conflict_reason`; `rate_limited` in
