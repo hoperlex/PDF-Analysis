@@ -54,3 +54,14 @@ Only the five documentation paths above belong to this task. `contracts/**`, mig
 locks, composition, `Makefile`, runtime/UI, global styles, workflows, deployment files and Git
 refs are untouched. Existing uncommitted `ALPHA-MANUAL-01` files are preserved and are not part
 of this plan task.
+
+## Addendum — 2026-10-05, `W48-INT-CLOSE`
+
+Two statements above were wrong when this report was written or became wrong right after, and
+they are corrected here rather than in place:
+
+- `ALPHA-MANUAL-01` was committed as `a20d890`, not `cf63d31`;
+  `git merge-base --is-ancestor cf63d31 c11f1b6` is false — `cf63d31` is an unreachable commit.
+- `MAIN-AUTODEPLOY-02` did complete: run `36873558201`, attempt 2, succeeded for `608632a`
+  including the deploy/verify step (`W48-FREEZE-01.md`, entry conditions). "Both observed
+  workflow runs failed" described the two runs before it.

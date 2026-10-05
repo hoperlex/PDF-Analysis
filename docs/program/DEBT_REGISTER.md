@@ -1,7 +1,9 @@
 # Debt register
 
 Written 2026-09-17 by the integrator. **Reconciled by `W47-CLOSE` against the gated wave-47
-tree at `b0e5ae5` on 2026-09-30.**
+tree at `b0e5ae5` on 2026-09-30, and by `W48-INT-CLOSE` against the W48 closure candidate on
+2026-10-05:** fifteen rows closed, six narrowed, nine opened (`D-120` … `D-128`); every closure
+carries its check.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
 register that had been entirely obsolete while still reading as the list of what was open, and this
@@ -15,39 +17,48 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | ~~D-63~~ | a dashboard | **closed by wave 46**: four panels on one read (`W46-WIRE`, `W46-CLIENT`, `alpha-w46`) |
 | ~~D-118~~ | `make gate` did not lint | **closed by `W47-CLOSE`**: lint runs first and fails closed; eslint is clean |
 | **D-119** | the restored MinIO release predates upstream's final security release, and upstream is now archived | **owner**: rehearse the security upgrade after backup, or select the next S3-compatible implementation |
+| **D-120** | a push to `main` deploys whatever it names; the workflow proves ancestry, not a gate | **owner**: bind deployment to gate evidence, or keep it a process rule |
+| **D-121** | `ALPHA ACCEPTANCE PASS` attests the deployed SHA from operator input; nothing served names the running revision | a revision endpoint or served file is a contract question |
+| D-122 | no online dependency-vulnerability, transitive-licence or container-image scan has ever run | `W48-AUDIT` §7 question 5 |
+| **D-123** | the alpha MinIO volume was never inventoried, and the restore was not rehearsed on it after the image rebuild | sits beside `D-119`; **owner** schedules it |
+| D-124 | the norms HNSW index is one per table and the snapshot filter runs after the scan; `hnsw.ef_search` is never set | a second snapshot shrinks `nearest()` |
+| D-125 | the corpus loader re-reads files after `snapshot_of` hashed them and does not re-verify | immutable snapshot can carry other bytes |
+| D-126 | a snapshot's `content_key` excludes the segmentation profile | raising the profile version makes `ensure_snapshot` conflict |
+| D-127 | an embedding build counts as complete with a one-character window; its digest includes a private bigint | completeness and digest are weaker than `NORM-VECTOR-01` claims |
+| D-128 | nine `W48-JUDGE-Z` findings classed *register*: guard blind spots and two naming/reporting gaps | each with its path:line in `reviews/W48-JUDGE-Z.md` |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
-| **D-77** | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | fixed; the rule is the finding |
+| ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
 | D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
 | D-79 | the gate now reads `docs/` — `test_doc_prose_facts.py`, built in wave 45 | **and it was red on arrival**: see `D-102` |
 | ~~D-80~~ | the web image overlaid the host's `node_modules` | **closed by `W45-READY`**: root `.dockerignore`, verified by a marker build |
-| **D-83** | twelve refusal sentences cannot be rendered by the stack-free gate | live drive restored: 6 fixtures / 0 findings; boundary remains explicit |
-| D-87 | a full-tree mutation copy still cannot redden a migration — §10.1 names only half the trap | one fixture exists; the class is wider |
-| **D-89** | a shared hotspot with no owner: the journey manifest, and I wrote both grants | the rule is in the row |
+| **D-83** | twelve refusal sentences cannot be rendered by the stack-free gate | narrowed by `W48-LIVE`: refusals are a fail-closed phase of `make alpha-acceptance`; no live run recorded |
+| D-87 | a full-tree mutation copy still cannot redden a migration — §10.1 names only half the trap | narrowed by `W48-GUARDS`: fresh database per case and 11 family digests; `OPERATING_CONSTRAINTS.md` §10.1 still states half |
+| ~~D-89~~ | a shared hotspot with no owner: the journey manifest, and I wrote both grants | **closed by `W48-GOV`**: enumerator ownership is a task-file rule the battery enforces (`268d6ab`) |
 | **D-91** | two streams drew `R-18`'s line in different places in one wave | **owner**: where does it fall |
-| D-96 | three register rows in three waves sent a stream to a file that does not carry what the row says | the check command is the row |
-| **D-98** | the surface guard's `SURFACE_NOUNS` misses *declarations*, *models*, *copies*, *places* — two live stale sentences sit inside files it **does** scan | a synonym set is a literal |
-| **D-99** | the same guard reads only `.py/.md/.ts/.tsx`, so **eight** stale sentences in `.yml`, `.conf`, `.sh`, `.example` and Dockerfiles are invisible | off by four, and older than this wave |
-| **D-100** | `docs/program/P02_SEAMS.md` is outside every scanner, and has now recorded the same defect about itself **twice** | the note is doing the instrument's job |
+| D-96 | three register rows in three waves sent a stream to a file that does not carry what the row says | narrowed by `W48-GOV`: task premises need captured output; this register's own rows are still checked by nothing |
+| ~~D-98~~ | the surface guard's `SURFACE_NOUNS` misses *declarations*, *models*, *copies*, *places* — two live stale sentences sit inside files it **does** scan | **closed by `W48-PROSE`**: `SURFACE_NOUNS` removed; unknown nouns judged against contract history (`95a3f9e`) |
+| ~~D-99~~ | the same guard reads only `.py/.md/.ts/.tsx`, so **eight** stale sentences in `.yml`, `.conf`, `.sh`, `.example` and Dockerfiles are invisible | **closed by `W48-PROSE`**: file discovery is `git ls-files`, no suffix list (`95a3f9e`) |
+| ~~D-100~~ | `docs/program/P02_SEAMS.md` is outside every scanner, and has now recorded the same defect about itself **twice** | **closed by `W48-PROSE`**: `P02_SEAMS.md` is a named live document with its own red mutation (`95a3f9e`) |
 | ~~D-101~~ | `R-48` allowed the shipped default after the first change | **closed by `W47-FIX`**: shipped default is a case-folded contextual refusal |
 | ~~D-102~~ | the prose guard's own pinned count went stale | **closed by `W46-SEAL`**: pin moved to 17/20/61 and is named as a reseal document |
 | ~~D-103~~ | the deploy guard read four secret names but missed three derived values | **closed by `W47-GATE`**: derived-secret coherence refuses before docker |
-| **D-104** | every prose guard this programme has checks **numbers**; `CURRENT_STATE.md` asserts a deployed SHA and a date as present-tense fact | not a number, so nothing checks it |
-| **D-105** | the pin was **not** the only one: three sibling hard-coded literals sit beside derived comparisons, green by luck | the reseal set is five documents and three pins |
+| **D-104** | every prose guard this programme has checks **numbers**; `CURRENT_STATE.md` asserts a deployed SHA and a date as present-tense fact | narrowed by `W48-PROSE`: `CURRENT_STATE.md`'s instance is guarded; non-numeric claims elsewhere are not |
+| ~~D-105~~ | the pin was **not** the only one: three sibling hard-coded literals sit beside derived comparisons, green by luck | **closed by `W48-PROSE`**: `CONTRACT_PIN_REGISTRY.md` lists all 27 pins and the guard fails on an unregistered one |
 | **D-106** | the whole surface **ignores** undeclared query parameters: a scoped request gets an unscoped `200` with no signal | **owner**: refuse surface-wide, or keep |
 | **D-107** | the product cannot set a document's section; the API can | **owner**: whether and when the upload form offers one |
-| **D-108** | the live journey is not in `make gate`; the `blocks` route was red for a whole wave unseen | wave 48's audit |
+| **D-108** | the live journey is not in `make gate`; the `blocks` route was red for a whole wave unseen | narrowed by `W48-LIVE`: `make alpha-acceptance` exists beside the gate; never run against a deployed SHA (`W48-INT-MAIN-01`) |
 | D-109 | *контракт* and *операция* on screen: `R-39` bans ids, fields and transport, and is silent on these | **owner**: where the line falls |
 | **D-110** | the analysis is built for АР, yet a document stored as `KM` is analysed by the same profile; nothing looks at the section | **owner**: refuse at intake, skip at run start, or a profile per section |
 | D-111 | `documents_by_project` is unbounded: 63 rows, 6906 px on one screen | a cap or paging is a contract question |
-| D-112 | a 200-character project name overflows `/dashboard` and `/projects` | pre-existing, product-wide |
-| **D-113** | an unknown `cost_basis` vanishes from the spend line; no fault is raised (`F-1`'s field, X-3's mechanism) | wave 48 |
-| **D-114** | both count guards seed equal values where a row swap is invisible: AR↔KM passes on the server and in the browser | wave 48 |
-| D-115 | a correctly shaped historical heading placed early still hides the claims after it | wave 48 |
-| D-116 | the dashboard-invalidation guard reads comments as code | wave 48 |
-| D-117 | wave 46's stream reports do not record their own final gates, one mutation quote does not reproduce, and the lock credits the wrong commit | wave 48 |
-| **D-97** | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | consolidate against one provider/state contract |
-| D-74 | an existence check costs a full parent read | a narrow port on four implementations |
+| ~~D-112~~ | a 200-character project name overflows `/dashboard` and `/projects` | **closed by `W48-WEB` + `W48-TAILS`, measured by `W48-JUDGE-Z`**: 200- and 400-character strings widen none of 8 pages at 780 × 900 |
+| ~~D-113~~ | an unknown `cost_basis` vanishes from the spend line; no fault is raised (`F-1`'s field, X-3's mechanism) | **closed by `W48-WEB`**: an unknown `cost_basis` renders `data-panel-fault` (`996b546`) |
+| ~~D-114~~ | both count guards seed equal values where a row swap is invisible: AR↔KM passes on the server and in the browser | **closed by `W48-GUARDS`**: pairwise-distinct seeds asserted before use (`39e06c2`) |
+| ~~D-115~~ | a correctly shaped historical heading placed early still hides the claims after it | **closed by `W48-PROSE`**: historical headings unique, newest-first and bound to the highest tag (`95a3f9e`) |
+| ~~D-116~~ | the dashboard-invalidation guard reads comments as code | **closed by `W48-GUARDS`**: the guard parses TypeScript and counts call nodes only (`39e06c2`, `a73a331`) |
+| D-117 | wave 46's stream reports do not record their own final gates, one mutation quote does not reproduce, and the lock credits the wrong commit | narrowed by `W48-GOV`: addendum corrects the gates, quote and credit; `web/FRONTEND_LOCK.json:23` still credits `069f656` |
+| ~~D-97~~ | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | **closed by `W48-WEB`**: every screen-wide consumer renders through `harness.ts::renderScreen` (`996b546`) |
+| ~~D-74~~ | an existence check costs a full parent read | **closed by `W48-PORTS`**: `run_exists`/`finding_exists` on both ports since `8877d5d` |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | **D-70** | the stand's API **will not start** since wave 41: the stub URL has no host and `D-72` now refuses it | **owner: a real credential, or a hostname** |
 | D-71 | `D-59` is 121 blocks not 79, and 25 of them are a different defect | **owner: widen `R-19`?** |
@@ -56,7 +67,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
 | D-61 | the journey guard still matches by substring against concatenated source | compare against **rendered** output |
-| D-52 | the legacy icon set is at least partly Feather, MIT, notice absent | a `NOTICE` file if we copy; **not** `D-11`'s shape |
+| ~~D-52~~ | the legacy icon set is at least partly Feather, MIT, notice absent | **closed by `W48-GOV`**: `web/NOTICE` since `4a602ba`; `test_d52s_later_repair_is_present_and_bound_to_a_notice` |
 | D-50 | a character offset no second extractor can resolve | registered |
 | D-51 | criterion 8 is a container restart, for a structural reason | registered; nothing to fix |
 | D-1.6, D-8 | names the programme repeats without opening the file | prose |
@@ -94,6 +105,108 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-128 — the closure judge's register findings
+
+**Opened 2026-10-05 by `W48-INT-CLOSE` from `docs/program/reviews/W48-JUDGE-Z.md`.** The judge
+classed nine findings *register*: F-1 `screen-set.guard.test.ts` does not read
+`tests/unit/screens`, where five files mount a private router; F-2 the invalidation guard finds
+hooks only by the `use-*` prefix; F-3 `test_wave_governance.py` checks `origin_main_authority`
+by length only; F-4 nothing asserts the acceptance report never says *proves*; F-5
+`test_deploy_auto_workflow.py` misses job-level `permissions` and an extra `known_hosts` entry;
+F-6 the ALR-05 guard does not see `importlib.import_module`; F-7 `run-presentation.ts` shows an
+unknown `provider_mode` or `cost_basis` as *absent*; F-10 the reconciliation report's
+`orphan_objects` and `unpublished_records` are no longer populated; F-11 `STAGE_VERSION` in
+`analysis/public.py` names only the text stage's version.
+
+**Check:** each finding's path:line and reproduction in the review.
+
+### D-127 — an embedding build's completeness and digest are weaker than claimed
+
+**Opened 2026-10-05 by `W48-INT-CLOSE`.** `ensure_build` in
+`src/auditmanager/norms/embedding_repository.py` accepts a build when every chunk has at least
+one window inside its bounds; text coverage, the 64-token overlap and `token_count` are not
+checked, so one one-character window per chunk passes. `embedding_set_sha256` includes the private
+`chunk_pk` identity, so the same corpus in another database yields another digest.
+
+**Check:** `sed -n '/def ensure_build/,/return/p' src/auditmanager/norms/embedding_repository.py`.
+
+### D-126 — the snapshot key does not include the segmentation profile
+
+**Opened 2026-10-05 by `W48-INT-CLOSE`.** `content_key` is unique and excludes
+`segmentation_profile`, so raising `SEGMENTATION_PROFILE_VERSION` — which `segmentation.py` asks
+for — makes `ensure_snapshot` raise `NormsProjectionConflict` on the same corpus; a second
+projection of the same text cannot be loaded.
+
+**Check:** `rg -n 'segmentation_profile|content_key' src/auditmanager/norms/repository.py src/auditmanager/norms/loader.py`.
+
+
+### D-125 — the corpus loader does not re-verify what it re-reads
+
+**Opened 2026-10-05 by `W48-INT-CLOSE`.** `open_corpus_projection` hashes the corpus in
+`snapshot_of`; `CorpusProjection.iter_documents` (`src/auditmanager/norms/corpus_source.py`)
+reads every document again for insertion without comparing it with that hash. A file changed in
+the minutes a load takes enters an immutable snapshot whose `content_key` it does not match.
+
+**Check:** `sed -n '/def iter_documents/,/join_into_chunks/p' src/auditmanager/norms/corpus_source.py`.
+
+
+### D-124 — the norms vector index is filtered after the scan
+
+**Opened 2026-10-05 by `W48-INT-CLOSE`, from the identity-programme revision of the
+normative-corpus commits.** `norm_embedding` has one HNSW index for the whole table; `_NEAREST`
+in `src/auditmanager/norms/embedding_repository.py` filters by snapshot, chunking profile and
+embedding profile after the index scan, and `hnsw.ef_search` / `hnsw.iterative_scan` are never
+set. With a second snapshot loaded, `nearest(limit=k)` can return fewer than `k` rows or miss true
+neighbours. The only test uses two rows and one snapshot.
+
+**Check:** `git grep -n 'ef_search\|iterative_scan' -- src tools tests db` → empty.
+
+
+### D-123 — the alpha MinIO volume was never inventoried, and its restore not rehearsed since the rebuild
+
+**Opened 2026-10-05 by `W48-INT-CLOSE`, from `reviews/W48-AUDIT.md` §7 question 6.** The
+backup/restore commands exist and were exercised in wave 47 (`R-52`), but nobody has listed what
+the live `s3-data` volume holds, and no restore has been rehearsed against it since
+`MINIO-IMAGE-01` replaced the image with a source build. `D-119`'s lifecycle decision needs both
+first.
+
+**Check:** none static — the evidence is a host-side inventory and a rehearsal record, and
+neither exists in `docs/program/`.
+
+
+### D-122 — no online vulnerability, licence or image scan
+
+**Opened 2026-10-05 by `W48-INT-CLOSE`, from `reviews/W48-AUDIT.md` §7 question 5.** `npm ls`
+proves installation shape only. No CVE database, transitive-licence report or container-image
+scan has been run against `uv.lock`, `web/package-lock.json` or the built images.
+
+**Check:** `rg -n -i 'trivy|grype|osv|pip-audit|npm audit' Makefile .github infra` → empty.
+
+
+### D-121 — the alpha acceptance verdict attests the deployed revision; it does not measure it
+
+**Opened 2026-10-05 by `W48-INT-CLOSE`.** `scripts/manual-alpha-check.sh` and
+`tests/e2e/pc01/journey/verify-acceptance.mjs` compare an operator-supplied `--deployed-sha`
+with `HEAD`; the deployed host is never asked which revision it runs, and no endpoint or served
+file says. `W48-GUARDS-2` reworded the verdict to *attested*. A revision endpoint is a contract
+change and is deferred.
+
+**Check:** `grep -n 'deployed-sha' scripts/manual-alpha-check.sh tests/e2e/pc01/journey/verify-acceptance.mjs`.
+
+
+### D-120 — a push to `main` deploys whatever it names
+
+**Opened 2026-10-05 by `W48-INT-CLOSE`, from the identity-programme revision.**
+`.github/workflows/deploy-auto.yml` triggers on `push` to `main` and `workflow_dispatch`; before it
+deploys it proves only that the SHA is an ancestor of `origin/main`. Nothing in the workflow runs
+`make gate` or reads gate evidence, so the rule that only a gated candidate reaches the alpha is a
+process rule (`AGENTS.md` §6, `MAIN_AUTODEPLOY_POLICY.md`), not a mechanism.
+
+**Check:** `grep -c 'make gate' .github/workflows/deploy-auto.yml` → `0`.
+**Needs:** an owner decision — bind deployment to gate evidence, or record the process rule as
+the accepted control.
+
 
 ### D-119 — reproducible again is not maintained: MinIO needs a security/lifecycle decision
 
@@ -1796,6 +1909,8 @@ Check: `grep -n 000 docs/manual-tests/PC-01_prototype.md` against `ls db/migrati
 
 ### D-77 — `origin/dev` sat 41 commits behind `origin/main`, and a peer measured the programme on it
 
+> **`D-77` closed by `W48-GOV`, 2026-10-05.** `OPERATING_CONSTRAINTS.md` §15 (`1843db5`) gives the two refs their roles: `origin/dev` is the candidate and is read back as an exact SHA; `origin/main` is a deployment action and needs separate direct authority, which `MAIN_DIRECT_AUTHORITY_REQUIRED` enforces in task files.
+
 **Found 2026-09-23 by `pdf-analysis-04`, not by the integrator who caused it.**
 
 This programme's version discipline says `origin/main` carries gated checkpoints and **`origin/dev`
@@ -2374,6 +2489,8 @@ wave-43 English-screen and 1.08:1-border probes now redden across all fourteen s
 
 ### D-89 — a shared hotspot with no owner, and the integrator wrote both grants
 
+> **`D-89` closed by `W48-GOV`, 2026-10-05.** `TASK_TEMPLATE.md` requires an enumerator path, a sole owner and a totality query, and `test_every_task_added_after_governance_activation_satisfies_the_rules` (`268d6ab`) applies the rule to every task file outside the captured baseline; the gate's battery runs it.
+
 **The dispatch defect of wave 43, recorded because `AGENTS.md` §3 exists to prevent exactly it.**
 
 `tests/e2e/pc01/journey/manifest.json` must list every screen the application offers, and **both**
@@ -2656,6 +2773,12 @@ addresses.
 
 ### D-98, D-99, D-100 — the surface guard is three blind spots, and `W45-JUDGE-A` found all three past its brief
 
+> **`D-98` closed by `W48-PROSE`, 2026-10-05.** `SURFACE_NOUNS` is gone (`95a3f9e`); an unknown noun inside an explicit surface assertion is judged against values taken from contract history, and the `twelve widgets` case proves it.
+
+> **`D-99` closed by `W48-PROSE`, 2026-10-05.** The scan's file list comes from `git ls-files`, so no suffix can escape it; a mutation of a `.conf` file proves it, and the eight stale `infra/deploy` sentences were corrected in the same commit.
+
+> **`D-100` closed by `W48-PROSE`, 2026-10-05.** `P02_SEAMS.md` is a named live document in `LIVE_SURFACE_DOCUMENTS` with its own red mutation; the note it kept writing about itself is now the instrument's job.
+
 **The `D-23` guard reads prose against the surface it describes. It has three holes and each is a
 different kind.**
 
@@ -2864,6 +2987,8 @@ here they did not: **I gave them both the same trail.**
 
 ### D-105 — the pin was not the only one; there are three more, green by luck
 
+> **`D-105` closed by `W48-PROSE`, 2026-10-05.** `CONTRACT_PIN_REGISTRY.md` lists every independent pin with the event that moves it, and the guard fails on an unregistered path or an extra pin. The count is 27, not the 25 the lane report states, because `W48-FIX` (`78074f3`) added two frontend error-catalog pins.
+
 **`W45-JUDGE-X`'s answer to the one question I asked it beyond its brief.**
 
 Three sibling self-checks sit **beside a genuine derived comparison in the same module**, in
@@ -3029,6 +3154,8 @@ prints `None` today.
 
 ### D-112 — a long project name overflows two screens
 
+> **`D-112` closed by `W48-WEB` and `W48-TAILS`, measured by `W48-JUDGE-Z`, 2026-10-05.** Containment is declared for `.am-state`, `.am-kb__record` and the decision history and guarded in `styling-layer.test.ts`. The judge drove a built stand at 780 × 900 with a 200-character project name and a 400-character unbroken comment: no page of eight had `scrollWidth` above 780, the comment wrapped in a 636 px column, and a 1400 px control block was caught. Measured with Firefox and geckodriver through the journey's own `width.mjs`; the host has no Chromium.
+
 **Found by `W46-JUDGE-Y`, 2026-09-28, pre-existing and product-wide.** A 200-character project
 name, which the contract allows (`maxLength: 200`), overflows `/dashboard` and `/projects` at
 780 px. It is older than wave 46. **The class is wider than names** (`W46-JUDGE-Y`'s
@@ -3045,6 +3172,8 @@ at 780 px on both screens.
 
 ### D-113 — an unknown `cost_basis` vanishes from the spend line
 
+> **`D-113` closed by `W48-WEB`, 2026-10-05.** `run-activity-panel.tsx` checks `cost_basis` against `COST_BASIS_VALUES` before indexing the label table; an unknown value renders `data-panel-fault="incomplete"` and never `guessed`. Check: `git grep -n 'an unknown cost basis is a fault' -- web/tests/unit/widgets/dashboard.test.ts`.
+
 **Found by `W46-JUDGE-Z` (Z-1), 2026-09-29.** Z made the server send `cost_basis: "guessed"`.
 The screen rendered *«…вызовов модели: 2 · .»*: the label disappeared and no fault was raised
 (`web/src/widgets/dashboard/ui/run-activity-panel.tsx:106-113`). That is X-3's mechanism (an
@@ -3057,6 +3186,8 @@ the three. It is reachable only if the server breaks its own closed `CostBasis` 
 
 ### D-114 — the count guards cannot see two rows swapped
 
+> **`D-114` closed by `W48-GUARDS`, 2026-10-05.** Backend and browser fixtures seed pairwise-distinct counts and assert distinctness before relying on them (`39e06c2`); the lane recorded all six swap mutations failing.
+
 **Found by `W46-JUDGE-Z` (Z-3), 2026-09-29.** `W46-GUARD`'s exact-count test and `W46-CLIENT`'s
 keyed per-row test seed **equal** values in rows whose swap would matter. On the server, swapping
 AR↔KM, pending↔rejected and queued↔running passes 4/4. In the browser, АР↔ГП passes 16/16 and the
@@ -3067,6 +3198,8 @@ truth is 2 and 1. X's cross-examination had asked for distinct counts; the repai
 
 ### D-115 — a correctly shaped historical heading, placed early, still blinds the scan
 
+> **`D-115` closed by `W48-PROSE`, 2026-10-05.** Historical headings must be unique and newest-first, the first must match the highest `alpha-w*` tag, and the live prefix must keep its migration, surface and verification facts; `W48-JUDGE-A` reproduced the early-heading mutation going red.
+
 **Found by `W46-JUDGE-Z` (Z-2), 2026-09-29.** `W46-GUARD` requires the boundary to be a real
 heading of the file's own shape, outside code fences. It does not require that heading to come
 after the live section's claims. Inserting `## Previous release state — wave 46 (historical
@@ -3076,6 +3209,8 @@ at `tests/contract/api_v1/test_doc_prose_facts.py:486-492` says the opposite.
 **Check:** the insertion above must redden `test_doc_prose_facts.py`.
 
 ### D-116 — the dashboard-invalidation guard reads comments as code
+
+> **`D-116` closed by `W48-GUARDS`, 2026-10-05.** The guard parses TypeScript with `ts.createSourceFile` and counts only executable call nodes (`39e06c2`); `a73a331` adds `.tsx` and namespace-qualified hooks, and a commented-out invalidation is red in the committed test.
 
 **Found by `W46-JUDGE-Z` (Z-5), 2026-09-29.** With the invalidation line commented out, the guard
 still passes 7/7, the frontend 80/1134 and `tsc` 0. A comment in `use-export-run.ts` turns a
@@ -3103,6 +3238,8 @@ after the fact is the integrator writing history. Wave 48 decides whether to ann
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 
+> **`D-97` closed by `W48-WEB`, 2026-10-05.** All five screen-wide consumers render through `harness.ts::renderScreen` (`996b546`), and `a73a331` makes the guard discover new consumers instead of listing them. The private router mounts left are the five focused screen tests the row excluded (`D-128` F-1 records that the guard does not read them).
+
 **Opened by both closing W44 judges, 2026-09-24.** The integration comment claimed five existing
 copies became four and that the residue was registered. The commit migrated none of the five and
 added `web/tests/unit/screens/harness.ts` as another implementation site.
@@ -3127,6 +3264,8 @@ derived route question and each explicit state answer; sharing an empty provider
 close the row.
 
 ### D-74 — a parent-existence check costs a full parent read
+
+> **`D-74` closed by `W48-PORTS`, 2026-10-05.** `8877d5d` (2026-09-23) added `run_exists` and `finding_exists` to both ports, both production adapters and both test implementations, and the two routers call them; `test_existence_is_not_a_full_read.py` proves the narrow queries skip stages, cost and decision history. W48-PORTS found the plan describing an open row whose fix was already merged. Check: `git grep -nE 'def (run|finding)_exists' -- src/auditmanager/api/routers/ports.py src/auditmanager/bootstrap/adapters.py tests/integration/api/conftest.py`.
 
 **Reported by `W40-GUARDS` while repairing `D-67`, not repaired — the narrow port it needs is
 outside that stream's grant.**
@@ -3681,6 +3820,8 @@ harness that dies with the session that wrote it.
 Check: `grep -n "captureScreenshot" tests/e2e/pc01/journey/cdp.mjs`.
 
 ### D-52 — the legacy icon set is at least partly Feather, and the notice MIT requires is absent
+
+> **`D-52` closed by `W48-GOV`, 2026-10-05.** The repair was always in the tree: `4a602ba` added `web/NOTICE` — Feather's provenance, Cole Bemis's copyright and the verbatim MIT text — in the same commit as the copied geometry, and `841e7c4` tests the notice's claim. The row stayed open for two weeks because nobody reconciled it. `test_d52s_later_repair_is_present_and_bound_to_a_notice` now holds it. Check: `git grep -c 'Cole Bemis' -- web/NOTICE` → 1.
 
 **Found by `pdf-analysis-84` while rendering the legacy front end as a visual reference for
 `R-18`. Verified against the source by the integrator 2026-09-21. Opened the same day.**

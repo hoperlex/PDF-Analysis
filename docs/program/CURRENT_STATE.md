@@ -1,9 +1,10 @@
 # Current state
 
-> **Updated 2026-10-02 by `MAIN-REF-POLICY-01`.** The gated normative-vector successor and its
-> alpha runtime decision are integrated without a release tag; wave 47 remains the last tagged
-> release. Development candidates now publish to `origin/dev`; `origin/main` requires a separate
-> direct owner instruction because it triggers external deployment.
+> **Updated 2026-10-05 by `W48-INT-CLOSE`.** W48 is closed on `origin/dev` without a release
+> tag; wave 47 remains the last tagged release. The identity programme
+> (`docs/program/dispatch/IDENTITY-WAVES.md`) is next. Development candidates publish to
+> `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
+> external deployment.
 >
 > **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
 > true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
@@ -30,28 +31,43 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-02 — W48 alpha hardening
+## Active development, 2026-10-05 — W48 closed on `dev`; the identity programme is next
 
-The owner has set the publication boundary for W48 and following waves: a gated development
-candidate is published to `origin/dev`; `origin/main` is the external auto-deploy ref and may be
-updated only after a separate direct owner instruction for the exact candidate. Wave completion,
-an integration slot and a green gate do not imply that instruction. A candidate on `dev` is not
-described as deployed and receives no release tag that requires deployed/manual evidence.
+W48 (correction, debt closure and a whole-tree audit, `R-49`) is integrated on
+`integration/w48-close` and published to `origin/dev` by `W48-INT-CLOSE`. It is not tagged:
+`alpha-w48` needs the deployed two-level evidence of `dispatch/W48-PLAN.md` §12 — a live provider
+run (`D-70`) and a direct owner instruction naming the exact candidate for `origin/main` — and
+`W48-INT-MAIN-01` owns that step. Development candidates publish to `origin/dev`; `origin/main`
+is the auto-deploy ref and moves only on that instruction.
 
-The independent normative-corpus slices are accepted by `NORM-INT-01` for a gated fast-forward to
-`origin/main`. `NORM-VECTOR-01` is the untagged successor; it deliberately changes no API or UI.
-W48 is now planned under owner ruling `R-49` as correction, debt closure and a whole-tree code
-audit; this supersedes the older host/optimisation placeholder in `WAVE_PLAN_45_48.md`. The public
-host and live provider are release evidence and prerequisites for the W48 tag, not a new product
-vertical. W49 is queued, not dispatchable, behind `alpha-w48` as verified normative-corpus
-promotion: it must resolve storage/Blob identity first, then prove custody, all 121 repairs,
-repaired snapshot load and a complete embedding build. Public retrieval, exact citations and
-audit-run snapshot consumption are W50-or-later work and remain absent. The frozen API surface
-remains **17 paths / 20 operations / 61 schemas** and the error
-catalog remains **22**. Domain candidate revision 8 now declares **27** opaque identities:
-`NormDocument` uses `ndoc_<ULID>`, `NormParagraph` uses `npar_<ULID>`, and retrieval
-chunks deliberately have no public identity. The migration head is
-**`0014_durable_analysis_effects`**.
+What W48 changed, by owner ruling and by lane:
+
+- **durable analysis effects** (`R-53`): migration `0014_durable_analysis_effects` records every
+  paid provider attempt and every analysis object before the external effect, reconciles them
+  after a crash, and settles terminal effects; it was edited in place, so a database that applied
+  an earlier `0014` shape is recreated, not upgraded;
+- **guards that can fail**: the prose, surface, migration-inventory, invalidation, governance and
+  acceptance guards were mutated until each failed for its stated reason (`W48-PROSE`,
+  `W48-GUARDS`, `W48-FIX`, `W48-FIX-B`, `W48-GUARDS-2`, `W48-GOV`);
+- **context boundaries** (`R-58`): every cross-context import goes through
+  `auditmanager.<context>.public`; `tests/contract/architecture/test_alr05_boundaries.py` fails on
+  a deep or package-root import;
+- **screens**: unknown closed-vocabulary values render a typed fault and hostile user strings
+  wrap (`W48-WEB`, `W48-TAILS`);
+- **external acceptance**: `make alpha-acceptance` is the repository-owned deployed check beside,
+  not inside, the hermetic gate (`W48-LIVE`).
+
+The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
+with no promotion. W49 now means identity, W50 the shell and W51 the screens:
+`docs/program/dispatch/IDENTITY-WAVES.md` is the controlling plan, with `W49-PLAN.md`,
+`W50-PLAN.md` and `W51-PLAN.md` beside it.
+
+The frozen API surface remains **17 paths / 20 operations / 61 schemas**, the error catalog
+**22**, domain candidate revision 8 with **27** opaque identities, and the migration head is
+**`0014_durable_analysis_effects`**. The last closed release remains `alpha-w47`. This section
+makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is deployed.
+
+### Normative-corpus persistence and the alpha runtime boundary (integrated before W48, unchanged)
 
 Persistence separates opaque `norms_snapshot_id` from deterministic `content_key`, stores
 immutable canonical paragraphs separately from replace-only retrieval chunks, and loads an exact
@@ -98,12 +114,6 @@ over digest-pinned Go and Alpine inputs. Local and alpha composition still mount
 `s3-data` volume and initialize the same private bucket; this is an image-acquisition repair, not
 an S3 identity or persisted-data migration. `D-119` records the separate security/lifecycle
 decision rather than smuggling a MinIO release upgrade into recovery work.
-
-The complete project gate passes with literal `GATE OK`. The last closed release remains
-`alpha-w47`; `origin/dev` is the working publication target for this untagged successor, while
-`origin/main` remains unchanged without direct deployment authority. This section makes no
-deployment claim. Use
-`infra/deploy/verify-deployed.sh` for the deployed-state answer.
 
 ## Previous release state — wave 47 (historical record)
 
