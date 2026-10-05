@@ -157,7 +157,7 @@ class OpaqueId:
 
 
 # ---------------------------------------------------------------------------
-# The 27 declared entity identities, in catalog order.
+# The 29 declared entity identities, in catalog order.
 # ---------------------------------------------------------------------------
 
 
@@ -267,6 +267,22 @@ class AuditEventId(OpaqueId, prefix="evt", entity="AuditEvent"):
 
 class ErasureRequestId(OpaqueId, prefix="era", entity="ErasureRequest"):
     """Identity of an erasure request. Not allocated in PC-01."""
+
+
+class UserUid(OpaqueId, prefix="usr", entity="User"):
+    """Identity of one account (``app_user``). `W49-SEAL-01` moved ``usr`` here.
+
+    Minted in this shape by ``auditmanager.access`` since migration ``0006``, outside this
+    registry until the account crossed the wire; the access boundary now delegates to this
+    type, so the prefix and its pattern have one owner.
+    """
+
+
+class RegistrationRequestId(OpaqueId, prefix="reg", entity="RegistrationRequest"):
+    """Identity of one registration request (``request_id``). `W49-SEAL-01` moved ``reg`` here.
+
+    Minted by ``auditmanager.access.registrations`` since migration ``0015``.
+    """
 
 
 #: Every concrete identity type, keyed by contract entity name.

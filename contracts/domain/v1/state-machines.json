@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.state-machines",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 8,
-  "revision_note": "Fourth review round of the unreleased 1.0.0-draft.1 candidate. Round 4 corrects one stale statement and changes nothing else. A round-3 integrator note said that the architecture and program ledgers still recorded U-06 as open and that the fail-soft policy of the excluded optimization names therefore had no encoder; that was read from a state the architecture lane has since superseded. U-06 is resolved, and the same owner decision splits FS-04 into three parts, each with an owner, a contract family and a task, so no part of it is without an encoder. This lane owns and encodes exactly one of them, the AuditRun and Job consumer part. The round-3 decision itself is untouched: optional_branch_policy, the six-row decision table, the guards of machines.audit_run and machines.job, the terminal semantics and the schema pins that hold them are exactly those of round 3, so the rule still cannot be weakened or removed without a deliberate edit of both the catalog and its schema. Rounds 1 and 2 are unchanged: no error code, identifier, state, transition or machine was added, removed or renamed, and PD-01 and PD-03 keep the wording the repository owner approved on 2026-09-01. contract_version stays 1.0.0-draft.1 because the round redefined no meaning, and round-to-round distinguishability is carried by candidate_revision rather than by the version string; candidate_revision records the review round.",
+  "candidate_revision": 9,
+  "revision_note": "Candidate revision 9 of the unreleased 1.0.0-draft.1 candidate, written by W49-SEAL-01 under owner rulings R-55, R-56, R-60 and R-61 (OWNER_RULINGS_2026-09-17.md section 3.19) and the seal decisions of 2026-10-06. Two machines are added, because state_transition_not_allowed is defined against this file and the account and registration operations of W49 raise it with machine, current_state and requested_state details that must name a declared machine. app_user is the account lifecycle (active -> archived -> active | purged; purged is terminal because the row is deleted) and registration_request is the application lifecycle (pending -> approved | rejected, both terminal). Neither is seeded into contract_state_transition: the account lifecycle is enforced by auditmanager.access under its own row locks, and the registration lifecycle by the am_guard_registration_request trigger of migration 0015. No existing machine, state, transition, guard or rule changed. The family carries one candidate_revision, so all three catalogs move to 9; contract_version stays 1.0.0-draft.1.",
   "status": "draft_candidate",
   "frozen": false,
   "rules": [
@@ -816,6 +816,126 @@
       ],
       "notes": [
         "The retention window for command records is the unresolved OPEN-RETENTION owner decision. idempotency_key_stale is the fail-closed answer once a record is no longer available; no window value is invented here."
+      ]
+    },
+    "app_user": {
+      "entity": "User",
+      "identifier": "user_uid",
+      "purpose": "One account a person signs in with: an e-mail login, a full name, a role set and a password. Archive is the normal removal and is reversible; purge is the irreversible deletion of an archived account that nothing references.",
+      "authoritative_writer": "the access bounded context (auditmanager.access)",
+      "initial": "active",
+      "transitions": {
+        "active": [
+          "archived"
+        ],
+        "archived": [
+          "active",
+          "purged"
+        ]
+      },
+      "terminal": [
+        "purged"
+      ],
+      "terminal_semantics": {
+        "purged": {
+          "outcome": "erased",
+          "publishes_result": false,
+          "description": "The account row is deleted irreversibly. Only an archived account that no RESTRICT reference of the access reference register names may be purged; its roles go with it and the registration request that created it keeps its row with created_user_uid null. The login becomes free."
+        }
+      },
+      "guards": [
+        {
+          "from": "active",
+          "to": "archived",
+          "trigger": "an administrator archives the account (archiveUser)",
+          "guard": "the actor is not the account itself, and the account is not the last active account holding admin; the same UPDATE raises token_epoch, so every credential the account holds is refused",
+          "on_violation": "conflict"
+        },
+        {
+          "from": "archived",
+          "to": "active",
+          "trigger": "an administrator restores the account (restoreUser)",
+          "guard": "no active account holds the archived account's login; the same UPDATE raises token_epoch",
+          "on_violation": "conflict"
+        },
+        {
+          "from": "archived",
+          "to": "purged",
+          "trigger": "an administrator purges the account (purgeUser)",
+          "guard": "the actor is not the account itself, and no RESTRICT foreign key of the access reference register names the account",
+          "on_violation": "conflict"
+        }
+      ],
+      "retry": {
+        "in_place": true,
+        "creates": "nothing; a refused transition leaves the account in its state",
+        "note": "Repeating an archive of an archived account, a restore of an active one or a purge of an active one is state_transition_not_allowed with these machine details, never a silent success."
+      },
+      "evidence": [
+        "OWNER_RULINGS_2026-09-17.md R-61",
+        "W49-PLAN.md section 3.1",
+        "W49-PLAN.md section 3.2"
+      ],
+      "notes": [
+        "An incomplete profile, a default credential and the role set are properties of an active account, not states of this machine: they decide what an active account may reach (the registers in src/auditmanager/api/security.py), not whether it exists.",
+        "An act on oneself is refused with permission_denied and no detail; the last active administrator is refused with conflict and conflict_reason last_admin; a referenced purge with conflict and conflict_reason account_referenced; a restore whose login an active account now holds with conflict and conflict_reason login_taken."
+      ]
+    },
+    "registration_request": {
+      "entity": "RegistrationRequest",
+      "identifier": "request_id",
+      "purpose": "One application for an account, submitted without a credential and decided once by an administrator: approved, which creates the account, or rejected with a reason only administrators read.",
+      "authoritative_writer": "the access bounded context (auditmanager.access.registrations); the am_guard_registration_request trigger of migration 0015 refuses every other write",
+      "initial": "pending",
+      "transitions": {
+        "pending": [
+          "approved",
+          "rejected"
+        ]
+      },
+      "terminal": [
+        "approved",
+        "rejected"
+      ],
+      "terminal_semantics": {
+        "approved": {
+          "outcome": "success",
+          "publishes_result": true,
+          "description": "The account was created in the same transaction, from the request's digest and names, with the roles the administrator chose (at least one) and a complete profile; created_user_uid names it and the request's password columns are null."
+        },
+        "rejected": {
+          "outcome": "rejected",
+          "publishes_result": false,
+          "description": "No account was created. The reason (1-256 characters) is stored for administrators only and the request's password columns are null, so the applicant's pair can no longer be proven and sign-in answers the generic refusal (R-56 addendum of 2026-10-06)."
+        }
+      },
+      "guards": [
+        {
+          "from": "pending",
+          "to": "approved",
+          "trigger": "an administrator approves the request (approveRegistration)",
+          "guard": "the request is locked FOR UPDATE and still pending, at least one known role is chosen, and no active account holds the login",
+          "on_violation": "state_transition_not_allowed"
+        },
+        {
+          "from": "pending",
+          "to": "rejected",
+          "trigger": "an administrator rejects the request (rejectRegistration)",
+          "guard": "the request is locked FOR UPDATE and still pending, and the reason is 1-256 characters with no control character but a line feed",
+          "on_violation": "state_transition_not_allowed"
+        }
+      ],
+      "retry": {
+        "in_place": false,
+        "creates": "a new request_id when the applicant submits again",
+        "note": "A decided request is never reopened. Two concurrent approvals serialise on the row lock; the second finds the request decided and answers state_transition_not_allowed."
+      },
+      "evidence": [
+        "OWNER_RULINGS_2026-09-17.md R-56",
+        "W49-PLAN.md section 3.3"
+      ],
+      "notes": [
+        "At most one pending request per login (a partial unique index) and at most 100 pending requests in all; both refusals are conflict, with conflict_reason request_pending and queue_full."
       ]
     }
   },

@@ -1,221 +1,184 @@
-# W49-SEAL-01 — STOPPED before implementation (stop report, part a)
+# W49-SEAL-01a — the documents: the reseal, the catalog code, the identities, the machines, the pins
 
-**Task:** `docs/program/tasks/W49-SEAL-01.md` (as amended at `7912504`).
-**Base:** `7912504` (`integration/w49`). **Branch:** `agent/w49-seal-01`.
-**Lane:** `FOUNDATION_INSTANCE=gate-w49seal`, Postgres `56570`, S3 `60170`/`60171`, database
-`auditmanager_w49seal`, bucket `auditmanager-w49seal` (`PORT_REGISTRY.md` row for
-`W49-SEAL-01`); the three ports had no listener (`ss -ltn`) before `make foundation`.
+**Task:** `docs/program/tasks/W49-SEAL-01.md` (part a of three; one owner, three reports, one
+gate). **Base:** `7912504`; the amended task file and plan merged from `integration/w49` at
+`2894951` (merge commit `7d06e67`). **Branch:** `agent/w49-seal-01`. **Plan:** `W49-PLAN.md`
+§3.1–§3.4, §3.6, §4 `W49-SEAL-01`. **Lane:** `gate-w49seal`, Postgres `56570`, S3
+`60170`/`60171` (free under `ss -ltn` before `make foundation`).
 
-**Status: stopped on the plan's stop conditions before any code or contract change.** The
-slot cannot reach a green gate inside its `allowed_paths`: adding `rate_limited`, adding the
-fourteen operations and applying the §3.2 registers each make tests red whose repair lies in
-files the task file does not grant, and three of them also need a decision the plan does not
-take. Per `EXECUTOR-PROMPT.md` and `W49-PLAN.md` §7 this report records what was measured and
-asks; nothing was widened. The only commit on the branch is this report.
+## 0. The stop of 2026-10-06 and the resumption
 
-## 1. Premise re-measured at `7912504`
+The slot first stopped before any code (`2fae883`, this file's first version): a 23rd catalog
+code broke the error kernel's import-time guard, two exhaustive frontend maps and a frontend
+length pin; count prose sat in seven ungranted files; the suite accounts became incomplete
+and roleless under §3.2; a frontend test pinned the open set; migration `0002`'s vocabulary
+needed a ruling. The integrator widened the grant to exactly those sites and ruled the three
+questions (`2894951`): the stored vocabulary is the catalog minus an explicit edge-only set;
+`submitRegistration` declares neither `401` nor `403`, `readRegistrationStatus` `401` and no
+`403`; the suite accounts become complete `expert` accounts through one helper. The
+measurements of the stop are in `git show 2fae883:docs/program/W49-SEAL-01a.md`.
 
-| Fact | Command | Result |
+## 1. What 01a delivers
+
+**The API reseal** (`contracts/api/v1/openapi.json`, the served application, the generated
+client, the mirror and `web/FRONTEND_LOCK.json` move together):
+
+| operationId | Method and path | Declared refusals |
 | --- | --- | --- |
-| surface triple | the task file's P-01 one-liner over `contracts/api/v1/openapi.json` | `17 20 61` |
-| contract SHA-256 | `sha256sum contracts/api/v1/openapi.json web/openapi/openapi.json` | both `f043eb6c3a5bbba3cb95fff59039fff42582c79ae0dc8ff2ba261e2cb4583585` |
-| error catalog | `len(codes)` of `contracts/domain/v1/error-codes.json` | `22`, `candidate_revision` 8 |
-| identities | `len(identifiers)` of `contracts/domain/v1/identifiers.json` | `27`, `candidate_revision` 8 |
-| state machines | keys of `state-machines.json` `machines` | `import, blob, audit_run, job, attempt, command_idempotency` |
-| lane head | `PYTHONPATH=src .venv/bin/alembic -c db/migrations/alembic.ini current` | `0015_accounts_roles_registration (head)` |
-| contract battery | `.venv/bin/python -m pytest tests/contract -q -p no:cacheprovider --ignore=tests/contract/test_cp00_candidate.py --ignore=tests/contract/test_cp00_final_state.py --ignore=tests/contract/test_validate_bootstrap.py` | `440 passed, 49 subtests passed in 11.70s`, exit 0 |
+| `getMe` | `GET /me` | 401, 403, 500, 503 |
+| `updateMyProfile` | `PATCH /me` | 401, 403, 409, 422, 500, 503 |
+| `submitRegistration` | `POST /registrations`, `security: []` | 409, 422, 500, 503 (**no 401, no 403**) |
+| `readRegistrationStatus` | `POST /registrations/status`, `security: []` | 401, 422, 500, 503 (no 403) |
+| `listRegistrations` | `GET /registrations?status=&cursor=&limit=` | 401, 403, 422, 500, 503 |
+| `approveRegistration` | `POST /registrations/{request_id}/approve`, `Idempotency-Key` | 401, 403, 404, 409, 422, 500, 503 |
+| `rejectRegistration` | `POST /registrations/{request_id}/reject` | 401, 403, 404, 409, 422, 500, 503 |
+| `listUsers` | `GET /users?include_archived=&cursor=&limit=` | 401, 403, 422, 500, 503 |
+| `getUser` | `GET /users/{user_uid}` | 401, 403, 404, 500, 503 |
+| `updateUser` | `PATCH /users/{user_uid}` | 401, 403, 404, 409, 422, 500, 503 |
+| `archiveUser` | `POST /users/{user_uid}/archive` | 401, 403, 404, 409, 500, 503 |
+| `restoreUser` | `POST /users/{user_uid}/restore` | 401, 403, 404, 409, 500, 503 |
+| `purgeUser` | `DELETE /users/{user_uid}` → `204` | 401, 403, 404, 409, 500, 503 |
+| `resetUserPassword` | `POST /users/{user_uid}/password` | 401, 403, 404, 422, 500, 503 |
 
-Note: the bare `pytest tests/contract -q` the task names fails **at the base** on
-`tests/contract/test_cp00_candidate.py::ACandidateIntegrityTests::test_the_reviewed_delta_is_exactly_what_is_declared`
-(first failure under `-x`); `make gate` and `OPERATING_CONSTRAINTS.md` §7 exclude that file and
-its two siblings, so the canonical form above is the one this lane would report.
+Sixteen schemas: `UserUid`, `RegistrationRequestId`, `Role` (`expert`, `admin`),
+`RegistrationStatus` (`pending`, `approved`, `rejected`), `Account`, `AccountPage`,
+`PersonNames`, `UpdateMyProfileRequest`, `UpdateUserRequest`, `ResetUserPasswordRequest`,
+`SubmitRegistrationRequest`, `RegistrationStatusResponse` (`{status: const "pending"}` — the
+only status ever shown to an applicant), `RegistrationRequest`, `RegistrationRequestPage`
+(`items`, `page`, `pending_total`), `ApproveRegistrationRequest` (roles, `minItems: 1`,
+`uniqueItems`), `RejectRegistrationRequest` (reason 1–256). `readRegistrationStatus` takes
+`IssueTokenRequest`: the pair it reads is the exchange's pair. Components added:
+parameters `UserUid`, `RequestId`, `IncludeArchived`, `RegistrationStatusFilter`; responses
+`StateConflict` (409: `conflict` with `conflict_reason`, or `state_transition_not_allowed`)
+and `ApprovalConflict` (409 of the keyed approval). Tags `account`, `registrations`,
+`users`. `ErrorCode` gains `rate_limited`.
 
-## 2. How the findings were measured
+**`rate_limited` is not declared on any operation.** It is answered by the edge before an
+operation is reached, exactly like the edge's own `413`, which the document does not declare
+either; declaring it made the PC-01 render-subset guard demand it in `PC01_ERROR_CODES`
+(`web/src/shared/api/errors.ts`, granted for its count sentence only). The info block and both
+operation descriptions say who answers it.
 
-Read-only sweeps of the worktree, plus one disposable probe tree that is not a worktree and
-not a ref of this repository: `git archive 7912504` extracted to
-`/root/w49seal-788b07cb-probe` (its own throwaway `git init`, `.venv` and `web/node_modules`
-symlinked from the lane). Every mutation below was made **only in the probe**; the worktree
-is unchanged apart from this file. The probe's Python runs used
-`-o pythonpath=/root/w49seal-788b07cb-probe/src`, and the tracebacks name files under the
-probe, which proves the probe's code was the code imported. The probe was deleted after the
-measurements.
+**Compatibility.** Every one of the twenty existing operations is unchanged on the wire:
+`test_openapi_conformance_live.py` compares the served document with the contract after
+normalisation, and the twenty rows of `FROZEN_OPERATIONS` are untouched. Prose that changed
+on existing objects: `info.description`, `bearerAuth.description`, `changePassword`'s
+description (the superseded denials below).
 
-## 3. Findings — reds whose repair is outside `allowed_paths`
+**The superseded denials (`R-55`).** `rg -n -i -e role -e 'rate limit' contracts/api/v1/openapi.json`
+printed six lines at the base and prints 26 now. None denies a role vocabulary or rate limiting:
 
-### F1 — the error kernel refuses to import with a 23rd catalog code
+* 2785, 2788, 2794 — `InputManifestEntry.role` (description, `required`, property), unchanged;
+* 7 (`info.description`) — the base denials rewritten: "does not have: ... roles, rate
+  limiting" lost both words and now points at the reseal; the `W34-CONTRACT` and
+  `W39-REVOKE` denials are now past tense and name `R-55` as superseding them; the new
+  `W49-SEAL-01` paragraph states the role vocabulary and the edge throttle;
+* 2063 (`bearerAuth`) — "no role, subject or capability vocabulary" replaced by "what a
+  subject may do is ... the account's role set (`Role`), which the server reads ... on
+  every request"; the `403` sentence names the four `required_capability` values;
+* 136 (`changePassword`) — "a role model this document does not describe" and "the role
+  vocabulary this document deliberately does not have" replaced by what is true now;
+* the new role-vocabulary sentences: 70 (`users` tag), 1274 (`getMe`), 1545
+  (`approveRegistration`), 1784–1785 (`updateUser`), 1846 (`purgeUser`), 4004/4006 (`Role`),
+  4032/4092/4094/4097 (`Account.roles`), 4203/4209/4211/4214 (`UpdateUserRequest.roles`),
+  4430/4433/4435/4439 (`ApproveRegistrationRequest.roles`).
 
-Probe step: `rate_limited` added to `error-codes.json` only, then
-`PYTHONPATH=src .venv/bin/python -c "import auditmanager.shared.errors"`:
+**The domain family, candidate revision 8 → 9** (`error-codes.json`, `identifiers.json`,
+`state-machines.json`, each with its revision note; `error-envelope.schema.json`;
+`contracts/domain/v1/README.md`'s revision-9 section):
 
-```text
-  File "/root/w49seal-788b07cb-probe/src/auditmanager/shared/errors/codes.py", line 80, in <module>
-    raise RuntimeError(
-RuntimeError: auditmanager.shared.errors.codes is out of step with contracts/domain/v1/error-codes.json: missing=['rate_limited'] extra=[]
-```
+* `rate_limited` — 429, `retryable: true`, category `policy`, `safe_detail_keys: []`, with
+  notes saying the edge answers it and nothing stores it; the envelope schema's `enum` and its
+  per-code `retryable` `allOf` branch;
+* `conflict.safe_detail_keys` gains `conflict_reason` (values `login_taken`,
+  `request_pending`, `queue_full`, `account_referenced`, `last_admin`, in a note);
+* identifiers `user_uid` → `usr` (entity `User`) and `request_id` → `reg` (entity
+  `RegistrationRequest`), and a `account_identity` distinction; the shared registry
+  (`src/auditmanager/shared/identity/ids.py`) gains `UserUid` and `RegistrationRequestId` in
+  the same commit;
+* machines `app_user` (`active → archived → active | purged`, terminal `purged`) and
+  `registration_request` (`pending → approved | rejected`).
 
-`src/auditmanager/shared/errors/codes.py` is an import-time guard that the `ErrorCode` enum
-equals the catalog. Without a `RATE_LIMITED` member nothing that imports the error kernel
-loads — the whole backend battery. The file is not granted. A code therefore lives in **five**
-places, not the four `IDENTITY-WAVES.md` §5 and `W49-PLAN.md` §3.4 name.
+**The code in five places, and the sixth that does not move.** `codes.py` (`RATE_LIMITED`
+and its count sentence), `api/schemas/models.py` (served `ErrorCode` enum),
+`catalog-message.ts` (a sentence and its count sentences), `terminal-reason.ts` (an entry —
+no run can end with the code, and the sentence says so), and the count pins below. Migration
+`0002`'s `ERROR_CODES` stays at 22: `test_contract_vocabulary.py` declares
+`EDGE_ONLY_CODES = frozenset({"rate_limited"})` and asserts the stored vocabulary equals the
+catalog minus it, that the set is a subset of the catalog and disjoint from what is stored.
 
-### F2 — the frontend has two more exhaustive maps over `ErrorCode`
+**The served application declares the fourteen operations.** The router modules `me.py`,
+`registrations.py` and `users.py`, the ports `AccountPort` and `RegistrationPort`, the views
+`schemas/accounts.py` and `schemas/registrations.py`, and the models land here and not in
+01c, because 01a's required `tests/contract -q` includes `test_openapi_conformance_live.py`,
+which compares the **served** document with the contract. They are declarations over ports
+that nothing implements until 01c; the edge additions (`AGGREGATE_OF_PATH_PARAMETER` for
+`user_uid`/`request_id`, the `status` and `roles` enum sentences, `unique_items`, and a list
+refusal naming its property rather than its index) are the same declarations' refusals.
 
-Probe step: F1's code also added to `codes.py`, to `components.schemas.ErrorCode.enum` and
-to the envelope schema's enum, then `npm --prefix web run api:generate` (exit 0) and
-`npm --prefix web run typecheck`:
+**Every surface pin of §3.6**, each measured, never quoted: the triple pin
+(`SurfaceTriple(paths=27, operations=34, schemas=77)`), `FROZEN_OPERATION_COUNT = 34`,
+`FROZEN_SCHEMA_COUNT = 77` and both frozen sets, `PATH_COUNT`/`OPERATION_COUNT`/`SCHEMA_COUNT`
+of the served-document test, the router counts of `test_operation_surface.py` and
+`test_router_and_body_rules.py`, the three composition pins, `test_acceptance.py:307`, the
+lock's three counts, and the catalog pins (`== 23` in `test_openapi_document.py`,
+`test_error_kernel.py`, `test_envelope_screen_rules.py`; `toHaveLength(23)` in both web
+tests); `CONTRACT_PIN_REGISTRY.md` moved every row but the head's and the migration's
+vocabulary row (still 22, by ruling); `_TS_ERROR_COUNT_ASSERTION` now also discovers 23, 27,
+34 and 77. The live sentences of `CURRENT_STATE.md` and `ALPHA_ROADMAP.md`, and the count
+sentences of `P02_SEAMS.md`, `infra/deploy/README.md`, `infra/deploy/serve.py`,
+`infra/deploy/proxy/nginx.conf`, `src/auditmanager/api/**`, the two `web/src` comments,
+`errors.ts` and `catalog-message.ts`.
 
-```text
-tsc exit=2
-src/entities/audit-run/model/terminal-reason.ts(63,7): error TS2741: Property 'rate_limited' is missing in type '{ ... }' but required in type 'Readonly<Record<... | "rate_limited", string>>'.
-src/shared/api/catalog-message.ts(70,7): error TS2741: Property 'rate_limited' is missing ...
-tests/unit/screens/run-terminal-reason.test.ts(55,7): error TS2741: Property 'rate_limited' is missing ...
-```
+## 2. Measured
 
-`catalog-message.ts` is granted (its one sentence); `terminal-reason.ts` and
-`run-terminal-reason.test.ts` are not. With a probe sentence added to `catalog-message.ts`,
-`npx --no-install vitest run tests/unit/api/failure-surface.test.ts tests/unit/screens/run-terminal-reason.test.ts tests/unit/run/terminal-reason.test.ts tests/contract`
-(from `web/`) → `Test Files 5 failed | 5 passed (10)`, `Tests 8 failed | 157 passed (165)`.
-The reds that the grant cannot repair:
+| Fact | Command (tree: this commit's working tree) | Result |
+| --- | --- | --- |
+| triple | P-01's one-liner over `contracts/api/v1/openapi.json` | `27 34 77` |
+| SHA-256 | `sha256sum contracts/api/v1/openapi.json web/openapi/openapi.json` | both `633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37` |
+| catalog | `len(codes)` | 23 |
+| identities | `len(identifiers)` | 29 |
+| served = contract | `pytest tests/contract/api_v1/test_openapi_conformance_live.py` | `1 passed` |
+| client | `npm --prefix web run api:verify` | `OK - 34 operations`, exit 0 |
+| typecheck | `npm --prefix web run typecheck` | exit 0 |
+| web contract | `cd web && npx --no-install vitest run tests/contract tests/unit/api tests/unit/screens/run-terminal-reason.test.ts tests/unit/run/terminal-reason.test.ts tests/guards/frontend-lock.guard.test.ts` | `16 passed (16)`, `263 passed` |
+| lint | `npm --prefix web run lint` | exit 0 |
+| contract battery | `pytest tests/contract -q` with the gate's three ignores | `438 passed`, 2 failed — see §4 |
 
-```text
-FAIL tests/unit/api/failure-surface.test.ts > a code outside the catalog is not a catalog code > is asked about a catalog the contract actually declares
-FAIL tests/unit/screens/run-terminal-reason.test.ts > every catalog reason reaches the screen as a sentence > renders a sentence for rate_limited, beside the code
-FAIL tests/contract/terminal-reason-sentences.contract.test.ts > ... > describes every code the catalog declares        (needs terminal-reason.ts)
-FAIL tests/contract/terminal-reason-sentences.contract.test.ts > ... > gives no catalog code the undescribed default   (needs terminal-reason.ts)
-```
+## 3. Contracts changed
 
-`web/tests/unit/api/failure-surface.test.ts:78` is the registered pin
-`error-frontend-failure-enum-count` (`toHaveLength(22)`); the registry lists it, the grant
-does not.
+`contracts/api/v1/openapi.json` and `README.md`; `contracts/domain/v1/{error-codes.json,
+error-envelope.schema.json, identifiers.json, state-machines.json, README.md}`.
 
-### F3 — migration `0002`'s error vocabulary versus the catalog (a decision)
+## 4. Risks, limits and open questions
 
-Same probe, `tests/contract` battery (canonical ignores): among the expected in-grant reds,
-`tests/contract/domain_p02/test_contract_vocabulary.py::test_error_code_domain_equals_the_frozen_catalog`
-fails because it asserts `set(migration 0002 ERROR_CODES) == set(catalog codes)`. Migration
-`0002` (and `0014`, which restates the tuple) builds CHECK constraints on stored
-`error_code`/`terminal_reason` columns from that tuple. The test file is granted, the
-migrations are not and must not move. Either the rule changes (the stored vocabulary may be
-narrower than the catalog by an explicit edge-only set `{rate_limited}`, which no column
-ever stores), or a migration widens the CHECKs (the head is not this slot's). That is a
-decision the plan did not take.
+1. **`docs/program/P02_SEAMS.md`'s operation table is outside the grant and its guard is red.**
+   `tests/contract/domain_p02/test_seam_register.py::test_the_api_operation_table_matches_the_frozen_document`
+   compares the table in §7 with the document; the grant names only the sentences of that
+   file that state a count, and the table needs the fourteen rows. Not edited. This is the
+   one red the slot cannot close; it is the first question of the hand-back.
+2. `test_alpha_acceptance_command.py::test_release_command_cannot_turn_skips_recorded_mode_or_outage_into_pass`
+   refuses an uncommitted checkout (`FAIL: checkout содержит незакоммиченные изменения`); it
+   was measured on the working tree before this commit and is environment, not code.
+3. **The three family schemas still pin `candidate_revision` `const: 8`.**
+   `error-codes.schema.json`, `identifiers.schema.json` and `state-machines.schema.json` are
+   outside the grant; the catalogs say 9 as ruled. Only `tests/contract/test_cp00_candidate.py`
+   (excluded from the gate, red at the base) validates the catalogs against them. Question 2.
+4. `Role`'s values are new enum vocabulary; `web/tests/guards/rendered-language.guard.test.ts`
+   permits every contract enum value as visible text unless it lists the schema in
+   `TRANSLATED_SCHEMAS`. Screens are W50/W51; noted for them.
+5. `tests/integration/db/test_schema_shape.py` still excludes `user_uid`, `request_id`,
+   `created_user_uid` and `author_user_uid` from the prefix sweep with a comment asking the
+   seal to move them into `prefix_by_column`; the file is outside the grant and stays green.
 
-### F4 — count prose outside the grant
+## 5. Integrator
 
-Probe step: F1–F2 plus fourteen stub operations at the ten §3.4 paths (the probe document
-measured `27 34 61`), then `test_surface_counts_in_prose.py::test_the_api_prose_states_the_surface_this_document_declares`
-and `::test_p02_seam_makes_a_current_claim_the_guard_reads` → `2 failed`. The ungranted lines:
+Intermediate commit; the integration suites are expected red until 01c. The lock's
+`content_commit` is moved to this commit by a later one of the slot, because a commit cannot
+name itself.
 
-```text
-docs/program/P02_SEAMS.md: 'Twenty operations' states 20 for operations, expected 34
-infra/deploy/README.md: 'twenty operations' states 20 for operations, expected 34   (three times)
-infra/deploy/proxy/nginx.conf: 'seventeen paths' states 17 for paths, expected 27
-infra/deploy/proxy/nginx.conf: 'twenty operations' states 20 for operations, expected 34
-infra/deploy/serve.py: 'twenty operations' states 20 for operations, expected 34
-src/auditmanager/shared/errors/codes.py: 'twenty-two codes' states 22 for codes, expected 23
-web/src/shared/api/errors.ts: 'twenty-two-code' states 22 for codes, expected 23
-web/src/shared/api/catalog-message.ts: '22 codes' states 22 for codes, expected 23   (granted: its rate_limited sentence only)
-web/src/shared/api/catalog-message.ts: '22-code' states 22 for codes, expected 23    (granted: its rate_limited sentence only)
-```
+## 6. Forbidden hotspots
 
-and `test_p02_seam_makes_a_current_claim_the_guard_reads` requires `P02_SEAMS.md` to state the
-**current** operation count. Every other red line of that run lies in granted files
-(`contracts/api/v1/openapi.json` info, `src/auditmanager/api/**`, the two one-line `web/src`
-comments). The real schema count will also move the `61 schema(s)` phrases in `app.py` and
-`declarations.py`, both granted.
-
-### F5 — the suites' own accounts become incomplete, roleless accounts under §3.2
-
-`tests/support/accounts.py` (`provisioned_record` → `UserRepository.create_user`) writes a
-legacy login with `profile_completed_at` NULL and no role row. Measured on the lane, unmodified
-worktree:
-
-```text
-$ PYTHONPATH=src .venv/bin/python <load tests/support/accounts.py; provisioned_record('pc01-acceptance'); AccountRepository().account_standing(...)>
-login= pc01-acceptance display_label= pc01-acceptance
-AccountStanding(token_epoch=1, is_default_credential=False, archived=False, profile_complete=False, roles=frozenset())
-```
-
-Under §3.2's order (incomplete profile → `permission_denied`, `required_capability:
-profile_completed`, on everything but `getMe`, `updateMyProfile`, `changePassword`; then
-`{expert}` for product mutations) every product call these suites make is refused. Callers
-outside the grant (`git grep -n provisioned_credential -- tests`):
-
-- `tests/support/accounts.py` (the helper itself)
-- `tests/e2e/pc01/driver.py` (`pc01-acceptance`; the grant covers only the route-count line of `test_acceptance.py`)
-- `tests/characterization/w13_baseline/journey.py` (`w13-baseline`), whose records
-  `10-appendDecision.success.json` and `11-listDecisionHistory.success.json` pin
-  `"author_label": "w13-baseline"` byte for byte — a complete profile changes that value to
-  the name form, so the records need a re-capture with a recorded `permitted_change`
-- `tests/integration/ingest/test_size_guard_boundary.py` (`size-guard-suite`)
-- `tests/integration/p02_journey/test_truncated_end_to_end.py` (`p02-truncated-suite`)
-- `tests/integration/p02_journey/test_query_surface_over_the_corpus.py` (`p02-query-suite`;
-  granted for one ledger keyword per call only)
-
-The four composition suites that use the helper are granted. `W49-PLAN.md` §4 `01c` names
-only `tests/integration/api/driver.py`, `test_authorization.py`, `test_decision_authorship.py`
-and `test_the_reviewer_name_is_visible.py`.
-
-### F6 — the frontend pins the open set to one operation
-
-`web/tests/unit/api/authorization-state.test.ts:235-251` (not granted) asserts every
-generated operation declares `401`, and that the operations without a `403` are exactly
-`['issueToken']`. `submitRegistration` and `readRegistrationStatus` are unauthenticated
-(`security: []`); by the rule the contract applies to `issueToken` they have no subject to
-deny and declare no `403`, and `submitRegistration` has no credential to refuse, so it
-declares no `401` either. Either way this test goes red. Whether the two new open operations
-declare `401`/`403` is itself a contract-shape question (Q3 below).
-
-## 4. In-grant pins found beyond the plan's list (seen, not blockers)
-
-`tests/contract/shared_kernel/test_error_kernel.py::TheEnumIsExactlyTheCatalog::test_there_are_twenty_two`;
-`tests/integration/api/test_envelope_screen_rules.py:195` (`len(raw["codes"]) == 22`);
-`tests/contract/domain_p02/test_contract_vocabulary.py:23` (`== 22`, see F3);
-`_TS_ERROR_COUNT_ASSERTION` in `test_doc_prose_facts.py` matches only `toHaveLength(17|20|22|61)`,
-so its value set must move with the counts or the inventory stops seeing the moved pins;
-the served `ErrorCode` enum is a literal in `src/auditmanager/api/schemas/models.py`
-(`test_openapi_conformance_live.py` red in the probe until it moves). The live sentence of
-`CURRENT_STATE.md` (line 65) carries the catalog count (22), the revision (8) and the identity
-count (27) beside the triple; the grant names "the live surface-triple sentence".
-
-## 5. Questions for the integrator (one batch)
-
-1. **Grant amendment for F1, F2, F4, F6** — the exact lines: `src/auditmanager/shared/errors/codes.py`
-   (the `RATE_LIMITED` member and the docstring count); `web/src/entities/audit-run/model/terminal-reason.ts`
-   (the `rate_limited` sentence); `web/tests/unit/screens/run-terminal-reason.test.ts` (its
-   `MUST_SAY.rate_limited` phrase); `web/tests/unit/api/failure-surface.test.ts` (the length
-   literal); `web/src/shared/api/errors.ts` and the two count phrases of `catalog-message.ts`;
-   the count phrases of `docs/program/P02_SEAMS.md`, `infra/deploy/README.md`,
-   `infra/deploy/serve.py` and `infra/deploy/proxy/nginx.conf` (nginx is `W49-EDGE-01`'s
-   afterwards; the stages are sequential, so there is no parallel writer);
-   `web/tests/unit/api/authorization-state.test.ts` (the open-set assertion). Granted or not?
-2. **F3:** does the stored error vocabulary admit an explicit edge-only set
-   (`{rate_limited}`, never stored) — the vocabulary test changes, no migration — or does a
-   migration widen the CHECKs? The first keeps the head where ACCESS left it.
-3. **F6 / contract shape:** confirm that `submitRegistration` declares neither `401` nor
-   `403`, and `readRegistrationStatus` declares `401` (its generic refusal) but not `403` — the
-   same reasoning `issueToken` carries.
-4. **F5:** how do the suites get a complete account with `expert`? Option (a): the shared
-   helper `tests/support/accounts.py` provisions every suite account complete (an e-mail login
-   derived from the suite label, fixed names, role `expert`), the five ungranted callers keep
-   their labels unchanged, and the W13 characterization records 10 and 11 are re-captured
-   because `author_label` becomes the name form (a recorded `permitted_change`). Option (b):
-   each suite changes on its own. Either needs paths outside the grant, and (a) also needs
-   the characterization re-capture granted.
-5. `CURRENT_STATE.md` line 65: may the seal move the catalog count, the revision and the
-   identity count in the same sentence as the triple?
-6. The task file's Handoff names `docs/program/W49-SEAL-01.md`, which is not in
-   `allowed_paths`; the three reports `01a/b/c` are. Is the list of changed files to live in
-   `01c`?
-
-## 6. AGENTS.md §5 items
-
-1. **Changed files:** `docs/program/W49-SEAL-01a.md` (this report) only.
-2. **Checks:** §1's baseline (`440 passed`), §3's probe measurements; nothing else ran on the
-   worktree.
-3. **Contracts:** none changed.
-4. **Risks/limitations:** none introduced; the probe tree was disposable and removed.
-5. **Integrator:** answer §5; on an amended task file the slot resumes from this branch.
-6. **Forbidden hotspots:** `git diff --name-only 7912504..HEAD` lists this report only; no
-   contract, source, test, lock, ref, tag or push.
+`git diff --name-only 7d06e67..<this commit>` lies inside the amended `allowed_paths`; the full
+list is in `W49-SEAL-01c.md`. No migration, no `src/auditmanager/access/**`, no lock file of
+the toolchain, no ref, tag or push.

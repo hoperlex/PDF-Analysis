@@ -18,21 +18,21 @@ inventory until the registry and the owning change move together.
       "pin_id": "surface-doc-prose-triple",
       "family": "surface",
       "path": "tests/contract/api_v1/test_doc_prose_facts.py",
-      "needle": "assert triple == SurfaceTriple(paths=17, operations=20, schemas=61)",
+      "needle": "assert triple == SurfaceTriple(paths=27, operations=34, schemas=77)",
       "event": "OpenAPI reseal changing a path, operation or component-schema count"
     },
     {
       "pin_id": "surface-conformance-operation-count",
       "family": "surface",
       "path": "tests/contract/api_v1/test_openapi_conformance.py",
-      "needle": "FROZEN_OPERATION_COUNT = 20",
+      "needle": "FROZEN_OPERATION_COUNT = 34",
       "event": "OpenAPI reseal changing the operation count"
     },
     {
       "pin_id": "surface-conformance-schema-count",
       "family": "surface",
       "path": "tests/contract/api_v1/test_openapi_conformance.py",
-      "needle": "FROZEN_SCHEMA_COUNT = 61",
+      "needle": "FROZEN_SCHEMA_COUNT = 77",
       "event": "OpenAPI reseal changing the component-schema count"
     },
     {
@@ -53,63 +53,63 @@ inventory until the registry and the owning change move together.
       "pin_id": "surface-served-path-count",
       "family": "surface",
       "path": "tests/integration/api/test_served_document_and_health_plane.py",
-      "needle": "PATH_COUNT = 17",
+      "needle": "PATH_COUNT = 27",
       "event": "OpenAPI reseal changing the path count"
     },
     {
       "pin_id": "surface-served-operation-count",
       "family": "surface",
       "path": "tests/integration/api/test_served_document_and_health_plane.py",
-      "needle": "OPERATION_COUNT = 20",
+      "needle": "OPERATION_COUNT = 34",
       "event": "OpenAPI reseal changing the operation count"
     },
     {
       "pin_id": "surface-served-schema-count",
       "family": "surface",
       "path": "tests/integration/api/test_served_document_and_health_plane.py",
-      "needle": "SCHEMA_COUNT = 61",
+      "needle": "SCHEMA_COUNT = 77",
       "event": "OpenAPI reseal changing the component-schema count"
     },
     {
       "pin_id": "surface-router-and-document-count",
       "family": "surface",
       "path": "tests/integration/api/test_operation_surface.py",
-      "needle": "def test_the_document_declares_twenty_and_the_router_implements_twenty(",
+      "needle": "def test_the_document_declares_thirty_four_and_the_router_implements_thirty_four(",
       "event": "OpenAPI reseal changing the operation count"
     },
     {
       "pin_id": "surface-router-count",
       "family": "surface",
       "path": "tests/integration/api/test_operation_surface.py",
-      "needle": "assert len(router.routes) == 20",
+      "needle": "assert len(router.routes) == 34",
       "event": "OpenAPI reseal changing the operation count"
     },
     {
       "pin_id": "surface-path-and-operation-count",
       "family": "surface",
       "path": "tests/integration/api/test_operation_surface.py",
-      "needle": "assert len(paths) == 17 and sum(",
+      "needle": "assert len(paths) == 27 and sum(",
       "event": "OpenAPI reseal changing the path or operation count"
     },
     {
       "pin_id": "surface-router-operation-id-count",
       "family": "surface",
       "path": "tests/integration/api/test_router_and_body_rules.py",
-      "needle": "assert len(router.operation_ids) == 20",
+      "needle": "assert len(router.operation_ids) == 34",
       "event": "OpenAPI reseal changing the operation count"
     },
     {
       "pin_id": "surface-router-route-count-control",
       "family": "surface",
       "path": "tests/integration/api/test_router_and_body_rules.py",
-      "needle": "assert len(router.routes) == 20",
+      "needle": "assert len(router.routes) == 34",
       "event": "OpenAPI reseal changing the operation count"
     },
     {
       "pin_id": "surface-composition-token-case",
       "family": "surface",
       "path": "tests/integration/composition/test_api_token_channel.py",
-      "needle": "assert len(application.router.routes) == 20",
+      "needle": "assert len(application.router.routes) == 34",
       "event": "OpenAPI reseal changing the operation count"
     },
     {
@@ -130,28 +130,28 @@ inventory until the registry and the owning change move together.
       "pin_id": "surface-e2e-composition",
       "family": "surface",
       "path": "tests/e2e/pc01/test_acceptance.py",
-      "needle": "assert len(client.app.router.routes) == 20",
+      "needle": "assert len(client.app.router.routes) == 34",
       "event": "OpenAPI reseal changing the operation count"
     },
     {
       "pin_id": "surface-frontend-lock-paths",
       "family": "surface",
       "path": "web/FRONTEND_LOCK.json",
-      "needle": "\"paths\": 17",
+      "needle": "\"paths\": 27",
       "event": "OpenAPI reseal changing the path count"
     },
     {
       "pin_id": "surface-frontend-lock-operations",
       "family": "surface",
       "path": "web/FRONTEND_LOCK.json",
-      "needle": "\"operations\": 20",
+      "needle": "\"operations\": 34",
       "event": "OpenAPI reseal changing the operation count"
     },
     {
       "pin_id": "surface-frontend-lock-schemas",
       "family": "surface",
       "path": "web/FRONTEND_LOCK.json",
-      "needle": "\"component_schemas\": 61",
+      "needle": "\"component_schemas\": 77",
       "event": "OpenAPI reseal changing the component-schema count"
     },
     {
@@ -165,28 +165,28 @@ inventory until the registry and the owning change move together.
       "pin_id": "error-openapi-enum-count",
       "family": "error_catalog",
       "path": "tests/contract/domain_p02/test_openapi_document.py",
-      "needle": "assert len(declared) == len(set(declared)) == 22",
+      "needle": "assert len(declared) == len(set(declared)) == 23",
       "event": "Domain error-catalog addition or removal and its OpenAPI reseal"
     },
     {
       "pin_id": "error-screen-source-count",
       "family": "error_catalog",
       "path": "tests/integration/api/test_envelope_screen_rules.py",
-      "needle": "assert len(raw[\"codes\"]) == 22",
+      "needle": "assert len(raw[\"codes\"]) == 23",
       "event": "Domain error-catalog addition or removal"
     },
     {
       "pin_id": "error-frontend-contract-enum-count",
       "family": "error_catalog",
       "path": "web/tests/contract/seam-operations.contract.test.ts",
-      "needle": "expect(ERROR_CODE_VALUES).toHaveLength(22);",
+      "needle": "expect(ERROR_CODE_VALUES).toHaveLength(23);",
       "event": "Domain error-catalog addition or removal and its generated frontend reseal"
     },
     {
       "pin_id": "error-frontend-failure-enum-count",
       "family": "error_catalog",
       "path": "web/tests/unit/api/failure-surface.test.ts",
-      "needle": "expect(ERROR_CODE_VALUES).toHaveLength(22);",
+      "needle": "expect(ERROR_CODE_VALUES).toHaveLength(23);",
       "event": "Domain error-catalog addition or removal and its generated frontend reseal"
     },
     {

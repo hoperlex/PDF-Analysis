@@ -8,7 +8,7 @@ contract's doing rather than a liberty:
   ``security`` would mean "inherit the document's", which is not what the contract says
   here: it says the empty requirement, explicitly, overriding the root. It is stated
   through ``openapi_extra`` -- the same mechanism ``uploadDocument`` uses to restore
-  ``encoding.file.contentType`` -- and :data:`_OPEN_REQUIREMENT` is where the exact
+  ``encoding.file.contentType`` -- and :data:`OPEN_REQUIREMENT` is where the exact
   spelling and the reason for it are written down. The runtime half of the same fact is
   :data:`auditmanager.api.security.UNAUTHENTICATED_OPERATIONS`, which is what actually lets
   an uncredentialed request through. Two halves, both named, neither inferred from the
@@ -74,6 +74,7 @@ from auditmanager.api.security import CurrentSubject
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
+    "OPEN_REQUIREMENT",
     "ChangePasswordRequest",
     "IssueTokenRequest",
     "IssueTokenResponse",
@@ -81,7 +82,10 @@ __all__ = [
 ]
 
 #: The operation's own ``security``: **the empty requirement**, which overrides the
-#: document root for this operation and for no other.
+#: document root for this operation. Since `W49-SEAL-01` it is also the requirement of the
+#: two registration operations a caller reaches without a credential
+#: (``api/routers/registrations.py``), which is why it is public: one spelling of the
+#: mechanism below, imported, rather than a second copy of it.
 #:
 #: The value is an empty ``tuple`` and not an empty ``list``, and that is the whole
 #: mechanism rather than a typo. ``fastapi.utils.deep_dict_update`` -- what applies
@@ -103,7 +107,7 @@ __all__ = [
 #:
 #: ``test_the_exchange_declares_the_empty_requirement`` asserts both halves: the normalized
 #: in-memory document and the bytes of the served ``/openapi.json``.
-_OPEN_REQUIREMENT: Final[dict[str, Any]] = {"security": ()}
+OPEN_REQUIREMENT: Final[dict[str, Any]] = {"security": ()}
 
 
 class _Object(BaseModel):
@@ -174,7 +178,7 @@ def build_auth_routes(router: APIRouter, credentials: CredentialPort) -> None:
         tags=["auth"],
         status_code=200,
         response_model=IssueTokenResponse,
-        openapi_extra=dict(_OPEN_REQUIREMENT),
+        openapi_extra=dict(OPEN_REQUIREMENT),
         responses={
             **success(
                 200,

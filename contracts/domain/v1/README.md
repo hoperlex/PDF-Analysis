@@ -1,11 +1,13 @@
-# Domain contract v1 — candidate `1.0.0-draft.1`, revision 8
+# Domain contract v1 — candidate `1.0.0-draft.1`, revision 9
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner); the additive norm-identity amendment is owned by
 [NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **candidate draft —
 working-tree amendment, not frozen, not ratified.** Every
 catalog in this directory declares `contract_version` `1.0.0-draft.1`,
-`candidate_revision` `8`, `status` `draft_candidate` and `frozen` `false`.
+`candidate_revision` `9`, `status` `draft_candidate` and `frozen` `false`. (The three
+family schemas still pin `candidate_revision` `8`: see
+[What changed in revision 9](#what-changed-in-revision-9-and-what-breaks-for-a-reader-of-revision-8).)
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a
@@ -53,15 +55,22 @@ and from all content-derived keys; rebuildable retrieval chunks deliberately rem
 without a public identity. Revisions 6 and 7 are preserved in Git history; this amendment neither
 rewrites nor relabels those rounds.
 
+Revision 9 carries the identity programme's owner rulings `R-55` ... `R-61` into this family
+(`W49-SEAL-01`): the account and the registration request become contracted entities with opaque
+`usr_<ULID>` and `reg_<ULID>` identities, their lifecycles `app_user` and `registration_request`
+become declared machines, the error catalog gains `rate_limited` and `conflict` gains the safe
+detail key `conflict_reason`. See
+[What changed in revision 9](#what-changed-in-revision-9-and-what-breaks-for-a-reader-of-revision-8).
+
 ## Files
 
 | File | Role |
 |---|---|
 | [identifiers.json](identifiers.json) | Identity catalog: prefixes, entity bindings, what is never identity |
 | [identifiers.schema.json](identifiers.schema.json) | Shape of the identity catalog |
-| [state-machines.json](state-machines.json) | Six closed lifecycles, guards, terminal semantics, run-creation rule, optional-branch policy, projections |
+| [state-machines.json](state-machines.json) | Eight closed lifecycles, guards, terminal semantics, run-creation rule, optional-branch policy, projections |
 | [state-machines.schema.json](state-machines.schema.json) | Shape of the lifecycle catalog |
-| [error-codes.json](error-codes.json) | 22 typed codes, categories, envelope declaration, detail-safety and internal-mapping rules |
+| [error-codes.json](error-codes.json) | 23 typed codes, categories, envelope declaration, detail-safety and internal-mapping rules |
 | [error-codes.schema.json](error-codes.schema.json) | Shape of the error catalog |
 | [error-envelope.schema.json](error-envelope.schema.json) | The externally visible failure envelope |
 | [examples/error-envelope.example.json](examples/error-envelope.example.json) | Valid envelope (`stale_attempt`) |
@@ -75,7 +84,7 @@ schema identity; neither is a contract version. The bare `version` key that revi
 used as the contract-envelope version is gone.
 
 The `1.0.0-draft.1` base was integrated at
-`cf7740474b1786163f54d93b013a0d526ef989e0`. Revision 8 is a later working-tree amendment:
+`cf7740474b1786163f54d93b013a0d526ef989e0`. Revisions 8 and 9 are later working-tree amendments:
 it is neither committed here, frozen nor ratified. Every catalog still declares
 `contract_version` `1.0.0-draft.1`, `status` `draft_candidate` and `frozen` `false`;
 `1.0.0-draft.0` is the version it supersedes. Until an integrator records a freeze, an
@@ -84,9 +93,9 @@ owner-authorized round edits this unreleased candidate in place and advances
 version procedure.
 
 So the version line stays `1.0.0-draft.0` → `1.0.0-draft.1`, and each review round is
-recorded by `candidate_revision`, which the owning schemas pin with `const`. Revision 8 is
-additive and changes the unreleased candidate identity surface, so consumers must pin and review
-candidate revision 8. The draft version string does not move because this is still the same
+recorded by `candidate_revision`, which the owning schemas pin with `const`. Revision 9 is
+additive and changes the unreleased candidate identity, lifecycle and error surfaces, so consumers
+must pin and review candidate revision 9. The draft version string does not move because this is still the same
 unfrozen `1.0.0-draft.1` candidate; `candidate_revision` is the machine-readable
 discriminator that prevents meaning from changing under the same revision. A freeze or release
 would move this change onto the formal version procedure.
@@ -140,7 +149,7 @@ must read `contract_version`, whose value did not change.
 
 ## Identity
 
-`<prefix>_<ULID>`, Crockford base32, uppercase, 26 characters. 27 identifiers, 27
+`<prefix>_<ULID>`, Crockford base32, uppercase, 26 characters. 29 identifiers, 29
 entity bindings, all prefixes unique.
 
 Load-bearing rules (full text in [identifiers.json](identifiers.json)):
@@ -212,7 +221,7 @@ an envelope.
 
 ## Lifecycles
 
-Six closed machines. Each declares its entity, identifier, authoritative writer,
+Eight closed machines (`app_user` and `registration_request` since revision 9). Each declares its entity, identifier, authoritative writer,
 initial state, transitions, terminal set, per-terminal semantics
 (`outcome`, `publishes_result`), guards with the error code raised on violation, and
 its retry rule. Any transition that is not declared is refused with
@@ -226,6 +235,8 @@ its retry rule. Any transition that is not declared is refused with
 | `job` | Job | `succeeded`, `failed`, `cancelled`, `dead_letter` | in place, bounded, creates a new Attempt; exhaustion is `dead_letter` |
 | `attempt` | Attempt | `succeeded`, `failed`, `superseded`, `lost`, `cancelled` | new `attempt_id` under the same `job_id` |
 | `command_idempotency` | CommandRecord | `succeeded`, `failed`, `abandoned` | the record *is* the retry mechanism |
+| `app_user` | User | `purged` | none in place; archive is reversed by a restore, a purge is irreversible |
+| `registration_request` | RegistrationRequest | `approved`, `rejected` | a new `request_id` when the applicant submits again |
 
 ### When a new AuditRun exists — `machines.audit_run.run_creation`
 
@@ -415,7 +426,7 @@ appended a new decision event.
 
 ## Errors
 
-22 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
+23 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
 `summary`, its `safe_detail_keys` and its inventory evidence.
 
 The envelope is:
@@ -724,6 +735,25 @@ assumption.
   - `attempt` gains the `lost` terminal, distinct from `superseded`;
   - the error envelope gains required `contract_version` and required `retryable`;
   - two identifiers are added: `lease_id` (`lse`) and `command_id` (`cmd`).
+
+### What changed in revision 9, and what breaks for a reader of revision 8
+
+Revision 9 carries the identity programme's owner rulings `R-55`, `R-56`, `R-60` and `R-61`
+(`docs/program/OWNER_RULINGS_2026-09-17.md` §3.19), written by `W49-SEAL-01` with the API
+reseal that puts the account and the registration request on the wire.
+
+| Change | Consumer impact |
+|---|---|
+| `user_uid` with prefix `usr`, bound to `User` | **Additive.** The prefix existed in `auditmanager.access` since migration `0006`; it is now contracted and in the shared registry. A login or an e-mail address is never an identity. |
+| `request_id` with prefix `reg`, bound to `RegistrationRequest` | **Additive.** Minted by `auditmanager.access.registrations` since migration `0015`. |
+| `account_identity` distinction | **Clarifying.** A request and the account its approval creates are distinct identities; a login is unique only among active accounts and pending requests. |
+| machines `app_user` (`active → archived → active \| purged`) and `registration_request` (`pending → approved \| rejected`) | **Additive.** `state_transition_not_allowed` now has declared machines to name for the account and registration operations. Neither is seeded into `contract_state_transition`. |
+| error code `rate_limited` (`429`, retryable, `policy`, no detail keys) | **Additive.** Answered only by the edge in front of `/api/v1`; never stored, so the database's code vocabulary stays the other twenty-two (`EDGE_ONLY_CODES` in `tests/contract/domain_p02/test_contract_vocabulary.py`). Closed code enums must add the member. |
+| `conflict` gains safe detail key `conflict_reason` | **Additive.** Values `login_taken`, `request_pending`, `queue_full`, `account_referenced`, `last_admin`; an enum-like classifier, never raw input. |
+| `candidate_revision` `8` → `9` in all three catalogs | Readers pinning the candidate revision must move. **The three family schemas still pin `const: 8`:** they are outside `W49-SEAL-01`'s grant, so the catalogs and their schemas disagree until an owner of those files moves the pins -- recorded as an open question in `docs/program/W49-SEAL-01a.md`, not decided here. |
+
+No existing identifier, state, transition, guard, code, summary or detail key is removed or
+renamed. `contract_version` remains `1.0.0-draft.1` and `frozen` remains `false`.
 
 ### What changed in revision 8, and what breaks for a reader of revision 7
 

@@ -17,9 +17,22 @@ Minimum conventions:
 under owner decision `OD-14` and released at Gate A. It is seam `S8` of
 `docs/program/P02_SEAMS.md`.
 
-**Twelve operations, and no thirteenth.** Exactly the eleven capabilities
-`docs/program/tasks/P2-API-01.md` enumerates. Adding an endpoint is a contract change,
-not an implementation detail.
+**Twelve operations at Gate A, and no thirteenth without a reseal.** Exactly the eleven
+capabilities `docs/program/tasks/P2-API-01.md` enumerated. Adding an endpoint is a contract
+change, not an implementation detail, and every one since was added by a recorded reseal:
+the document's own `info.description` narrates each, ending with `W49-SEAL-01` (accounts,
+registration requests and account management under `R-55` ... `R-61`), and it states the
+current totals once, in its last paragraph. `tests/contract/api_v1/test_doc_prose_facts.py`
+pins those totals independently.
+
+**Authorization since `W49-SEAL-01`.** The document still declares one bearer scheme and
+no format, issuer or flow. What a subject may do is the account's role set, read by the
+server on every request against written registers in `src/auditmanager/api/security.py`;
+a refusal is `403 permission_denied` with `required_capability` naming what is missing.
+Three operations take no credential: `issueToken`, `submitRegistration` and
+`readRegistrationStatus`. The domain catalog code `rate_limited` is answered by the edge in
+front of `/api/v1`, before any operation, and is therefore not declared on an operation --
+as the edge's own body-size refusal is not.
 
 | Consumer | What it does with this file |
 |---|---|

@@ -1,6 +1,6 @@
 """The parts of the frozen document every operation repeats.
 
-Declared once, because twenty copies of a response table is twenty places for one of them
+Declared once, because thirty-four copies of a response table is thirty-four places for one of them
 to be missing a status -- which is the shape of the defect ``openapi-drift.contract.test.ts``
 and `W13-CONF`'s gate both exist to catch. Each helper here produces exactly what the
 contract declares, and the gate compares the result on every run.
@@ -24,7 +24,10 @@ __all__ = [
     "CategoryFilterParam",
     "CorrelationIdParam",
     "CursorParam",
+    "IncludeArchivedParam",
     "LimitParam",
+    "RegistrationStatusFilterParam",
+    "STATE_CONFLICT_DESCRIPTION",
     "VerdictFilterParam",
     "declare_correlation_id",
     "envelope_responses",
@@ -56,8 +59,18 @@ _DESCRIPTIONS: Final[Mapping[int, str]] = {
     503: "A required dependency is unavailable.",
 }
 
+#: `W49-SEAL-01`. The ``409`` of an operation whose conflict is durable state rather than
+#: an idempotency key: an account or registration refusal, classified by
+#: ``details.conflict_reason``, or a transition the declared machine does not allow.
+STATE_CONFLICT_DESCRIPTION: Final[str] = (
+    "The change conflicts with durable state: `conflict` with `details.conflict_reason`, "
+    "or `state_transition_not_allowed` against the declared machine."
+)
 
-def envelope_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
+
+def envelope_responses(
+    *statuses: int, descriptions: Mapping[int, str] | None = None
+) -> dict[int | str, dict[str, Any]]:
     """The contract's error responses for one operation, as FastAPI declares them.
 
     **Every operation that can refuse must declare its own 422 here.** `W13-CONF` measured
@@ -65,14 +78,15 @@ def envelope_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
     own ``422`` *replaces* it, and ``HTTPValidationError`` and ``ValidationError`` then
     never enter ``components.schemas``. An operation that omits it gets FastAPI's, and the
     gate reports it in three places
-    (``test_the_gate_catches_fastapis_own_validation_error``). The 61 schema names are
+    (``test_the_gate_catches_fastapis_own_validation_error``). The 77 schema names are
     pinned, so two extra ones are a failure.
     """
+    overrides = descriptions or {}
     return {
         status: {
             "model": models.ErrorEnvelope,
             "headers": dict(CORRELATION_RESPONSE_HEADER),
-            "description": _DESCRIPTIONS[status],
+            "description": overrides.get(status, _DESCRIPTIONS[status]),
         }
         for status in statuses
     }
@@ -101,7 +115,7 @@ def success(status: int, description: str, **extra: Any) -> dict[int | str, dict
 #: **Declared, and deliberately not enforced.** The annotation is a plain ``str`` with the
 #: contract's schema attached, not ``models.CorrelationId``, because a constrained parameter
 #: is a *refusable* one -- FastAPI would answer 422 for a malformed value. Two things say
-#: that would be wrong. The contract: six of the twenty operations declare no ``422`` at
+#: that would be wrong. The contract: eleven of the thirty-four operations declare no ``422`` at
 #: all, and every one of them carries this parameter. And the rule
 #: :mod:`auditmanager.api.routers.correlation` has held since `B6`: an unusable correlation
 #: id is **replaced, not refused**, because it addresses a diagnostic record and authorises
@@ -158,6 +172,24 @@ VerdictFilterParam = Annotated[
     models.Verdict | None,
     BeforeValidator(_absent),
     WithJsonSchema({"$ref": "#/components/schemas/Verdict"}),
+    Query(json_schema_extra=optional_property),
+]
+
+
+def _absent_flag(value: Any) -> Any:
+    """``?include_archived=`` is the absent parameter, whose frozen default is ``false``."""
+    return False if value == "" else value
+
+
+#: `W49-SEAL-01`. ``listUsers``' ``include_archived``: boolean, **default false**.
+IncludeArchivedParam = Annotated[bool, BeforeValidator(_absent_flag), Query()]
+
+#: `W49-SEAL-01`. ``listRegistrations``' ``status`` filter, spelled as the two finding
+#: filters are: the enum is enforced, the empty string is the absent parameter.
+RegistrationStatusFilterParam = Annotated[
+    models.RegistrationStatus | None,
+    BeforeValidator(_absent),
+    WithJsonSchema({"$ref": "#/components/schemas/RegistrationStatus"}),
     Query(json_schema_extra=optional_property),
 ]
 

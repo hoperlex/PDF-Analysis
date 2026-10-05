@@ -39,11 +39,14 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import UploadFile
-from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, WithJsonSchema
 from typing_extensions import TypeAliasType
 
 __all__ = [
+    "Account",
+    "AccountPage",
     "AnalysisProfileId",
+    "ApproveRegistrationRequest",
     "AppendDecisionRequest",
     "AppendDecisionResponse",
     "BlockGeometry",
@@ -75,11 +78,20 @@ __all__ = [
     "ModelCallId",
     "ObservationProvenance",
     "PageInfo",
+    "PersonNames",
     "Project",
     "ProjectPage",
     "ProjectUid",
     "PromptBundleId",
     "ProviderMode",
+    "RegistrationRequest",
+    "RegistrationRequestId",
+    "RegistrationRequestPage",
+    "RegistrationStatus",
+    "RegistrationStatusResponse",
+    "RejectRegistrationRequest",
+    "ResetUserPasswordRequest",
+    "Role",
     "RunId",
     "RunState",
     "RunStatus",
@@ -89,7 +101,11 @@ __all__ = [
     "StageState",
     "StageStatus",
     "StartRunRequest",
+    "SubmitRegistrationRequest",
+    "UpdateMyProfileRequest",
+    "UpdateUserRequest",
     "UploadDocumentRequest",
+    "UserUid",
     "Verdict",
     "VersionBlockIndex",
     "VersionUid",
@@ -214,6 +230,13 @@ PromptBundleId = TypeAliasType(
 ModelCallId = TypeAliasType(
     "ModelCallId", Annotated[str, Field(pattern=rf"^mc_{_ULID}$")]
 )
+#: `W49-SEAL-01`. The account and the registration request crossed the wire, so their
+#: identities entered ``contracts/domain/v1/identifiers.json`` and are spelled here like
+#: every other one.
+UserUid = TypeAliasType("UserUid", Annotated[str, Field(pattern=rf"^usr_{_ULID}$")])
+RegistrationRequestId = TypeAliasType(
+    "RegistrationRequestId", Annotated[str, Field(pattern=rf"^reg_{_ULID}$")]
+)
 CorrelationId = TypeAliasType(
     "CorrelationId",
     Annotated[
@@ -238,9 +261,11 @@ Cursor = TypeAliasType("Cursor", Annotated[str, Field(min_length=1, max_length=5
 class ErrorCode(str, enum.Enum):
     """Exactly the key set of ``contracts/domain/v1/error-codes.json``.
 
-    Twenty-two codes since `W20-CODE` added ``staged_upload_lost`` under owner ruling
-    `R-8`, settling `D-18`; the twenty-first was ``dependency_credential_refused``, added at
-    `e6d0a6a` under `R-3`. The catalog is the authority;
+    Twenty-three codes since `W49-SEAL-01` added ``rate_limited``, which only the edge in
+    front of ``/api/v1`` answers; the twenty-second was ``staged_upload_lost``, added by
+    `W20-CODE` under owner ruling `R-8`, settling `D-18`, and the twenty-first
+    ``dependency_credential_refused``, added at `e6d0a6a` under `R-3`. The catalog is the
+    authority;
     ``tests/contract/shared_kernel/test_error_kernel.py`` refuses a disagreement at import.
     """
 
@@ -265,6 +290,7 @@ class ErrorCode(str, enum.Enum):
     COST_BUDGET_EXCEEDED = "cost_budget_exceeded"
     STALE_ATTEMPT = "stale_attempt"
     EXECUTION_TOKEN_INVALID = "execution_token_invalid"
+    RATE_LIMITED = "rate_limited"
     INTERNAL_ERROR = "internal_error"
 
 
@@ -362,6 +388,21 @@ class ProjectSection(str, enum.Enum):
     GP = "GP"
     TX = "TX"
     POS = "POS"
+
+
+class Role(str, enum.Enum):
+    """`R-55`, `R-60`. The closed role vocabulary; an account holds a set of these."""
+
+    EXPERT = "expert"
+    ADMIN = "admin"
+
+
+class RegistrationStatus(str, enum.Enum):
+    """The ``registration_request`` machine's states (``state-machines.json``)."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 # --- the shared envelopes ----------------------------------------------------------
@@ -772,3 +813,133 @@ class DashboardSummary(_Object):
     findings_by_verdict: list[VerdictCount]
     run_activity: RunActivity
     section_breakdown: list[SectionDocumentCount]
+
+
+# --- accounts and registration requests ------------------------------------------------
+#
+# `W49-SEAL-01`, owner rulings `R-55` ... `R-61`. The operations are in
+# ``api/routers/me.py``, ``api/routers/registrations.py`` and ``api/routers/users.py``; the
+# rules they answer by are ``auditmanager.access``'s and are not restated here. What is
+# restated is the bound a transport schema states for a body: a name is 1..60 characters,
+# a login as typed is at most 320 (the exchange's own bound; ``access`` folds and checks the
+# stored 254), a password 1..1024, a rejection reason 1..256.
+
+
+def _unique_roles(value: list[Any]) -> list[Any]:
+    """``uniqueItems: true``, enforced and not only declared: a role named twice is a
+    refused request, never a silently de-duplicated one."""
+    from pydantic_core import PydanticCustomError
+
+    if len(set(value)) != len(value):
+        raise PydanticCustomError("unique_items", "the roles must be distinct")
+    return value
+
+
+_PersonName = Annotated[str, Field(min_length=1, max_length=60)]
+
+def _declare_unique_items(schema: dict[str, Any]) -> None:
+    """``uniqueItems: true`` in the document. A callable rather than a dict, so it composes
+    with :func:`optional_property` on the one optional role set (``UpdateUserRequest``)."""
+    schema["uniqueItems"] = True
+
+
+def _optional_unique_items(schema: dict[str, Any]) -> None:
+    """Both of the above for an optional role set: an outer ``json_schema_extra`` replaces
+    the inner one rather than composing with it, so the two are applied together here."""
+    optional_property(schema)
+    _declare_unique_items(schema)
+
+
+#: A role set on the wire: a JSON array of distinct ``Role`` values.
+_RoleSet = Annotated[
+    list[Role],
+    AfterValidator(_unique_roles),
+    Field(json_schema_extra=_declare_unique_items),
+]
+
+
+class Account(_Object):
+    """One account, as the account itself and an administrator read it."""
+
+    user_uid: UserUid
+    login: Annotated[str, Field(min_length=1, max_length=254)]
+    display_label: Annotated[str, Field(min_length=1, max_length=254)]
+    last_name: _PersonName | None
+    first_name: _PersonName | None
+    middle_name: _PersonName | None
+    roles: _RoleSet
+    profile_complete: bool
+    is_default_credential: bool
+    archived_at: datetime | None
+
+
+class AccountPage(_Object):
+    items: list[Account]
+    page: PageInfo
+
+
+class PersonNames(_Object):
+    last_name: _PersonName
+    first_name: _PersonName
+    middle_name: _PersonName = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class UpdateMyProfileRequest(_Object):
+    last_name: _PersonName
+    first_name: _PersonName
+    middle_name: _PersonName = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    email: Annotated[str, Field(min_length=1, max_length=320)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+
+
+class UpdateUserRequest(_Object):
+    names: PersonNames = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    roles: _RoleSet = Field(default=None, json_schema_extra=_optional_unique_items)  # type: ignore[assignment]
+
+
+class ResetUserPasswordRequest(_Object):
+    temporary_password: Annotated[str, Field(min_length=1, max_length=1024)]
+
+
+class SubmitRegistrationRequest(_Object):
+    login: Annotated[str, Field(min_length=1, max_length=320)]
+    password: Annotated[str, Field(min_length=1, max_length=1024)]
+    last_name: _PersonName
+    first_name: _PersonName
+    middle_name: _PersonName = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class RegistrationStatusResponse(_Object):
+    """`R-56` with its 2026-10-06 addendum: the only status ever shown is ``pending``."""
+
+    status: Literal["pending"]
+
+
+class RegistrationRequest(_Object):
+    request_id: RegistrationRequestId
+    login: Annotated[str, Field(min_length=1, max_length=254)]
+    display_label: Annotated[str, Field(min_length=1, max_length=66)]
+    last_name: _PersonName
+    first_name: _PersonName
+    middle_name: _PersonName | None
+    status: RegistrationStatus
+    submitted_at: datetime
+    decided_at: datetime | None
+    decided_by: UserUid | None
+    rejection_reason: Annotated[str, Field(min_length=1, max_length=256)] | None
+    created_user_uid: UserUid | None
+
+
+class RegistrationRequestPage(_Object):
+    items: list[RegistrationRequest]
+    page: PageInfo
+    pending_total: Annotated[int, Field(ge=0)]
+
+
+class ApproveRegistrationRequest(_Object):
+    roles: Annotated[_RoleSet, Field(min_length=1)]
+
+
+class RejectRegistrationRequest(_Object):
+    reason: Annotated[str, Field(min_length=1, max_length=256)]

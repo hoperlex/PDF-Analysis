@@ -97,7 +97,7 @@ _TS_PIN_ASSIGNMENT = re.compile(
     re.MULTILINE,
 )
 _TS_ERROR_COUNT_ASSERTION = re.compile(
-    r"^\s*expect\(ERROR_CODE_VALUES\)\.toHaveLength\((?:17|20|22|61)\);?",
+    r"^\s*expect\(ERROR_CODE_VALUES\)\.toHaveLength\((?:17|20|22|23|27|34|61|77)\);?",
     re.MULTILINE,
 )
 
@@ -569,9 +569,13 @@ def test_true_surface_triple_matches_the_frozen_contract() -> None:
     the docstring above grew when `D-102` was written up. Reported in
     `docs/program/W46-SEAL.md` section 4 as a false premise found and corrected, not
     silently followed.
+
+    **`W49-SEAL-01` moved it to 27/34/77**: ten paths, fourteen operations and sixteen
+    schemas for the account itself, registration requests and account management
+    (`R-55` ... `R-61`), measured on the resealed document rather than quoted from the plan.
     """
     triple = _true_surface_triple()
-    assert triple == SurfaceTriple(paths=17, operations=20, schemas=61)
+    assert triple == SurfaceTriple(paths=27, operations=34, schemas=77)
 
 
 def test_true_tagged_tip_is_read_from_git_and_is_plausible() -> None:
@@ -629,7 +633,7 @@ def test_typescript_pin_discovery_reads_code_and_ignores_comments_and_strings() 
 
 def test_existing_frontend_error_count_pins_are_discovered() -> None:
     discovered = set(_discovered_independent_pins())
-    needle = "expect(ERROR_CODE_VALUES).toHaveLength(22);"
+    needle = "expect(ERROR_CODE_VALUES).toHaveLength(23);"
     assert ("web/tests/contract/seam-operations.contract.test.ts", needle) in discovered
     assert ("web/tests/unit/api/failure-surface.test.ts", needle) in discovered
 

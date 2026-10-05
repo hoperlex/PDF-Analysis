@@ -86,11 +86,11 @@ surface = conformance.surface
 
 #: `ALPHA_ROADMAP.md` §3 `T-1` and the measurement in the `W13-CONF` brief.
 FROZEN_OPENAPI_VERSION = "3.1.0"
-FROZEN_OPERATION_COUNT = 20
-FROZEN_SCHEMA_COUNT = 61
+FROZEN_OPERATION_COUNT = 34
+FROZEN_SCHEMA_COUNT = 77
 FROZEN_SERVER_URL = "/api/v1"
 
-#: The twenty operations, written out. Deliberately not derived from the document: an
+#: The thirty-four operations, written out. Deliberately not derived from the document: an
 #: operation that disappears from the contract has to fail *here*, not silently reduce the
 #: size of the thing both sides are compared through.
 #:
@@ -99,8 +99,9 @@ FROZEN_SERVER_URL = "/api/v1"
 #: added the decision journal under `R-24` the same day, seventeen until `W39-REVOKE`
 #: added the password change under `R-26` on 2026-09-23 -- the operation that makes a
 #: credential retractable -- nineteen until `W45-BLOCKS` added `getVersionBlocks` on
-#: 2026-09-25, and twenty until `W46-SEAL` added `getDashboardSummary` under `R-44` the
-#: same day.
+#: 2026-09-25, twenty until `W46-SEAL` added `getDashboardSummary` under `R-44` the
+#: same day, and thirty-four since `W49-SEAL-01` added the fourteen account and
+#: registration operations under `R-55` ... `R-61` on 2026-10-06.
 #:
 #: **This tuple, `FROZEN_OPERATION_COUNT` and `FROZEN_SCHEMA_COUNT`/`FROZEN_SCHEMA_NAMES`
 #: below are a pin this file's own header calls out as "not derived from the document",
@@ -130,9 +131,25 @@ FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("POST", "/auth/password", "changePassword"),
     ("GET", "/versions/{version_uid}/blocks", "getVersionBlocks"),
     ("GET", "/dashboard", "getDashboardSummary"),
+    # `W49-SEAL-01`, `R-55` ... `R-61`.
+    ("GET", "/me", "getMe"),
+    ("PATCH", "/me", "updateMyProfile"),
+    ("POST", "/registrations", "submitRegistration"),
+    ("POST", "/registrations/status", "readRegistrationStatus"),
+    ("GET", "/registrations", "listRegistrations"),
+    ("POST", "/registrations/{request_id}/approve", "approveRegistration"),
+    ("POST", "/registrations/{request_id}/reject", "rejectRegistration"),
+    ("GET", "/users", "listUsers"),
+    ("GET", "/users/{user_uid}", "getUser"),
+    ("PATCH", "/users/{user_uid}", "updateUser"),
+    ("POST", "/users/{user_uid}/archive", "archiveUser"),
+    ("POST", "/users/{user_uid}/restore", "restoreUser"),
+    ("DELETE", "/users/{user_uid}", "purgeUser"),
+    ("POST", "/users/{user_uid}/password", "resetUserPassword"),
 )
 
-#: The fifty-one `components.schemas` keys, written out. Forty-three until the `R-5`
+#: The `components.schemas` keys, written out -- seventy-seven since `W49-SEAL-01`, sixty-one
+#: before it from `W46-SEAL`, fifty-one before that. Forty-three until the `R-5`
 #: reseal, which added `DocumentVersionPage`, `RunStatusPage` and `CostBasis`,
 #: forty-six until `W34-CONTRACT` added `IssueTokenRequest` and `IssueTokenResponse`,
 #: forty-eight until `W38-KB` added `DecisionRecord` and `DecisionRecordPage`, and fifty
@@ -208,6 +225,25 @@ FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
         "RunActivity",
         "SectionDocumentCount",
         "DashboardSummary",
+        # `W49-SEAL-01`. Sixteen: two identities, two enumerations, ten objects and two
+        # pages. `readRegistrationStatus` takes `IssueTokenRequest` -- the pair it reads is
+        # the exchange's pair -- so the status read adds no request schema of its own.
+        "UserUid",
+        "RegistrationRequestId",
+        "Role",
+        "RegistrationStatus",
+        "Account",
+        "AccountPage",
+        "PersonNames",
+        "UpdateMyProfileRequest",
+        "UpdateUserRequest",
+        "ResetUserPasswordRequest",
+        "SubmitRegistrationRequest",
+        "RegistrationStatusResponse",
+        "RegistrationRequest",
+        "RegistrationRequestPage",
+        "ApproveRegistrationRequest",
+        "RejectRegistrationRequest",
     }
 )
 
@@ -249,14 +285,14 @@ class TestTheFrozenDocument:
     def test_declares_openapi_3_1_0(self, contract: dict[str, Any]) -> None:
         assert contract["openapi"] == FROZEN_OPENAPI_VERSION
 
-    def test_declares_exactly_twenty_operations(self, contract: dict[str, Any]) -> None:
+    def test_declares_exactly_the_frozen_operations(self, contract: dict[str, Any]) -> None:
         index = conformance.operation_index(contract)
         assert len(index) == FROZEN_OPERATION_COUNT
         assert index == {
             (method, path): operation_id for method, path, operation_id in FROZEN_OPERATIONS
         }
 
-    def test_declares_exactly_the_sixty_one_schemas(self, contract: dict[str, Any]) -> None:
+    def test_declares_exactly_the_frozen_schemas(self, contract: dict[str, Any]) -> None:
         names = set(contract["components"]["schemas"])
         assert len(names) == FROZEN_SCHEMA_COUNT
         assert names == set(FROZEN_SCHEMA_NAMES), {
@@ -608,7 +644,9 @@ class TestN1ComponentReferenceResolution:
         # Every operation that referenced it, not just one. Ten before the `R-5`
         # reseal; thirteen after it, because each of the three new listings declares
         # its own `404` -- an unknown parent is `not_found` and never an empty page.
-        assert len(report) == 14, report
+        # Fourteen until `W49-SEAL-01`, whose eight operations that address an account or
+        # a request by identity each declare one too.
+        assert len(report) == 22, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]
@@ -938,8 +976,11 @@ class TestN7EffectiveSecurity:
                     hoisted += 1
                 else:
                     overriding += 1
-        assert hoisted == FROZEN_OPERATION_COUNT - 1, hoisted
-        assert overriding == 1, overriding
+        # `W49-SEAL-01`: three operations declare the empty requirement now -- the
+        # exchange and the two registration operations an applicant reaches with no
+        # account.
+        assert hoisted == FROZEN_OPERATION_COUNT - 3, hoisted
+        assert overriding == 3, overriding
         assert_silent(differences(surface(rooted), surface(fastapi_flavoured(sealed))))
 
     def test_dropped_operation_security_is_caught(self, contract: dict[str, Any]) -> None:

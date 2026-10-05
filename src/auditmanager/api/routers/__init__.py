@@ -1,6 +1,6 @@
-"""The twenty operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The thirty-four operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the nine router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the twelve router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -53,8 +53,10 @@ from auditmanager.api.routers.idempotency import (
     IDEMPOTENCY_HEADER,
     require_idempotency_key,
 )
+from auditmanager.api.routers.me import build_me_routes
 from auditmanager.api.routers.multipart import MAX_BODY, BodyCapMiddleware
 from auditmanager.api.routers.ports import (
+    AccountPort,
     BlockPort,
     CredentialPort,
     CsvExportPort,
@@ -63,10 +65,13 @@ from auditmanager.api.routers.ports import (
     DocumentPort,
     FindingPort,
     ProjectPort,
+    RegistrationPort,
     RunPort,
 )
 from auditmanager.api.routers.projects import build_project_routes
+from auditmanager.api.routers.registrations import build_registration_routes
 from auditmanager.api.routers.runs import build_run_routes
+from auditmanager.api.routers.users import build_user_routes
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 
 class Router(APIRouter):
@@ -102,6 +107,7 @@ __all__ = [
     "IDEMPOTENCY_HEADER",
     "MAX_BODY",
     "METHOD_NOT_ALLOWED_CODE",
+    "AccountPort",
     "BlockPort",
     "BodyCapMiddleware",
     "CorrelationMiddleware",
@@ -113,6 +119,7 @@ __all__ = [
     "FailureEnvelopeMiddleware",
     "FindingPort",
     "ProjectPort",
+    "RegistrationPort",
     "Router",
     "RunPort",
     "WireResponse",
@@ -155,9 +162,17 @@ def build_router(
     credentials: CredentialPort | None = None,
     blocks: BlockPort | None = None,
     dashboard: DashboardPort | None = None,
+    accounts: AccountPort | None = None,
+    registrations: RegistrationPort | None = None,
 ) -> Router:
-    """Assemble the twenty operations, from the nine router modules -- ``dashboard`` is
-    the ninth.
+    """Assemble the thirty-four operations, from the twelve router modules -- ``me``,
+    ``registrations`` and ``users`` are `W49-SEAL-01`'s three.
+
+    ``accounts`` and ``registrations`` are two more ports with a default, for the reason
+    the paragraph below gives for the first three: every caller that does not serve them
+    -- ``create_documentation_app``, the test-only wirings -- keeps working unchanged, and
+    an operation whose port is ``None`` is declared in the document and answerable only
+    in an application that was handed one.
 
     Keyword-only, because eight same-shaped dependencies passed positionally is a wiring
     defect waiting to happen and the type checker cannot see it.
@@ -203,6 +218,9 @@ def build_router(
     build_export_routes(router, exports)
     build_auth_routes(router, credentials)  # type: ignore[arg-type]
     build_dashboard_routes(router, dashboard)  # type: ignore[arg-type]
+    build_me_routes(router, accounts)  # type: ignore[arg-type]
+    build_registration_routes(router, registrations)  # type: ignore[arg-type]
+    build_user_routes(router, accounts)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

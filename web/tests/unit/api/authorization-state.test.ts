@@ -226,28 +226,43 @@ describe('a 401 from the wire reaches the screen as a 401', () => {
   });
 
   it('is a state on every operation the seam is in front of', () => {
-    // `W34-CONTRACT` added `issueToken`, the credential exchange, which is the one
-    // operation a caller reaches while holding nothing: its `security` is the empty
-    // requirement, so it answers 401 when the login and password are not accepted and
-    // has no authenticated subject a 403 could deny. Every other operation carries both.
+    // `W34-CONTRACT` added `issueToken`, the credential exchange, which a caller reaches
+    // while holding nothing: its `security` is the empty requirement, so it answers 401
+    // when the login and password are not accepted and has no authenticated subject a 403
+    // could deny. `W49-SEAL-01` added the two registration operations an applicant with no
+    // account uses: `readRegistrationStatus` is shaped like the exchange (401, no 403),
+    // and `submitRegistration` takes no credential at all, so it declares neither. Every
+    // other operation carries both.
+    const open = ['issueToken', 'readRegistrationStatus', 'submitRegistration'];
+    const noCredentialToRefuse = ['submitRegistration'];
     const ids = Object.keys(OPERATIONS);
     expect(ids.length).toBeGreaterThan(10);
     for (const id of ids) {
       const descriptor = OPERATIONS[id as keyof typeof OPERATIONS];
-      expect([...descriptor.errorStatuses], `${id} cannot return 401`).toContain(401);
-      if (id === 'issueToken') {
-        expect([...descriptor.errorStatuses], 'issueToken denies no subject').not.toContain(403);
+      const statuses = [...descriptor.errorStatuses] as number[];
+      if (noCredentialToRefuse.includes(id)) {
+        expect(statuses, `${id} has no credential to refuse`).not.toContain(401);
+        expect(statuses, `${id} denies no subject`).not.toContain(403);
+        continue;
+      }
+      expect(statuses, `${id} cannot return 401`).toContain(401);
+      if (open.includes(id)) {
+        expect(statuses, `${id} denies no subject`).not.toContain(403);
       } else {
-        expect([...descriptor.errorStatuses], `${id} cannot return 403`).toContain(403);
+        expect(statuses, `${id} cannot return 403`).toContain(403);
       }
     }
-    // Anti-vacuity: the exception is one named operation and not "whatever lacks a 403".
+    // Anti-vacuity: the exceptions are named operations and not "whatever lacks a 403".
     // The spread widens each descriptor's literal tuple to `number[]`; without it `403` is
     // not assignable to the element type the generated table narrows to, which is itself
     // the compiler saying the same thing this assertion says at runtime.
     const without403 = ids.filter(
       (id) => ![...OPERATIONS[id as keyof typeof OPERATIONS].errorStatuses].some((s) => s === 403),
     );
-    expect(without403).toEqual(['issueToken']);
+    expect(without403.sort()).toEqual(open);
+    const without401 = ids.filter(
+      (id) => ![...OPERATIONS[id as keyof typeof OPERATIONS].errorStatuses].some((s) => s === 401),
+    );
+    expect(without401).toEqual(noCredentialToRefuse);
   });
 });

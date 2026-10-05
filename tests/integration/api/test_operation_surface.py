@@ -41,7 +41,7 @@ def test_the_router_declares_exactly_the_frozen_operations(
     )
 
 
-def test_the_document_declares_twenty_and_the_router_implements_twenty(
+def test_the_document_declares_thirty_four_and_the_router_implements_thirty_four(
     router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     """The count is checked separately from the set.
@@ -55,11 +55,13 @@ def test_the_document_declares_twenty_and_the_router_implements_twenty(
     `listDecisions` under `R-24`; **seventeen until `W39-REVOKE`**, which added
     `changePassword` under `R-26`; eighteen until `W42-SEAL`, which added no path
     or operation; **nineteen until `W45-BLOCKS`**, which added `getVersionBlocks`;
-    **twenty until `W46-SEAL`**, which added `getDashboardSummary` under `R-44`. The
-    number moved because an owner ruling or a reseal moved it; nothing else may move it.
+    **twenty until `W46-SEAL`**, which added `getDashboardSummary` under `R-44`;
+    **thirty-four since `W49-SEAL-01`**, which added the account, registration and
+    account-management operations under `R-55` ... `R-61`. The number moved because an
+    owner ruling or a reseal moved it; nothing else may move it.
     """
-    assert len(declared_operations(openapi_document)) == 20
-    assert len(router.routes) == 20
+    assert len(declared_operations(openapi_document)) == 34
+    assert len(router.routes) == 34
 
 
 def test_every_declared_operation_is_reachable(
@@ -169,19 +171,20 @@ def test_the_document_declares_no_operation_outside_the_declared_capabilities(
     assert list(openapi_document["components"]["securitySchemes"]) == ["bearerAuth"], (
         "the authorization seam is one bearer scheme declared once, per R-3"
     )
-    assert len(paths) == 17 and sum(
+    assert len(paths) == 27 and sum(
         1
         for item in openapi_document["paths"].values()
         for method in item
         if method in {"get", "put", "post", "delete", "options", "head", "patch"}
-    ) == 20, (
+    ) == 34, (
         "10 paths / 12 operations before the `R-5` reseal, 12 / 15 after it, 13 / 16 "
         "after `W34-CONTRACT` added the credential exchange, 14 / 17 after `W38-KB` added "
         "the decision journal under `R-24`, 15 / 18 after `W39-REVOKE` added the password "
         "change under `R-26`, unchanged after `W42-SEAL` (no path or operation added), "
         "16 / 19 after `W45-BLOCKS` added `getVersionBlocks` under "
         "`/versions/{version_uid}`, 17 / 20 after `W46-SEAL` added `getDashboardSummary` "
-        "under `/dashboard`, a new path with no path parameter at all. "
+        "under `/dashboard`, a new path with no path parameter at all, 27 / 34 after "
+        "`W49-SEAL-01` added `/me`, `/registrations` and `/users` with their sub-paths. "
         "The three operations `R-5` added are named in "
         "`REQUIRED_OPERATIONS`; the one wave 34 added is `issueToken`, and it is the only "
         "one this surface answers without a credential; the one wave 38 added is "

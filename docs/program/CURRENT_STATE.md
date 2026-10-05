@@ -62,9 +62,9 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 `docs/program/dispatch/IDENTITY-WAVES.md` is the controlling plan, with `W49-PLAN.md`,
 `W50-PLAN.md` and `W51-PLAN.md` beside it.
 
-The frozen API surface remains **17 paths / 20 operations / 61 schemas**, the error catalog
-**22**, domain candidate revision 8 with **27** opaque identities, and the migration head is
-**`0015_accounts_roles_registration`**. The last closed release remains `alpha-w47`. This section
+The frozen API surface is **27 paths / 34 operations / 77 schemas** since `W49-SEAL-01`, the
+error catalog **23**, domain candidate revision 9 with **29** opaque identities, and the
+migration head is **`0015_accounts_roles_registration`**. The last closed release remains `alpha-w47`. This section
 makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is deployed.
 
 ### Normative-corpus persistence and the alpha runtime boundary (integrated before W48, unchanged)

@@ -186,6 +186,13 @@ describe('the derivation reads the document and is not vacuous', () => {
       const statuses = declared
         .filter((entry) => entry.operationId === operationId)
         .map(({ status }) => status);
+      // `W49-SEAL-01`: the registration submission takes no credential at all, so it has
+      // none to refuse and declares no 401 -- pinned by name, as the open set below is.
+      if (operationId === 'submitRegistration') {
+        expect(statuses, `${operationId} takes no credential to refuse`).not.toContain('401');
+        expect(statuses, `${operationId} has no authenticated subject to deny`).not.toContain('403');
+        continue;
+      }
       expect(statuses, `${operationId} declares no 401`).toContain('401');
       if (requiresCredential(operationId)) {
         expect(statuses, `${operationId} declares no 403`).toContain('403');
@@ -198,15 +205,17 @@ describe('the derivation reads the document and is not vacuous', () => {
     }
   });
 
-  it('opens exactly one operation to a caller holding no credential', () => {
+  it('opens exactly the registered operations to a caller holding no credential', () => {
     // `W34-CONTRACT`. The branch above is only worth something if the set it branches on
     // is pinned: an operation that quietly dropped its `security` would otherwise be
-    // excused from the 403 rule by the same code that is meant to catch it.
+    // excused from the 403 rule by the same code that is meant to catch it. One until
+    // `W49-SEAL-01`; the two registration operations an applicant with no account uses
+    // joined the exchange.
     const open = operationsWithSecurity()
       .filter((entry) => !entry.requiresCredential)
       .map((entry) => entry.operationId)
       .sort();
-    expect(open).toEqual(['issueToken']);
+    expect(open).toEqual(['issueToken', 'readRegistrationStatus', 'submitRegistration']);
   });
 
   it('reads at least one catalog code out of every failure response the document declares', () => {
